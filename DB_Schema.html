@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS Entity-Relationship Diagram</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+        }
+        .entity {
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: all 0.3s ease-in-out;
+        }
+        .entity-title {
+            background-color: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .key-pk {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        .key-fk {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .connector-line {
+            stroke: #94a3b8;
+            stroke-width: 2;
+            fill: none;
+        }
+        .crow-foot-many {
+            stroke: #94a3b8;
+            stroke-width: 2;
+            fill: none;
+        }
+        .crow-foot-one {
+            stroke: #94a3b8;
+            stroke-width: 2;
+            fill: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 p-4 md:p-8 overflow-auto">
+    <div class="max-w-7xl mx-auto">
+        <div class="text-center mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900">Learning Management System (LMS)</h1>
+            <p class="mt-2 text-lg text-slate-600">Entity-Relationship Diagram</p>
+        </div>
+        
+        <!-- Diagram Container -->
+        <div id="diagram-container" class="relative w-full h-[2400px]">
+            <!-- SVG for drawing connectors -->
+            <svg id="connector-svg" class="absolute top-0 left-0 w-full h-full pointer-events-none"></svg>
+
+            <!-- Entities will be placed here -->
+            <!-- Column 1 -->
+            <div id="users" class="entity absolute bg-white rounded-lg w-64" style="top: 1000px; left: 20px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">USERS</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span>role</span><span class="text-slate-400">string</span></li>
+                    <li class="flex justify-between items-center"><span>name</span><span class="text-slate-400">string</span></li>
+                    <li class="flex justify-between items-center"><span>email</span><span class="text-slate-400">string</span></li>
+                    <li class="flex justify-between items-center"><span>password_hash</span><span class="text-slate-400">string</span></li>
+                </ul>
+            </div>
+
+            <div id="studentcourseassignments" class="entity absolute bg-white rounded-lg w-64" style="top: 650px; left: 320px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">STUDENT_COURSE</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>student_id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>course_id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>assigned_by</span></li>
+                    <li class="flex justify-between items-center"><span>assigned_at</span><span class="text-slate-400">datetime</span></li>
+                </ul>
+            </div>
+            
+            <div id="studentbadges" class="entity absolute bg-white rounded-lg w-64" style="top: 1350px; left: 320px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">STUDENT_BADGES</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>student_id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>badge_id</span></li>
+                    <li class="flex justify-between items-center"><span>earned_at</span><span class="text-slate-400">datetime</span></li>
+                </ul>
+            </div>
+
+            <!-- Column 2 -->
+             <div id="courses" class="entity absolute bg-white rounded-lg w-64" style="top: 400px; left: 620px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">COURSES</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span>name</span><span class="text-slate-400">string</span></li>
+                    <li class="flex justify-between items-center"><span>description</span><span class="text-slate-400">text</span></li>
+                    <li class="flex justify-between items-center"><span>year</span><span class="text-slate-400">integer</span></li>
+                </ul>
+            </div>
+            
+            <div id="badges" class="entity absolute bg-white rounded-lg w-64" style="top: 1550px; left: 620px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">BADGES</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>course_id</span></li>
+                    <li class="flex justify-between items-center"><span>name</span><span class="text-slate-400">string</span></li>
+                    <li class="flex justify-between items-center"><span>image_url</span><span class="text-slate-400">string</span></li>
+                </ul>
+            </div>
+
+            <!-- Column 3 -->
+            <div id="chapters" class="entity absolute bg-white rounded-lg w-64" style="top: 200px; left: 920px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">CHAPTERS</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>course_id</span></li>
+                    <li class="flex justify-between items-center"><span>name</span><span class="text-slate-400">string</span></li>
+                    <li class="flex justify-between items-center"><span>order_index</span><span class="text-slate-400">integer</span></li>
+                </ul>
+            </div>
+            
+            <div id="topics" class="entity absolute bg-white rounded-lg w-64" style="top: 600px; left: 920px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">TOPICS</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>chapter_id</span></li>
+                    <li class="flex justify-between items-center"><span>name</span><span class="text-slate-400">string</span></li>
+                    <li class="flex justify-between items-center"><span>order_index</span><span class="text-slate-400">integer</span></li>
+                </ul>
+            </div>
+
+            <div id="topiccompletion" class="entity absolute bg-white rounded-lg w-64" style="top: 1000px; left: 620px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">TOPIC_COMPLETION</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>student_id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>topic_id</span></li>
+                    <li class="flex justify-between items-center"><span>completed_at</span><span class="text-slate-400">datetime</span></li>
+                </ul>
+            </div>
+
+            <!-- Column 4 -->
+            <div id="quizzes" class="entity absolute bg-white rounded-lg w-64" style="top: 900px; left: 1220px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">QUIZZES</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>topic_id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>chapter_id</span></li>
+                    <li class="flex justify-between items-center"><span>name</span><span class="text-slate-400">string</span></li>
+                    <li class="flex justify-between items-center"><span>passing_score</span><span class="text-slate-400">integer</span></li>
+                </ul>
+            </div>
+
+            <div id="quizattempts" class="entity absolute bg-white rounded-lg w-64" style="top: 1300px; left: 920px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">QUIZ_ATTEMPTS</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>student_id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>quiz_id</span></li>
+                    <li class="flex justify-between items-center"><span>score</span><span class="text-slate-400">integer</span></li>
+                    <li class="flex justify-between items-center"><span>passed</span><span class="text-slate-400">boolean</span></li>
+                    <li class="flex justify-between items-center"><span>answers</span><span class="text-slate-400">jsonb</span></li>
+                </ul>
+            </div>
+
+            <!-- Column 5 -->
+            <div id="quizquestions" class="entity absolute bg-white rounded-lg w-64" style="top: 1200px; left: 1520px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">QUIZ_QUESTIONS</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>quiz_id</span></li>
+                    <li class="flex justify-between items-center"><span>question</span><span class="text-slate-400">text</span></li>
+                    <li class="flex justify-between items-center"><span>order_index</span><span class="text-slate-400">integer</span></li>
+                </ul>
+            </div>
+
+            <!-- Column 6 -->
+            <div id="quizoptions" class="entity absolute bg-white rounded-lg w-64" style="top: 1500px; left: 1820px;">
+                <h3 class="entity-title text-lg font-bold p-3 text-center">QUIZ_OPTIONS</h3>
+                <ul class="p-3 space-y-2 text-sm">
+                    <li class="flex justify-between items-center"><span><span class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">PK</span>id</span></li>
+                    <li class="flex justify-between items-center"><span><span class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2">FK</span>question_id</span></li>
+                    <li class="flex justify-between items-center"><span>option_text</span><span class="text-slate-400">text</span></li>
+                    <li class="flex justify-between items-center"><span>is_correct</span><span class="text-slate-400">boolean</span></li>
+                </ul>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // This script draws lines between the entities to show their relationships.
+        document.addEventListener('DOMContentLoaded', function() {
+            const svg = document.getElementById('connector-svg');
+            const container = document.getElementById('diagram-container');
+
+            // Define all the relationships to draw
+            const relationships = [
+                // USERS to related tables
+                { from: 'users', to: 'studentcourseassignments', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+                { from: 'users', to: 'studentbadges', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+                { from: 'users', to: 'topiccompletion', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+                { from: 'users', to: 'quizattempts', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+                
+                // COURSES to related tables
+                { from: 'courses', to: 'studentcourseassignments', fromSide: 'left', toSide: 'right', fromType: 'one', toType: 'many' },
+                { from: 'courses', to: 'chapters', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+                { from: 'courses', to: 'badges', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+                
+                // BADGES to STUDENT_BADGES
+                { from: 'badges', to: 'studentbadges', fromSide: 'left', toSide: 'right', fromType: 'one', toType: 'many' },
+                
+                // CHAPTERS to related tables
+                { from: 'chapters', to: 'topics', fromSide: 'bottom', toSide: 'top', fromType: 'one', toType: 'many' },
+                { from: 'chapters', to: 'quizzes', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+                
+                // TOPICS to related tables
+                { from: 'topics', to: 'topiccompletion', fromSide: 'left', toSide: 'right', fromType: 'one', toType: 'many' },
+                { from: 'topics', to: 'quizzes', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+
+                // QUIZZES to related tables
+                { from: 'quizzes', to: 'quizattempts', fromSide: 'left', toSide: 'right', fromType: 'one', toType: 'many' },
+                { from: 'quizzes', to: 'quizquestions', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+                
+                // QUIZ_QUESTIONS to QUIZ_OPTIONS
+                { from: 'quizquestions', to: 'quizoptions', fromSide: 'right', toSide: 'left', fromType: 'one', toType: 'many' },
+            ];
+
+            function drawAllLines() {
+                // Clear existing lines
+                svg.innerHTML = ''; 
+                relationships.forEach(rel => {
+                    const fromEl = document.getElementById(rel.from);
+                    const toEl = document.getElementById(rel.to);
+                    if (fromEl && toEl) {
+                        drawLine(svg, fromEl, toEl, rel.fromSide, rel.toSide, rel.fromType, rel.toType);
+                    }
+                });
+            }
+
+            function getCoords(el, side) {
+                const rect = el.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                const xOffset = container.scrollLeft - containerRect.left;
+                const yOffset = container.scrollTop - containerRect.top;
+
+                let x, y;
+                switch (side) {
+                    case 'top':
+                        x = rect.left + rect.width / 2 + xOffset;
+                        y = rect.top + yOffset;
+                        break;
+                    case 'bottom':
+                        x = rect.left + rect.width / 2 + xOffset;
+                        y = rect.bottom + yOffset;
+                        break;
+                    case 'left':
+                        x = rect.left + xOffset;
+                        y = rect.top + rect.height / 2 + yOffset;
+                        break;
+                    case 'right':
+                    default:
+                        x = rect.right + xOffset;
+                        y = rect.top + rect.height / 2 + yOffset;
+                        break;
+                }
+                return { x, y };
+            }
+
+            function drawLine(svg, fromEl, toEl, fromSide, toSide, fromType, toType) {
+                const start = getCoords(fromEl, fromSide);
+                const end = getCoords(toEl, toSide);
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+
+                let pathData;
+                if (fromSide === 'left' || fromSide === 'right') {
+                    pathData = `M ${start.x} ${start.y} C ${start.x + dx / 2} ${start.y}, ${end.x - dx / 2} ${end.y}, ${end.x} ${end.y}`;
+                } else {
+                     pathData = `M ${start.x} ${start.y} C ${start.x} ${start.y + dy / 2}, ${end.x} ${end.y - dy / 2}, ${end.x} ${end.y}`;
+                }
+
+                path.setAttribute('d', pathData);
+                path.setAttribute('class', 'connector-line');
+                svg.appendChild(path);
+
+                // Draw crow's foot notation
+                drawCrowFoot(svg, end, toSide, toType);
+                drawCrowFoot(svg, start, fromSide, fromType);
+            }
+
+            function drawCrowFoot(svg, point, side, type) {
+                const size = 10;
+                let angle = 0;
+                switch (side) {
+                    case 'left': angle = Math.PI; break;
+                    case 'top': angle = -Math.PI / 2; break;
+                    case 'bottom': angle = Math.PI / 2; break;
+                    case 'right': default: angle = 0; break;
+                }
+
+                if (type === 'many') {
+                    // Crow's foot for "many"
+                    const p1 = { x: point.x - size * Math.cos(angle - Math.PI / 6), y: point.y - size * Math.sin(angle - Math.PI / 6) };
+                    const p2 = { x: point.x - size * Math.cos(angle + Math.PI / 6), y: point.y - size * Math.sin(angle + Math.PI / 6) };
+                    
+                    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line1.setAttribute('x1', point.x); line1.setAttribute('y1', point.y);
+                    line1.setAttribute('x2', p1.x); line1.setAttribute('y2', p1.y);
+                    line1.setAttribute('class', 'crow-foot-many');
+                    svg.appendChild(line1);
+
+                    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line2.setAttribute('x1', point.x); line2.setAttribute('y1', point.y);
+                    line2.setAttribute('x2', p2.x); line2.setAttribute('y2', p2.y);
+                    line2.setAttribute('class', 'crow-foot-many');
+                    svg.appendChild(line2);
+                }
+                
+                // Perpendicular line for "one"
+                const p3 = { x: point.x - size * Math.cos(angle - Math.PI / 2), y: point.y - size * Math.sin(angle - Math.PI / 2) };
+                const p4 = { x: point.x - size * Math.cos(angle + Math.PI / 2), y: point.y - size * Math.sin(angle + Math.PI / 2) };
+                
+                const line3 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line3.setAttribute('x1', p3.x); line3.setAttribute('y1', p3.y);
+                line3.setAttribute('x2', p4.x); line3.setAttribute('y2', p4.y);
+                line3.setAttribute('class', 'crow-foot-one');
+                svg.appendChild(line3);
+            }
+
+            // Initial draw and redraw on resize
+            drawAllLines();
+            window.addEventListener('resize', drawAllLines);
+        });
+    </script>
+</body>
+</html>
