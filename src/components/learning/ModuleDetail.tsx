@@ -1,22 +1,23 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { BookOpen, Play, CheckCircle, Lock, Clock, Award, TrendingUp, ChevronRight } from 'lucide-react'
 import { mockData } from '@/lib/supabase'
 
 interface ModuleDetailProps {
   moduleId: string
-  onNavigation: (view: string, data?: any) => void
 }
 
-export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
+export default function ModuleDetail({ moduleId }: ModuleDetailProps) {
+  const router = useRouter()
   const [selectedModule, setSelectedModule] = useState<string | null>(null)
   
   // Use mock data from supabase
   const modules = mockData.curriculum
 
   const handleChapterClick = (moduleId: string, chapterId: string) => {
-    onNavigation('chapterDetail', { moduleId, chapterId })
+    router.push(`/trainee/modules/${moduleId}/chapters/${chapterId}`)
   }
 
   const handleModuleSelect = (moduleId: string) => {

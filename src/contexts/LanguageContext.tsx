@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, ReactNode, useMemo, useCallback } from 'react'
 
 export type Language = 'de' | 'en'
 
@@ -145,14 +145,25 @@ const translations = {
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>('de')
+  const [language, setLanguageState] = useState<Language>('de')
 
-  const t = (key: string): string => {
+  const setLanguage = useCallback((lang: Language) => {
+    setLanguageState(lang)
+  }, [])
+
+  const t = useCallback((key: string): string => {
     return translations[language][key as keyof typeof translations[typeof language]] || key
-  }
+  }, [language])
+
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo<LanguageContextType>(() => ({
+    language,
+    setLanguage,
+    t
+  }), [language, setLanguage, t])
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   )

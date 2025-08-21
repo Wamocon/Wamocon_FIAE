@@ -6,14 +6,13 @@ import { useBreadcrumbs } from '@/contexts/BreadcrumbContext'
 import { Bell, Menu, ChevronLeft } from 'lucide-react'
 
 interface HeaderProps {
-  onNavigation: (view: string, data?: any, title?: string) => void
   onGoBack: () => void
   onToggleSidebar: () => void
   sidebarOpen: boolean
   userRole: 'trainee' | 'trainer'
 }
 
-export function Header({ onNavigation, onGoBack, onToggleSidebar, sidebarOpen, userRole }: HeaderProps) {
+export function Header({ onGoBack, onToggleSidebar, sidebarOpen, userRole }: HeaderProps) {
   const { profile, switchRole } = useAuth()
   const { language } = useLanguage()
   const { breadcrumbs } = useBreadcrumbs()

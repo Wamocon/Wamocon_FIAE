@@ -1,72 +1,49 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
-export default function TrainerLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+const TrainerLayoutComponent = ({ children }: { children: React.ReactNode }) => {
   const { user, profile, loading } = useAuth()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
+  // Memoize authentication check to prevent unnecessary re-renders
+  const isAuthenticated = useMemo(() => {
+    return !loading && user && profile && profile.role === 'trainer'
+  }, [loading, user, profile])
+
+  // Memoize redirect logic
+  const shouldRedirect = useMemo(() => {
+    if (loading) return false
+    if (!user) return true
+    if (profile && profile.role !== 'trainer') return true
+    return false
+  }, [loading, user, profile])
+
   useEffect(() => {
-    if (!loading && !user) {
+    if (shouldRedirect) {
       router.push('/login')
     }
-    
-    // Redirect non-trainer users
-    if (!loading && profile && profile.role !== 'trainer') {
-      router.push('/login')
+  }, [shouldRedirect, router])
+
+  const handleGoBack = useCallback(() => {
+    // Use window.history.back() instead of router.back() to prevent potential loops
+    if (window.history.length > 1) {
+      window.history.back()
+    } else {
+      router.push('/trainer/dashboard')
     }
-  }, [user, profile, loading, router])
+  }, [router])
 
-  const handleNavigation = (view: string, data?: any, title?: string) => {
-    // Navigate to the appropriate trainer route
-    switch (view) {
-      case 'dashboard':
-        router.push('/trainer/dashboard')
-        break
-      case 'profile':
-        router.push('/trainer/profile')
-        break
-      case 'contentManagement':
-        router.push('/trainer/content-management')
-        break
-      case 'quizManagement':
-        router.push('/trainer/quiz-management')
-        break
-      case 'trainees':
-        if (data?.traineeId) {
-          router.push(`/trainer/trainees/${data.traineeId}`)
-        } else {
-          router.push('/trainer/trainees')
-        }
-        break
-      case 'acceptanceProtocol':
-        router.push('/trainer/acceptance-protocol')
-        break
-      case 'analytics':
-        router.push('/trainer/analytics')
-        break
-      default:
-        router.push('/trainer/dashboard')
-    }
-  }
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev)
+  }, [])
 
-  const handleGoBack = () => {
-    router.back()
-  }
-
-  const handleToggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
-
+  // Show loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -78,7 +55,8 @@ export default function TrainerLayout({
     )
   }
 
-  if (!user || !profile) {
+  // Show redirect state
+  if (shouldRedirect) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
@@ -89,7 +67,8 @@ export default function TrainerLayout({
     )
   }
 
-  if (profile.role !== 'trainer') {
+  // Show access denied state
+  if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
@@ -104,7 +83,6 @@ export default function TrainerLayout({
     <MainLayout
       user={user}
       profile={profile}
-      onNavigation={handleNavigation}
       onGoBack={handleGoBack}
       sidebarOpen={sidebarOpen}
       onToggleSidebar={handleToggleSidebar}
@@ -114,3 +92,5 @@ export default function TrainerLayout({
     </MainLayout>
   )
 }
+
+export default memo(TrainerLayoutComponent)

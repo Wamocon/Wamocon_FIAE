@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react'
@@ -14,21 +14,26 @@ export default function LoginPage() {
   const router = useRouter()
   const { signIn, profile } = useAuth()
 
+  // Memoize redirect logic to prevent unnecessary re-renders
+  const shouldRedirect = useMemo(() => {
+    return profile && !isLoading
+  }, [profile, isLoading])
+
   // Handle redirect after successful authentication
   useEffect(() => {
-    if (profile && !isLoading) {
-      if (profile.role === 'trainer') {
+    if (shouldRedirect) {
+      if (profile?.role === 'trainer') {
         router.push('/trainer/dashboard')
-      } else if (profile.role === 'trainee') {
+      } else if (profile?.role === 'trainee') {
         router.push('/trainee/dashboard')
       } else {
         // Fallback to trainee dashboard if role is undefined
         router.push('/trainee/dashboard')
       }
     }
-  }, [profile, isLoading, router])
+  }, [shouldRedirect, profile, router])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError('')
@@ -41,7 +46,15 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [signIn, email, password])
+
+  const handleGoBack = useCallback(() => {
+    router.push('/')
+  }, [router])
+
+  const togglePasswordVisibility = useCallback(() => {
+    setShowPassword(prev => !prev)
+  }, [])
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
@@ -59,7 +72,7 @@ export default function LoginPage() {
           </h1>
           <p className="text-muted text-lg">Willkommen zurück!</p>
           <button
-            onClick={() => router.push('/')}
+            onClick={handleGoBack}
             className="text-sm text-accent hover:text-accent/80 underline mt-2"
           >
             ← Zurück zur Startseite
@@ -106,7 +119,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={togglePasswordVisibility}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-foreground transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

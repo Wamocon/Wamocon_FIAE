@@ -1,14 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { FileCheck2, TrendingUp, Calendar, Award, BookOpen, Eye, MessageSquare, Download, Share2, MoreVertical } from 'lucide-react'
 import { mockData } from '@/lib/supabase'
 
 interface TraineeDetailProps {
-  onNavigation: (view: string, data?: any) => void
+  traineeId: string
 }
 
-export function TraineeDetail({ onNavigation }: TraineeDetailProps) {
+export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<'overview' | 'progress' | 'submissions' | 'notes'>('overview')
   
   // Use mock data from supabase
@@ -16,7 +18,7 @@ export function TraineeDetail({ onNavigation }: TraineeDetailProps) {
   const mockSubmissions = mockData.quizSubmissions
 
   const handleAcceptanceProtocol = () => {
-    onNavigation('acceptanceProtocol')
+    router.push('/trainer/acceptance-protocol')
   }
 
   const tabs = [

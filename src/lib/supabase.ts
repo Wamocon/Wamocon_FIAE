@@ -131,6 +131,73 @@ export const mockData = {
   trainees: [
     { id: 'trainee_1', name: 'Elias Felsing', progress: 75, avatar: 'https://placehold.co/100x100/7c3aed/ffffff?text=E' },
     { id: 'trainee_2', name: 'Maanik Garg', progress: 90, avatar: 'https://placehold.co/100x100/16a34a/ffffff?text=M' },
-    { id: 'trainee_3', name: 'Julia Schneider', progress: 50, avatar: 'https://placehold.co/100x100/f97316/ffffff?text=J' },
+    { id: 'trainee_3', name: 'Julia Schneider', progress: 50, avatar: 'https://placehold.co/100x100/16a34a/ffffff?text=J' },
+  ]
+}
+
+// Mock quiz data for development
+export const mockQuiz = {
+  id: 'quiz_1_1_2',
+  title: 'Quiz: Grundbegriffe der Programmierung',
+  description: 'Teste dein Wissen über die Grundlagen der Programmierung',
+  timeLimit: 300, // 5 minutes
+  passingScore: 70,
+  totalQuestions: 5,
+  questions: [
+    {
+      id: 'q1',
+      question: 'Was ist eine Programmiersprache?',
+      options: [
+        'Eine Sprache, die nur Computer verstehen',
+        'Ein Werkzeug zur Kommunikation mit dem Computer',
+        'Eine künstliche Sprache für Menschen',
+        'Ein Betriebssystem'
+      ],
+      correctAnswer: 1
+    },
+    {
+      id: 'q2',
+      question: 'Welches ist KEIN Grundkonzept der Programmierung?',
+      options: [
+        'Variablen',
+        'Schleifen',
+        'Datenbanken',
+        'Funktionen'
+      ],
+      correctAnswer: 2
+    },
+    {
+      id: 'q3',
+      question: 'Was bedeutet "Debugging"?',
+      options: [
+        'Programme schreiben',
+        'Fehler in Programmen finden und beheben',
+        'Programme kompilieren',
+        'Programme testen'
+      ],
+      correctAnswer: 1
+    },
+    {
+      id: 'q4',
+      question: 'Welche Struktur wird verwendet, um Entscheidungen zu treffen?',
+      options: [
+        'Schleifen',
+        'Bedingungen (if/else)',
+        'Funktionen',
+        'Variablen'
+      ],
+      correctAnswer: 1
+    },
+    {
+      id: 'q5',
+      question: 'Was ist der Zweck von Kommentaren im Code?',
+      options: [
+        'Den Code zu verstecken',
+        'Den Code zu beschleunigen',
+        'Den Code verständlich zu machen',
+        'Den Code zu kompilieren'
+      ],
+      correctAnswer: 2
+    }
   ]
 }

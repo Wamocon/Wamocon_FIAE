@@ -5,11 +5,7 @@ import { Award, Calendar, ArrowRight, Play, BookOpen, Target, TrendingUp, Clock,
 import { mockData } from '@/lib/supabase'
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
 
-interface TraineeDashboardProps {
-  onNavigation: (view: string, data?: any) => void
-}
-
-export default function TraineeDashboard({ onNavigation }: TraineeDashboardProps) {
+export default function TraineeDashboard() {
   const router = useRouter()
   
   // Use mock data from supabase
@@ -48,11 +44,48 @@ export default function TraineeDashboard({ onNavigation }: TraineeDashboardProps
   }))
 
   const handleModuleClick = (moduleId: string) => {
-    onNavigation('modules', { moduleId })
+    router.push(`/trainee/modules/${moduleId}`)
   }
 
   const handleLessonClick = (lessonId: string) => {
-    onNavigation('lessons', { lessonId })
+    router.push(`/trainee/lessons/${lessonId}`)
+  }
+
+  const handleNavigation = (view: string, data?: any) => {
+    switch (view) {
+      case 'modules':
+        if (data?.moduleId) {
+          router.push(`/trainee/modules/${data.moduleId}`)
+        } else {
+          router.push('/trainee/modules')
+        }
+        break
+      case 'lessons':
+        if (data?.lessonId) {
+          router.push(`/trainee/lessons/${data.lessonId}`)
+        } else {
+          router.push('/trainee/lessons')
+        }
+        break
+      case 'quizzes':
+        if (data?.quizId) {
+          router.push(`/trainee/quizzes/${data.quizId}`)
+        } else {
+          router.push('/trainee/quizzes')
+        }
+        break
+      case 'knowledgeSubmission':
+        router.push('/trainee/knowledge-submission')
+        break
+      case 'reflection':
+        router.push('/trainee/reflection')
+        break
+      case 'dashboard':
+        router.push('/trainee/dashboard')
+        break
+      default:
+        console.log('Navigation:', view, data)
+    }
   }
 
   return (

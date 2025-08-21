@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { BookOpen, Users, GraduationCap, ArrowRight, Shield } from 'lucide-react'
@@ -10,21 +10,27 @@ export default function LandingPage() {
   const { user, profile, loading } = useAuth()
   const router = useRouter()
 
+  // Memoize redirect logic to prevent unnecessary re-renders
+  const shouldRedirect = useMemo(() => {
+    return !loading && user && profile
+  }, [loading, user, profile])
+
   // If user is already authenticated, redirect to appropriate dashboard
   useEffect(() => {
-    if (!loading && user && profile) {
-      if (profile.role === 'trainee') {
+    if (shouldRedirect) {
+      if (profile?.role === 'trainee') {
         router.push('/trainee/dashboard')
-      } else if (profile.role === 'trainer') {
+      } else if (profile?.role === 'trainer') {
         router.push('/trainer/dashboard')
       }
     }
-  }, [user, profile, loading, router])
+  }, [shouldRedirect, profile, router])
 
-  const handleGetStarted = () => {
+  const handleGetStarted = useCallback(() => {
     router.push('/login')
-  }
+  }, [router])
 
+  // Memoize loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center relative overflow-hidden">
@@ -44,7 +50,7 @@ export default function LandingPage() {
   }
 
   // If user is authenticated, show loading while redirecting
-  if (user && profile) {
+  if (shouldRedirect) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center relative overflow-hidden">
         {/* Enhanced background theme */}

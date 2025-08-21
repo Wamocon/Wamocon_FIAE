@@ -5,11 +5,7 @@ import { Users, TrendingUp, Clock, AlertTriangle, BookOpen, Target, BarChart3, P
 import { mockData } from '@/lib/supabase'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
 
-interface TrainerDashboardProps {
-  onNavigation: (view: string, data?: any) => void
-}
-
-export default function TrainerDashboard({ onNavigation }: TrainerDashboardProps) {
+export default function TrainerDashboard() {
   const router = useRouter()
   
   const trainees = mockData.trainees
@@ -42,7 +38,30 @@ export default function TrainerDashboard({ onNavigation }: TrainerDashboardProps
   ]
 
   const handleTraineeClick = (traineeId: string) => {
-    onNavigation('trainees', { traineeId })
+    router.push(`/trainer/trainees/${traineeId}`)
+  }
+
+  const handleNavigation = (view: string, data?: any) => {
+    switch (view) {
+      case 'trainees':
+        if (data?.traineeId) {
+          router.push(`/trainer/trainees/${data.traineeId}`)
+        } else {
+          router.push('/trainer/trainees')
+        }
+        break
+      case 'contentManagement':
+        router.push('/trainer/content-management')
+        break
+      case 'quizManagement':
+        router.push('/trainer/quiz-management')
+        break
+      case 'analytics':
+        router.push('/trainer/analytics')
+        break
+      default:
+        console.log('Navigation:', view, data)
+    }
   }
 
   return (

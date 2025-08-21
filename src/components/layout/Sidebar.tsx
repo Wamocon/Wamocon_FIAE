@@ -20,21 +20,18 @@ import { useMemo, useCallback } from 'react'
 
 interface SidebarProps {
   currentView: string
-  onNavigation: (view: string, data?: any) => void
   isOpen: boolean
   onToggle: () => void
   userRole: 'trainee' | 'trainer'
 }
 
-export function Sidebar({ currentView, onNavigation, isOpen, onToggle, userRole }: SidebarProps) {
+export function Sidebar({ currentView, isOpen, onToggle, userRole }: SidebarProps) {
   const { profile, signOut } = useAuth()
   const { language } = useLanguage()
   const router = useRouter()
 
   const handleNavigation = useCallback((view: string) => {
-    onNavigation(view)
-    
-    // Handle specific navigation
+    // Handle specific navigation directly - no more double navigation
     switch (view) {
       case 'dashboard':
         router.push(userRole === 'trainee' ? '/trainee/dashboard' : '/trainer/dashboard')
@@ -75,7 +72,7 @@ export function Sidebar({ currentView, onNavigation, isOpen, onToggle, userRole 
       default:
         router.push(userRole === 'trainee' ? '/trainee/dashboard' : '/trainer/dashboard')
     }
-  }, [onNavigation, router, userRole])
+  }, [router, userRole])
 
   const handleSignOut = useCallback(async () => {
     try {

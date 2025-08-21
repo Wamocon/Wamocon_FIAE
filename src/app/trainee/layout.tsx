@@ -1,80 +1,49 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
-export default function TraineeLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+const TraineeLayoutComponent = ({ children }: { children: React.ReactNode }) => {
   const { user, profile, loading } = useAuth()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
+  // Memoize authentication check to prevent unnecessary re-renders
+  const isAuthenticated = useMemo(() => {
+    return !loading && user && profile && profile.role === 'trainee'
+  }, [loading, user, profile])
+
+  // Memoize redirect logic
+  const shouldRedirect = useMemo(() => {
+    if (loading) return false
+    if (!user) return true
+    if (profile && profile.role !== 'trainee') return true
+    return false
+  }, [loading, user, profile])
+
   useEffect(() => {
-    if (!loading && !user) {
+    if (shouldRedirect) {
       router.push('/login')
     }
-    
-    // Redirect non-trainee users
-    if (!loading && profile && profile.role !== 'trainee') {
-      router.push('/login')
+  }, [shouldRedirect, router])
+
+  const handleGoBack = useCallback(() => {
+    // Use window.history.back() instead of router.back() to prevent potential loops
+    if (window.history.length > 1) {
+      window.history.back()
+    } else {
+      router.push('/trainee/dashboard')
     }
-  }, [user, profile, loading, router])
+  }, [router])
 
-  const handleNavigation = (view: string, data?: any, title?: string) => {
-    // Navigate to the appropriate trainee route
-    switch (view) {
-      case 'dashboard':
-        router.push('/trainee/dashboard')
-        break
-      case 'profile':
-        router.push('/trainee/profile')
-        break
-      case 'reflection':
-        router.push('/trainee/reflection')
-        break
-      case 'knowledgeSubmission':
-        router.push('/trainee/knowledge-submission')
-        break
-      case 'modules':
-        if (data?.moduleId) {
-          router.push(`/trainee/modules/${data.moduleId}`)
-        } else {
-          router.push('/trainee/modules')
-        }
-        break
-      case 'lessons':
-        if (data?.lessonId) {
-          router.push(`/trainee/lessons/${data.lessonId}`)
-        } else {
-          router.push('/trainee/lessons')
-        }
-        break
-      case 'quizzes':
-        if (data?.quizId) {
-          router.push(`/trainee/quizzes/${data.quizId}`)
-        } else {
-          router.push('/trainee/quizzes')
-        }
-        break
-      default:
-        router.push('/trainee/dashboard')
-    }
-  }
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev)
+  }, [])
 
-  const handleGoBack = () => {
-    router.back()
-  }
-
-  const handleToggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
-
+  // Show loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -86,7 +55,8 @@ export default function TraineeLayout({
     )
   }
 
-  if (!user || !profile) {
+  // Show redirect state
+  if (shouldRedirect) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
@@ -97,7 +67,8 @@ export default function TraineeLayout({
     )
   }
 
-  if (profile.role !== 'trainee') {
+  // Show access denied state
+  if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
@@ -112,7 +83,6 @@ export default function TraineeLayout({
     <MainLayout
       user={user}
       profile={profile}
-      onNavigation={handleNavigation}
       onGoBack={handleGoBack}
       sidebarOpen={sidebarOpen}
       onToggleSidebar={handleToggleSidebar}
@@ -122,3 +92,5 @@ export default function TraineeLayout({
     </MainLayout>
   )
 }
+
+export default memo(TraineeLayoutComponent)

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 // Mock user data
@@ -25,7 +25,7 @@ const mockUsers = {
   }
 }
 
-// Mock authentication state
+// Mock authentication state - moved outside component to prevent recreation
 let mockAuthState: {
   user: User | null
   profile: Profile | null
@@ -36,7 +36,7 @@ let mockAuthState: {
   isAuthenticated: false
 }
 
-// Create a mock Supabase client
+// Create a mock Supabase client - moved outside component
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-key'
@@ -72,16 +72,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isInitialized, setIsInitialized] = useState(false)
+  const authCheckRef = useRef<NodeJS.Timeout>()
 
-  // Check for existing session on mount
+  // Check for existing session on mount - optimized to run only once
   useEffect(() => {
+    if (isInitialized) return
+
     const checkAuth = () => {
-      // Check localStorage for existing session
-      const savedUser = localStorage.getItem('mockUser')
-      const savedProfile = localStorage.getItem('mockProfile')
-      
-      if (savedUser && savedProfile) {
-        try {
+      try {
+        // Check localStorage for existing session
+        const savedUser = localStorage.getItem('mockUser')
+        const savedProfile = localStorage.getItem('mockProfile')
+        
+        if (savedUser && savedProfile) {
           const userData = JSON.parse(savedUser)
           const profileData = JSON.parse(savedProfile)
           
@@ -92,20 +96,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             profile: profileData,
             isAuthenticated: true
           }
-        } catch (error) {
-          console.error('Error parsing saved auth data:', error)
-          localStorage.removeItem('mockUser')
-          localStorage.removeItem('mockProfile')
         }
+      } catch (error) {
+        console.error('Error parsing saved auth data:', error)
+        localStorage.removeItem('mockUser')
+        localStorage.removeItem('mockProfile')
+      } finally {
+        setLoading(false)
+        setIsInitialized(true)
       }
-      
-      setLoading(false)
     }
 
-    checkAuth()
-  }, [])
+    // Clear any existing timeout
+    if (authCheckRef.current) {
+      clearTimeout(authCheckRef.current)
+    }
 
-  const signIn = async (email: string, password: string) => {
+    // Add small delay to prevent rapid state changes
+    authCheckRef.current = setTimeout(checkAuth, 100)
+
+    return () => {
+      if (authCheckRef.current) {
+        clearTimeout(authCheckRef.current)
+      }
+    }
+  }, [isInitialized])
+
+  const signIn = useCallback(async (email: string, password: string) => {
     setLoading(true)
     
     try {
@@ -137,8 +154,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       // Save to localStorage
-      localStorage.setItem('mockUser', JSON.stringify(userData))
-      localStorage.setItem('mockProfile', JSON.stringify(userProfile))
+      try {
+        localStorage.setItem('mockUser', JSON.stringify(userData))
+        localStorage.setItem('mockProfile', JSON.stringify(userProfile))
+      } catch (error) {
+        console.error('Error saving to localStorage:', error)
+      }
       
     } catch (error) {
       console.error('Sign in error:', error)
@@ -146,9 +167,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     setLoading(true)
     
     try {
@@ -167,17 +188,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       // Clear localStorage
-      localStorage.removeItem('mockUser')
-      localStorage.removeItem('mockProfile')
+      try {
+        localStorage.removeItem('mockUser')
+        localStorage.removeItem('mockProfile')
+      } catch (error) {
+        console.error('Error clearing localStorage:', error)
+      }
       
     } catch (error) {
       console.error('Sign out error:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const switchRole = (newRole: 'trainee' | 'trainer') => {
+  const switchRole = useCallback((newRole: 'trainee' | 'trainer') => {
     if (profile) {
       const updatedProfile = { ...profile, role: newRole }
       setProfile(updatedProfile)
@@ -186,18 +211,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mockAuthState.profile = updatedProfile
       
       // Update localStorage
-      localStorage.setItem('mockProfile', JSON.stringify(updatedProfile))
+      try {
+        localStorage.setItem('mockProfile', JSON.stringify(updatedProfile))
+      } catch (error) {
+        console.error('Error updating localStorage:', error)
+      }
     }
-  }
+  }, [profile])
 
-  const value: AuthContextType = {
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo<AuthContextType>(() => ({
     user,
     profile,
     loading,
     signIn,
     signOut,
     switchRole
-  }
+  }), [user, profile, loading, signIn, signOut, switchRole])
 
   return (
     <AuthContext.Provider value={value}>

@@ -1,20 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft, BookOpen, CheckCircle, Play, Pause, Volume2, VolumeX, Maximize2, Download, Share2 } from 'lucide-react'
 
 interface LessonProps {
-  onNavigation: (view: string, data?: any) => void
+  lessonId: string
 }
 
-export function Lesson({ onNavigation }: LessonProps) {
+export default function Lesson({ lessonId }: LessonProps) {
+  const router = useRouter()
   const [isCompleted, setIsCompleted] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [progress, setProgress] = useState(0)
 
   const handleGoBack = () => {
-    onNavigation('chapterDetail')
+    router.push('/trainee/modules')
   }
 
   const handleComplete = () => {
@@ -44,13 +46,13 @@ export function Lesson({ onNavigation }: LessonProps) {
           
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
-              onClick={() => onNavigation('dashboard')}
+              onClick={() => router.push('/trainee/dashboard')}
               className="px-6 py-3 font-medium text-white bg-gradient-to-r from-accent to-primary rounded-2xl hover:from-accent/90 hover:to-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
               Zum Dashboard
             </button>
             <button
-              onClick={() => onNavigation('chapterDetail')}
+              onClick={() => router.push('/trainee/modules')}
               className="px-6 py-3 font-medium text-muted bg-muted/30 rounded-2xl hover:bg-muted/50 transition-all duration-200"
             >
               Nächste Lektion

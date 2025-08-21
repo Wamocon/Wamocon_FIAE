@@ -2,7 +2,7 @@
 
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 
 // Use the same User interface as AuthContext
 interface User {
@@ -23,7 +23,6 @@ interface Profile {
 interface MainLayoutProps {
   user?: User | null
   profile: Profile | null
-  onNavigation: (view: string, data?: any, title?: string) => void
   onGoBack: () => void
   sidebarOpen: boolean
   onToggleSidebar: () => void
@@ -34,7 +33,6 @@ interface MainLayoutProps {
 export function MainLayout({
   user,
   profile,
-  onNavigation,
   onGoBack,
   sidebarOpen,
   onToggleSidebar,
@@ -44,12 +42,12 @@ export function MainLayout({
   // Determine current view from URL path - optimized with useMemo
   const currentView = useMemo(() => 'dashboard', [])
 
-  return (
+  // Memoize the layout structure to prevent unnecessary re-renders
+  const layoutContent = useMemo(() => (
     <div className="flex h-screen bg-gradient-to-br from-background via-red-900/20 to-red-800/30">
       {/* Sidebar */}
       <Sidebar 
         currentView={currentView}
-        onNavigation={onNavigation}
         isOpen={sidebarOpen}
         onToggle={onToggleSidebar}
         userRole={userRole}
@@ -59,7 +57,6 @@ export function MainLayout({
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <Header
-          onNavigation={onNavigation}
           onGoBack={onGoBack}
           onToggleSidebar={onToggleSidebar}
           sidebarOpen={sidebarOpen}
@@ -72,5 +69,7 @@ export function MainLayout({
         </div>
       </main>
     </div>
-  )
+  ), [currentView, sidebarOpen, onToggleSidebar, userRole, onGoBack, children])
+
+  return layoutContent
 }

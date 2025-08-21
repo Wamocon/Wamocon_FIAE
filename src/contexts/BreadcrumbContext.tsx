@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 
 export interface BreadcrumbItem {
@@ -23,11 +23,11 @@ export function BreadcrumbProvider({ children }: { children: React.ReactNode }) 
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([])
   const pathname = usePathname()
 
-  // Initialize breadcrumbs based on current path
-  useEffect(() => {
-    if (!pathname) return
+  // Memoize breadcrumb building logic to prevent unnecessary recalculations
+  const buildBreadcrumbs = useCallback((path: string) => {
+    if (!path) return []
     
-    const pathSegments = pathname.split('/').filter(Boolean)
+    const pathSegments = path.split('/').filter(Boolean)
     const newBreadcrumbs: BreadcrumbItem[] = []
 
     // Build breadcrumbs from path segments
@@ -68,10 +68,16 @@ export function BreadcrumbProvider({ children }: { children: React.ReactNode }) 
       newBreadcrumbs.push({ label, href: currentPath })
     })
 
-    setBreadcrumbs(newBreadcrumbs)
-  }, [pathname])
+    return newBreadcrumbs
+  }, [])
 
-  const addBreadcrumb = (item: BreadcrumbItem) => {
+  // Initialize breadcrumbs based on current path - optimized with useMemo
+  useEffect(() => {
+    const newBreadcrumbs = buildBreadcrumbs(pathname)
+    setBreadcrumbs(newBreadcrumbs)
+  }, [pathname, buildBreadcrumbs])
+
+  const addBreadcrumb = useCallback((item: BreadcrumbItem) => {
     setBreadcrumbs(prev => {
       // Check if breadcrumb already exists
       const exists = prev.some(bc => bc.href === item.href)
@@ -79,23 +85,28 @@ export function BreadcrumbProvider({ children }: { children: React.ReactNode }) 
       
       return [...prev, item]
     })
-  }
+  }, [])
 
-  const removeBreadcrumb = (href: string) => {
+  const removeBreadcrumb = useCallback((href: string) => {
     setBreadcrumbs(prev => prev.filter(bc => bc.href !== href))
-  }
+  }, [])
 
-  const clearBreadcrumbs = () => {
+  const clearBreadcrumbs = useCallback(() => {
     setBreadcrumbs([])
-  }
+  }, [])
 
-  const value: BreadcrumbContextType = {
+  const setBreadcrumbsCustom = useCallback((items: BreadcrumbItem[]) => {
+    setBreadcrumbs(items)
+  }, [])
+
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo<BreadcrumbContextType>(() => ({
     breadcrumbs: breadcrumbs || [], // Ensure breadcrumbs is never undefined
     addBreadcrumb,
     removeBreadcrumb,
     clearBreadcrumbs,
-    setBreadcrumbs
-  }
+    setBreadcrumbs: setBreadcrumbsCustom
+  }), [breadcrumbs, addBreadcrumb, removeBreadcrumb, clearBreadcrumbs, setBreadcrumbsCustom])
 
   return (
     <BreadcrumbContext.Provider value={value}>
