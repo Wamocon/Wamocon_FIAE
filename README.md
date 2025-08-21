@@ -184,7 +184,7 @@ src/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/fiae-learning-platform.git
+   git clone https://github.com/Wamocon/Wamocon_FIAE.git
    cd fiae-learning-platform
    ```
 
@@ -253,8 +253,7 @@ npm run test:e2e
 
 ### **Platform Options**
 - **Vercel**: Recommended for Next.js applications
-- **Netlify**: Static site hosting
-- **AWS**: Enterprise deployment
+
 - **Docker**: Containerized deployment
 
 ### **Environment Variables**
@@ -350,50 +349,6 @@ npm run dev
 - **Manual Review**: Code quality and security review
 - **Testing**: Functional and regression testing
 - **Documentation**: Update relevant documentation
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-### **Getting Help**
-- **Documentation**: Comprehensive project documentation
-- **Issues**: GitHub issues for bug reports
-- **Discussions**: GitHub discussions for questions
-- **Wiki**: Project wiki for detailed guides
-
-### **Contact Information**
-- **Project Maintainer**: [Your Name](mailto:your.email@example.com)
-- **GitHub Issues**: [Report Issues](https://github.com/yourusername/fiae-learning-platform/issues)
-- **Documentation**: [Project Wiki](https://github.com/yourusername/fiae-learning-platform/wiki)
-
-## 🏆 Acknowledgments
-
-- **Next.js Team**: For the amazing React framework
-- **Tailwind CSS**: For the utility-first CSS framework
-- **Shadcn UI**: For the professional component library
-- **German Vocational Training**: For the educational context and requirements
-
-## 📈 Roadmap
-
-### **Version 1.1 (Q1 2025)**
-- [ ] Real-time collaboration features
-- [ ] Advanced analytics dashboard
-- [ ] Mobile application
-- [ ] Offline learning support
-
-### **Version 1.2 (Q2 2025)**
-- [ ] AI-powered learning recommendations
-- [ ] Gamification elements
-- [ ] Social learning features
-- [ ] Advanced assessment tools
-
-### **Version 2.0 (Q3 2025)**
-- [ ] Multi-tenant architecture
-- [ ] Advanced reporting system
-- [ ] Integration APIs
-- [ ] Enterprise features
 
 ---
 
