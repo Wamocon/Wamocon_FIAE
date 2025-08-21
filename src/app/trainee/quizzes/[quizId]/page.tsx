@@ -1,13 +1,13 @@
-'use client'
+'use client';
 
-import { useAuth } from '@/contexts/AuthContext'
-import { useParams } from 'next/navigation'
-import { Quiz } from '@/components/learning/Quiz'
+import { useAuth } from '@/contexts/AuthContext';
+import { useParams } from 'next/navigation';
+import { Quiz } from '@/components/learning/Quiz';
 
 export default function TraineeQuizPage() {
-  const { profile, loading } = useAuth()
-  const params = useParams()
-  const quizId = params.quizId as string
+  const { profile, loading } = useAuth();
+  const params = useParams();
+  const quizId = params.quizId as string;
 
   if (loading) {
     return (
@@ -17,7 +17,7 @@ export default function TraineeQuizPage() {
           <p className="text-muted-foreground">Lade Quiz...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!profile) {
@@ -28,7 +28,7 @@ export default function TraineeQuizPage() {
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (profile.role !== 'trainee') {
@@ -39,19 +39,23 @@ export default function TraineeQuizPage() {
           <p className="text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  return <Quiz onNavigation={(view, data) => {
-    switch (view) {
-      case 'chapterDetail':
-        window.location.href = '/trainee/modules'
-        break
-      case 'dashboard':
-        window.location.href = '/trainee/dashboard'
-        break
-      default:
-        console.log('Navigation:', view, data)
-    }
-  }} />
+  return (
+    <Quiz
+      onNavigation={(view, data) => {
+        switch (view) {
+          case 'chapterDetail':
+            window.location.href = '/trainee/modules';
+            break;
+          case 'dashboard':
+            window.location.href = '/trainee/dashboard';
+            break;
+          default:
+            console.log('Navigation:', view, data);
+        }
+      }}
+    />
+  );
 }

@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { useAuth } from '@/contexts/AuthContext'
-import { ContentManagement } from '@/components/trainer/ContentManagement'
+import { useAuth } from '@/contexts/AuthContext';
+import { ContentManagement } from '@/components/trainer/ContentManagement';
 
 export default function TrainerContentManagementPage() {
-  const { profile, loading } = useAuth()
+  const { profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +14,7 @@ export default function TrainerContentManagementPage() {
           <p className="text-muted-foreground">Lade Inhalts-Management...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!profile) {
@@ -25,7 +25,7 @@ export default function TrainerContentManagementPage() {
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (profile.role !== 'trainer') {
@@ -36,10 +36,8 @@ export default function TrainerContentManagementPage() {
           <p className="text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  return <ContentManagement />
+  return <ContentManagement />;
 }
-
-

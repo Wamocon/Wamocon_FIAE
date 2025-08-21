@@ -1,13 +1,13 @@
-'use client'
+'use client';
 
-import { useAuth } from '@/contexts/AuthContext'
-import { useParams } from 'next/navigation'
-import { Lesson } from '@/components/learning/Lesson'
+import { useAuth } from '@/contexts/AuthContext';
+import { useParams } from 'next/navigation';
+import { Lesson } from '@/components/learning/Lesson';
 
 export default function TraineeLessonPage() {
-  const { profile, loading } = useAuth()
-  const params = useParams()
-  const lessonId = params.lessonId as string
+  const { profile, loading } = useAuth();
+  const params = useParams();
+  const lessonId = params.lessonId as string;
 
   if (loading) {
     return (
@@ -17,7 +17,7 @@ export default function TraineeLessonPage() {
           <p className="text-muted-foreground">Lade Lektion...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!profile) {
@@ -28,7 +28,7 @@ export default function TraineeLessonPage() {
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (profile.role !== 'trainee') {
@@ -39,19 +39,23 @@ export default function TraineeLessonPage() {
           <p className="text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  return <Lesson onNavigation={(view, data) => {
-    switch (view) {
-      case 'dashboard':
-        window.location.href = '/trainee/dashboard'
-        break
-      case 'chapterDetail':
-        window.location.href = '/trainee/modules'
-        break
-      default:
-        console.log('Navigation:', view, data)
-    }
-  }} />
+  return (
+    <Lesson
+      onNavigation={(view, data) => {
+        switch (view) {
+          case 'dashboard':
+            window.location.href = '/trainee/dashboard';
+            break;
+          case 'chapterDetail':
+            window.location.href = '/trainee/modules';
+            break;
+          default:
+            console.log('Navigation:', view, data);
+        }
+      }}
+    />
+  );
 }

@@ -1,29 +1,39 @@
-'use client'
+'use client';
 
-import { useAuth } from '@/contexts/AuthContext'
-import { useLanguage } from '@/contexts/LanguageContext'
-import { useBreadcrumbs } from '@/contexts/BreadcrumbContext'
-import { Bell, Menu, ChevronLeft } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useBreadcrumbs } from '@/contexts/BreadcrumbContext';
+import { Bell, Menu, ChevronLeft } from 'lucide-react';
 
 interface HeaderProps {
-  onNavigation: (view: string, data?: any, title?: string) => void
-  onGoBack: () => void
-  onToggleSidebar: () => void
-  sidebarOpen: boolean
-  userRole: 'trainee' | 'trainer'
+  onNavigation: (view: string, data?: any, title?: string) => void;
+  onGoBack: () => void;
+  onToggleSidebar: () => void;
+  sidebarOpen: boolean;
+  userRole: 'trainee' | 'trainer';
 }
 
-export function Header({ onNavigation, onGoBack, onToggleSidebar, sidebarOpen, userRole }: HeaderProps) {
-  const { profile, switchRole } = useAuth()
-  const { language } = useLanguage()
-  const { breadcrumbs } = useBreadcrumbs()
+export function Header({
+  onNavigation,
+  onGoBack,
+  onToggleSidebar,
+  sidebarOpen,
+  userRole,
+}: HeaderProps) {
+  const { profile, switchRole } = useAuth();
+  const { language } = useLanguage();
+  const { breadcrumbs } = useBreadcrumbs();
 
-  const hasNotifications = profile?.role === 'trainer'
-  const canGoBack = breadcrumbs && Array.isArray(breadcrumbs) && breadcrumbs.length > 1
-  const currentBreadcrumb = breadcrumbs && Array.isArray(breadcrumbs) && breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1] : null
+  const hasNotifications = profile?.role === 'trainer';
+  const canGoBack =
+    breadcrumbs && Array.isArray(breadcrumbs) && breadcrumbs.length > 1;
+  const currentBreadcrumb =
+    breadcrumbs && Array.isArray(breadcrumbs) && breadcrumbs.length > 0
+      ? breadcrumbs[breadcrumbs.length - 1]
+      : null;
 
   if (!profile) {
-    return null
+    return null;
   }
 
   return (
@@ -53,7 +63,7 @@ export function Header({ onNavigation, onGoBack, onToggleSidebar, sidebarOpen, u
           </h2>
         </div>
       </div>
-      
+
       {/* Right side actions */}
       <div className="flex items-center gap-4">
         {/* Notifications */}
@@ -66,12 +76,16 @@ export function Header({ onNavigation, onGoBack, onToggleSidebar, sidebarOpen, u
 
         {/* Role Switcher */}
         <button
-          onClick={() => switchRole(profile.role === 'trainee' ? 'trainer' : 'trainee')}
+          onClick={() =>
+            switchRole(profile.role === 'trainee' ? 'trainer' : 'trainee')
+          }
           className="px-4 py-2 text-sm font-medium text-primary-foreground bg-gradient-to-r from-accent to-primary hover:from-accent/90 hover:to-primary/90 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
         >
-          {profile.role === 'trainee' ? 'Zur Ausbilder-Ansicht' : 'Zur Azubi-Ansicht'}
+          {profile.role === 'trainee'
+            ? 'Zur Ausbilder-Ansicht'
+            : 'Zur Azubi-Ansicht'}
         </button>
       </div>
     </header>
-  )
+  );
 }

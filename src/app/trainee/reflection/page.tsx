@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { useAuth } from '@/contexts/AuthContext'
-import { Reflection } from '@/components/learning/Reflection'
+import { useAuth } from '@/contexts/AuthContext';
+import { Reflection } from '@/components/learning/Reflection';
 
 export default function TraineeReflectionPage() {
-  const { profile, loading } = useAuth()
+  const { profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +14,7 @@ export default function TraineeReflectionPage() {
           <p className="text-muted-foreground">Lade Reflektion...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!profile) {
@@ -25,7 +25,7 @@ export default function TraineeReflectionPage() {
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (profile.role !== 'trainee') {
@@ -36,10 +36,8 @@ export default function TraineeReflectionPage() {
           <p className="text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  return <Reflection />
+  return <Reflection />;
 }
-
-

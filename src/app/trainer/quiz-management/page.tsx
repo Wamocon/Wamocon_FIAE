@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { useAuth } from '@/contexts/AuthContext'
-import { QuizManagement } from '@/components/trainer/QuizManagement'
+import { useAuth } from '@/contexts/AuthContext';
+import { QuizManagement } from '@/components/trainer/QuizManagement';
 
 export default function TrainerQuizManagementPage() {
-  const { profile, loading } = useAuth()
+  const { profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +14,7 @@ export default function TrainerQuizManagementPage() {
           <p className="text-muted-foreground">Lade Quiz-Verwaltung...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!profile) {
@@ -25,7 +25,7 @@ export default function TrainerQuizManagementPage() {
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (profile.role !== 'trainer') {
@@ -36,10 +36,8 @@ export default function TrainerQuizManagementPage() {
           <p className="text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  return <QuizManagement />
+  return <QuizManagement />;
 }
-
-

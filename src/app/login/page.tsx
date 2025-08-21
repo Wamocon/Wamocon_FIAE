@@ -1,53 +1,56 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
-import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
+import Link from 'next/link';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const router = useRouter()
-  const { signIn, profile } = useAuth()
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const router = useRouter();
+  const { signIn, profile } = useAuth();
 
   // Handle redirect after successful authentication
   useEffect(() => {
     if (profile && !isLoading) {
       if (profile.role === 'trainer') {
-        router.push('/trainer/dashboard')
+        router.push('/trainer/dashboard');
       } else if (profile.role === 'trainee') {
-        router.push('/trainee/dashboard')
+        router.push('/trainee/dashboard');
       } else {
         // Fallback to trainee dashboard if role is undefined
-        router.push('/trainee/dashboard')
+        router.push('/trainee/dashboard');
       }
     }
-  }, [profile, isLoading, router])
+  }, [profile, isLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError('')
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
 
     try {
-      await signIn(email, password)
+      await signIn(email, password);
       // The redirect will be handled by the useEffect when the profile updates
     } catch (err) {
-      setError('Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.')
+      setError(
+        'Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.'
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background overlay for consistent theme */}
       <div className="absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25 pointer-events-none"></div>
-      
+
       <div className="w-full max-w-md space-y-8 relative z-10">
         {/* Header */}
         <div className="text-center">
@@ -71,7 +74,10 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
                 E-Mail-Adresse
               </label>
               <div className="relative">
@@ -80,7 +86,7 @@ export default function LoginPage() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={e => setEmail(e.target.value)}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-background/50 border border-border rounded-xl text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
                   placeholder="ihre.email@beispiel.de"
@@ -90,7 +96,10 @@ export default function LoginPage() {
 
             {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
                 Passwort
               </label>
               <div className="relative">
@@ -99,7 +108,7 @@ export default function LoginPage() {
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={e => setPassword(e.target.value)}
                   required
                   className="w-full pl-12 pr-12 py-3 bg-background/50 border border-border rounded-xl text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
                   placeholder="••••••••"
@@ -109,7 +118,11 @@ export default function LoginPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-foreground transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -137,31 +150,33 @@ export default function LoginPage() {
               )}
             </button>
 
-            {/* Demo Credentials */}
-            <div className="mt-6 p-4 bg-muted/50 rounded-xl border border-border/50">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Demo-Anmeldedaten:</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted">Auszubildender:</span>
-                  <span className="text-accent font-mono">elias.felsing@azubi.de</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Ausbilder:</span>
-                  <span className="text-accent font-mono">ausbilder@wamocon.de</span>
-                </div>
-                <div className="text-center text-xs text-muted mt-2">
-                  Passwort: (beliebig)
-                </div>
+            {error && (
+              <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+                <p className="text-red-400 text-sm">{error}</p>
               </div>
+            )}
+
+            <div className="text-center">
+              <p className="text-gray-400">
+                Noch kein Konto?{' '}
+                <Link
+                  href="/register"
+                  className="text-red-400 hover:text-red-300 font-medium"
+                >
+                  Konto erstellen
+                </Link>
+              </p>
             </div>
           </form>
         </div>
 
         {/* Copyright */}
         <div className="text-center">
-          <p className="text-xs text-muted">© 2025 FIAE-Lernplattform. Alle Rechte vorbehalten.</p>
+          <p className="text-xs text-muted">
+            © 2025 FIAE-Lernplattform. Alle Rechte vorbehalten.
+          </p>
         </div>
       </div>
     </div>
-  )
+  );
 }

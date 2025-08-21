@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createContext, useContext, useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 
 // Mock user data
 const mockUsers = {
@@ -12,7 +12,7 @@ const mockUsers = {
     role: 'trainee' as const,
     avatar: null,
     training_start_date: '2024-09-01',
-    trainer_id: 'trainer_1'
+    trainer_id: 'trainer_1',
   },
   'ausbilder@wamocon.de': {
     id: 'trainer_1',
@@ -21,174 +21,172 @@ const mockUsers = {
     role: 'trainer' as const,
     avatar: null,
     training_start_date: null,
-    trainer_id: null
-  }
-}
+    trainer_id: null,
+  },
+};
 
 // Mock authentication state
 let mockAuthState: {
-  user: User | null
-  profile: Profile | null
-  isAuthenticated: boolean
+  user: User | null;
+  profile: Profile | null;
+  isAuthenticated: boolean;
 } = {
   user: null,
   profile: null,
-  isAuthenticated: false
-}
+  isAuthenticated: false,
+};
 
 // Create a mock Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-key'
-)
+);
 
 interface User {
-  id: string
-  email: string
+  id: string;
+  email: string;
 }
 
 interface Profile {
-  id: string
-  email: string
-  full_name: string
-  role: 'trainee' | 'trainer'
-  avatar?: string | null
-  training_start_date?: string | null
-  trainer_id?: string | null
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'trainee' | 'trainer';
+  avatar?: string | null;
+  training_start_date?: string | null;
+  trainer_id?: string | null;
 }
 
 interface AuthContextType {
-  user: User | null
-  profile: Profile | null
-  loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signOut: () => Promise<void>
-  switchRole: (newRole: 'trainee' | 'trainer') => void
+  user: User | null;
+  profile: Profile | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  switchRole: (newRole: 'trainee' | 'trainer') => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Check for existing session on mount
   useEffect(() => {
     const checkAuth = () => {
       // Check localStorage for existing session
-      const savedUser = localStorage.getItem('mockUser')
-      const savedProfile = localStorage.getItem('mockProfile')
-      
+      const savedUser = localStorage.getItem('mockUser');
+      const savedProfile = localStorage.getItem('mockProfile');
+
       if (savedUser && savedProfile) {
         try {
-          const userData = JSON.parse(savedUser)
-          const profileData = JSON.parse(savedProfile)
-          
-          setUser(userData)
-          setProfile(profileData)
+          const userData = JSON.parse(savedUser);
+          const profileData = JSON.parse(savedProfile);
+
+          setUser(userData);
+          setProfile(profileData);
           mockAuthState = {
             user: userData,
             profile: profileData,
-            isAuthenticated: true
-          }
+            isAuthenticated: true,
+          };
         } catch (error) {
-          console.error('Error parsing saved auth data:', error)
-          localStorage.removeItem('mockUser')
-          localStorage.removeItem('mockProfile')
+          console.error('Error parsing saved auth data:', error);
+          localStorage.removeItem('mockUser');
+          localStorage.removeItem('mockProfile');
         }
       }
-      
-      setLoading(false)
-    }
 
-    checkAuth()
-  }, [])
+      setLoading(false);
+    };
+
+    checkAuth();
+  }, []);
 
   const signIn = async (email: string, password: string) => {
-    setLoading(true)
-    
+    setLoading(true);
+
     try {
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // Check if user exists in mock data
-      const userProfile = mockUsers[email as keyof typeof mockUsers]
-      
+      const userProfile = mockUsers[email as keyof typeof mockUsers];
+
       if (!userProfile) {
-        throw new Error('User not found')
+        throw new Error('User not found');
       }
-      
+
       // Create user object
       const userData: User = {
         id: userProfile.id,
-        email: userProfile.email
-      }
-      
+        email: userProfile.email,
+      };
+
       // Set authentication state
-      setUser(userData)
-      setProfile(userProfile)
-      
+      setUser(userData);
+      setProfile(userProfile);
+
       // Update mock state
       mockAuthState = {
         user: userData,
         profile: userProfile,
-        isAuthenticated: true
-      }
-      
+        isAuthenticated: true,
+      };
+
       // Save to localStorage
-      localStorage.setItem('mockUser', JSON.stringify(userData))
-      localStorage.setItem('mockProfile', JSON.stringify(userProfile))
-      
+      localStorage.setItem('mockUser', JSON.stringify(userData));
+      localStorage.setItem('mockProfile', JSON.stringify(userProfile));
     } catch (error) {
-      console.error('Sign in error:', error)
-      throw new Error('Invalid login credentials')
+      console.error('Sign in error:', error);
+      throw new Error('Invalid login credentials');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const signOut = async () => {
-    setLoading(true)
-    
+    setLoading(true);
+
     try {
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Clear authentication state
-      setUser(null)
-      setProfile(null)
-      
+      setUser(null);
+      setProfile(null);
+
       // Update mock state
       mockAuthState = {
         user: null,
         profile: null,
-        isAuthenticated: false
-      }
-      
+        isAuthenticated: false,
+      };
+
       // Clear localStorage
-      localStorage.removeItem('mockUser')
-      localStorage.removeItem('mockProfile')
-      
+      localStorage.removeItem('mockUser');
+      localStorage.removeItem('mockProfile');
     } catch (error) {
-      console.error('Sign out error:', error)
+      console.error('Sign out error:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const switchRole = (newRole: 'trainee' | 'trainer') => {
     if (profile) {
-      const updatedProfile = { ...profile, role: newRole }
-      setProfile(updatedProfile)
-      
+      const updatedProfile = { ...profile, role: newRole };
+      setProfile(updatedProfile);
+
       // Update mock state
-      mockAuthState.profile = updatedProfile
-      
+      mockAuthState.profile = updatedProfile;
+
       // Update localStorage
-      localStorage.setItem('mockProfile', JSON.stringify(updatedProfile))
+      localStorage.setItem('mockProfile', JSON.stringify(updatedProfile));
     }
-  }
+  };
 
   const value: AuthContextType = {
     user,
@@ -196,20 +194,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signIn,
     signOut,
-    switchRole
-  }
+    switchRole,
+  };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context
+  return context;
 }

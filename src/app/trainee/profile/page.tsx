@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { useAuth } from '@/contexts/AuthContext'
-import { Profile } from '@/components/profile/Profile'
+import { useAuth } from '@/contexts/AuthContext';
+import { Profile } from '@/components/profile/Profile';
 
 export default function TraineeProfilePage() {
-  const { profile, loading } = useAuth()
+  const { profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +14,7 @@ export default function TraineeProfilePage() {
           <p className="text-muted-foreground">Lade Profil...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!profile) {
@@ -25,7 +25,7 @@ export default function TraineeProfilePage() {
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (profile.role !== 'trainee') {
@@ -36,8 +36,8 @@ export default function TraineeProfilePage() {
           <p className="text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  return <Profile />
+  return <Profile />;
 }

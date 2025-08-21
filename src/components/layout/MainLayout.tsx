@@ -1,34 +1,34 @@
-'use client'
+'use client';
 
-import { Header } from './Header'
-import { Sidebar } from './Sidebar'
-import { useMemo } from 'react'
+import { Header } from './Header';
+import { Sidebar } from './Sidebar';
+import { useMemo } from 'react';
 
 // Use the same User interface as AuthContext
 interface User {
-  id: string
-  email: string
+  id: string;
+  email: string;
 }
 
 interface Profile {
-  id: string
-  email: string
-  full_name: string
-  role: 'trainee' | 'trainer'
-  avatar?: string | null
-  training_start_date?: string | null
-  trainer_id?: string | null
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'trainee' | 'trainer';
+  avatar?: string | null;
+  training_start_date?: string | null;
+  trainer_id?: string | null;
 }
 
 interface MainLayoutProps {
-  user?: User | null
-  profile: Profile | null
-  onNavigation: (view: string, data?: any, title?: string) => void
-  onGoBack: () => void
-  sidebarOpen: boolean
-  onToggleSidebar: () => void
-  userRole: 'trainee' | 'trainer'
-  children: React.ReactNode
+  user?: User | null;
+  profile: Profile | null;
+  onNavigation: (view: string, data?: any, title?: string) => void;
+  onGoBack: () => void;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
+  userRole: 'trainee' | 'trainer';
+  children: React.ReactNode;
 }
 
 export function MainLayout({
@@ -39,15 +39,15 @@ export function MainLayout({
   sidebarOpen,
   onToggleSidebar,
   userRole,
-  children
+  children,
 }: MainLayoutProps) {
   // Determine current view from URL path - optimized with useMemo
-  const currentView = useMemo(() => 'dashboard', [])
+  const currentView = useMemo(() => 'dashboard', []);
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-background via-red-900/20 to-red-800/30">
       {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         currentView={currentView}
         onNavigation={onNavigation}
         isOpen={sidebarOpen}
@@ -72,5 +72,5 @@ export function MainLayout({
         </div>
       </main>
     </div>
-  )
+  );
 }

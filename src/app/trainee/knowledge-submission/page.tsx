@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { useAuth } from '@/contexts/AuthContext'
-import { KnowledgeSubmission } from '@/components/learning/KnowledgeSubmission'
+import { useAuth } from '@/contexts/AuthContext';
+import { KnowledgeSubmission } from '@/components/learning/KnowledgeSubmission';
 
 export default function TraineeKnowledgeSubmissionPage() {
-  const { profile, loading } = useAuth()
+  const { profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +14,7 @@ export default function TraineeKnowledgeSubmissionPage() {
           <p className="text-muted-foreground">Lade Wissensabgabe...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!profile) {
@@ -25,7 +25,7 @@ export default function TraineeKnowledgeSubmissionPage() {
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (profile.role !== 'trainee') {
@@ -36,10 +36,8 @@ export default function TraineeKnowledgeSubmissionPage() {
           <p className="text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  return <KnowledgeSubmission />
+  return <KnowledgeSubmission />;
 }
-
-

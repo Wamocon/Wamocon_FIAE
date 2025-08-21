@@ -1,89 +1,91 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
-import { MainLayout } from '@/components/layout/MainLayout'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { MainLayout } from '@/components/layout/MainLayout';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function TraineeLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const { user, profile, loading } = useAuth()
-  const router = useRouter()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { user, profile, loading } = useAuth();
+  const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/login')
+      router.push('/login');
     }
-    
+
     // Redirect non-trainee users
     if (!loading && profile && profile.role !== 'trainee') {
-      router.push('/login')
+      router.push('/login');
     }
-  }, [user, profile, loading, router])
+  }, [user, profile, loading, router]);
 
   const handleNavigation = (view: string, data?: any, title?: string) => {
     // Navigate to the appropriate trainee route
     switch (view) {
       case 'dashboard':
-        router.push('/trainee/dashboard')
-        break
+        router.push('/trainee/dashboard');
+        break;
       case 'profile':
-        router.push('/trainee/profile')
-        break
+        router.push('/trainee/profile');
+        break;
       case 'reflection':
-        router.push('/trainee/reflection')
-        break
+        router.push('/trainee/reflection');
+        break;
       case 'knowledgeSubmission':
-        router.push('/trainee/knowledge-submission')
-        break
+        router.push('/trainee/knowledge-submission');
+        break;
       case 'modules':
         if (data?.moduleId) {
-          router.push(`/trainee/modules/${data.moduleId}`)
+          router.push(`/trainee/modules/${data.moduleId}`);
         } else {
-          router.push('/trainee/modules')
+          router.push('/trainee/modules');
         }
-        break
+        break;
       case 'lessons':
         if (data?.lessonId) {
-          router.push(`/trainee/lessons/${data.lessonId}`)
+          router.push(`/trainee/lessons/${data.lessonId}`);
         } else {
-          router.push('/trainee/lessons')
+          router.push('/trainee/lessons');
         }
-        break
+        break;
       case 'quizzes':
         if (data?.quizId) {
-          router.push(`/trainee/quizzes/${data.quizId}`)
+          router.push(`/trainee/quizzes/${data.quizId}`);
         } else {
-          router.push('/trainee/quizzes')
+          router.push('/trainee/quizzes');
         }
-        break
+        break;
       default:
-        router.push('/trainee/dashboard')
+        router.push('/trainee/dashboard');
     }
-  }
+  };
 
   const handleGoBack = () => {
-    router.back()
-  }
+    router.back();
+  };
 
   const handleToggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
+    setSidebarOpen(!sidebarOpen);
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-muted-foreground">Lade Trainee Dashboard...</p>
+          <p className="mt-4 text-muted-foreground">
+            Lade Trainee Dashboard...
+          </p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!user || !profile) {
@@ -94,7 +96,7 @@ export default function TraineeLayout({
           <p className="mt-4 text-muted-foreground">Weiterleitung...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (profile.role !== 'trainee') {
@@ -105,7 +107,7 @@ export default function TraineeLayout({
           <p className="mt-4 text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -120,5 +122,5 @@ export default function TraineeLayout({
     >
       {children}
     </MainLayout>
-  )
+  );
 }
