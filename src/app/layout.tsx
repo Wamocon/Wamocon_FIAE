@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="de">
+    <html lang="de" className="dark" suppressHydrationWarning>
       <body className={inter.className}>
         <AuthProvider>
           <LanguageProvider>

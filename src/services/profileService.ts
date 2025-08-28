@@ -1,7 +1,6 @@
 // import db from "@/db";
 // import { profiles } from "@/db/migrations/schemas/schema";
 
-
 // export async function createProfileOnSignup(user: { id: string; full_name: string }) {
 //   await db.insert(profiles).values({
 //     auth_id: user.id,

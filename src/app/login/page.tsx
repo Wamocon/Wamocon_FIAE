@@ -1,11 +1,13 @@
-// LoginPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
 import Link from 'next/link';
+import db from '@/db';
+import { profiles } from '@/db/migrations/schemas/schema';
+import { eq } from 'drizzle-orm';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,17 +16,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
-  const { signIn, profile } = useAuth();
-
-  useEffect(() => {
-    if (profile && !isLoading) {
-      if (profile.role === 'trainer') {
-        router.push('/trainer/dashboard');
-      } else {
-        router.push('/trainee/dashboard');
-      }
-    }
-  }, [profile, isLoading, router]);
+  const supabase = createClientComponentClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,16 +24,45 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await signIn(email, password);
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message || 'Anmeldung fehlgeschlagen.');
+      // 1. Supabase login
+      const { data, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+      if (signInError) throw signInError;
+      if (!data.user) throw new Error('Benutzer nicht gefunden.');
+
+      // 2. Fetch profile from database using Drizzle
+      const profilesResult = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.auth_id, data.user.id));
+
+      const profile = profilesResult[0];
+
+      if (!profile) throw new Error('Profil nicht gefunden.');
+
+      // 3. Redirect based on role
+      if (profile.role === 'trainer') {
+        router.push('/trainer/dashboard');
+      } else {
+        router.push('/trainee/dashboard');
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error('Login error:', err);
+        setError(err.message || 'Anmeldung fehlgeschlagen.');
+      } else {
+        console.error('Login error:', err);
+        setError('Anmeldung fehlgeschlagen.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ... Rest of your JSX (unchanged)
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>

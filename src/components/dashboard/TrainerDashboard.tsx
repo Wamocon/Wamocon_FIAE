@@ -35,10 +35,8 @@ export default function TrainerDashboard({
 }: TrainerDashboardProps) {
   const router = useRouter();
 
-  const trainees = mockData.trainees;
-  const pendingReviews = mockData.quizSubmissions.filter(
-    sub => sub.status === 'submitted'
-  ).length;
+  const trainees = [];
+  const pendingReviews = 0;
 
   // Chart data
   const progressData = [

@@ -78,12 +78,8 @@
           "name": "acceptance_protocols_trainee_id_profiles_id_fk",
           "tableFrom": "acceptance_protocols",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "trainee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["trainee_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -91,12 +87,8 @@
           "name": "acceptance_protocols_trainer_id_profiles_id_fk",
           "tableFrom": "acceptance_protocols",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "trainer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["trainer_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -189,12 +181,8 @@
           "name": "knowledge_submissions_user_id_profiles_id_fk",
           "tableFrom": "knowledge_submissions",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -280,12 +268,8 @@
           "name": "lessons_module_id_modules_id_fk",
           "tableFrom": "lessons",
           "tableTo": "modules",
-          "columnsFrom": [
-            "module_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["module_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -430,12 +414,8 @@
           "name": "options_question_id_questions_id_fk",
           "tableFrom": "options",
           "tableTo": "questions",
-          "columnsFrom": [
-            "question_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["question_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -516,9 +496,7 @@
         "profiles_auth_id_unique": {
           "name": "profiles_auth_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "auth_id"
-          ]
+          "columns": ["auth_id"]
         }
       },
       "policies": {},
@@ -561,12 +539,8 @@
           "name": "progress_user_id_profiles_id_fk",
           "tableFrom": "progress",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -574,12 +548,8 @@
           "name": "progress_sub_lesson_id_sub_lessons_id_fk",
           "tableFrom": "progress",
           "tableTo": "sub_lessons",
-          "columnsFrom": [
-            "sub_lesson_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["sub_lesson_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -659,12 +629,8 @@
           "name": "questions_quiz_id_quizzes_id_fk",
           "tableFrom": "questions",
           "tableTo": "quizzes",
-          "columnsFrom": [
-            "quiz_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["quiz_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -731,12 +697,8 @@
           "name": "quiz_submissions_user_id_profiles_id_fk",
           "tableFrom": "quiz_submissions",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -744,12 +706,8 @@
           "name": "quiz_submissions_quiz_id_quizzes_id_fk",
           "tableFrom": "quiz_submissions",
           "tableTo": "quizzes",
-          "columnsFrom": [
-            "quiz_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["quiz_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -842,12 +800,8 @@
           "name": "quizzes_lesson_id_lessons_id_fk",
           "tableFrom": "quizzes",
           "tableTo": "lessons",
-          "columnsFrom": [
-            "lesson_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["lesson_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -855,12 +809,8 @@
           "name": "quizzes_module_id_modules_id_fk",
           "tableFrom": "quizzes",
           "tableTo": "modules",
-          "columnsFrom": [
-            "module_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["module_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -964,12 +914,8 @@
           "name": "reflections_user_id_profiles_id_fk",
           "tableFrom": "reflections",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1067,12 +1013,8 @@
           "name": "sub_lessons_lesson_id_lessons_id_fk",
           "tableFrom": "sub_lessons",
           "tableTo": "lessons",
-          "columnsFrom": [
-            "lesson_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["lesson_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1125,12 +1067,8 @@
           "name": "submission_answers_submission_id_quiz_submissions_id_fk",
           "tableFrom": "submission_answers",
           "tableTo": "quiz_submissions",
-          "columnsFrom": [
-            "submission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["submission_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1138,12 +1076,8 @@
           "name": "submission_answers_question_id_questions_id_fk",
           "tableFrom": "submission_answers",
           "tableTo": "questions",
-          "columnsFrom": [
-            "question_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["question_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1151,12 +1085,8 @@
           "name": "submission_answers_selected_option_id_options_id_fk",
           "tableFrom": "submission_answers",
           "tableTo": "options",
-          "columnsFrom": [
-            "selected_option_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["selected_option_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1223,12 +1153,8 @@
           "name": "testimonials_user_id_profiles_id_fk",
           "tableFrom": "testimonials",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1244,36 +1170,22 @@
     "public.question_type": {
       "name": "question_type",
       "schema": "public",
-      "values": [
-        "multiple_choice",
-        "true_false",
-        "short_answer"
-      ]
+      "values": ["multiple_choice", "true_false", "short_answer"]
     },
     "public.quiz_type": {
       "name": "quiz_type",
       "schema": "public",
-      "values": [
-        "mini",
-        "big"
-      ]
+      "values": ["mini", "big"]
     },
     "public.submission_status": {
       "name": "submission_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved",
-        "rejected"
-      ]
+      "values": ["pending", "approved", "rejected"]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": [
-        "trainee",
-        "trainer"
-      ]
+      "values": ["trainee", "trainer"]
     }
   },
   "schemas": {},

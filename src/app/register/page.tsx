@@ -11,14 +11,12 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const router = useRouter();
   const supabase = createClientComponentClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
 
     // Basic validation
     if (!formData.email || !formData.password) {
@@ -39,9 +37,8 @@ export default function RegisterPage() {
 
       if (signUpError) throw signUpError;
 
-      // Success message (Supabase trigger will insert profile automatically)
-      setSuccess('Registrierung erfolgreich! Bitte bestätigen Sie Ihre E-Mail.');
-      setTimeout(() => router.push('/login'), 1500);
+      // Immediately redirect to login
+      router.push('/login');
     } catch (err: unknown) {
       console.error('Registration failed:', err);
       setError(
@@ -55,7 +52,6 @@ export default function RegisterPage() {
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (error) setError('');
-    if (success) setSuccess('');
   };
 
   return (
@@ -138,12 +134,6 @@ export default function RegisterPage() {
             {error && (
               <div className="bg-destructive/10 border-destructive/20 rounded-xl border p-3">
                 <p className="text-destructive text-sm">{error}</p>
-              </div>
-            )}
-
-            {success && (
-              <div className="bg-green-100 border-green-300 text-green-800 rounded-xl border p-3">
-                <p className="text-sm">{success}</p>
               </div>
             )}
 

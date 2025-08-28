@@ -2,7 +2,11 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase'; // Your Supabase client from supabase.ts
-import { User } from '@supabase/supabase-js';
+
+interface User {
+  id: string;
+  email: string;
+}
 
 interface Profile {
   id: string;
@@ -20,13 +24,12 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (
+    fullName: string,
     email: string,
     password: string,
-    fullName: string,
     role: 'trainee' | 'trainer'
   ) => Promise<void>;
   signOut: () => Promise<void>;
-  switchRole: (newRole: 'trainee' | 'trainer') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,172 +39,122 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Check for existing session on mount
   useEffect(() => {
-    const checkSession = async () => {
+    const init = async () => {
+      setLoading(true);
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
+      if (session?.user) {
+        const u = session.user;
+        setUser({ id: u.id, email: u.email || '' });
+        await loadProfile(u.id);
+      }
       setLoading(false);
     };
 
-    checkSession();
-
-    // Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
+      (_event, session) => {
+        if (session?.user) {
+          const u = session.user;
+          setUser({ id: u.id, email: u.email || '' });
+          loadProfile(u.id);
+        } else {
+          setUser(null);
+          setProfile(null);
+        }
       }
     );
+
+    init();
 
     return () => {
       authListener.subscription.unsubscribe();
     };
   }, []);
 
-  // Fetch profile when user changes
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (user) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select(
-            'id, full_name, email, role, avatar, training_start_date, trainer_id'
-          )
-          .eq('id', user.id)
-          .single();
+  const loadProfile = async (userId: string) => {
+    const { data: authUser } = await supabase.auth.getUser();
+    const email = authUser.user?.email || '';
 
-        if (error) {
-          console.error('Error fetching profile:', error);
-          setProfile(null);
-        } else {
-          setProfile(data);
-        }
-      } else {
-        setProfile(null);
-      }
-    };
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(
+        'id, auth_id, full_name, role, avatar_url, trainer_auth_id, training_start_date'
+      )
+      .eq('auth_id', userId)
+      .single();
 
-    fetchProfile();
-  }, [user]);
+    if (error) {
+      console.error('Failed to load profile', error);
+      setProfile(null);
+      return;
+    }
+
+    setProfile({
+      id: data.id,
+      email,
+      full_name: data.full_name,
+      role: data.role as 'trainee' | 'trainer',
+      avatar: (data as any).avatar_url || null,
+      training_start_date: (data as any).training_start_date || null,
+      trainer_id: (data as any).trainer_auth_id || null,
+    });
+  };
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
-      setUser(data.user);
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      throw new Error(
-        error.message.includes('Email not confirmed')
-          ? 'Bitte bestätigen Sie Ihre E-Mail-Adresse.'
-          : 'Ungültige Anmeldedaten.'
-      );
-    } finally {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
       setLoading(false);
+      throw error;
     }
+    if (data.user) {
+      setUser({ id: data.user.id, email: data.user.email || '' });
+      await loadProfile(data.user.id);
+    }
+    setLoading(false);
   };
 
   const signUp = async (
+    fullName: string,
     email: string,
     password: string,
-    fullName: string,
     role: 'trainee' | 'trainer'
   ) => {
     setLoading(true);
-    try {
-      // Sign up with Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName, role },
-        },
-      });
-      if (error) throw new Error(error.message);
 
-      if (data.user) {
-        // Auto-signin to set authenticated session
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) {
-          console.error('Auto-signin error:', signInError);
-          throw new Error('Auto-signin failed: ' + signInError.message);
-        }
-
-        // Verify session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) {
-          throw new Error('No authenticated session after signin');
-        }
-
-        // Insert into profiles table
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: data.user.id,
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
           full_name: fullName,
-          email,
           role,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
+        },
+      },
+    });
 
-        if (profileError) {
-          console.error('Profile insert error:', profileError);
-          throw new Error('Profile creation failed: ' + profileError.message);
-        }
-
-        setUser(data.user);
-      }
-    } catch (error: any) {
-      console.error('Sign up error:', error);
-      throw new Error(error.message || 'Registrierung fehlgeschlagen.');
-    } finally {
+    if (error || !data.user) {
       setLoading(false);
+      throw error || new Error('Sign up failed');
     }
+
+    setUser({ id: data.user.id, email });
+
+    await loadProfile(data.user.id);
+    setLoading(false);
   };
 
   const signOut = async () => {
     setLoading(true);
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-    } catch (error) {
-      console.error('Sign out error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const switchRole = async (newRole: 'trainee' | 'trainer') => {
-    if (!user || !profile) return;
-
-    setLoading(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
-      setProfile({ ...profile, role: newRole });
-    } catch (error: any) {
-      console.error('Switch role error:', error);
-      throw new Error('Rollenwechsel fehlgeschlagen: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
+    await supabase.auth.signOut();
+    setUser(null);
+    setProfile(null);
+    setLoading(false);
   };
 
   const value: AuthContextType = {
@@ -211,7 +164,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     signUp,
     signOut,
-    switchRole,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
