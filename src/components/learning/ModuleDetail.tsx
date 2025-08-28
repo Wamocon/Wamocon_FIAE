@@ -55,14 +55,14 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
+    <div className="mx-auto max-w-7xl space-y-8 p-6">
       {/* Header */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-accent to-primary rounded-3xl flex items-center justify-center mx-auto mb-4">
-            <BookOpen className="w-10 h-10 text-white" />
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+        <div className="mb-6 text-center">
+          <div className="from-accent to-primary mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
+            <BookOpen className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+          <h1 className="text-foreground mb-2 text-3xl font-bold">
             Module Übersicht
           </h1>
           <p className="text-muted">
@@ -73,7 +73,7 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
       </div>
 
       {/* Modules Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         {modules.map(module => {
           const progress = getModuleProgress(module);
           const completedLessons = getCompletedLessons(module);
@@ -83,29 +83,29 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
           return (
             <div
               key={module.moduleId}
-              className="glass-effect rounded-3xl shadow-lg border border-accent/30 overflow-hidden"
+              className="glass-effect border-accent/30 overflow-hidden rounded-3xl border shadow-lg"
             >
               {/* Module Header */}
               <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-accent to-primary rounded-2xl flex items-center justify-center">
-                    <BookOpen className="w-8 h-8 text-white" />
+                <div className="mb-4 flex items-start justify-between">
+                  <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br">
+                    <BookOpen className="h-8 w-8 text-white" />
                   </div>
                   <button
                     onClick={() => handleModuleSelect(module.moduleId)}
-                    className="p-2 text-muted hover:text-foreground hover:bg-accent/20 rounded-xl transition-all duration-200"
+                    className="text-muted hover:text-foreground hover:bg-accent/20 rounded-xl p-2 transition-all duration-200"
                   >
                     <ChevronRight
-                      className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                      className={`h-5 w-5 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
                     />
                   </button>
                 </div>
 
-                <h3 className="font-bold text-xl text-foreground mb-2">
+                <h3 className="text-foreground mb-2 text-xl font-bold">
                   {module.title}
                 </h3>
-                <div className="flex items-center gap-4 text-sm text-muted mb-4">
-                  <span className="px-3 py-1 bg-accent/20 text-accent rounded-full font-medium">
+                <div className="text-muted mb-4 flex items-center gap-4 text-sm">
+                  <span className="bg-accent/20 text-accent rounded-full px-3 py-1 font-medium">
                     Jahr {module.training_year}
                   </span>
                   <span>{module.chapters?.length || 0} Kapitel</span>
@@ -114,30 +114,30 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
                 {/* Progress Section */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted">
+                    <span className="text-muted text-sm">
                       Gesamtfortschritt
                     </span>
-                    <span className="text-lg font-bold text-accent">
+                    <span className="text-accent text-lg font-bold">
                       {progress}%
                     </span>
                   </div>
 
-                  <div className="w-full bg-muted/30 rounded-full h-3 overflow-hidden">
+                  <div className="bg-muted/30 h-3 w-full overflow-hidden rounded-full">
                     <div
-                      className="bg-gradient-to-r from-accent to-primary h-3 rounded-full transition-all duration-500"
+                      className="from-accent to-primary h-3 rounded-full bg-gradient-to-r transition-all duration-500"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
 
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      <CheckCircle className="h-4 w-4 text-green-500" />
                       <span className="text-muted">
                         {completedLessons} abgeschlossen
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-muted" />
+                      <Clock className="text-muted h-4 w-4" />
                       <span className="text-muted">
                         {totalLessons} Lektionen
                       </span>
@@ -148,8 +148,8 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
 
               {/* Chapters Section */}
               {isExpanded && module.chapters && (
-                <div className="px-6 pb-6 border-t border-accent/20">
-                  <h4 className="font-semibold text-foreground mb-4 mt-4">
+                <div className="border-accent/20 border-t px-6 pb-6">
+                  <h4 className="text-foreground mt-4 mb-4 font-semibold">
                     Kapitel in diesem Modul
                   </h4>
                   <div className="space-y-3">
@@ -168,7 +168,7 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
                       return (
                         <div
                           key={chapter.chapterId}
-                          className="p-4 bg-background/50 rounded-xl border border-accent/20 hover:border-accent/40 transition-colors cursor-pointer"
+                          className="bg-background/50 border-accent/20 hover:border-accent/40 cursor-pointer rounded-xl border p-4 transition-colors"
                           onClick={() =>
                             handleChapterClick(
                               module.moduleId,
@@ -176,20 +176,20 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
                             )
                           }
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <h5 className="font-medium text-foreground">
+                          <div className="mb-2 flex items-center justify-between">
+                            <h5 className="text-foreground font-medium">
                               {chapter.title}
                             </h5>
                             <div className="flex items-center gap-2">
                               {chapterPercentage === 100 ? (
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                <CheckCircle className="h-4 w-4 text-green-500" />
                               ) : (
-                                <Play className="w-4 h-4 text-accent" />
+                                <Play className="text-accent h-4 w-4" />
                               )}
                             </div>
                           </div>
 
-                          <div className="w-full bg-muted/30 rounded-full h-2 mb-2">
+                          <div className="bg-muted/30 mb-2 h-2 w-full rounded-full">
                             <div
                               className={`h-2 rounded-full transition-all duration-500 ${
                                 chapterPercentage === 100
@@ -200,7 +200,7 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
                             />
                           </div>
 
-                          <p className="text-xs text-muted">
+                          <p className="text-muted text-xs">
                             {chapterProgress} von {totalChapterLessons}{' '}
                             Lektionen abgeschlossen
                           </p>
@@ -216,36 +216,36 @@ export function ModuleDetail({ onNavigation }: ModuleDetailProps) {
       </div>
 
       {/* Learning Statistics */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
-        <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center">
-          <TrendingUp className="w-6 h-6 mr-3 text-accent" />
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+        <h2 className="text-foreground mb-6 flex items-center text-2xl font-bold">
+          <TrendingUp className="text-accent mr-3 h-6 w-6" />
           Lernstatistiken
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="text-center p-6 bg-background/50 rounded-2xl border border-accent/20">
-            <Award className="w-12 h-12 text-accent mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="bg-background/50 border-accent/20 rounded-2xl border p-6 text-center">
+            <Award className="text-accent mx-auto mb-3 h-12 w-12" />
+            <h3 className="text-foreground mb-2 text-lg font-semibold">
               Abgeschlossene Module
             </h3>
-            <p className="text-3xl font-bold text-accent">
+            <p className="text-accent text-3xl font-bold">
               {modules.filter(m => m.progress === 100).length}
             </p>
           </div>
-          <div className="text-center p-6 bg-background/50 rounded-2xl border border-accent/20">
-            <BookOpen className="w-12 h-12 text-primary mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
+          <div className="bg-background/50 border-accent/20 rounded-2xl border p-6 text-center">
+            <BookOpen className="text-primary mx-auto mb-3 h-12 w-12" />
+            <h3 className="text-foreground mb-2 text-lg font-semibold">
               Aktive Module
             </h3>
-            <p className="text-3xl font-bold text-primary">
+            <p className="text-primary text-3xl font-bold">
               {modules.filter(m => m.progress > 0 && m.progress < 100).length}
             </p>
           </div>
-          <div className="text-center p-6 bg-background/50 rounded-2xl border border-accent/20">
-            <Clock className="w-12 h-12 text-muted mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
+          <div className="bg-background/50 border-accent/20 rounded-2xl border p-6 text-center">
+            <Clock className="text-muted mx-auto mb-3 h-12 w-12" />
+            <h3 className="text-foreground mb-2 text-lg font-semibold">
               Verbleibende
             </h3>
-            <p className="text-3xl font-bold text-muted">
+            <p className="text-muted text-3xl font-bold">
               {modules.filter(m => m.progress === 0).length}
             </p>
           </div>

@@ -97,35 +97,35 @@ export default function TraineeDashboard({
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background via-red-900/30 to-red-800/40 min-h-screen relative">
+    <div className="from-background relative min-h-screen space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
       {/* Enhanced red background overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25 pointer-events-none rounded-3xl"></div>
+      <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
       <div className="relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
             {/* Continue Learning Card */}
             <div
-              className="glass-effect-enhanced p-6 rounded-2xl shadow-2xl border-2 border-accent/40 cursor-pointer hover:border-accent/70 hover:shadow-accent/20 transition-all duration-300 transform hover:-translate-y-1"
+              className="glass-effect-enhanced border-accent/40 hover:border-accent/70 hover:shadow-accent/20 transform cursor-pointer rounded-2xl border-2 p-6 shadow-2xl transition-all duration-300 hover:-translate-y-1"
               onClick={() => handleLessonClick(nextLesson.id)}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-accent mb-3 tracking-wider uppercase">
+                  <h3 className="text-accent mb-3 text-sm font-bold tracking-wider uppercase">
                     WEITERMACHEN
                   </h3>
-                  <p className="text-2xl font-bold text-foreground leading-tight">
+                  <p className="text-foreground text-2xl leading-tight font-bold">
                     {nextLesson.title}
                   </p>
                   <p className="text-muted-foreground mt-2">
                     Modul: {nextLesson.module}
                   </p>
                 </div>
-                <div className="w-16 h-16 bg-gradient-to-br from-accent to-primary rounded-2xl flex items-center justify-center shadow-lg">
-                  <Play className="w-8 h-8 text-white" />
+                <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg">
+                  <Play className="h-8 w-8 text-white" />
                 </div>
               </div>
-              <div className="flex items-center mt-4 text-accent">
-                <Clock className="w-4 h-4 mr-2" />
+              <div className="text-accent mt-4 flex items-center">
+                <Clock className="mr-2 h-4 w-4" />
                 <span className="text-sm font-medium">
                   {nextLesson.estimatedTime}
                 </span>
@@ -133,40 +133,40 @@ export default function TraineeDashboard({
             </div>
 
             {/* Learning Path Section - Textual Information Above Charts */}
-            <div className="glass-effect-enhanced p-6 rounded-2xl shadow-2xl border-2 border-accent/30">
-              <h3 className="text-xl font-bold text-foreground mb-6 flex items-center">
-                <div className="w-10 h-10 bg-gradient-to-br from-accent to-primary rounded-xl flex items-center justify-center mr-4">
-                  <BookOpen className="w-5 h-5 text-white" />
+            <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
+              <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
+                <div className="from-accent to-primary mr-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
+                  <BookOpen className="h-5 w-5 text-white" />
                 </div>
                 Mein Lernpfad
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {modules.map(module => (
                   <div
                     key={module.moduleId}
-                    className="bg-gradient-to-br from-background/80 to-red-900/10 p-5 rounded-xl shadow-lg hover:shadow-xl hover:from-background/90 hover:to-red-900/20 transition-all duration-300 cursor-pointer border border-accent/20 hover:border-accent/40 group"
+                    className="from-background/80 hover:from-background/90 border-accent/20 hover:border-accent/40 group cursor-pointer rounded-xl border bg-gradient-to-br to-red-900/10 p-5 shadow-lg transition-all duration-300 hover:to-red-900/20 hover:shadow-xl"
                     onClick={() => handleModuleClick(module.moduleId)}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-bold text-lg text-foreground group-hover:text-accent transition-colors">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-foreground group-hover:text-accent text-lg font-bold transition-colors">
                         {module.title}
                       </h3>
-                      <ArrowRight className="w-5 h-5 text-accent/60 group-hover:text-accent transition-colors" />
+                      <ArrowRight className="text-accent/60 group-hover:text-accent h-5 w-5 transition-colors" />
                     </div>
-                    <p className="text-sm text-muted-foreground mb-3">
+                    <p className="text-muted-foreground mb-3 text-sm">
                       Fortschritt
                     </p>
-                    <div className="w-full bg-muted/50 rounded-full h-3 overflow-hidden">
+                    <div className="bg-muted/50 h-3 w-full overflow-hidden rounded-full">
                       <div
-                        className="bg-gradient-to-r from-accent to-primary h-3 rounded-full transition-all duration-700 shadow-lg"
+                        className="from-accent to-primary h-3 rounded-full bg-gradient-to-r shadow-lg transition-all duration-700"
                         style={{ width: `${module.progress}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between mt-3">
-                      <span className="text-sm text-muted-foreground">
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-muted-foreground text-sm">
                         0% → {module.progress}%
                       </span>
-                      <span className="text-lg font-bold text-accent">
+                      <span className="text-accent text-lg font-bold">
                         {module.progress}%
                       </span>
                     </div>
@@ -176,72 +176,72 @@ export default function TraineeDashboard({
             </div>
 
             {/* Recent Achievements Section - Textual Information Above Charts */}
-            <div className="glass-effect p-6 rounded-2xl shadow-lg border border-accent/20">
-              <h3 className="font-bold text-lg text-foreground mb-4 flex items-center">
-                <div className="w-8 h-8 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center mr-3">
-                  <Award className="w-4 h-4 text-white" />
+            <div className="glass-effect border-accent/20 rounded-2xl border p-6 shadow-lg">
+              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
+                <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-500 to-orange-500">
+                  <Award className="h-4 w-4 text-white" />
                 </div>
                 Letzte Erfolge
               </h3>
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-background/60 to-red-900/10 rounded-xl border border-accent/20 hover:border-accent/40 transition-colors">
+                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
                   <span className="text-foreground font-medium">
                     90% im Quiz "Grundbegriffe"
                   </span>
-                  <div className="w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center">
-                    <Award className="w-4 h-4 text-accent" />
+                  <div className="bg-accent/20 flex h-8 w-8 items-center justify-center rounded-full">
+                    <Award className="text-accent h-4 w-4" />
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-background/60 to-red-900/10 rounded-xl border border-accent/20 hover:border-accent/40 transition-colors">
+                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
                   <span className="text-foreground font-medium">
                     Modul "HTML/CSS" abgeschlossen
                   </span>
-                  <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
-                    <BookOpen className="w-4 h-4 text-green-400" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20">
+                    <BookOpen className="h-4 w-4 text-green-400" />
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-background/60 to-red-900/10 rounded-xl border border-accent/20 hover:border-accent/40 transition-colors">
+                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
                   <span className="text-foreground font-medium">
                     7 Tage in Folge gelernt
                   </span>
-                  <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-blue-400" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/20">
+                    <TrendingUp className="h-4 w-4 text-blue-400" />
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Upcoming Deadlines Section - Textual Information Above Charts */}
-            <div className="glass-effect p-6 rounded-2xl shadow-lg border border-accent/20">
-              <h3 className="font-bold text-lg text-foreground mb-4 flex items-center">
-                <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-pink-500 rounded-lg flex items-center justify-center mr-3">
-                  <Calendar className="w-4 h-4 text-white" />
+            <div className="glass-effect border-accent/20 rounded-2xl border p-6 shadow-lg">
+              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
+                <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-500">
+                  <Calendar className="h-4 w-4 text-white" />
                 </div>
                 Anstehende Termine
               </h3>
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-background/60 to-red-900/10 rounded-xl border border-accent/20 hover:border-accent/40 transition-colors">
+                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
                   <span className="text-foreground font-medium">
                     Reflektion Q3: 30.09.2025
                   </span>
-                  <div className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center">
-                    <Calendar className="w-4 h-4 text-purple-400" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/20">
+                    <Calendar className="h-4 w-4 text-purple-400" />
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-background/60 to-red-900/10 rounded-xl border border-accent/20 hover:border-accent/40 transition-colors">
+                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
                   <span className="text-foreground font-medium">
                     Quiz "JavaScript": 25.08.2025
                   </span>
-                  <div className="w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center">
-                    <Target className="w-4 h-4 text-accent" />
+                  <div className="bg-accent/20 flex h-8 w-8 items-center justify-center rounded-full">
+                    <Target className="text-accent h-4 w-4" />
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-background/60 to-red-900/10 rounded-xl border border-accent/20 hover:border-accent/40 transition-colors">
+                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
                   <span className="text-foreground font-medium">
                     Projektabgabe: 15.09.2025
                   </span>
-                  <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center">
-                    <BookOpen className="w-4 h-4 text-orange-400" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/20">
+                    <BookOpen className="h-4 w-4 text-orange-400" />
                   </div>
                 </div>
               </div>
@@ -251,17 +251,17 @@ export default function TraineeDashboard({
           {/* Right Sidebar - Charts */}
           <div className="space-y-6">
             {/* Weekly Progress Chart */}
-            <div className="glass-effect-enhanced p-6 rounded-2xl shadow-2xl border-2 border-accent/30">
-              <h3 className="font-bold text-lg text-foreground mb-4 flex items-center">
-                <div className="w-8 h-8 bg-gradient-to-br from-accent to-primary rounded-lg flex items-center justify-center mr-3">
-                  <BarChart3 className="w-4 h-4 text-white" />
+            <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
+              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
+                <div className="from-accent to-primary mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br">
+                  <BarChart3 className="h-4 w-4 text-white" />
                 </div>
                 Wöchentlicher Fortschritt
               </h3>
               <ResponsiveContainer
                 width="100%"
                 height={200}
-                className="bg-gradient-to-br from-background/40 to-red-900/10 rounded-xl p-2"
+                className="from-background/40 rounded-xl bg-gradient-to-br to-red-900/10 p-2"
               >
                 <LineChart data={weeklyProgress}>
                   <CartesianGrid
@@ -309,9 +309,9 @@ export default function TraineeDashboard({
                 {weeklyProgress.map((item, index) => (
                   <div
                     key={index}
-                    className="text-center p-2 bg-gradient-to-br from-accent/20 to-primary/20 rounded-lg border border-accent/30"
+                    className="from-accent/20 to-primary/20 border-accent/30 rounded-lg border bg-gradient-to-br p-2 text-center"
                   >
-                    <div className="font-bold text-accent text-sm">
+                    <div className="text-accent text-sm font-bold">
                       {item.week}
                     </div>
                     <div className="text-foreground font-semibold">
@@ -323,17 +323,17 @@ export default function TraineeDashboard({
             </div>
 
             {/* Skills Radar Chart */}
-            <div className="glass-effect-enhanced p-6 rounded-2xl shadow-2xl border-2 border-accent/30">
-              <h3 className="font-bold text-lg text-foreground mb-4 flex items-center">
-                <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center mr-3">
-                  <Target className="w-4 h-4 text-white" />
+            <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
+              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
+                <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
+                  <Target className="h-4 w-4 text-white" />
                 </div>
                 Fähigkeiten
               </h3>
               <ResponsiveContainer
                 width="100%"
                 height={200}
-                className="bg-gradient-to-br from-background/40 to-green-900/10 rounded-xl p-2"
+                className="from-background/40 rounded-xl bg-gradient-to-br to-green-900/10 p-2"
               >
                 <RadarChart data={skillRadar}>
                   <PolarGrid stroke="#6b7280" strokeOpacity={0.2} />
@@ -364,12 +364,12 @@ export default function TraineeDashboard({
                 {skillRadar.map((item, index) => (
                   <div
                     key={index}
-                    className="text-center p-2 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-lg border border-green-500/30"
+                    className="rounded-lg border border-green-500/30 bg-gradient-to-br from-green-500/20 to-emerald-500/20 p-2 text-center"
                   >
-                    <div className="font-bold text-green-400 text-xs">
+                    <div className="text-xs font-bold text-green-400">
                       {item.skill}
                     </div>
-                    <div className="text-foreground font-semibold text-sm">
+                    <div className="text-foreground text-sm font-semibold">
                       {item.value}/100
                     </div>
                   </div>
@@ -378,17 +378,17 @@ export default function TraineeDashboard({
             </div>
 
             {/* Module Progress Chart */}
-            <div className="glass-effect-enhanced p-6 rounded-2xl shadow-2xl border-2 border-accent/30">
-              <h3 className="font-bold text-lg text-foreground mb-4 flex items-center">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center mr-3">
-                  <PieChart className="w-4 h-4 text-white" />
+            <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
+              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
+                <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-500">
+                  <PieChart className="h-4 w-4 text-white" />
                 </div>
                 Modul-Fortschritt
               </h3>
               <ResponsiveContainer
                 width="100%"
                 height={200}
-                className="bg-gradient-to-br from-background/40 to-blue-900/10 rounded-xl p-2"
+                className="from-background/40 rounded-xl bg-gradient-to-br to-blue-900/10 p-2"
               >
                 <BarChart data={moduleProgress}>
                   <CartesianGrid
@@ -433,19 +433,19 @@ export default function TraineeDashboard({
                 {moduleProgress.map((item, index) => (
                   <div
                     key={index}
-                    className="flex justify-between items-center p-2 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg border border-blue-500/30"
+                    className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-2"
                   >
-                    <span className="text-foreground font-medium text-xs truncate flex-1 mr-2">
+                    <span className="text-foreground mr-2 flex-1 truncate text-xs font-medium">
                       {item.name}
                     </span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-16 bg-blue-500/30 rounded-full h-2">
+                      <div className="h-2 w-16 rounded-full bg-blue-500/30">
                         <div
-                          className="bg-gradient-to-r from-accent to-primary h-2 rounded-full shadow-lg"
+                          className="from-accent to-primary h-2 rounded-full bg-gradient-to-r shadow-lg"
                           style={{ width: `${item.progress}%` }}
                         />
                       </div>
-                      <span className="text-accent font-bold text-sm min-w-[2.5rem] text-right">
+                      <span className="text-accent min-w-[2.5rem] text-right text-sm font-bold">
                         {item.progress}%
                       </span>
                     </div>

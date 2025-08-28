@@ -126,29 +126,29 @@ export function Quiz({ onNavigation }: QuizProps) {
   if (isSubmitted) {
     const passed = score >= mockQuiz.passingScore;
     return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30 text-center">
+      <div className="mx-auto max-w-2xl p-6">
+        <div className="glass-effect border-accent/30 rounded-3xl border p-8 text-center shadow-lg">
           <div
-            className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${
+            className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ${
               passed
                 ? 'bg-gradient-to-br from-green-500 to-emerald-500'
                 : 'bg-gradient-to-br from-red-500 to-pink-500'
             }`}
           >
             {passed ? (
-              <Trophy className="w-10 h-10 text-white" />
+              <Trophy className="h-10 w-10 text-white" />
             ) : (
-              <XCircle className="w-10 h-10 text-white" />
+              <XCircle className="h-10 w-10 text-white" />
             )}
           </div>
 
-          <h2 className="text-2xl font-bold text-foreground mb-2">
+          <h2 className="text-foreground mb-2 text-2xl font-bold">
             {passed
               ? 'Quiz erfolgreich abgeschlossen! 🎉'
               : 'Quiz nicht bestanden'}
           </h2>
 
-          <div className="text-6xl font-bold mb-4">
+          <div className="mb-4 text-6xl font-bold">
             <span className={passed ? 'text-green-500' : 'text-red-500'}>
               {score}%
             </span>
@@ -160,17 +160,17 @@ export function Quiz({ onNavigation }: QuizProps) {
               : `Du hast ${score}% der Fragen richtig beantwortet. Die Bestehensgrenze liegt bei ${mockQuiz.passingScore}%.`}
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <button
               onClick={() => onNavigation('dashboard')}
-              className="px-6 py-3 font-medium text-white bg-gradient-to-r from-accent to-primary rounded-2xl hover:from-accent/90 hover:to-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
             >
               Zum Dashboard
             </button>
             {!passed && (
               <button
                 onClick={() => window.location.reload()}
-                className="px-6 py-3 font-medium text-muted bg-muted/30 rounded-2xl hover:bg-muted/50 transition-all duration-200"
+                className="text-muted bg-muted/30 hover:bg-muted/50 rounded-2xl px-6 py-3 font-medium transition-all duration-200"
               >
                 Erneut versuchen
               </button>
@@ -185,18 +185,18 @@ export function Quiz({ onNavigation }: QuizProps) {
   const isAnswerSelected = selectedAnswers[currentQ.id] !== undefined;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8 p-6">
       {/* Header */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
-        <div className="flex items-center gap-4 mb-6">
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+        <div className="mb-6 flex items-center gap-4">
           <button
             onClick={handleGoBack}
-            className="p-2 text-muted hover:text-foreground hover:bg-accent/20 rounded-xl transition-all duration-200"
+            className="text-muted hover:text-foreground hover:bg-accent/20 rounded-xl p-2 transition-all duration-200"
           >
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="h-6 w-6" />
           </button>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-foreground">
+            <h1 className="text-foreground text-3xl font-bold">
               {mockQuiz.title}
             </h1>
             <p className="text-muted mt-1">{mockQuiz.description}</p>
@@ -204,14 +204,14 @@ export function Quiz({ onNavigation }: QuizProps) {
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-muted/30 rounded-full h-3 mb-4">
+        <div className="bg-muted/30 mb-4 h-3 w-full rounded-full">
           <div
-            className="bg-gradient-to-r from-accent to-primary h-3 rounded-full transition-all duration-500"
+            className="from-accent to-primary h-3 rounded-full bg-gradient-to-r transition-all duration-500"
             style={{ width: `${getProgressPercentage()}%` }}
           />
         </div>
 
-        <div className="flex items-center justify-between text-sm text-muted">
+        <div className="text-muted flex items-center justify-between text-sm">
           <span>
             Frage {currentQuestion + 1} von {mockQuiz.totalQuestions}
           </span>
@@ -220,13 +220,13 @@ export function Quiz({ onNavigation }: QuizProps) {
       </div>
 
       {/* Timer */}
-      <div className="glass-effect rounded-3xl p-6 border border-accent/30">
+      <div className="glass-effect border-accent/30 rounded-3xl border p-6">
         <div className="flex items-center justify-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-500 rounded-2xl flex items-center justify-center">
-            <Clock className="w-6 h-6 text-white" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-pink-500">
+            <Clock className="h-6 w-6 text-white" />
           </div>
           <div className="text-center">
-            <p className="text-sm text-red-600 font-medium">
+            <p className="text-sm font-medium text-red-600">
               Verbleibende Zeit
             </p>
             <p className="text-2xl font-bold text-red-700">
@@ -237,9 +237,9 @@ export function Quiz({ onNavigation }: QuizProps) {
       </div>
 
       {/* Current Question */}
-      <div className="bg-white rounded-3xl p-8 shadow-lg border border-slate-200">
+      <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-lg">
         <div className="mb-6">
-          <h3 className="text-xl font-bold text-slate-800 mb-2">
+          <h3 className="mb-2 text-xl font-bold text-slate-800">
             Frage {currentQuestion + 1}
           </h3>
           <p className="text-lg text-slate-700">{currentQ.question}</p>
@@ -249,10 +249,10 @@ export function Quiz({ onNavigation }: QuizProps) {
           {currentQ.options.map((option, oIndex) => (
             <label
               key={oIndex}
-              className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-200 border-2 ${
+              className={`flex cursor-pointer items-center rounded-2xl border-2 p-4 transition-all duration-200 ${
                 selectedAnswers[currentQ.id] === oIndex
-                  ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-300 shadow-md'
-                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                  ? 'border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50 shadow-md'
+                  : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
               }`}
             >
               <input
@@ -264,31 +264,31 @@ export function Quiz({ onNavigation }: QuizProps) {
                 className="sr-only"
               />
               <div
-                className={`w-5 h-5 rounded-full border-2 mr-4 flex items-center justify-center ${
+                className={`mr-4 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
                   selectedAnswers[currentQ.id] === oIndex
                     ? 'border-blue-500 bg-blue-500'
                     : 'border-slate-400'
                 }`}
               >
                 {selectedAnswers[currentQ.id] === oIndex && (
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
+                  <div className="h-2 w-2 rounded-full bg-white"></div>
                 )}
               </div>
-              <span className="text-slate-800 font-medium">{option}</span>
+              <span className="font-medium text-slate-800">{option}</span>
             </label>
           ))}
         </div>
       </div>
 
       {/* Navigation */}
-      <div className="bg-white rounded-3xl p-6 shadow-lg border border-slate-200">
-        <div className="flex justify-between items-center">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+        <div className="flex items-center justify-between">
           <button
             onClick={handlePrevQuestion}
             disabled={currentQuestion === 0}
-            className="px-6 py-3 font-medium text-slate-600 bg-slate-100 rounded-2xl hover:bg-slate-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="flex items-center gap-2 rounded-2xl bg-slate-100 px-6 py-3 font-medium text-slate-600 transition-all duration-200 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
             Vorherige
           </button>
 
@@ -305,16 +305,16 @@ export function Quiz({ onNavigation }: QuizProps) {
                   Object.keys(selectedAnswers).length <
                   mockQuiz.questions.length
                 }
-                className="px-8 py-3 font-semibold text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex transform items-center gap-2 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 px-8 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:from-green-700 hover:to-emerald-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <CheckCircle className="w-5 h-5" />
+                <CheckCircle className="h-5 w-5" />
                 Quiz abschließen
               </button>
             ) : (
               <button
                 onClick={handleNextQuestion}
                 disabled={!isAnswerSelected}
-                className="px-6 py-3 font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="transform rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Nächste Frage
               </button>

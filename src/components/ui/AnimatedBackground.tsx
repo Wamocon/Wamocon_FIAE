@@ -133,7 +133,7 @@ export function AnimatedBackground() {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none"
+      className="pointer-events-none fixed inset-0"
       style={{ zIndex: 0 }}
     />
   );

@@ -195,26 +195,26 @@ export function Sidebar({
 
   return (
     <aside
-      className={`${isOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 glass-effect border-r border-border/50 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0`}
+      className={`${isOpen ? 'translate-x-0' : '-translate-x-full'} glass-effect border-border/50 fixed inset-y-0 left-0 z-50 w-64 border-r transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0`}
     >
-      <div className="flex flex-col h-full">
+      <div className="flex h-full flex-col">
         {/* Logo Section */}
-        <div className="flex items-center justify-center h-16 px-6 border-b border-border/50">
+        <div className="border-border/50 flex h-16 items-center justify-center border-b px-6">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center">
-              <GraduationCap className="w-6 h-6 text-primary-foreground" />
+            <div className="from-primary to-primary/80 flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br">
+              <GraduationCap className="text-primary-foreground h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">
+              <h1 className="text-foreground text-xl font-bold">
                 FIAE-Plattform
               </h1>
-              <p className="text-xs text-muted-foreground">Learning Platform</p>
+              <p className="text-muted-foreground text-xs">Learning Platform</p>
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className="flex-1 space-y-2 px-4 py-6">
           {navigationItems.map(item => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
@@ -223,13 +223,13 @@ export function Sidebar({
               <button
                 key={item.id}
                 onClick={() => handleNavigation(item.id)}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+                className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${
                   isActive
-                    ? 'bg-accent/20 text-accent border border-accent/30'
+                    ? 'bg-accent/20 text-accent border-accent/30 border'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-accent' : ''}`} />
+                <Icon className={`h-5 w-5 ${isActive ? 'text-accent' : ''}`} />
                 <span className="font-medium">{item.label}</span>
               </button>
             );
@@ -237,16 +237,16 @@ export function Sidebar({
         </nav>
 
         {/* User Profile Section */}
-        <div className="p-4 border-t border-border/50">
-          <div className="flex items-center space-x-3 p-3 rounded-xl bg-background/50">
-            <div className="w-10 h-10 bg-gradient-to-br from-accent to-accent/80 rounded-full flex items-center justify-center">
-              <Users className="w-5 h-5 text-accent-foreground" />
+        <div className="border-border/50 border-t p-4">
+          <div className="bg-background/50 flex items-center space-x-3 rounded-xl p-3">
+            <div className="from-accent to-accent/80 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br">
+              <Users className="text-accent-foreground h-5 w-5" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">
+            <div className="min-w-0 flex-1">
+              <p className="text-foreground truncate text-sm font-medium">
                 {profile.full_name}
               </p>
-              <p className="text-xs text-muted-foreground capitalize">
+              <p className="text-muted-foreground text-xs capitalize">
                 {profile.role === 'trainee' ? 'Auszubildender' : 'Ausbilder'}
               </p>
             </div>
@@ -254,9 +254,9 @@ export function Sidebar({
 
           <button
             onClick={handleSignOut}
-            className="w-full mt-3 flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-all duration-200"
+            className="text-muted-foreground hover:text-foreground hover:bg-accent/10 mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="h-5 w-5" />
             <span className="font-medium">
               {language === 'de' ? 'Abmelden' : 'Logout'}
             </span>

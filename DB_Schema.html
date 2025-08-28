@@ -52,50 +52,50 @@
       }
     </style>
   </head>
-  <body class="bg-slate-50 text-slate-800 p-4 md:p-8 overflow-auto">
-    <div class="max-w-7xl mx-auto">
-      <div class="text-center mb-12">
-        <h1 class="text-3xl md:text-4xl font-bold text-slate-900">
+  <body class="overflow-auto bg-slate-50 p-4 text-slate-800 md:p-8">
+    <div class="mx-auto max-w-7xl">
+      <div class="mb-12 text-center">
+        <h1 class="text-3xl font-bold text-slate-900 md:text-4xl">
           Learning Management System (LMS)
         </h1>
         <p class="mt-2 text-lg text-slate-600">Entity-Relationship Diagram</p>
       </div>
 
       <!-- Diagram Container -->
-      <div id="diagram-container" class="relative w-full h-[2400px]">
+      <div id="diagram-container" class="relative h-[2400px] w-full">
         <!-- SVG for drawing connectors -->
         <svg
           id="connector-svg"
-          class="absolute top-0 left-0 w-full h-full pointer-events-none"
+          class="pointer-events-none absolute top-0 left-0 h-full w-full"
         ></svg>
 
         <!-- Entities will be placed here -->
         <!-- Column 1 -->
         <div
           id="users"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 1000px; left: 20px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">USERS</h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">USERS</h3>
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>role</span><span class="text-slate-400">string</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>name</span><span class="text-slate-400">string</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>email</span><span class="text-slate-400">string</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>password_hash</span
               ><span class="text-slate-400">string</span>
             </li>
@@ -104,46 +104,46 @@
 
         <div
           id="studentcourseassignments"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 650px; left: 320px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             STUDENT_COURSE
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >student_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >course_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >assigned_by</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>assigned_at</span
               ><span class="text-slate-400">datetime</span>
             </li>
@@ -152,38 +152,38 @@
 
         <div
           id="studentbadges"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 1350px; left: 320px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             STUDENT_BADGES
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >student_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >badge_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>earned_at</span><span class="text-slate-400">datetime</span>
             </li>
           </ul>
@@ -192,28 +192,28 @@
         <!-- Column 2 -->
         <div
           id="courses"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 400px; left: 620px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             COURSES
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>name</span><span class="text-slate-400">string</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>description</span><span class="text-slate-400">text</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>year</span><span class="text-slate-400">integer</span>
             </li>
           </ul>
@@ -221,31 +221,31 @@
 
         <div
           id="badges"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 1550px; left: 620px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">BADGES</h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">BADGES</h3>
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >course_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>name</span><span class="text-slate-400">string</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>image_url</span><span class="text-slate-400">string</span>
             </li>
           </ul>
@@ -254,33 +254,33 @@
         <!-- Column 3 -->
         <div
           id="chapters"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 200px; left: 920px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             CHAPTERS
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >course_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>name</span><span class="text-slate-400">string</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>order_index</span
               ><span class="text-slate-400">integer</span>
             </li>
@@ -289,31 +289,31 @@
 
         <div
           id="topics"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 600px; left: 920px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">TOPICS</h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">TOPICS</h3>
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >chapter_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>name</span><span class="text-slate-400">string</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>order_index</span
               ><span class="text-slate-400">integer</span>
             </li>
@@ -322,38 +322,38 @@
 
         <div
           id="topiccompletion"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 1000px; left: 620px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             TOPIC_COMPLETION
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >student_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >topic_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>completed_at</span
               ><span class="text-slate-400">datetime</span>
             </li>
@@ -363,41 +363,41 @@
         <!-- Column 4 -->
         <div
           id="quizzes"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 900px; left: 1220px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             QUIZZES
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >topic_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >chapter_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>name</span><span class="text-slate-400">string</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>passing_score</span
               ><span class="text-slate-400">integer</span>
             </li>
@@ -406,44 +406,44 @@
 
         <div
           id="quizattempts"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 1300px; left: 920px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             QUIZ_ATTEMPTS
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >student_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >quiz_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>score</span><span class="text-slate-400">integer</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>passed</span><span class="text-slate-400">boolean</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>answers</span><span class="text-slate-400">jsonb</span>
             </li>
           </ul>
@@ -452,33 +452,33 @@
         <!-- Column 5 -->
         <div
           id="quizquestions"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 1200px; left: 1520px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             QUIZ_QUESTIONS
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >quiz_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>question</span><span class="text-slate-400">text</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>order_index</span
               ><span class="text-slate-400">integer</span>
             </li>
@@ -488,33 +488,33 @@
         <!-- Column 6 -->
         <div
           id="quizoptions"
-          class="entity absolute bg-white rounded-lg w-64"
+          class="entity absolute w-64 rounded-lg bg-white"
           style="top: 1500px; left: 1820px"
         >
-          <h3 class="entity-title text-lg font-bold p-3 text-center">
+          <h3 class="entity-title p-3 text-center text-lg font-bold">
             QUIZ_OPTIONS
           </h3>
-          <ul class="p-3 space-y-2 text-sm">
-            <li class="flex justify-between items-center">
+          <ul class="space-y-2 p-3 text-sm">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-pk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-pk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >PK</span
                 >id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span
                 ><span
-                  class="key-fk font-mono text-xs py-0.5 px-1.5 rounded-md mr-2"
+                  class="key-fk mr-2 rounded-md px-1.5 py-0.5 font-mono text-xs"
                   >FK</span
                 >question_id</span
               >
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>option_text</span><span class="text-slate-400">text</span>
             </li>
-            <li class="flex justify-between items-center">
+            <li class="flex items-center justify-between">
               <span>is_correct</span><span class="text-slate-400">boolean</span>
             </li>
           </ul>

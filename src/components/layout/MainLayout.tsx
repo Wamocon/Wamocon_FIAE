@@ -45,7 +45,7 @@ export function MainLayout({
   const currentView = useMemo(() => 'dashboard', []);
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-background via-red-900/20 to-red-800/30">
+    <div className="from-background flex h-screen bg-gradient-to-br via-red-900/20 to-red-800/30">
       {/* Sidebar */}
       <Sidebar
         currentView={currentView}
@@ -56,7 +56,7 @@ export function MainLayout({
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
         <Header
           onNavigation={onNavigation}
@@ -67,7 +67,7 @@ export function MainLayout({
         />
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto bg-gradient-to-br from-background/80 via-red-900/15 to-red-800/25">
+        <div className="from-background/80 flex-1 overflow-y-auto bg-gradient-to-br via-red-900/15 to-red-800/25">
           {children}
         </div>
       </main>

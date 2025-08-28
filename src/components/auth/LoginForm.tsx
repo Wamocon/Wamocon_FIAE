@@ -38,20 +38,20 @@ export function LoginForm() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900">
-      <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-2xl shadow-2xl">
+    <div className="flex min-h-screen items-center justify-center bg-gray-900">
+      <div className="w-full max-w-md space-y-8 rounded-2xl bg-gray-800 p-8 shadow-2xl">
         <div>
-          <h2 className="text-4xl font-bold text-center text-white">
+          <h2 className="text-center text-4xl font-bold text-white">
             FIAE-Lernplattform
           </h2>
           <p className="mt-2 text-center text-gray-400">Willkommen zurück!</p>
         </div>
 
         {/* Role Selector */}
-        <div className="flex bg-gray-700 rounded-lg p-1">
+        <div className="flex rounded-lg bg-gray-700 p-1">
           <button
             onClick={() => handleSwitchRole('trainee')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               currentRole === 'trainee'
                 ? 'bg-blue-600 text-white'
                 : 'text-gray-400 hover:text-white'
@@ -61,7 +61,7 @@ export function LoginForm() {
           </button>
           <button
             onClick={() => handleSwitchRole('trainer')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               currentRole === 'trainer'
                 ? 'bg-blue-600 text-white'
                 : 'text-gray-400 hover:text-white'
@@ -85,7 +85,7 @@ export function LoginForm() {
               type="email"
               autoComplete="email"
               required
-              className="w-full px-4 py-3 mt-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+              className="mt-2 w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               placeholder="ihre.email@beispiel.de"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -106,7 +106,7 @@ export function LoginForm() {
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 required
-                className="w-full px-4 py-3 pr-12 mt-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                className="mt-2 w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 pr-12 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 placeholder="••••••••"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -114,12 +114,12 @@ export function LoginForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+                className="absolute top-1/2 right-3 -translate-y-1/2 p-1 text-gray-400 transition-colors hover:text-white"
               >
                 {showPassword ? (
-                  <EyeOff className="w-5 h-5" />
+                  <EyeOff className="h-5 w-5" />
                 ) : (
-                  <Eye className="w-5 h-5" />
+                  <Eye className="h-5 w-5" />
                 )}
               </button>
             </div>
@@ -129,11 +129,11 @@ export function LoginForm() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-blue-600/50 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+              className="w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors duration-300 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 focus:outline-none disabled:bg-blue-600/50"
             >
               {isLoading ? (
                 <div className="flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Anmelden...
                 </div>
               ) : (

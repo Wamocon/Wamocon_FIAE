@@ -1,45 +1,52 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { GraduationCap, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
+import { GraduationCap, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function RegisterPage() {
-  // const { signUp } = useAuth()
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    role: 'trainee' as 'trainee' | 'trainer',
-  });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const router = useRouter();
+  const supabase = createClientComponentClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwörter stimmen nicht überein');
+    // Basic validation
+    if (!formData.email || !formData.password) {
+      setError('Bitte geben Sie eine E-Mail-Adresse und ein Passwort ein.');
       return;
     }
     if (formData.password.length < 6) {
-      setError('Passwort muss mindestens 6 Zeichen lang sein');
+      setError('Passwort muss mindestens 6 Zeichen lang sein.');
       return;
     }
 
     setIsLoading(true);
     try {
-      // await signUp(formData.fullName, formData.email, formData.password, formData.role)
-    } catch (error: any) {
-      console.error('Registration failed:', error);
-      setError(error.message || 'Registrierung fehlgeschlagen');
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+
+      if (signUpError) throw signUpError;
+
+      // Success message (Supabase trigger will insert profile automatically)
+      setSuccess('Registrierung erfolgreich! Bitte bestätigen Sie Ihre E-Mail.');
+      setTimeout(() => router.push('/login'), 1500);
+    } catch (err: unknown) {
+      console.error('Registration failed:', err);
+      setError(
+        err instanceof Error ? err.message : 'Registrierung fehlgeschlagen'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -48,20 +55,18 @@ export default function RegisterPage() {
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (error) setError('');
+    if (success) setSuccess('');
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background overlay for consistent theme */}
-      <div className="absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25 pointer-events-none"></div>
-
-      <div className="w-full max-w-md space-y-8 relative z-10">
-        {/* Header */}
+    <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
+      <div className="relative z-10 w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-accent to-primary rounded-full flex items-center justify-center mb-6 shadow-2xl">
-            <GraduationCap className="w-8 h-8 text-primary-foreground" />
+          <div className="from-accent to-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br shadow-2xl">
+            <GraduationCap className="text-primary-foreground h-8 w-8" />
           </div>
-          <h1 className="text-4xl font-bold text-foreground mb-2 bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
+          <h1 className="text-foreground from-accent to-primary mb-2 bg-gradient-to-r bg-clip-text text-4xl font-bold text-transparent">
             FIAE-Lernplattform
           </h1>
           <p className="text-muted text-lg">
@@ -69,38 +74,18 @@ export default function RegisterPage() {
           </p>
           <button
             onClick={() => router.push('/')}
-            className="text-sm text-accent hover:text-accent/80 underline mt-2"
+            className="text-accent hover:text-accent/80 mt-2 text-sm underline"
           >
             ← Zurück zur Startseite
           </button>
         </div>
 
-        {/* Registration Form */}
-        <div className="glass-effect-enhanced p-8 rounded-2xl shadow-2xl border-2 border-accent/30">
+        <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-8 shadow-2xl">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label
-                htmlFor="fullName"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                Vollständiger Name *
-              </label>
-              <input
-                id="fullName"
-                name="fullName"
-                type="text"
-                required
-                className="w-full px-4 py-3 bg-background/50 border border-border rounded-xl text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-                placeholder="Max Mustermann"
-                value={formData.fullName}
-                onChange={e => handleInputChange('fullName', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label
                 htmlFor="email"
-                className="block text-sm font-medium text-foreground mb-2"
+                className="text-foreground mb-2 block text-sm font-medium"
               >
                 E-Mail-Adresse *
               </label>
@@ -110,7 +95,7 @@ export default function RegisterPage() {
                 type="email"
                 autoComplete="email"
                 required
-                className="w-full px-4 py-3 bg-background/50 border border-border rounded-xl text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+                className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border px-4 py-3 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
                 placeholder="ihre.email@beispiel.de"
                 value={formData.email}
                 onChange={e => handleInputChange('email', e.target.value)}
@@ -118,39 +103,9 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Rolle *
-              </label>
-              <div className="flex bg-background/50 rounded-xl p-1">
-                <button
-                  type="button"
-                  onClick={() => handleInputChange('role', 'trainee')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    formData.role === 'trainee'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted hover:text-foreground'
-                  }`}
-                >
-                  Auszubildender
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleInputChange('role', 'trainer')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    formData.role === 'trainer'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted hover:text-foreground'
-                  }`}
-                >
-                  Ausbilder
-                </button>
-              </div>
-            </div>
-
-            <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium text-foreground mb-2"
+                className="text-foreground mb-2 block text-sm font-medium"
               >
                 Passwort *
               </label>
@@ -161,7 +116,7 @@ export default function RegisterPage() {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="w-full px-4 py-3 pr-12 bg-background/50 border border-border rounded-xl text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+                  className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border px-4 py-3 pr-12 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={e => handleInputChange('password', e.target.value)}
@@ -169,78 +124,50 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-foreground transition-colors"
+                  className="text-muted hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 p-1 transition-colors"
                 >
                   {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                Passwort bestätigen *
-              </label>
-              <div className="relative">
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  required
-                  className="w-full px-4 py-3 pr-12 bg-background/50 border border-border rounded-xl text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-                  placeholder="••••••••"
-                  value={formData.confirmPassword}
-                  onChange={e =>
-                    handleInputChange('confirmPassword', e.target.value)
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-foreground transition-colors"
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               </div>
             </div>
 
             {error && (
-              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl">
-                <p className="text-sm text-destructive">{error}</p>
+              <div className="bg-destructive/10 border-destructive/20 rounded-xl border p-3">
+                <p className="text-destructive text-sm">{error}</p>
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-100 border-green-300 text-green-800 rounded-xl border p-3">
+                <p className="text-sm">{success}</p>
               </div>
             )}
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-accent shadow-lg hover:shadow-xl"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-primary/50 focus:ring-offset-background focus:ring-accent w-full rounded-xl py-3 font-semibold shadow-lg transition-colors duration-300 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none"
             >
               {isLoading ? (
                 <div className="flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div>
+                  <div className="border-primary-foreground/30 border-t-primary-foreground mr-2 h-5 w-5 animate-spin rounded-full border-2"></div>
                   Registrieren...
                 </div>
               ) : (
                 'Konto erstellen'
               )}
             </button>
+
             <div className="text-center">
               <p className="text-gray-400">
                 Bereits ein Konto?{' '}
                 <Link
                   href="/login"
-                  className="text-red-400 hover:text-red-300 font-medium"
+                  className="font-medium text-red-400 hover:text-red-300"
                 >
                   Hier anmelden
                 </Link>
@@ -248,8 +175,6 @@ export default function RegisterPage() {
             </div>
           </form>
         </div>
-
-        {/* Already have an account */}
       </div>
     </div>
   );

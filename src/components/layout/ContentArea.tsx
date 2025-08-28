@@ -72,12 +72,12 @@ export function ContentArea({
 
       default:
         return (
-          <div className="text-center text-gray-500 p-8">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 bg-gray-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+          <div className="p-8 text-center text-gray-500">
+            <div className="mx-auto max-w-md">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-700">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
               </div>
-              <h2 className="text-2xl font-semibold text-gray-300 mb-2">
+              <h2 className="mb-2 text-2xl font-semibold text-gray-300">
                 Diese Ansicht befindet sich im Aufbau
               </h2>
               <p className="text-gray-500">
@@ -90,7 +90,7 @@ export function ContentArea({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="bg-background flex-1 overflow-y-auto">
       {renderContent()}
     </div>
   );

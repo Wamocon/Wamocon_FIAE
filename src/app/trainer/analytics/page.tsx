@@ -29,9 +29,9 @@ export default function TrainerAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-accent/30 border-t-accent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
           <p className="text-muted-foreground">Lade Analysen...</p>
         </div>
       </div>
@@ -40,9 +40,9 @@ export default function TrainerAnalyticsPage() {
 
   if (!profile) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-destructive/30 border-t-destructive rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
         </div>
       </div>
@@ -51,9 +51,9 @@ export default function TrainerAnalyticsPage() {
 
   if (profile.role !== 'trainer') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-destructive/30 border-t-destructive rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
           <p className="text-muted-foreground">Zugriff verweigert...</p>
         </div>
       </div>
@@ -115,15 +115,15 @@ export default function TrainerAnalyticsPage() {
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
+    <div className="mx-auto max-w-7xl space-y-8 p-6">
       {/* Header */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
-        <div className="flex items-center gap-6 mb-6">
-          <div className="w-16 h-16 bg-gradient-to-br from-accent to-primary rounded-3xl flex items-center justify-center">
-            <BarChart3 className="w-8 h-8 text-white" />
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+        <div className="mb-6 flex items-center gap-6">
+          <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br">
+            <BarChart3 className="h-8 w-8 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+            <h1 className="text-foreground mb-2 text-3xl font-bold">
               Analysen & Statistiken
             </h1>
             <p className="text-muted">
@@ -135,29 +135,29 @@ export default function TrainerAnalyticsPage() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="glass-effect rounded-3xl p-6 shadow-lg border border-accent/30">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-accent to-primary rounded-2xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-white" />
+            <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
+              <Users className="h-6 w-6 text-white" />
             </div>
             <div>
-              <p className="text-sm text-muted">Aktive Azubis</p>
-              <p className="text-2xl font-bold text-foreground">
+              <p className="text-muted text-sm">Aktive Azubis</p>
+              <p className="text-foreground text-2xl font-bold">
                 {trainees.length}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="glass-effect rounded-3xl p-6 shadow-lg border border-accent/30">
+        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-white" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500">
+              <TrendingUp className="h-6 w-6 text-white" />
             </div>
             <div>
-              <p className="text-sm text-muted">Ø Fortschritt</p>
-              <p className="text-2xl font-bold text-foreground">
+              <p className="text-muted text-sm">Ø Fortschritt</p>
+              <p className="text-foreground text-2xl font-bold">
                 {Math.round(
                   trainees.reduce((acc, t) => acc + (t.progress || 0), 0) /
                     trainees.length
@@ -168,39 +168,39 @@ export default function TrainerAnalyticsPage() {
           </div>
         </div>
 
-        <div className="glass-effect rounded-3xl p-6 shadow-lg border border-accent/30">
+        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-violet-500 rounded-2xl flex items-center justify-center">
-              <Award className="w-6 h-6 text-white" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-violet-500">
+              <Award className="h-6 w-6 text-white" />
             </div>
             <div>
-              <p className="text-sm text-muted">Quiz abgeschlossen</p>
-              <p className="text-2xl font-bold text-foreground">
+              <p className="text-muted text-sm">Quiz abgeschlossen</p>
+              <p className="text-foreground text-2xl font-bold">
                 {quizSubmissions.length}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="glass-effect rounded-3xl p-6 shadow-lg border border-accent/30">
+        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center">
-              <Clock className="w-6 h-6 text-white" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500">
+              <Clock className="h-6 w-6 text-white" />
             </div>
             <div>
-              <p className="text-sm text-muted">Ø Lernzeit</p>
-              <p className="text-2xl font-bold text-foreground">4.2h</p>
+              <p className="text-muted text-sm">Ø Lernzeit</p>
+              <p className="text-foreground text-2xl font-bold">4.2h</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         {/* Progress Over Time */}
-        <div className="glass-effect p-6 rounded-2xl shadow-lg">
-          <h3 className="text-xl font-bold text-foreground mb-6 flex items-center">
-            <TrendingUp className="w-6 h-6 mr-3 text-accent" />
+        <div className="glass-effect rounded-2xl p-6 shadow-lg">
+          <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
+            <TrendingUp className="text-accent mr-3 h-6 w-6" />
             Fortschritt über Zeit
           </h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -242,9 +242,9 @@ export default function TrainerAnalyticsPage() {
         </div>
 
         {/* Module Progress */}
-        <div className="glass-effect p-6 rounded-2xl shadow-lg">
-          <h3 className="text-xl font-bold text-foreground mb-6 flex items-center">
-            <Target className="w-6 h-6 mr-3 text-primary" />
+        <div className="glass-effect rounded-2xl p-6 shadow-lg">
+          <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
+            <Target className="text-primary mr-3 h-6 w-6" />
             Modul-Fortschritt
           </h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -306,38 +306,38 @@ export default function TrainerAnalyticsPage() {
       </div>
 
       {/* Quiz Performance Table */}
-      <div className="glass-effect p-6 rounded-2xl shadow-lg">
-        <h3 className="text-xl font-bold text-foreground mb-6 flex items-center">
-          <BarChart3 className="w-6 h-6 mr-3 text-accent" />
+      <div className="glass-effect rounded-2xl p-6 shadow-lg">
+        <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
+          <BarChart3 className="text-accent mr-3 h-6 w-6" />
           Quiz-Leistung
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-accent/30">
-                <th className="text-left p-3 text-muted font-medium">
+              <tr className="border-accent/30 border-b">
+                <th className="text-muted p-3 text-left font-medium">
                   Auszubildender
                 </th>
-                <th className="text-left p-3 text-muted font-medium">Quiz</th>
-                <th className="text-left p-3 text-muted font-medium">
+                <th className="text-muted p-3 text-left font-medium">Quiz</th>
+                <th className="text-muted p-3 text-left font-medium">
                   Punktzahl
                 </th>
-                <th className="text-left p-3 text-muted font-medium">Datum</th>
+                <th className="text-muted p-3 text-left font-medium">Datum</th>
               </tr>
             </thead>
             <tbody>
               {quizPerformance.map((quiz, index) => (
                 <tr
                   key={index}
-                  className="border-b border-accent/20 hover:bg-accent/5"
+                  className="border-accent/20 hover:bg-accent/5 border-b"
                 >
-                  <td className="p-3 text-foreground font-medium">
+                  <td className="text-foreground p-3 font-medium">
                     {quiz.trainee}
                   </td>
-                  <td className="p-3 text-muted">{quiz.quiz}</td>
+                  <td className="text-muted p-3">{quiz.quiz}</td>
                   <td className="p-3">
                     <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      className={`rounded-full px-3 py-1 text-sm font-medium ${
                         quiz.score >= 80
                           ? 'bg-green-500/20 text-green-400'
                           : quiz.score >= 60
@@ -348,7 +348,7 @@ export default function TrainerAnalyticsPage() {
                       {quiz.score}%
                     </span>
                   </td>
-                  <td className="p-3 text-muted">{quiz.date}</td>
+                  <td className="text-muted p-3">{quiz.date}</td>
                 </tr>
               ))}
             </tbody>

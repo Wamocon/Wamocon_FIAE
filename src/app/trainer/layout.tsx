@@ -69,10 +69,10 @@ export default function TrainerLayout({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-muted-foreground">
+          <p className="text-muted-foreground mt-4">
             Lade Trainer Dashboard...
           </p>
         </div>
@@ -82,10 +82,10 @@ export default function TrainerLayout({
 
   if (!user || !profile) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-muted-foreground">Weiterleitung...</p>
+          <p className="text-muted-foreground mt-4">Weiterleitung...</p>
         </div>
       </div>
     );
@@ -93,10 +93,10 @@ export default function TrainerLayout({
 
   if (profile.role !== 'trainer') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-muted-foreground">Zugriff verweigert...</p>
+          <p className="text-muted-foreground mt-4">Zugriff verweigert...</p>
         </div>
       </div>
     );

@@ -48,12 +48,12 @@ export function Reflection() {
 
   if (isSubmitted) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="glass-effect p-8 rounded-3xl shadow-lg text-center max-w-md">
-          <div className="w-20 h-20 bg-gradient-to-br from-accent to-primary rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-10 h-10 text-white" />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="glass-effect max-w-md rounded-3xl p-8 text-center shadow-lg">
+          <div className="from-accent to-primary mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br">
+            <CheckCircle className="h-10 w-10 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">
+          <h2 className="text-foreground mb-2 text-2xl font-bold">
             Reflektion erfolgreich gespeichert! 🎉
           </h2>
           <p className="text-muted">
@@ -66,14 +66,14 @@ export function Reflection() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="mx-auto max-w-6xl p-6">
       {/* Header Section */}
-      <div className="glass-effect p-8 rounded-3xl shadow-lg mb-8">
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-accent to-primary rounded-3xl flex items-center justify-center mx-auto mb-4">
-            <Target className="w-10 h-10 text-white" />
+      <div className="glass-effect mb-8 rounded-3xl p-8 shadow-lg">
+        <div className="mb-6 text-center">
+          <div className="from-accent to-primary mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
+            <Target className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+          <h1 className="text-foreground mb-2 text-3xl font-bold">
             Reflektionstermin Q3/2025
           </h1>
           <p className="text-muted">
@@ -86,23 +86,23 @@ export function Reflection() {
       {/* Main Form */}
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* SWOT and MES Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* SWOT Analysis - Left Column */}
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-foreground mb-4">
+            <h2 className="text-foreground mb-4 text-2xl font-semibold">
               SWOT-Analyse
             </h2>
 
             {/* Strengths */}
             <div>
-              <label className="block text-sm font-medium text-accent mb-2">
+              <label className="text-accent mb-2 block text-sm font-medium">
                 Stärken (Strengths)
               </label>
               <textarea
                 rows={4}
                 value={reflectionData.strengths}
                 onChange={e => handleInputChange('strengths', e.target.value)}
-                className="w-full bg-background/50 border border-accent/30 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-accent text-foreground resize-none"
+                className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full resize-none rounded-xl border p-3 focus:ring-2 focus:outline-none"
                 placeholder="Was lief besonders gut?"
                 required
               />
@@ -110,14 +110,14 @@ export function Reflection() {
 
             {/* Weaknesses */}
             <div>
-              <label className="block text-sm font-medium text-accent mb-2">
+              <label className="text-accent mb-2 block text-sm font-medium">
                 Schwächen (Weaknesses)
               </label>
               <textarea
                 rows={4}
                 value={reflectionData.weaknesses}
                 onChange={e => handleInputChange('weaknesses', e.target.value)}
-                className="w-full bg-background/50 border border-accent/30 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-accent text-foreground resize-none"
+                className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full resize-none rounded-xl border p-3 focus:ring-2 focus:outline-none"
                 placeholder="Wo hattest du Schwierigkeiten?"
                 required
               />
@@ -126,20 +126,20 @@ export function Reflection() {
 
           {/* MES Feedback - Right Column */}
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-white mb-4">
+            <h2 className="mb-4 text-2xl font-semibold text-white">
               MES-Feedback
             </h2>
 
             {/* More */}
             <div>
-              <label className="block text-sm font-medium text-accent mb-2">
+              <label className="text-accent mb-2 block text-sm font-medium">
                 Mehr davon (More)
               </label>
               <textarea
                 rows={4}
                 value={reflectionData.more}
                 onChange={e => handleInputChange('more', e.target.value)}
-                className="w-full bg-background/50 border border-accent/30 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-accent text-foreground resize-none"
+                className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full resize-none rounded-xl border p-3 focus:ring-2 focus:outline-none"
                 placeholder="Was hat dir besonders geholfen?"
                 required
               />
@@ -147,14 +147,14 @@ export function Reflection() {
 
             {/* Equal */}
             <div>
-              <label className="block text-sm font-medium text-accent mb-2">
+              <label className="text-accent mb-2 block text-sm font-medium">
                 Gleich lassen (Equal)
               </label>
               <textarea
                 rows={4}
                 value={reflectionData.equal}
                 onChange={e => handleInputChange('equal', e.target.value)}
-                className="w-full bg-background/50 border border-accent/30 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-accent text-foreground resize-none"
+                className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full resize-none rounded-xl border p-3 focus:ring-2 focus:outline-none"
                 placeholder="Welche Aspekte sind gut so?"
                 required
               />
@@ -167,16 +167,16 @@ export function Reflection() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-8 py-3 font-semibold text-white bg-accent rounded-2xl hover:bg-accent/90 disabled:bg-accent/50 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background flex items-center gap-2"
+            className="bg-accent hover:bg-accent/90 disabled:bg-accent/50 focus:ring-accent focus:ring-offset-background flex items-center gap-2 rounded-2xl px-8 py-3 font-semibold text-white transition-colors duration-300 focus:ring-2 focus:ring-offset-2 focus:outline-none"
           >
             {isSubmitting ? (
               <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-white"></div>
                 Wird gespeichert...
               </>
             ) : (
               <>
-                <Send className="w-5 h-5" />
+                <Send className="h-5 w-5" />
                 Reflektion speichern
               </>
             )}

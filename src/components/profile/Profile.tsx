@@ -16,10 +16,10 @@ export function Profile() {
 
   if (!profile) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-accent/30 border-t-accent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="mt-4 text-muted-foreground">Lade Profil...</p>
+          <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <p className="text-muted-foreground mt-4">Lade Profil...</p>
         </div>
       </div>
     );
@@ -41,15 +41,15 @@ export function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <div className="bg-background min-h-screen p-6">
       {/* Profile Header */}
-      <div className="bg-card rounded-3xl p-8 shadow-lg border border-border">
+      <div className="bg-card border-border rounded-3xl border p-8 shadow-lg">
         <div className="flex items-center space-x-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center">
-            <User className="w-10 h-10 text-primary-foreground" />
+          <div className="from-primary to-primary/80 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br">
+            <User className="text-primary-foreground h-10 w-10" />
           </div>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-foreground">
+            <h1 className="text-foreground text-3xl font-bold">
               {isEditing ? (
                 <input
                   type="text"
@@ -60,7 +60,7 @@ export function Profile() {
                       full_name: e.target.value,
                     })
                   }
-                  className="w-full bg-muted border border-border rounded-xl px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                  className="bg-muted border-border text-foreground focus:ring-accent w-full rounded-xl border px-4 py-2 focus:border-transparent focus:ring-2 focus:outline-none"
                 />
               ) : (
                 profile.full_name
@@ -72,21 +72,21 @@ export function Profile() {
           </div>
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className="p-3 bg-accent/10 hover:bg-accent/20 rounded-xl transition-colors"
+            className="bg-accent/10 hover:bg-accent/20 rounded-xl p-3 transition-colors"
           >
-            <Edit3 className="w-5 h-5 text-accent" />
+            <Edit3 className="text-accent h-5 w-5" />
           </button>
         </div>
       </div>
 
       {/* Personal Information */}
-      <div className="bg-card rounded-3xl p-8 shadow-lg border border-border mt-6">
-        <h2 className="text-2xl font-bold text-foreground mb-6">
+      <div className="bg-card border-border mt-6 rounded-3xl border p-8 shadow-lg">
+        <h2 className="text-foreground mb-6 text-2xl font-bold">
           Persönliche Informationen
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
+            <label className="text-muted-foreground mb-2 block text-sm font-medium">
               Vollständiger Name
             </label>
             {isEditing ? (
@@ -99,16 +99,16 @@ export function Profile() {
                     full_name: e.target.value,
                   })
                 }
-                className="w-full bg-muted border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                className="bg-muted border-border text-foreground focus:ring-accent w-full rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
               />
             ) : (
-              <div className="px-4 py-3 bg-muted border border-border rounded-2xl text-foreground">
+              <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3">
                 {profile.full_name}
               </div>
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
+            <label className="text-muted-foreground mb-2 block text-sm font-medium">
               E-Mail
             </label>
             {isEditing ? (
@@ -118,43 +118,43 @@ export function Profile() {
                 onChange={e =>
                   setEditedProfile({ ...editedProfile, email: e.target.value })
                 }
-                className="w-full bg-muted border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                className="bg-muted border-border text-foreground focus:ring-accent w-full rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
               />
             ) : (
-              <div className="px-4 py-3 bg-muted border border-border rounded-2xl text-foreground">
+              <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3">
                 {profile.email}
               </div>
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
+            <label className="text-muted-foreground mb-2 block text-sm font-medium">
               Rolle
             </label>
-            <div className="px-4 py-3 bg-muted border border-border rounded-2xl text-foreground">
+            <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3">
               {profile.role === 'trainee' ? 'Auszubildender' : 'Ausbilder'}
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
+            <label className="text-muted-foreground mb-2 block text-sm font-medium">
               Ausbildungsstart
             </label>
-            <div className="px-4 py-3 bg-muted border border-border rounded-2xl text-foreground">
+            <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3">
               {profile.training_start_date || 'Nicht angegeben'}
             </div>
           </div>
         </div>
 
         {isEditing && (
-          <div className="flex space-x-4 mt-6">
+          <div className="mt-6 flex space-x-4">
             <button
               onClick={handleSave}
-              className="px-6 py-3 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-colors duration-200"
+              className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-6 py-3 transition-colors duration-200"
             >
               Speichern
             </button>
             <button
               onClick={handleCancel}
-              className="px-6 py-3 bg-muted text-muted-foreground rounded-xl hover:bg-muted/80 transition-colors duration-200"
+              className="bg-muted text-muted-foreground hover:bg-muted/80 rounded-xl px-6 py-3 transition-colors duration-200"
             >
               Abbrechen
             </button>
@@ -163,59 +163,59 @@ export function Profile() {
       </div>
 
       {/* Statistics */}
-      <div className="bg-card rounded-3xl p-6 shadow-lg border border-border mt-6">
-        <h2 className="text-2xl font-bold text-foreground mb-6">Statistiken</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+      <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
+        <h2 className="text-foreground mb-6 text-2xl font-bold">Statistiken</h2>
+        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
           <div className="text-center">
-            <Award className="w-8 h-8 text-accent mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">
+            <Award className="text-accent mx-auto mb-2 h-8 w-8" />
+            <p className="text-muted-foreground text-sm">
               Module abgeschlossen
             </p>
-            <p className="text-2xl font-bold text-foreground">12</p>
+            <p className="text-foreground text-2xl font-bold">12</p>
           </div>
           <div className="text-center">
-            <Target className="w-8 h-8 text-primary mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Zertifikate</p>
-            <p className="text-2xl font-bold text-foreground">8</p>
+            <Target className="text-primary mx-auto mb-2 h-8 w-8" />
+            <p className="text-muted-foreground text-sm">Zertifikate</p>
+            <p className="text-foreground text-2xl font-bold">8</p>
           </div>
           <div className="text-center">
-            <Clock className="w-8 h-8 text-accent mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Lernstunden</p>
-            <p className="text-2xl font-bold text-foreground">156</p>
+            <Clock className="text-accent mx-auto mb-2 h-8 w-8" />
+            <p className="text-muted-foreground text-sm">Lernstunden</p>
+            <p className="text-foreground text-2xl font-bold">156</p>
           </div>
           <div className="text-center">
-            <TrendingUp className="w-8 h-8 text-primary mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Ziel erreicht</p>
-            <p className="text-2xl font-bold text-foreground">85%</p>
+            <TrendingUp className="text-primary mx-auto mb-2 h-8 w-8" />
+            <p className="text-muted-foreground text-sm">Ziel erreicht</p>
+            <p className="text-foreground text-2xl font-bold">85%</p>
           </div>
         </div>
       </div>
 
       {/* Recent Activities */}
-      <div className="bg-card rounded-3xl p-6 shadow-lg border border-border mt-6">
-        <h2 className="text-2xl font-bold text-foreground mb-6">
+      <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
+        <h2 className="text-foreground mb-6 text-2xl font-bold">
           Letzte Aktivitäten
         </h2>
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+          <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
             <span className="text-muted-foreground">
               Modul "JavaScript Grundlagen" abgeschlossen
             </span>
-            <span className="text-muted-foreground text-sm ml-auto">
+            <span className="text-muted-foreground ml-auto text-sm">
               vor 2 Stunden
             </span>
           </div>
-          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+          <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
             <span className="text-muted-foreground">
               Quiz "HTML & CSS" bestanden
             </span>
-            <span className="text-muted-foreground text-sm ml-auto">
+            <span className="text-muted-foreground ml-auto text-sm">
               vor 1 Tag
             </span>
           </div>
-          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+          <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
             <span className="text-muted-foreground">Reflexion eingereicht</span>
-            <span className="text-muted-foreground text-sm ml-auto">
+            <span className="text-muted-foreground ml-auto text-sm">
               vor 3 Tagen
             </span>
           </div>

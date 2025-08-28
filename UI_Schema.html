@@ -61,13 +61,13 @@
     -->
     <div
       id="login-view"
-      class="flex items-center justify-center min-h-screen bg-gray-900"
+      class="flex min-h-screen items-center justify-center bg-gray-900"
     >
       <div
-        class="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-2xl shadow-2xl"
+        class="w-full max-w-md space-y-8 rounded-2xl bg-gray-800 p-8 shadow-2xl"
       >
         <div>
-          <h2 class="text-4xl font-bold text-center text-white">
+          <h2 class="text-center text-4xl font-bold text-white">
             FIAE-Lernplattform
           </h2>
           <p class="mt-2 text-center text-gray-400">Willkommen zurück!</p>
@@ -83,7 +83,7 @@
               type="email"
               autocomplete="email"
               required
-              class="w-full px-4 py-3 mt-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+              class="mt-2 w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               value="elias.felsing@azubi.de"
             />
           </div>
@@ -97,14 +97,14 @@
               type="password"
               autocomplete="current-password"
               required
-              class="w-full px-4 py-3 mt-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+              class="mt-2 w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               value="password123"
             />
           </div>
           <div>
             <button
               type="submit"
-              class="w-full py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+              class="w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors duration-300 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 focus:outline-none"
             >
               Anmelden
             </button>
@@ -133,16 +133,16 @@
       <div class="flex h-screen bg-gray-900">
         <!-- Sidebar -->
         <aside
-          class="w-64 flex-shrink-0 bg-gray-900 border-r border-gray-700/50 flex flex-col"
+          class="flex w-64 flex-shrink-0 flex-col border-r border-gray-700/50 bg-gray-900"
         >
           <div
-            class="h-16 flex items-center justify-center px-4 border-b border-gray-700/50"
+            class="flex h-16 items-center justify-center border-b border-gray-700/50 px-4"
           >
-            <i data-lucide="graduation-cap" class="w-8 h-8 text-blue-500"></i>
-            <h1 class="text-xl font-bold text-white ml-2">FIAE-Plattform</h1>
+            <i data-lucide="graduation-cap" class="h-8 w-8 text-blue-500"></i>
+            <h1 class="ml-2 text-xl font-bold text-white">FIAE-Plattform</h1>
           </div>
-          <nav id="sidebar-nav" class="flex-1 px-4 py-6 space-y-1"></nav>
-          <div class="px-4 py-4 border-t border-gray-700/50">
+          <nav id="sidebar-nav" class="flex-1 space-y-1 px-4 py-6"></nav>
+          <div class="border-t border-gray-700/50 px-4 py-4">
             <div class="flex items-center">
               <img
                 id="user-avatar"
@@ -157,32 +157,32 @@
             </div>
             <button
               onclick="logout()"
-              class="w-full mt-4 flex items-center justify-center py-2 px-4 text-sm font-medium rounded-md text-gray-300 bg-gray-800 hover:bg-gray-700"
+              class="mt-4 flex w-full items-center justify-center rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
             >
-              <i data-lucide="log-out" class="w-4 h-4 mr-2"></i>
+              <i data-lucide="log-out" class="mr-2 h-4 w-4"></i>
               Abmelden
             </button>
           </div>
         </aside>
 
         <!-- Main Content Area -->
-        <main id="main-content" class="flex-1 flex flex-col overflow-hidden">
+        <main id="main-content" class="flex flex-1 flex-col overflow-hidden">
           <header
-            class="h-16 bg-gray-900 border-b border-gray-700/50 flex items-center justify-between px-6"
+            class="flex h-16 items-center justify-between border-b border-gray-700/50 bg-gray-900 px-6"
           >
             <div id="breadcrumb-container" class="text-sm text-gray-400"></div>
             <div class="flex items-center gap-4">
-              <button class="text-gray-400 hover:text-white relative">
-                <i data-lucide="bell" class="w-6 h-6"></i>
+              <button class="relative text-gray-400 hover:text-white">
+                <i data-lucide="bell" class="h-6 w-6"></i>
                 <span
                   id="notification-dot"
                   class="absolute -top-1 -right-1 flex h-3 w-3"
                 >
                   <span
-                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"
+                    class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"
                   ></span>
                   <span
-                    class="relative inline-flex rounded-full h-3 w-3 bg-red-500"
+                    class="relative inline-flex h-3 w-3 rounded-full bg-red-500"
                   ></span>
                 </span>
               </button>
@@ -191,7 +191,7 @@
           </header>
           <div
             id="content-area"
-            class="flex-1 overflow-y-auto p-8 bg-gray-900"
+            class="flex-1 overflow-y-auto bg-gray-900 p-8"
           ></div>
         </main>
       </div>

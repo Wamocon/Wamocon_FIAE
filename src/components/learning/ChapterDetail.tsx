@@ -21,24 +21,24 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
   const getIcon = (type: string) => {
     switch (type) {
       case 'lesson':
-        return <BookOpen className="w-5 h-5" />;
+        return <BookOpen className="h-5 w-5" />;
       case 'exercise':
-        return <Edit3 className="w-5 h-5" />;
+        return <Edit3 className="h-5 w-5" />;
       case 'quiz':
-        return <FileQuestion className="w-5 h-5" />;
+        return <FileQuestion className="h-5 w-5" />;
       default:
-        return <BookOpen className="w-5 h-5" />;
+        return <BookOpen className="h-5 w-5" />;
     }
   };
 
   const getStatusIcon = (completed: boolean, type: string) => {
     if (type === 'quiz') {
-      return <Loader2 className="w-6 h-6 text-yellow-500 animate-spin" />;
+      return <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />;
     }
     return completed ? (
-      <CheckCircle2 className="w-6 h-6 text-green-500" />
+      <CheckCircle2 className="h-6 w-6 text-green-500" />
     ) : (
-      <Circle className="w-6 h-6 text-muted" />
+      <Circle className="text-muted h-6 w-6" />
     );
   };
 
@@ -51,14 +51,14 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8 p-6">
       {/* Header */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-accent to-primary rounded-3xl flex items-center justify-center mx-auto mb-4">
-            <BookOpen className="w-10 h-10 text-white" />
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+        <div className="mb-6 text-center">
+          <div className="from-accent to-primary mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
+            <BookOpen className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+          <h1 className="text-foreground mb-2 text-3xl font-bold">
             {mockChapter.title}
           </h1>
           <p className="text-muted">
@@ -68,24 +68,24 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
       </div>
 
       {/* Lessons List */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
-        <h2 className="text-2xl font-bold text-foreground mb-6">
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+        <h2 className="text-foreground mb-6 text-2xl font-bold">
           Lektionen in diesem Kapitel
         </h2>
         <div className="space-y-4">
           {mockChapter.lessons.map(lesson => (
             <div
               key={lesson.id}
-              className="p-6 bg-background/50 rounded-2xl border border-accent/20 cursor-pointer hover:border-accent/40 hover:shadow-md transition-all duration-200"
+              className="bg-background/50 border-accent/20 hover:border-accent/40 cursor-pointer rounded-2xl border p-6 transition-all duration-200 hover:shadow-md"
               onClick={() => handleLessonClick(lesson.id)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-accent to-primary rounded-2xl flex items-center justify-center">
+                  <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
                     {getIcon(lesson.type)}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground text-lg">
+                    <h3 className="text-foreground text-lg font-semibold">
                       {lesson.title}
                     </h3>
                     <p className="text-muted text-sm">{lesson.ref}</p>
@@ -100,17 +100,17 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
 
       {/* Quiz Section */}
       <div
-        className="glass-effect rounded-3xl p-8 border border-accent/30 cursor-pointer hover:border-accent/50 hover:shadow-lg transition-all duration-200"
+        className="glass-effect border-accent/30 hover:border-accent/50 cursor-pointer rounded-3xl border p-8 transition-all duration-200 hover:shadow-lg"
         onClick={() => handleQuizClick(mockChapter.mainQuizId)}
       >
         <div className="flex items-center justify-between">
           <div>
-            <h4 className="font-bold text-2xl text-foreground mb-2">
+            <h4 className="text-foreground mb-2 text-2xl font-bold">
               Abschlusstest: {mockChapter.title}
             </h4>
             <p className="text-muted">Teste dein Wissen aus diesem Kapitel.</p>
           </div>
-          <button className="px-8 py-4 font-semibold text-white bg-gradient-to-r from-accent to-primary rounded-2xl hover:from-accent/90 hover:to-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+          <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-8 py-4 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
             Quiz starten
           </button>
         </div>

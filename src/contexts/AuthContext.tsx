@@ -1,51 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-// Mock user data
-const mockUsers = {
-  'elias.felsing@azubi.de': {
-    id: 'user_1',
-    email: 'elias.felsing@azubi.de',
-    full_name: 'Elias Felsing',
-    role: 'trainee' as const,
-    avatar: null,
-    training_start_date: '2024-09-01',
-    trainer_id: 'trainer_1',
-  },
-  'ausbilder@wamocon.de': {
-    id: 'trainer_1',
-    email: 'ausbilder@wamocon.de',
-    full_name: 'Max Mustermann',
-    role: 'trainer' as const,
-    avatar: null,
-    training_start_date: null,
-    trainer_id: null,
-  },
-};
-
-// Mock authentication state
-let mockAuthState: {
-  user: User | null;
-  profile: Profile | null;
-  isAuthenticated: boolean;
-} = {
-  user: null,
-  profile: null,
-  isAuthenticated: false,
-};
-
-// Create a mock Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-key'
-);
-
-interface User {
-  id: string;
-  email: string;
-}
+import { supabase } from '@/lib/supabase'; // Your Supabase client from supabase.ts
+import { User } from '@supabase/supabase-js';
 
 interface Profile {
   id: string;
@@ -62,8 +19,14 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: 'trainee' | 'trainer'
+  ) => Promise<void>;
   signOut: () => Promise<void>;
-  switchRole: (newRole: 'trainee' | 'trainer') => void;
+  switchRole: (newRole: 'trainee' | 'trainer') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -75,73 +38,133 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check for existing session on mount
   useEffect(() => {
-    const checkAuth = () => {
-      // Check localStorage for existing session
-      const savedUser = localStorage.getItem('mockUser');
-      const savedProfile = localStorage.getItem('mockProfile');
-
-      if (savedUser && savedProfile) {
-        try {
-          const userData = JSON.parse(savedUser);
-          const profileData = JSON.parse(savedProfile);
-
-          setUser(userData);
-          setProfile(profileData);
-          mockAuthState = {
-            user: userData,
-            profile: profileData,
-            isAuthenticated: true,
-          };
-        } catch (error) {
-          console.error('Error parsing saved auth data:', error);
-          localStorage.removeItem('mockUser');
-          localStorage.removeItem('mockProfile');
-        }
-      }
-
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
       setLoading(false);
     };
 
-    checkAuth();
+    checkSession();
+
+    // Listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
+
+  // Fetch profile when user changes
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select(
+            'id, full_name, email, role, avatar, training_start_date, trainer_id'
+          )
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching profile:', error);
+          setProfile(null);
+        } else {
+          setProfile(data);
+        }
+      } else {
+        setProfile(null);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
-
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Check if user exists in mock data
-      const userProfile = mockUsers[email as keyof typeof mockUsers];
-
-      if (!userProfile) {
-        throw new Error('User not found');
-      }
-
-      // Create user object
-      const userData: User = {
-        id: userProfile.id,
-        email: userProfile.email,
-      };
-
-      // Set authentication state
-      setUser(userData);
-      setProfile(userProfile);
-
-      // Update mock state
-      mockAuthState = {
-        user: userData,
-        profile: userProfile,
-        isAuthenticated: true,
-      };
-
-      // Save to localStorage
-      localStorage.setItem('mockUser', JSON.stringify(userData));
-      localStorage.setItem('mockProfile', JSON.stringify(userProfile));
-    } catch (error) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      setUser(data.user);
+    } catch (error: any) {
       console.error('Sign in error:', error);
-      throw new Error('Invalid login credentials');
+      throw new Error(
+        error.message.includes('Email not confirmed')
+          ? 'Bitte bestätigen Sie Ihre E-Mail-Adresse.'
+          : 'Ungültige Anmeldedaten.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: 'trainee' | 'trainer'
+  ) => {
+    setLoading(true);
+    try {
+      // Sign up with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName, role },
+        },
+      });
+      if (error) throw new Error(error.message);
+
+      if (data.user) {
+        // Auto-signin to set authenticated session
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) {
+          console.error('Auto-signin error:', signInError);
+          throw new Error('Auto-signin failed: ' + signInError.message);
+        }
+
+        // Verify session
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('No authenticated session after signin');
+        }
+
+        // Insert into profiles table
+        const { error: profileError } = await supabase.from('profiles').insert({
+          id: data.user.id,
+          full_name: fullName,
+          email,
+          role,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+
+        if (profileError) {
+          console.error('Profile insert error:', profileError);
+          throw new Error('Profile creation failed: ' + profileError.message);
+        }
+
+        setUser(data.user);
+      }
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      throw new Error(error.message || 'Registrierung fehlgeschlagen.');
     } finally {
       setLoading(false);
     }
@@ -149,25 +172,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     setLoading(true);
-
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Clear authentication state
+      await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
-
-      // Update mock state
-      mockAuthState = {
-        user: null,
-        profile: null,
-        isAuthenticated: false,
-      };
-
-      // Clear localStorage
-      localStorage.removeItem('mockUser');
-      localStorage.removeItem('mockProfile');
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
@@ -175,16 +183,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const switchRole = (newRole: 'trainee' | 'trainer') => {
-    if (profile) {
-      const updatedProfile = { ...profile, role: newRole };
-      setProfile(updatedProfile);
+  const switchRole = async (newRole: 'trainee' | 'trainer') => {
+    if (!user || !profile) return;
 
-      // Update mock state
-      mockAuthState.profile = updatedProfile;
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', user.id);
 
-      // Update localStorage
-      localStorage.setItem('mockProfile', JSON.stringify(updatedProfile));
+      if (error) throw error;
+
+      setProfile({ ...profile, role: newRole });
+    } catch (error: any) {
+      console.error('Switch role error:', error);
+      throw new Error('Rollenwechsel fehlgeschlagen: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -193,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     loading,
     signIn,
+    signUp,
     signOut,
     switchRole,
   };
