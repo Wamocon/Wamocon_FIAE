@@ -1,12 +1,26 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { Plus, Edit, Trash2, FileQuestion, Clock, Target, Users, BarChart3, Search, Filter, Eye, Copy, MoreVertical } from 'lucide-react'
+import { useState } from 'react';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  FileQuestion,
+  Clock,
+  Target,
+  Users,
+  BarChart3,
+  Search,
+  Filter,
+  Eye,
+  Copy,
+  MoreVertical,
+} from 'lucide-react';
 
 export function QuizManagement() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedStatus, setSelectedStatus] = useState('all')
-  
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+
   // Mock quiz data
   const mockQuizzes = [
     {
@@ -19,7 +33,7 @@ export function QuizManagement() {
       status: 'active',
       attempts: 24,
       avgScore: 78,
-      lastUsed: '2025-01-15'
+      lastUsed: '2025-01-15',
     },
     {
       id: 'quiz_2',
@@ -31,7 +45,7 @@ export function QuizManagement() {
       status: 'active',
       attempts: 18,
       avgScore: 82,
-      lastUsed: '2025-01-12'
+      lastUsed: '2025-01-12',
     },
     {
       id: 'quiz_3',
@@ -43,7 +57,7 @@ export function QuizManagement() {
       status: 'draft',
       attempts: 0,
       avgScore: 0,
-      lastUsed: null
+      lastUsed: null,
     },
     {
       id: 'quiz_4',
@@ -55,71 +69,86 @@ export function QuizManagement() {
       status: 'archived',
       attempts: 45,
       avgScore: 76,
-      lastUsed: '2024-12-20'
-    }
-  ]
+      lastUsed: '2024-12-20',
+    },
+  ];
 
   const filteredQuizzes = mockQuizzes.filter(quiz => {
-    const matchesSearch = quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         quiz.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = selectedStatus === 'all' || quiz.status === selectedStatus
-    return matchesSearch && matchesStatus
-  })
+    const matchesSearch =
+      quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      quiz.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus =
+      selectedStatus === 'all' || quiz.status === selectedStatus;
+    return matchesSearch && matchesStatus;
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-500/20 text-green-400 border-green-500/30'
-      case 'draft': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-      case 'archived': return 'bg-muted/30 text-muted border-accent/30'
-      default: return 'bg-muted/30 text-muted border-accent/30'
+      case 'active':
+        return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case 'draft':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'archived':
+        return 'bg-muted/30 text-muted border-accent/30';
+      default:
+        return 'bg-muted/30 text-muted border-accent/30';
     }
-  }
+  };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'active': return 'Aktiv'
-      case 'draft': return 'Entwurf'
-      case 'archived': return 'Archiviert'
-      default: return 'Unbekannt'
+      case 'active':
+        return 'Aktiv';
+      case 'draft':
+        return 'Entwurf';
+      case 'archived':
+        return 'Archiviert';
+      default:
+        return 'Unbekannt';
     }
-  }
+  };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
+    <div className="mx-auto max-w-7xl space-y-8 p-6">
       {/* Header */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Quiz-Verwaltung</h1>
-            <p className="text-muted">Erstellen und verwalten Sie Tests und Quizze für Ihre Auszubildenden</p>
+            <h1 className="text-foreground mb-2 text-3xl font-bold">
+              Quiz-Verwaltung
+            </h1>
+            <p className="text-muted">
+              Erstellen und verwalten Sie Tests und Quizze für Ihre
+              Auszubildenden
+            </p>
           </div>
-          <button className="px-6 py-3 font-semibold text-white bg-gradient-to-r from-accent to-primary rounded-2xl hover:from-accent/90 hover:to-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2">
-            <Plus className="w-5 h-5" />
+          <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
+            <Plus className="h-5 w-5" />
             Neues Quiz
           </button>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="glass-effect rounded-3xl p-6 shadow-lg border border-accent/30">
-        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+      <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
+        <div className="flex flex-col items-center justify-between gap-4 lg:flex-row">
           {/* Search and Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 flex-1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+          <div className="flex flex-1 flex-col gap-4 sm:flex-row">
+            <div className="relative max-w-md flex-1">
+              <Search className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Nach Quizzen suchen..."
-                className="w-full pl-10 pr-4 py-3 bg-background/50 border border-accent/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-foreground"
+                className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full rounded-2xl border py-3 pr-4 pl-10 focus:border-transparent focus:ring-2 focus:outline-none"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value)}
               />
             </div>
-            
+
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-4 py-3 bg-background/50 border border-accent/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-foreground"
+              onChange={e => setSelectedStatus(e.target.value)}
+              className="bg-background/50 border-accent/30 focus:ring-accent text-foreground rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
             >
               <option value="all">Alle Status</option>
               <option value="active">Aktiv</option>
@@ -129,95 +158,113 @@ export function QuizManagement() {
           </div>
 
           {/* Stats */}
-          <div className="flex items-center gap-4 text-sm text-muted">
+          <div className="text-muted flex items-center gap-4 text-sm">
             <span>{filteredQuizzes.length} Quizze gefunden</span>
           </div>
         </div>
       </div>
 
       {/* Quiz Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredQuizzes.map((quiz) => (
-          <div key={quiz.id} className="glass-effect rounded-3xl p-6 shadow-lg border border-accent/30 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-accent to-primary rounded-2xl flex items-center justify-center">
-                <FileQuestion className="w-6 h-6 text-white" />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {filteredQuizzes.map(quiz => (
+          <div
+            key={quiz.id}
+            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl"
+          >
+            <div className="mb-4 flex items-start justify-between">
+              <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
+                <FileQuestion className="h-6 w-6 text-white" />
               </div>
               <div className="flex items-center gap-2">
-                <button className="p-2 text-muted hover:text-accent hover:bg-accent/10 rounded-xl transition-all duration-200">
-                  <Eye className="w-4 h-4" />
+                <button className="text-muted hover:text-accent hover:bg-accent/10 rounded-xl p-2 transition-all duration-200">
+                  <Eye className="h-4 w-4" />
                 </button>
-                <button className="p-2 text-muted hover:text-accent hover:bg-accent/10 rounded-xl transition-all duration-200">
-                  <Edit className="w-4 h-4" />
+                <button className="text-muted hover:text-accent hover:bg-accent/10 rounded-xl p-2 transition-all duration-200">
+                  <Edit className="h-4 w-4" />
                 </button>
-                <button className="p-2 text-muted hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all duration-200">
-                  <Trash2 className="w-4 h-4" />
+                <button className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500">
+                  <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             </div>
-            
-            <h3 className="font-bold text-xl text-foreground mb-2">{quiz.title}</h3>
-            <p className="text-muted text-sm mb-4 line-clamp-2">{quiz.description}</p>
-            
+
+            <h3 className="text-foreground mb-2 text-xl font-bold">
+              {quiz.title}
+            </h3>
+            <p className="text-muted mb-4 line-clamp-2 text-sm">
+              {quiz.description}
+            </p>
+
             {/* Status Badge */}
             <div className="mb-4">
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(quiz.status)}`}>
+              <span
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${getStatusColor(quiz.status)}`}
+              >
                 {getStatusLabel(quiz.status)}
               </span>
             </div>
-            
+
             {/* Quiz Details */}
-            <div className="space-y-3 mb-4">
+            <div className="mb-4 space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center text-muted">
-                  <Clock className="w-4 h-4 mr-2" />
+                <div className="text-muted flex items-center">
+                  <Clock className="mr-2 h-4 w-4" />
                   Zeitlimit
                 </div>
-                <span className="font-medium text-foreground">{quiz.timeLimit} Min.</span>
+                <span className="text-foreground font-medium">
+                  {quiz.timeLimit} Min.
+                </span>
               </div>
-              
+
               <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center text-muted">
-                  <Target className="w-4 h-4 mr-2" />
+                <div className="text-muted flex items-center">
+                  <Target className="mr-2 h-4 w-4" />
                   Bestehensgrenze
                 </div>
-                <span className="font-medium text-foreground">{quiz.passingScore}%</span>
+                <span className="text-foreground font-medium">
+                  {quiz.passingScore}%
+                </span>
               </div>
-              
+
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted">Fragen</span>
-                <span className="font-medium text-foreground">{quiz.questionCount}</span>
+                <span className="text-foreground font-medium">
+                  {quiz.questionCount}
+                </span>
               </div>
             </div>
-            
+
             {/* Stats */}
             {quiz.status === 'active' && (
-              <div className="pt-4 border-t border-accent/30 space-y-3">
+              <div className="border-accent/30 space-y-3 border-t pt-4">
                 <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center text-muted">
-                    <Users className="w-4 h-4 mr-2" />
+                  <div className="text-muted flex items-center">
+                    <Users className="mr-2 h-4 w-4" />
                     Versuche
                   </div>
-                  <span className="font-medium text-foreground">{quiz.attempts}</span>
+                  <span className="text-foreground font-medium">
+                    {quiz.attempts}
+                  </span>
                 </div>
-                
+
                 <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center text-muted">
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    Ø Punktzahl
+                  <div className="text-muted flex items-center">
+                    <BarChart3 className="mr-2 h-4 w-4" />Ø Punktzahl
                   </div>
-                  <span className="font-medium text-foreground">{quiz.avgScore}%</span>
+                  <span className="text-foreground font-medium">
+                    {quiz.avgScore}%
+                  </span>
                 </div>
               </div>
             )}
-            
+
             {/* Actions */}
-            <div className="flex items-center justify-between pt-4 border-t border-accent/30">
-              <button className="text-sm text-accent hover:text-accent/90 font-medium">
+            <div className="border-accent/30 flex items-center justify-between border-t pt-4">
+              <button className="text-accent hover:text-accent/90 text-sm font-medium">
                 Ergebnisse anzeigen
               </button>
-              <button className="text-sm text-muted hover:text-foreground">
-                <MoreVertical className="w-4 h-4" />
+              <button className="text-muted hover:text-foreground text-sm">
+                <MoreVertical className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -226,22 +273,23 @@ export function QuizManagement() {
 
       {/* Empty State */}
       {filteredQuizzes.length === 0 && (
-        <div className="glass-effect rounded-3xl p-12 shadow-lg border border-accent/30 text-center">
-          <div className="w-20 h-20 bg-gradient-to-br from-muted to-muted/30 rounded-3xl flex items-center justify-center mx-auto mb-6">
-            <FileQuestion className="w-10 h-10 text-muted" />
+        <div className="glass-effect border-accent/30 rounded-3xl border p-12 text-center shadow-lg">
+          <div className="from-muted to-muted/30 mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
+            <FileQuestion className="text-muted h-10 w-10" />
           </div>
-          <h3 className="text-xl font-semibold text-foreground mb-2">Keine Quizze gefunden</h3>
+          <h3 className="text-foreground mb-2 text-xl font-semibold">
+            Keine Quizze gefunden
+          </h3>
           <p className="text-muted mb-6">
-            {searchTerm || selectedStatus !== 'all' 
+            {searchTerm || selectedStatus !== 'all'
               ? 'Versuchen Sie andere Suchkriterien oder Filter.'
-              : 'Erstellen Sie Ihr erstes Quiz, um zu beginnen.'
-            }
+              : 'Erstellen Sie Ihr erstes Quiz, um zu beginnen.'}
           </p>
-          <button className="px-6 py-3 font-medium text-white bg-gradient-to-r from-accent to-primary rounded-2xl hover:from-accent/90 hover:to-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+          <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
             Neues Quiz erstellen
           </button>
         </div>
       )}
     </div>
-  )
+  );
 }

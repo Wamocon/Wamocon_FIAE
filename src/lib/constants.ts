@@ -6,38 +6,68 @@ export const APP_CONFIG = {
   defaultLanguage: 'de',
   supportedLanguages: ['de', 'en'],
   defaultTheme: 'dark',
-  supportedThemes: ['light', 'dark']
-}
+  supportedThemes: ['light', 'dark'],
+};
 
 // API Configuration
 export const API_CONFIG = {
   baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   timeout: 30000,
-  retries: 3
-}
+  retries: 3,
+};
 
 // Supabase Configuration
 export const SUPABASE_CONFIG = {
   url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
   anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!
-}
+  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+};
 
 // Navigation Links
 export const NAVIGATION = {
   trainee: [
-    { key: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', view: 'dashboard' },
-    { key: 'knowledgeSubmission', icon: 'BookUp', label: 'Berufsschul-Inhalte', view: 'knowledgeSubmission' },
-    { key: 'reflection', icon: 'Swords', label: 'Reflektionen', view: 'reflection' },
-    { key: 'profile', icon: 'User', label: 'Mein Profil', view: 'profile' }
+    {
+      key: 'dashboard',
+      icon: 'LayoutDashboard',
+      label: 'Dashboard',
+      view: 'dashboard',
+    },
+    {
+      key: 'knowledgeSubmission',
+      icon: 'BookUp',
+      label: 'Berufsschul-Inhalte',
+      view: 'knowledgeSubmission',
+    },
+    {
+      key: 'reflection',
+      icon: 'Swords',
+      label: 'Reflektionen',
+      view: 'reflection',
+    },
+    { key: 'profile', icon: 'User', label: 'Mein Profil', view: 'profile' },
   ],
   trainer: [
-    { key: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', view: 'dashboard' },
-    { key: 'contentManagement', icon: 'FolderKanban', label: 'Inhalts-Management', view: 'contentManagement' },
-    { key: 'quizManagement', icon: 'FileQuestion', label: 'Quiz-Verwaltung', view: 'quizManagement' },
-    { key: 'profile', icon: 'User', label: 'Mein Profil', view: 'profile' }
-  ]
-}
+    {
+      key: 'dashboard',
+      icon: 'LayoutDashboard',
+      label: 'Dashboard',
+      view: 'dashboard',
+    },
+    {
+      key: 'contentManagement',
+      icon: 'FolderKanban',
+      label: 'Inhalts-Management',
+      view: 'contentManagement',
+    },
+    {
+      key: 'quizManagement',
+      icon: 'FileQuestion',
+      label: 'Quiz-Verwaltung',
+      view: 'quizManagement',
+    },
+    { key: 'profile', icon: 'User', label: 'Mein Profil', view: 'profile' },
+  ],
+};
 
 // Learning Path Configuration
 export const LEARNING_PATH = {
@@ -45,8 +75,8 @@ export const LEARNING_PATH = {
   maxChaptersPerModule: 10,
   maxLessonsPerChapter: 20,
   passingScore: 70,
-  timeLimitMinutes: 30
-}
+  timeLimitMinutes: 30,
+};
 
 // Quiz Configuration
 export const QUIZ_CONFIG = {
@@ -54,22 +84,22 @@ export const QUIZ_CONFIG = {
   maxQuestions: 50,
   defaultTimeLimit: 30,
   passingScore: 70,
-  maxAttempts: 3
-}
+  maxAttempts: 3,
+};
 
 // File Upload Configuration
 export const FILE_UPLOAD = {
   maxSize: 10 * 1024 * 1024, // 10MB
   allowedTypes: ['pdf', 'png', 'jpg', 'jpeg', 'zip'],
-  maxFiles: 5
-}
+  maxFiles: 5,
+};
 
 // Notification Configuration
 export const NOTIFICATIONS = {
   maxUnread: 99,
   autoDismiss: 5000,
-  position: 'top-right'
-}
+  position: 'top-right',
+};
 
 // Theme Colors
 export const THEME_COLORS = {
@@ -83,7 +113,7 @@ export const THEME_COLORS = {
     600: '#2563eb',
     700: '#1d4ed8',
     800: '#1e40af',
-    900: '#1e3a8a'
+    900: '#1e3a8a',
   },
   gray: {
     50: '#f9fafb',
@@ -95,9 +125,9 @@ export const THEME_COLORS = {
     600: '#4b5563',
     700: '#374151',
     800: '#1f2937',
-    900: '#111827'
-  }
-}
+    900: '#111827',
+  },
+};
 
 // Spacing
 export const SPACING = {
@@ -107,8 +137,8 @@ export const SPACING = {
   lg: '1.5rem',
   xl: '2rem',
   '2xl': '3rem',
-  '3xl': '4rem'
-}
+  '3xl': '4rem',
+};
 
 // Border Radius
 export const BORDER_RADIUS = {
@@ -119,8 +149,8 @@ export const BORDER_RADIUS = {
   xl: '0.75rem',
   '2xl': '1rem',
   '3xl': '1.5rem',
-  full: '9999px'
-}
+  full: '9999px',
+};
 
 // Localization
 export const LOCALIZATION = {
@@ -133,7 +163,7 @@ export const LOCALIZATION = {
       save: 'Speichern',
       delete: 'Löschen',
       edit: 'Bearbeiten',
-      view: 'Anzeigen'
+      view: 'Anzeigen',
     },
     auth: {
       login: 'Anmelden',
@@ -141,13 +171,13 @@ export const LOCALIZATION = {
       email: 'E-Mail',
       password: 'Passwort',
       welcomeBack: 'Willkommen zurück!',
-      loginFailed: 'Anmeldung fehlgeschlagen'
+      loginFailed: 'Anmeldung fehlgeschlagen',
     },
     navigation: {
       dashboard: 'Dashboard',
       profile: 'Profil',
-      settings: 'Einstellungen'
-    }
+      settings: 'Einstellungen',
+    },
   },
   en: {
     common: {
@@ -158,7 +188,7 @@ export const LOCALIZATION = {
       save: 'Save',
       delete: 'Delete',
       edit: 'Edit',
-      view: 'View'
+      view: 'View',
     },
     auth: {
       login: 'Sign In',
@@ -166,45 +196,46 @@ export const LOCALIZATION = {
       email: 'Email',
       password: 'Password',
       welcomeBack: 'Welcome back!',
-      loginFailed: 'Login failed'
+      loginFailed: 'Login failed',
     },
     navigation: {
       dashboard: 'Dashboard',
       profile: 'Profile',
-      settings: 'Settings'
-    }
-  }
-}
+      settings: 'Settings',
+    },
+  },
+};
 
 // Validation Rules
 export const VALIDATION = {
   email: {
     required: 'E-Mail ist erforderlich',
-    invalid: 'Ungültige E-Mail-Adresse'
+    invalid: 'Ungültige E-Mail-Adresse',
   },
   password: {
     required: 'Passwort ist erforderlich',
-    minLength: 'Passwort muss mindestens 8 Zeichen lang sein'
+    minLength: 'Passwort muss mindestens 8 Zeichen lang sein',
   },
   name: {
     required: 'Name ist erforderlich',
-    minLength: 'Name muss mindestens 2 Zeichen lang sein'
-  }
-}
+    minLength: 'Name muss mindestens 2 Zeichen lang sein',
+  },
+};
 
 // Error Messages
 export const ERROR_MESSAGES = {
   network: 'Netzwerkfehler. Bitte versuchen Sie es erneut.',
   unauthorized: 'Sie sind nicht berechtigt, diese Aktion auszuführen.',
   notFound: 'Die angeforderte Ressource wurde nicht gefunden.',
-  serverError: 'Ein Serverfehler ist aufgetreten. Bitte versuchen Sie es später erneut.',
-  validation: 'Bitte überprüfen Sie Ihre Eingaben.'
-}
+  serverError:
+    'Ein Serverfehler ist aufgetreten. Bitte versuchen Sie es später erneut.',
+  validation: 'Bitte überprüfen Sie Ihre Eingaben.',
+};
 
 // Success Messages
 export const SUCCESS_MESSAGES = {
   saved: 'Änderungen wurden erfolgreich gespeichert.',
   deleted: 'Element wurde erfolgreich gelöscht.',
   created: 'Element wurde erfolgreich erstellt.',
-  updated: 'Element wurde erfolgreich aktualisiert.'
-}
+  updated: 'Element wurde erfolgreich aktualisiert.',
+};

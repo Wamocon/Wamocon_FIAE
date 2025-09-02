@@ -1,16 +1,25 @@
-'use client'
+'use client';
 
-import { createContext, useContext, useState, ReactNode, useMemo, useCallback } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useMemo,
+  useCallback,
+} from 'react';
 
-export type Language = 'de' | 'en'
+export type Language = 'de' | 'en';
 
 interface LanguageContextType {
-  language: Language
-  setLanguage: (lang: Language) => void
-  t: (key: string) => string
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: (key: string) => string;
 }
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
+const LanguageContext = createContext<LanguageContextType | undefined>(
+  undefined
+);
 
 // German translations
 const translations = {
@@ -24,7 +33,7 @@ const translations = {
     'nav.profile': 'Profil',
     'nav.contentManagement': 'Inhaltsverwaltung',
     'nav.traineeManagement': 'Azubi-Verwaltung',
-    
+
     // Common
     'common.loading': 'Laden...',
     'common.error': 'Fehler',
@@ -36,7 +45,7 @@ const translations = {
     'common.back': 'Zurück',
     'common.next': 'Weiter',
     'common.previous': 'Zurück',
-    
+
     // Auth
     'auth.login': 'Anmelden',
     'auth.logout': 'Abmelden',
@@ -46,7 +55,7 @@ const translations = {
     'auth.loginFailed': 'Anmeldung fehlgeschlagen',
     'auth.switchToTrainer': 'Zur Ausbilder-Ansicht',
     'auth.switchToTrainee': 'Zur Azubi-Ansicht',
-    
+
     // Dashboard
     'dashboard.welcome': 'Willkommen',
     'dashboard.continueLearning': 'Weitermachen',
@@ -57,7 +66,7 @@ const translations = {
     'dashboard.activeTrainees': 'Aktive Azubis',
     'dashboard.averageProgress': 'Ø Fortschritt',
     'dashboard.pendingReviews': 'Offene Reviews',
-    
+
     // Actions
     'actions.continue': 'Weitermachen',
     'actions.start': 'Starten',
@@ -65,13 +74,13 @@ const translations = {
     'actions.review': 'Bewerten',
     'actions.submit': 'Einreichen',
     'actions.view': 'Anzeigen',
-    
+
     // Status
     'status.completed': 'Abgeschlossen',
     'status.inProgress': 'In Bearbeitung',
     'status.pending': 'Ausstehend',
     'status.overdue': 'Überfällig',
-    
+
     // Time
     'time.days': 'Tage',
     'time.hours': 'Stunden',
@@ -88,7 +97,7 @@ const translations = {
     'nav.profile': 'Profile',
     'nav.contentManagement': 'Content Management',
     'nav.traineeManagement': 'Trainee Management',
-    
+
     // Common
     'common.loading': 'Loading...',
     'common.error': 'Error',
@@ -100,7 +109,7 @@ const translations = {
     'common.back': 'Back',
     'common.next': 'Next',
     'common.previous': 'Previous',
-    
+
     // Auth
     'auth.login': 'Login',
     'auth.logout': 'Logout',
@@ -110,7 +119,7 @@ const translations = {
     'auth.loginFailed': 'Login failed',
     'auth.switchToTrainer': 'Switch to Trainer View',
     'auth.switchToTrainee': 'Switch to Trainee View',
-    
+
     // Dashboard
     'dashboard.welcome': 'Welcome',
     'dashboard.continueLearning': 'Continue Learning',
@@ -121,7 +130,7 @@ const translations = {
     'dashboard.activeTrainees': 'Active Trainees',
     'dashboard.averageProgress': 'Avg. Progress',
     'dashboard.pendingReviews': 'Pending Reviews',
-    
+
     // Actions
     'actions.continue': 'Continue',
     'actions.start': 'Start',
@@ -129,52 +138,60 @@ const translations = {
     'actions.review': 'Review',
     'actions.submit': 'Submit',
     'actions.view': 'View',
-    
+
     // Status
     'status.completed': 'Completed',
     'status.inProgress': 'In Progress',
     'status.pending': 'Pending',
     'status.overdue': 'Overdue',
-    
+
     // Time
     'time.days': 'days',
     'time.hours': 'hours',
     'time.minutes': 'minutes',
     'time.seconds': 'seconds',
-  }
-}
+  },
+};
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('de')
+  const [language, setLanguageState] = useState<Language>('de');
 
   const setLanguage = useCallback((lang: Language) => {
-    setLanguageState(lang)
-  }, [])
+    setLanguageState(lang);
+  }, []);
 
-  const t = useCallback((key: string): string => {
-    return translations[language][key as keyof typeof translations[typeof language]] || key
-  }, [language])
+  const t = useCallback(
+    (key: string): string => {
+      return (
+        translations[language][
+          key as keyof (typeof translations)[typeof language]
+        ] || key
+      );
+    },
+    [language]
+  );
 
   // Memoize the context value to prevent unnecessary re-renders
-  const value = useMemo<LanguageContextType>(() => ({
-    language,
-    setLanguage,
-    t
-  }), [language, setLanguage, t])
+  const value = useMemo<LanguageContextType>(
+    () => ({
+      language,
+      setLanguage,
+      t,
+    }),
+    [language, setLanguage, t]
+  );
 
   return (
     <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
-  )
+  );
 }
 
 export function useLanguage() {
-  const context = useContext(LanguageContext)
+  const context = useContext(LanguageContext);
   if (context === undefined) {
-    throw new Error('useLanguage must be used within a LanguageProvider')
+    throw new Error('useLanguage must be used within a LanguageProvider');
   }
-  return context
+  return context;
 }
-
-

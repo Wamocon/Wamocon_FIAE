@@ -1,172 +1,203 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { FileCheck2, Download, Share2, CheckCircle, Calendar, User, Award, Building } from 'lucide-react'
+import { useState } from 'react';
+import {
+  FileCheck2,
+  Download,
+  Share2,
+  CheckCircle,
+  Calendar,
+  User,
+  Award,
+  Building,
+} from 'lucide-react';
 
 export function AcceptanceProtocol() {
   const [formData, setFormData] = useState({
     milestone: '',
     comments: '',
-    date: new Date().toISOString().split('T')[0]
-  })
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [isGenerated, setIsGenerated] = useState(false)
+    date: new Date().toISOString().split('T')[0],
+  });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGenerated, setIsGenerated] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsGenerating(true)
-    
+    e.preventDefault();
+    setIsGenerating(true);
+
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    setIsGenerating(false)
-    setIsGenerated(true)
-  }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    setIsGenerating(false);
+    setIsGenerated(true);
+  };
 
   if (isGenerated) {
     return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30 text-center">
-          <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-10 h-10 text-white" />
+      <div className="mx-auto max-w-2xl p-6">
+        <div className="glass-effect border-accent/30 rounded-3xl border p-8 text-center shadow-lg">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500">
+            <CheckCircle className="h-10 w-10 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Protokoll erfolgreich generiert!</h2>
+          <h2 className="text-foreground mb-2 text-2xl font-bold">
+            Protokoll erfolgreich generiert!
+          </h2>
           <p className="text-muted mb-6">
-            Das digitale Abnahmeprotokoll wurde erstellt und ist bereit zum Download.
+            Das digitale Abnahmeprotokoll wurde erstellt und ist bereit zum
+            Download.
           </p>
-          
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button className="px-6 py-3 font-medium text-white bg-gradient-to-r from-accent to-primary rounded-2xl hover:from-accent/90 hover:to-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2">
-              <Download className="w-5 h-5" />
+
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
+            <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
+              <Download className="h-5 w-5" />
               PDF herunterladen
             </button>
-            <button className="px-6 py-3 font-medium text-muted bg-muted/30 rounded-2xl hover:bg-muted/50 transition-all duration-200 flex items-center gap-2">
-              <Share2 className="w-5 h-5" />
+            <button className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-6 py-3 font-medium transition-all duration-200">
+              <Share2 className="h-5 w-5" />
               Teilen
             </button>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8 p-6">
       {/* Header */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Digitales Abnahmeprotokoll</h1>
-            <p className="text-muted">Erstellen Sie ein formales Abnahmeprotokoll für eine Ausbildungsphase</p>
+            <h1 className="text-foreground mb-2 text-3xl font-bold">
+              Digitales Abnahmeprotokoll
+            </h1>
+            <p className="text-muted">
+              Erstellen Sie ein formales Abnahmeprotokoll für eine
+              Ausbildungsphase
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="h-12 bg-gradient-to-r from-accent to-primary px-6 rounded-2xl flex items-center">
-              <span className="text-white font-bold text-sm">WMC-Siegel</span>
+            <div className="from-accent to-primary flex h-12 items-center rounded-2xl bg-gradient-to-r px-6">
+              <span className="text-sm font-bold text-white">WMC-Siegel</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Form */}
-      <div className="glass-effect rounded-3xl p-8 shadow-lg border border-accent/30">
+      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Participant Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" />
+              <label className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium">
+                <User className="h-4 w-4" />
                 Auszubildender
               </label>
               <input
                 type="text"
-                className="w-full px-4 py-3 bg-background/50 border border-accent/30 rounded-2xl text-foreground"
+                className="bg-background/50 border-accent/30 text-foreground w-full rounded-2xl border px-4 py-3"
                 value="Elias Felsing"
                 disabled
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-                <Building className="w-4 h-4" />
+              <label className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium">
+                <Building className="h-4 w-4" />
                 Ausbilder
               </label>
               <input
                 type="text"
-                className="w-full px-4 py-3 bg-background/50 border border-accent/30 rounded-2xl text-foreground"
+                className="bg-background/50 border-accent/30 text-foreground w-full rounded-2xl border px-4 py-3"
                 value="Waleri Moretz"
                 disabled
               />
             </div>
           </div>
-          
+
           {/* Date */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
+            <label className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium">
+              <Calendar className="h-4 w-4" />
               Datum der Abnahme
             </label>
             <input
               type="date"
-              className="w-full px-4 py-3 bg-background/50 border border-accent/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-foreground"
+              className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
               value={formData.date}
-              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+              onChange={e =>
+                setFormData(prev => ({ ...prev, date: e.target.value }))
+              }
             />
           </div>
-          
+
           {/* Milestone */}
           <div>
-            <label htmlFor="milestone_name" className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-              <Award className="w-4 h-4" />
+            <label
+              htmlFor="milestone_name"
+              className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium"
+            >
+              <Award className="h-4 w-4" />
               Abgenommener Meilenstein
             </label>
             <input
               type="text"
               id="milestone_name"
               required
-              className="w-full px-4 py-3 bg-background/50 border border-accent/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-foreground placeholder-muted"
+              className="bg-background/50 border-accent/30 focus:ring-accent text-foreground placeholder-muted w-full rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
               placeholder="z.B. Abschluss Phase 1 - Grundlagen der Programmierung"
               value={formData.milestone}
-              onChange={(e) => setFormData(prev => ({ ...prev, milestone: e.target.value }))}
+              onChange={e =>
+                setFormData(prev => ({ ...prev, milestone: e.target.value }))
+              }
             />
           </div>
-          
+
           {/* Comments */}
           <div>
-            <label htmlFor="comments" className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-              <FileCheck2 className="w-4 h-4" />
+            <label
+              htmlFor="comments"
+              className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium"
+            >
+              <FileCheck2 className="h-4 w-4" />
               Finale Kommentare des Ausbilders
             </label>
             <textarea
               id="comments"
               rows={6}
               required
-              className="w-full px-4 py-3 bg-background/50 border border-accent/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-foreground placeholder-muted resize-none"
+              className="bg-background/50 border-accent/30 focus:ring-accent text-foreground placeholder-muted w-full resize-none rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
               placeholder="Beschreiben Sie die erreichten Lernziele, besondere Leistungen und Empfehlungen für die nächste Phase..."
               value={formData.comments}
-              onChange={(e) => setFormData(prev => ({ ...prev, comments: e.target.value }))}
+              onChange={e =>
+                setFormData(prev => ({ ...prev, comments: e.target.value }))
+              }
             />
           </div>
-          
+
           {/* Actions */}
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-accent/30">
+          <div className="border-accent/30 flex flex-col items-center justify-between gap-4 border-t pt-6 sm:flex-row">
             <button
               type="button"
-              className="px-6 py-3 font-medium text-muted bg-muted/30 rounded-2xl hover:bg-muted/50 transition-all duration-200"
+              className="text-muted bg-muted/30 hover:bg-muted/50 rounded-2xl px-6 py-3 font-medium transition-all duration-200"
             >
               Abbrechen
             </button>
             <button
               type="submit"
-              disabled={isGenerating || !formData.milestone || !formData.comments}
-              className="px-8 py-3 font-semibold text-white bg-gradient-to-r from-accent to-primary rounded-2xl hover:from-accent/90 hover:to-primary/90 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2"
+              disabled={
+                isGenerating || !formData.milestone || !formData.comments
+              }
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 focus:ring-accent flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-8 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isGenerating ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
                   Wird generiert...
                 </>
               ) : (
                 <>
-                  <FileCheck2 className="w-5 h-5" />
+                  <FileCheck2 className="h-5 w-5" />
                   Protokoll generieren & autorisieren
                 </>
               )}
@@ -176,28 +207,31 @@ export function AcceptanceProtocol() {
       </div>
 
       {/* Info Card */}
-      <div className="glass-effect rounded-3xl p-6 border border-accent/30">
-        <h3 className="text-lg font-semibold text-foreground mb-3">Wichtige Hinweise</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted">
+      <div className="glass-effect border-accent/30 rounded-3xl border p-6">
+        <h3 className="text-foreground mb-3 text-lg font-semibold">
+          Wichtige Hinweise
+        </h3>
+        <div className="text-muted grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
           <div className="flex items-start gap-2">
-            <div className="w-2 h-2 bg-accent rounded-full mt-2 flex-shrink-0"></div>
-            <span>Das Protokoll wird digital signiert und ist rechtlich bindend</span>
+            <div className="bg-accent mt-2 h-2 w-2 flex-shrink-0 rounded-full"></div>
+            <span>
+              Das Protokoll wird digital signiert und ist rechtlich bindend
+            </span>
           </div>
           <div className="flex items-start gap-2">
-            <div className="w-2 h-2 bg-accent rounded-full mt-2 flex-shrink-0"></div>
+            <div className="bg-accent mt-2 h-2 w-2 flex-shrink-0 rounded-full"></div>
             <span>Alle Beteiligten erhalten eine Kopie per E-Mail</span>
           </div>
           <div className="flex items-start gap-2">
-            <div className="w-2 h-2 bg-accent rounded-full mt-2 flex-shrink-0"></div>
+            <div className="bg-accent mt-2 h-2 w-2 flex-shrink-0 rounded-full"></div>
             <span>Das Protokoll wird automatisch archiviert</span>
           </div>
           <div className="flex items-start gap-2">
-            <div className="w-2 h-2 bg-accent rounded-full mt-2 flex-shrink-0"></div>
+            <div className="bg-accent mt-2 h-2 w-2 flex-shrink-0 rounded-full"></div>
             <span>Änderungen sind nach der Generierung nicht mehr möglich</span>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
-

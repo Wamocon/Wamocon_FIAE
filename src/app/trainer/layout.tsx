@@ -1,82 +1,88 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
-import { MainLayout } from '@/components/layout/MainLayout'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { MainLayout } from '@/components/layout/MainLayout';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
-const TrainerLayoutComponent = ({ children }: { children: React.ReactNode }) => {
-  const { user, profile, loading } = useAuth()
-  const router = useRouter()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+const TrainerLayoutComponent = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
+  const { user, profile, loading } = useAuth();
+  const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Memoize authentication check to prevent unnecessary re-renders
   const isAuthenticated = useMemo(() => {
-    return !loading && user && profile && profile.role === 'trainer'
-  }, [loading, user, profile])
+    return !loading && user && profile && profile.role === 'trainer';
+  }, [loading, user, profile]);
 
   // Memoize redirect logic
   const shouldRedirect = useMemo(() => {
-    if (loading) return false
-    if (!user) return true
-    if (profile && profile.role !== 'trainer') return true
-    return false
-  }, [loading, user, profile])
+    if (loading) return false;
+    if (!user) return true;
+    if (profile && profile.role !== 'trainer') return true;
+    return false;
+  }, [loading, user, profile]);
 
   useEffect(() => {
     if (shouldRedirect) {
-      router.push('/login')
+      router.push('/login');
     }
-  }, [shouldRedirect, router])
+  }, [shouldRedirect, router]);
 
   const handleGoBack = useCallback(() => {
     // Use window.history.back() instead of router.back() to prevent potential loops
     if (window.history.length > 1) {
-      window.history.back()
+      window.history.back();
     } else {
-      router.push('/trainer/dashboard')
+      router.push('/trainer/dashboard');
     }
-  }, [router])
+  }, [router]);
 
   const handleToggleSidebar = useCallback(() => {
-    setSidebarOpen(prev => !prev)
-  }, [])
+    setSidebarOpen(prev => !prev);
+  }, []);
 
   // Show loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-muted-foreground">Lade Trainer Dashboard...</p>
+          <p className="text-muted-foreground mt-4">
+            Lade Trainer Dashboard...
+          </p>
         </div>
       </div>
-    )
+    );
   }
 
   // Show redirect state
   if (shouldRedirect) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-muted-foreground">Weiterleitung...</p>
+          <p className="text-muted-foreground mt-4">Weiterleitung...</p>
         </div>
       </div>
-    )
+    );
   }
 
   // Show access denied state
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-muted-foreground">Zugriff verweigert...</p>
+          <p className="text-muted-foreground mt-4">Zugriff verweigert...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -90,7 +96,7 @@ const TrainerLayoutComponent = ({ children }: { children: React.ReactNode }) => 
     >
       {children}
     </MainLayout>
-  )
-}
+  );
+};
 
-export default memo(TrainerLayoutComponent)
+export default memo(TrainerLayoutComponent);
