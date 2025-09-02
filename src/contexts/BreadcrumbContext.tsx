@@ -77,7 +77,7 @@ export function BreadcrumbProvider({
     setBreadcrumbs(newBreadcrumbs);
   }, [pathname]);
 
-  const addBreadcrumb = (item: BreadcrumbItem) => {
+  const addBreadcrumb = useCallback((item: BreadcrumbItem) => {
     setBreadcrumbs(prev => {
       // Check if breadcrumb already exists
       const exists = prev.some(bc => bc.href === item.href);
@@ -95,7 +95,12 @@ export function BreadcrumbProvider({
     setBreadcrumbs([]);
   };
 
-  const value: BreadcrumbContextType = {
+  const setBreadcrumbsCustom = useCallback((items: BreadcrumbItem[]) => {
+    setBreadcrumbs(items)
+  }, [])
+
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo<BreadcrumbContextType>(() => ({
     breadcrumbs: breadcrumbs || [], // Ensure breadcrumbs is never undefined
     addBreadcrumb,
     removeBreadcrumb,

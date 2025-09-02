@@ -206,7 +206,7 @@ src/
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/yourusername/fiae-learning-platform.git
+   git clone https://github.com/Wamocon/Wamocon_FIAE.git
    cd fiae-learning-platform
    ```
 
@@ -281,8 +281,7 @@ npm run test:e2e
 ### **Platform Options**
 
 - **Vercel**: Recommended for Next.js applications
-- **Netlify**: Static site hosting
-- **AWS**: Enterprise deployment
+
 - **Docker**: Containerized deployment
 
 ### **Environment Variables**

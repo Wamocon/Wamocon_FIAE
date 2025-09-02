@@ -34,7 +34,6 @@ interface MainLayoutProps {
 export function MainLayout({
   user,
   profile,
-  onNavigation,
   onGoBack,
   sidebarOpen,
   onToggleSidebar,
@@ -49,7 +48,6 @@ export function MainLayout({
       {/* Sidebar */}
       <Sidebar
         currentView={currentView}
-        onNavigation={onNavigation}
         isOpen={sidebarOpen}
         onToggle={onToggleSidebar}
         userRole={userRole}
@@ -59,7 +57,6 @@ export function MainLayout({
       <main className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
         <Header
-          onNavigation={onNavigation}
           onGoBack={onGoBack}
           onToggleSidebar={onToggleSidebar}
           sidebarOpen={sidebarOpen}

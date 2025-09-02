@@ -80,7 +80,8 @@ export default function TrainerLayout({
     );
   }
 
-  if (!user || !profile) {
+  // Show redirect state
+  if (shouldRedirect) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -91,7 +92,8 @@ export default function TrainerLayout({
     );
   }
 
-  if (profile.role !== 'trainer') {
+  // Show access denied state
+  if (!isAuthenticated) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -106,7 +108,6 @@ export default function TrainerLayout({
     <MainLayout
       user={user}
       profile={profile}
-      onNavigation={handleNavigation}
       onGoBack={handleGoBack}
       sidebarOpen={sidebarOpen}
       onToggleSidebar={handleToggleSidebar}
@@ -116,3 +117,5 @@ export default function TrainerLayout({
     </MainLayout>
   );
 }
+
+export default memo(TrainerLayoutComponent)

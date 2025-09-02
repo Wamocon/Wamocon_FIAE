@@ -84,7 +84,7 @@ export function Quiz({ onNavigation }: QuizProps) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const handleAnswerSelect = (questionId: number, answerIndex: number) => {
+  const handleAnswerSelect = useCallback((questionId: string, optionIndex: number) => {
     setSelectedAnswers(prev => ({
       ...prev,
       [questionId]: answerIndex,
@@ -278,7 +278,6 @@ export function Quiz({ onNavigation }: QuizProps) {
             </label>
           ))}
         </div>
-      </div>
 
       {/* Navigation */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">

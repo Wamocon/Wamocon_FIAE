@@ -88,7 +88,8 @@ export default function TraineeLayout({
     );
   }
 
-  if (!user || !profile) {
+  // Show redirect state
+  if (shouldRedirect) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -99,7 +100,8 @@ export default function TraineeLayout({
     );
   }
 
-  if (profile.role !== 'trainee') {
+  // Show access denied state
+  if (!isAuthenticated) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -114,7 +116,6 @@ export default function TraineeLayout({
     <MainLayout
       user={user}
       profile={profile}
-      onNavigation={handleNavigation}
       onGoBack={handleGoBack}
       sidebarOpen={sidebarOpen}
       onToggleSidebar={handleToggleSidebar}
@@ -124,3 +125,5 @@ export default function TraineeLayout({
     </MainLayout>
   );
 }
+
+export default memo(TraineeLayoutComponent)

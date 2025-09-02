@@ -34,6 +34,7 @@ export default function LandingPage() {
     router.push('/register');
   };
 
+  // Memoize loading state
   if (loading) {
     return (
       <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden">
@@ -55,7 +56,7 @@ export default function LandingPage() {
   }
 
   // If user is authenticated, show loading while redirecting
-  if (user && profile) {
+  if (shouldRedirect) {
     return (
       <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden">
         {/* Enhanced background theme */}
