@@ -5,23 +5,27 @@ A comprehensive, role-based learning management system designed for German vocat
 ## 🚀 Features
 
 ### **Role-Based Access Control (RBAC)**
+
 - **Trainee (Auszubildende)**: Access to learning modules, lessons, quizzes, and progress tracking
 - **Trainer (Ausbilder)**: Content management, trainee oversight, analytics, and assessment tools
 - **Secure Authentication**: Role validation and route protection
 
 ### **Learning Management**
+
 - **Modular Learning Paths**: Structured curriculum with progressive difficulty levels
 - **Interactive Lessons**: Rich content with multimedia support
 - **Assessment System**: Comprehensive quizzes and progress tracking
 - **Reflection Tools**: Built-in learning reflection and knowledge submission
 
 ### **Professional Dashboard**
+
 - **Real-time Analytics**: Progress visualization with charts and statistics
 - **Performance Tracking**: Detailed metrics and learning outcomes
 - **Modern UI/UX**: Glassmorphism design with dark theme
 - **Responsive Design**: Mobile-first approach for all devices
 
 ### **Content Management**
+
 - **Dynamic Content**: Easy-to-update learning materials
 - **Quiz Management**: Create, edit, and manage assessments
 - **Trainee Oversight**: Monitor individual and group progress
@@ -30,20 +34,24 @@ A comprehensive, role-based learning management system designed for German vocat
 ## 🛠️ Tech Stack
 
 ### **Frontend Framework**
+
 - **Next.js 15.4.6**: Latest App Router with React 18
 - **TypeScript**: Full type safety and IntelliSense
 - **Tailwind CSS 4.1.12**: Latest utility-first CSS framework
 
 ### **UI Components**
+
 - **Shadcn UI**: Professional component library
 - **Lucide React**: Modern icon system
 - **Recharts**: Data visualization and analytics charts
 
 ### **State Management**
+
 - **React Context**: Authentication and language management
 - **Custom Hooks**: Reusable business logic
 
 ### **Styling & Theming**
+
 - **CSS Variables**: Dynamic theme system
 - **Glassmorphism**: Modern visual effects
 - **Responsive Design**: Mobile-first approach
@@ -51,18 +59,21 @@ A comprehensive, role-based learning management system designed for German vocat
 ## ⚡ Performance Optimizations
 
 ### **React Performance**
+
 - **React.memo**: Component memoization to prevent unnecessary re-renders
 - **useMemo**: Expensive computation caching
 - **useCallback**: Stable function references
 - **Lazy Loading**: Code splitting and dynamic imports
 
 ### **CSS Performance**
+
 - **Hardware Acceleration**: GPU-accelerated animations with `transform: translateZ(0)`
 - **Reduced Motion**: Respects user preferences for motion sensitivity
 - **Optimized Blur**: Balanced backdrop-filter values for smooth performance
 - **Efficient Transitions**: Cubic-bezier easing functions for natural feel
 
 ### **Next.js Optimizations**
+
 - **App Router**: Modern routing with improved performance
 - **Server Components**: Reduced client-side JavaScript
 - **Prefetching**: Intelligent link preloading
@@ -115,6 +126,7 @@ src/
 ## 🎨 Design System
 
 ### **High-Contrast Gaming Theme - Crimson & Onyx**
+
 - **Primary Background**: Deep charcoal with radial gradient (#0a0a0a → #3a0a0a)
 - **Accent Color**: Vibrant crimson red (#ff1a1a) for all interactive elements
 - **Text Colors**: Crisp white (#ffffff) for primary, muted gray (#6b7280) for secondary
@@ -122,18 +134,21 @@ src/
 - **Glass Effects**: Modern glassmorphism with backdrop blur and subtle shadows
 
 ### **Theme Features**
+
 - **Radial Gradient Background**: Black on top-right transitioning to red tint
 - **Animated Elements**: Subtle particle effects and background pulse
 - **Hover Animations**: Smooth transitions with transform effects
 - **Performance Optimized**: Hardware acceleration and reduced motion support
 
 ### **Visual Elements**
+
 - **Glassmorphism**: Translucent, frosted glass effects
 - **Gradients**: Smooth color transitions
 - **Shadows**: Subtle depth and layering
 - **Rounded Corners**: Modern, friendly interface
 
 ### **Typography**
+
 - **Font Family**: System fonts with fallbacks
 - **Hierarchy**: Clear heading and text structure
 - **Readability**: Optimized contrast and spacing
@@ -141,12 +156,14 @@ src/
 ## 🔐 Authentication & Security
 
 ### **Role-Based Access Control**
+
 - **Trainee Routes**: `/trainee/*` - Learning and assessment tools
 - **Trainer Routes**: `/trainer/*` - Administration and oversight
 - **Route Protection**: Middleware-based security
 - **Session Management**: Persistent authentication state
 
 ### **Security Features**
+
 - **Route Validation**: Automatic role checking
 - **Access Control**: Unauthorized access prevention
 - **Session Security**: Secure authentication flow
@@ -154,12 +171,14 @@ src/
 ## 📊 Data Visualization
 
 ### **Charts & Analytics**
+
 - **Progress Tracking**: Real-time learning progress
 - **Performance Metrics**: Individual and group statistics
 - **Interactive Charts**: Responsive data visualization
 - **Export Capabilities**: Data analysis and reporting
 
 ### **Dashboard Features**
+
 - **Overview Cards**: Key performance indicators
 - **Progress Bars**: Visual progress representation
 - **Statistical Charts**: Comprehensive data analysis
@@ -168,6 +187,7 @@ src/
 ## 🌍 Internationalization
 
 ### **Language Support**
+
 - **German (Primary)**: Full localization for German users
 - **English (Secondary)**: International accessibility
 - **Context Switching**: Dynamic language selection
@@ -176,6 +196,7 @@ src/
 ## 🚀 Getting Started
 
 ### **Prerequisites**
+
 - **Node.js**: Version 18.0 or higher
 - **npm/yarn**: Package manager
 - **Git**: Version control
@@ -183,12 +204,14 @@ src/
 ### **Installation**
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/Wamocon/Wamocon_FIAE.git
    cd fiae-learning-platform
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    # or
@@ -196,12 +219,14 @@ src/
    ```
 
 3. **Environment setup**
+
    ```bash
    cp .env.example .env.local
    # Configure your environment variables
    ```
 
 4. **Start development server**
+
    ```bash
    npm run dev
    # or
@@ -229,6 +254,7 @@ npm run export
 ## 🧪 Testing
 
 ### **Test Commands**
+
 ```bash
 # Run all tests
 npm test
@@ -244,6 +270,7 @@ npm run test:e2e
 ```
 
 ### **Testing Strategy**
+
 - **Unit Tests**: Component and function testing
 - **Integration Tests**: API and data flow testing
 - **E2E Tests**: User journey validation
@@ -252,11 +279,13 @@ npm run test:e2e
 ## 📦 Deployment
 
 ### **Platform Options**
+
 - **Vercel**: Recommended for Next.js applications
 
 - **Docker**: Containerized deployment
 
 ### **Environment Variables**
+
 ```bash
 # Required
 NEXT_PUBLIC_APP_URL=https://yourdomain.com
@@ -268,6 +297,7 @@ NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
 ```
 
 ### **Build Optimization**
+
 - **Code Splitting**: Automatic route-based splitting
 - **Image Optimization**: Next.js image optimization
 - **Bundle Analysis**: Webpack bundle analyzer
@@ -276,12 +306,14 @@ NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
 ## 🔧 Development
 
 ### **Code Standards**
+
 - **ESLint**: Code quality and consistency
 - **Prettier**: Code formatting
 - **TypeScript**: Type safety and IntelliSense
 - **Husky**: Git hooks for quality assurance
 
 ### **Development Workflow**
+
 1. **Feature Branch**: Create feature branch from main
 2. **Development**: Implement features with tests
 3. **Code Review**: Submit pull request for review
@@ -289,6 +321,7 @@ NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
 5. **Deployment**: Merge to main and deploy
 
 ### **Code Quality**
+
 - **Linting**: ESLint with strict rules
 - **Formatting**: Prettier for consistent style
 - **Type Checking**: TypeScript strict mode
@@ -297,28 +330,30 @@ NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
 ## 📚 API Documentation
 
 ### **Mock Data Structure**
+
 ```typescript
 interface Module {
-  id: string
-  title: string
-  description: string
-  level: 'beginner' | 'intermediate' | 'advanced'
-  progress: number
-  estimatedTime: string
-  chapters: Chapter[]
-  lessons: Lesson[]
+  id: string;
+  title: string;
+  description: string;
+  level: 'beginner' | 'intermediate' | 'advanced';
+  progress: number;
+  estimatedTime: string;
+  chapters: Chapter[];
+  lessons: Lesson[];
 }
 
 interface Trainee {
-  id: string
-  name: string
-  avatar: string
-  progress: number
-  role: 'trainee'
+  id: string;
+  name: string;
+  avatar: string;
+  progress: number;
+  role: 'trainee';
 }
 ```
 
 ### **Authentication Endpoints**
+
 - `POST /api/auth/login` - User authentication
 - `POST /api/auth/logout` - User logout
 - `GET /api/auth/profile` - User profile data
@@ -326,6 +361,7 @@ interface Trainee {
 ## 🤝 Contributing
 
 ### **Contribution Guidelines**
+
 1. **Fork the repository**
 2. **Create feature branch**: `git checkout -b feature/amazing-feature`
 3. **Commit changes**: `git commit -m 'Add amazing feature'`
@@ -333,6 +369,7 @@ interface Trainee {
 5. **Open pull request**: Submit for review
 
 ### **Development Setup**
+
 ```bash
 # Install development dependencies
 npm install --save-dev
@@ -345,6 +382,7 @@ npm run dev
 ```
 
 ### **Code Review Process**
+
 - **Automated Checks**: Linting, testing, and type checking
 - **Manual Review**: Code quality and security review
 - **Testing**: Functional and regression testing
@@ -354,4 +392,4 @@ npm run dev
 
 **Built with ❤️ for German vocational training excellence**
 
-*This project follows enterprise-grade development standards and is designed for professional use in educational institutions and corporate training environments.*
+_This project follows enterprise-grade development standards and is designed for professional use in educational institutions and corporate training environments._

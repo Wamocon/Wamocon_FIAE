@@ -1,135 +1,178 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
-import { GraduationCap, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
+import Link from 'next/link';
+import db from '@/db';
+import { profiles } from '@/db/migrations/schemas/schema';
+import { eq } from 'drizzle-orm';
 
-export function LoginForm() {
-  const { signIn, switchRole } = useAuth()
-  const [email, setEmail] = useState('elias.felsing@azubi.de')
-  const [password, setPassword] = useState('password123')
-  const [isLoading, setIsLoading] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [currentRole, setCurrentRole] = useState<'trainee' | 'trainer'>('trainee')
+export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const router = useRouter();
+  const supabase = createClientComponentClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    
-    try {
-      await signIn(email, password)
-    } catch (error) {
-      console.error('Login failed:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
 
-  const handleSwitchRole = (role: 'trainee' | 'trainer') => {
-    setCurrentRole(role)
-    if (role === 'trainer') {
-      setEmail('ausbilder@wamocon.de')
-    } else {
-      setEmail('elias.felsing@azubi.de')
+    try {
+      // 1. Supabase login
+      const { data, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+      if (signInError) throw signInError;
+      if (!data.user) throw new Error('Benutzer nicht gefunden.');
+
+      // 2. Fetch profile from database using Drizzle
+      const profilesResult = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.auth_id, data.user.id));
+
+      const profile = profilesResult[0];
+
+      if (!profile) throw new Error('Profil nicht gefunden.');
+
+      // 3. Redirect based on role
+      if (profile.role === 'trainer') {
+        router.push('/trainer/dashboard');
+      } else {
+        router.push('/trainee/dashboard');
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error('Login error:', err);
+        setError(err.message || 'Anmeldung fehlgeschlagen.');
+      } else {
+        console.error('Login error:', err);
+        setError('Anmeldung fehlgeschlagen.');
+      }
+    } finally {
+      setIsLoading(false);
     }
-    switchRole(role)
-  }
+  };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900">
-      <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-2xl shadow-2xl">
-        <div>
-          <h2 className="text-4xl font-bold text-center text-white">FIAE-Lernplattform</h2>
-          <p className="mt-2 text-center text-gray-400">Willkommen zurück!</p>
-        </div>
-        
-        {/* Role Selector */}
-        <div className="flex bg-gray-700 rounded-lg p-1">
-          <button
-            onClick={() => handleSwitchRole('trainee')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              currentRole === 'trainee'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Auszubildender
-          </button>
-          <button
-            onClick={() => handleSwitchRole('trainer')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              currentRole === 'trainer'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Ausbilder
-          </button>
-        </div>
-        
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="email" className="text-sm font-medium text-gray-300">E-Mail-Adresse</label>
-            <input 
-              id="email" 
-              name="email" 
-              type="email" 
-              autoComplete="email" 
-              required 
-              className="w-full px-4 py-3 mt-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white" 
-              placeholder="ihre.email@beispiel.de"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+    <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
+      <div className="relative z-10 w-full max-w-md space-y-8">
+        <div className="text-center">
+          <div className="from-accent to-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br shadow-2xl">
+            <BookOpen className="text-primary-foreground h-8 w-8" />
           </div>
-          
-          <div>
-            <label htmlFor="password" className="text-sm font-medium text-gray-300">Passwort</label>
-            <div className="relative">
-              <input 
-                id="password" 
-                name="password" 
-                type={showPassword ? 'text' : 'password'} 
-                autoComplete="current-password" 
-                required 
-                className="w-full px-4 py-3 pr-12 mt-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white" 
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+          <h1 className="text-foreground from-accent to-primary mb-2 bg-gradient-to-r bg-clip-text text-4xl font-bold text-transparent">
+            FIAE-Lernplattform
+          </h1>
+          <p className="text-muted text-lg">Willkommen zurück!</p>
+          <button
+            onClick={() => router.push('/')}
+            className="text-accent hover:text-accent/80 mt-2 text-sm underline"
+          >
+            ← Zurück zur Startseite
+          </button>
+        </div>
+        <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-8 shadow-2xl">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label
+                htmlFor="email"
+                className="text-foreground mb-2 block text-sm font-medium"
               >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+                E-Mail-Adresse
+              </label>
+              <div className="relative">
+                <Mail className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border py-3 pr-4 pl-10 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
+                  placeholder="ihre.email@beispiel.de"
+                />
+              </div>
             </div>
-          </div>
-          
-          <div>
-            <button 
-              type="submit" 
+            <div>
+              <label
+                htmlFor="password"
+                className="text-foreground mb-2 block text-sm font-medium"
+              >
+                Passwort
+              </label>
+              <div className="relative">
+                <Lock className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border py-3 pr-12 pl-12 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-muted hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 p-1 transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+            {error && (
+              <div className="bg-destructive/10 border-destructive/20 rounded-xl border p-3">
+                <p className="text-destructive text-sm">{error}</p>
+              </div>
+            )}
+            <button
+              type="submit"
               disabled={isLoading}
-              className="w-full py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-blue-600/50 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-primary/50 focus:ring-offset-background focus:ring-accent w-full rounded-xl py-3 font-semibold shadow-lg transition-colors duration-300 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none"
             >
               {isLoading ? (
                 <div className="flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  Anmelden...
+                  <div className="border-primary-foreground/30 border-t-primary-foreground mr-2 h-5 w-5 animate-spin rounded-full border-2"></div>
+                  Anmeldung läuft...
                 </div>
               ) : (
-                'Anmelden'
+                'An'
               )}
             </button>
-          </div>
-        </form>
-        
-        <div className="text-center text-xs text-gray-500">
-          <p>Demo-Anmeldung: {email}</p>
-          <p>Passwort: password123</p>
+            <div className="text-center">
+              <p className="text-gray-400">
+                Noch kein Konto?{' '}
+                <Link
+                  href="/register"
+                  className="font-medium text-red-400 hover:text-red-300"
+                >
+                  Konto erstellen
+                </Link>
+              </p>
+            </div>
+          </form>
+        </div>
+        <div className="text-center">
+          <p className="text-muted text-xs">
+            © 2025 FIAE-Lernplattform. Alle Rechte vorbehalten.
+          </p>
         </div>
       </div>
     </div>
-  )
+  );
 }

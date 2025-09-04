@@ -1,90 +1,127 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FIAE-Lernplattform - Wireframe</title>
-    
+
     <!-- Tailwind CSS for modern styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- Lucide Icons for a clean icon set -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
-        /* Custom styles for a polished look */
-        body {
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
-        /* Custom scrollbar for a modern feel */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #111827; /* bg-gray-900 */
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #374151; /* bg-gray-700 */
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #4b5563; /* bg-gray-600 */
-        }
+      /* Custom styles for a polished look */
+      body {
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-        /* Helper class to hide elements */
-        .hidden-view {
-            display: none;
-        }
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 50;
-        }
+      /* Custom scrollbar for a modern feel */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #111827; /* bg-gray-900 */
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #374151; /* bg-gray-700 */
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #4b5563; /* bg-gray-600 */
+      }
+
+      /* Helper class to hide elements */
+      .hidden-view {
+        display: none;
+      }
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+      }
     </style>
-</head>
-<body class="bg-gray-900 text-gray-200">
-
+  </head>
+  <body class="bg-gray-900 text-gray-200">
     <!-- 
       =====================================================================
       LOGIN VIEW
       =====================================================================
     -->
-    <div id="login-view" class="flex items-center justify-center min-h-screen bg-gray-900">
-        <div class="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-2xl shadow-2xl">
-            <div>
-                <h2 class="text-4xl font-bold text-center text-white">FIAE-Lernplattform</h2>
-                <p class="mt-2 text-center text-gray-400">Willkommen zurück!</p>
-            </div>
-            <form class="space-y-6" onsubmit="event.preventDefault(); login()">
-                <div>
-                    <label for="email" class="text-sm font-medium text-gray-300">E-Mail-Adresse</label>
-                    <input id="email" name="email" type="email" autocomplete="email" required class="w-full px-4 py-3 mt-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white" value="elias.felsing@azubi.de">
-                </div>
-                <div>
-                    <label for="password" class="text-sm font-medium text-gray-300">Passwort</label>
-                    <input id="password" name="password" type="password" autocomplete="current-password" required class="w-full px-4 py-3 mt-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white" value="password123">
-                </div>
-                <div>
-                    <button type="submit" class="w-full py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500">
-                        Anmelden
-                    </button>
-                </div>
-            </form>
-            <div class="text-center text-sm text-gray-400">
-                <p>Anmelden als <button onclick="switchLogin('trainer')" class="font-medium text-blue-400 hover:underline">Ausbilder</button></p>
-            </div>
+    <div
+      id="login-view"
+      class="flex min-h-screen items-center justify-center bg-gray-900"
+    >
+      <div
+        class="w-full max-w-md space-y-8 rounded-2xl bg-gray-800 p-8 shadow-2xl"
+      >
+        <div>
+          <h2 class="text-center text-4xl font-bold text-white">
+            FIAE-Lernplattform
+          </h2>
+          <p class="mt-2 text-center text-gray-400">Willkommen zurück!</p>
         </div>
+        <form class="space-y-6" onsubmit="event.preventDefault(); login()">
+          <div>
+            <label for="email" class="text-sm font-medium text-gray-300"
+              >E-Mail-Adresse</label
+            >
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+              class="mt-2 w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              value="elias.felsing@azubi.de"
+            />
+          </div>
+          <div>
+            <label for="password" class="text-sm font-medium text-gray-300"
+              >Passwort</label
+            >
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              class="mt-2 w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              value="password123"
+            />
+          </div>
+          <div>
+            <button
+              type="submit"
+              class="w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors duration-300 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 focus:outline-none"
+            >
+              Anmelden
+            </button>
+          </div>
+        </form>
+        <div class="text-center text-sm text-gray-400">
+          <p>
+            Anmelden als
+            <button
+              onclick="switchLogin('trainer')"
+              class="font-medium text-blue-400 hover:underline"
+            >
+              Ausbilder
+            </button>
+          </p>
+        </div>
+      </div>
     </div>
 
     <!-- 
@@ -93,120 +130,239 @@
       =====================================================================
     -->
     <div id="app-view" class="hidden-view">
-        <div class="flex h-screen bg-gray-900">
-            <!-- Sidebar -->
-            <aside class="w-64 flex-shrink-0 bg-gray-900 border-r border-gray-700/50 flex flex-col">
-                <div class="h-16 flex items-center justify-center px-4 border-b border-gray-700/50">
-                    <i data-lucide="graduation-cap" class="w-8 h-8 text-blue-500"></i>
-                    <h1 class="text-xl font-bold text-white ml-2">FIAE-Plattform</h1>
-                </div>
-                <nav id="sidebar-nav" class="flex-1 px-4 py-6 space-y-1"></nav>
-                <div class="px-4 py-4 border-t border-gray-700/50">
-                    <div class="flex items-center">
-                        <img id="user-avatar" class="h-10 w-10 rounded-full object-cover" src="" alt="Avatar">
-                        <div class="ml-3">
-                            <p id="user-name" class="text-sm font-medium text-white"></p>
-                            <p id="user-role" class="text-xs text-gray-400"></p>
-                        </div>
-                    </div>
-                    <button onclick="logout()" class="w-full mt-4 flex items-center justify-center py-2 px-4 text-sm font-medium rounded-md text-gray-300 bg-gray-800 hover:bg-gray-700">
-                        <i data-lucide="log-out" class="w-4 h-4 mr-2"></i>
-                        Abmelden
-                    </button>
-                </div>
-            </aside>
+      <div class="flex h-screen bg-gray-900">
+        <!-- Sidebar -->
+        <aside
+          class="flex w-64 flex-shrink-0 flex-col border-r border-gray-700/50 bg-gray-900"
+        >
+          <div
+            class="flex h-16 items-center justify-center border-b border-gray-700/50 px-4"
+          >
+            <i data-lucide="graduation-cap" class="h-8 w-8 text-blue-500"></i>
+            <h1 class="ml-2 text-xl font-bold text-white">FIAE-Plattform</h1>
+          </div>
+          <nav id="sidebar-nav" class="flex-1 space-y-1 px-4 py-6"></nav>
+          <div class="border-t border-gray-700/50 px-4 py-4">
+            <div class="flex items-center">
+              <img
+                id="user-avatar"
+                class="h-10 w-10 rounded-full object-cover"
+                src=""
+                alt="Avatar"
+              />
+              <div class="ml-3">
+                <p id="user-name" class="text-sm font-medium text-white"></p>
+                <p id="user-role" class="text-xs text-gray-400"></p>
+              </div>
+            </div>
+            <button
+              onclick="logout()"
+              class="mt-4 flex w-full items-center justify-center rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
+            >
+              <i data-lucide="log-out" class="mr-2 h-4 w-4"></i>
+              Abmelden
+            </button>
+          </div>
+        </aside>
 
-            <!-- Main Content Area -->
-            <main id="main-content" class="flex-1 flex flex-col overflow-hidden">
-                <header class="h-16 bg-gray-900 border-b border-gray-700/50 flex items-center justify-between px-6">
-                    <div id="breadcrumb-container" class="text-sm text-gray-400"></div>
-                    <div class="flex items-center gap-4">
-                        <button class="text-gray-400 hover:text-white relative">
-                            <i data-lucide="bell" class="w-6 h-6"></i>
-                            <span id="notification-dot" class="absolute -top-1 -right-1 flex h-3 w-3">
-                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                            </span>
-                        </button>
-                        <div id="role-switcher-container"></div>
-                    </div>
-                </header>
-                <div id="content-area" class="flex-1 overflow-y-auto p-8 bg-gray-900"></div>
-            </main>
-        </div>
+        <!-- Main Content Area -->
+        <main id="main-content" class="flex flex-1 flex-col overflow-hidden">
+          <header
+            class="flex h-16 items-center justify-between border-b border-gray-700/50 bg-gray-900 px-6"
+          >
+            <div id="breadcrumb-container" class="text-sm text-gray-400"></div>
+            <div class="flex items-center gap-4">
+              <button class="relative text-gray-400 hover:text-white">
+                <i data-lucide="bell" class="h-6 w-6"></i>
+                <span
+                  id="notification-dot"
+                  class="absolute -top-1 -right-1 flex h-3 w-3"
+                >
+                  <span
+                    class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"
+                  ></span>
+                  <span
+                    class="relative inline-flex h-3 w-3 rounded-full bg-red-500"
+                  ></span>
+                </span>
+              </button>
+              <div id="role-switcher-container"></div>
+            </div>
+          </header>
+          <div
+            id="content-area"
+            class="flex-1 overflow-y-auto bg-gray-900 p-8"
+          ></div>
+        </main>
+      </div>
     </div>
-    
+
     <div id="modal-container"></div>
 
     <script>
-        // =====================================================================
-        // MOCK DATA
-        // =====================================================================
-        const mockData = {
-            profiles: {
-                trainee: { id: 'trainee_1', fullName: 'Elias Felsing', role: 'trainee', avatar: 'https://placehold.co/100x100/7c3aed/ffffff?text=E', trainerId: 'trainer_1', training_start_date: '2025-08-01' },
-                trainer: { id: 'trainer_1', fullName: 'Waleri Moretz', role: 'trainer', avatar: 'https://placehold.co/100x100/1d4ed8/ffffff?text=W' }
-            },
-            curriculum: [
-                { 
-                    moduleId: 'mod_1', training_year: 1, title: 'Grundlagen der Anwendungsentwicklung', progress: 75,
-                    chapters: [
-                        { 
-                            chapterId: 'chap_1_1', title: 'Einführung in die Programmierung',
-                            lessons: [
-                                { id: 'les_1_1_1', title: 'Was ist eine Programmiersprache?', type: 'lesson', completed: true, ref: '§4 Abs. 2 Nr. 1a' },
-                                { id: 'les_1_1_2', title: 'Quiz: Grundbegriffe', type: 'quiz', quizId: 'quiz_1_1_2', completed: true, ref: '§4 Abs. 2 Nr. 1a' },
-                                { id: 'les_1_1_3', title: 'Praxis: Dein erstes "Hello, World!"', type: 'exercise', completed: true, ref: '§4 Abs. 2 Nr. 1b' }
-                            ],
-                            mainQuizId: 'quiz_chap_1_1'
-                        },
-                        { 
-                            chapterId: 'chap_1_2', title: 'Variablen und Datentypen',
-                            lessons: [
-                                { id: 'les_1_2_1', title: 'Variablen, Datentypen und Operatoren', type: 'lesson', completed: false, ref: '§4 Abs. 2 Nr. 1c' },
-                                { id: 'les_1_2_2', title: 'Quiz: Datentypen', type: 'quiz', quizId: 'quiz_1_2_2', completed: false, ref: '§4 Abs. 2 Nr. 1c' }
-                            ],
-                            mainQuizId: 'quiz_chap_1_2'
-                        }
-                    ]
-                },
-                { 
-                    moduleId: 'mod_2', training_year: 1, title: 'Projektmanagement und agile Methoden', progress: 40,
-                    chapters: [ { chapterId: 'chap_2_1', title: 'Einführung in Scrum', lessons: [], mainQuizId: 'quiz_chap_2_1' } ]
-                }
+      // =====================================================================
+      // MOCK DATA
+      // =====================================================================
+      const mockData = {
+        profiles: {
+          trainee: {
+            id: 'trainee_1',
+            fullName: 'Elias Felsing',
+            role: 'trainee',
+            avatar: 'https://placehold.co/100x100/7c3aed/ffffff?text=E',
+            trainerId: 'trainer_1',
+            training_start_date: '2025-08-01',
+          },
+          trainer: {
+            id: 'trainer_1',
+            fullName: 'Waleri Moretz',
+            role: 'trainer',
+            avatar: 'https://placehold.co/100x100/1d4ed8/ffffff?text=W',
+          },
+        },
+        curriculum: [
+          {
+            moduleId: 'mod_1',
+            training_year: 1,
+            title: 'Grundlagen der Anwendungsentwicklung',
+            progress: 75,
+            chapters: [
+              {
+                chapterId: 'chap_1_1',
+                title: 'Einführung in die Programmierung',
+                lessons: [
+                  {
+                    id: 'les_1_1_1',
+                    title: 'Was ist eine Programmiersprache?',
+                    type: 'lesson',
+                    completed: true,
+                    ref: '§4 Abs. 2 Nr. 1a',
+                  },
+                  {
+                    id: 'les_1_1_2',
+                    title: 'Quiz: Grundbegriffe',
+                    type: 'quiz',
+                    quizId: 'quiz_1_1_2',
+                    completed: true,
+                    ref: '§4 Abs. 2 Nr. 1a',
+                  },
+                  {
+                    id: 'les_1_1_3',
+                    title: 'Praxis: Dein erstes "Hello, World!"',
+                    type: 'exercise',
+                    completed: true,
+                    ref: '§4 Abs. 2 Nr. 1b',
+                  },
+                ],
+                mainQuizId: 'quiz_chap_1_1',
+              },
+              {
+                chapterId: 'chap_1_2',
+                title: 'Variablen und Datentypen',
+                lessons: [
+                  {
+                    id: 'les_1_2_1',
+                    title: 'Variablen, Datentypen und Operatoren',
+                    type: 'lesson',
+                    completed: false,
+                    ref: '§4 Abs. 2 Nr. 1c',
+                  },
+                  {
+                    id: 'les_1_2_2',
+                    title: 'Quiz: Datentypen',
+                    type: 'quiz',
+                    quizId: 'quiz_1_2_2',
+                    completed: false,
+                    ref: '§4 Abs. 2 Nr. 1c',
+                  },
+                ],
+                mainQuizId: 'quiz_chap_1_2',
+              },
             ],
-            quizSubmissions: [
-                { submissionId: 'sub_1', quizId: 'quiz_1_1_2', quizTitle: 'Quiz: Grundbegriffe', traineeId: 'trainee_1', score: 90, status: 'reviewed', feedback: 'Sehr gute Leistung! Die Grundlagen sitzen.', submitted_at: '2025-08-10T10:00:00Z' },
-                { submissionId: 'sub_2', quizId: 'quiz_chap_1_1', quizTitle: 'Abschlusstest: Einführung', traineeId: 'trainee_1', score: 75, status: 'submitted', feedback: null, submitted_at: '2025-08-12T14:30:00Z' }
+          },
+          {
+            moduleId: 'mod_2',
+            training_year: 1,
+            title: 'Projektmanagement und agile Methoden',
+            progress: 40,
+            chapters: [
+              {
+                chapterId: 'chap_2_1',
+                title: 'Einführung in Scrum',
+                lessons: [],
+                mainQuizId: 'quiz_chap_2_1',
+              },
             ],
-            trainees: [
-                { id: 'trainee_1', name: 'Elias Felsing', progress: 75, avatar: 'https://placehold.co/100x100/7c3aed/ffffff?text=E' },
-                { id: 'trainee_2', name: 'Maanik Garg', progress: 90, avatar: 'https://placehold.co/100x100/16a34a/ffffff?text=M' },
-                { id: 'trainee_3', name: 'Julia Schneider', progress: 50, avatar: 'https://placehold.co/100x100/f97316/ffffff?text=J' },
-            ]
-        };
+          },
+        ],
+        quizSubmissions: [
+          {
+            submissionId: 'sub_1',
+            quizId: 'quiz_1_1_2',
+            quizTitle: 'Quiz: Grundbegriffe',
+            traineeId: 'trainee_1',
+            score: 90,
+            status: 'reviewed',
+            feedback: 'Sehr gute Leistung! Die Grundlagen sitzen.',
+            submitted_at: '2025-08-10T10:00:00Z',
+          },
+          {
+            submissionId: 'sub_2',
+            quizId: 'quiz_chap_1_1',
+            quizTitle: 'Abschlusstest: Einführung',
+            traineeId: 'trainee_1',
+            score: 75,
+            status: 'submitted',
+            feedback: null,
+            submitted_at: '2025-08-12T14:30:00Z',
+          },
+        ],
+        trainees: [
+          {
+            id: 'trainee_1',
+            name: 'Elias Felsing',
+            progress: 75,
+            avatar: 'https://placehold.co/100x100/7c3aed/ffffff?text=E',
+          },
+          {
+            id: 'trainee_2',
+            name: 'Maanik Garg',
+            progress: 90,
+            avatar: 'https://placehold.co/100x100/16a34a/ffffff?text=M',
+          },
+          {
+            id: 'trainee_3',
+            name: 'Julia Schneider',
+            progress: 50,
+            avatar: 'https://placehold.co/100x100/f97316/ffffff?text=J',
+          },
+        ],
+      };
 
-        // =====================================================================
-        // APPLICATION STATE
-        // =====================================================================
-        let state = {
-            currentUser: null,
-            currentView: 'dashboard',
-            currentTrainingYear: 1,
-            breadcrumbs: []
-        };
-        
-        // =====================================================================
-        // UI TEMPLATES / VIEWS
-        // =====================================================================
-        const placeholder = (title) => `<div class="text-center text-gray-500"><h2 class="text-2xl">${title}</h2><p>Diese Ansicht befindet sich im Aufbau.</p></div>`;
+      // =====================================================================
+      // APPLICATION STATE
+      // =====================================================================
+      let state = {
+        currentUser: null,
+        currentView: 'dashboard',
+        currentTrainingYear: 1,
+        breadcrumbs: [],
+      };
 
-        const views = {
-            // --- TRAINEE VIEWS ---
-            traineeDashboard: (trainingYear) => {
-                const modulesForYear = mockData.curriculum.filter(m => m.training_year === trainingYear);
-                const nextLesson = mockData.curriculum[0].chapters[1].lessons[0];
-                return `
+      // =====================================================================
+      // UI TEMPLATES / VIEWS
+      // =====================================================================
+      const placeholder = title =>
+        `<div class="text-center text-gray-500"><h2 class="text-2xl">${title}</h2><p>Diese Ansicht befindet sich im Aufbau.</p></div>`;
+
+      const views = {
+        // --- TRAINEE VIEWS ---
+        traineeDashboard: trainingYear => {
+          const modulesForYear = mockData.curriculum.filter(
+            m => m.training_year === trainingYear
+          );
+          const nextLesson = mockData.curriculum[0].chapters[1].lessons[0];
+          return `
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div class="lg:col-span-2">
                             <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-blue-500/30 cursor-pointer hover:border-blue-500/70" onclick="navigateTo('lesson', { lessonId: '${nextLesson.id}'})">
@@ -217,14 +373,18 @@
 
                             <h3 class="text-xl font-bold text-white mt-10 mb-4">Mein Lernpfad</h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                ${modulesForYear.map(mod => `
+                                ${modulesForYear
+                                  .map(
+                                    mod => `
                                     <div class="bg-gray-800 p-6 rounded-lg shadow-lg hover:bg-gray-700/50 transition-colors duration-300 cursor-pointer" onclick="navigateTo('moduleDetail', { moduleId: '${mod.moduleId}' })">
                                         <h3 class="font-bold text-xl text-white">${mod.title}</h3>
                                         <p class="text-sm text-gray-400 mt-2">Fortschritt</p>
                                         <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2"><div class="bg-blue-600 h-2.5 rounded-full" style="width: ${mod.progress}%"></div></div>
                                         <p class="text-right text-sm font-semibold mt-2 text-blue-400">${mod.progress}%</p>
                                     </div>
-                                `).join('')}
+                                `
+                                  )
+                                  .join('')}
                             </div>
                         </div>
                         <div class="lg:col-span-1 space-y-8">
@@ -249,34 +409,44 @@
                         </div>
                     </div>
                 `;
-            },
-            
-            moduleDetail: (moduleId) => {
-                const module = mockData.curriculum.find(m => m.moduleId === moduleId);
-                if (!module) return `<p>Modul nicht gefunden.</p>`;
-                return `
+        },
+
+        moduleDetail: moduleId => {
+          const module = mockData.curriculum.find(m => m.moduleId === moduleId);
+          if (!module) return `<p>Modul nicht gefunden.</p>`;
+          return `
                     <div class="space-y-4">
-                        ${module.chapters.map(chap => `
+                        ${module.chapters
+                          .map(
+                            chap => `
                             <div class="bg-gray-800 p-6 rounded-lg shadow-lg cursor-pointer hover:bg-gray-700/50" onclick="navigateTo('chapterDetail', { moduleId: '${moduleId}', chapterId: '${chap.chapterId}' })">
                                 <h4 class="font-bold text-lg text-white">${chap.title}</h4>
                                 <p class="text-sm text-gray-400 mt-1">${chap.lessons.length} Lektionen</p>
                             </div>
-                        `).join('')}
+                        `
+                          )
+                          .join('')}
                     </div>
                 `;
-            },
-            
-            chapterDetail: (moduleId, chapterId) => {
-                const module = mockData.curriculum.find(m => m.moduleId === moduleId);
-                const chapter = module?.chapters.find(c => c.chapterId === chapterId);
-                if (!chapter) return `<p>Kapitel nicht gefunden.</p>`;
-                return `
+        },
+
+        chapterDetail: (moduleId, chapterId) => {
+          const module = mockData.curriculum.find(m => m.moduleId === moduleId);
+          const chapter = module?.chapters.find(c => c.chapterId === chapterId);
+          if (!chapter) return `<p>Kapitel nicht gefunden.</p>`;
+          return `
                     <div class="space-y-3">
-                        ${chapter.lessons.map(les => {
-                            const submission = mockData.quizSubmissions.find(s => s.quizId === les.quizId);
-                            let statusIcon = les.completed ? '<i data-lucide="check-circle-2" class="w-6 h-6 text-green-500"></i>' : '<i data-lucide="circle" class="w-6 h-6 text-gray-600"></i>';
+                        ${chapter.lessons
+                          .map(les => {
+                            const submission = mockData.quizSubmissions.find(
+                              s => s.quizId === les.quizId
+                            );
+                            let statusIcon = les.completed
+                              ? '<i data-lucide="check-circle-2" class="w-6 h-6 text-green-500"></i>'
+                              : '<i data-lucide="circle" class="w-6 h-6 text-gray-600"></i>';
                             if (submission?.status === 'submitted') {
-                                statusIcon = '<i data-lucide="loader-circle" class="w-6 h-6 text-yellow-500 animate-spin"></i>';
+                              statusIcon =
+                                '<i data-lucide="loader-circle" class="w-6 h-6 text-yellow-500 animate-spin"></i>';
                             }
                             return `
                             <div class="bg-gray-800 p-4 rounded-lg flex items-center justify-between cursor-pointer hover:bg-gray-700/50" onclick="navigateTo('lesson', { lessonId: '${les.id}' })">
@@ -289,7 +459,8 @@
                                 </div>
                                 ${statusIcon}
                             </div>`;
-                        }).join('')}
+                          })
+                          .join('')}
                     </div>
                     <div class="mt-8 bg-blue-800/80 border border-blue-500/50 p-6 rounded-lg flex items-center justify-between cursor-pointer hover:bg-blue-800" onclick="navigateTo('quiz', { quizId: '${chapter.mainQuizId}' })">
                         <div>
@@ -299,10 +470,10 @@
                         <button class="px-6 py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500">Quiz starten</button>
                     </div>
                 `;
-            },
+        },
 
-            lesson: (lessonId) => {
-                return `
+        lesson: lessonId => {
+          return `
                     <div class="max-w-4xl mx-auto">
                         <div class="bg-gray-800 p-8 rounded-lg shadow-lg">
                             <div class="flex justify-between items-start">
@@ -325,10 +496,10 @@
                         </div>
                     </div>
                 `;
-            },
+        },
 
-            quiz: (quizId) => {
-                 return `
+        quiz: quizId => {
+          return `
                     <div class="max-w-2xl mx-auto">
                          <div class="bg-gray-800 p-8 rounded-lg shadow-lg">
                             <div class="flex justify-between items-center">
@@ -358,9 +529,9 @@
                          </div>
                     </div>
                 `;
-            },
+        },
 
-            knowledgeSubmission: `
+        knowledgeSubmission: `
                 <div class="max-w-3xl mx-auto bg-gray-800 p-8 rounded-lg shadow-lg">
                     <h1 class="text-3xl font-bold text-white">Berufsschul-Inhalte einreichen</h1>
                     <p class="text-gray-400 mt-2">Teile interessante Themen oder Aufgaben aus der Berufsschule mit uns. Wir prüfen diese und nehmen sie ggf. als neue Anforderungen in die Lernplattform auf.</p>
@@ -397,7 +568,7 @@
                     </form>
                 </div>
             `,
-            reflection: `
+        reflection: `
                 <div class="max-w-4xl mx-auto bg-gray-800 p-8 rounded-lg shadow-lg">
                     <h1 class="text-3xl font-bold text-white">Reflektionstermin Q3/2025</h1>
                     <p class="text-gray-400 mt-2">Nutze die SWOT- und MES-Methode, um deinen Lernfortschritt und deine Erfahrungen zu reflektieren.</p>
@@ -434,9 +605,9 @@
                     </div>
                 </div>
             `,
-            profile: (role) => {
-                const user = mockData.profiles[role];
-                return `
+        profile: role => {
+          const user = mockData.profiles[role];
+          return `
                     <div class="max-w-2xl mx-auto bg-gray-800 p-8 rounded-lg shadow-lg">
                         <div class="flex flex-col items-center">
                             <img class="h-24 w-24 rounded-full object-cover mb-4" src="${user.avatar}" alt="Avatar">
@@ -448,7 +619,9 @@
                                 <label class="block text-sm font-medium text-gray-400">Vollständiger Name</label>
                                 <input type="text" class="w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg p-3 text-white" value="${user.fullName}">
                             </div>
-                            ${role === 'trainee' ? `
+                            ${
+                              role === 'trainee'
+                                ? `
                             <div>
                                 <label class="block text-sm font-medium text-gray-400">Ausbildungsstart</label>
                                 <input type="text" class="w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg p-3 text-white" value="${user.training_start_date}" disabled>
@@ -456,17 +629,19 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-400">Zugeordneter Ausbilder</label>
                                 <input type="text" class="w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg p-3 text-white" value="${mockData.profiles.trainer.fullName}" disabled>
-                            </div>` : ''}
+                            </div>`
+                                : ''
+                            }
                             <div class="pt-4 flex justify-end">
                                 <button class="px-6 py-2 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Änderungen speichern</button>
                             </div>
                         </div>
                     </div>
                 `;
-            },
-            
-            // --- TRAINER VIEWS ---
-            trainerDashboard: `
+        },
+
+        // --- TRAINER VIEWS ---
+        trainerDashboard: `
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><div class="flex items-center"><i data-lucide="users" class="w-8 h-8 text-blue-400 mr-4"></i><div><p class="text-sm text-gray-400">Aktive Azubis</p><p class="text-2xl font-bold text-white">${mockData.trainees.length}</p></div></div></div>
                     <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><div class="flex items-center"><i data-lucide="check-circle" class="w-8 h-8 text-green-400 mr-4"></i><div><p class="text-sm text-gray-400">Ø Fortschritt</p><p class="text-2xl font-bold text-white">72%</p></div></div></div>
@@ -476,8 +651,12 @@
                     <div class="lg:col-span-3 bg-gray-800 p-6 rounded-lg shadow-lg">
                         <h3 class="font-bold text-xl text-white mb-4">Handlung erforderlich</h3>
                         <div class="space-y-3">
-                        ${mockData.quizSubmissions.filter(s => s.status === 'submitted').map(sub => {
-                            const trainee = mockData.trainees.find(t => t.id === sub.traineeId);
+                        ${mockData.quizSubmissions
+                          .filter(s => s.status === 'submitted')
+                          .map(sub => {
+                            const trainee = mockData.trainees.find(
+                              t => t.id === sub.traineeId
+                            );
                             return `
                             <div class="flex items-center justify-between p-3 bg-gray-900/50 rounded-md">
                                 <div class="flex items-center">
@@ -489,13 +668,16 @@
                                 </div>
                                 <button onclick="navigateTo('traineeDetail', { traineeId: '${trainee.id}' })" class="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Bewerten</button>
                             </div>`;
-                        }).join('')}
+                          })
+                          .join('')}
                         </div>
                     </div>
                     <div class="lg:col-span-2 bg-gray-800 p-6 rounded-lg shadow-lg">
                         <h3 class="font-bold text-xl text-white mb-4">Auszubildenden-Übersicht</h3>
                         <div class="space-y-2">
-                             ${mockData.trainees.map(t => `
+                             ${mockData.trainees
+                               .map(
+                                 t => `
                                 <div class="flex items-center justify-between p-2 rounded-md hover:bg-gray-900/50 cursor-pointer" onclick="navigateTo('traineeDetail', { traineeId: '${t.id}' })">
                                     <div class="flex items-center">
                                         <img class="h-8 w-8 rounded-full object-cover mr-3" src="${t.avatar}" alt="Avatar">
@@ -503,15 +685,19 @@
                                     </div>
                                     <i data-lucide="chevron-right" class="w-5 h-5 text-gray-500"></i>
                                 </div>
-                            `).join('')}
+                            `
+                               )
+                               .join('')}
                         </div>
                     </div>
                 </div>
             `,
-            traineeDetail: (traineeId) => {
-                const trainee = mockData.trainees.find(t => t.id === traineeId);
-                const submissions = mockData.quizSubmissions.filter(s => s.traineeId === traineeId);
-                return `
+        traineeDetail: traineeId => {
+          const trainee = mockData.trainees.find(t => t.id === traineeId);
+          const submissions = mockData.quizSubmissions.filter(
+            s => s.traineeId === traineeId
+          );
+          return `
                     <div class="bg-gray-800 p-8 rounded-lg shadow-lg">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center">
@@ -529,7 +715,9 @@
                                     <tr><th class="p-3">Quiz Titel</th><th class="p-3">Ergebnis</th><th class="p-3">Status</th><th class="p-3">Aktion</th></tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-700/50">
-                                ${submissions.map(s => `
+                                ${submissions
+                                  .map(
+                                    s => `
                                     <tr class="hover:bg-gray-700/30">
                                         <td class="p-3 font-medium text-white">${s.quizTitle}</td>
                                         <td class="p-3 text-gray-300">${s.score}%</td>
@@ -537,17 +725,23 @@
                                         <td class="p-3">
                                             ${s.status === 'submitted' ? `<button onclick="openFeedbackModal('${s.submissionId}')" class="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Feedback geben</button>` : `<span class="text-xs text-gray-500">Keine Aktion</span>`}
                                         </td>
-                                    </tr>`).join('')}
+                                    </tr>`
+                                  )
+                                  .join('')}
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 `;
-            },
-            feedbackModal: (submissionId) => {
-                const submission = mockData.quizSubmissions.find(s => s.submissionId === submissionId);
-                const trainee = mockData.trainees.find(t => t.id === submission.traineeId);
-                return `
+        },
+        feedbackModal: submissionId => {
+          const submission = mockData.quizSubmissions.find(
+            s => s.submissionId === submissionId
+          );
+          const trainee = mockData.trainees.find(
+            t => t.id === submission.traineeId
+          );
+          return `
                 <div class="modal-overlay" onclick="closeModal()">
                     <div class="bg-gray-800 rounded-xl shadow-2xl p-8 w-full max-w-lg" onclick="event.stopPropagation()">
                         <h2 class="text-2xl font-bold text-white mb-2">Feedback für ${submission.quizTitle}</h2>
@@ -565,9 +759,9 @@
                     </div>
                 </div>
                 `;
-            },
-            
-            acceptanceProtocol: `
+        },
+
+        acceptanceProtocol: `
                  <div class="max-w-3xl mx-auto bg-gray-800 p-8 rounded-lg shadow-lg">
                     <div class="flex items-center justify-between">
                         <h1 class="text-3xl font-bold text-white">Digitales Abnahmeprotokoll</h1>
@@ -602,7 +796,7 @@
                     </form>
                 </div>
             `,
-            contentManagement: `
+        contentManagement: `
                 <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="font-bold text-xl text-white">Inhalts-Verwaltung</h3>
@@ -611,194 +805,291 @@
                         </button>
                     </div>
                     <div class="space-y-4">
-                        ${mockData.curriculum.map(mod => `
+                        ${mockData.curriculum
+                          .map(
+                            mod => `
                             <details class="bg-gray-900/50 p-4 rounded-lg">
                                 <summary class="font-semibold text-white cursor-pointer">${mod.title} (Jahr ${mod.training_year})</summary>
                                 <div class="mt-4 pl-4 border-l-2 border-gray-700 space-y-2">
                                     ${mod.chapters.map(chap => `<p class="text-gray-300">${chap.title}</p>`).join('')}
                                 </div>
                             </details>
-                        `).join('')}
+                        `
+                          )
+                          .join('')}
                     </div>
                 </div>
             `,
-            quizManagement: `
+        quizManagement: `
                 <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
                     <h3 class="font-bold text-xl text-white mb-6">Quiz-Verwaltung</h3>
                     <p class="text-gray-400">Hier können Sie Tests und Quizze erstellen, bearbeiten und zuweisen.</p>
                 </div>
             `,
-        };
-        
-        const navLinks = {
-            trainee: [
-                { label: 'Dashboard', icon: 'layout-dashboard', view: 'dashboard' },
-                { label: 'Berufsschul-Inhalte', icon: 'book-up', view: 'knowledgeSubmission' },
-                { label: 'Reflektionen', icon: 'swords', view: 'reflection' },
-                { label: 'Mein Profil', icon: 'user', view: 'profile' },
-            ],
-            trainer: [
-                { label: 'Dashboard', icon: 'layout-dashboard', view: 'dashboard' },
-                { label: 'Inhalts-Management', icon: 'folder-kanban', view: 'contentManagement' },
-                { label: 'Quiz-Verwaltung', icon: 'file-question', view: 'quizManagement' },
-                { label: 'Mein Profil', icon: 'user', view: 'profile' },
-            ]
-        };
+      };
 
-        // =====================================================================
-        // APPLICATION LOGIC
-        // =====================================================================
-        
-        function login() {
-            const email = document.getElementById('email').value;
-            state.currentUser = email.includes('ausbilder') ? 'trainer' : 'trainee';
-            document.getElementById('login-view').classList.add('hidden-view');
-            document.getElementById('app-view').classList.remove('hidden-view');
-            setupAppForRole(state.currentUser);
-            navigateTo('dashboard');
+      const navLinks = {
+        trainee: [
+          { label: 'Dashboard', icon: 'layout-dashboard', view: 'dashboard' },
+          {
+            label: 'Berufsschul-Inhalte',
+            icon: 'book-up',
+            view: 'knowledgeSubmission',
+          },
+          { label: 'Reflektionen', icon: 'swords', view: 'reflection' },
+          { label: 'Mein Profil', icon: 'user', view: 'profile' },
+        ],
+        trainer: [
+          { label: 'Dashboard', icon: 'layout-dashboard', view: 'dashboard' },
+          {
+            label: 'Inhalts-Management',
+            icon: 'folder-kanban',
+            view: 'contentManagement',
+          },
+          {
+            label: 'Quiz-Verwaltung',
+            icon: 'file-question',
+            view: 'quizManagement',
+          },
+          { label: 'Mein Profil', icon: 'user', view: 'profile' },
+        ],
+      };
+
+      // =====================================================================
+      // APPLICATION LOGIC
+      // =====================================================================
+
+      function login() {
+        const email = document.getElementById('email').value;
+        state.currentUser = email.includes('ausbilder') ? 'trainer' : 'trainee';
+        document.getElementById('login-view').classList.add('hidden-view');
+        document.getElementById('app-view').classList.remove('hidden-view');
+        setupAppForRole(state.currentUser);
+        navigateTo('dashboard');
+      }
+
+      function logout() {
+        state.currentUser = null;
+        state.breadcrumbs = [];
+        document.getElementById('app-view').classList.add('hidden-view');
+        document.getElementById('login-view').classList.remove('hidden-view');
+        switchLogin('trainee');
+      }
+
+      function setupAppForRole(role) {
+        const user = mockData.profiles[role];
+        document.getElementById('user-name').textContent = user.fullName;
+        document.getElementById('user-role').textContent =
+          user.role.charAt(0).toUpperCase() + user.role.slice(1);
+        document.getElementById('user-avatar').src = user.avatar;
+
+        if (role === 'trainee') {
+          const startDate = new Date(user.training_start_date);
+          const now = new Date('2025-08-12T15:38:00');
+          const diffTime = Math.abs(now - startDate);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          state.currentTrainingYear = Math.floor(diffDays / 365) + 1;
         }
-        
-        function logout() {
-            state.currentUser = null;
-            state.breadcrumbs = [];
-            document.getElementById('app-view').classList.add('hidden-view');
-            document.getElementById('login-view').classList.remove('hidden-view');
-            switchLogin('trainee');
-        }
-        
-        function setupAppForRole(role) {
-            const user = mockData.profiles[role];
-            document.getElementById('user-name').textContent = user.fullName;
-            document.getElementById('user-role').textContent = user.role.charAt(0).toUpperCase() + user.role.slice(1);
-            document.getElementById('user-avatar').src = user.avatar;
 
-            if (role === 'trainee') {
-                const startDate = new Date(user.training_start_date);
-                const now = new Date('2025-08-12T15:38:00');
-                const diffTime = Math.abs(now - startDate);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                state.currentTrainingYear = Math.floor(diffDays / 365) + 1;
-            }
-            
-            const hasNotifications = role === 'trainer' && mockData.quizSubmissions.some(s => s.status === 'submitted');
-            document.getElementById('notification-dot').style.display = hasNotifications ? 'flex' : 'none';
+        const hasNotifications =
+          role === 'trainer' &&
+          mockData.quizSubmissions.some(s => s.status === 'submitted');
+        document.getElementById('notification-dot').style.display =
+          hasNotifications ? 'flex' : 'none';
 
-            const navContainer = document.getElementById('sidebar-nav');
-            navContainer.innerHTML = navLinks[role].map(link => `
+        const navContainer = document.getElementById('sidebar-nav');
+        navContainer.innerHTML = navLinks[role]
+          .map(
+            link => `
                 <a href="#" onclick="event.preventDefault(); navigateTo('${link.view}')" class="flex items-center px-3 py-3 text-sm font-medium rounded-md text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
                     <i data-lucide="${link.icon}" class="w-5 h-5 mr-3"></i>
                     <span>${link.label}</span>
-                </a>`).join('');
-            
-            const switcherContainer = document.getElementById('role-switcher-container');
-            switcherContainer.innerHTML = role === 'trainee' 
-                ? `<button onclick="switchRole('trainer')" class="text-sm px-3 py-2 bg-gray-800 rounded-md hover:bg-gray-700">Zur Ausbilder-Ansicht</button>`
-                : `<button onclick="switchRole('trainee')" class="text-sm px-3 py-2 bg-gray-800 rounded-md hover:bg-gray-700">Zur Azubi-Ansicht</button>`;
+                </a>`
+          )
+          .join('');
+
+        const switcherContainer = document.getElementById(
+          'role-switcher-container'
+        );
+        switcherContainer.innerHTML =
+          role === 'trainee'
+            ? `<button onclick="switchRole('trainer')" class="text-sm px-3 py-2 bg-gray-800 rounded-md hover:bg-gray-700">Zur Ausbilder-Ansicht</button>`
+            : `<button onclick="switchRole('trainee')" class="text-sm px-3 py-2 bg-gray-800 rounded-md hover:bg-gray-700">Zur Azubi-Ansicht</button>`;
+      }
+
+      function switchRole(newRole) {
+        state.currentUser = newRole;
+        setupAppForRole(newRole);
+        navigateTo('dashboard');
+      }
+
+      function goBack() {
+        if (state.breadcrumbs.length > 1) {
+          state.breadcrumbs.pop();
+          const last = state.breadcrumbs[state.breadcrumbs.length - 1];
+          navigateTo(last.view, last.data, true);
         }
-        
-        function switchRole(newRole) {
-            state.currentUser = newRole;
-            setupAppForRole(newRole);
-            navigateTo('dashboard');
-        }
+      }
 
-        function goBack() {
-            if (state.breadcrumbs.length > 1) {
-                state.breadcrumbs.pop();
-                const last = state.breadcrumbs[state.breadcrumbs.length - 1];
-                navigateTo(last.view, last.data, true);
-            }
-        }
-
-        function navigateTo(view, data = {}, fromHistory = false) {
-            if (!fromHistory) {
-                if (view === 'dashboard') {
-                    state.breadcrumbs = [{ view, data, title: 'Dashboard' }];
-                } else {
-                    state.breadcrumbs.push({ view, data, title: '...' });
-                }
-            }
-            
-            const contentArea = document.getElementById('content-area');
-            const breadcrumbContainer = document.getElementById('breadcrumb-container');
-            let htmlContent = '';
-            let title = '';
-
-            const role = state.currentUser;
-            const navs = navLinks[role];
-
-            if (role === 'trainee') {
-                switch(view) {
-                    case 'dashboard': title = 'Mein Dashboard'; htmlContent = views.traineeDashboard(state.currentTrainingYear); break;
-                    case 'moduleDetail': title = mockData.curriculum.find(m=>m.moduleId===data.moduleId).title; htmlContent = views.moduleDetail(data.moduleId); break;
-                    case 'chapterDetail': title = mockData.curriculum.find(m=>m.moduleId===data.moduleId).chapters.find(c=>c.chapterId===data.chapterId).title; htmlContent = views.chapterDetail(data.moduleId, data.chapterId); break;
-                    case 'lesson': title = 'Lektion'; htmlContent = views.lesson(data.lessonId); break;
-                    case 'quiz': title = 'Quiz'; htmlContent = views.quiz(data.quizId); break;
-                    case 'knowledgeSubmission': title = 'Inhalte einreichen'; htmlContent = views.knowledgeSubmission; break;
-                    case 'reflection': title = 'Reflektionen'; htmlContent = views.reflection; break;
-                    case 'profile': title = 'Mein Profil'; htmlContent = views.profile(role); break;
-                    default: title = 'Unbekannt'; htmlContent = placeholder(title);
-                }
-            } else { // Trainer views
-                 switch(view) {
-                    case 'dashboard': title = 'Ausbilder-Dashboard'; htmlContent = views.trainerDashboard; break;
-                    case 'traineeDetail': const trainee = mockData.trainees.find(t => t.id === data.traineeId); title = `Detailansicht: ${trainee.name}`; htmlContent = views.traineeDetail(data.traineeId); break;
-                    case 'acceptanceProtocol': title = 'Digitales Abnahmeprotokoll'; htmlContent = views.acceptanceProtocol; break;
-                    case 'contentManagement': title = 'Inhalts-Verwaltung'; htmlContent = views.contentManagement; break;
-                    case 'quizManagement': title = 'Quiz-Verwaltung'; htmlContent = views.quizManagement; break;
-                    case 'profile': title = 'Mein Profil'; htmlContent = views.profile(role); break;
-                    default: title = 'Unbekannt'; htmlContent = placeholder(title);
-                }
-            }
-            
-            if(state.breadcrumbs.length > 0) state.breadcrumbs[state.breadcrumbs.length-1].title = title;
-            breadcrumbContainer.innerHTML = state.breadcrumbs.map((b, i) => `<span class="cursor-pointer hover:text-white" onclick="navigateToFromBreadcrumb(${i})">${b.title}</span>`).join(' <i data-lucide="chevron-right" class="inline-block w-4 h-4 -mb-px"></i> ');
-            
-            contentArea.innerHTML = htmlContent;
-            lucide.createIcons();
+      function navigateTo(view, data = {}, fromHistory = false) {
+        if (!fromHistory) {
+          if (view === 'dashboard') {
+            state.breadcrumbs = [{ view, data, title: 'Dashboard' }];
+          } else {
+            state.breadcrumbs.push({ view, data, title: '...' });
+          }
         }
 
-        function navigateToFromBreadcrumb(index) {
-            const targetState = state.breadcrumbs[index];
-            state.breadcrumbs = state.breadcrumbs.slice(0, index + 1);
-            navigateTo(targetState.view, targetState.data, true);
-        }
-        
-        function openFeedbackModal(submissionId) {
-            const modalContainer = document.getElementById('modal-container');
-            modalContainer.innerHTML = views.feedbackModal(submissionId);
-            lucide.createIcons();
+        const contentArea = document.getElementById('content-area');
+        const breadcrumbContainer = document.getElementById(
+          'breadcrumb-container'
+        );
+        let htmlContent = '';
+        let title = '';
+
+        const role = state.currentUser;
+        const navs = navLinks[role];
+
+        if (role === 'trainee') {
+          switch (view) {
+            case 'dashboard':
+              title = 'Mein Dashboard';
+              htmlContent = views.traineeDashboard(state.currentTrainingYear);
+              break;
+            case 'moduleDetail':
+              title = mockData.curriculum.find(
+                m => m.moduleId === data.moduleId
+              ).title;
+              htmlContent = views.moduleDetail(data.moduleId);
+              break;
+            case 'chapterDetail':
+              title = mockData.curriculum
+                .find(m => m.moduleId === data.moduleId)
+                .chapters.find(c => c.chapterId === data.chapterId).title;
+              htmlContent = views.chapterDetail(data.moduleId, data.chapterId);
+              break;
+            case 'lesson':
+              title = 'Lektion';
+              htmlContent = views.lesson(data.lessonId);
+              break;
+            case 'quiz':
+              title = 'Quiz';
+              htmlContent = views.quiz(data.quizId);
+              break;
+            case 'knowledgeSubmission':
+              title = 'Inhalte einreichen';
+              htmlContent = views.knowledgeSubmission;
+              break;
+            case 'reflection':
+              title = 'Reflektionen';
+              htmlContent = views.reflection;
+              break;
+            case 'profile':
+              title = 'Mein Profil';
+              htmlContent = views.profile(role);
+              break;
+            default:
+              title = 'Unbekannt';
+              htmlContent = placeholder(title);
+          }
+        } else {
+          // Trainer views
+          switch (view) {
+            case 'dashboard':
+              title = 'Ausbilder-Dashboard';
+              htmlContent = views.trainerDashboard;
+              break;
+            case 'traineeDetail':
+              const trainee = mockData.trainees.find(
+                t => t.id === data.traineeId
+              );
+              title = `Detailansicht: ${trainee.name}`;
+              htmlContent = views.traineeDetail(data.traineeId);
+              break;
+            case 'acceptanceProtocol':
+              title = 'Digitales Abnahmeprotokoll';
+              htmlContent = views.acceptanceProtocol;
+              break;
+            case 'contentManagement':
+              title = 'Inhalts-Verwaltung';
+              htmlContent = views.contentManagement;
+              break;
+            case 'quizManagement':
+              title = 'Quiz-Verwaltung';
+              htmlContent = views.quizManagement;
+              break;
+            case 'profile':
+              title = 'Mein Profil';
+              htmlContent = views.profile(role);
+              break;
+            default:
+              title = 'Unbekannt';
+              htmlContent = placeholder(title);
+          }
         }
 
-        function closeModal() {
-            document.getElementById('modal-container').innerHTML = '';
-        }
+        if (state.breadcrumbs.length > 0)
+          state.breadcrumbs[state.breadcrumbs.length - 1].title = title;
+        breadcrumbContainer.innerHTML = state.breadcrumbs
+          .map(
+            (b, i) =>
+              `<span class="cursor-pointer hover:text-white" onclick="navigateToFromBreadcrumb(${i})">${b.title}</span>`
+          )
+          .join(
+            ' <i data-lucide="chevron-right" class="inline-block w-4 h-4 -mb-px"></i> '
+          );
 
-        function submitFeedback(submissionId) {
-            const feedbackText = document.getElementById('feedback_text').value;
-            const submission = mockData.quizSubmissions.find(s => s.submissionId === submissionId);
-            if (submission) {
-                submission.status = 'reviewed';
-                submission.feedback = feedbackText;
-            }
-            closeModal();
-            const hasNotifications = mockData.quizSubmissions.some(s => s.status === 'submitted');
-            document.getElementById('notification-dot').style.display = hasNotifications ? 'flex' : 'none';
-            const current = state.breadcrumbs[state.breadcrumbs.length - 1];
-            navigateTo(current.view, current.data, true);
-        }
+        contentArea.innerHTML = htmlContent;
+        lucide.createIcons();
+      }
 
-        function switchLogin(role) {
-            document.getElementById('email').value = role === 'trainer' 
-                ? 'waleri.moretz@ausbilder.de' 
-                : 'elias.felsing@azubi.de';
-        }
+      function navigateToFromBreadcrumb(index) {
+        const targetState = state.breadcrumbs[index];
+        state.breadcrumbs = state.breadcrumbs.slice(0, index + 1);
+        navigateTo(targetState.view, targetState.data, true);
+      }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-        });
+      function openFeedbackModal(submissionId) {
+        const modalContainer = document.getElementById('modal-container');
+        modalContainer.innerHTML = views.feedbackModal(submissionId);
+        lucide.createIcons();
+      }
+
+      function closeModal() {
+        document.getElementById('modal-container').innerHTML = '';
+      }
+
+      function submitFeedback(submissionId) {
+        const feedbackText = document.getElementById('feedback_text').value;
+        const submission = mockData.quizSubmissions.find(
+          s => s.submissionId === submissionId
+        );
+        if (submission) {
+          submission.status = 'reviewed';
+          submission.feedback = feedbackText;
+        }
+        closeModal();
+        const hasNotifications = mockData.quizSubmissions.some(
+          s => s.status === 'submitted'
+        );
+        document.getElementById('notification-dot').style.display =
+          hasNotifications ? 'flex' : 'none';
+        const current = state.breadcrumbs[state.breadcrumbs.length - 1];
+        navigateTo(current.view, current.data, true);
+      }
+
+      function switchLogin(role) {
+        document.getElementById('email').value =
+          role === 'trainer'
+            ? 'waleri.moretz@ausbilder.de'
+            : 'elias.felsing@azubi.de';
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons();
+        }
+      });
     </script>
-</body>
+  </body>
 </html>

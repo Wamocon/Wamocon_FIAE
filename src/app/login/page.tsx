@@ -1,101 +1,109 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
-import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const router = useRouter()
-  const { signIn, profile } = useAuth()
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const router = useRouter();
+  const { signIn, profile } = useAuth();
 
   // Memoize redirect logic to prevent unnecessary re-renders
   const shouldRedirect = useMemo(() => {
-    return profile && !isLoading
-  }, [profile, isLoading])
+    return profile && !isLoading;
+  }, [profile, isLoading]);
 
   // Handle redirect after successful authentication
   useEffect(() => {
     if (shouldRedirect) {
       if (profile?.role === 'trainer') {
-        router.push('/trainer/dashboard')
+        router.push('/trainer/dashboard');
       } else if (profile?.role === 'trainee') {
-        router.push('/trainee/dashboard')
+        router.push('/trainee/dashboard');
       } else {
         // Fallback to trainee dashboard if role is undefined
-        router.push('/trainee/dashboard')
+        router.push('/trainee/dashboard');
       }
     }
-  }, [shouldRedirect, profile, router])
+  }, [shouldRedirect, profile, router]);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError('')
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsLoading(true);
+      setError('');
 
-    try {
-      await signIn(email, password)
-      // The redirect will be handled by the useEffect when the profile updates
-    } catch (err) {
-      setError('Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [signIn, email, password])
+      try {
+        await signIn(email, password);
+        // The redirect will be handled by the useEffect when the profile updates
+      } catch (err) {
+        setError(
+          'Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.'
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [signIn, email, password]
+  );
 
   const handleGoBack = useCallback(() => {
-    router.push('/')
-  }, [router])
+    router.push('/');
+  }, [router]);
 
   const togglePasswordVisibility = useCallback(() => {
-    setShowPassword(prev => !prev)
-  }, [])
+    setShowPassword(prev => !prev);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
       {/* Background overlay for consistent theme */}
-      <div className="absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25 pointer-events-none"></div>
-      
-      <div className="w-full max-w-md space-y-8 relative z-10">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
+
+      <div className="relative z-10 w-full max-w-md space-y-8">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-accent to-primary rounded-full flex items-center justify-center mb-6 shadow-2xl">
-            <BookOpen className="w-8 h-8 text-primary-foreground" />
+          <div className="from-accent to-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br shadow-2xl">
+            <BookOpen className="text-primary-foreground h-8 w-8" />
           </div>
-          <h1 className="text-4xl font-bold text-foreground mb-2 bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
+          <h1 className="text-foreground from-accent to-primary mb-2 bg-gradient-to-r bg-clip-text text-4xl font-bold text-transparent">
             FIAE-Lernplattform
           </h1>
           <p className="text-muted text-lg">Willkommen zurück!</p>
           <button
             onClick={handleGoBack}
-            className="text-sm text-accent hover:text-accent/80 underline mt-2"
+            className="text-accent hover:text-accent/80 mt-2 text-sm underline"
           >
             ← Zurück zur Startseite
           </button>
         </div>
 
         {/* Login Form */}
-        <div className="glass-effect-enhanced p-8 rounded-2xl shadow-2xl border-2 border-accent/30">
+        <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-8 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+              <label
+                htmlFor="email"
+                className="text-foreground mb-2 block text-sm font-medium"
+              >
                 E-Mail-Adresse
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                <Mail className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
                 <input
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={e => setEmail(e.target.value)}
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-background/50 border border-border rounded-xl text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+                  className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border py-3 pr-4 pl-10 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
                   placeholder="ihre.email@beispiel.de"
                 />
               </div>
@@ -103,34 +111,41 @@ export default function LoginPage() {
 
             {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
+              <label
+                htmlFor="password"
+                className="text-foreground mb-2 block text-sm font-medium"
+              >
                 Passwort
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                <Lock className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={e => setPassword(e.target.value)}
                   required
-                  className="w-full pl-12 pr-12 py-3 bg-background/50 border border-border rounded-xl text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+                  className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border py-3 pr-12 pl-12 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={togglePasswordVisibility}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-foreground transition-colors"
+                  className="text-muted hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 p-1 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl">
-                <p className="text-sm text-destructive">{error}</p>
+              <div className="bg-destructive/10 border-destructive/20 rounded-xl border p-3">
+                <p className="text-destructive text-sm">{error}</p>
               </div>
             )}
 
@@ -138,43 +153,27 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-accent shadow-lg hover:shadow-xl"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-primary/50 focus:ring-offset-background focus:ring-accent w-full rounded-xl py-3 font-semibold shadow-lg transition-colors duration-300 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none"
             >
               {isLoading ? (
                 <div className="flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div>
+                  <div className="border-primary-foreground/30 border-t-primary-foreground mr-2 h-5 w-5 animate-spin rounded-full border-2"></div>
                   Anmeldung läuft...
                 </div>
               ) : (
                 'Anmelden'
               )}
             </button>
-
-            {/* Demo Credentials */}
-            <div className="mt-6 p-4 bg-muted/50 rounded-xl border border-border/50">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Demo-Anmeldedaten:</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted">Auszubildender:</span>
-                  <span className="text-accent font-mono">elias.felsing@azubi.de</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Ausbilder:</span>
-                  <span className="text-accent font-mono">ausbilder@wamocon.de</span>
-                </div>
-                <div className="text-center text-xs text-muted mt-2">
-                  Passwort: (beliebig)
-                </div>
-              </div>
-            </div>
           </form>
         </div>
 
         {/* Copyright */}
         <div className="text-center">
-          <p className="text-xs text-muted">© 2025 FIAE-Lernplattform. Alle Rechte vorbehalten.</p>
+          <p className="text-muted text-xs">
+            © 2025 FIAE-Lernplattform. Alle Rechte vorbehalten.
+          </p>
         </div>
       </div>
     </div>
-  )
+  );
 }
