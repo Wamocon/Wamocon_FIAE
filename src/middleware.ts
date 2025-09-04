@@ -1,32 +1,32 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
-  
+  const { pathname } = request.nextUrl;
+
   // Public routes that don't require authentication
-  const publicRoutes = ['/', '/login']
+  const publicRoutes = ['/', '/login'];
   if (publicRoutes.includes(pathname)) {
-    return NextResponse.next()
+    return NextResponse.next();
   }
 
   // Check for authentication token in localStorage (this will be handled client-side)
   // For now, we'll let the client-side components handle authentication
   // The middleware will just ensure the routes are accessible
-  
+
   // Role-based route protection
   if (pathname.startsWith('/trainee/')) {
     // Trainee routes - let the component handle role checking
-    return NextResponse.next()
+    return NextResponse.next();
   }
 
   if (pathname.startsWith('/trainer/')) {
     // Trainer routes - let the component handle role checking
-    return NextResponse.next()
+    return NextResponse.next();
   }
 
   // Default: allow access
-  return NextResponse.next()
+  return NextResponse.next();
 }
 
 export const config = {
@@ -40,5 +40,4 @@ export const config = {
      */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
-}
-
+};
