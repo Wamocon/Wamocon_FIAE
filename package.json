@@ -21,8 +21,9 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:status": "supabase status",
-    "migrate:generate": "node -r dotenv/config ./node_modules/.bin/drizzle-kit generate",
-    "migrate:push": "node -r dotenv/config ./node_modules/.bin/drizzle-kit push",
+  "migrate:generate": "drizzle-kit generate",
+  "migrate:push": "drizzle-kit push",
+    "db:seed": "tsx -r dotenv/config src/db/seed.ts",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "type-check": "tsc --noEmit",
@@ -98,6 +99,7 @@
     "prettier-plugin-tailwindcss": "^0.6.14",
     "supabase": "^2.39.2",
     "tailwindcss": "^4.1.12",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   },
   "engines": {

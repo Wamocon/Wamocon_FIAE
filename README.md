@@ -238,6 +238,32 @@ src/
    http://localhost:3000
    ```
 
+## 🗄️ Database & Seeding
+
+This project uses Drizzle ORM with Postgres (Supabase). To create tables and populate mock data:
+
+1. Configure your database connection in `.env.local` (see `.env.example`):
+
+   ```bash
+   DB_CONNECTION_STRING=postgres://USER:PASSWORD@HOST:5432/DATABASE
+   NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.ref.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   ```
+
+2. Push the schema to the database:
+
+   ```bash
+   npm run migrate:push
+   ```
+
+3. Seed mock data:
+
+   ```bash
+   npm run db:seed
+   ```
+
+After seeding, connect your frontend to Supabase; you should see real data rendered from the backend.
+
 ### **Build for Production**
 
 ```bash
