@@ -13,7 +13,7 @@ import {
   BarChart3,
   PieChart,
 } from 'lucide-react';
-import { mockData } from '@/lib/supabase';
+import { supabase, mockData } from '@/lib/supabase';
 import {
   LineChart,
   Line,
@@ -68,7 +68,7 @@ export default function TraineeDashboard() {
     { skill: 'Git', value: 82 },
   ];
 
-  const moduleProgress = modules.map(module => ({
+  const moduleProgress = modules.map((module: any) => ({
     name:
       module.title.length > 20
         ? module.title.substring(0, 20) + '...'
@@ -172,7 +172,7 @@ export default function TraineeDashboard() {
                 Mein Lernpfad
               </h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {modules.map(module => (
+                {modules.map((module: any) => (
                   <div
                     key={module.moduleId}
                     className="from-background/80 hover:from-background/90 border-accent/20 hover:border-accent/40 group cursor-pointer rounded-xl border bg-gradient-to-br to-red-900/10 p-5 shadow-lg transition-all duration-300 hover:to-red-900/20 hover:shadow-xl"
@@ -337,7 +337,7 @@ export default function TraineeDashboard() {
               </ResponsiveContainer>
               {/* Compact data display */}
               <div className="mt-4 grid grid-cols-3 gap-2">
-                {weeklyProgress.map((item, index) => (
+                {weeklyProgress.map((item: any, index: number) => (
                   <div
                     key={index}
                     className="from-accent/20 to-primary/20 border-accent/30 rounded-lg border bg-gradient-to-br p-2 text-center"
@@ -392,7 +392,7 @@ export default function TraineeDashboard() {
               </ResponsiveContainer>
               {/* Compact skills display */}
               <div className="mt-4 grid grid-cols-2 gap-2">
-                {skillRadar.map((item, index) => (
+                {skillRadar.map((item: any, index: number) => (
                   <div
                     key={index}
                     className="rounded-lg border border-green-500/30 bg-gradient-to-br from-green-500/20 to-emerald-500/20 p-2 text-center"
@@ -461,7 +461,7 @@ export default function TraineeDashboard() {
               </ResponsiveContainer>
               {/* Compact module progress display */}
               <div className="mt-4 space-y-2">
-                {moduleProgress.map((item, index) => (
+                {moduleProgress.map((item: any, index: number) => (
                   <div
                     key={index}
                     className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-2"

@@ -93,7 +93,7 @@ export default function LandingPage() {
             <span className="text-foreground text-xl font-bold">FIAE</span>
           </div>
           <Button
-            onClick={handleGetStarted}
+            onClick={handleSignUp}
             variant="outline"
             className="border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
           >
