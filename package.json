@@ -24,6 +24,7 @@
   "migrate:generate": "drizzle-kit generate",
   "migrate:push": "drizzle-kit push",
     "db:seed": "tsx -r dotenv/config src/db/seed.ts",
+  "db:print:modules": "tsx -r dotenv/config scripts/print-modules.ts",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "type-check": "tsc --noEmit",

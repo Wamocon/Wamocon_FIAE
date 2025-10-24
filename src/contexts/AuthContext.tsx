@@ -30,6 +30,14 @@ interface AuthContextType {
     role: 'trainee' | 'trainer'
   ) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (updates: {
+    full_name?: string;
+    avatar_url?: string | null;
+    training_start_date?: string | null;
+    trainer_auth_id?: string | null;
+  }) => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  switchRole: (role: 'trainee' | 'trainer') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -185,6 +193,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     signUp,
     signOut,
+    updateProfile: async updates => {
+      if (!profile) return;
+      await supabase
+        .from('profiles')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', profile.id);
+      if (user) await loadProfile(user.id);
+    },
+    refreshProfile: async () => {
+      if (user) await loadProfile(user.id);
+    },
+    switchRole: async (role: 'trainee' | 'trainer') => {
+      if (!profile) return;
+      await supabase
+        .from('profiles')
+        .update({ role, updated_at: new Date().toISOString() })
+        .eq('id', profile.id);
+      if (user) await loadProfile(user.id);
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

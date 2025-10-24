@@ -1,11 +1,13 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { mockData } from '@/lib/supabase';
 import { Brain, Clock, Target, Play, CheckCircle, Award } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function TraineeQuizzesPage() {
   const { profile, loading } = useAuth();
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [fetching, setFetching] = useState(false);
 
   if (loading) {
     return (
@@ -40,25 +42,23 @@ export default function TraineeQuizzesPage() {
     );
   }
 
-  // Extract quizzes from curriculum
-  const quizzes = mockData.curriculum.flatMap(
-    module =>
-      module.chapters?.flatMap(
-        chapter =>
-          chapter.lessons
-            ?.filter(lesson => lesson.type === 'quiz')
-            .map(lesson => ({
-              id: lesson.quizId || lesson.id,
-              title: lesson.title,
-              description: `Quiz aus Modul: ${module.title}`,
-              difficulty: 'intermediate',
-              bestScore: lesson.completed ? 85 : 0,
-              questions: [],
-              timeLimit: '15 min',
-              attempts: lesson.completed ? 1 : 0,
-            })) || []
-      ) || []
-  );
+  useEffect(() => {
+    const load = async () => {
+      if (!profile?.id) return;
+      setFetching(true);
+      try {
+        const res = await fetch(`/api/trainee/quizzes?userId=${profile.id}`);
+        const data = await res.json();
+        setQuizzes(data || []);
+      } catch (e) {
+        console.error(e);
+        setQuizzes([]);
+      } finally {
+        setFetching(false);
+      }
+    };
+    load();
+  }, [profile?.id]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -125,7 +125,7 @@ export default function TraineeQuizzesPage() {
             <div className="mb-4 grid grid-cols-3 gap-4 text-sm">
               <div className="bg-background/50 rounded-xl p-3 text-center">
                 <div className="text-accent text-lg font-bold">
-                  {quiz.questions?.length || 0}
+                  {quiz.questionsCount || 0}
                 </div>
                 <div className="text-muted">Fragen</div>
               </div>
@@ -145,10 +145,10 @@ export default function TraineeQuizzesPage() {
 
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <button className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-colors">
+              <a href={`/trainee/quizzes/${quiz.id}`} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-center text-sm font-medium transition-colors">
                 <Play className="mr-2 inline h-4 w-4" />
                 {quiz.bestScore > 0 ? 'Wiederholen' : 'Starten'}
-              </button>
+              </a>
               <button className="bg-muted/30 text-muted hover:text-foreground hover:bg-muted/50 rounded-xl px-4 py-2 transition-colors">
                 <Award className="h-4 w-4" />
               </button>

@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { User, Edit3, Award, Clock, Target, TrendingUp } from 'lucide-react';
 
 export function Profile() {
-  const { profile } = useAuth();
+  const { profile, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState({
     full_name: profile?.full_name || '',
@@ -25,9 +25,12 @@ export function Profile() {
     );
   }
 
-  const handleSave = () => {
-    // Handle save logic here
-    setIsEditing(false);
+  const handleSave = async () => {
+    try {
+      await updateProfile({ full_name: editedProfile.full_name });
+    } finally {
+      setIsEditing(false);
+    }
   };
 
   const handleCancel = () => {

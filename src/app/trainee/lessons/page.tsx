@@ -1,11 +1,13 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { mockData } from '@/lib/supabase';
 import { Play, Clock, BookOpen, CheckCircle, Target } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function TraineeLessonsPage() {
   const { profile, loading } = useAuth();
+  const [lessonsList, setLessonsList] = useState<any[]>([]);
+  const [fetching, setFetching] = useState(false);
 
   if (loading) {
     return (
@@ -40,17 +42,23 @@ export default function TraineeLessonsPage() {
     );
   }
 
-  // Get all lessons from curriculum
-  const allLessons = mockData.curriculum.flatMap(module =>
-    (module.chapters || []).flatMap(chapter =>
-      (chapter.lessons || []).map(lesson => ({
-        ...lesson,
-        moduleTitle: module.title,
-        moduleId: module.moduleId,
-        chapterTitle: chapter.title,
-      }))
-    )
-  );
+  useEffect(() => {
+    const load = async () => {
+      if (!profile?.id) return;
+      setFetching(true);
+      try {
+        const res = await fetch(`/api/trainee/lessons?userId=${profile.id}`);
+        const data = await res.json();
+        setLessonsList(data || []);
+      } catch (e) {
+        console.error(e);
+        setLessonsList([]);
+      } finally {
+        setFetching(false);
+      }
+    };
+    load();
+  }, [profile?.id]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -73,7 +81,7 @@ export default function TraineeLessonsPage() {
 
       {/* Lessons Grid */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {allLessons.map(lesson => (
+        {lessonsList.map(lesson => (
           <div
             key={lesson.id}
             className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl"
@@ -95,7 +103,7 @@ export default function TraineeLessonsPage() {
             </div>
 
             <p className="text-muted mb-4 line-clamp-2">
-              {lesson.ref || 'Keine Beschreibung verfügbar'}
+      {'Keine Beschreibung verfügbar'}
             </p>
 
             {/* Progress */}
@@ -122,7 +130,7 @@ export default function TraineeLessonsPage() {
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
                 <div className="text-primary text-lg font-bold">
-                  {lesson.type}
+                  Lesson
                 </div>
                 <div className="text-muted">Typ</div>
               </div>
@@ -130,10 +138,10 @@ export default function TraineeLessonsPage() {
 
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <button className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-colors">
+              <a href={`/trainee/lessons/${lesson.id}`} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-center text-sm font-medium transition-colors">
                 <Play className="mr-2 inline h-4 w-4" />
                 {lesson.completed ? 'Wiederholen' : 'Starten'}
-              </button>
+              </a>
               <button className="bg-muted/30 text-muted hover:text-foreground hover:bg-muted/50 rounded-xl px-4 py-2 transition-colors">
                 <CheckCircle className="h-4 w-4" />
               </button>
