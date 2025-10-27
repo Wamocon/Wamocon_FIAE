@@ -10,18 +10,8 @@ import {
   Target,
   BarChart3,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import {
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Trainee {
   id: string;
@@ -30,11 +20,24 @@ interface Trainee {
   progress?: number;
 }
 
+type DashboardResponse = {
+  trainees: Trainee[];
+  counts: { activeTrainees: number; pendingReviews: number; recentReflections: number };
+  charts: {
+    progressTrend: { week: string; progress: number }[];
+    moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[];
+  };
+};
+
 export default function TrainerDashboard() {
   const router = useRouter();
+  const { user, profile } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [pendingReviews, setPendingReviews] = useState<number>(0);
+  const [recentReflections, setRecentReflections] = useState<number>(0);
+  const [progressTrend, setProgressTrend] = useState<{ week: string; progress: number }[]>([]);
+  const [moduleProgress, setModuleProgress] = useState<{ name: string; completed: number; inProgress: number; notStarted: number }[]>([]);
 
   useEffect(() => {
     setMounted(true);
@@ -42,48 +45,30 @@ export default function TrainerDashboard() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: traineeRows } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, role')
-        .eq('role', 'trainee');
-
-      setTrainees(
-        (traineeRows || []).map(r => ({
-          id: r.id as any,
-          full_name: (r as any).full_name,
-          avatar_url: (r as any).avatar_url ?? null,
-          progress: 0,
-        }))
-      );
-
-      const { count } = await supabase
-        .from('quiz_submissions')
-        .select('id', { count: 'exact', head: true });
-
-      setPendingReviews(count || 0);
+      try {
+  if (!user?.id && !profile?.id) return; // wait for auth
+  const params = new URLSearchParams();
+  if (user?.id) params.set('trainerAuthId', user.id);
+  if (profile?.id) params.set('trainerProfileId', profile.id);
+  const url = `/api/trainer/dashboard?${params.toString()}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load dashboard');
+        const data: DashboardResponse = await res.json();
+  setTrainees(data.trainees || []);
+  setPendingReviews(data.counts?.pendingReviews || 0);
+  setRecentReflections(data.counts?.recentReflections || 0);
+  setProgressTrend(data.charts?.progressTrend || []);
+  setModuleProgress(data.charts?.moduleProgress || []);
+      } catch (e) {
+        console.error(e);
+      }
     };
     load();
-  }, []);
+  }, [user?.id]);
 
   if (!mounted) return null;
 
-  // Chart data
-  const progressData = [
-    { month: 'Jan', trainees: 12, progress: 65 },
-    { month: 'Feb', trainees: 15, progress: 72 },
-    { month: 'Mar', trainees: 18, progress: 78 },
-    { month: 'Apr', trainees: 20, progress: 82 },
-    { month: 'Mai', trainees: 22, progress: 85 },
-    { month: 'Jun', trainees: 25, progress: 88 },
-  ];
-
-  const monthlyProgress = [
-    { name: 'HTML/CSS', completed: 85, inProgress: 10, notStarted: 5 },
-    { name: 'JavaScript', completed: 70, inProgress: 20, notStarted: 10 },
-    { name: 'React', completed: 55, inProgress: 30, notStarted: 15 },
-    { name: 'Node.js', completed: 40, inProgress: 35, notStarted: 25 },
-    { name: 'Datenbanken', completed: 60, inProgress: 25, notStarted: 15 },
-  ];
+  // Chart data now comes from API: progressTrend and moduleProgress
 
   const avgProgress = trainees.length
     ? Math.round(
@@ -93,6 +78,13 @@ export default function TrainerDashboard() {
         ) / trainees.length
       )
     : 0;
+
+  console.log('Trainees:', trainees.length);
+  console.log('Pending Reviews:', pendingReviews);
+  console.log('Recent Reflections:', recentReflections);
+  console.log('Progress Trend:', progressTrend);
+  console.log('Module Progress:', moduleProgress);
+  console.log('Avg Progress:', avgProgress);
 
   return (
     <div className="from-background relative min-h-screen space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
@@ -130,12 +122,12 @@ export default function TrainerDashboard() {
                     <h4 className="text-foreground font-semibold">
                       Reflektionen
                     </h4>
-                    <span className="text-accent text-2xl font-bold">—</span>
+                    <span className="text-accent text-2xl font-bold">{recentReflections}</span>
                   </div>
                   <p className="text-muted-foreground text-sm">
                     Neue Einreichungen
                   </p>
-                  <button className="bg-accent text-accent-foreground hover:bg-accent/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors">
+                  <button onClick={() => router.push('/trainer/reflections')} className="bg-accent text-accent-foreground hover:bg-accent/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors">
                     Anzeigen
                   </button>
                 </div>
@@ -161,7 +153,7 @@ export default function TrainerDashboard() {
                   <TrendingUp className="text-primary mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">Ø Fortschritt</p>
                   <p className="text-foreground text-2xl font-bold">
-                    {avgProgress}%
+                    {avgProgress}%  
                   </p>
                 </div>
 
@@ -187,14 +179,14 @@ export default function TrainerDashboard() {
                 Gesamtfortschritt
               </h3>
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={progressData}>
+                <AreaChart data={progressTrend}>
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke="#6b7280"
                     strokeOpacity={0.3}
                   />
                   <XAxis
-                    dataKey="month"
+                    dataKey="week"
                     stroke="#ffffff"
                     fontSize={12}
                     tick={{ fill: '#ffffff' }}
@@ -232,7 +224,7 @@ export default function TrainerDashboard() {
                 Einzelner Fortschritt
               </h3>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={monthlyProgress}>
+                <BarChart data={moduleProgress}>
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke="#6b7280"

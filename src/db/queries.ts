@@ -19,6 +19,7 @@ export type ModuleSummary = {
   lessonsCount: number;
   subLessonsCount: number;
   progress?: number; // optional for future per-user progress
+  estimatedWeeks?: number; // sum of lessons.duration_weeks (if set)
 };
 
 export async function getModulesWithCounts(): Promise<ModuleSummary[]> {
@@ -49,6 +50,16 @@ export async function getModulesWithCounts(): Promise<ModuleSummary[]> {
       subLessonsCount = value;
     }
 
+    // Compute estimated weeks based on lesson.duration_weeks
+    let estimatedWeeks = 0;
+    const lessonDurations = await db
+      .select({ duration_weeks: lessons.duration_weeks })
+      .from(lessons)
+      .where(eq(lessons.module_id, m.id));
+    if (lessonDurations.length > 0) {
+      estimatedWeeks = lessonDurations.reduce((acc, row) => acc + (row.duration_weeks ?? 0), 0);
+    }
+
     results.push({
       id: m.id,
       title: m.title,
@@ -56,6 +67,7 @@ export async function getModulesWithCounts(): Promise<ModuleSummary[]> {
       lessonsCount,
       subLessonsCount,
       progress: 0,
+      estimatedWeeks,
     });
   }
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Plus,
   Edit,
@@ -17,96 +18,48 @@ import {
   MoreVertical,
 } from 'lucide-react';
 
+type QuizItem = {
+  id: string;
+  title: string;
+  quiz_type: 'mini' | 'big';
+  training_year: number;
+  time_limit_minutes: number;
+  module_id?: string | null;
+  lesson_id?: string | null;
+  module_title?: string | null;
+  lesson_title?: string | null;
+};
+
 export function QuizManagement() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
 
-  // Mock quiz data
-  const mockQuizzes = [
-    {
-      id: 'quiz_1',
-      title: 'Grundbegriffe der Programmierung',
-      description: 'Test über die Grundlagen der Programmierung',
-      timeLimit: 30,
-      passingScore: 70,
-      questionCount: 15,
-      status: 'active',
-      attempts: 24,
-      avgScore: 78,
-      lastUsed: '2025-01-15',
-    },
-    {
-      id: 'quiz_2',
-      title: 'Variablen und Datentypen',
-      description: 'Quiz über Variablen, Datentypen und Operatoren',
-      timeLimit: 25,
-      passingScore: 75,
-      questionCount: 12,
-      status: 'active',
-      attempts: 18,
-      avgScore: 82,
-      lastUsed: '2025-01-12',
-    },
-    {
-      id: 'quiz_3',
-      title: 'Abschlusstest: Einführung in die Programmierung',
-      description: 'Umfassender Test über das erste Modul',
-      timeLimit: 45,
-      passingScore: 80,
-      questionCount: 20,
-      status: 'draft',
-      attempts: 0,
-      avgScore: 0,
-      lastUsed: null,
-    },
-    {
-      id: 'quiz_4',
-      title: 'Datenbank-Grundlagen',
-      description: 'Test über relationale Datenbanken und SQL',
-      timeLimit: 35,
-      passingScore: 75,
-      questionCount: 18,
-      status: 'archived',
-      attempts: 45,
-      avgScore: 76,
-      lastUsed: '2024-12-20',
-    },
-  ];
+  const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredQuizzes = mockQuizzes.filter(quiz => {
-    const matchesSearch =
-      quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      quiz.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      selectedStatus === 'all' || quiz.status === selectedStatus;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams();
+        if (searchTerm.trim()) params.set('q', searchTerm.trim());
+        if (selectedYear) params.set('year', selectedYear);
+        const res = await fetch(`/api/trainer/quizzes?${params.toString()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load quizzes');
+        const data = await res.json();
+        setQuizzes(data.quizzes || []);
+      } catch (e: any) {
+        setError(e?.message || 'Unknown error');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [searchTerm, selectedYear]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-500/20 text-green-400 border-green-500/30';
-      case 'draft':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'archived':
-        return 'bg-muted/30 text-muted border-accent/30';
-      default:
-        return 'bg-muted/30 text-muted border-accent/30';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'Aktiv';
-      case 'draft':
-        return 'Entwurf';
-      case 'archived':
-        return 'Archiviert';
-      default:
-        return 'Unbekannt';
-    }
-  };
+  const filteredQuizzes = useMemo(() => quizzes, [quizzes]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -122,7 +75,10 @@ export function QuizManagement() {
               Auszubildenden
             </p>
           </div>
-          <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
+          <button
+            onClick={() => router.push('/trainer/quiz-management/new-quiz')}
+            className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+          >
             <Plus className="h-5 w-5" />
             Neues Quiz
           </button>
@@ -146,14 +102,14 @@ export function QuizManagement() {
             </div>
 
             <select
-              value={selectedStatus}
-              onChange={e => setSelectedStatus(e.target.value)}
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
               className="bg-background/50 border-accent/30 focus:ring-accent text-foreground rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
             >
-              <option value="all">Alle Status</option>
-              <option value="active">Aktiv</option>
-              <option value="draft">Entwurf</option>
-              <option value="archived">Archiviert</option>
+              <option value="all">Alle Jahre</option>
+              <option value="1">Jahr 1</option>
+              <option value="2">Jahr 2</option>
+              <option value="3">Jahr 3</option>
             </select>
           </div>
 
@@ -176,32 +132,29 @@ export function QuizManagement() {
                 <FileQuestion className="h-6 w-6 text-white" />
               </div>
               <div className="flex items-center gap-2">
-                <button className="text-muted hover:text-accent hover:bg-accent/10 rounded-xl p-2 transition-all duration-200">
-                  <Eye className="h-4 w-4" />
-                </button>
-                <button className="text-muted hover:text-accent hover:bg-accent/10 rounded-xl p-2 transition-all duration-200">
-                  <Edit className="h-4 w-4" />
-                </button>
-                <button className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500">
+                <button
+                  onClick={async () => {
+                    if (!window.confirm('Quiz löschen? Dies löscht auch alle Fragen und Optionen.')) return;
+                    try {
+                      const res = await fetch(`/api/trainer/quizzes/${quiz.id}`, { method: 'DELETE' });
+                      if (!res.ok) throw new Error('Fehler beim Löschen');
+                      setQuizzes(prev => prev.filter(q => q.id !== quiz.id));
+                    } catch (e: any) {
+                      alert(e?.message || 'Unbekannter Fehler');
+                    }
+                  }}
+                  className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500"
+                >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
-            <h3 className="text-foreground mb-2 text-xl font-bold">
+            <h3 className="text-foreground mb-2 text-xl font-bold truncate">
               {quiz.title}
             </h3>
-            <p className="text-muted mb-4 line-clamp-2 text-sm">
-              {quiz.description}
-            </p>
-
-            {/* Status Badge */}
-            <div className="mb-4">
-              <span
-                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${getStatusColor(quiz.status)}`}
-              >
-                {getStatusLabel(quiz.status)}
-              </span>
+            <div className="mb-4 text-sm text-muted">
+              <span className="rounded-full bg-muted/30 px-3 py-1">{quiz.quiz_type === 'mini' ? 'Mini' : 'Groß'}</span>
             </div>
 
             {/* Quiz Details */}
@@ -212,67 +165,34 @@ export function QuizManagement() {
                   Zeitlimit
                 </div>
                 <span className="text-foreground font-medium">
-                  {quiz.timeLimit} Min.
+                  {quiz.time_limit_minutes} Min.
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <div className="text-muted flex items-center">
-                  <Target className="mr-2 h-4 w-4" />
-                  Bestehensgrenze
-                </div>
-                <span className="text-foreground font-medium">
-                  {quiz.passingScore}%
-                </span>
+                <span className="text-muted">Trainingsjahr</span>
+                <span className="text-foreground font-medium">{quiz.training_year}</span>
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted">Fragen</span>
-                <span className="text-foreground font-medium">
-                  {quiz.questionCount}
+                <span className="text-muted">Zuordnung</span>
+                <span className="text-foreground max-w-[60%] truncate text-right">
+                  {quiz.lesson_title || quiz.module_title || '—'}
                 </span>
               </div>
             </div>
 
-            {/* Stats */}
-            {quiz.status === 'active' && (
-              <div className="border-accent/30 space-y-3 border-t pt-4">
-                <div className="flex items-center justify-between text-sm">
-                  <div className="text-muted flex items-center">
-                    <Users className="mr-2 h-4 w-4" />
-                    Versuche
-                  </div>
-                  <span className="text-foreground font-medium">
-                    {quiz.attempts}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <div className="text-muted flex items-center">
-                    <BarChart3 className="mr-2 h-4 w-4" />Ø Punktzahl
-                  </div>
-                  <span className="text-foreground font-medium">
-                    {quiz.avgScore}%
-                  </span>
-                </div>
-              </div>
-            )}
-
             {/* Actions */}
             <div className="border-accent/30 flex items-center justify-between border-t pt-4">
-              <button className="text-accent hover:text-accent/90 text-sm font-medium">
-                Ergebnisse anzeigen
-              </button>
-              <button className="text-muted hover:text-foreground text-sm">
-                <MoreVertical className="h-4 w-4" />
-              </button>
+              <div />
+              <div className="text-xs text-muted">Zuletzt aktualisiert</div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Empty State */}
-      {filteredQuizzes.length === 0 && (
+      {filteredQuizzes.length === 0 && !loading && (
         <div className="glass-effect border-accent/30 rounded-3xl border p-12 text-center shadow-lg">
           <div className="from-muted to-muted/30 mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
             <FileQuestion className="text-muted h-10 w-10" />
@@ -281,11 +201,14 @@ export function QuizManagement() {
             Keine Quizze gefunden
           </h3>
           <p className="text-muted mb-6">
-            {searchTerm || selectedStatus !== 'all'
+            {searchTerm || selectedYear !== 'all'
               ? 'Versuchen Sie andere Suchkriterien oder Filter.'
               : 'Erstellen Sie Ihr erstes Quiz, um zu beginnen.'}
           </p>
-          <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
+          <button
+            onClick={() => router.push('/trainer/quiz-management/new')}
+            className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+          >
             Neues Quiz erstellen
           </button>
         </div>

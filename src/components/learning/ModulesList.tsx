@@ -41,15 +41,15 @@ export default function ModulesList({ modules }: { modules: ModuleSummary[] }) {
         {modules.map((module) => (
           <div
             key={module.id}
-            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl"
+            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[420px] flex flex-col overflow-hidden"
           >
             <div className="mb-4 flex items-start justify-between">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 min-w-0">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
                   <BookOpen className="h-6 w-6 text-white" />
                 </div>
-                <div>
-                  <h3 className="text-foreground text-xl font-bold">{module.title}</h3>
+                <div className="min-w-0">
+                  <h3 className="text-foreground text-xl font-bold line-clamp-2 break-words min-h-[56px]">{module.title}</h3>
                   <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">
                     Jahr {module.training_year}
                   </span>
@@ -57,7 +57,7 @@ export default function ModulesList({ modules }: { modules: ModuleSummary[] }) {
               </div>
             </div>
 
-            <p className="text-muted mb-4 line-clamp-2">Modul aus dem {module.training_year}. Ausbildungsjahr</p>
+            <p className="text-muted mb-4 line-clamp-2 break-words text-sm min-h-[40px]">Modul aus dem {module.training_year}. Ausbildungsjahr</p>
 
             {/* Progress */}
             <div className="mb-4">
@@ -84,13 +84,13 @@ export default function ModulesList({ modules }: { modules: ModuleSummary[] }) {
                 <div className="text-muted">Aufgaben</div>
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
-                <div className="text-accent text-lg font-bold">~8</div>
+                <div className="text-accent text-lg font-bold">{module.estimatedWeeks ?? 0}</div>
                 <div className="text-muted">Wochen</div>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mt-auto pt-2">
               <Link
                 href={`/trainee/modules/${module.id}`}
                 className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-center text-sm font-medium transition-colors"

@@ -84,25 +84,25 @@ export default function TraineeLessonsPage() {
         {lessonsList.map(lesson => (
           <div
             key={lesson.id}
-            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl"
+            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[420px] flex flex-col overflow-hidden"
           >
             <div className="mb-4 flex items-start justify-between">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 min-w-0">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
                   <Play className="h-6 w-6 text-white" />
                 </div>
-                <div>
-                  <h3 className="text-foreground text-xl font-bold">
+                <div className="min-w-0">
+                  <h3 className="text-foreground text-xl font-bold line-clamp-2 break-words">
                     {lesson.title}
                   </h3>
-                  <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">
+                  <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium inline-block max-w-[220px] truncate">
                     {lesson.moduleTitle}
                   </span>
                 </div>
               </div>
             </div>
 
-            <p className="text-muted mb-4 line-clamp-2">
+            <p className="text-muted mb-4 line-clamp-2 break-words">
       {'Keine Beschreibung verfügbar'}
             </p>
 
@@ -132,12 +132,12 @@ export default function TraineeLessonsPage() {
                 <div className="text-primary text-lg font-bold">
                   Lesson
                 </div>
-                <div className="text-muted">Typ</div>
+                <div className="text-muted">Type</div>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mt-auto pt-2">
               <a href={`/trainee/lessons/${lesson.id}`} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-center text-sm font-medium transition-colors">
                 <Play className="mr-2 inline h-4 w-4" />
                 {lesson.completed ? 'Wiederholen' : 'Starten'}
