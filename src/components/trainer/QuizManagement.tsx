@@ -1,218 +1,493 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  Plus,
-  Edit,
-  Trash2,
-  FileQuestion,
-  Clock,
-  Target,
-  Users,
-  BarChart3,
-  Search,
-  Filter,
-  Eye,
-  Copy,
-  MoreVertical,
-} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Plus, Trash2, Pencil, X, Check, Search } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
-type QuizItem = {
+// Minimal shadcn-like primitives for this self-contained demo
+function Dialog({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="glass-effect border-accent/30 relative z-10 w-full max-w-5xl rounded-3xl border bg-background p-0 shadow-2xl">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Switch({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onCheckedChange(!checked)}
+      className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-slate-300'}`}
+    >
+      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
+    </button>
+  );
+}
+
+function RadioGroup({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <div className="flex gap-4">
+      {options.map((opt) => (
+        <label key={opt.value} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+          <input
+            type="radio"
+            className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
+            checked={value === opt.value}
+            onChange={() => onChange(opt.value)}
+          />
+          {opt.label}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+// Simple combobox with multi-select behavior
+type ComboOption = { id: string; label: string };
+
+function MultiSelect({
+  options,
+  selected,
+  onChange,
+  placeholder = 'Search trainees...',
+}: {
+  options: ComboOption[];
+  selected: string[]; // selected IDs
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(
+    () => options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase())),
+    [options, query],
+  );
+
+  const toggle = (id: string) => {
+    if (selected.includes(id)) onChange(selected.filter((s) => s !== id));
+    else onChange([...selected, id]);
+  };
+
+  return (
+    <div className="relative">
+      <div className="mb-2 flex flex-wrap gap-2">
+        {selected.map((id) => {
+          const opt = options.find(o => o.id === id);
+          const label = opt?.label ?? id;
+          return (
+          <span key={id} className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2 py-1 text-xs text-foreground">
+            {label}
+            <button onClick={() => toggle(id)} aria-label={`Remove ${label}`} className="text-muted hover:text-foreground">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        );})}
+      </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        <Input
+          placeholder={placeholder}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setOpen(true)}
+          className="pl-9"
+        />
+      </div>
+      {open && (
+        <div className="absolute z-30 mt-2 max-h-60 w-full overflow-auto rounded-md border border-accent/30 bg-background p-1 shadow-lg">
+          {filtered.length === 0 && (
+            <div className="px-2 py-3 text-sm text-muted">No results</div>
+          )}
+          {filtered.map((opt) => {
+            const active = selected.includes(opt.id);
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => toggle(opt.id)}
+                className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm hover:bg-accent/20 ${active ? 'text-foreground' : 'text-foreground'}`}
+              >
+                <span>{opt.label}</span>
+                {active && <Check className="h-4 w-4" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type QuizListItem = {
   id: string;
   title: string;
   quiz_type: 'mini' | 'big';
-  training_year: number;
-  time_limit_minutes: number;
-  module_id?: string | null;
-  lesson_id?: string | null;
-  module_title?: string | null;
-  lesson_title?: string | null;
+  is_active?: boolean;
+  assigned_count: number;
+  created_at: string;
+};
+
+type QuestionDraft = {
+  id: string;
+  text: string;
+  options: [string, string, string, string];
+  correctIndex: 0 | 1 | 2 | 3;
 };
 
 export function QuizManagement() {
-  const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedYear, setSelectedYear] = useState('all');
+  const { profile } = useAuth();
+  const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Create dialog state
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [editMode, setEditMode] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+
+  // Step 1: Details
+  const [title, setTitle] = useState('');
+  const [isActive, setIsActive] = useState(false);
+
+  // Step 2: Questions
+  const blankQuestion = (): QuestionDraft => ({ id: crypto.randomUUID(), text: '', options: ['', '', '', ''], correctIndex: 0 });
+  const [questions, setQuestions] = useState<QuestionDraft[]>([blankQuestion()]);
+
+  // Step 3: Trainees assignment
+  const [traineeOptions, setTraineeOptions] = useState<ComboOption[]>([]);
+  const [assigned, setAssigned] = useState<string[]>([]); // selected trainee IDs
+
+  const resetForm = () => {
+    setStep(0);
+    setTitle('');
+    setIsActive(false);
+    setQuestions([blankQuestion()]);
+    setAssigned([]);
+    setEditMode(false);
+    setEditId(null);
+  };
+
+  const openCreate = () => {
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEdit = async (id: string) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/trainer/quizzes/${id}`);
+      if (!res.ok) throw new Error('Failed to load quiz');
+      const data = await res.json();
+      setEditMode(true);
+      setEditId(data.id);
+      setStep(0);
+      setTitle(data.title || '');
+      setIsActive(Boolean(data.is_active));
+      const mappedQs: QuestionDraft[] = Array.isArray(data.questions)
+        ? data.questions.map((qq: any) => ({
+            id: crypto.randomUUID(),
+            text: String(qq.question_text || ''),
+            options: (qq.options || ['', '', '', '']).slice(0, 4).concat(['', '', '', '']).slice(0, 4) as [string, string, string, string],
+            correctIndex: Number(qq.correct_index ?? 0) as 0 | 1 | 2 | 3,
+          }))
+        : [blankQuestion()];
+      setQuestions(mappedQs.length ? mappedQs : [blankQuestion()]);
+      setAssigned(Array.isArray(data.assigned_trainee_ids) ? data.assigned_trainee_ids : []);
+      setOpen(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addQuestion = () => setQuestions((qs) => [...qs, blankQuestion()]);
+  const removeQuestion = (id: string) => setQuestions((qs) => (qs.length > 1 ? qs.filter((q) => q.id !== id) : qs));
+  const updateQuestionText = (id: string, text: string) =>
+    setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, text } : q)));
+  const updateOption = (id: string, idx: number, val: string) =>
+    setQuestions((qs) =>
+      qs.map((q) => (q.id === id ? { ...q, options: q.options.map((o, i) => (i === idx ? val : o)) as any } : q)),
+    );
+  const setCorrect = (id: string, idx: 0 | 1 | 2 | 3) =>
+    setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, correctIndex: idx } : q)));
+
+  const canSave = useMemo(() => {
+    if (!title.trim()) return false;
+    if (questions.length === 0) return false;
+    for (const q of questions) {
+      if (!q.text.trim()) return false;
+      if (q.options.some((o) => !o.trim())) return false;
+    }
+    return true;
+  }, [title, questions]);
+
+  const onSave = async () => {
+    if (!profile) return;
+    try {
+      setSaving(true);
+      const payload = {
+        trainer_id: profile.id,
+        title: title.trim(),
+        is_active: isActive,
+        quiz_type: 'big' as const,
+        questions: questions.map((qq) => ({
+          question_text: qq.text.trim(),
+          options: qq.options.map((o) => o.trim()),
+          correct_index: qq.correctIndex,
+        })),
+        assigned_trainee_ids: assigned,
+      };
+      if (editMode && editId) {
+        const res = await fetch(`/api/trainer/quizzes/${editId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, trainerId: profile.id }),
+        });
+        if (!res.ok) throw new Error('Failed to save changes');
+      } else {
+        const res = await fetch(`/api/trainer/quizzes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('Failed to create quiz');
+      }
+      setOpen(false);
+      resetForm();
+      // refresh list
+      await loadQuizzes();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/trainer/quizzes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      await loadQuizzes();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const loadQuizzes = async () => {
+    if (!profile) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/trainer/quizzes?trainerId=${profile.id}`);
+      if (!res.ok) throw new Error('Failed to load quizzes');
+      const data = await res.json();
+      const items: QuizListItem[] = (data.quizzes || []).filter((q: any) => q.quiz_type === 'big');
+      setQuizzes(items);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadTrainees = async () => {
+    if (!profile) return;
+    try {
+      const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const opts: ComboOption[] = (data.trainees || []).map((t: any) => ({ id: t.id, label: t.full_name }));
+      setTraineeOptions(opts);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const params = new URLSearchParams();
-        if (searchTerm.trim()) params.set('q', searchTerm.trim());
-        if (selectedYear) params.set('year', selectedYear);
-        const res = await fetch(`/api/trainer/quizzes?${params.toString()}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to load quizzes');
-        const data = await res.json();
-        setQuizzes(data.quizzes || []);
-      } catch (e: any) {
-        setError(e?.message || 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [searchTerm, selectedYear]);
-
-  const filteredQuizzes = useMemo(() => quizzes, [quizzes]);
+    if (profile?.id) {
+      loadTrainees();
+      loadQuizzes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
       {/* Header */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-foreground mb-2 text-3xl font-bold">
-              Quiz-Verwaltung
-            </h1>
-            <p className="text-muted">
-              Erstellen und verwalten Sie Tests und Quizze für Ihre
-              Auszubildenden
-            </p>
-          </div>
-          <button
-            onClick={() => router.push('/trainer/quiz-management/new-quiz')}
-            className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-          >
-            <Plus className="h-5 w-5" />
-            Neues Quiz
-          </button>
+        <div className="flex items-center justify-between">
+          <h2 className="text-foreground text-2xl font-bold">Quiz Management</h2>
+          <Button onClick={openCreate} className="gap-2 bg-gradient-to-r from-accent to-primary text-white hover:from-accent/90 hover:to-primary/90">
+            <Plus className="h-4 w-4" /> Create New Quiz
+          </Button>
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Table */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-        <div className="flex flex-col items-center justify-between gap-4 lg:flex-row">
-          {/* Search and Filters */}
-          <div className="flex flex-1 flex-col gap-4 sm:flex-row">
-            <div className="relative max-w-md flex-1">
-              <Search className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Nach Quizzen suchen..."
-                className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full rounded-2xl border py-3 pr-4 pl-10 focus:border-transparent focus:ring-2 focus:outline-none"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <select
-              value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value)}
-              className="bg-background/50 border-accent/30 focus:ring-accent text-foreground rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
-            >
-              <option value="all">Alle Jahre</option>
-              <option value="1">Jahr 1</option>
-              <option value="2">Jahr 2</option>
-              <option value="3">Jahr 3</option>
-            </select>
-          </div>
-
-          {/* Stats */}
-          <div className="text-muted flex items-center gap-4 text-sm">
-            <span>{filteredQuizzes.length} Quizze gefunden</span>
-          </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200">
+          <thead className="divide-y divide-slate-200">
+            <tr>
+              <th className="px-4 py-3 text-sm font-medium text-foreground">Quiz Title</th>
+              <th className="px-4 py-3 text-sm font-medium text-foreground">Status</th>
+              <th className="px-4 py-3 text-sm font-medium text-foreground">Trainees Assigned</th>
+              <th className="px-4 py-3 text-sm font-medium text-foreground">Date Created</th>
+              <th className="px-4 py-3 text-sm font-medium text-foreground">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {quizzes.map((q) => (
+              <tr key={q.id} className="hover:bg-red-50/80">
+                <td className="px-4 py-3 text-sm font-medium text-foreground">{q.title}</td>
+                <td className="px-4 py-3">
+                  {q.is_active ? (
+                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">Active</span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700">Inactive</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm text-foreground">{q.assigned_count} Trainees</td>
+                <td className="px-4 py-3 text-sm text-foreground">{new Date(q.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-2">
+                    <Button className="h-8 gap-1 px-3" onClick={() => openEdit(q.id)}>
+                      <Pencil className="h-4 w-4" /> Edit
+                    </Button>
+                    <Button variant="destructive" className="h-8 gap-1 px-3" onClick={() => onDelete(q.id)}>
+                      <Trash2 className="h-4 w-4" /> Delete
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Quiz Grid */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredQuizzes.map(quiz => (
-          <div
-            key={quiz.id}
-            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl"
-          >
-            <div className="mb-4 flex items-start justify-between">
-              <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-                <FileQuestion className="h-6 w-6 text-white" />
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={async () => {
-                    if (!window.confirm('Quiz löschen? Dies löscht auch alle Fragen und Optionen.')) return;
-                    try {
-                      const res = await fetch(`/api/trainer/quizzes/${quiz.id}`, { method: 'DELETE' });
-                      if (!res.ok) throw new Error('Fehler beim Löschen');
-                      setQuizzes(prev => prev.filter(q => q.id !== quiz.id));
-                    } catch (e: any) {
-                      alert(e?.message || 'Unbekannter Fehler');
-                    }
-                  }}
-                  className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            <h3 className="text-foreground mb-2 text-xl font-bold truncate">
-              {quiz.title}
-            </h3>
-            <div className="mb-4 text-sm text-muted">
-              <span className="rounded-full bg-muted/30 px-3 py-1">{quiz.quiz_type === 'mini' ? 'Mini' : 'Groß'}</span>
-            </div>
-
-            {/* Quiz Details */}
-            <div className="mb-4 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <div className="text-muted flex items-center">
-                  <Clock className="mr-2 h-4 w-4" />
-                  Zeitlimit
-                </div>
-                <span className="text-foreground font-medium">
-                  {quiz.time_limit_minutes} Min.
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted">Trainingsjahr</span>
-                <span className="text-foreground font-medium">{quiz.training_year}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted">Zuordnung</span>
-                <span className="text-foreground max-w-[60%] truncate text-right">
-                  {quiz.lesson_title || quiz.module_title || '—'}
-                </span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="border-accent/30 flex items-center justify-between border-t pt-4">
-              <div />
-              <div className="text-xs text-muted">Zuletzt aktualisiert</div>
-            </div>
+      {/* Create Dialog */}
+      <Dialog open={open} onClose={() => setOpen(false)}>
+        <div className="flex items-start justify-between rounded-t-3xl border-b border-accent/30 bg-background px-6 py-4">
+          <div>
+            <h3 className="text-foreground text-lg font-semibold">{editMode ? 'Edit Global Quiz' : 'Create New Global Quiz'}</h3>
+            <p className="text-muted text-sm">Follow the steps to {editMode ? 'update' : 'set up'} your quiz.</p>
           </div>
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {filteredQuizzes.length === 0 && !loading && (
-        <div className="glass-effect border-accent/30 rounded-3xl border p-12 text-center shadow-lg">
-          <div className="from-muted to-muted/30 mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <FileQuestion className="text-muted h-10 w-10" />
-          </div>
-          <h3 className="text-foreground mb-2 text-xl font-semibold">
-            Keine Quizze gefunden
-          </h3>
-          <p className="text-muted mb-6">
-            {searchTerm || selectedYear !== 'all'
-              ? 'Versuchen Sie andere Suchkriterien oder Filter.'
-              : 'Erstellen Sie Ihr erstes Quiz, um zu beginnen.'}
-          </p>
-          <button
-            onClick={() => router.push('/trainer/quiz-management/new')}
-            className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-          >
-            Neues Quiz erstellen
+          <button onClick={() => setOpen(false)} className="text-muted hover:text-foreground">
+            <X className="h-5 w-5" />
           </button>
         </div>
-      )}
+
+        {/* Steps header */}
+        <div className="flex items-center gap-3 px-6 pt-4">
+          <div className={`h-2 flex-1 rounded-full ${step >= 0 ? 'bg-blue-600' : 'bg-muted'}`} />
+          <div className={`h-2 flex-1 rounded-full ${step >= 1 ? 'bg-blue-600' : 'bg-muted'}`} />
+          <div className={`h-2 flex-1 rounded-full ${step >= 2 ? 'bg-blue-600' : 'bg-muted'}`} />
+        </div>
+
+        {/* Step content */}
+        {step === 0 && (
+          <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+            <div className="space-y-4">
+            <div>
+                <label className="text-foreground mb-1 block text-sm font-medium">Quiz Title</label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter quiz title" />
+            </div>
+              <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-muted/30 p-3">
+                <div>
+                  <div className="text-foreground text-sm font-medium">Set Active</div>
+                  <div className="text-muted text-xs">Make this quiz available to trainees</div>
+                </div>
+                <Switch checked={isActive} onCheckedChange={setIsActive} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+            <div className="space-y-4">
+            {questions.map((q, qi) => (
+              <div key={q.id} className="rounded-lg border border-slate-200 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                    <div className="text-foreground text-sm font-medium">Question {qi + 1}</div>
+                    <button onClick={() => removeQuestion(q.id)} className="text-muted hover:text-red-600">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="mb-3">
+                    <label className="text-foreground mb-1 block text-xs font-medium">Question Text</label>
+                    <Input value={q.text} onChange={(e) => updateQuestionText(q.id, e.target.value)} placeholder="Type your question..." />
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {q.options.map((opt, idx) => (
+                    <div key={idx}>
+                        <label className="text-foreground mb-1 block text-xs font-medium">Option {idx + 1}</label>
+                      <Input value={opt} onChange={(e) => updateOption(q.id, idx, e.target.value)} placeholder={`Option ${idx + 1}`} />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3">
+                    <label className="text-foreground mb-1 block text-xs font-medium">Correct Answer</label>
+                  <RadioGroup
+                    value={String(q.correctIndex)}
+                    onChange={(v) => setCorrect(q.id, Number(v) as 0 | 1 | 2 | 3)}
+                    options={[
+                      { value: '0', label: 'Option 1' },
+                      { value: '1', label: 'Option 2' },
+                      { value: '2', label: 'Option 3' },
+                      { value: '3', label: 'Option 4' },
+                    ]}
+                  />
+                </div>
+              </div>
+            ))}
+            <div>
+              <Button variant="secondary" className="gap-2" onClick={addQuestion}>
+                <Plus className="h-4 w-4" /> Add Question
+              </Button>
+            </div>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+            <div className="space-y-3">
+              <label className="text-foreground mb-1 block text-sm font-medium">Assign Trainees</label>
+              <MultiSelect options={traineeOptions} selected={assigned} onChange={setAssigned} />
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-accent/30 bg-background px-6 py-4">
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" disabled={step === 0} onClick={() => setStep((s) => (s > 0 ? ((s - 1) as 0 | 1 | 2) : s))}>
+              Back
+            </Button>
+            <Button onClick={() => setStep((s) => (s < 2 ? ((s + 1) as 0 | 1 | 2) : s))} disabled={step === 2}>
+              Next
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={onSave} disabled={!canSave || saving}>
+              {editMode ? 'Save Changes' : 'Save Quiz'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

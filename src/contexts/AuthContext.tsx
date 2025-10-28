@@ -88,9 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase
       .from('profiles')
       .select(
-        'id, auth_id, full_name, role, avatar_url, trainer_auth_id, training_start_date'
+        'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date'
       )
-      .eq('auth_id', userId)
+      .eq('id', userId)
       .single();
 
     if (error) {
@@ -101,11 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile({
       id: data.id,
       email,
-      full_name: data.full_name,
-      role: data.role as 'trainee' | 'trainer',
+      full_name: (data as any).full_name,
+      role: String(data.role).toLowerCase() as 'trainee' | 'trainer',
       avatar: (data as any).avatar_url || null,
-      training_start_date: (data as any).training_start_date || null,
-      trainer_id: (data as any).trainer_auth_id || null,
+      training_start_date: (data as any).start_of_training_date || null,
+      trainer_id: (data as any).assigned_trainer_id || null,
     });
   };
 
@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = await supabase
         .from('profiles')
         .select('id')
-        .eq('auth_id', userId)
+        .eq('id', userId)
         .maybeSingle();
       if (data) return true;
       await new Promise(res => setTimeout(res, intervalMs));
@@ -197,7 +197,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!profile) return;
       await supabase
         .from('profiles')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({
+          // map legacy keys to new column names when present
+          full_name: (updates as any).full_name,
+          avatar_url: (updates as any).avatar_url,
+          start_of_training_date: (updates as any).training_start_date,
+          assigned_trainer_id: (updates as any).trainer_auth_id ?? (updates as any).assigned_trainer_id,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', profile.id);
       if (user) await loadProfile(user.id);
     },
@@ -206,9 +213,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     switchRole: async (role: 'trainee' | 'trainer') => {
       if (!profile) return;
+      const dbRole = role.toUpperCase(); // 'TRAINEE' | 'TRAINER'
       await supabase
         .from('profiles')
-        .update({ role, updated_at: new Date().toISOString() })
+        .update({ role: dbRole, updated_at: new Date().toISOString() })
         .eq('id', profile.id);
       if (user) await loadProfile(user.id);
     },

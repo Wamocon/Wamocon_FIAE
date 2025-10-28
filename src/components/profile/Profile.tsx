@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { User, Edit3, Award, Clock, Target, TrendingUp } from 'lucide-react';
+import { User, Edit3, Award, Clock, Target, TrendingUp, Users } from 'lucide-react';
 
 export function Profile() {
   const { profile, updateProfile } = useAuth();
@@ -13,6 +13,8 @@ export function Profile() {
     role: profile?.role || 'trainee',
     training_start_date: profile?.training_start_date || '',
   });
+  const [stats, setStats] = useState<{ trainees?: number; activeCourses?: number; pendingReviews?: number; recentActivity7d?: number } | null>(null);
+  const [activities, setActivities] = useState<Array<{ id: string; userId: string; activityType: string; createdAt: string }>>([]);
 
   if (!profile) {
     return (
@@ -24,6 +26,27 @@ export function Profile() {
       </div>
     );
   }
+
+  // Load trainer-specific stats
+  useEffect(() => {
+    const load = async () => {
+      if (profile?.role !== 'trainer') return;
+      try {
+        const url = `/api/trainer/profile?trainerId=${profile.id}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        setStats(data.counts || null);
+        const recent = Array.isArray(data.recentActivities)
+          ? data.recentActivities.map((r: any) => ({ ...r, createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : '' }))
+          : [];
+        setActivities(recent);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    load();
+  }, [profile?.id, profile?.role]);
 
   const handleSave = async () => {
     try {
@@ -139,11 +162,17 @@ export function Profile() {
           </div>
           <div>
             <label className="text-muted-foreground mb-2 block text-sm font-medium">
-              Ausbildungsstart
+              {profile.role === 'trainee' ? 'Ausbildungsstart' : 'Benutzer-ID'}
             </label>
-            <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3">
-              {profile.training_start_date || 'Nicht angegeben'}
-            </div>
+            {profile.role === 'trainee' ? (
+              <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3">
+                {profile.training_start_date || 'Nicht angegeben'}
+              </div>
+            ) : (
+              <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3 select-all">
+                {profile.id}
+              </div>
+            )}
           </div>
         </div>
 
@@ -168,61 +197,88 @@ export function Profile() {
       {/* Statistics */}
       <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
         <h2 className="text-foreground mb-6 text-2xl font-bold">Statistiken</h2>
-        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-          <div className="text-center">
-            <Award className="text-accent mx-auto mb-2 h-8 w-8" />
-            <p className="text-muted-foreground text-sm">
-              Module abgeschlossen
-            </p>
-            <p className="text-foreground text-2xl font-bold">12</p>
+        {profile.role === 'trainer' ? (
+          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+            <div className="text-center">
+              <Users className="text-accent mx-auto mb-2 h-8 w-8" />
+              <p className="text-muted-foreground text-sm">Azubis</p>
+              <p className="text-foreground text-2xl font-bold">{stats?.trainees ?? 0}</p>
+            </div>
+            <div className="text-center">
+              <Target className="text-primary mx-auto mb-2 h-8 w-8" />
+              <p className="text-muted-foreground text-sm">Aktive Kurse</p>
+              <p className="text-foreground text-2xl font-bold">{stats?.activeCourses ?? 0}</p>
+            </div>
+            <div className="text-center">
+              <Clock className="text-accent mx-auto mb-2 h-8 w-8" />
+              <p className="text-muted-foreground text-sm">Offene Reviews</p>
+              <p className="text-foreground text-2xl font-bold">{stats?.pendingReviews ?? 0}</p>
+            </div>
+            <div className="text-center">
+              <TrendingUp className="text-primary mx-auto mb-2 h-8 w-8" />
+              <p className="text-muted-foreground text-sm">Aktivität (7T)</p>
+              <p className="text-foreground text-2xl font-bold">{stats?.recentActivity7d ?? 0}</p>
+            </div>
           </div>
-          <div className="text-center">
-            <Target className="text-primary mx-auto mb-2 h-8 w-8" />
-            <p className="text-muted-foreground text-sm">Zertifikate</p>
-            <p className="text-foreground text-2xl font-bold">8</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+            <div className="text-center">
+              <Award className="text-accent mx-auto mb-2 h-8 w-8" />
+              <p className="text-muted-foreground text-sm">Module abgeschlossen</p>
+              <p className="text-foreground text-2xl font-bold">12</p>
+            </div>
+            <div className="text-center">
+              <Target className="text-primary mx-auto mb-2 h-8 w-8" />
+              <p className="text-muted-foreground text-sm">Zertifikate</p>
+              <p className="text-foreground text-2xl font-bold">8</p>
+            </div>
+            <div className="text-center">
+              <Clock className="text-accent mx-auto mb-2 h-8 w-8" />
+              <p className="text-muted-foreground text-sm">Lernstunden</p>
+              <p className="text-foreground text-2xl font-bold">156</p>
+            </div>
+            <div className="text-center">
+              <TrendingUp className="text-primary mx-auto mb-2 h-8 w-8" />
+              <p className="text-muted-foreground text-sm">Ziel erreicht</p>
+              <p className="text-foreground text-2xl font-bold">85%</p>
+            </div>
           </div>
-          <div className="text-center">
-            <Clock className="text-accent mx-auto mb-2 h-8 w-8" />
-            <p className="text-muted-foreground text-sm">Lernstunden</p>
-            <p className="text-foreground text-2xl font-bold">156</p>
-          </div>
-          <div className="text-center">
-            <TrendingUp className="text-primary mx-auto mb-2 h-8 w-8" />
-            <p className="text-muted-foreground text-sm">Ziel erreicht</p>
-            <p className="text-foreground text-2xl font-bold">85%</p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Recent Activities */}
       <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
-        <h2 className="text-foreground mb-6 text-2xl font-bold">
-          Letzte Aktivitäten
-        </h2>
-        <div className="space-y-4">
-          <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
-            <span className="text-muted-foreground">
-              Modul "JavaScript Grundlagen" abgeschlossen
-            </span>
-            <span className="text-muted-foreground ml-auto text-sm">
-              vor 2 Stunden
-            </span>
+        <h2 className="text-foreground mb-6 text-2xl font-bold">Letzte Aktivitäten</h2>
+        {profile.role === 'trainer' ? (
+          <div className="space-y-4">
+            {activities.length === 0 && (
+              <div className="text-muted-foreground">Keine Aktivitäten gefunden</div>
+            )}
+            {activities.map((a) => (
+              <div key={a.id} className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
+                <span className="text-muted-foreground">{a.activityType}</span>
+                <span className="text-muted-foreground ml-auto text-sm">
+                  {a.createdAt ? new Date(a.createdAt).toLocaleString() : ''}
+                </span>
+              </div>
+            ))}
           </div>
-          <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
-            <span className="text-muted-foreground">
-              Quiz "HTML & CSS" bestanden
-            </span>
-            <span className="text-muted-foreground ml-auto text-sm">
-              vor 1 Tag
-            </span>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
+              <span className="text-muted-foreground">Modul "JavaScript Grundlagen" abgeschlossen</span>
+              <span className="text-muted-foreground ml-auto text-sm">vor 2 Stunden</span>
+            </div>
+            <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
+              <span className="text-muted-foreground">Quiz "HTML & CSS" bestanden</span>
+              <span className="text-muted-foreground ml-auto text-sm">vor 1 Tag</span>
+            </div>
+            <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
+              <span className="text-muted-foreground">Reflexion eingereicht</span>
+              <span className="text-muted-foreground ml-auto text-sm">vor 3 Tagen</span>
+            </div>
           </div>
-          <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
-            <span className="text-muted-foreground">Reflexion eingereicht</span>
-            <span className="text-muted-foreground ml-auto text-sm">
-              vor 3 Tagen
-            </span>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

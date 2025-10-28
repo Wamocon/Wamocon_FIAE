@@ -1,275 +1,327 @@
 import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { randomUUID } from 'crypto';
 import {
   profiles,
-  modules,
-  lessons,
-  subLessons,
-  progress,
+  courses,
+  courseMembers,
+  courseSkills,
+  skills,
+  enablers,
+  enablerQuizzes,
+  enablerCompletions,
+  useCases,
+  useCaseSubmissions,
+  useCaseSubmissionLinks,
   quizzes,
   questions,
   options,
+  quizAssignments,
   quizSubmissions,
-  submissionAnswers,
-  knowledgeSubmissions,
+  quizSubmissionAnswers,
   reflections,
-  testimonials,
+  knowledgeNotes,
   acceptanceProtocols,
+  traineeAchievedSkills,
+  activityLog,
 } from './migrations/schemas/schema';
 
 async function main() {
-  if (!process.env.DB_CONNECTION_STRING) {
-    throw new Error('DB_CONNECTION_STRING is not defined');
-  }
+  const { DB_CONNECTION_STRING } = process.env;
+  if (!DB_CONNECTION_STRING) throw new Error('DB_CONNECTION_STRING is not defined');
 
-  const sql = postgres(process.env.DB_CONNECTION_STRING, { max: 1 });
+  const sql = postgres(DB_CONNECTION_STRING, { max: 1 });
   const db = drizzle(sql);
 
-  // Seed everything inside a transaction for safety
+  // Provided auth IDs
+  const trainerId = '4bdfa8e5-91d5-4cbe-9e1c-882a93190292';
+  const trainee1Id = 'c4fd8987-87ee-443a-aac7-6e7c0808c26d';
+  const trainee2Id = '4bf8c2fc-b38f-4ef9-aebb-76eaa2beef65';
+
   await db.transaction(async (tx) => {
-    // 1) Clean existing data (delete in FK-safe order)
-    await tx.delete(submissionAnswers);
+    // Clean relevant tables for repeatable seeding (FK-safe order)
+    await tx.delete(activityLog);
+    await tx.delete(quizSubmissionAnswers);
     await tx.delete(quizSubmissions);
+    await tx.delete(quizAssignments);
     await tx.delete(options);
     await tx.delete(questions);
+    await tx.delete(enablerQuizzes);
     await tx.delete(quizzes);
-    await tx.delete(progress);
-    await tx.delete(subLessons);
-    await tx.delete(lessons);
-    await tx.delete(modules);
-    await tx.delete(acceptanceProtocols);
-    await tx.delete(testimonials);
+    await tx.delete(useCaseSubmissionLinks);
+    await tx.delete(useCaseSubmissions);
     await tx.delete(reflections);
-    await tx.delete(knowledgeSubmissions);
+    await tx.delete(knowledgeNotes);
+    await tx.delete(acceptanceProtocols);
+    await tx.delete(traineeAchievedSkills);
+    await tx.delete(enablerCompletions);
+    await tx.delete(courseMembers);
+    await tx.delete(courseSkills);
+    await tx.delete(enablers);
+    await tx.delete(useCases);
+    await tx.delete(skills);
+    await tx.delete(courses);
     await tx.delete(profiles);
 
-    // 2) Insert base entities
-  const trainerAuthId = randomUUID();
-  const traineeAuthId = randomUUID();
-
-    const [trainer] = await tx
-      .insert(profiles)
-      .values({
-        auth_id: trainerAuthId,
-        full_name: 'Alex Trainer',
-        role: 'trainer',
-        avatar_url: null,
-        training_start_date: null,
-      })
-      .returning();
-
-    const [trainee] = await tx
-      .insert(profiles)
-      .values({
-        auth_id: traineeAuthId,
-        full_name: 'Jamie Trainee',
-        role: 'trainee',
-        avatar_url: null,
-        trainer_auth_id: trainerAuthId,
-        training_start_date: new Date().toISOString().slice(0, 10),
-      })
-      .returning();
-
-    const [module1] = await tx
-      .insert(modules)
-      .values({
-        title: 'Introduction to Web Development',
-        training_year: 1,
-        order_index: 1,
-        duration_days: 30,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    const [lesson1] = await tx
-      .insert(lessons)
-      .values({
-        module_id: module1.id,
-        rahmenplan_reference_code: 'RP-101',
-        title: 'HTML & CSS Basics',
-        order_index: 1,
-        duration_weeks: 1,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    const [lesson2] = await tx
-      .insert(lessons)
-      .values({
-        module_id: module1.id,
-        rahmenplan_reference_code: 'RP-102',
-        title: 'JavaScript Fundamentals',
-        order_index: 2,
-        duration_weeks: 2,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    const [sub1] = await tx
-      .insert(subLessons)
-      .values({
-        lesson_id: lesson1.id,
-        title: 'Intro to HTML',
-        content:
-          'Learn basic HTML tags, structure, and semantics. Build your first page.',
-        exercise_prompt: 'Create an HTML page with a header, nav, and footer.',
-        exercise_solution: '<!doctype html><html>...</html>',
-        order_index: 1,
-        duration_minutes: 60,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    const [sub2] = await tx
-      .insert(subLessons)
-      .values({
-        lesson_id: lesson1.id,
-        title: 'Styling with CSS',
-        content: 'Selectors, box model, flexbox, and responsive design.',
-        exercise_prompt: 'Style your HTML page using a responsive layout.',
-        exercise_solution: '/* CSS solution snippet */',
-        order_index: 2,
-        duration_minutes: 60,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    const [sub3] = await tx
-      .insert(subLessons)
-      .values({
-        lesson_id: lesson2.id,
-        title: 'JS Variables and Functions',
-        content: 'Variables, scopes, functions, and basic DOM manipulation.',
-        exercise_prompt: 'Write a function that toggles a menu.',
-        exercise_solution: 'function toggleMenu() { /* ... */ }',
-        order_index: 1,
-        duration_minutes: 60,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    // Progress: trainee completed first sub-lesson
-    await tx.insert(progress).values({
-      user_id: trainee.id,
-      sub_lesson_id: sub1.id,
-      completed_at: new Date(),
-    });
-
-    // Quiz for lesson2
-    const [quiz1] = await tx
-      .insert(quizzes)
-      .values({
-        quiz_type: 'mini',
-        title: 'JS Basics Quiz',
-        lesson_id: lesson2.id,
-        module_id: module1.id,
-        training_year: 1,
-        time_limit_minutes: 15,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    const [q1] = await tx
-      .insert(questions)
-      .values({
-        quiz_id: quiz1.id,
-        question_text: 'Which keyword declares a block-scoped variable?',
-        question_type: 'multiple_choice',
-        order_index: 1,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    const [q2] = await tx
-      .insert(questions)
-      .values({
-        quiz_id: quiz1.id,
-        question_text: 'true/false: const variables can be reassigned.',
-        question_type: 'true_false',
-        order_index: 2,
-        created_by: trainer.id,
-      })
-      .returning();
-
-    const [q1o1, q1o2, q1o3] = await tx
-      .insert(options)
-      .values([
-        { question_id: q1.id, option_text: 'var', is_correct: false },
-        { question_id: q1.id, option_text: 'let', is_correct: true },
-        { question_id: q1.id, option_text: 'function', is_correct: false },
-      ])
-      .returning();
-
-    const [q2o1, q2o2] = await tx
-      .insert(options)
-      .values([
-        { question_id: q2.id, option_text: 'true', is_correct: false },
-        { question_id: q2.id, option_text: 'false', is_correct: true },
-      ])
-      .returning();
-
-    // A submission from trainee
-    const [subm1] = await tx
-      .insert(quizSubmissions)
-      .values({ user_id: trainee.id, quiz_id: quiz1.id, score: 100, created_by: trainee.id })
-      .returning();
-
-    await tx.insert(submissionAnswers).values([
-      { submission_id: subm1.id, question_id: q1.id, selected_option_id: q1o2.id, created_by: trainee.id },
-      { submission_id: subm1.id, question_id: q2.id, selected_option_id: q2o2.id, created_by: trainee.id },
+    // Insert profiles for trainer and trainees
+    await tx.insert(profiles).values([
+      {
+        id: trainerId,
+        fullName: 'Trainer One',
+        email: 'trainer.one@example.com',
+        avatarUrl: null,
+        role: 'TRAINER',
+        startOfTrainingDate: null,
+        assignedTrainerId: null,
+      },
+      {
+        id: trainee1Id,
+        fullName: 'Trainee Alpha',
+        email: 'trainee.alpha@example.com',
+        avatarUrl: null,
+        role: 'TRAINEE',
+        startOfTrainingDate: new Date(),
+        assignedTrainerId: trainerId,
+      },
+      {
+        id: trainee2Id,
+        fullName: 'Trainee Beta',
+        email: 'trainee.beta@example.com',
+        avatarUrl: null,
+        role: 'TRAINEE',
+        startOfTrainingDate: new Date(),
+        assignedTrainerId: trainerId,
+      },
     ]);
 
-    // Knowledge submission, reflections, testimonials, acceptance protocol
-    await tx.insert(knowledgeSubmissions).values({
-      user_id: trainee.id,
-      title: 'CSS Layout Exercise',
-      description: 'Demonstrated responsive layout with flexbox and grid.',
-      file_url: 'https://example.com/files/layout.pdf',
-      status: 'approved',
-      reviewer_notes: 'Solid work and clear structure.',
-      created_by: trainer.id,
-      modified_by: trainer.id,
+    // Create a simple course and link members
+    const [course] = await tx
+      .insert(courses)
+      .values({
+        title: 'Web Essentials',
+        description: 'Foundations of web development with hands-on practice.',
+        year: 1,
+        chapter: 1,
+        createdById: trainerId,
+        isActive: true,
+        isPublished: true,
+      })
+      .returning();
+
+    await tx.insert(courseMembers).values([
+      { courseId: course.id, userId: trainerId, role: 'TRAINER' },
+      { courseId: course.id, userId: trainee1Id, role: 'TRAINEE' },
+      { courseId: course.id, userId: trainee2Id, role: 'TRAINEE' },
+    ]);
+
+    // Skills and course skills
+    const insertedSkills = await tx
+      .insert(skills)
+      .values([
+        { name: 'HTML/CSS' },
+        { name: 'JavaScript' },
+        { name: 'Git' },
+      ])
+      .returning();
+    await tx.insert(courseSkills).values(
+      insertedSkills.map((s) => ({ courseId: course.id, skillId: s.id }))
+    );
+
+    // Add one Enabler and one Use Case
+    const [enabler] = await tx.insert(enablers).values({
+      courseId: course.id,
+      title: 'HTML & CSS Enabler',
+      orderIndex: 1,
+      pptUrl: null,
+      videoUrl: null,
+      scenarioText: 'Build a responsive landing page from a brief.',
+      scenarioImageUrl: null,
+      durationValue: 2,
+      durationUnit: 'WEEKS',
+      isActive: true,
+    }).returning();
+
+    await tx.insert(useCases).values({
+      courseId: course.id,
+      title: 'Responsive Layout Use Case',
+      descriptionText: 'Create a responsive layout with header, grid, and footer.',
+      orderIndex: 2,
+      durationValue: 1,
+      durationUnit: 'WEEKS',
+      isActive: true,
     });
 
-    await tx.insert(reflections).values({
-      user_id: trainee.id,
-      due_date: new Date().toISOString().slice(0, 10),
-      swot_strengths: 'Strong motivation, quick learner',
-      swot_weaknesses: 'Limited prior JS experience',
-      swot_opportunities: 'Mentorship, project-based learning',
-      swot_threats: 'Time constraints',
-      mes_status: 'On track',
-      created_by: trainee.id,
-      modified_by: trainee.id,
-    });
+    // Enabler small quiz (ENABLER)
+    const [enablerQuiz] = await tx
+      .insert(quizzes)
+      .values({
+        title: 'Enabler Quiz: HTML & CSS',
+        quizType: 'ENABLER',
+        createdById: trainerId,
+        isActive: true,
+      })
+      .returning();
+    await tx.insert(enablerQuizzes).values({ enablerId: enabler.id, quizId: enablerQuiz.id });
 
-    await tx.insert(testimonials).values({
-      user_id: trainee.id,
-      milestone: 'Completed Module 1',
-      feedback_text: 'Learned the fundamentals and built my first responsive page.',
-      created_by: trainee.id,
-    });
+    const enablerQs = await tx
+      .insert(questions)
+      .values([
+        { quizId: enablerQuiz.id, questionText: 'Which tag creates a hyperlink?', orderIndex: 1 },
+        { quizId: enablerQuiz.id, questionText: 'Which CSS property sets text color?', orderIndex: 2 },
+      ])
+      .returning();
 
-    await tx.insert(acceptanceProtocols).values({
-      trainee_id: trainee.id,
-      trainer_id: trainer.id,
-      milestone_name: 'Module 1 Acceptance',
-      comments: 'Requirements met. Good understanding of basics.',
-      protocol_pdf_url: 'https://example.com/files/acceptance.pdf',
-      created_by: trainer.id,
-      modified_by: trainer.id,
-    });
+    const [qA, qB] = enablerQs;
+    const enablerOptsA = await tx
+      .insert(options)
+      .values([
+        { questionId: qA.id, optionText: '<a>', isCorrect: true },
+        { questionId: qA.id, optionText: '<link>', isCorrect: false },
+        { questionId: qA.id, optionText: '<href>', isCorrect: false },
+      ])
+      .returning();
+    const enablerOptsB = await tx
+      .insert(options)
+      .values([
+        { questionId: qB.id, optionText: 'font-color', isCorrect: false },
+        { questionId: qB.id, optionText: 'color', isCorrect: true },
+        { questionId: qB.id, optionText: 'text-style', isCorrect: false },
+      ])
+      .returning();
+
+    // Global quiz (GLOBAL) assigned to trainees
+    const [globalQuiz] = await tx
+      .insert(quizzes)
+      .values({
+        title: 'Global Quiz: Web Basics',
+        quizType: 'GLOBAL',
+        createdById: trainerId,
+        isActive: true,
+      })
+      .returning();
+
+    const globalQs = await tx
+      .insert(questions)
+      .values([
+        { quizId: globalQuiz.id, questionText: 'CSS stands for?', orderIndex: 1 },
+        { quizId: globalQuiz.id, questionText: 'JS is primarily executed in the ___?', orderIndex: 2 },
+      ])
+      .returning();
+    const [g1, g2] = globalQs;
+    const g1Opts = await tx
+      .insert(options)
+      .values([
+        { questionId: g1.id, optionText: 'Cascading Style Sheets', isCorrect: true },
+        { questionId: g1.id, optionText: 'Creative Styling Syntax', isCorrect: false },
+        { questionId: g1.id, optionText: 'Computer Styled System', isCorrect: false },
+      ])
+      .returning();
+    const g2Opts = await tx
+      .insert(options)
+      .values([
+        { questionId: g2.id, optionText: 'Database', isCorrect: false },
+        { questionId: g2.id, optionText: 'Browser', isCorrect: true },
+        { questionId: g2.id, optionText: 'Server only', isCorrect: false },
+      ])
+      .returning();
+
+    await tx.insert(quizAssignments).values([
+      { quizId: globalQuiz.id, traineeId: trainee1Id, assignedById: trainerId },
+      { quizId: globalQuiz.id, traineeId: trainee2Id, assignedById: trainerId },
+    ]);
+
+    // Submissions for global quiz
+    const [sub1] = await tx
+      .insert(quizSubmissions)
+      .values({ traineeId: trainee1Id, quizId: globalQuiz.id, score: 100, isReviewed: false })
+      .returning();
+    const [sub2] = await tx
+      .insert(quizSubmissions)
+      .values({ traineeId: trainee2Id, quizId: globalQuiz.id, score: 50, isReviewed: false })
+      .returning();
+
+    // Pick correct options for answers
+    const g1Correct = g1Opts.find((o) => o.isCorrect)!.id;
+    const g2Correct = g2Opts.find((o) => o.isCorrect)!.id;
+    const g1Wrong = g1Opts.find((o) => !o.isCorrect)!.id;
+    const g2Wrong = g2Opts.find((o) => !o.isCorrect)!.id;
+
+    await tx.insert(quizSubmissionAnswers).values([
+      { submissionId: sub1.id, questionId: g1.id, selectedOptionId: g1Correct },
+      { submissionId: sub1.id, questionId: g2.id, selectedOptionId: g2Correct },
+      { submissionId: sub2.id, questionId: g1.id, selectedOptionId: g1Wrong },
+      { submissionId: sub2.id, questionId: g2.id, selectedOptionId: g2Wrong },
+    ]);
+
+    // Reflections
+    await tx.insert(reflections).values([
+      { traineeId: trainee1Id, strengths: 'CSS layouts', weaknesses: 'JS basics', mesMore: 'Practice', mesEqual: 'Focus', isReviewed: false, reviewedById: null },
+      { traineeId: trainee2Id, strengths: 'HTML semantics', weaknesses: 'Accessibility', mesMore: 'Refactor', mesEqual: 'Consistency', isReviewed: true, reviewedById: trainerId },
+    ]);
+
+    // Knowledge notes
+    await tx.insert(knowledgeNotes).values([
+      { traineeId: trainee1Id, title: 'Flexbox Cheatsheet', content: 'Notes on flex properties.', oneDriveLink: null },
+      { traineeId: trainee2Id, title: 'CSS Grid Areas', content: 'Grid templates and areas.', oneDriveLink: 'https://1drv.ms/mock' },
+    ]);
+
+    // Use case submissions and links
+    const [uc] = await tx
+      .insert(useCases)
+      .values({
+        courseId: course.id,
+        title: 'Forms and Validation',
+        descriptionText: 'Build a form with validation using HTML/CSS/JS.',
+        orderIndex: 3,
+        durationValue: 1,
+        durationUnit: 'WEEKS',
+        isActive: true,
+      })
+      .returning();
+
+    const [ucs1] = await tx
+      .insert(useCaseSubmissions)
+      .values({ traineeId: trainee1Id, useCaseId: uc.id, submissionText: 'My solution text', status: 'APPROVED', trainerFeedback: 'Good job', reviewedById: trainerId, reviewedAt: new Date() })
+      .returning();
+    const [ucs2] = await tx
+      .insert(useCaseSubmissions)
+      .values({ traineeId: trainee2Id, useCaseId: uc.id, submissionText: 'Links attached', status: 'PENDING' })
+      .returning();
+    await tx.insert(useCaseSubmissionLinks).values([
+      { submissionId: ucs1.id, url: 'https://github.com/example/repo', description: 'GitHub Repo' },
+      { submissionId: ucs2.id, url: 'https://1drv.ms/f/mock', description: 'OneDrive' },
+    ]);
+
+    // Acceptance protocols
+    await tx.insert(acceptanceProtocols).values([
+      { traineeId: trainee1Id, trainerId: trainerId, acceptanceDate: new Date(), milestone: 'Module 1 Complete', comments: 'Well done', instructions: 'Proceed to next module', pdfUrl: 'https://files.example.com/protocol1.pdf' },
+      { traineeId: trainee2Id, trainerId: trainerId, acceptanceDate: new Date(), milestone: 'Onboarding', comments: 'Welcome aboard', instructions: 'Start Web Essentials', pdfUrl: 'https://files.example.com/protocol2.pdf' },
+    ]);
+
+    // Achieved skills
+    await tx.insert(traineeAchievedSkills).values([
+      { traineeId: trainee1Id, skillId: insertedSkills[0].id, achievedViaCourseId: course.id },
+      { traineeId: trainee1Id, skillId: insertedSkills[1].id, achievedViaCourseId: course.id },
+      { traineeId: trainee2Id, skillId: insertedSkills[0].id, achievedViaCourseId: course.id },
+    ]);
+
+    // Activity log
+    await tx.insert(activityLog).values([
+      { userId: trainee1Id, activityType: 'QUIZ_SUBMITTED', relatedItemId: sub1.id, relatedItemTable: 'quiz_submissions', context: { score: 100 } as any },
+      { userId: trainee2Id, activityType: 'COURSE_ASSIGNED', relatedItemId: course.id, relatedItemTable: 'courses', context: { title: course.title } as any },
+    ]);
+
+    // Enabler completions
+    await tx.insert(enablerCompletions).values([
+      { traineeId: trainee1Id, enablerId: enabler.id },
+    ]);
   });
 
   await sql.end({ timeout: 1 });
-  // eslint-disable-next-line no-console
-  console.log('✅ Seed complete.');
+  console.log('✅ Seeded trainer, trainees, and full mock data across all tables.');
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('❌ Seed failed:', err);
   process.exit(1);
 });

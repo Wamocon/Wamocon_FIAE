@@ -119,12 +119,12 @@ export default function TrainerTraineesPage() {
             <div className="mb-4">
               <div className="mb-2 flex items-center justify-between text-sm">
                 <span className="text-muted">Gesamtfortschritt</span>
-                <span className="text-foreground font-medium">{trainee.progress}%</span>
+                <span className="text-foreground font-medium">{trainee.progress ?? 0}%</span>
               </div>
-              <div className="bg-muted/30 h-3 w-full rounded-full">
+              <div className="h-3 w-full rounded-full bg-muted/30">
                 <div
-                  className="from-accent to-primary h-3 rounded-full bg-gradient-to-r transition-all duration-500"
-                  style={{ width: `${trainee.progress || 0}%` }}
+                  className="h-3 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500"
+                  style={{ width: `${Math.max(0, Math.min(100, trainee.progress ?? 0))}%` }}
                 />
               </div>
             </div>

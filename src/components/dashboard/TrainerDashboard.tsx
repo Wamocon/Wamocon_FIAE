@@ -22,7 +22,7 @@ interface Trainee {
 
 type DashboardResponse = {
   trainees: Trainee[];
-  counts: { activeTrainees: number; pendingReviews: number; recentReflections: number };
+  counts: { activeTrainees: number; pendingReviews: number; recentReflections: number; pendingQuiz: number; pendingReflections: number; pendingUseCases: number };
   charts: {
     progressTrend: { week: string; progress: number }[];
     moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[];
@@ -35,6 +35,8 @@ export default function TrainerDashboard() {
   const [mounted, setMounted] = useState(false);
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [pendingReviews, setPendingReviews] = useState<number>(0);
+  const [pendingQuiz, setPendingQuiz] = useState<number>(0);
+  const [pendingReflections, setPendingReflections] = useState<number>(0);
   const [recentReflections, setRecentReflections] = useState<number>(0);
   const [progressTrend, setProgressTrend] = useState<{ week: string; progress: number }[]>([]);
   const [moduleProgress, setModuleProgress] = useState<{ name: string; completed: number; inProgress: number; notStarted: number }[]>([]);
@@ -56,6 +58,8 @@ export default function TrainerDashboard() {
         const data: DashboardResponse = await res.json();
   setTrainees(data.trainees || []);
   setPendingReviews(data.counts?.pendingReviews || 0);
+  setPendingQuiz(data.counts?.pendingQuiz || 0);
+  setPendingReflections(data.counts?.pendingReflections || 0);
   setRecentReflections(data.counts?.recentReflections || 0);
   setProgressTrend(data.charts?.progressTrend || []);
   setModuleProgress(data.charts?.moduleProgress || []);
@@ -106,13 +110,13 @@ export default function TrainerDashboard() {
                       Quiz-Reviews
                     </h4>
                     <span className="text-primary text-2xl font-bold">
-                      {pendingReviews}
+                      {pendingQuiz}
                     </span>
                   </div>
                   <p className="text-muted-foreground text-sm">
                     Warten auf Bewertung
                   </p>
-                  <button className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors">
+                  <button onClick={() => router.push('/trainer/reviews?view=quizzes&onlyPending=true')} className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors">
                     Jetzt bewerten
                   </button>
                 </div>
@@ -141,7 +145,11 @@ export default function TrainerDashboard() {
                 Auszubildenden-Übersicht
               </h3>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                <div className="bg-background/50 border-border/50 rounded-xl border p-6 text-center">
+                <div
+                  role="button"
+                  onClick={() => router.push('/trainer/trainees')}
+                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
+                >
                   <Users className="text-accent mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">Aktive Azubis</p>
                   <p className="text-foreground text-2xl font-bold">
@@ -149,7 +157,11 @@ export default function TrainerDashboard() {
                   </p>
                 </div>
 
-                <div className="bg-background/50 border-border/50 rounded-xl border p-6 text-center">
+                <div
+                  role="button"
+                  onClick={() => router.push('/trainer/analytics')}
+                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
+                >
                   <TrendingUp className="text-primary mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">Ø Fortschritt</p>
                   <p className="text-foreground text-2xl font-bold">
@@ -157,13 +169,17 @@ export default function TrainerDashboard() {
                   </p>
                 </div>
 
-                <div className="bg-background/50 border-border/50 rounded-xl border p-6 text-center">
+                <div
+                  role="button"
+                  onClick={() => router.push('/trainer/reviews?onlyPending=true')}
+                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
+                >
                   <Clock className="text-accent mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">
                     Offene Reviews
                   </p>
                   <p className="text-foreground text-2xl font-bold">
-                    {pendingReviews}
+                    {pendingQuiz + pendingReflections}
                   </p>
                 </div>
               </div>
@@ -174,10 +190,18 @@ export default function TrainerDashboard() {
           <div className="space-y-8">
             {/* Overall Progress Chart */}
             <div className="glass-effect rounded-2xl p-6 shadow-lg">
-              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-foreground flex items-center text-lg font-bold">
                 <TrendingUp className="text-accent mr-3 h-6 w-6" />
                 Gesamtfortschritt
-              </h3>
+                </h3>
+                <button
+                  onClick={() => router.push('/trainer/analytics')}
+                  className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
+                >
+                  Anzeigen
+                </button>
+              </div>
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={progressTrend}>
                   <CartesianGrid
@@ -219,10 +243,18 @@ export default function TrainerDashboard() {
 
             {/* Module Progress Chart */}
             <div className="glass-effect rounded-2xl p-6 shadow-lg">
-              <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
-                <BarChart3 className="text-accent mr-3 h-6 w-6" />
-                Einzelner Fortschritt
-              </h3>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-foreground flex items-center text-lg font-bold">
+                  <BarChart3 className="text-accent mr-3 h-6 w-6" />
+                  Einzelner Fortschritt
+                </h3>
+                <button
+                  onClick={() => router.push('/trainer/analytics')}
+                  className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
+                >
+                  Anzeigen
+                </button>
+              </div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={moduleProgress}>
                   <CartesianGrid

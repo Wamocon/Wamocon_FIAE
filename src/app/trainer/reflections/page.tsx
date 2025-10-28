@@ -1,80 +1,145 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { CheckCircle2, Circle } from 'lucide-react';
 
 type ReflectionItem = {
   id: string;
-  user_id: string;
-  due_date: string | null;
-  submitted_at: string | null;
-  mes_status: string | null;
-  trainee_name: string;
+  traineeId: string;
+  traineeName: string;
+  strengths: string | null;
+  weaknesses: string | null;
+  mesMore: string | null;
+  mesEqual: string | null;
+  isReviewed: boolean;
+  reviewedById: string | null;
+  createdAt: string;
 };
 
 export default function TrainerReflectionsPage() {
-  const { user, profile } = useAuth();
-  const router = useRouter();
+  const { profile } = useAuth();
   const [items, setItems] = useState<ReflectionItem[]>([]);
+  const [summary, setSummary] = useState<{ total: number; reviewed: number; unread: number }>({ total: 0, reviewed: 0, unread: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'unread' | 'reviewed'>('all');
+
+  const filtered = useMemo(() => {
+    switch (filter) {
+      case 'unread':
+        return items.filter(i => !i.isReviewed);
+      case 'reviewed':
+        return items.filter(i => i.isReviewed);
+      default:
+        return items;
+    }
+  }, [filter, items]);
+
+  const load = async () => {
+    if (!profile?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/trainer/reflections?trainerProfileId=${profile.id}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Fehler beim Laden der Reflektionen');
+      const data = await res.json();
+      setItems(data.reflections || []);
+      setSummary(data.summary || { total: 0, reviewed: 0, unread: 0 });
+    } catch (e: any) {
+      setError(e.message || 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        if (!user?.id && !profile?.id) return;
-        const params = new URLSearchParams();
-        if (user?.id) params.set('trainerAuthId', user.id);
-        if (profile?.id) params.set('trainerProfileId', profile.id);
-        const res = await fetch(`/api/trainer/reflections?${params.toString()}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to load reflections');
-        const data = await res.json();
-        setItems(data.reflections || []);
-      } catch (e: any) {
-        setError(e?.message || 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
-    };
     load();
-  }, [user?.id, profile?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
-  if (loading) return <div className="p-6">Lade Reflektionen…</div>;
-  if (error) return <div className="p-6 text-red-400">{error}</div>;
+  const toggleReviewed = async (id: string, current: boolean) => {
+    try {
+      await fetch(`/api/trainer/reflections/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_reviewed: !current, reviewer_id: profile?.id }),
+      });
+      await load();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Reflektionen meiner Auszubildenden</h1>
-      </div>
-
-      {items.length === 0 ? (
-        <p className="text-muted-foreground">Keine Reflektionen gefunden.</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-border/50 bg-background/50">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50 bg-background/70 text-left text-muted-foreground">
-                <th className="p-3">Auszubildende/r</th>
-                <th className="p-3">Fällig am</th>
-                <th className="p-3">Eingereicht am</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((r) => (
-                <tr key={r.id} className="border-b border-border/50 hover:bg-background/70">
-                  <td className="p-3 font-medium">{r.trainee_name}</td>
-                  <td className="p-3">{r.due_date || '—'}</td>
-                  <td className="p-3">{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : '—'}</td>
-                  <td className="p-3">{r.mes_status || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="bg-background min-h-screen p-6">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-foreground text-2xl font-bold">Reflektionen meiner Auszubildenden</h1>
+              <div className="text-muted text-sm">Insgesamt: {summary.total} · Gelesen: {summary.reviewed} · Offen: {summary.unread}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setFilter('all')} className={`rounded-xl px-4 py-2 text-sm ${filter === 'all' ? 'bg-accent text-foreground' : 'border border-accent/30 text-foreground'}`}>Alle</button>
+              <button onClick={() => setFilter('unread')} className={`rounded-xl px-4 py-2 text-sm ${filter === 'unread' ? 'bg-accent text-foreground' : 'border border-accent/30 text-foreground'}`}>Offen ({summary.unread})</button>
+              <button onClick={() => setFilter('reviewed')} className={`rounded-xl px-4 py-2 text-sm ${filter === 'reviewed' ? 'bg-accent text-foreground' : 'border border-accent/30 text-foreground'}`}>Gelesen ({summary.reviewed})</button>
+            </div>
+          </div>
         </div>
-      )}
+
+        <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
+          {loading ? (
+            <div className="text-center text-muted">Lade…</div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-700 bg-red-900/20 p-4 text-red-300">{error}</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-muted">Keine Reflektionen vorhanden.</div>
+          ) : (
+            <ul className="space-y-4">
+              {filtered.map((r) => (
+                <li key={r.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-foreground font-semibold">{r.traineeName}</div>
+                      <div className="text-muted text-xs">{new Date(r.createdAt).toLocaleString()}</div>
+                    </div>
+                    <button
+                      onClick={() => toggleReviewed(r.id, r.isReviewed)}
+                      className={`rounded-xl px-3 py-2 text-sm ${r.isReviewed ? 'border border-green-600/40 text-green-300 hover:bg-green-900/20' : 'border border-accent/30 text-foreground hover:bg-background/50'}`}
+                    >
+                      {r.isReviewed ? (
+                        <span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Gelesen</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-2"><Circle className="h-4 w-4" /> Als gelesen markieren</span>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                      <div className="text-muted mb-1 text-xs">Stärken</div>
+                      <div className="text-foreground whitespace-pre-wrap rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{r.strengths || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted mb-1 text-xs">Schwächen</div>
+                      <div className="text-foreground whitespace-pre-wrap rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{r.weaknesses || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted mb-1 text-xs">Mehr davon</div>
+                      <div className="text-foreground whitespace-pre-wrap rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{r.mesMore || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted mb-1 text-xs">Gleich lassen</div>
+                      <div className="text-foreground whitespace-pre-wrap rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{r.mesEqual || '-'}</div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

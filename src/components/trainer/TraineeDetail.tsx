@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   FileCheck2,
   TrendingUp,
@@ -21,13 +22,28 @@ interface TraineeDetailProps {
 
 export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
   const router = useRouter();
+  const { profile } = useAuth() as any;
   const [activeTab, setActiveTab] = useState<
     'overview' | 'progress' | 'submissions' | 'notes'
   >('overview');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [trainee, setTrainee] = useState<{ id: string; full_name: string; avatar_url?: string | null; progress: number } | null>(null);
+  const [trainee, setTrainee] = useState<{
+    id: string;
+    full_name: string;
+    avatar_url?: string | null;
+    training_start_date?: string | null;
+    assigned_trainer_id?: string | null;
+    progress: number;
+  } | null>(null);
+  const [edit, setEdit] = useState({
+    full_name: '',
+    avatar_url: '',
+    start_of_training_date: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -37,6 +53,11 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         if (!res.ok) throw new Error('Konnte Auszubildenden nicht laden');
         const data = await res.json();
         setTrainee(data.trainee);
+        setEdit({
+          full_name: data.trainee?.full_name || '',
+          avatar_url: data.trainee?.avatar_url || '',
+          start_of_training_date: data.trainee?.training_start_date ? String(data.trainee.training_start_date).slice(0, 10) : '',
+        });
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
       } finally {
@@ -48,6 +69,37 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
 
   const handleAcceptanceProtocol = () => {
     router.push('/trainer/acceptance-protocol');
+  };
+
+  const handleSave = async () => {
+    if (!profile?.id || !trainee?.id) return;
+    try {
+      setSaving(true);
+      setError(null);
+      const payload: any = {
+        trainer_id: profile.id,
+        full_name: edit.full_name,
+        avatar_url: edit.avatar_url,
+      };
+      if (edit.start_of_training_date) payload.start_of_training_date = edit.start_of_training_date;
+      const res = await fetch(`/api/trainer/trainees/${trainee.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Änderungen konnten nicht gespeichert werden');
+      const data = await res.json();
+      setTrainee((prev) => ({
+        ...prev!,
+        full_name: data.trainee.full_name,
+        avatar_url: data.trainee.avatar_url,
+        training_start_date: data.trainee.training_start_date,
+      }));
+    } catch (e: any) {
+      setError(e?.message || 'Unbekannter Fehler');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const tabs = [
@@ -93,6 +145,12 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           </div>
 
           <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowEdit((v) => !v)}
+                className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200"
+              >
+                {showEdit ? 'Bearbeiten ausblenden' : 'Bearbeiten'}
+              </button>
             <button className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200">
               <Share2 className="h-4 w-4" />
               Teilen
@@ -188,6 +246,50 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         </div>
 
         <div className="p-8">
+          {/* Edit form for trainers */}
+          {profile?.role === 'trainer' && trainee && showEdit && (
+            <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-6">
+              <h3 className="mb-4 text-lg font-semibold text-slate-800">Stammdaten bearbeiten</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">Vollständiger Name</label>
+                  <input
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800"
+                    value={edit.full_name}
+                    onChange={(e) => setEdit((p) => ({ ...p, full_name: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">Avatar URL</label>
+                  <input
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800"
+                    value={edit.avatar_url}
+                    onChange={(e) => setEdit((p) => ({ ...p, avatar_url: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">Start der Ausbildung</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800"
+                    value={edit.start_of_training_date}
+                    onChange={(e) => setEdit((p) => ({ ...p, start_of_training_date: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {saving ? 'Speichern…' : 'Speichern'}
+                </button>
+                {error && <div className="text-sm text-red-600">{error}</div>}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'overview' && (
             <div className="space-y-6">
               <h3 className="mb-4 text-xl font-bold text-slate-800">

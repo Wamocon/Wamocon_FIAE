@@ -61,6 +61,7 @@ export function AcceptanceProtocol() {
         trainer_id: profile?.id,
         milestone_name: formData.milestone.trim(),
         comments: formData.comments.trim(),
+        acceptance_date: formData.date,
       };
       const res = await fetch('/api/trainer/acceptance-protocols', {
         method: 'POST',
