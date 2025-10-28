@@ -73,6 +73,9 @@ export function Sidebar({
         case 'modules':
           router.push('/trainee/modules');
           break;
+        case 'courses':
+          router.push('/trainee/courses');
+          break;
         case 'lessons':
           router.push('/trainee/lessons');
           break;
@@ -161,10 +164,10 @@ export function Sidebar({
               href: '/trainee/reflection',
             },
             {
-              id: 'modules',
-              label: language === 'de' ? 'Lernmodule' : 'Learning Modules',
+              id: 'courses',
+              label: language === 'de' ? 'Kurse' : 'Courses',
               icon: BookOpen,
-              href: '/trainee/modules',
+              href: '/trainee/courses',
             },
             {
               id: 'lessons',

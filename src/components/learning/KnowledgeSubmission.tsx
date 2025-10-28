@@ -1,10 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  Upload,
-  FileText,
   Send,
   CheckCircle,
   AlertCircle,
@@ -12,40 +10,65 @@ import {
   Clock,
   Award,
 } from 'lucide-react';
+import Link from 'next/link';
 
 export function KnowledgeSubmission() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
+  const [oneDriveLink, setOneDriveLink] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState<
     'idle' | 'success' | 'error'
   >('idle');
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(Array.from(e.target.files));
-    }
-  };
+  const [loading, setLoading] = useState(false);
+  const [notes, setNotes] = useState<Array<{ id: string; title: string; content: string; createdAt: string; oneDriveLink?: string | null }>>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!profile?.id) throw new Error('No profile');
+      const res = await fetch('/api/trainee/knowledge-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trainee_id: profile.id, title, content, one_drive_link: oneDriveLink || null }),
+      });
+      if (!res.ok) throw new Error('Failed to submit note');
       setSubmissionStatus('success');
       setTitle('');
       setContent('');
-      setFiles([]);
+      setOneDriveLink('');
+      // refresh
+      await loadNotes();
     } catch (error) {
       setSubmissionStatus('error');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const loadNotes = async () => {
+    if (!profile?.id) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/trainee/knowledge-notes?traineeId=${profile.id}`);
+      if (!res.ok) throw new Error('Failed to load notes');
+      const data = await res.json();
+      setNotes((data?.notes || []).map((n: any) => ({ id: n.id, title: n.title, content: n.content, createdAt: n.createdAt, oneDriveLink: n.oneDriveLink })));
+    } catch (e) {
+      console.error(e);
+      setNotes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   if (!user) {
     return (
@@ -115,43 +138,20 @@ export function KnowledgeSubmission() {
             </div>
 
             <div>
-              <label className="text-muted mb-2 block text-sm font-medium">
-                Dateien anhängen (optional)
+              <label htmlFor="onedrive" className="text-muted mb-2 block text-sm font-medium">
+                Dokument-Link (OneDrive) – optional
               </label>
-              <div className="border-accent/30 hover:border-accent/50 rounded-2xl border-2 border-dashed p-8 text-center transition-colors">
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileChange}
-                  className="hidden"
-                  id="file-upload"
-                />
-                <label htmlFor="file-upload" className="cursor-pointer">
-                  <Upload className="text-accent mx-auto mb-4 h-12 w-12" />
-                  <p className="text-muted mb-2">
-                    Klicken Sie hier, um Dateien auszuwählen
-                  </p>
-                  <p className="text-muted text-sm">
-                    Oder ziehen Sie Dateien hierher
-                  </p>
-                </label>
-              </div>
-              {files.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {files.map((file, index) => (
-                    <div
-                      key={index}
-                      className="bg-background/50 border-accent/30 flex items-center gap-3 rounded-xl border p-3"
-                    >
-                      <FileText className="text-accent h-5 w-5" />
-                      <span className="text-muted text-sm">{file.name}</span>
-                      <span className="text-muted ml-auto text-xs">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <input
+                id="onedrive"
+                type="url"
+                value={oneDriveLink}
+                onChange={e => setOneDriveLink(e.target.value)}
+                className="bg-background/50 border-accent/30 focus:ring-accent text-foreground placeholder-muted w-full rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
+                placeholder="https://1drv.ms/... oder vollständige OneDrive-URL"
+              />
+              <p className="text-muted mt-2 text-xs">
+                Hinweis: Fügen Sie hier den OneDrive-Link Ihres Dokuments ein. Wir speichern den Link zu Ihrer Einreichung.
+              </p>
             </div>
 
             <button
@@ -207,6 +207,39 @@ export function KnowledgeSubmission() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Submitted Notes List */}
+        <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+          <h2 className="text-foreground mb-6 text-2xl font-bold">Meine Beiträge</h2>
+          {loading ? (
+            <div className="text-center text-muted">Lade...</div>
+          ) : notes.length === 0 ? (
+            <div className="text-muted">Noch keine Einreichungen vorhanden.</div>
+          ) : (
+            <div className="space-y-3">
+              {notes.map((n) => (
+                <Link key={n.id} href={`/trainee/knowledge-submission/${n.id}`}>
+                  <div className="bg-background/50 border-accent/30 hover:border-accent/60 rounded-xl border p-4 transition-colors">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-foreground font-semibold">{n.title}</div>
+                        <div className="text-muted text-xs">{new Date(n.createdAt).toLocaleString()}</div>
+                      </div>
+                    </div>
+                    <p className="text-muted mt-2 line-clamp-3 whitespace-pre-wrap">{n.content}</p>
+                    {n.oneDriveLink && (
+                      <div className="mt-2 text-xs">
+                        <span className="text-muted">Link: </span>
+                        <span className="text-accent underline">{n.oneDriveLink}</span>
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+          <div className="text-muted mt-4 text-xs">Hinweis: Verwenden Sie den OneDrive-Link, um Dokumente zu referenzieren.</div>
         </div>
 
         {/* Guidelines */}

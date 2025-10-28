@@ -1,6 +1,5 @@
-'use client';
-
 import ModuleDetail from '@/components/learning/ModuleDetail';
+import { getModuleWithLessons } from '@/db/queries';
 
 export default async function ModuleDetailPage({
   params,
@@ -8,5 +7,6 @@ export default async function ModuleDetailPage({
   params: Promise<{ moduleId: string }>;
 }) {
   const { moduleId } = await params;
-  return <ModuleDetail moduleId={moduleId} />;
+  const data = await getModuleWithLessons(moduleId);
+  return <ModuleDetail data={data} />;
 }

@@ -1,84 +1,77 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { ArrowLeft, BookOpen, CheckCircle, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  BookOpen,
-  CheckCircle,
-  Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Maximize2,
-  Download,
-  Share2,
-} from 'lucide-react';
+import type { LessonWithSubLessons } from '@/db/queries';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface LessonProps {
-  lessonId: string;
+  data: LessonWithSubLessons | null;
 }
 
-export default function Lesson({ lessonId }: LessonProps) {
+export default function Lesson({ data }: LessonProps) {
   const router = useRouter();
-  const [isCompleted, setIsCompleted] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const { profile } = useAuth();
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState<string | null>(null);
 
-  const handleGoBack = () => {
-    router.push('/trainee/modules');
-  };
-
-  const handleComplete = () => {
-    setIsCompleted(true);
-    // Here you would typically save the completion status to the backend
-  };
-
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
-  };
-
-  const handleMute = () => {
-    setIsMuted(!isMuted);
-  };
-
-  if (isCompleted) {
+  if (!data) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
-        <div className="glass-effect border-accent/30 rounded-3xl border p-8 text-center shadow-lg">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500">
-            <CheckCircle className="h-10 w-10 text-white" />
-          </div>
-          <h2 className="text-foreground mb-2 text-2xl font-bold">
-            Lektion erfolgreich abgeschlossen! 🎉
-          </h2>
-          <p className="text-muted mb-6">
-            Du hast die Lektion "Variablen, Datentypen und Operatoren"
-            erfolgreich abgeschlossen.
-          </p>
-
-          <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <button
-              onClick={() => router.push('/trainee/dashboard')}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-            >
-              Zum Dashboard
-            </button>
-            <button
-              onClick={() => router.push('/trainee/modules')}
-              className="text-muted bg-muted/30 hover:bg-muted/50 rounded-2xl px-6 py-3 font-medium transition-all duration-200"
-            >
-              Nächste Lektion
-            </button>
-          </div>
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <p className="text-muted-foreground">Lektion nicht gefunden...</p>
         </div>
       </div>
     );
   }
 
+  const handleGoBack = () => router.back();
+
+  useEffect(() => {
+    const load = async () => {
+      if (!data?.lesson.id || !profile?.id) return;
+      try {
+        const res = await fetch(
+          `/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`
+        );
+        const j = await res.json();
+        const set = new Set<string>(j.completedIds || []);
+        setCompletedIds(set);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    load();
+  }, [data?.lesson.id, profile?.id]);
+
+  const toggleCompletion = async (subLessonId: string, next: boolean) => {
+    if (!profile?.id) return;
+    setSaving(subLessonId);
+    try {
+      // optimistic update
+      setCompletedIds(prev => {
+        const copy = new Set(prev);
+        if (next) copy.add(subLessonId);
+        else copy.delete(subLessonId);
+        return copy;
+      });
+      await fetch('/api/trainee/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: profile.id, subLessonId, completed: next }),
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(null);
+    }
+  };
+
   return (
-    <div className="mx-auto max-w-6xl space-y-8 p-6">
+    <div className="mx-auto max-w-5xl space-y-8 p-6">
       {/* Header */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-4">
@@ -89,274 +82,50 @@ export default function Lesson({ lessonId }: LessonProps) {
             <ArrowLeft className="h-6 w-6" />
           </button>
           <div className="flex-1">
-            <h1 className="text-foreground text-3xl font-bold">
-              Variablen, Datentypen und Operatoren
-            </h1>
-            <p className="text-muted mt-1">
-              Lektion aus dem Kapitel "Variablen und Datentypen"
-            </p>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="bg-muted/30 mb-4 h-3 w-full rounded-full">
-          <div
-            className="from-accent to-primary h-3 rounded-full bg-gradient-to-r transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        <div className="text-muted flex items-center justify-between text-sm">
-          <span>Fortschritt: {progress}%</span>
-          <span>Geschätzte Zeit: 15 Min.</span>
-        </div>
-      </div>
-
-      {/* Video Player */}
-      <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
-        <div className="bg-background/50 relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl">
-          <div className="text-center">
-            <div className="from-accent to-primary mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br">
-              <Play className="h-12 w-12 text-white" />
-            </div>
-            <p className="text-muted font-medium">Video wird geladen...</p>
-          </div>
-
-          {/* Video Controls */}
-          <div className="absolute right-4 bottom-4 left-4 rounded-2xl bg-black/50 p-4 backdrop-blur-sm">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handlePlayPause}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white transition-colors duration-200 hover:bg-slate-100"
-              >
-                {isPlaying ? (
-                  <Pause className="h-5 w-5 text-slate-800" />
-                ) : (
-                  <Play className="h-5 w-5 text-slate-800" />
-                )}
-              </button>
-
-              <div className="h-2 flex-1 rounded-full bg-slate-300">
-                <div
-                  className="h-2 rounded-full bg-white"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-
-              <button
-                onClick={handleMute}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-white transition-colors duration-200 hover:bg-white/20"
-              >
-                {isMuted ? (
-                  <VolumeX className="h-4 w-4" />
-                ) : (
-                  <Volume2 className="h-4 w-4" />
-                )}
-              </button>
-
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg text-white transition-colors duration-200 hover:bg-white/20">
-                <Maximize2 className="h-4 w-4" />
-              </button>
-            </div>
+            <h1 className="text-foreground text-3xl font-bold">{data.lesson.title}</h1>
+            <p className="text-muted mt-1">{data.subLessons.length} Aufgaben</p>
           </div>
         </div>
       </div>
 
-      {/* Lesson Content */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-lg">
-        <div className="prose prose-slate max-w-none">
-          <h2 className="mb-4 text-2xl font-bold text-slate-800">
-            Was sind Variablen?
-          </h2>
-          <p className="mb-6 text-lg leading-relaxed text-slate-600">
-            Variablen sind Behälter für Daten in der Programmierung. Sie
-            ermöglichen es uns, Informationen zu speichern und später wieder zu
-            verwenden. Eine Variable hat einen Namen und kann verschiedene Arten
-            von Daten enthalten.
-          </p>
-
-          <h3 className="mb-4 text-xl font-bold text-slate-800">
-            Beispiel in JavaScript:
-          </h3>
-          <div className="mb-6 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 p-6">
-            <code className="font-mono text-sm leading-relaxed text-slate-800">
-              <span className="text-blue-600">let</span>{' '}
-              <span className="text-green-600">name</span> ={' '}
-              <span className="text-orange-600">"Elias"</span>;<br />
-              <span className="text-blue-600">let</span>{' '}
-              <span className="text-green-600">age</span> ={' '}
-              <span className="text-purple-600">18</span>;<br />
-              <span className="text-blue-600">let</span>{' '}
-              <span className="text-green-600">isStudent</span> ={' '}
-              <span className="text-red-600">true</span>;
-            </code>
-          </div>
-
-          <h3 className="mb-4 text-xl font-bold text-slate-800">Datentypen:</h3>
-          <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                <div className="h-3 w-3 rounded-full bg-blue-500"></div>
-                <span className="text-slate-700">
-                  <strong>String:</strong> Text (z.B. "Hello World")
-                </span>
+      {/* Sub-lessons list */}
+      <div className="space-y-4">
+        {data.subLessons.map((s) => (
+          <div key={s.id} className="glass-effect border-accent/30 rounded-2xl border p-6 shadow-lg">
+            <div className="mb-2 flex items-center gap-3">
+              <div className="from-accent to-primary flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
+                <BookOpen className="h-5 w-5 text-white" />
               </div>
-              <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                <span className="text-slate-700">
-                  <strong>Number:</strong> Zahlen (z.B. 42, 3.14)
-                </span>
-              </div>
-              <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                <div className="h-3 w-3 rounded-full bg-purple-500"></div>
-                <span className="text-slate-700">
-                  <strong>Boolean:</strong> Wahrheitswerte (true/false)
-                </span>
-              </div>
+              <h3 className="text-foreground text-lg font-semibold flex-1">{s.title}</h3>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-red-600"
+                  checked={completedIds.has(s.id)}
+                  onChange={(e) => toggleCompletion(s.id, e.target.checked)}
+                  disabled={!!saving}
+                />
+                <span className="text-muted-foreground">Abgeschlossen</span>
+              </label>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                <div className="h-3 w-3 rounded-full bg-orange-500"></div>
-                <span className="text-slate-700">
-                  <strong>Array:</strong> Listen von Werten
-                </span>
-              </div>
-              <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                <span className="text-slate-700">
-                  <strong>Object:</strong> Sammlung von Eigenschaften
-                </span>
-              </div>
-              <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                <div className="h-3 w-3 rounded-full bg-indigo-500"></div>
-                <span className="text-slate-700">
-                  <strong>Undefined:</strong> Nicht definierter Wert
-                </span>
-              </div>
+            {s.content && (
+              <p className="text-muted whitespace-pre-wrap">{s.content}</p>
+            )}
+            <div className="text-muted mt-2 text-xs">Dauer: {s.duration_minutes ?? 0} Minuten</div>
+            <div className="mt-4 flex justify-end">
+              <Link href={`/trainee/lessons/${data.lesson.id}/${s.id}`} className="text-sm text-accent hover:underline inline-flex items-center gap-1">
+                Öffnen
+                <ChevronRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
-
-          <h3 className="mb-4 text-xl font-bold text-slate-800">Operatoren:</h3>
-          <p className="mb-6 text-lg leading-relaxed text-slate-600">
-            Operatoren sind Symbole, die Operationen auf Variablen und Werten
-            ausführen. Sie ermöglichen es uns, Berechnungen durchzuführen und
-            Vergleiche anzustellen.
-          </p>
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
-              <h4 className="mb-4 flex items-center gap-2 font-semibold text-blue-800">
-                <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                Arithmetische Operatoren:
-              </h4>
-              <div className="space-y-2 text-sm text-blue-700">
-                <div className="flex items-center justify-between">
-                  <span>+ (Addition)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    5 + 3 = 8
-                  </code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>- (Subtraktion)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    10 - 4 = 6
-                  </code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>* (Multiplikation)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    6 * 7 = 42
-                  </code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>/ (Division)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    15 / 3 = 5
-                  </code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>% (Modulo)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    17 % 5 = 2
-                  </code>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 p-6">
-              <h4 className="mb-4 flex items-center gap-2 font-semibold text-green-800">
-                <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                Vergleichsoperatoren:
-              </h4>
-              <div className="space-y-2 text-sm text-green-700">
-                <div className="flex items-center justify-between">
-                  <span>== (Gleichheit)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    5 == "5"
-                  </code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>=== (Strikte Gleichheit)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    5 === 5
-                  </code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>!= (Ungleichheit)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    5 != 3
-                  </code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>&gt; (Größer als)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    10 &gt; 5
-                  </code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>&lt; (Kleiner als)</span>
-                  <code className="rounded bg-white px-2 py-1 text-xs">
-                    3 &lt; 7
-                  </code>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Actions */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
-        <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-2 text-slate-600 transition-all duration-200 hover:bg-slate-200">
-              <Download className="h-4 w-4" />
-              Material herunterladen
-            </button>
-            <button className="flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-2 text-slate-600 transition-all duration-200 hover:bg-slate-200">
-              <Share2 className="h-4 w-4" />
-              Teilen
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleGoBack}
-              className="flex items-center gap-2 rounded-2xl bg-slate-100 px-6 py-3 font-medium text-slate-600 transition-all duration-200 hover:bg-slate-200"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Zurück zum Kapitel
-            </button>
-
-            <button
-              onClick={handleComplete}
-              className="flex transform items-center gap-2 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 px-8 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:from-green-700 hover:to-emerald-700 hover:shadow-xl"
-            >
-              <CheckCircle className="h-5 w-5" />
-              Lektion abgeschlossen
-            </button>
-          </div>
-        </div>
+      <div className="flex justify-end">
+        <Link href="/trainee/modules" className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors">
+          Zurück zu den Modulen
+        </Link>
       </div>
     </div>
   );

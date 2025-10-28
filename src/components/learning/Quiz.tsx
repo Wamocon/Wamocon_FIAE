@@ -10,35 +10,35 @@ import {
   Award,
   Target,
 } from 'lucide-react';
-import { mockQuiz } from '@/lib/supabase';
+import type { QuizWithQuestions } from '@/db/queries';
 
 interface QuizProps {
-  quizId: string;
+  quiz: QuizWithQuestions;
 }
 
-export default function Quiz({ quizId }: QuizProps) {
+export default function Quiz({ quiz }: QuizProps) {
   const router = useRouter();
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<
     Record<string, number>
   >({});
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
+  const [timeLeft, setTimeLeft] = useState(quiz.timeLimitMinutes * 60);
   const [isCompleted, setIsCompleted] = useState(false);
   const [passed, setPassed] = useState(false);
   const [score, setScore] = useState(0);
 
   // Memoize quiz data to prevent unnecessary recalculations
-  const quizData = useMemo(() => mockQuiz, []);
+  const quizData = useMemo(() => quiz, [quiz]);
 
   // Reset quiz state function instead of page reload
   const resetQuiz = useCallback(() => {
     setCurrentQuestion(0);
     setSelectedAnswers({});
-    setTimeLeft(300);
+    setTimeLeft(quiz.timeLimitMinutes * 60);
     setIsCompleted(false);
     setPassed(false);
     setScore(0);
-  }, []);
+  }, [quiz.timeLimitMinutes]);
 
   const handleGoBack = useCallback(() => {
     router.push('/trainee/modules');
@@ -69,10 +69,7 @@ export default function Quiz({ quizId }: QuizProps) {
     let correctAnswers = 0;
     quizData.questions.forEach(question => {
       const selectedAnswer = selectedAnswers[question.id];
-      if (
-        selectedAnswer !== undefined &&
-        selectedAnswer === question.correctAnswer
-      ) {
+      if (selectedAnswer !== undefined && selectedAnswer === question.correctIndex) {
         correctAnswers++;
       }
     });
@@ -294,11 +291,9 @@ export default function Quiz({ quizId }: QuizProps) {
           <button
             onClick={handleNextQuestion}
             disabled={!isAnswerSelected}
-            className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-w-[160px] flex items-center justify-center rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-lg transition duration-200 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {currentQuestion === quizData.totalQuestions - 1
-              ? 'Abschließen'
-              : 'Nächste Frage'}
+            {currentQuestion === quizData.totalQuestions - 1 ? 'Abschließen' : 'Nächste Frage'}
           </button>
         </div>
       </div>

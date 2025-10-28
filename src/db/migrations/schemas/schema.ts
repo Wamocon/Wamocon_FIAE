@@ -2,289 +2,480 @@ import {
   pgTable,
   uuid,
   text,
-  integer,
-  timestamp,
-  date,
   pgEnum,
+  timestamp,
+  integer,
   boolean,
+  real,
+  primaryKey,
+  unique,
+  jsonb,
+  pgSchema,
 } from 'drizzle-orm/pg-core';
 
-// ==========================
-// ENUMS
-// ==========================
-export const userRole = pgEnum('user_role', ['trainee', 'trainer']);
-export const quizType = pgEnum('quiz_type', ['mini', 'big']);
-export const questionType = pgEnum('question_type', [
-  'multiple_choice',
-  'true_false',
-  'short_answer',
-]);
-export const submissionStatus = pgEnum('submission_status', [
-  'pending',
-  'approved',
-  'rejected',
-]);
-
-// ==========================
-// PROFILES
-// ==========================
-export const profiles = pgTable('profiles', {
-  id: uuid('id').primaryKey().defaultRandom(), // local PK
-  auth_id: uuid('auth_id').notNull().unique(), // FK to Supabase auth.users.id
-  full_name: text('full_name').notNull(),
-  role: userRole('role').default('trainee'),
-  avatar_url: text('avatar_url'),
-  trainer_auth_id: text(),
-  training_start_date: date('training_start_date'),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
+// --- SUPABASE AUTH HELPER ---
+// Reference auth.users in the "auth" schema so we can define FKs without creating the table.
+const auth = pgSchema('auth');
+export const authUsers = auth.table('users', {
+  id: uuid('id').primaryKey(),
 });
-export type Profile = typeof profiles.$inferSelect;
 
-// ==========================
-// MODULES
-// ==========================
+// --- ENUMS ---
+// Re-usable ENUM types for your database columns
+
+export const userRole = pgEnum('user_role', ['TRAINER', 'TRAINEE']);
+export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
+export const quizType = pgEnum('quiz_type', ['ENABLER', 'GLOBAL']);
+export const reviewStatus = pgEnum('review_status', [
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+]);
+
+// --- 1. CORE USER TABLES ---
+
+export const profiles = pgTable('profiles', {
+  // 1:1 link to the authenticated user in auth.users
+  id: uuid('id')
+    .primaryKey()
+    .references(() => authUsers.id, { onDelete: 'cascade' }),
+  fullName: text('full_name').notNull(),
+  email: text('email').notNull().unique(),
+  avatarUrl: text('avatar_url'),
+  role: userRole('role').notNull(),
+  startOfTrainingDate: timestamp('start_of_training_date'),
+
+  // A trainee can be assigned to a specific trainer
+  // Note: Do not add a self-referential FK here to avoid TS circular init errors.
+  // You can enforce this in application logic or add the FK via a raw migration if needed.
+  assignedTrainerId: uuid('assigned_trainer_id'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// --- 2. CONTENT MANAGEMENT TABLES ---
+
+export const courses = pgTable('courses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  description: text('description'),
+  year: integer('year'), // 1, 2, or 3
+  chapter: integer('chapter'), // For "capital 1 to n"
+
+  // The main trainer who created the course
+  createdById: uuid('created_by_id')
+    .notNull()
+    .references(() => profiles.id),
+
+  isActive: boolean('is_active').default(false),
+  isPublished: boolean('is_published').default(false), // For drafts
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// Many-to-many table linking courses to multiple trainers and trainees
+export const courseMembers = pgTable(
+  'course_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    role: userRole('role').notNull(), // To store if the member is a co-trainer or trainee
+  },
+  (table) => ({
+    // A user can only be in a course once
+    unq: unique().on(table.courseId, table.userId),
+  }),
+);
+
+// Table for skills, powering the "Skills Achieved" feature
+export const skills = pgTable('skills', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+});
+
+// Many-to-many table linking skills to courses
+export const courseSkills = pgTable(
+  'course_skills',
+  {
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    skillId: uuid('skill_id')
+      .notNull()
+      .references(() => skills.id, { onDelete: 'cascade' }),
+  },
+  (table) => ({
+    // Set the composite primary key
+    pk: primaryKey({ columns: [table.courseId, table.skillId] }),
+  }),
+);
+
+// --- Course Content: Enablers & Use Cases ---
+
+export const enablers = pgTable('enablers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  courseId: uuid('course_id')
+    .notNull()
+    .references(() => courses.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  orderIndex: integer('order_index').notNull(), // To set the order of modules
+
+  // Content
+  pptUrl: text('ppt_url'), // Link to Supabase Storage
+  videoUrl: text('video_url'), // Link to Supabase Storage or external
+  scenarioText: text('scenario_text'),
+  scenarioImageUrl: text('scenario_image_url'),
+
+  // Settings
+  durationValue: integer('duration_value'),
+  durationUnit: durationUnit('duration_unit'),
+  isActive: boolean('is_active').default(false),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export const useCases = pgTable('use_cases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  courseId: uuid('course_id')
+    .notNull()
+    .references(() => courses.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  descriptionText: text('description_text').notNull(),
+  orderIndex: integer('order_index').notNull(),
+
+  // Settings
+  durationValue: integer('duration_value'),
+  durationUnit: durationUnit('duration_unit'),
+  isActive: boolean('is_active').default(false),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// --- 3. QUIZ & SUBMISSION TABLES ---
+
+export const quizzes = pgTable('quizzes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  // ENABLER = "small quiz", GLOBAL = "big quiz"
+  quizType: quizType('quiz_type').notNull(),
+  createdById: uuid('created_by_id')
+    .notNull()
+    .references(() => profiles.id),
+  isActive: boolean('is_active').default(false),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// 1:1 relationship linking a "small quiz" to its enabler
+export const enablerQuizzes = pgTable('enabler_quizzes', {
+  enablerId: uuid('enabler_id')
+    .primaryKey()
+    .references(() => enablers.id, { onDelete: 'cascade' }),
+  quizId: uuid('quiz_id')
+    .notNull()
+    .unique()
+    .references(() => quizzes.id, { onDelete: 'cascade' }),
+});
+
+export const questions = pgTable('questions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  quizId: uuid('quiz_id')
+    .notNull()
+    .references(() => quizzes.id, { onDelete: 'cascade' }),
+  questionText: text('question_text').notNull(),
+  orderIndex: integer('order_index'),
+});
+
+export const options = pgTable('options', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  questionId: uuid('question_id')
+    .notNull()
+    .references(() => questions.id, { onDelete: 'cascade' }),
+  optionText: text('option_text').notNull(),
+  isCorrect: boolean('is_correct').notNull().default(false),
+});
+
+// --- Trainee Submissions & Progress ---
+
+// Assigns "GLOBAL" quizzes to trainees
+export const quizAssignments = pgTable(
+  'quiz_assignments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    quizId: uuid('quiz_id')
+      .notNull()
+      .references(() => quizzes.id, { onDelete: 'cascade' }),
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    assignedById: uuid('assigned_by_id')
+      .notNull()
+      .references(() => profiles.id),
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    unq: unique().on(table.quizId, table.traineeId), // Trainee can only be assigned once
+  }),
+);
+
+// Header for a single quiz attempt
+export const quizSubmissions = pgTable('quiz_submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  quizId: uuid('quiz_id')
+    .notNull()
+    .references(() => quizzes.id, { onDelete: 'cascade' }),
+  score: real('score'), // A percentage, e.g., 85.5
+  submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+
+  // For "Action Required" dashboard
+  isReviewed: boolean('is_reviewed').default(false),
+});
+
+// Trainee's answer for each question in that submission
+export const quizSubmissionAnswers = pgTable('quiz_submission_answers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  submissionId: uuid('submission_id')
+    .notNull()
+    .references(() => quizSubmissions.id, { onDelete: 'cascade' }),
+  questionId: uuid('question_id')
+    .notNull()
+    .references(() => questions.id, { onDelete: 'cascade' }),
+  selectedOptionId: uuid('selected_option_id')
+    .notNull()
+    .references(() => options.id, { onDelete: 'cascade' }),
+});
+
+// Submissions for Use Cases
+export const useCaseSubmissions = pgTable('use_case_submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  useCaseId: uuid('use_case_id')
+    .notNull()
+    .references(() => useCases.id, { onDelete: 'cascade' }),
+  submissionText: text('submission_text'),
+
+  // For "Action Required" and progress
+  status: reviewStatus('status').default('PENDING'),
+  trainerFeedback: text('trainer_feedback'),
+  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
+  reviewedAt: timestamp('reviewed_at'),
+  submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+});
+
+// Stores multiple links for a single use case submission
+export const useCaseSubmissionLinks = pgTable('use_case_submission_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  submissionId: uuid('submission_id')
+    .notNull()
+    .references(() => useCaseSubmissions.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  description: text('description'), // e.g., "GitHub Repo", "OneDrive"
+});
+
+// --- 4. TRAINEE-SPECIFIC TABLES ---
+
+export const reflections = pgTable('reflections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+
+  // SWOT
+  strengths: text('strengths'),
+  weaknesses: text('weaknesses'),
+  // MES
+  mesMore: text('mes_more'),
+  mesEqual: text('mes_equal'),
+
+  // For the trainer's "Action Required" dashboard
+  isReviewed: boolean('is_reviewed').default(false),
+  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// For the "Knowledge Transfer" feature
+export const knowledgeNotes = pgTable('knowledge_notes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  content: text('content'),
+  oneDriveLink: text('onedrive_link'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// --- 5. PROTOCOL & ANALYTICS TABLES ---
+
+export const acceptanceProtocols = pgTable('acceptance_protocols', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id),
+  trainerId: uuid('trainer_id')
+    .notNull()
+    .references(() => profiles.id),
+
+  acceptanceDate: timestamp('acceptance_date').notNull(),
+  milestone: text('milestone').notNull(),
+  comments: text('comments'),
+  instructions: text('important_instructions'),
+
+  // This timestamp "signs" the document
+  generatedAt: timestamp('generated_at').defaultNow().notNull(),
+  // Store the link to the generated PDF in Supabase Storage
+  pdfUrl: text('pdf_url'),
+});
+
+// Tracks a trainee's achieved skills
+export const traineeAchievedSkills = pgTable(
+  'trainee_achieved_skills',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    skillId: uuid('skill_id')
+      .notNull()
+      .references(() => skills.id, { onDelete: 'cascade' }),
+    
+    // Store how they earned it
+    achievedViaCourseId: uuid('achieved_via_course_id').references(
+      () => courses.id,
+    ),
+    achievedAt: timestamp('achieved_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    unq: unique().on(table.traineeId, table.skillId), // Can only achieve a skill once
+  }),
+);
+
+// Central log for all major events (powers "Recent Activity" feeds)
+export const activityLog = pgTable('activity_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => profiles.id),
+  activityType: text('activity_type').notNull(), // e.g., 'COURSE_COMPLETED'
+
+  // Polymorphic link to the related item
+  relatedItemId: uuid('related_item_id'),
+  relatedItemTable: text('related_item_table'), // e.g., 'courses', 'quizzes'
+
+  // Additional context as JSON
+  context: jsonb('context'), // e.g., { courseName: 'Intro to Next.js' }
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Tracks non-submittable progress, like watching a video
+export const enablerCompletions = pgTable(
+  'enabler_completions',
+  {
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    enablerId: uuid('enabler_id')
+      .notNull()
+      .references(() => enablers.id, { onDelete: 'cascade' }),
+    completedAt: timestamp('completed_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    // A trainee can only complete an enabler once
+    pk: primaryKey({ columns: [table.traineeId, table.enablerId] }),
+  }),
+);
+
+// ---------------------------------------------
+// LEGACY CONTENT TABLE STUBS (for compatibility)
+// These provide minimal shapes so existing routes compile.
+// They can be removed once those routes are fully migrated
+// to the new courses/enablers/use-cases schema.
+// ---------------------------------------------
+
 export const modules = pgTable('modules', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
-  training_year: integer('training_year').notNull(),
-  order_index: integer('order_index').notNull(),
-  duration_days: integer('duration_days').default(365),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
+  training_year: integer('training_year'),
+  order_index: integer('order_index'),
   created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
 });
-export type Module = typeof modules.$inferSelect;
 
-// ==========================
-// LESSONS
-// ==========================
 export const lessons = pgTable('lessons', {
   id: uuid('id').primaryKey().defaultRandom(),
-  module_id: uuid('module_id')
-    .notNull()
-    .references(() => modules.id),
-  rahmenplan_reference_code: text('rahmenplan_reference_code'),
+  module_id: uuid('module_id').references(() => modules.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
-  order_index: integer('order_index').notNull(),
-  duration_weeks: integer('duration_weeks').default(3),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
+  order_index: integer('order_index'),
+  duration_weeks: integer('duration_weeks'),
   created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
 });
-export type Lesson = typeof lessons.$inferSelect;
 
-// ==========================
-// SUB-LESSONS
-// ==========================
 export const subLessons = pgTable('sub_lessons', {
   id: uuid('id').primaryKey().defaultRandom(),
-  lesson_id: uuid('lesson_id')
-    .notNull()
-    .references(() => lessons.id),
+  lesson_id: uuid('lesson_id').references(() => lessons.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
-  content: text('content'),
-  exercise_prompt: text('exercise_prompt'),
-  exercise_solution: text('exercise_solution'),
-  order_index: integer('order_index').notNull(),
-  duration_minutes: integer('duration_minutes').default(30),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
-  created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
 });
-export type SubLesson = typeof subLessons.$inferSelect;
 
-// ==========================
-// PROGRESS
-// ==========================
-export const progress = pgTable(
-  'progress',
-  {
-    user_id: uuid('user_id').references(() => profiles.id),
-    sub_lesson_id: uuid('sub_lesson_id').references(() => subLessons.id),
-    completed_at: timestamp('completed_at'),
-    created_at: timestamp('created_at').defaultNow(),
-  },
-  table => ({
-    primaryKey: [table.user_id, table.sub_lesson_id],
-  })
-);
-export type Progress = typeof progress.$inferSelect;
-
-// ==========================
-// QUIZZES
-// ==========================
-export const quizzes = pgTable('quizzes', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  quiz_type: quizType('quiz_type').notNull(),
-  title: text('title').notNull(),
-  lesson_id: uuid('lesson_id').references(() => lessons.id),
-  module_id: uuid('module_id').references(() => modules.id),
-  training_year: integer('training_year').notNull(),
-  time_limit_minutes: integer('time_limit_minutes').default(30),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
-  created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
+export const progress = pgTable('progress', {
+  user_id: uuid('user_id').references(() => profiles.id, { onDelete: 'cascade' }),
+  sub_lesson_id: uuid('sub_lesson_id').references(() => subLessons.id, { onDelete: 'cascade' }),
+  created_at: timestamp('created_at').defaultNow().notNull(),
 });
+
+// --- TYPE EXPORTS ---
+export type Profile = typeof profiles.$inferSelect;
+export type Course = typeof courses.$inferSelect;
+export type CourseMember = typeof courseMembers.$inferSelect;
+export type Skill = typeof skills.$inferSelect;
+export type CourseSkill = typeof courseSkills.$inferSelect;
+export type Enabler = typeof enablers.$inferSelect;
+export type UseCase = typeof useCases.$inferSelect;
 export type Quiz = typeof quizzes.$inferSelect;
-
-// ==========================
-// QUESTIONS
-// ==========================
-export const questions = pgTable('questions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  quiz_id: uuid('quiz_id')
-    .notNull()
-    .references(() => quizzes.id),
-  question_text: text('question_text').notNull(),
-  question_type: questionType('question_type').notNull(),
-  order_index: integer('order_index').notNull(),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
-  created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
-});
+export type EnablerQuiz = typeof enablerQuizzes.$inferSelect;
 export type Question = typeof questions.$inferSelect;
-
-// ==========================
-// OPTIONS
-// ==========================
-export const options = pgTable('options', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  question_id: uuid('question_id')
-    .notNull()
-    .references(() => questions.id),
-  option_text: text('option_text').notNull(),
-  is_correct: boolean('is_correct').notNull().default(false),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
-  created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
-});
 export type Option = typeof options.$inferSelect;
-
-// ==========================
-// QUIZ SUBMISSIONS
-// ==========================
-export const quizSubmissions = pgTable('quiz_submissions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  user_id: uuid('user_id')
-    .notNull()
-    .references(() => profiles.id),
-  quiz_id: uuid('quiz_id')
-    .notNull()
-    .references(() => quizzes.id),
-  score: integer('score'),
-  submitted_at: timestamp('submitted_at').defaultNow(),
-  created_at: timestamp('created_at').defaultNow(),
-  created_by: uuid('created_by'),
-});
+export type QuizAssignment = typeof quizAssignments.$inferSelect;
 export type QuizSubmission = typeof quizSubmissions.$inferSelect;
-
-// ==========================
-// SUBMISSION ANSWERS
-// ==========================
-export const submissionAnswers = pgTable(
-  'submission_answers',
-  {
-    submission_id: uuid('submission_id').references(() => quizSubmissions.id),
-    question_id: uuid('question_id').references(() => questions.id),
-    selected_option_id: uuid('selected_option_id').references(() => options.id),
-    created_at: timestamp('created_at').defaultNow(),
-    created_by: uuid('created_by'),
-  },
-  table => ({
-    primaryKey: [table.submission_id, table.question_id],
-  })
-);
-export type SubmissionAnswer = typeof submissionAnswers.$inferSelect;
-
-// ==========================
-// KNOWLEDGE SUBMISSIONS
-// ==========================
-export const knowledgeSubmissions = pgTable('knowledge_submissions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  user_id: uuid('user_id')
-    .notNull()
-    .references(() => profiles.id),
-  title: text('title').notNull(),
-  description: text('description'),
-  file_url: text('file_url'),
-  status: submissionStatus('status').default('pending'),
-  reviewer_notes: text('reviewer_notes'),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
-  created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
-});
-export type KnowledgeSubmission = typeof knowledgeSubmissions.$inferSelect;
-
-// ==========================
-// REFLECTIONS
-// ==========================
-export const reflections = pgTable('reflections', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  user_id: uuid('user_id')
-    .notNull()
-    .references(() => profiles.id),
-  due_date: date('due_date'),
-  swot_strengths: text('swot_strengths'),
-  swot_weaknesses: text('swot_weaknesses'),
-  swot_opportunities: text('swot_opportunities'),
-  swot_threats: text('swot_threats'),
-  mes_status: text('mes_status'),
-  submitted_at: timestamp('submitted_at').defaultNow(),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
-  created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
-});
+export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
+export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
+export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
 export type Reflection = typeof reflections.$inferSelect;
-
-// ==========================
-// TESTIMONIALS
-// ==========================
-export const testimonials = pgTable('testimonials', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  user_id: uuid('user_id')
-    .notNull()
-    .references(() => profiles.id),
-  milestone: text('milestone').notNull(),
-  feedback_text: text('feedback_text'),
-  submitted_at: timestamp('submitted_at').defaultNow(),
-  created_at: timestamp('created_at').defaultNow(),
-  created_by: uuid('created_by'),
-});
-export type Testimonial = typeof testimonials.$inferSelect;
-
-// ==========================
-// ACCEPTANCE PROTOCOLS
-// ==========================
-export const acceptanceProtocols = pgTable('acceptance_protocols', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  trainee_id: uuid('trainee_id')
-    .notNull()
-    .references(() => profiles.id),
-  trainer_id: uuid('trainer_id')
-    .notNull()
-    .references(() => profiles.id),
-  milestone_name: text('milestone_name').notNull(),
-  comments: text('comments'),
-  protocol_pdf_url: text('protocol_pdf_url'),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
-  created_by: uuid('created_by'),
-  modified_by: uuid('modified_by'),
-});
+export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;
-
-// drop a trigger
-// -- 1️⃣ Drop the trigger
-// DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-
-// -- 2️⃣ Now drop the function
-// DROP FUNCTION IF EXISTS handle_new_user();
+export type ActivityLog = typeof activityLog.$inferSelect;
+export type EnablerCompletion = typeof enablerCompletions.$inferSelect;
+// Legacy compatibility types
+export type LegacyModule = typeof modules.$inferSelect;
+export type LegacyLesson = typeof lessons.$inferSelect;
+export type LegacySubLesson = typeof subLessons.$inferSelect;

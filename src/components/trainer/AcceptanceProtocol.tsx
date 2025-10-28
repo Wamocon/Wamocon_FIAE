@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   FileCheck2,
   Download,
@@ -12,24 +13,70 @@ import {
   Building,
 } from 'lucide-react';
 
+type TraineeItem = { id: string; full_name: string; avatar_url?: string | null };
+
 export function AcceptanceProtocol() {
+  const { user, profile } = useAuth() as any;
   const [formData, setFormData] = useState({
+    trainee_id: '',
     milestone: '',
     comments: '',
     date: new Date().toISOString().split('T')[0],
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successId, setSuccessId] = useState<string | null>(null);
+  const [trainees, setTrainees] = useState<TraineeItem[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!user || !profile) return;
+      try {
+        const params = new URLSearchParams();
+        if (user.id) params.set('trainerAuthId', user.id);
+        if (profile.id) params.set('trainerProfileId', profile.id);
+        const res = await fetch(`/api/trainer/trainees?${params.toString()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Konnte Auszubildende nicht laden');
+        const data = await res.json();
+        setTrainees(data.trainees || []);
+      } catch (e: any) {
+        setError(e?.message || 'Unbekannter Fehler');
+      }
+    };
+    load();
+  }, [user, profile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsGenerating(true);
+    setError(null);
+    if (!formData.trainee_id) return setError('Bitte Auszubildenden auswählen.');
+    if (!formData.milestone.trim()) return setError('Bitte einen Meilenstein angeben.');
+    if (!formData.comments.trim()) return setError('Bitte Kommentare hinzufügen.');
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    setIsGenerating(false);
-    setIsGenerated(true);
+    try {
+      setIsGenerating(true);
+      const payload = {
+        trainee_id: formData.trainee_id,
+        trainer_id: profile?.id,
+        milestone_name: formData.milestone.trim(),
+        comments: formData.comments.trim(),
+        acceptance_date: formData.date,
+      };
+      const res = await fetch('/api/trainer/acceptance-protocols', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Erstellung fehlgeschlagen');
+      const data = await res.json();
+      setSuccessId(data.protocol?.id || null);
+      setIsGenerated(true);
+    } catch (e: any) {
+      setError(e?.message || 'Unbekannter Fehler');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   if (isGenerated) {
@@ -48,7 +95,7 @@ export function AcceptanceProtocol() {
           </p>
 
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
+            <button disabled className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60">
               <Download className="h-5 w-5" />
               PDF herunterladen
             </button>
@@ -56,6 +103,9 @@ export function AcceptanceProtocol() {
               <Share2 className="h-5 w-5" />
               Teilen
             </button>
+            {successId && (
+              <div className="text-xs text-muted">ID: {successId}</div>
+            )}
           </div>
         </div>
       </div>
@@ -94,12 +144,16 @@ export function AcceptanceProtocol() {
                 <User className="h-4 w-4" />
                 Auszubildender
               </label>
-              <input
-                type="text"
+              <select
                 className="bg-background/50 border-accent/30 text-foreground w-full rounded-2xl border px-4 py-3"
-                value="Elias Felsing"
-                disabled
-              />
+                value={formData.trainee_id}
+                onChange={e => setFormData(prev => ({ ...prev, trainee_id: e.target.value }))}
+              >
+                <option value="">Bitte auswählen</option>
+                {trainees.map(t => (
+                  <option key={t.id} value={t.id}>{t.full_name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium">
@@ -109,7 +163,7 @@ export function AcceptanceProtocol() {
               <input
                 type="text"
                 className="bg-background/50 border-accent/30 text-foreground w-full rounded-2xl border px-4 py-3"
-                value="Waleri Moretz"
+                value={profile?.full_name || ''}
                 disabled
               />
             </div>
@@ -175,6 +229,10 @@ export function AcceptanceProtocol() {
             />
           </div>
 
+          {error && (
+            <div className="text-red-500">{error}</div>
+          )}
+
           {/* Actions */}
           <div className="border-accent/30 flex flex-col items-center justify-between gap-4 border-t pt-6 sm:flex-row">
             <button
@@ -186,7 +244,7 @@ export function AcceptanceProtocol() {
             <button
               type="submit"
               disabled={
-                isGenerating || !formData.milestone || !formData.comments
+                isGenerating || !formData.trainee_id || !formData.milestone || !formData.comments
               }
               className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 focus:ring-accent flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-8 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >

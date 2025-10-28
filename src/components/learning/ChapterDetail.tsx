@@ -8,15 +8,24 @@ import {
   Circle,
   Loader2,
 } from 'lucide-react';
-import { mockData } from '@/lib/supabase';
+// Temporary inline mock until this component is wired to real data
+type LessonItem = { id: string; title: string; type: 'lesson' | 'exercise' | 'quiz'; completed: boolean; ref?: string | null };
+const mockChapter = {
+  title: 'Grundlagen der Anwendungsentwicklung',
+  mainQuizId: 'quiz-1',
+  lessons: [
+    { id: 'l1', title: 'Einführung in Next.js', type: 'lesson', completed: true, ref: 'NEXT-101' },
+    { id: 'l2', title: 'TypeScript Basics', type: 'lesson', completed: false, ref: 'TS-201' },
+    { id: 'l3', title: 'Übung: Komponenten', type: 'exercise', completed: false, ref: 'EX-305' },
+    { id: 'l4', title: 'Kapitel-Quiz', type: 'quiz', completed: false, ref: 'QZ-999' },
+  ] as LessonItem[],
+};
 
 interface ChapterDetailProps {
   onNavigation: (view: string, data?: any) => void;
 }
 
 export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
-  // Use mock data from supabase - get first chapter for demo
-  const mockChapter = mockData.curriculum[0].chapters[0];
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -73,7 +82,7 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
           Lektionen in diesem Kapitel
         </h2>
         <div className="space-y-4">
-          {mockChapter.lessons.map(lesson => (
+          {mockChapter.lessons.map((lesson: LessonItem) => (
             <div
               key={lesson.id}
               className="bg-background/50 border-accent/20 hover:border-accent/40 cursor-pointer rounded-2xl border p-6 transition-all duration-200 hover:shadow-md"

@@ -38,14 +38,14 @@ export default function LoginPage() {
       const profilesResult = await db
         .select()
         .from(profiles)
-        .where(eq(profiles.auth_id, data.user.id));
+        .where(eq(profiles.id, data.user.id));
 
       const profile = profilesResult[0];
 
       if (!profile) throw new Error('Profil nicht gefunden.');
 
       // 3. Redirect based on role
-      if (profile.role === 'trainer') {
+      if (profile.role === 'TRAINER') {
         router.push('/trainer/dashboard');
       } else {
         router.push('/trainee/dashboard');
