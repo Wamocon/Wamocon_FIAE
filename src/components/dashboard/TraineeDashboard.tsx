@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   Award,
   Calendar,
@@ -13,7 +14,8 @@ import {
   BarChart3,
   PieChart,
 } from 'lucide-react';
-import { supabase, mockData } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   LineChart,
   Line,
@@ -38,48 +40,54 @@ import {
 
 export default function TraineeDashboard() {
   const router = useRouter();
+  const { profile } = useAuth();
 
-  // Use mock data from supabase
-  const nextLesson = {
-    id: 'les_1_2_1',
-    title: 'Variablen, Datentypen und Operatoren',
-    module: 'Variablen und Datentypen',
-    estimatedTime: '45 min',
-  };
+  const [nextLesson, setNextLesson] = useState<{
+    id: string;
+    title: string;
+    module: string;
+    estimatedTime: string;
+  } | null>(null);
+  const [modules, setModules] = useState<any[]>([]);
+  const [weeklyProgress, setWeeklyProgress] = useState<any[]>([]);
+  const [skillRadar, setSkillRadar] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<any[]>([]);
+  const [deadlines, setDeadlines] = useState<any[]>([]);
 
-  const modules = mockData.curriculum;
+  useEffect(() => {
+    const load = async () => {
+      if (!profile?.id) return;
+      try {
+        const res = await fetch(`/api/trainee/dashboard?userId=${profile.id}`);
+        const data = await res.json();
+  setModules(Array.isArray(data.modules) ? data.modules : []);
+  setWeeklyProgress(Array.isArray(data.weeklyProgress) ? data.weeklyProgress : []);
+  setSkillRadar(Array.isArray(data.skillRadar) ? data.skillRadar : []);
+  setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
+  setDeadlines(Array.isArray(data.deadlines) ? data.deadlines : []);
+        if (data.nextItem) {
+          setNextLesson({
+            id: data.nextItem.lessonId,
+            title: data.nextItem.lessonTitle,
+            module: data.nextItem.moduleTitle,
+            estimatedTime: data.nextItem.estimatedTime,
+          });
+        } else {
+          setNextLesson(null);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    load();
+  }, [profile?.id]);
 
-  // Chart data
-  const weeklyProgress = [
-    { week: 'W1', progress: 15 },
-    { week: 'W2', progress: 28 },
-    { week: 'W3', progress: 42 },
-    { week: 'W4', progress: 55 },
-    { week: 'W5', progress: 68 },
-    { week: 'W6', progress: 75 },
-  ];
-
-  const skillRadar = [
-    { skill: 'HTML/CSS', value: 85 },
-    { skill: 'JavaScript', value: 72 },
-    { skill: 'React', value: 68 },
-    { skill: 'Node.js', value: 45 },
-    { skill: 'Datenbanken', value: 78 },
-    { skill: 'Git', value: 82 },
-  ];
+  // Derived module progress for charts
 
   const moduleProgress = modules.map((module: any) => ({
-    name:
-      module.title.length > 20
-        ? module.title.substring(0, 20) + '...'
-        : module.title,
-    progress: module.progress,
-    color:
-      module.progress > 70
-        ? '#ef4444'
-        : module.progress > 40
-          ? '#dc2626'
-          : '#3c2846',
+    name: module.title.length > 20 ? module.title.substring(0, 20) + '...' : module.title,
+    progress: module.progress ?? 0,
+    color: (module.progress ?? 0) > 70 ? '#ef4444' : (module.progress ?? 0) > 40 ? '#dc2626' : '#3c2846',
   }));
 
   const handleModuleClick = (moduleId: string) => {
@@ -137,7 +145,7 @@ export default function TraineeDashboard() {
             {/* Continue Learning Card */}
             <div
               className="glass-effect-enhanced border-accent/40 hover:border-accent/70 hover:shadow-accent/20 transform cursor-pointer rounded-2xl border-2 p-6 shadow-2xl transition-all duration-300 hover:-translate-y-1"
-              onClick={() => handleLessonClick(nextLesson.id)}
+              onClick={() => nextLesson && handleLessonClick(nextLesson.id)}
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -145,10 +153,10 @@ export default function TraineeDashboard() {
                     WEITERMACHEN
                   </h3>
                   <p className="text-foreground text-2xl leading-tight font-bold">
-                    {nextLesson.title}
+                    {nextLesson ? nextLesson.title : 'Weiter lernen'}
                   </p>
                   <p className="text-muted-foreground mt-2">
-                    Modul: {nextLesson.module}
+                    Modul: {nextLesson ? nextLesson.module : '-'}
                   </p>
                 </div>
                 <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg">
@@ -158,7 +166,7 @@ export default function TraineeDashboard() {
               <div className="text-accent mt-4 flex items-center">
                 <Clock className="mr-2 h-4 w-4" />
                 <span className="text-sm font-medium">
-                  {nextLesson.estimatedTime}
+                  {nextLesson ? nextLesson.estimatedTime : ''}
                 </span>
               </div>
             </div>
@@ -174,9 +182,9 @@ export default function TraineeDashboard() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {modules.map((module: any) => (
                   <div
-                    key={module.moduleId}
+                    key={module.id}
                     className="from-background/80 hover:from-background/90 border-accent/20 hover:border-accent/40 group cursor-pointer rounded-xl border bg-gradient-to-br to-red-900/10 p-5 shadow-lg transition-all duration-300 hover:to-red-900/20 hover:shadow-xl"
-                    onClick={() => handleModuleClick(module.moduleId)}
+                    onClick={() => handleModuleClick(module.id)}
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <h3 className="text-foreground group-hover:text-accent text-lg font-bold transition-colors">
@@ -190,15 +198,15 @@ export default function TraineeDashboard() {
                     <div className="bg-muted/50 h-3 w-full overflow-hidden rounded-full">
                       <div
                         className="from-accent to-primary h-3 rounded-full bg-gradient-to-r shadow-lg transition-all duration-700"
-                        style={{ width: `${module.progress}%` }}
+                        style={{ width: `${module.progress ?? 0}%` }}
                       />
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-muted-foreground text-sm">
-                        0% → {module.progress}%
+                        0% → {module.progress ?? 0}%
                       </span>
                       <span className="text-accent text-lg font-bold">
-                        {module.progress}%
+                        {module.progress ?? 0}%
                       </span>
                     </div>
                   </div>
@@ -215,30 +223,19 @@ export default function TraineeDashboard() {
                 Letzte Erfolge
               </h3>
               <div className="space-y-3">
-                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
-                  <span className="text-foreground font-medium">
-                    90% im Quiz "Grundbegriffe"
-                  </span>
-                  <div className="bg-accent/20 flex h-8 w-8 items-center justify-center rounded-full">
-                    <Award className="text-accent h-4 w-4" />
+                {achievements.length === 0 && (
+                  <div className="text-muted-foreground">Noch keine Aktivitäten</div>
+                )}
+                {achievements.map((a, idx) => (
+                  <div key={idx} className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
+                    <span className="text-foreground font-medium">{a.text}</span>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/20">
+                      {a.kind === 'quiz' && <Award className="text-accent h-4 w-4" />}
+                      {a.kind === 'module' && <BookOpen className="text-green-400 h-4 w-4" />}
+                      {a.kind === 'streak' && <TrendingUp className="text-blue-400 h-4 w-4" />}
+                    </div>
                   </div>
-                </div>
-                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
-                  <span className="text-foreground font-medium">
-                    Modul "HTML/CSS" abgeschlossen
-                  </span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20">
-                    <BookOpen className="h-4 w-4 text-green-400" />
-                  </div>
-                </div>
-                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
-                  <span className="text-foreground font-medium">
-                    7 Tage in Folge gelernt
-                  </span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/20">
-                    <TrendingUp className="h-4 w-4 text-blue-400" />
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -251,30 +248,19 @@ export default function TraineeDashboard() {
                 Anstehende Termine
               </h3>
               <div className="space-y-3">
-                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
-                  <span className="text-foreground font-medium">
-                    Reflektion Q3: 30.09.2025
-                  </span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/20">
-                    <Calendar className="h-4 w-4 text-purple-400" />
+                {deadlines.length === 0 && (
+                  <div className="text-muted-foreground">Keine anstehenden Termine</div>
+                )}
+                {deadlines.map((d, idx) => (
+                  <div key={idx} className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
+                    <span className="text-foreground font-medium">
+                      {d.label}: {new Date(d.dueDate).toLocaleDateString()}
+                    </span>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/20">
+                      <Calendar className="h-4 w-4 text-purple-400" />
+                    </div>
                   </div>
-                </div>
-                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
-                  <span className="text-foreground font-medium">
-                    Quiz "JavaScript": 25.08.2025
-                  </span>
-                  <div className="bg-accent/20 flex h-8 w-8 items-center justify-center rounded-full">
-                    <Target className="text-accent h-4 w-4" />
-                  </div>
-                </div>
-                <div className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
-                  <span className="text-foreground font-medium">
-                    Projektabgabe: 15.09.2025
-                  </span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/20">
-                    <BookOpen className="h-4 w-4 text-orange-400" />
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>

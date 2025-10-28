@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { Target, TrendingUp, Send, CheckCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Target, Send, CheckCircle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ReflectionData {
   strengths: string;
@@ -11,6 +12,7 @@ interface ReflectionData {
 }
 
 export function Reflection() {
+  const { profile } = useAuth();
   const [reflectionData, setReflectionData] = useState<ReflectionData>({
     strengths: '',
     weaknesses: '',
@@ -19,6 +21,8 @@ export function Reflection() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const handleInputChange = (field: keyof ReflectionData, value: string) => {
     setReflectionData(prev => ({ ...prev, [field]: value }));
@@ -27,24 +31,62 @@ export function Reflection() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    // Simulate submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-
-    // Reset form after showing success
-    setTimeout(() => {
-      setIsSubmitted(false);
-      setReflectionData({
-        strengths: '',
-        weaknesses: '',
-        more: '',
-        equal: '',
+    setError(null);
+    try {
+      if (!profile?.id) throw new Error('Kein Profil gefunden');
+      // Create a new reflection (do not overwrite)
+      const res = await fetch('/api/trainee/reflection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trainee_id: profile.id,
+          strengths: reflectionData.strengths,
+          weaknesses: reflectionData.weaknesses,
+          mes_more: reflectionData.more,
+          mes_equal: reflectionData.equal,
+        }),
       });
-    }, 3000);
+      if (!res.ok) throw new Error('Speichern fehlgeschlagen');
+      setIsSubmitted(true);
+      // keep the form values as-is so the trainee sees what was saved
+      setTimeout(() => setIsSubmitted(false), 2500);
+      // Optionally reload latest from server to reflect any server-side adjustments
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unbekannter Fehler');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const load = async () => {
+    if (!profile?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/trainee/reflection?traineeId=${profile.id}`);
+      if (!res.ok) throw new Error('Fehler beim Laden der Reflektion');
+      const data = await res.json();
+      const r = data?.reflection;
+      if (r) {
+        setReflectionData({
+          strengths: r.strengths || '',
+          weaknesses: r.weaknesses || '',
+          more: r.mesMore || '',
+          equal: r.mesEqual || '',
+        });
+      }
+    } catch (err: any) {
+      setError(err.message || 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   if (isSubmitted) {
     return (
@@ -85,6 +127,9 @@ export function Reflection() {
 
       {/* Main Form */}
       <form onSubmit={handleSubmit} className="space-y-8">
+        {error && (
+          <div className="rounded-2xl border border-red-700 bg-red-900/20 p-4 text-red-300">{error}</div>
+        )}
         {/* SWOT and MES Grid */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* SWOT Analysis - Left Column */}
@@ -105,6 +150,7 @@ export function Reflection() {
                 className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full resize-none rounded-xl border p-3 focus:ring-2 focus:outline-none"
                 placeholder="Was lief besonders gut?"
                 required
+                disabled={loading}
               />
             </div>
 
@@ -120,6 +166,7 @@ export function Reflection() {
                 className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full resize-none rounded-xl border p-3 focus:ring-2 focus:outline-none"
                 placeholder="Wo hattest du Schwierigkeiten?"
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -142,6 +189,7 @@ export function Reflection() {
                 className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full resize-none rounded-xl border p-3 focus:ring-2 focus:outline-none"
                 placeholder="Was hat dir besonders geholfen?"
                 required
+                disabled={loading}
               />
             </div>
 
@@ -157,6 +205,7 @@ export function Reflection() {
                 className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full resize-none rounded-xl border p-3 focus:ring-2 focus:outline-none"
                 placeholder="Welche Aspekte sind gut so?"
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -166,7 +215,7 @@ export function Reflection() {
         <div className="flex justify-center pt-6">
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || loading}
             className="bg-accent hover:bg-accent/90 disabled:bg-accent/50 focus:ring-accent focus:ring-offset-background flex items-center gap-2 rounded-2xl px-8 py-3 font-semibold text-white transition-colors duration-300 focus:ring-2 focus:ring-offset-2 focus:outline-none"
           >
             {isSubmitting ? (

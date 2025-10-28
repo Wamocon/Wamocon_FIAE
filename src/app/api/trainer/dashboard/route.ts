@@ -1,0 +1,152 @@
+import { NextRequest, NextResponse } from 'next/server';
+import db from '@/db';
+import { and, count, desc, eq, inArray, gt } from 'drizzle-orm';
+import {
+  profiles,
+  courses,
+  enablers,
+  enablerCompletions,
+  quizSubmissions,
+  reflections,
+  useCaseSubmissions,
+} from '@/db/migrations/schemas/schema';
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    // With new schema, profiles.id equals Supabase auth user id
+    const trainerId = searchParams.get('trainerProfileId') || searchParams.get('trainerAuthId');
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainer id' }, { status: 400 });
+    }
+
+    // Trainees assigned to this trainer
+    const traineeRows = await db
+      .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
+      .from(profiles)
+      .where(and(eq(profiles.role, 'TRAINEE' as any), eq(profiles.assignedTrainerId, trainerId as any)));
+    const traineeIds = traineeRows.map(t => t.id);
+
+    // Enablers under courses created by this trainer (active)
+    const trainerEnablers = await db
+      .select({ id: enablers.id, title: enablers.title })
+      .from(enablers)
+      .innerJoin(courses, eq(enablers.courseId, courses.id))
+      .where(and(eq(courses.createdById, trainerId as any)));
+    const enablerIds = trainerEnablers.map(e => e.id);
+
+    // Progress per trainee = completed enablers / total enablers
+    let totalEnablers = enablerIds.length;
+    const completedMap = new Map<string, number>();
+    if (totalEnablers > 0 && traineeIds.length > 0) {
+      const rows = await db
+        .select({ traineeId: enablerCompletions.traineeId, c: count() })
+        .from(enablerCompletions)
+        .where(and(inArray(enablerCompletions.enablerId, enablerIds as any), inArray(enablerCompletions.traineeId, traineeIds as any)))
+        .groupBy(enablerCompletions.traineeId);
+      rows.forEach(r => completedMap.set(String(r.traineeId), Number(r.c)));
+    }
+    const trainees = traineeRows.map(t => {
+      const completed = completedMap.get(String(t.id)) || 0;
+      const pct = totalEnablers > 0 ? Math.round((completed / totalEnablers) * 100) : 0;
+      return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct };
+    });
+
+    // Pending reviews: unreviewed quiz submissions + reflections + pending use case submissions
+  let pendingQuiz = 0, pendingRefl = 0, pendingUseCases = 0;
+    if (traineeIds.length > 0) {
+      const [{ c: pq } = { c: 0 }] = await db
+        .select({ c: count() })
+        .from(quizSubmissions)
+        .where(and(eq(quizSubmissions.isReviewed, false as any), inArray(quizSubmissions.traineeId, traineeIds as any)));
+      pendingQuiz = Number(pq) || 0;
+
+      const [{ c: pr } = { c: 0 }] = await db
+        .select({ c: count() })
+        .from(reflections)
+        .where(and(eq(reflections.isReviewed, false as any), inArray(reflections.traineeId, traineeIds as any)));
+      pendingRefl = Number(pr) || 0;
+
+      const [{ c: pu } = { c: 0 }] = await db
+        .select({ c: count() })
+        .from(useCaseSubmissions)
+        .where(and(eq(useCaseSubmissions.status, 'PENDING' as any), inArray(useCaseSubmissions.traineeId, traineeIds as any)));
+      pendingUseCases = Number(pu) || 0;
+    }
+  const pendingReviews = pendingQuiz + pendingRefl + pendingUseCases;
+
+    // Recent reflections (last 7 days)
+    const lastWeek = new Date();
+    lastWeek.setDate(lastWeek.getDate() - 7);
+    const [{ c: recentReflections = 0 } = { c: 0 }] = traineeIds.length
+      ? await db
+          .select({ c: count() })
+          .from(reflections)
+          .where(and(inArray(reflections.traineeId, traineeIds as any), gt(reflections.createdAt, lastWeek as any)))
+      : [{ c: 0 }];
+
+    // Progress trend: count enabler completions and quiz submissions per week bucket for last 6 weeks
+    const weeks = 6;
+    const trendBuckets: { week: string; progress: number }[] = [];
+    for (let i = weeks - 1; i >= 0; i--) trendBuckets.push({ week: `W${weeks - i}`, progress: 0 });
+    if (traineeIds.length > 0) {
+      const compRows = await db
+        .select({ at: enablerCompletions.completedAt })
+        .from(enablerCompletions)
+        .where(inArray(enablerCompletions.traineeId, traineeIds as any))
+        .orderBy(desc(enablerCompletions.completedAt));
+      const subRows = await db
+        .select({ at: quizSubmissions.submittedAt })
+        .from(quizSubmissions)
+        .where(inArray(quizSubmissions.traineeId, traineeIds as any))
+        .orderBy(desc(quizSubmissions.submittedAt));
+      const now = new Date();
+      const addToBuckets = (date: Date | null) => {
+        if (!date) return;
+        const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+        const bucketIndex = Math.floor(diffDays / 7);
+        if (bucketIndex >= 0 && bucketIndex < weeks) {
+          const idx = weeks - 1 - bucketIndex;
+          trendBuckets[idx].progress += 1;
+        }
+      };
+      compRows.forEach(r => addToBuckets(r.at ? new Date(r.at as any) : null));
+      subRows.forEach(r => addToBuckets(r.at ? new Date(r.at as any) : null));
+    }
+    const maxVal = trendBuckets.reduce((m, b) => Math.max(m, b.progress), 0) || 1;
+    const progressTrend = trendBuckets.map(b => ({ week: b.week, progress: Math.round((b.progress / maxVal) * 100) }));
+
+    // Module progress chart -> use Enablers as units across trainees
+    const moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[] = [];
+    for (const en of trainerEnablers) {
+      if (traineeIds.length === 0) {
+        moduleProgress.push({ name: en.title, completed: 0, inProgress: 0, notStarted: 0 });
+        continue;
+      }
+      const [{ c: completedCnt = 0 } = { c: 0 }] = await db
+        .select({ c: count() })
+        .from(enablerCompletions)
+        .where(and(eq(enablerCompletions.enablerId, en.id as any), inArray(enablerCompletions.traineeId, traineeIds as any)));
+      const completed = Number(completedCnt) || 0;
+      const notStarted = Math.max(traineeIds.length - completed, 0);
+      // inProgress concept doesn't apply to enabler completion; keep as 0
+      moduleProgress.push({ name: en.title, completed, inProgress: 0, notStarted });
+    }
+
+    return NextResponse.json({
+      trainees,
+      counts: {
+        activeTrainees: trainees.length,
+        pendingReviews,
+        pendingQuiz,
+        pendingReflections: pendingRefl,
+        pendingUseCases,
+        recentReflections: Number(recentReflections) || 0,
+      },
+      charts: { progressTrend, moduleProgress },
+    });
+  } catch (e) {
+    console.error('Trainer dashboard API error', e);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

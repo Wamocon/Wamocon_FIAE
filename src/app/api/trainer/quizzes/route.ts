@@ -1,0 +1,138 @@
+import { NextRequest, NextResponse } from 'next/server';
+import db from '@/db';
+import { and, desc, eq, ilike, sql, count } from 'drizzle-orm';
+import { quizzes, enablerQuizzes, enablers, courses, questions, options, quizAssignments } from '@/db/migrations/schemas/schema';
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const trainerId = searchParams.get('trainerId');
+    const q = searchParams.get('q')?.trim();
+    const year = searchParams.get('year');
+
+    if (!trainerId) {
+      return NextResponse.json({ error: 'trainerId required' }, { status: 400 });
+    }
+
+    // Include assignment count for GLOBAL quizzes
+    const rows = await db
+      .select({
+        id: quizzes.id,
+        title: quizzes.title,
+        quizType: quizzes.quizType,
+        isActive: quizzes.isActive,
+        enablerId: enablerQuizzes.enablerId,
+        enablerTitle: enablers.title,
+        courseYear: courses.year,
+        updatedAt: quizzes.updatedAt,
+        createdAt: quizzes.createdAt,
+        assignedCount: count(quizAssignments.id).as('assigned_count'),
+      })
+      .from(quizzes)
+      .leftJoin(enablerQuizzes, eq(enablerQuizzes.quizId, quizzes.id))
+      .leftJoin(enablers, eq(enablerQuizzes.enablerId, enablers.id))
+      .leftJoin(courses, eq(enablers.courseId, courses.id))
+      .leftJoin(quizAssignments, eq(quizAssignments.quizId, quizzes.id))
+      .where(
+        and(
+          eq(quizzes.createdById, trainerId as any),
+          q ? ilike(quizzes.title, `%${q}%`) : undefined,
+          year && year !== 'all' ? eq(courses.year, Number(year) as any) : undefined,
+        ) as any,
+      )
+      .groupBy(
+        quizzes.id,
+        quizzes.title,
+        quizzes.quizType,
+        quizzes.isActive,
+        enablerQuizzes.enablerId,
+        enablers.title,
+        courses.year,
+        quizzes.updatedAt,
+        quizzes.createdAt,
+      )
+      .orderBy(desc((quizzes as any).updatedAt ?? (quizzes as any).createdAt));
+
+    const out = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      quiz_type: r.quizType === 'ENABLER' ? 'mini' : 'big',
+      is_active: r.isActive,
+      training_year: r.courseYear ?? 0,
+      time_limit_minutes: 0,
+      module_id: r.enablerId || null,
+      lesson_id: null,
+      module_title: r.enablerTitle || null,
+      lesson_title: null,
+      assigned_count: Number(r.assignedCount || 0),
+      created_at: r.createdAt,
+    }));
+
+    return NextResponse.json({ quizzes: out });
+  } catch (e) {
+    console.error('List quizzes error', e);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const trainer_id = (body?.trainer_id || body?.trainerId) as string | undefined;
+    const title = String(body?.title || '').trim();
+    const quiz_type = (body?.quiz_type || body?.quizType) as 'mini' | 'big';
+    const enabler_id = body?.enabler_id || body?.enablerId || null;
+    const is_active = Boolean(body?.is_active ?? body?.isActive ?? true);
+    const questionsPayload = (body?.questions || []) as Array<{
+      question_text: string;
+      options: string[];
+      correct_index: number;
+    }>;
+    const assignedTraineeIds = (body?.assigned_trainee_ids || body?.assignedTraineeIds || []) as string[];
+
+    if (!trainer_id) return NextResponse.json({ error: 'trainer_id required' }, { status: 400 });
+    if (!title) return NextResponse.json({ error: 'title required' }, { status: 400 });
+    if (!quiz_type || !['mini', 'big'].includes(quiz_type)) {
+      return NextResponse.json({ error: 'quiz_type must be mini or big' }, { status: 400 });
+    }
+
+    const qt = quiz_type === 'mini' ? 'ENABLER' : 'GLOBAL';
+
+    const [qz] = await db
+      .insert(quizzes)
+      .values({ title, quizType: qt as any, createdById: trainer_id, isActive: is_active })
+      .returning();
+
+    if (qt === 'ENABLER') {
+      if (!enabler_id) return NextResponse.json({ error: 'enabler_id required for mini quiz' }, { status: 400 });
+      await db.insert(enablerQuizzes).values({ enablerId: enabler_id, quizId: qz.id });
+    }
+
+    // Create questions/options if provided
+    if (Array.isArray(questionsPayload) && questionsPayload.length > 0) {
+      let order = 1;
+      for (const q of questionsPayload) {
+        const [qRow] = await db
+          .insert(questions)
+          .values({ quizId: qz.id, questionText: q.question_text, orderIndex: order++ })
+          .returning();
+        // Create options, mark correct
+        for (let i = 0; i < q.options.length; i++) {
+          const optText = q.options[i];
+          await db.insert(options).values({ questionId: qRow.id, optionText: optText, isCorrect: i === Number(q.correct_index) });
+        }
+      }
+    }
+
+    // Assign trainees for GLOBAL quizzes if provided
+    if (qt === 'GLOBAL' && Array.isArray(assignedTraineeIds) && assignedTraineeIds.length > 0) {
+      const values = assignedTraineeIds.map((tid) => ({ quizId: qz.id, traineeId: tid, assignedById: trainer_id }));
+      await db.insert(quizAssignments).values(values).onConflictDoNothing();
+    }
+
+    return NextResponse.json({ id: qz.id }, { status: 201 });
+  } catch (e) {
+    console.error('Create quiz error', e);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

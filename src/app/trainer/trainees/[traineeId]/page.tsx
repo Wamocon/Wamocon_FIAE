@@ -1,12 +1,9 @@
-'use client';
-
 import TraineeDetail from '@/components/trainer/TraineeDetail';
 
-export default async function TraineeDetailPage({
+export default function TraineeDetailPage({
   params,
 }: {
-  params: Promise<{ traineeId: string }>;
+  params: { traineeId: string };
 }) {
-  const { traineeId } = await params;
-  return <TraineeDetail traineeId={traineeId} />;
+  return <TraineeDetail traineeId={params.traineeId} />;
 }
