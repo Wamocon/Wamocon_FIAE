@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
   Edit,
@@ -16,23 +17,23 @@ import {
   Trash,
 } from 'lucide-react';
 
-type LessonItem = { id: string; title: string; subLessonsCount: number };
-type ModuleItem = {
+type CourseCard = {
   id: string;
   title: string;
-  training_year: number;
-  lessonsCount: number;
-  subLessonsCount: number;
-  lessons: LessonItem[];
+  year: number | null;
+  chapter: number | null;
+  enablersCount: number;
+  useCasesCount: number;
 };
 
 export function ContentManagement() {
   const router = useRouter();
+  const { profile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const [modules, setModules] = useState<ModuleItem[]>([]);
+  const [courses, setCourses] = useState<CourseCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,12 +42,14 @@ export function ContentManagement() {
       try {
         setLoading(true);
         const params = new URLSearchParams();
-        if (searchTerm.trim()) params.set('q', searchTerm.trim());
-        if (selectedYear) params.set('year', selectedYear);
-        const res = await fetch(`/api/trainer/content?${params.toString()}`, { cache: 'no-store' });
+  if (!profile?.id) return;
+  if (searchTerm.trim()) params.set('q', searchTerm.trim());
+  if (selectedYear) params.set('year', selectedYear);
+  params.set('trainerProfileId', profile.id);
+  const res = await fetch(`/api/trainer/courses?${params.toString()}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to load content');
         const data = await res.json();
-        setModules(data.modules || []);
+        setCourses(data.courses || []);
       } catch (e: any) {
         setError(e?.message || 'Unknown error');
       } finally {
@@ -54,9 +57,9 @@ export function ContentManagement() {
       }
     };
     load();
-  }, [searchTerm, selectedYear]);
+  }, [searchTerm, selectedYear, profile?.id]);
 
-  const filteredCurriculum = useMemo(() => modules, [modules]);
+  const filteredCurriculum = useMemo(() => courses, [courses]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -79,7 +82,7 @@ export function ContentManagement() {
             className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
           >
             <Plus className="h-5 w-5" />
-            Neues Modul
+            Neuer Kurs
           </button>
         </div>
       </div>
@@ -147,9 +150,9 @@ export function ContentManagement() {
       )}
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredCurriculum.map(module => (
+          {filteredCurriculum.map(course => (
             <div
-              key={module.id}
+              key={course.id}
               className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[420px] flex flex-col"
             >
               <div className="mb-4 flex items-start justify-between">
@@ -158,7 +161,7 @@ export function ContentManagement() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => router.push(`/trainer/content-management/${module.id}/edit`)}
+                    onClick={() => router.push(`/trainer/content-management/${course.id}/edit`)}
                     className="text-muted hover:text-accent hover:bg-accent/10 rounded-xl p-2 transition-all duration-200"
                   >
                     <Edit className="h-4 w-4" />
@@ -167,9 +170,9 @@ export function ContentManagement() {
                     onClick={async () => {
                       if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
                       try {
-                        const res = await fetch(`/api/trainer/content/modules/${module.id}`, { method: 'DELETE' });
+                        const res = await fetch(`/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`, { method: 'DELETE' });
                         if (!res.ok) throw new Error('Fehler beim Löschen');
-                        setModules(prev => prev.filter(m => m.id !== module.id));
+                        setCourses(prev => prev.filter(c => c.id !== course.id));
                       } catch (e: any) {
                         alert(e?.message || 'Unbekannter Fehler');
                       }
@@ -182,61 +185,85 @@ export function ContentManagement() {
               </div>
 
               <h3 className="text-foreground mb-2 text-xl font-bold truncate">
-                {module.title}
+                {course.title}
               </h3>
               <div className="text-muted mb-4 flex items-center gap-2 text-sm">
                 <span className="bg-accent rounded-full px-3 py-1 font-medium text-white">
-                  Jahr {module.training_year}
+                  Jahr {course.year ?? '-'}
                 </span>
                 <span className="bg-muted/30 text-muted rounded-full px-3 py-1">
-                  {module.lessons.length} Kapitel
+                  Capital {course.chapter ?? '-'}
                 </span>
               </div>
 
               <div className="mb-4 space-y-3 flex-1 overflow-y-auto pr-1">
-                {module.lessons.map((lesson, index) => (
-                  <div
-                    key={index}
-                    className="bg-muted/30 flex items-center gap-3 rounded-xl p-3"
-                  >
-                    <FolderOpen className="text-muted h-4 w-4" />
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-foreground text-sm font-medium truncate">
-                        {lesson.title}
-                      </h4>
-                      <p className="text-muted text-xs">
-                        {lesson.subLessonsCount} Lektionen
-                      </p>
-                    </div>
+                <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
+                  <div className="min-w-0">
+                    <h4 className="text-foreground text-sm font-medium">Enabler</h4>
+                    <p className="text-muted text-xs">{course.enablersCount} Themen</p>
                   </div>
-                ))}
-              </div>
-
-              <div className="border-accent/30 flex items-center justify-between border-t pt-4">
-                <div className="flex items-center gap-3">
                   <button
                     onClick={async () => {
-                      const title = window.prompt('Kapitel (Lektion) Titel');
+                      const title = window.prompt('Enabler Titel');
                       if (!title) return;
                       try {
-                        const res = await fetch(`/api/trainer/content/modules/${module.id}/lessons`, {
+                        const res = await fetch(`/api/trainer/courses/${course.id}/enablers?trainerId=${profile?.id || ''}`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ title }),
                         });
                         if (!res.ok) throw new Error('Fehler beim Erstellen');
-                        const rj = await res.json();
-                        setModules(prev => prev.map(m => (m.id === module.id ? { ...m, lessons: [{ id: rj.lesson.id, title: rj.lesson.title, subLessonsCount: 0 }, ...m.lessons], lessonsCount: m.lessonsCount + 1 } : m)));
+                        // Reload list
+                        const r = await fetch(`/api/trainer/courses?trainerProfileId=${profile?.id || ''}&year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`);
+                        const data = await r.json();
+                        setCourses(data.courses || []);
                       } catch (e: any) {
                         alert(e?.message || 'Unbekannter Fehler');
                       }
                     }}
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >
-                    Neues Kapitel
+                    + Hinzufügen
                   </button>
-                  <button className="text-accent hover:text-accent/90 text-sm font-medium">
-                    Alle Kapitel anzeigen
+                </div>
+
+                <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
+                  <div className="min-w-0">
+                    <h4 className="text-foreground text-sm font-medium">Use Cases</h4>
+                    <p className="text-muted text-xs">{course.useCasesCount} Aufgaben</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const title = window.prompt('Use Case Titel');
+                      if (!title) return;
+                      try {
+                        const res = await fetch(`/api/trainer/courses/${course.id}/use-cases?trainerId=${profile?.id || ''}`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ title }),
+                        });
+                        if (!res.ok) throw new Error('Fehler beim Erstellen');
+                        const r = await fetch(`/api/trainer/courses?trainerProfileId=${profile?.id || ''}&year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`);
+                        const data = await r.json();
+                        setCourses(data.courses || []);
+                      } catch (e: any) {
+                        alert(e?.message || 'Unbekannter Fehler');
+                      }
+                    }}
+                    className="text-accent hover:text-accent/90 text-sm font-medium"
+                  >
+                    + Hinzufügen
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-accent/30 flex items-center justify-between border-t pt-4">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => router.push(`/trainer/content-management/${course.id}/edit`)}
+                    className="text-accent hover:text-accent/90 text-sm font-medium"
+                  >
+                    Bearbeiten
                   </button>
                 </div>
                 <button className="text-muted hover:text-foreground text-sm">
@@ -248,9 +275,9 @@ export function ContentManagement() {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredCurriculum.map(module => (
+          {filteredCurriculum.map(course => (
             <div
-              key={module.id}
+              key={course.id}
               className="glass-effect border-accent/30 rounded-2xl border p-6 shadow-lg"
             >
               <div className="mb-4 flex items-center justify-between">
@@ -260,19 +287,19 @@ export function ContentManagement() {
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-foreground text-xl font-bold truncate">
-                      {module.title}
+                      {course.title}
                     </h3>
                     <div className="text-muted flex items-center gap-2 text-sm">
-                      <span>Jahr {module.training_year}</span>
+                      <span>Jahr {course.year ?? '-'}</span>
                       <span>•</span>
-                      <span>{module.lessons.length} Kapitel</span>
+                      <span>Capital {course.chapter ?? '-'}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => router.push(`/trainer/content-management/${module.id}/edit`)}
+                    onClick={() => router.push(`/trainer/content-management/${course.id}/edit`)}
                     className="text-muted hover:text-accent hover:bg-accent/10 rounded-xl p-2 transition-all duration-200"
                   >
                     <Edit className="h-4 w-4" />
@@ -281,9 +308,9 @@ export function ContentManagement() {
                     onClick={async () => {
                       if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
                       try {
-                        const res = await fetch(`/api/trainer/content/modules/${module.id}`, { method: 'DELETE' });
+                        const res = await fetch(`/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`, { method: 'DELETE' });
                         if (!res.ok) throw new Error('Fehler beim Löschen');
-                        setModules(prev => prev.filter(m => m.id !== module.id));
+                        setCourses(prev => prev.filter(c => c.id !== course.id));
                       } catch (e: any) {
                         alert(e?.message || 'Unbekannter Fehler');
                       }
@@ -296,23 +323,22 @@ export function ContentManagement() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {module.lessons.map((lesson, index) => (
-                  <div
-                    key={index}
-                    className="bg-muted/30 border-accent/30 rounded-xl border p-4 h-28 flex flex-col overflow-hidden"
-                  >
-                    <div className="flex-1">
-                      <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
-                        <FolderOpen className="text-muted h-4 w-4 mt-0.5" />
-                        <span className="truncate">{lesson.title}</span>
-                      </h4>
-                    </div>
-                    <div className="text-muted mt-2 flex items-center gap-2 text-sm shrink-0">
-                      <FileText className="h-4 w-4" />
-                      <span>{lesson.subLessonsCount} Lektionen</span>
-                    </div>
+                <div className="bg-muted/30 border-accent/30 rounded-xl border p-4 h-28 flex flex-col overflow-hidden">
+                  <div className="flex-1">
+                    <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
+                      <FolderOpen className="text-muted h-4 w-4 mt-0.5" />
+                      <span className="truncate">Enabler: {course.enablersCount}</span>
+                    </h4>
                   </div>
-                ))}
+                </div>
+                <div className="bg-muted/30 border-accent/30 rounded-xl border p-4 h-28 flex flex-col overflow-hidden">
+                  <div className="flex-1">
+                    <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
+                      <FileText className="h-4 w-4" />
+                      <span className="truncate">Use Cases: {course.useCasesCount}</span>
+                    </h4>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -326,18 +352,18 @@ export function ContentManagement() {
             <BookOpen className="text-muted h-10 w-10" />
           </div>
           <h3 className="text-foreground mb-2 text-xl font-semibold">
-            Keine Module gefunden
+            Keine Kurse gefunden
           </h3>
           <p className="text-muted mb-6">
             {searchTerm || selectedYear !== 'all'
               ? 'Versuchen Sie andere Suchkriterien oder Filter.'
-              : 'Erstellen Sie Ihr erstes Lernmodul, um zu beginnen.'}
+              : 'Erstellen Sie Ihren ersten Kurs, um zu beginnen.'}
           </p>
           <button
             onClick={() => router.push('/trainer/content-management/new')}
             className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
           >
-            Neues Modul erstellen
+            Neuen Kurs erstellen
           </button>
         </div>
       )}

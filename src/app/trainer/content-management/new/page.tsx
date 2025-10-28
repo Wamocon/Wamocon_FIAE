@@ -4,45 +4,39 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function NewModulePage() {
+export default function NewCoursePage() {
   const router = useRouter();
   const { profile } = useAuth();
 
   const [title, setTitle] = useState('');
   const [year, setYear] = useState<'1' | '2' | '3' | ''>('');
-  const [lessons, setLessons] = useState<Array<{ title: string; duration_weeks?: string }>>([
-    { title: '' },
-  ]);
+  const [chapter, setChapter] = useState<string>('');
+  const [skills, setSkills] = useState<string>(''); // comma-separated
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const addLesson = () => setLessons(prev => [...prev, { title: '' }]);
-  const removeLesson = (idx: number) => setLessons(prev => prev.filter((_, i) => i !== idx));
-  const updateLesson = (idx: number, key: 'title' | 'duration_weeks', value: string) =>
-    setLessons(prev => prev.map((l, i) => (i === idx ? { ...l, [key]: value } : l)));
+  // No lessons in the new schema; handled as Enablers/Use Cases at course level
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!title.trim()) return setError('Bitte einen Modultitel eingeben.');
-    if (!year) return setError('Bitte ein Trainingsjahr wählen.');
+  if (!title.trim()) return setError('Bitte einen Kurstitel eingeben.');
+  if (!year) return setError('Bitte ein Trainingsjahr wählen.');
 
     try {
       setSubmitting(true);
       const payload: any = {
         title: title.trim(),
-        training_year: Number(year),
-        created_by: profile?.id,
-        lessons: lessons
-          .map((l, i) => ({
-            title: l.title.trim(),
-            order_index: i + 1,
-            duration_weeks: l.duration_weeks ? Number(l.duration_weeks) : undefined,
-          }))
-          .filter(l => l.title.length > 0),
+        year: Number(year),
+        chapter: chapter ? Number(chapter) : undefined,
+        createdById: profile?.id,
+        skills: skills
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
       };
 
-      const res = await fetch('/api/trainer/content/modules', {
+      const res = await fetch('/api/trainer/courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -60,12 +54,12 @@ export default function NewModulePage() {
 
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-6 text-2xl font-bold">Neues Modul anlegen</h1>
+      <h1 className="mb-6 text-2xl font-bold">Neuen Kurs anlegen</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && <div className="text-red-500">{error}</div>}
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Modultitel</label>
+          <label className="mb-1 block text-sm font-medium">Kurstitel</label>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
@@ -88,43 +82,25 @@ export default function NewModulePage() {
           </select>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">Kapitel (Lektionen)</label>
-            <button
-              type="button"
-              onClick={addLesson}
-              className="rounded-md bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/90"
-            >
-              + Lektion hinzufügen
-            </button>
-          </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">Kapitel/Abschnitt (z.B. Capital 1)</label>
+          <input
+            value={chapter}
+            onChange={(e) => setChapter(e.target.value)}
+            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            placeholder="z.B. 1"
+            inputMode="numeric"
+          />
+        </div>
 
-          {lessons.map((l, idx) => (
-            <div key={idx} className="grid grid-cols-1 gap-3 md:grid-cols-12">
-              <input
-                className="md:col-span-9 rounded-md border border-border bg-background px-3 py-2"
-                placeholder={`Lektion ${idx + 1} Titel`}
-                value={l.title}
-                onChange={e => updateLesson(idx, 'title', e.target.value)}
-              />
-              <input
-                className="md:col-span-2 rounded-md border border-border bg-background px-3 py-2"
-                placeholder="Wochen"
-                type="number"
-                min={1}
-                value={l.duration_weeks ?? ''}
-                onChange={e => updateLesson(idx, 'duration_weeks', e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => removeLesson(idx)}
-                className="md:col-span-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-red-500/10"
-              >
-                Entfernen
-              </button>
-            </div>
-          ))}
+        <div>
+          <label className="mb-1 block text-sm font-medium">Skills (Kommagetrennt)</label>
+          <input
+            value={skills}
+            onChange={(e) => setSkills(e.target.value)}
+            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            placeholder="z.B. Git, HTML, CSS, JavaScript"
+          />
         </div>
 
         <div className="flex items-center gap-3">
