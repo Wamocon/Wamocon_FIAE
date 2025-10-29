@@ -171,7 +171,7 @@ export function Sidebar({
             },
             {
               id: 'lessons',
-              label: language === 'de' ? 'Lektionen' : 'Lessons',
+              label: language === 'de' ? 'Trainer-Feedback' : 'Trainer Feedback',
               icon: GraduationCap,
               href: '/trainee/lessons',
             },

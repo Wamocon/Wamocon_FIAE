@@ -41,7 +41,9 @@ export function ContentManagement() {
   const [showAddEnabler, setShowAddEnabler] = useState(false);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   const [enTitle, setEnTitle] = useState('');
-  const [enDesc, setEnDesc] = useState('');
+  const [enDescription, setEnDescription] = useState('');
+  const [enScenario, setEnScenario] = useState('');
+  const [enHint, setEnHint] = useState('');
   const [enPpt, setEnPpt] = useState('');
   const [enVideo, setEnVideo] = useState('');
   type BuilderQuestion = { questionText: string; options: [string, string, string, string]; correctIndex: number };
@@ -49,6 +51,15 @@ export function ContentManagement() {
     { questionText: '', options: ['', '', '', ''], correctIndex: 0 },
   ]);
   const [enSubmitting, setEnSubmitting] = useState(false);
+  const [enDuration, setEnDuration] = useState<string>('');
+  const [enActive, setEnActive] = useState<boolean>(false);
+  // Quick-add Use Case modal state
+  const [showAddUseCase, setShowAddUseCase] = useState(false);
+  const [ucTitle, setUcTitle] = useState('');
+  const [ucDesc, setUcDesc] = useState('');
+  const [ucSubmitting, setUcSubmitting] = useState(false);
+  const [ucDuration, setUcDuration] = useState<string>('');
+  const [ucActive, setUcActive] = useState<boolean>(false);
 
   useEffect(() => {
     const load = async () => {
@@ -219,10 +230,14 @@ export function ContentManagement() {
                     onClick={() => {
                       setActiveCourseId(course.id);
                       setEnTitle('');
-                      setEnDesc('');
+                      setEnDescription('');
+                      setEnScenario('');
+                      setEnHint('');
                       setEnPpt('');
                       setEnVideo('');
                       setEnQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
+                      setEnDuration('');
+                      setEnActive(false);
                       setShowAddEnabler(true);
                     }}
                     className="text-accent hover:text-accent/90 text-sm font-medium"
@@ -237,22 +252,13 @@ export function ContentManagement() {
                     <p className="text-muted text-xs">{course.useCasesCount} Aufgaben</p>
                   </div>
                   <button
-                    onClick={async () => {
-                      const title = window.prompt('Use Case Titel');
-                      if (!title) return;
-                      try {
-                        const res = await fetch(`/api/trainer/courses/${course.id}/use-cases?trainerId=${profile?.id || ''}`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ title }),
-                        });
-                        if (!res.ok) throw new Error('Fehler beim Erstellen');
-                        const r = await fetch(`/api/trainer/courses?trainerProfileId=${profile?.id || ''}&year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`);
-                        const data = await r.json();
-                        setCourses(data.courses || []);
-                      } catch (e: any) {
-                        alert(e?.message || 'Unbekannter Fehler');
-                      }
+                    onClick={() => {
+                      setActiveCourseId(course.id);
+                      setUcTitle('');
+                      setUcDesc('');
+                      setUcDuration('');
+                      setUcActive(false);
+                      setShowAddUseCase(true);
                     }}
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >
@@ -388,7 +394,7 @@ export function ContentManagement() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Beschreibung</label>
-                <textarea value={enDesc} onChange={e => setEnDesc(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} />
+                <textarea value={enDescription} onChange={e => setEnDescription(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Enablers" />
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -399,6 +405,26 @@ export function ContentManagement() {
                   <label className="mb-1 block text-sm font-medium">Video-Link</label>
                   <input value={enVideo} onChange={e => setEnVideo(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder="https://..." />
                 </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
+                  <input type="number" min={0} value={enDuration} onChange={e => setEnDuration(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder="z.B. 7" />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={enActive} onChange={e => setEnActive(e.target.checked)} />
+                    <span>Aktiv</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Szenario</label>
+                <textarea value={enScenario} onChange={e => setEnScenario(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={4} placeholder="Beschreibe hier das Szenario, das der Azubi lösen soll..." />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Hinweis (für Trainees sichtbar)</label>
+                <textarea value={enHint} onChange={e => setEnHint(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} placeholder="Tipp zur Lösung des Szenarios" />
               </div>
               <div className="mt-2">
                 <div className="mb-2 text-sm font-semibold">Quiz-Fragen</div>
@@ -435,7 +461,7 @@ export function ContentManagement() {
                   setEnSubmitting(true);
                   try {
                     // Create Enabler (active)
-                    const res = await fetch(`/api/trainer/courses/${activeCourseId}/enablers?trainerId=${profile.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: enTitle.trim(), scenarioText: enDesc.trim() || undefined, pptUrl: enPpt.trim() || undefined, videoUrl: enVideo.trim() || undefined, isActive: true }) });
+                    const res = await fetch(`/api/trainer/courses/${activeCourseId}/enablers?trainerId=${profile.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: enTitle.trim(), descriptionText: enDescription.trim() || undefined, scenarioText: enScenario.trim() || undefined, hintText: enHint.trim() || undefined, pptUrl: enPpt.trim() || undefined, videoUrl: enVideo.trim() || undefined, durationValue: enDuration ? Number(enDuration) : undefined, durationUnit: enDuration ? 'DAYS' : undefined, isActive: enActive }) });
                     if (!res.ok) throw new Error('Enabler konnte nicht erstellt werden');
                     const data = await res.json();
                     const enablerId = data.enabler?.id;
@@ -454,11 +480,80 @@ export function ContentManagement() {
 
                     setShowAddEnabler(false);
                     setActiveCourseId(null);
-                    setEnTitle(''); setEnDesc(''); setEnPpt(''); setEnVideo(''); setEnQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
+                    setEnTitle(''); setEnDescription(''); setEnScenario(''); setEnHint(''); setEnPpt(''); setEnVideo(''); setEnDuration(''); setEnActive(false); setEnQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   } finally {
                     setEnSubmitting(false);
+                  }
+                }}>Erstellen</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Use Case Modal (Quick Add from course card) */}
+      {showAddUseCase && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !ucSubmitting && setShowAddUseCase(false)} />
+          <div className="relative z-10 w-full max-w-xl rounded-xl border border-border bg-background p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Neuen Use Case erstellen</h2>
+              <button className="rounded-md border border-border px-2 py-1 text-sm" onClick={() => !ucSubmitting && setShowAddUseCase(false)}>Schließen</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Titel</label>
+                <input value={ucTitle} onChange={e => setUcTitle(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Beschreibung (erforderlich)</label>
+                <textarea value={ucDesc} onChange={e => setUcDesc(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={4} />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
+                  <input type="number" min={0} value={ucDuration} onChange={e => setUcDuration(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder="z.B. 14" />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={ucActive} onChange={e => setUcActive(e.target.checked)} />
+                    <span>Aktiv</span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button className="rounded-md border border-border px-4 py-2" type="button" onClick={() => !ucSubmitting && setShowAddUseCase(false)}>Abbrechen</button>
+                <button className="rounded-md bg-primary px-4 py-2 text-white disabled:opacity-60" disabled={ucSubmitting} onClick={async () => {
+                  if (!profile?.id) { alert('Kein Trainerprofil'); return; }
+                  if (!activeCourseId) { alert('Kein Kurs ausgewählt'); return; }
+                  if (!ucTitle.trim()) { alert('Bitte Titel eingeben'); return; }
+                  if (!ucDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
+                  setUcSubmitting(true);
+                  try {
+                    const res = await fetch(`/api/trainer/courses/${activeCourseId}/use-cases?trainerId=${profile.id}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ title: ucTitle.trim(), descriptionText: ucDesc.trim(), durationValue: ucDuration ? Number(ucDuration) : undefined, durationUnit: ucDuration ? 'DAYS' : undefined, isActive: ucActive }),
+                    });
+                    if (!res.ok) throw new Error('Use Case konnte nicht erstellt werden');
+
+                    // Refresh list
+                    const r = await fetch(`/api/trainer/courses?trainerProfileId=${profile.id}&year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`);
+                    const fresh = await r.json();
+                    setCourses(fresh.courses || []);
+
+                    setShowAddUseCase(false);
+                    setActiveCourseId(null);
+                    setUcTitle('');
+                    setUcDesc('');
+                    setUcDuration('');
+                    setUcActive(false);
+                  } catch (e: any) {
+                    alert(e?.message || 'Unbekannter Fehler');
+                  } finally {
+                    setUcSubmitting(false);
                   }
                 }}>Erstellen</button>
               </div>

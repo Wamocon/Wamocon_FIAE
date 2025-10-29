@@ -38,8 +38,8 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
     const title: string | undefined = body?.title;
     if (!title) return NextResponse.json({ error: 'Missing title' }, { status: 400 });
   const orderIndex: number | undefined = body?.orderIndex ? Number(body.orderIndex) : undefined;
-    const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
-    const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit;
+  const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
+  const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit || (typeof durationValue === 'number' ? 'DAYS' : undefined);
   const descriptionText: string | undefined = body?.descriptionText;
     const isActive: boolean | undefined = typeof body?.isActive === 'boolean' ? body.isActive : undefined;
 
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
       finalOrderIndex = (Number(m?.m ?? 0) || 0) + 1;
     }
 
+    const activatedAt = isActive ? new Date() : null;
     const [inserted] = await db
       .insert(useCases)
       .values({
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
         durationUnit: durationUnitVal as any,
         descriptionText: (descriptionText ?? '') as any,
         isActive: isActive as any,
+        activatedAt: activatedAt as any,
       })
       .returning();
 

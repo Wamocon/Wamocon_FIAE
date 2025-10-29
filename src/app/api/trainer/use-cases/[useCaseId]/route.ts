@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { useCaseId:
     const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
     if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const body = await req.json();
-    const updates: any = {};
+  const updates: any = {};
     for (const key of [
       'title',
       'orderIndex',
@@ -42,6 +42,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { useCaseId:
       'isActive',
     ]) {
       if (typeof body?.[key] !== 'undefined') updates[key] = body[key];
+    }
+    if (typeof body?.isActive === 'boolean' && body.isActive && !row0.isActive && !row0.activatedAt) {
+      updates.activatedAt = new Date();
     }
     const [row] = await db.update(useCases).set(updates).where(eq(useCases.id, useCaseId as any)).returning();
     return NextResponse.json({ useCase: row });

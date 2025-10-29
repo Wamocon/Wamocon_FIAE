@@ -46,7 +46,9 @@ export default function TraineeCoursesPage() {
             <li key={c.id} className="rounded-md border p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-semibold">{c.title}</div>
+                  <div className="font-semibold">
+                    <Link className="text-primary underline" href={`/trainee/modules/${c.id}`}>{c.title}</Link>
+                  </div>
                   <div className="text-sm text-muted-foreground">
                     {c.year ? `Jahr ${c.year}` : '—'} {c.chapter ? `• Kapitel ${c.chapter}` : ''}
                   </div>
@@ -61,8 +63,8 @@ export default function TraineeCoursesPage() {
                     {c.enablers.map((e) => (
                       <li key={e.id} className="rounded border p-3 flex items-center justify-between">
                         <span className="truncate">{e.title}</span>
-                        <Link className="text-primary underline" href={`/trainee/enablers/${e.id}/quiz`}>
-                          Quiz starten
+                        <Link className="text-primary underline" href={`/trainee/enablers/${e.id}`}>
+                          Öffnen
                         </Link>
                       </li>
                     ))}

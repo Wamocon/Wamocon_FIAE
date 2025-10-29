@@ -57,7 +57,7 @@ export function Header({
         {/* Notifications */}
         {hasNotifications && (
           <button className="text-muted hover:text-foreground hover:bg-muted relative rounded-lg p-2 transition-all duration-200">
-            <Bell className="h-5 w-5" />
+            
             <span className="bg-accent absolute top-1 right-1 h-2.5 w-2.5 animate-pulse rounded-full" />
           </button>
         )}
