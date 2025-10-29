@@ -66,12 +66,12 @@ export default function TraineeUseCaseDetailPage() {
   if (!useCase) return <div className="p-6">Nicht gefunden</div>;
 
   return (
-    <div className="mx-auto max-w-3xl p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">{useCase.title}</h1>
-        <p className="mt-2 whitespace-pre-line">{useCase.descriptionText}</p>
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+        <h1 className="text-foreground text-2xl font-bold">{useCase.title}</h1>
+        <p className="text-muted-foreground mt-2 whitespace-pre-line">{useCase.descriptionText}</p>
         {useCase.isActive && useCase.durationValue && useCase.activatedAt && (
-          <div className="mt-2 text-sm">
+          <div className="mt-3 text-sm">
             {(() => {
               const started = new Date(useCase.activatedAt as string).getTime();
               const now = Date.now();
@@ -85,30 +85,30 @@ export default function TraineeUseCaseDetailPage() {
         )}
       </div>
 
-      {success && <div className="rounded-md border border-green-400 bg-green-50 p-3 text-green-700">{success}</div>}
+      {success && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-3 text-green-300">{success}</div>}
 
-      <div className="rounded-md border p-4 space-y-4">
+      <div className="space-y-4 rounded-3xl border border-accent/30 bg-black/30 p-5">
         <div>
           <label className="mb-1 block text-sm font-medium">Deine Lösung / Beschreibung</label>
-          <textarea value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={6} />
+          <textarea value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={6} />
         </div>
         <div className="space-y-2">
           <div className="text-sm font-medium">Links zu deiner Arbeit</div>
           {links.map((l, i) => (
             <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <input className="rounded-md border border-border bg-background px-3 py-2 md:col-span-2" placeholder="https://github.com/... oder https://1drv.ms/..." value={l.url} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))} />
-              <input className="rounded-md border border-border bg-background px-3 py-2" placeholder="Beschreibung (optional)" value={l.description || ''} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} />
+              <input className="rounded-xl border border-accent/30 bg-black/30 px-3 py-2 md:col-span-2" placeholder="https://github.com/... oder https://1drv.ms/..." value={l.url} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))} />
+              <input className="rounded-xl border border-accent/30 bg-black/30 px-3 py-2" placeholder="Beschreibung (optional)" value={l.description || ''} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} />
             </div>
           ))}
           <div className="flex gap-2">
-            <button className="rounded-md border border-border px-3 py-2 text-sm" onClick={() => setLinks((prev) => [...prev, { url: '', description: '' }])}>+ Link hinzufügen</button>
+            <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => [...prev, { url: '', description: '' }])}>+ Link hinzufügen</button>
             {links.length > 1 && (
-              <button className="rounded-md border border-border px-3 py-2 text-sm" onClick={() => setLinks((prev) => prev.slice(0, -1))}>Letzten Link entfernen</button>
+              <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => prev.slice(0, -1))}>Letzten Link entfernen</button>
             )}
           </div>
         </div>
         <div className="flex justify-end">
-          <button disabled={saving} onClick={submit} className="rounded-md bg-primary px-4 py-2 text-white disabled:opacity-60">Abgeben</button>
+          <button disabled={saving} onClick={submit} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-60">Abgeben</button>
         </div>
       </div>
     </div>

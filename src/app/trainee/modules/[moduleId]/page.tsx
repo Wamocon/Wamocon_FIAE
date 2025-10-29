@@ -42,44 +42,46 @@ export default function TraineeModuleDetailPage() {
   if (!course) return <div className="p-6">Nicht gefunden</div>;
 
   return (
-    <div className="mx-auto max-w-4xl p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">{course.title}</h1>
-        <div className="text-sm text-muted-foreground">
+    <div className="mx-auto max-w-4xl space-y-6 p-6">
+      <div className="rounded-3xl border border-accent/30 bg-black/30 p-6">
+        <h1 className="text-foreground text-2xl font-bold">{course.title}</h1>
+        <div className="text-muted-foreground mt-1 text-sm">
           {course.year ? `Jahr ${course.year}` : '—'} {course.chapter ? `• Kapitel ${course.chapter}` : ''}
         </div>
       </div>
 
-      <div className="rounded-md border p-4">
-        <div className="font-semibold mb-2">Enabler</div>
-        {enablers.length === 0 ? (
-          <div className="text-sm text-muted-foreground">Keine aktiven Enabler</div>
-        ) : (
-          <ul className="space-y-2">
-            {enablers.map((e) => (
-              <li key={e.id} className="flex items-center justify-between rounded border p-3">
-                <span className="truncate">{e.title}</span>
-                <Link href={`/trainee/enablers/${e.id}`} className="text-primary underline">Öffnen</Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <div className="space-y-5">
+        <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+          <div className="mb-3 text-sm font-semibold">Enabler</div>
+          {enablers.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Keine aktiven Enabler</div>
+          ) : (
+            <ul className="space-y-2">
+              {enablers.map((e) => (
+                <li key={e.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
+                  <span className="truncate">{e.title}</span>
+                  <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      <div className="rounded-md border p-4">
-        <div className="font-semibold mb-2">Use Cases</div>
-        {useCases.length === 0 ? (
-          <div className="text-sm text-muted-foreground">Keine aktiven Use Cases</div>
-        ) : (
-          <ul className="space-y-2">
-            {useCases.map((u) => (
-              <li key={u.id} className="flex items-center justify-between rounded border p-3">
-                <span className="truncate">{u.title}</span>
-                <Link href={`/trainee/use-cases/${u.id}`} className="text-primary underline">Öffnen</Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+          <div className="mb-3 text-sm font-semibold">Use Cases</div>
+          {useCases.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Keine aktiven Use Cases</div>
+          ) : (
+            <ul className="space-y-2">
+              {useCases.map((u) => (
+                <li key={u.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
+                  <span className="truncate">{u.title}</span>
+                  <Link href={`/trainee/use-cases/${u.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );

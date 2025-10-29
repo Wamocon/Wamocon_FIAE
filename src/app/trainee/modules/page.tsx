@@ -37,21 +37,21 @@ export default function TraineeModulesPage() {
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
-    <div className="mx-auto max-w-4xl p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Meine Module</h1>
+    <div className="mx-auto max-w-4xl space-y-6 p-6">
+      <h1 className="text-foreground text-2xl font-bold">Meine Module</h1>
       {courses.length === 0 ? (
-        <div className="text-muted">Keine Kurse zugewiesen.</div>
+        <div className="text-muted-foreground">Keine Kurse zugewiesen.</div>
       ) : (
         <ul className="space-y-3">
           {courses.map((c) => (
-            <li key={c.id} className="rounded-md border p-4 flex items-center justify-between">
+            <li key={c.id} className="flex items-center justify-between rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div>
                 <div className="font-semibold">{c.title}</div>
                 <div className="text-sm text-muted-foreground">
                   {c.year ? `Jahr ${c.year}` : '—'} {c.chapter ? `• Kapitel ${c.chapter}` : ''}
                 </div>
               </div>
-              <Link className="text-primary underline" href={`/trainee/modules/${c.id}`}>Öffnen</Link>
+              <Link className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={`/trainee/modules/${c.id}`}>Öffnen</Link>
             </li>
           ))}
         </ul>

@@ -43,17 +43,6 @@ export default function TraineeEnablerDetailPage() {
         setLoading(false);
       }
     };
-  const submitSolution = async () => {
-    if (!profile?.id) return setError('Profil fehlt');
-    setSaveSuccess(null);
-    try {
-      const r = await fetch(`/api/trainee/enablers/${enablerId}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ traineeId: profile.id, solutionText }) });
-      if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
-      setSaveSuccess('Lösung gespeichert. Status: Ausstehend');
-    } catch (e: any) {
-      setError(e?.message || 'Unbekannter Fehler');
-    }
-  };
     load();
   }, [profile?.id, enablerId]);
 
@@ -91,14 +80,14 @@ export default function TraineeEnablerDetailPage() {
   if (!enabler) return <div className="p-6">Nicht gefunden</div>;
 
   return (
-    <div className="mx-auto max-w-3xl p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">{enabler.title}</h1>
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+        <h1 className="text-foreground text-2xl font-bold">{enabler.title}</h1>
         {enabler.descriptionText && (
-          <p className="mt-2 whitespace-pre-line text-muted-foreground">{enabler.descriptionText}</p>
+          <p className="text-muted-foreground mt-2 whitespace-pre-line">{enabler.descriptionText}</p>
         )}
         {enabler.isActive && enabler.durationValue && enabler.activatedAt && (
-          <div className="mt-2 text-sm">
+          <div className="mt-3 text-sm">
             {(() => {
               const started = new Date(enabler.activatedAt as string).getTime();
               const now = Date.now();
@@ -110,40 +99,41 @@ export default function TraineeEnablerDetailPage() {
             })()}
           </div>
         )}
-        <div className="mt-3 space-x-4">
+        <div className="mt-3 flex flex-wrap gap-3">
           {enabler.videoUrl && (
-            <a className="text-primary underline" href={enabler.videoUrl} target="_blank" rel="noreferrer">Video ansehen</a>
+            <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.videoUrl} target="_blank" rel="noreferrer">Video ansehen</a>
           )}
           {enabler.pptUrl && (
-            <a className="text-primary underline" href={enabler.pptUrl} target="_blank" rel="noreferrer">PPT öffnen</a>
+            <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.pptUrl} target="_blank" rel="noreferrer">PPT öffnen</a>
           )}
         </div>
         {enabler.scenarioText && (
-          <div className="mt-4">
-            <div className="text-sm font-semibold mb-1">Szenario</div>
+          <div className="mt-4 rounded-xl border border-accent/20 bg-black/20 p-4">
+            <div className="mb-1 text-sm font-semibold">Szenario</div>
             <p className="whitespace-pre-line">{enabler.scenarioText}</p>
           </div>
         )}
         {enabler.hintText && (
-          <div className="mt-3">
-            <div className="text-sm font-semibold mb-1">Hinweis</div>
+          <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-4">
+            <div className="mb-1 text-sm font-semibold">Hinweis</div>
             <p className="whitespace-pre-line text-muted-foreground">{enabler.hintText}</p>
           </div>
         )}
       </div>
-      <div className="rounded-md border p-4 space-y-3">
-        {saveSuccess && <div className="rounded-md border border-green-400 bg-green-50 p-2 text-green-700 text-sm">{saveSuccess}</div>}
+
+      <div className="space-y-4 rounded-3xl border border-accent/30 bg-black/30 p-5">
+        {saveSuccess && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-300">{saveSuccess}</div>}
         <div>
           <label className="mb-1 block text-sm font-medium">Deine Lösung zum Szenario</label>
-          <textarea value={solutionText} onChange={(e) => setSolutionText(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={6} placeholder="Beschreibe deine Lösung..." />
+          <textarea value={solutionText} onChange={(e) => setSolutionText(e.target.value)} className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={6} placeholder="Beschreibe deine Lösung..." />
         </div>
         <div className="flex justify-end">
-          <button onClick={submitSolution} className="rounded-md bg-primary px-4 py-2 text-white">Lösung abgeben</button>
+          <button onClick={submitSolution} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">Lösung abgeben</button>
         </div>
       </div>
 
       {quiz && (
-        <div className="rounded-md border p-4 space-y-4">
+        <div className="space-y-4 rounded-3xl border border-accent/30 bg-black/30 p-5">
           <div className="text-lg font-semibold">Quiz: {quiz.title}</div>
           {result ? (
             <div className="space-y-3">
@@ -153,23 +143,23 @@ export default function TraineeEnablerDetailPage() {
                   const fb = result.feedback.find((f) => String(f.questionId) === String(q.id));
                   const chosen = answers[q.id];
                   return (
-                    <li key={q.id} className={`rounded-md border p-3 ${fb?.correct ? 'border-green-600/50' : 'border-red-600/50'}`}>
+                    <li key={q.id} className={`rounded-xl border p-3 ${fb?.correct ? 'border-green-600/50 bg-green-500/10' : 'border-red-600/50 bg-red-500/10'}`}>
                       <div className="font-medium">{q.questionText}</div>
-                      <div className="text-sm mt-1">Deine Antwort: {q.options.find((o) => String(o.id) === String(chosen))?.optionText || '-'}</div>
+                      <div className="mt-1 text-sm">Deine Antwort: {q.options.find((o) => String(o.id) === String(chosen))?.optionText || '-'}</div>
                       {!fb?.correct && (
-                        <div className="text-sm text-green-600 mt-1">Richtig: {q.options.find((o) => String(o.id) === String(fb?.correctOptionId))?.optionText}</div>
+                        <div className="mt-1 text-sm text-green-400">Richtig: {q.options.find((o) => String(o.id) === String(fb?.correctOptionId))?.optionText}</div>
                       )}
                     </li>
                   );
                 })}
               </ul>
-              <button className="rounded-md border border-border px-4 py-2" onClick={() => { setResult(null); setAnswers({}); }}>Erneut versuchen</button>
+              <button className="rounded-md border border-accent/30 px-4 py-2 hover:bg-background/60" onClick={() => { setResult(null); setAnswers({}); }}>Erneut versuchen</button>
             </div>
           ) : (
             <div className="space-y-4">
               {quiz.questions.map((q: QuizQ) => (
-                <div key={q.id} className="rounded-md border p-3">
-                  <div className="font-medium mb-2">{q.questionText}</div>
+                <div key={q.id} className="rounded-xl border border-accent/20 bg-black/20 p-3">
+                  <div className="mb-2 font-medium">{q.questionText}</div>
                   <div className="space-y-2">
                     {q.options.map((o: { id: string; optionText: string }) => (
                       <label key={o.id} className="flex items-center gap-2">
@@ -180,7 +170,7 @@ export default function TraineeEnablerDetailPage() {
                   </div>
                 </div>
               ))}
-              <button onClick={submitQuiz} className="rounded-md bg-primary px-4 py-2 text-white">Quiz abgeben</button>
+              <button onClick={submitQuiz} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">Quiz abgeben</button>
             </div>
           )}
         </div>

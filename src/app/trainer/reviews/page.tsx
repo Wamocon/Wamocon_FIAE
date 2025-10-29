@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, MessageSquare } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string };
@@ -152,51 +152,56 @@ export default function TrainerReviewsPage() {
   const forcedView = viewParam === 'enablers' || viewParam === 'usecases' || viewParam === 'quizzes' || viewParam === 'reflections';
 
   return (
-    <div className="mx-auto max-w-6xl p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Offen Review</h1>
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <div className="glass-effect rounded-3xl border border-accent/30 bg-black/40 p-5 shadow-lg">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h1 className="text-foreground text-xl font-bold">Offen Review</h1>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
         {!forcedView ? (
           <>
-            <button className={`rounded-md border px-3 py-1 text-sm ${activeTab==='enablers'?'bg-primary text-white':'bg-background'}`} onClick={() => setActiveTab('enablers')}>Enabler</button>
-            <button className={`rounded-md border px-3 py-1 text-sm ${activeTab==='usecases'?'bg-primary text-white':'bg-background'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
-            <button className={`rounded-md border px-3 py-1 text-sm ${activeTab==='quizzes'?'bg-primary text-white':'bg-background'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
-            <button className={`rounded-md border px-3 py-1 text-sm ${activeTab==='reflections'?'bg-primary text-white':'bg-background'}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='enablers'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Enabler</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='usecases'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='quizzes'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='reflections'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
           </>
         ) : (
-          <div className="rounded-md border px-3 py-1 text-sm bg-background">
+          <div className="rounded-xl border border-accent/30 bg-black/30 px-3 py-1.5 text-sm">
             {activeTab === 'enablers' ? 'Enabler' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
           </div>
         )}
-
-        {activeTab === 'enablers' || activeTab === 'usecases' ? (
-          <div className="ml-auto flex items-center gap-2 text-sm">
-            <span>Filter:</span>
-            <select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value as any)} className="rounded-md border px-2 py-1">
-              <option value="all">Alle</option>
-              <option value="pending">Offen</option>
-              <option value="approved">Genehmigt</option>
-              <option value="rejected">Abgelehnt</option>
-            </select>
-          </div>
-        ) : (
-          <div className="ml-auto flex items-center gap-2 text-sm">
-            <span>Filter:</span>
-            <select value={pendingFilter} onChange={(e)=>setPendingFilter(e.target.value as any)} className="rounded-md border px-2 py-1">
-              <option value="pending">Offen</option>
-              <option value="all">Alle</option>
-            </select>
-            {activeTab==='quizzes' && (
-              <>
-                <span>Typ:</span>
-                <select value={quizTypeFilter} onChange={(e)=>setQuizTypeFilter(e.target.value as any)} className="rounded-md border px-2 py-1">
-                  <option value="all">Alle</option>
-                  <option value="ENABLER">Enabler</option>
-                  <option value="GLOBAL">Global</option>
-                </select>
-              </>
-            )}
-          </div>
-        )}
+        <div className="ml-auto flex items-center gap-2 text-sm">
+          {activeTab === 'enablers' || activeTab === 'usecases' ? (
+            <>
+              <span>Filter:</span>
+              <select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
+                <option value="all">Alle</option>
+                <option value="pending">Offen</option>
+                <option value="approved">Genehmigt</option>
+                <option value="rejected">Abgelehnt</option>
+              </select>
+            </>
+          ) : (
+            <>
+              <span>Filter:</span>
+              <select value={pendingFilter} onChange={(e)=>setPendingFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
+                <option value="pending">Offen</option>
+                <option value="all">Alle</option>
+              </select>
+              {activeTab==='quizzes' && (
+                <>
+                  <span>Typ:</span>
+                  <select value={quizTypeFilter} onChange={(e)=>setQuizTypeFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
+                    <option value="all">Alle</option>
+                    <option value="ENABLER">Enabler</option>
+                    <option value="GLOBAL">Global</option>
+                  </select>
+                </>
+              )}
+            </>
+          )}
+        </div>
+        </div>
       </div>
 
       {loading && <div>Lade…</div>}
@@ -206,25 +211,32 @@ export default function TrainerReviewsPage() {
         <div className="space-y-4">
           {filteredEnablers.length === 0 && <div className="text-sm text-muted-foreground">Keine Einreichungen</div>}
           {filteredEnablers.map(it => (
-            <div key={it.id} className="rounded-md border p-4">
-              <div className="flex items-center justify-between">
-                <div className="font-semibold">{it.enablerTitle}</div>
-                <div className={`text-xs rounded-full px-2 py-1 border ${it.status==='PENDING'?'border-yellow-500 text-yellow-600': it.status==='APPROVED'?'border-green-500 text-green-600':'border-red-500 text-red-600'}`}>{it.status}</div>
+            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                    <BookOpen className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">{it.enablerTitle}</div>
+                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
               </div>
-              <div className="mt-1 text-sm text-muted-foreground">{it.traineeName} • Eingereicht am {new Date(it.submittedAt).toLocaleString()}</div>
               {it.solutionText && (
-                <div className="mt-3">
+                <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-3">
                   <div className="text-sm font-medium">Lösung</div>
-                  <p className="whitespace-pre-line text-sm">{it.solutionText}</p>
+                  <p className="whitespace-pre-line text-sm text-foreground/90">{it.solutionText}</p>
                 </div>
               )}
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">Feedback</label>
-                <textarea className="w-full rounded-md border px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+                <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'REJECTED')}>Ablehnen</button>
-                <button className="rounded-md bg-primary text-white px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'APPROVED')}>Genehmigen</button>
+                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'REJECTED')}>Ablehnen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'APPROVED')}>Genehmigen</button>
               </div>
             </div>
           ))}
@@ -235,25 +247,32 @@ export default function TrainerReviewsPage() {
         <div className="space-y-4">
           {filteredUseCases.length === 0 && <div className="text-sm text-muted-foreground">Keine Einreichungen</div>}
           {filteredUseCases.map(it => (
-            <div key={it.id} className="rounded-md border p-4">
-              <div className="flex items-center justify-between">
-                <div className="font-semibold">{it.useCaseTitle}</div>
-                <div className={`text-xs rounded-full px-2 py-1 border ${it.status==='PENDING'?'border-yellow-500 text-yellow-600': it.status==='APPROVED'?'border-green-500 text-green-600':'border-red-500 text-red-600'}`}>{it.status}</div>
+            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">{it.useCaseTitle}</div>
+                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
               </div>
-              <div className="mt-1 text-sm text-muted-foreground">{it.traineeName} • Eingereicht am {new Date(it.submittedAt).toLocaleString()}</div>
               {it.submissionText && (
-                <div className="mt-3">
+                <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-3">
                   <div className="text-sm font-medium">Lösung</div>
-                  <p className="whitespace-pre-line text-sm">{it.submissionText}</p>
+                  <p className="whitespace-pre-line text-sm text-foreground/90">{it.submissionText}</p>
                 </div>
               )}
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">Feedback</label>
-                <textarea className="w-full rounded-md border px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+                <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border px-3 py-2" onClick={()=>reviewItem('usecase', it.id, 'REJECTED')}>Ablehnen</button>
-                <button className="rounded-md bg-primary text-white px-3 py-2" onClick={()=>reviewItem('usecase', it.id, 'APPROVED')}>Genehmigen</button>
+                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('usecase', it.id, 'REJECTED')}>Ablehnen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('usecase', it.id, 'APPROVED')}>Genehmigen</button>
               </div>
             </div>
           ))}
@@ -264,32 +283,38 @@ export default function TrainerReviewsPage() {
         <div className="space-y-4">
           {quizzesFiltered.length === 0 && <div className="text-sm text-muted-foreground">Keine Quiz-Einreichungen.</div>}
           {quizzesFiltered.map(s => (
-            <div key={s.id} className="rounded-md border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">{s.traineeName}</div>
-                  <div className="text-xs text-muted-foreground">{new Date(s.submittedAt).toLocaleString()}</div>
+            <div key={s.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                    <HelpCircle className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">{s.quizTitle}</div>
+                    <div className="text-xs text-muted-foreground">{s.traineeName} • {new Date(s.submittedAt).toLocaleString()}</div>
+                  </div>
                 </div>
-                <button onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)} className={`rounded-md px-3 py-2 text-sm ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-gray-300'}`}>
-                  {s.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4"/> Bewertet</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4"/> Als bewertet markieren</span>)}
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{s.quizType || '-'}</span>
+                  <button onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
+                    {s.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4"/> Bewertet</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4"/> Als bewertet markieren</span>)}
+                  </button>
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
                 <div>
-                  <div className="text-xs text-muted-foreground">Quiz</div>
-                  <div className="text-sm">{s.quizTitle}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Typ</div>
-                  <div className="text-sm">{s.quizType || '-'}</div>
+                  <div className="text-xs text-muted-foreground">Teilnehmer</div>
+                  <div className="text-sm">{s.traineeName}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Score</div>
                   <div className="text-sm">{s.score ?? 0}%</div>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Status</div>
-                  <div className="text-sm">{s.isReviewed ? 'Bewertet' : 'Offen'}</div>
+                <div className="md:col-span-2">
+                  <div className="text-xs text-muted-foreground">Fortschritt</div>
+                  <div className="mt-1 h-1.5 w-full rounded-full bg-black/30">
+                    <div className="h-1.5 rounded-full bg-primary/90" style={{ width: `${Math.max(0, Math.min(100, s.score ?? 0))}%` }} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -301,32 +326,37 @@ export default function TrainerReviewsPage() {
         <div className="space-y-4">
           {reflectionsFiltered.length === 0 && <div className="text-sm text-muted-foreground">Keine Reflektionen.</div>}
           {reflectionsFiltered.map(r => (
-            <div key={r.id} className="rounded-md border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">{r.traineeName}</div>
-                  <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</div>
+            <div key={r.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                    <MessageSquare className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">Reflexion von {r.traineeName}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</div>
+                  </div>
                 </div>
-                <button onClick={() => toggleReflectionReviewed(r.id, r.isReviewed)} className={`rounded-md px-3 py-2 text-sm ${r.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-gray-300'}`}>
+                <button onClick={() => toggleReflectionReviewed(r.id, r.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${r.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
                   {r.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4"/> Gelesen</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4"/> Als gelesen markieren</span>)}
                 </button>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
                   <div className="text-xs text-muted-foreground">Stärken</div>
-                  <div className="text-sm whitespace-pre-wrap">{r.strengths || '-'}</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.strengths || '-'}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Schwächen</div>
-                  <div className="text-sm whitespace-pre-wrap">{r.weaknesses || '-'}</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.weaknesses || '-'}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Mehr davon</div>
-                  <div className="text-sm whitespace-pre-wrap">{r.mesMore || '-'}</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.mesMore || '-'}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Gleich lassen</div>
-                  <div className="text-sm whitespace-pre-wrap">{r.mesEqual || '-'}</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.mesEqual || '-'}</div>
                 </div>
               </div>
             </div>
