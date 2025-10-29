@@ -18,6 +18,8 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback } from 'react';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 interface SidebarProps {
   currentView: string;
   isOpen: boolean;
@@ -232,7 +234,19 @@ export function Sidebar({
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
                 }`}
               >
-                <Icon className={`h-5 w-5 ${isActive ? 'text-accent' : ''}`} />
+                {item.id === 'profile' ? (
+                  <Avatar className="h-5 w-5">
+                    {profile.avatar ? (
+                      <AvatarImage src={profile.avatar} alt={profile.full_name} />
+                    ) : (
+                      <AvatarFallback>
+                        {profile.full_name?.trim()?.charAt(0)?.toUpperCase() || 'U'}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                ) : (
+                  <Icon className={`h-5 w-5 ${isActive ? 'text-accent' : ''}`} />
+                )}
                 <span className="font-medium">{item.label}</span>
               </button>
             );
@@ -243,7 +257,19 @@ export function Sidebar({
         <div className="border-border/50 border-t p-4">
           <div className="bg-background/50 flex items-center space-x-3 rounded-xl p-3">
             <div className="from-accent to-accent/80 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br">
-              <Users className="text-accent-foreground h-5 w-5" />
+              <Avatar className="h-10 w-10">
+                {profile.avatar ? (
+                  <AvatarImage src={profile.avatar} alt={profile.full_name} />
+                ) : (
+                  <AvatarFallback>
+                    {profile.full_name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .toUpperCase()}
+                  </AvatarFallback>
+                )}
+              </Avatar>
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-foreground truncate text-sm font-medium">
