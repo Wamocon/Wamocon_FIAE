@@ -52,11 +52,12 @@ export async function GET(req: NextRequest) {
           .where(and(eq(progress.user_id, userId), inArray(progress.sub_lesson_id, subIds)));
         completed = Number(value) >= subIds.length;
       }
+      const moduleId = String(l.module_id ?? '');
       out.push({
         id: l.id,
         title: l.title,
-        moduleTitle: moduleMap.get(l.module_id) || 'Unbekanntes Modul',
-        moduleId: l.module_id,
+        moduleTitle: moduleMap.get(moduleId) || 'Unbekanntes Modul',
+        moduleId,
         completed,
         type: 'lesson',
         ref: null,

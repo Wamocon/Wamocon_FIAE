@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { enablers, courseMembers, courses } from '@/db/migrations/schemas/schema';
 
-export async function GET(_req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const [row] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ enabler: row });
@@ -15,9 +15,9 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -59,9 +59,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { enablerId:
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });

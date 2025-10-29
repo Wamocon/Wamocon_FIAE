@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 
-export async function GET(_req: NextRequest, { params }: { params: { useCaseId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
     const { useCases } = await import('@/db/migrations/schemas/schema');
-    const { useCaseId } = params;
+    const { useCaseId } = await params;
     const [row] = await db.select().from(useCases).where(eq(useCases.id, useCaseId as any));
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ useCase: row });
@@ -15,10 +15,10 @@ export async function GET(_req: NextRequest, { params }: { params: { useCaseId: 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { useCaseId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
   const { useCases, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
-    const { useCaseId } = params;
+    const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -54,10 +54,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { useCaseId:
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { useCaseId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
   const { useCases, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
-    const { useCaseId } = params;
+    const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });

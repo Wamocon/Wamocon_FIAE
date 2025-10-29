@@ -10,9 +10,9 @@ import {
   skills,
 } from '@/db/migrations/schemas/schema';
 
-export async function GET(_req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const [course] = await db.select().from(courses).where(eq(courses.id, courseId as any));
     if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -59,9 +59,9 @@ export async function GET(_req: NextRequest, { params }: { params: { courseId: s
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -114,9 +114,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { courseId: 
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });

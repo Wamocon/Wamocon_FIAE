@@ -15,7 +15,7 @@ import {
   BarChart3,
   FileCheck2,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback } from 'react';
 
 interface SidebarProps {
@@ -34,6 +34,7 @@ export function Sidebar({
   const { profile, signOut } = useAuth();
   const { language } = useLanguage();
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleNavigation = useCallback(
     (view: string) => {
@@ -216,7 +217,10 @@ export function Sidebar({
         <nav className="flex-1 space-y-2 px-4 py-6">
           {navigationItems.map(item => {
             const Icon = item.icon;
-            const isActive = currentView === item.id;
+            // Prefer URL-based active detection to avoid stale props
+            const isActive = pathname
+              ? pathname === item.href || pathname.startsWith(item.href + '/')
+              : currentView === item.id;
 
             return (
               <button

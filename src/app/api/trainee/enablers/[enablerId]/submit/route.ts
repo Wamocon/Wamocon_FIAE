@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { enablers, courseMembers, enablerSubmissions } from '@/db/migrations/schemas/schema';
 
-export async function POST(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
     const solutionText: string | null = (body?.solutionText ?? null);

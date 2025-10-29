@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, max } from 'drizzle-orm';
 
-export async function GET(_req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
     const { useCases } = await import('@/db/migrations/schemas/schema');
-    const { courseId } = params;
+    const { courseId } = await params;
     const list = await db
       .select({ id: useCases.id, title: useCases.title, orderIndex: useCases.orderIndex, isActive: useCases.isActive })
       .from(useCases)
@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: { courseId: s
 export async function POST(req: NextRequest, { params }: { params: { courseId: string } }) {
   try {
     const { useCases } = await import('@/db/migrations/schemas/schema');
-    const { courseId } = params;
+    const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });

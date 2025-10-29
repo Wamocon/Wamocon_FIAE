@@ -5,11 +5,11 @@ import { courses, courseMembers, enablers, useCases } from '@/db/migrations/sche
 
 // GET course details for a trainee: includes active enablers and use-cases
 // query: traineeId
-export async function GET(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { courseId } = params;
+    const { courseId } = await params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [member] = await db

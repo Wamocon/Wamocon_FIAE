@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, count, eq, inArray, max } from 'drizzle-orm';
 import { enablers, durationUnit, courses, courseMembers } from '@/db/migrations/schemas/schema';
 
-export async function GET(_req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const list = await db
       .select({ id: enablers.id, title: enablers.title, orderIndex: enablers.orderIndex, isActive: enablers.isActive })
       .from(enablers)
@@ -18,9 +18,9 @@ export async function GET(_req: NextRequest, { params }: { params: { courseId: s
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });

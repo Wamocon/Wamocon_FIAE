@@ -5,11 +5,11 @@ import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks } f
 
 // GET trainee-facing use-case detail; optionally include latest submission by trainee
 // query: traineeId
-export async function GET(req: NextRequest, { params }: { params: { useCaseId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { useCaseId } = params;
+    const { useCaseId } = await params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [u] = await db.select().from(useCases).where(eq(useCases.id, useCaseId as any));

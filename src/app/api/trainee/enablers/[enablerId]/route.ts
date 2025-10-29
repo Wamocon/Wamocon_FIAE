@@ -5,11 +5,11 @@ import { enablers, courseMembers, enablerSubmissions } from '@/db/migrations/sch
 
 // GET trainee-facing enabler detail (title, description, ppt, video)
 // query: traineeId
-export async function GET(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { enablerId } = params;
+    const { enablerId } = await params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [e] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));

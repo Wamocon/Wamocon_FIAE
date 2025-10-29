@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
         .where(and(eq(progress.user_id, userId), eq(progress.sub_lesson_id, subLessonId)))
         .limit(1);
       if (existing.length === 0) {
-        await db.insert(progress).values({ user_id: userId, sub_lesson_id: subLessonId, completed_at: new Date() });
+        await db.insert(progress).values({ user_id: userId, sub_lesson_id: subLessonId });
       }
     } else {
       // Delete if exists

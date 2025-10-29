@@ -5,9 +5,9 @@ import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks } f
 
 // POST submit or update a use-case submission
 // Body: { traineeId: string, submissionText?: string, links?: Array<{ url: string, description?: string }> }
-export async function POST(req: NextRequest, { params }: { params: { useCaseId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
-    const { useCaseId } = params;
+    const { useCaseId } = await params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
     const submissionText: string | undefined = body?.submissionText;

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lessons } from '@/db/migrations/schemas/schema';
 
-export async function POST(req: NextRequest, { params }: { params: { moduleId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
-    const { moduleId } = params;
+    const { moduleId } = await params;
     const body = await req.json();
     const title: string | undefined = body?.title;
     const order_index: number | undefined = body?.order_index ? Number(body.order_index) : undefined;
