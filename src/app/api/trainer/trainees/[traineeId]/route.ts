@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, count, eq, inArray } from 'drizzle-orm';
 import { profiles, enablers, courses, enablerCompletions } from '@/db/migrations/schemas/schema';
 
-export async function GET(_req: NextRequest, { params }: { params: { traineeId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ traineeId: string }> }) {
   try {
-    const { traineeId } = params;
+    const { traineeId } = await params;
     const [p] = await db
       .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl, startOfTrainingDate: profiles.startOfTrainingDate })
       .from(profiles)
@@ -58,9 +58,9 @@ export async function GET(_req: NextRequest, { params }: { params: { traineeId: 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { traineeId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ traineeId: string }> }) {
   try {
-    const { traineeId } = params;
+    const { traineeId } = await params;
     const body = await req.json();
     const trainer_id = (body?.trainer_id || body?.trainerId) as string | undefined;
     if (!trainer_id) return NextResponse.json({ error: 'trainer_id required' }, { status: 400 });

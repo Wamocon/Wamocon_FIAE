@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
         submittedAt: quizSubmissions.submittedAt,
         traineeName: profiles.fullName,
         quizTitle: quizzes.title,
+        quizType: quizzes.quizType,
       })
       .from(quizSubmissions)
       .innerJoin(profiles, eq(quizSubmissions.traineeId, profiles.id))

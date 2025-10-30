@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, max } from 'drizzle-orm';
 
-export async function GET(_req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
     const { useCases } = await import('@/db/migrations/schemas/schema');
-    const { courseId } = params;
+    const { courseId } = await params;
     const list = await db
       .select({ id: useCases.id, title: useCases.title, orderIndex: useCases.orderIndex, isActive: useCases.isActive })
       .from(useCases)
@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: { courseId: s
 export async function POST(req: NextRequest, { params }: { params: { courseId: string } }) {
   try {
     const { useCases } = await import('@/db/migrations/schemas/schema');
-    const { courseId } = params;
+    const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -38,8 +38,8 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
     const title: string | undefined = body?.title;
     if (!title) return NextResponse.json({ error: 'Missing title' }, { status: 400 });
   const orderIndex: number | undefined = body?.orderIndex ? Number(body.orderIndex) : undefined;
-    const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
-    const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit;
+  const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
+  const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit || (typeof durationValue === 'number' ? 'DAYS' : undefined);
   const descriptionText: string | undefined = body?.descriptionText;
     const isActive: boolean | undefined = typeof body?.isActive === 'boolean' ? body.isActive : undefined;
 
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
       finalOrderIndex = (Number(m?.m ?? 0) || 0) + 1;
     }
 
+    const activatedAt = isActive ? new Date() : null;
     const [inserted] = await db
       .insert(useCases)
       .values({
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
         durationUnit: durationUnitVal as any,
         descriptionText: (descriptionText ?? '') as any,
         isActive: isActive as any,
+        activatedAt: activatedAt as any,
       })
       .returning();
 

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 
-export async function GET(_req: NextRequest, { params }: { params: { useCaseId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
     const { useCases } = await import('@/db/migrations/schemas/schema');
-    const { useCaseId } = params;
+    const { useCaseId } = await params;
     const [row] = await db.select().from(useCases).where(eq(useCases.id, useCaseId as any));
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ useCase: row });
@@ -15,10 +15,10 @@ export async function GET(_req: NextRequest, { params }: { params: { useCaseId: 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { useCaseId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
   const { useCases, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
-    const { useCaseId } = params;
+    const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { useCaseId:
     const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
     if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const body = await req.json();
-    const updates: any = {};
+  const updates: any = {};
     for (const key of [
       'title',
       'orderIndex',
@@ -43,6 +43,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { useCaseId:
     ]) {
       if (typeof body?.[key] !== 'undefined') updates[key] = body[key];
     }
+    if (typeof body?.isActive === 'boolean' && body.isActive && !row0.isActive && !row0.activatedAt) {
+      updates.activatedAt = new Date();
+    }
     const [row] = await db.update(useCases).set(updates).where(eq(useCases.id, useCaseId as any)).returning();
     return NextResponse.json({ useCase: row });
   } catch (e) {
@@ -51,10 +54,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { useCaseId:
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { useCaseId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
   const { useCases, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
-    const { useCaseId } = params;
+    const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });

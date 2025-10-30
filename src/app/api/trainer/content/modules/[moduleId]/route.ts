@@ -3,9 +3,9 @@ import db from '@/db';
 import { lessons, modules, subLessons } from '@/db/migrations/schemas/schema';
 import { eq, inArray } from 'drizzle-orm';
 
-export async function GET(_req: NextRequest, { params }: { params: { moduleId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
-    const { moduleId } = params;
+    const { moduleId } = await params;
     const [mod] = await db
       .select({ id: modules.id, title: modules.title, training_year: modules.training_year, order_index: modules.order_index })
       .from(modules)
@@ -23,9 +23,9 @@ export async function GET(_req: NextRequest, { params }: { params: { moduleId: s
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { moduleId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
-    const { moduleId } = params;
+    const { moduleId } = await params;
     const body = await req.json();
     const updates: any = {};
     if (typeof body?.title === 'string') updates.title = body.title;
@@ -92,9 +92,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { moduleId: 
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { moduleId: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
-    const { moduleId } = params;
+    const { moduleId } = await params;
     // Delete subLessons -> lessons -> module
     const lessonRows = await db.select({ id: lessons.id }).from(lessons).where(eq(lessons.module_id, moduleId));
     const lessonIds = lessonRows.map(r => r.id);

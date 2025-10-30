@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       const lessonsCount = ls.length;
       const subLessonsCount = Object.values(subCountsByLesson).reduce((a, b) => a + b, 0);
 
-      out.push({ id: m.id, title: m.title, training_year: m.training_year, lessonsCount, subLessonsCount, lessons: lessonsWithCounts });
+  out.push({ id: m.id, title: m.title, training_year: Number(m.training_year ?? 0), lessonsCount, subLessonsCount, lessons: lessonsWithCounts });
     }
 
     return NextResponse.json({ modules: out });

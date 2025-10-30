@@ -14,9 +14,9 @@ import {
 } from '@/db/migrations/schemas/schema';
 
 // GET quiz for an enabler (trainer editing)
-export async function GET(_req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const [link] = await db.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId as any));
     if (!link) return NextResponse.json({ quiz: null });
     const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, link.quizId));
@@ -43,9 +43,9 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
 
 // POST create/replace quiz for enabler
 // Body: { title: string, createdById: string, questions: [{ questionText, options: [string, string, string, string], correctIndex }] }
-export async function POST(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const body = await req.json();
     const title: string | undefined = body?.title;
     const createdById: string | undefined = body?.createdById;

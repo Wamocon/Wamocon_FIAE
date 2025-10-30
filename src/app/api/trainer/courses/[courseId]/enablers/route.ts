@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, count, eq, inArray, max } from 'drizzle-orm';
 import { enablers, durationUnit, courses, courseMembers } from '@/db/migrations/schemas/schema';
 
-export async function GET(_req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const list = await db
       .select({ id: enablers.id, title: enablers.title, orderIndex: enablers.orderIndex, isActive: enablers.isActive })
       .from(enablers)
@@ -18,9 +18,9 @@ export async function GET(_req: NextRequest, { params }: { params: { courseId: s
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -38,10 +38,12 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
     const title: string | undefined = body?.title;
     if (!title) return NextResponse.json({ error: 'Missing title' }, { status: 400 });
   const orderIndex: number | undefined = body?.orderIndex ? Number(body.orderIndex) : undefined;
-    const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
-    const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit;
-    const pptUrl: string | undefined = body?.pptUrl;
-    const videoUrl: string | undefined = body?.videoUrl;
+  const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
+  const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit || (typeof durationValue === 'number' ? 'DAYS' : undefined);
+  const pptUrl: string | undefined = body?.pptUrl;
+  const videoUrl: string | undefined = body?.videoUrl;
+  const descriptionText: string | undefined = body?.descriptionText;
+    const hintText: string | undefined = body?.hintText;
     const scenarioText: string | undefined = body?.scenarioText;
     const scenarioImageUrl: string | undefined = body?.scenarioImageUrl;
     const isActive: boolean | undefined = typeof body?.isActive === 'boolean' ? body.isActive : undefined;
@@ -56,6 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
       finalOrderIndex = (Number(m?.m ?? 0) || 0) + 1;
     }
 
+    const activatedAt = isActive ? new Date() : null;
     const [inserted] = await db
       .insert(enablers)
       .values({
@@ -64,11 +67,14 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
         orderIndex: finalOrderIndex as any,
         durationValue: durationValue as any,
         durationUnit: durationUnitVal as any,
-        pptUrl: pptUrl as any,
-        videoUrl: videoUrl as any,
+  descriptionText: descriptionText as any,
+  pptUrl: pptUrl as any,
+  videoUrl: videoUrl as any,
         scenarioText: scenarioText as any,
+    hintText: hintText as any,
         scenarioImageUrl: scenarioImageUrl as any,
         isActive: isActive as any,
+        activatedAt: activatedAt as any,
       })
       .returning();
 

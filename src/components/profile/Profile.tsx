@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { User, Edit3, Award, Clock, Target, TrendingUp, Users } from 'lucide-react';
+import { User, Edit3, Award, Clock, Target, TrendingUp, Users, Upload } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { FILE_UPLOAD } from '@/lib/constants';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export function Profile() {
   const { profile, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [editedProfile, setEditedProfile] = useState({
     full_name: profile?.full_name || '',
     email: profile?.email || '',
@@ -66,13 +71,91 @@ export function Profile() {
     setIsEditing(false);
   };
 
+  const handleChooseFile = () => fileInputRef.current?.click();
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!profile) {
+      alert('Nicht angemeldet. Bitte melden Sie sich erneut an.');
+      return;
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !FILE_UPLOAD.allowedTypes.includes(ext)) {
+      alert(`Ungültiger Dateityp. Erlaubt: ${FILE_UPLOAD.allowedTypes.join(', ')}`);
+      return;
+    }
+    if (file.size > FILE_UPLOAD.maxSize) {
+      alert('Datei ist zu groß. Maximal 10MB.');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const path = `${profile.id}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type,
+        });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+      const publicUrl = data.publicUrl;
+      await updateProfile({ avatar_url: publicUrl });
+    } catch (e: any) {
+      console.error('Avatar upload error:', e);
+      const msg = typeof e?.message === 'string' ? e.message : String(e);
+      const hint = msg.toLowerCase().includes('not found')
+        ? '\nHinweis: Existiert der Storage-Bucket "avatars" und ist er öffentlich?'
+        : '';
+      alert(`Upload fehlgeschlagen. Bitte erneut versuchen.\n\nFehler: ${msg}${hint}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const onFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const f = e.target.files?.[0];
+    if (f) await handleAvatarUpload(f);
+    // reset input so same file can be picked again if needed
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <div className="bg-background min-h-screen p-6">
       {/* Profile Header */}
       <div className="bg-card border-border rounded-3xl border p-8 shadow-lg">
         <div className="flex items-center space-x-6">
-          <div className="from-primary to-primary/80 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br">
-            <User className="text-primary-foreground h-10 w-10" />
+          <div className="relative">
+            <Avatar className="h-20 w-20">
+              {profile.avatar ? (
+                <AvatarImage src={profile.avatar} alt={profile.full_name} />
+              ) : (
+                <AvatarFallback>
+                  <User className="h-8 w-8" />
+                </AvatarFallback>
+              )}
+            </Avatar>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={handleChooseFile}
+                disabled={isUploading}
+                className="bg-accent/90 hover:bg-accent text-accent-foreground absolute -bottom-2 -right-2 rounded-full p-2 shadow transition disabled:opacity-70"
+                title="Profilbild ändern"
+              >
+                <Upload className="h-4 w-4" />
+              </button>
+            )}
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg"
+              className="hidden"
+              onChange={onFileChange}
+            />
           </div>
           <div className="flex-1">
             <h1 className="text-foreground text-3xl font-bold">
@@ -96,12 +179,17 @@ export function Profile() {
               {profile.role === 'trainee' ? 'Auszubildender' : 'Ausbilder'}
             </p>
           </div>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="bg-accent/10 hover:bg-accent/20 rounded-xl p-3 transition-colors"
-          >
-            <Edit3 className="text-accent h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {isUploading && (
+              <span className="text-muted-foreground text-sm">Lade hoch…</span>
+            )}
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className="bg-accent/10 hover:bg-accent/20 rounded-xl p-3 transition-colors"
+            >
+              <Edit3 className="text-accent h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
 

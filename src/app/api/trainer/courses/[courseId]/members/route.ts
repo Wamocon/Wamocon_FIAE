@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { courseMembers, profiles, userRole, courses } from '@/db/migrations/schemas/schema';
 
-export async function GET(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     // Optional: restrict listing to trainer members
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
@@ -30,9 +30,9 @@ export async function GET(req: NextRequest, { params }: { params: { courseId: st
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -55,9 +55,9 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const trainerId = searchParams.get('trainerId');

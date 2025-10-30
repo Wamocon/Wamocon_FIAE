@@ -3,9 +3,9 @@ import db from '@/db';
 import { lessons, subLessons } from '@/db/migrations/schemas/schema';
 import { eq } from 'drizzle-orm';
 
-export async function PATCH(req: NextRequest, { params }: { params: { lessonId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ lessonId: string }> }) {
   try {
-    const { lessonId } = params;
+    const { lessonId } = await params;
     const body = await req.json();
     const updates: any = {};
     if (typeof body?.title === 'string') updates.title = body.title;
@@ -22,9 +22,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { lessonId: 
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { lessonId: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ lessonId: string }> }) {
   try {
-    const { lessonId } = params;
+    const { lessonId } = await params;
     await db.delete(subLessons).where(eq(subLessons.lesson_id, lessonId));
     await db.delete(lessons).where(eq(lessons.id, lessonId));
     return NextResponse.json({ ok: true });
