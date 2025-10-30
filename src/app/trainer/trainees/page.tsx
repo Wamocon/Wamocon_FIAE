@@ -150,12 +150,6 @@ export default function TrainerTraineesPage() {
                 <Eye className="mr-2 inline h-4 w-4" />
                 Details
               </button>
-              <button className="bg-muted/30 text-muted hover:text-foreground hover:bg-muted/50 rounded-xl px-4 py-2 transition-colors">
-                <MessageSquare className="h-4 w-4" />
-              </button>
-              <button className="bg-muted/30 text-muted hover:text-foreground hover:bg-muted/50 rounded-xl px-4 py-2 transition-colors">
-                <TrendingUp className="h-4 w-4" />
-              </button>
             </div>
           </div>
         ))}

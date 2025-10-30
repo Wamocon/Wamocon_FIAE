@@ -262,71 +262,93 @@ export default function EditCoursePage() {
           <ul className="space-y-2">
             {enablers.map((e) => (
               <li key={e.id} className="flex items-center justify-between">
-                <span className="truncate">
-                  {e.title}
-                  <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${e.isActive?'border-green-500 text-green-600':'border-yellow-500 text-yellow-600'}`}>{e.isActive?'Aktiv':'Inaktiv'}</span>
-                </span>
-                <button
-                  type="button"
-                  className="text-xs rounded-md border border-accent/30 px-2 py-1"
-                  onClick={async () => {
-                    await fetch(`/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !e.isActive }) });
-                    const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
-                    const data = await r.json();
-                    setEnablers((data.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                  }}
-                >
-                  {e.isActive ? 'Deaktivieren' : 'Aktivieren'}
-                </button>
-                <button
-                  type="button"
-                  className="ml-2 text-xs rounded-md border border-accent/30 px-2 py-1"
-                  onClick={async () => {
-                    // Prefill enabler details and quiz into add/edit fields and open edit modal
-                    try {
-                      setEditingEnablerId(e.id);
-                      // Load enabler fields
-                      const er = await fetch(`/api/trainer/enablers/${e.id}`);
-                      if (er.ok) {
-                        const ej = await er.json();
-                        const en = ej.enabler || {};
-                        setEnablerTitle(en.title || '');
-                        setEnablerDescription(en.descriptionText || '');
-                        setEnablerScenario(en.scenarioText || '');
-                        setEnablerPpt(en.pptUrl || '');
-                        setEnablerVideo(en.videoUrl || '');
-                        setEnablerHint(en.hintText || '');
-                        setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
-                        setEnablerActive(!!en.isActive);
-                      }
-                      // Load quiz
-                      const qr = await fetch(`/api/trainer/enablers/${e.id}/quiz`);
-                      if (qr.ok) {
-                        const qj = await qr.json();
-                        const quiz = qj.quiz;
-                        if (quiz && Array.isArray(quiz.questions) && quiz.questions.length) {
-                          const mapped = quiz.questions.map((q: any) => {
-                            const options: [string, string, string, string] = ["", "", "", ""] as any;
-                            let correctIndex = 0;
-                            q.options.forEach((o: any, idx: number) => {
-                              options[idx] = o.optionText || '';
-                              if (o.isCorrect) correctIndex = idx;
-                            });
-                            return { questionText: q.questionText || '', options, correctIndex };
-                          });
-                          setEnablerQuestions(mapped);
-                        } else {
-                          setEnablerQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="truncate font-medium">{e.title}</span>
+                  <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${e.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{e.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                    onClick={async () => {
+                      await fetch(`/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !e.isActive }) });
+                      const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
+                      const data = await r.json();
+                      setEnablers((data.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                    }}
+                  >
+                    {e.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                    onClick={async () => {
+                      // Prefill enabler details and quiz into add/edit fields and open edit modal
+                      try {
+                        setEditingEnablerId(e.id);
+                        // Load enabler fields
+                        const er = await fetch(`/api/trainer/enablers/${e.id}`);
+                        if (er.ok) {
+                          const ej = await er.json();
+                          const en = ej.enabler || {};
+                          setEnablerTitle(en.title || '');
+                          setEnablerDescription(en.descriptionText || '');
+                          setEnablerScenario(en.scenarioText || '');
+                          setEnablerPpt(en.pptUrl || '');
+                          setEnablerVideo(en.videoUrl || '');
+                          setEnablerHint(en.hintText || '');
+                          setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
+                          setEnablerActive(!!en.isActive);
                         }
+                        // Load quiz
+                        const qr = await fetch(`/api/trainer/enablers/${e.id}/quiz`);
+                        if (qr.ok) {
+                          const qj = await qr.json();
+                          const quiz = qj.quiz;
+                          if (quiz && Array.isArray(quiz.questions) && quiz.questions.length) {
+                            const mapped = quiz.questions.map((q: any) => {
+                              const options: [string, string, string, string] = ["", "", "", ""] as any;
+                              let correctIndex = 0;
+                              q.options.forEach((o: any, idx: number) => {
+                                options[idx] = o.optionText || '';
+                                if (o.isCorrect) correctIndex = idx;
+                              });
+                              return { questionText: q.questionText || '', options, correctIndex };
+                            });
+                            setEnablerQuestions(mapped);
+                          } else {
+                            setEnablerQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
+                          }
+                        }
+                        setShowEditEnabler(true);
+                      } catch (e) {
+                        console.error(e);
                       }
-                      setShowEditEnabler(true);
-                    } catch (e) {
-                      console.error(e);
-                    }
-                  }}
-                >
-                  Bearbeiten
-                </button>
+                    }}
+                  >
+                    Bearbeiten
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
+                    onClick={async () => {
+                      if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                      const ok = window.confirm('Diesen Enabler wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
+                      if (!ok) return;
+                      try {
+                        const del = await fetch(`/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                        if (!del.ok) throw new Error('Löschen fehlgeschlagen');
+                        const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
+                        const data = await r.json();
+                        setEnablers((data.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                      } catch (err: any) {
+                        alert(err?.message || 'Unbekannter Fehler');
+                      }
+                    }}
+                  >
+                    Löschen
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -344,50 +366,72 @@ export default function EditCoursePage() {
           <ul className="space-y-2">
             {useCases.map((u) => (
               <li key={u.id} className="flex items-center justify-between">
-                <span className="truncate">
-                  {u.title}
-                  <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${u.isActive?'border-green-500 text-green-600':'border-yellow-500 text-yellow-600'}`}>{u.isActive?'Aktiv':'Inaktiv'}</span>
-                </span>
-                <button
-                  type="button"
-                  className="text-xs rounded-md border border-accent/30 px-2 py-1"
-                  onClick={async () => {
-                    await fetch(`/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !u.isActive }) });
-                    const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
-                    const data = await r.json();
-                    setUseCases((data.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                  }}
-                >
-                  {u.isActive ? 'Deaktivieren' : 'Aktivieren'}
-                </button>
-                <button
-                  type="button"
-                  className="ml-2 text-xs rounded-md border border-accent/30 px-2 py-1"
-                  onClick={async () => {
-                    try {
-                      setEditingUseCaseId(u.id);
-                      const ur = await fetch(`/api/trainer/use-cases/${u.id}`);
-                      if (ur.ok) {
-                        const uj = await ur.json();
-                        const uc = uj.useCase || {};
-                        setUseCaseEditTitle(uc.title || '');
-                        setUseCaseEditDesc(uc.descriptionText || '');
-                        setUseCaseEditDuration(uc.durationValue ? String(uc.durationValue) : '');
-                        setUseCaseEditActive(!!uc.isActive);
-                      } else {
-                        setUseCaseEditTitle(u.title);
-                        setUseCaseEditDesc('');
-                        setUseCaseEditDuration('');
-                        setUseCaseEditActive(false);
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="truncate font-medium">{u.title}</span>
+                  <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${u.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{u.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                    onClick={async () => {
+                      await fetch(`/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !u.isActive }) });
+                      const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
+                      const data = await r.json();
+                      setUseCases((data.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                    }}
+                  >
+                    {u.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                    onClick={async () => {
+                      try {
+                        setEditingUseCaseId(u.id);
+                        const ur = await fetch(`/api/trainer/use-cases/${u.id}`);
+                        if (ur.ok) {
+                          const uj = await ur.json();
+                          const uc = uj.useCase || {};
+                          setUseCaseEditTitle(uc.title || '');
+                          setUseCaseEditDesc(uc.descriptionText || '');
+                          setUseCaseEditDuration(uc.durationValue ? String(uc.durationValue) : '');
+                          setUseCaseEditActive(!!uc.isActive);
+                        } else {
+                          setUseCaseEditTitle(u.title);
+                          setUseCaseEditDesc('');
+                          setUseCaseEditDuration('');
+                          setUseCaseEditActive(false);
+                        }
+                        setShowEditUseCase(true);
+                      } catch (e) {
+                        console.error(e);
                       }
-                      setShowEditUseCase(true);
-                    } catch (e) {
-                      console.error(e);
-                    }
-                  }}
-                >
-                  Bearbeiten
-                </button>
+                    }}
+                  >
+                    Bearbeiten
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
+                    onClick={async () => {
+                      if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                      const ok = window.confirm('Diesen Use Case wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
+                      if (!ok) return;
+                      try {
+                        const del = await fetch(`/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                        if (!del.ok) throw new Error('Löschen fehlgeschlagen');
+                        const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
+                        const data = await r.json();
+                        setUseCases((data.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                      } catch (err: any) {
+                        alert(err?.message || 'Unbekannter Fehler');
+                      }
+                    }}
+                  >
+                    Löschen
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
