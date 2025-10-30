@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { enablers, courseMembers, courses } from '@/db/migrations/schemas/schema';
 
-export async function GET(_req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const [row] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ enabler: row });
@@ -15,9 +15,9 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -32,12 +32,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { enablerId:
     const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
     if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const body = await req.json();
-    const updates: any = {};
+  const updates: any = {};
     for (const key of [
       'title',
       'orderIndex',
       'durationValue',
       'durationUnit',
+      'descriptionText',
+      'hintText',
       'pptUrl',
       'videoUrl',
       'scenarioText',
@@ -45,6 +47,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { enablerId:
       'isActive',
     ]) {
       if (typeof body?.[key] !== 'undefined') updates[key] = body[key];
+    }
+    if (typeof body?.isActive === 'boolean' && body.isActive && !row0.isActive && !row0.activatedAt) {
+      updates.activatedAt = new Date();
     }
     const [row] = await db.update(enablers).set(updates).where(eq(enablers.id, enablerId as any)).returning();
     return NextResponse.json({ enabler: row });
@@ -54,9 +59,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { enablerId:
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });

@@ -6,6 +6,7 @@ import {
   courses,
   enablers,
   enablerCompletions,
+  enablerSubmissions,
   quizSubmissions,
   reflections,
   useCaseSubmissions,
@@ -52,8 +53,8 @@ export async function GET(req: NextRequest) {
       return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct };
     });
 
-    // Pending reviews: unreviewed quiz submissions + reflections + pending use case submissions
-  let pendingQuiz = 0, pendingRefl = 0, pendingUseCases = 0;
+    // Pending reviews: unreviewed quiz submissions + reflections + pending use case submissions + pending enabler submissions
+  let pendingQuiz = 0, pendingRefl = 0, pendingUseCases = 0, pendingEnablers = 0;
     if (traineeIds.length > 0) {
       const [{ c: pq } = { c: 0 }] = await db
         .select({ c: count() })
@@ -72,8 +73,14 @@ export async function GET(req: NextRequest) {
         .from(useCaseSubmissions)
         .where(and(eq(useCaseSubmissions.status, 'PENDING' as any), inArray(useCaseSubmissions.traineeId, traineeIds as any)));
       pendingUseCases = Number(pu) || 0;
+
+      const [{ c: pe } = { c: 0 }] = await db
+        .select({ c: count() })
+        .from(enablerSubmissions)
+        .where(and(eq(enablerSubmissions.status, 'PENDING' as any), inArray(enablerSubmissions.traineeId, traineeIds as any)));
+      pendingEnablers = Number(pe) || 0;
     }
-  const pendingReviews = pendingQuiz + pendingRefl + pendingUseCases;
+  const pendingReviews = pendingQuiz + pendingRefl + pendingUseCases + pendingEnablers;
 
     // Recent reflections (last 7 days)
     const lastWeek = new Date();
@@ -140,6 +147,7 @@ export async function GET(req: NextRequest) {
         pendingReviews,
         pendingQuiz,
         pendingReflections: pendingRefl,
+        pendingEnablers,
         pendingUseCases,
         recentReflections: Number(recentReflections) || 0,
       },

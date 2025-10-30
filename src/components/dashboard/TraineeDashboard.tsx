@@ -95,7 +95,8 @@ export default function TraineeDashboard() {
   };
 
   const handleLessonClick = (lessonId: string) => {
-    router.push(`/trainee/lessons/${lessonId}`);
+    // Redirect to enabler detail for ongoing item
+    router.push(`/trainee/enablers/${lessonId}`);
   };
 
   const handleNavigation = (view: string, data?: any) => {

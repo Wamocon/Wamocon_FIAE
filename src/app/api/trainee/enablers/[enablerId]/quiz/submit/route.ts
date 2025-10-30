@@ -15,9 +15,9 @@ import {
 
 // POST submit answers for enabler quiz
 // Body: { traineeId: string, answers: Array<{ questionId: string, selectedOptionId: string }> }
-export async function POST(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
     const answers: Array<{ questionId: string; selectedOptionId: string }> = Array.isArray(body?.answers) ? body.answers : [];

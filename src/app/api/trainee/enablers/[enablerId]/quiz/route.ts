@@ -13,11 +13,11 @@ import {
 
 // GET trainee-facing enabler quiz (requires membership and enabler active)
 // query: traineeId
-export async function GET(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { enablerId } = params;
+    const { enablerId } = await params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));

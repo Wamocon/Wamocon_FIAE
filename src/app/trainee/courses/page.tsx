@@ -36,33 +36,36 @@ export default function TraineeCoursesPage() {
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
-    <div className="mx-auto max-w-4xl p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Meine Kurse</h1>
+    <div className="mx-auto max-w-4xl space-y-6 p-6">
+      <h1 className="text-foreground text-2xl font-bold">Meine Kurse</h1>
       {courses.length === 0 ? (
-        <div className="text-muted">Keine Kurse zugewiesen.</div>
+        <div className="text-muted-foreground">Keine Kurse zugewiesen.</div>
       ) : (
         <ul className="space-y-4">
           {courses.map((c) => (
-            <li key={c.id} className="rounded-md border p-4">
+            <li key={c.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-semibold">{c.title}</div>
+                  <div className="font-semibold">
+                    <Link className="hover:text-accent transition-colors" href={`/trainee/modules/${c.id}`}>{c.title}</Link>
+                  </div>
                   <div className="text-sm text-muted-foreground">
                     {c.year ? `Jahr ${c.year}` : '—'} {c.chapter ? `• Kapitel ${c.chapter}` : ''}
                   </div>
                 </div>
+                <Link className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={`/trainee/modules/${c.id}`}>Öffnen</Link>
               </div>
-              <div className="mt-3">
-                <div className="text-sm font-medium mb-2">Enabler</div>
+              <div className="mt-4">
+                <div className="mb-2 text-sm font-medium">Enabler</div>
                 {c.enablers.length === 0 ? (
                   <div className="text-sm text-muted-foreground">Keine aktiven Enabler</div>
                 ) : (
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     {c.enablers.map((e) => (
-                      <li key={e.id} className="rounded border p-3 flex items-center justify-between">
+                      <li key={e.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
                         <span className="truncate">{e.title}</span>
-                        <Link className="text-primary underline" href={`/trainee/enablers/${e.id}/quiz`}>
-                          Quiz starten
+                        <Link className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60" href={`/trainee/enablers/${e.id}`}>
+                          Öffnen
                         </Link>
                       </li>
                     ))}

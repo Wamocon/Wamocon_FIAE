@@ -132,15 +132,18 @@ export const enablers = pgTable('enablers', {
   orderIndex: integer('order_index').notNull(), // To set the order of modules
 
   // Content
+  descriptionText: text('description_text'),
   pptUrl: text('ppt_url'), // Link to Supabase Storage
   videoUrl: text('video_url'), // Link to Supabase Storage or external
   scenarioText: text('scenario_text'),
+  hintText: text('hint_text'),
   scenarioImageUrl: text('scenario_image_url'),
 
   // Settings
   durationValue: integer('duration_value'),
   durationUnit: durationUnit('duration_unit'),
   isActive: boolean('is_active').default(false),
+  activatedAt: timestamp('activated_at'),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at')
@@ -161,6 +164,7 @@ export const useCases = pgTable('use_cases', {
   durationValue: integer('duration_value'),
   durationUnit: durationUnit('duration_unit'),
   isActive: boolean('is_active').default(false),
+  activatedAt: timestamp('activated_at'),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at')
@@ -417,6 +421,23 @@ export const enablerCompletions = pgTable(
   }),
 );
 
+// Trainee submissions for Enabler scenarios
+export const enablerSubmissions = pgTable('enabler_submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  enablerId: uuid('enabler_id')
+    .notNull()
+    .references(() => enablers.id, { onDelete: 'cascade' }),
+  solutionText: text('solution_text'),
+  status: reviewStatus('status').default('PENDING'),
+  trainerFeedback: text('trainer_feedback'),
+  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
+  reviewedAt: timestamp('reviewed_at'),
+  submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+});
+
 // ---------------------------------------------
 // LEGACY CONTENT TABLE STUBS (for compatibility)
 // These provide minimal shapes so existing routes compile.
@@ -475,6 +496,7 @@ export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;
 export type ActivityLog = typeof activityLog.$inferSelect;
 export type EnablerCompletion = typeof enablerCompletions.$inferSelect;
+export type EnablerSubmission = typeof enablerSubmissions.$inferSelect;
 // Legacy compatibility types
 export type LegacyModule = typeof modules.$inferSelect;
 export type LegacyLesson = typeof lessons.$inferSelect;

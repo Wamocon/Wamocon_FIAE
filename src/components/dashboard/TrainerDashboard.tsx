@@ -22,7 +22,7 @@ interface Trainee {
 
 type DashboardResponse = {
   trainees: Trainee[];
-  counts: { activeTrainees: number; pendingReviews: number; recentReflections: number; pendingQuiz: number; pendingReflections: number; pendingUseCases: number };
+  counts: { activeTrainees: number; pendingReviews: number; recentReflections: number; pendingQuiz: number; pendingReflections: number; pendingUseCases: number; pendingEnablers?: number };
   charts: {
     progressTrend: { week: string; progress: number }[];
     moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[];
@@ -178,9 +178,7 @@ export default function TrainerDashboard() {
                   <p className="text-muted-foreground text-sm">
                     Offene Reviews
                   </p>
-                  <p className="text-foreground text-2xl font-bold">
-                    {pendingQuiz + pendingReflections}
-                  </p>
+                  <p className="text-foreground text-2xl font-bold">{pendingReviews}</p>
                 </div>
               </div>
             </div>

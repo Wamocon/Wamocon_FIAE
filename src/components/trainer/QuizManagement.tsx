@@ -348,7 +348,7 @@ export function QuizManagement() {
           </thead>
           <tbody className="divide-y divide-slate-200">
             {quizzes.map((q) => (
-              <tr key={q.id} className="hover:bg-red-50/80">
+              <tr key={q.id} className="transition-colors hover:bg-accent/10">
                 <td className="px-4 py-3 text-sm font-medium text-foreground">{q.title}</td>
                 <td className="px-4 py-3">
                   {q.is_active ? (

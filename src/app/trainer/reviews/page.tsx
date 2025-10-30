@@ -1,95 +1,129 @@
-"use client";
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, MessageSquare } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
-interface ReflectionItem {
-  id: string;
-  traineeId: string;
-  traineeName: string;
-  strengths: string | null;
-  weaknesses: string | null;
-  mesMore: string | null;
-  mesEqual: string | null;
-  isReviewed: boolean;
-  createdAt: string;
-}
+type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string };
+type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string };
+type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
+type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'ENABLER' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string };
 
-interface SubmissionItem {
-  id: string;
-  traineeId: string;
-  traineeName: string;
-  quizId: string;
-  quizTitle: string;
-  score: number | null;
-  isReviewed: boolean;
-  submittedAt: string;
-}
-
-export default function ReviewCenterPage() {
+export default function TrainerReviewsPage() {
   const { profile } = useAuth();
   const searchParams = useSearchParams();
-  const viewParam = searchParams.get('view'); // 'quizzes' | 'reflections' | null
-  const onlyPendingParam = searchParams.get('onlyPending'); // 'true' | 'false' | null
-  const [loading, setLoading] = useState(true);
+  const viewParam = searchParams.get('view'); // 'enablers' | 'usecases' | 'quizzes' | 'reflections'
+  const onlyPendingParam = searchParams.get('onlyPending'); // 'true' | 'false'
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'enablers' | 'usecases' | 'quizzes' | 'reflections'>('enablers');
+
+  // Enabler/UseCase state
+  const [enablerSubs, setEnablerSubs] = useState<EnablerReviewItem[]>([]);
+  const [useCaseSubs, setUseCaseSubs] = useState<UseCaseReviewItem[]>([]);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
+
+  // Quiz/Reflection state
   const [reflections, setReflections] = useState<ReflectionItem[]>([]);
-  const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
-  const [filter, setFilter] = useState<'pending' | 'all'>('pending');
+  const [quizzes, setQuizzes] = useState<QuizSubmissionItem[]>([]);
+  const [pendingFilter, setPendingFilter] = useState<'pending' | 'all'>('pending');
+  const [quizTypeFilter, setQuizTypeFilter] = useState<'all' | 'ENABLER' | 'GLOBAL'>('all');
 
-  // Sync filter with URL param when it changes
+  const filteredEnablers = useMemo(() => enablerSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [enablerSubs, statusFilter]);
+  const filteredUseCases = useMemo(() => useCaseSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [useCaseSubs, statusFilter]);
+  const reflectionsFiltered = useMemo(() => reflections.filter(r => pendingFilter === 'pending' ? !r.isReviewed : true), [reflections, pendingFilter]);
+  const quizzesFiltered = useMemo(() => quizzes.filter(q => {
+    const pendingOk = pendingFilter === 'pending' ? !q.isReviewed : true;
+    const typeOk = quizTypeFilter === 'all' ? true : q.quizType === quizTypeFilter;
+    return pendingOk && typeOk;
+  }), [quizzes, pendingFilter, quizTypeFilter]);
+
+  // Sync state from URL params (deep-linking from dashboard)
   useEffect(() => {
-    if (onlyPendingParam === 'false') setFilter('all');
-    else if (onlyPendingParam === 'true') setFilter('pending');
-  }, [onlyPendingParam]);
-
-  const reflectionsFiltered = useMemo(
-    () => reflections.filter(r => (filter === 'pending' ? !r.isReviewed : true)),
-    [reflections, filter],
-  );
-  const submissionsFiltered = useMemo(
-    () => submissions.filter(s => (filter === 'pending' ? !s.isReviewed : true)),
-    [submissions, filter],
-  );
-
-  const load = async () => {
-    if (!profile?.id) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const fetchReflections = async () => {
-        const res = await fetch(`/api/trainer/reflections?trainerProfileId=${profile.id}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Fehler beim Laden der Reflektionen');
-        const data = await res.json();
-        setReflections(data.reflections || []);
-      };
-      const fetchSubmissions = async () => {
-        const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${filter === 'pending'}`);
-        if (!res.ok) throw new Error('Fehler beim Laden der Einsendungen');
-        const data = await res.json();
-        setSubmissions(data.submissions || []);
-      };
-      // If URL says view=quizzes, don't fetch reflections
-      if (viewParam === 'quizzes') {
-        await fetchSubmissions();
-      } else if (viewParam === 'reflections') {
-        await fetchReflections();
-      } else {
-        await Promise.all([fetchReflections(), fetchSubmissions()]);
-      }
-    } catch (e: any) {
-      setError(e.message || 'Unbekannter Fehler');
-    } finally {
-      setLoading(false);
+    const allowed = ['enablers', 'usecases', 'quizzes', 'reflections'] as const;
+    if (viewParam && (allowed as readonly string[]).includes(viewParam)) {
+      setActiveTab(viewParam as any);
     }
-  };
-
-  useEffect(() => {
-    load();
+    if (onlyPendingParam === 'true') {
+      setStatusFilter('pending');
+      setPendingFilter('pending');
+    } else if (onlyPendingParam === 'false') {
+      setStatusFilter('all');
+      setPendingFilter('all');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id, filter]);
+  }, [viewParam, onlyPendingParam]);
+
+  // load Enablers/UseCases
+  useEffect(() => {
+    const loadEU = async () => {
+      if (!profile?.id) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const onlyPending = statusFilter === 'pending';
+        const r = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
+        if (!r.ok) throw new Error('Konnte Reviews nicht laden');
+        const data = await r.json();
+        setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status })));
+        setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status })));
+      } catch (e: any) {
+        setError(e?.message || 'Unbekannter Fehler');
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (activeTab === 'enablers' || activeTab === 'usecases') loadEU();
+  }, [profile?.id, statusFilter, activeTab]);
+
+  // load Quizzes/Reflections
+  useEffect(() => {
+    const loadQR = async () => {
+      if (!profile?.id) return;
+      setLoading(true);
+      setError(null);
+      try {
+        if (activeTab === 'reflections') {
+          const res = await fetch(`/api/trainer/reflections?trainerProfileId=${profile.id}`, { cache: 'no-store' });
+          if (!res.ok) throw new Error('Fehler beim Laden der Reflektionen');
+          const data = await res.json();
+          setReflections(data.reflections || []);
+        } else if (activeTab === 'quizzes') {
+          const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${pendingFilter === 'pending'}`);
+          if (!res.ok) throw new Error('Fehler beim Laden der Einreichungen');
+          const data = await res.json();
+          setQuizzes(data.submissions || []);
+        }
+      } catch (e: any) {
+        setError(e.message || 'Unbekannter Fehler');
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (activeTab === 'reflections' || activeTab === 'quizzes') loadQR();
+  }, [profile?.id, activeTab, pendingFilter]);
+
+  const reviewItem = async (kind: 'enabler' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
+    if (!profile?.id) return;
+    const feedback = feedbackMap[id] || '';
+    const url = kind === 'enabler'
+      ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
+      : `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`;
+    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, trainerFeedback: feedback }) });
+    if (!r.ok) {
+      alert('Konnte Review nicht speichern');
+      return;
+    }
+    // Refresh the list with same filter
+    const onlyPending = statusFilter === 'pending';
+    const rr = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
+    const data = await rr.json();
+    setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status })));
+    setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status })));
+    setFeedbackMap(prev => ({ ...prev, [id]: '' }));
+  };
 
   const toggleReflectionReviewed = async (id: string, current: boolean) => {
     await fetch(`/api/trainer/reflections/${id}`, {
@@ -97,7 +131,10 @@ export default function ReviewCenterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_reviewed: !current, reviewer_id: profile?.id }),
     });
-    await load();
+    // reload
+    const res = await fetch(`/api/trainer/reflections?trainerProfileId=${profile?.id}`, { cache: 'no-store' });
+    const data = await res.json();
+    setReflections(data.reflections || []);
   };
 
   const toggleSubmissionReviewed = async (id: string, current: boolean) => {
@@ -106,133 +143,227 @@ export default function ReviewCenterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_reviewed: !current }),
     });
-    await load();
+    // reload
+    const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`);
+    const data = await res.json();
+    setQuizzes(data.submissions || []);
   };
 
+  const forcedView = viewParam === 'enablers' || viewParam === 'usecases' || viewParam === 'quizzes' || viewParam === 'reflections';
+
   return (
-    <div className="bg-background min-h-screen p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-foreground text-2xl font-bold">Review-Center</h1>
-              <div className="text-muted text-sm">
-                Reflektionen: {reflections.filter(r => !r.isReviewed).length} offen · Quizzes: {submissions.filter(s => !s.isReviewed).length} offen
+    <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <div className="glass-effect rounded-3xl border border-accent/30 bg-black/40 p-5 shadow-lg">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h1 className="text-foreground text-xl font-bold">Offen Review</h1>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {!forcedView ? (
+          <>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='enablers'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Enabler</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='usecases'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='quizzes'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='reflections'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
+          </>
+        ) : (
+          <div className="rounded-xl border border-accent/30 bg-black/30 px-3 py-1.5 text-sm">
+            {activeTab === 'enablers' ? 'Enabler' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
+          </div>
+        )}
+        <div className="ml-auto flex items-center gap-2 text-sm">
+          {activeTab === 'enablers' || activeTab === 'usecases' ? (
+            <>
+              <span>Filter:</span>
+              <select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
+                <option value="all">Alle</option>
+                <option value="pending">Offen</option>
+                <option value="approved">Genehmigt</option>
+                <option value="rejected">Abgelehnt</option>
+              </select>
+            </>
+          ) : (
+            <>
+              <span>Filter:</span>
+              <select value={pendingFilter} onChange={(e)=>setPendingFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
+                <option value="pending">Offen</option>
+                <option value="all">Alle</option>
+              </select>
+              {activeTab==='quizzes' && (
+                <>
+                  <span>Typ:</span>
+                  <select value={quizTypeFilter} onChange={(e)=>setQuizTypeFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
+                    <option value="all">Alle</option>
+                    <option value="ENABLER">Enabler</option>
+                    <option value="GLOBAL">Global</option>
+                  </select>
+                </>
+              )}
+            </>
+          )}
+        </div>
+        </div>
+      </div>
+
+      {loading && <div>Lade…</div>}
+      {error && <div className="text-red-500">{error}</div>}
+
+      {!loading && activeTab==='enablers' && (
+        <div className="space-y-4">
+          {filteredEnablers.length === 0 && <div className="text-sm text-muted-foreground">Keine Einreichungen</div>}
+          {filteredEnablers.map(it => (
+            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                    <BookOpen className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">{it.enablerTitle}</div>
+                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
+              </div>
+              {it.solutionText && (
+                <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-3">
+                  <div className="text-sm font-medium">Lösung</div>
+                  <p className="whitespace-pre-line text-sm text-foreground/90">{it.solutionText}</p>
+                </div>
+              )}
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium">Feedback</label>
+                <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+              </div>
+              <div className="mt-3 flex justify-end gap-2">
+                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'REJECTED')}>Ablehnen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'APPROVED')}>Genehmigen</button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setFilter('pending')} className={`rounded-xl px-4 py-2 text-sm ${filter === 'pending' ? 'bg-accent text-foreground' : 'border border-accent/30 text-foreground'}`}>Offen</button>
-              <button onClick={() => setFilter('all')} className={`rounded-xl px-4 py-2 text-sm ${filter === 'all' ? 'bg-accent text-foreground' : 'border border-accent/30 text-foreground'}`}>Alle</button>
+          ))}
+        </div>
+      )}
+
+      {!loading && activeTab==='usecases' && (
+        <div className="space-y-4">
+          {filteredUseCases.length === 0 && <div className="text-sm text-muted-foreground">Keine Einreichungen</div>}
+          {filteredUseCases.map(it => (
+            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">{it.useCaseTitle}</div>
+                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
+              </div>
+              {it.submissionText && (
+                <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-3">
+                  <div className="text-sm font-medium">Lösung</div>
+                  <p className="whitespace-pre-line text-sm text-foreground/90">{it.submissionText}</p>
+                </div>
+              )}
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium">Feedback</label>
+                <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+              </div>
+              <div className="mt-3 flex justify-end gap-2">
+                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('usecase', it.id, 'REJECTED')}>Ablehnen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('usecase', it.id, 'APPROVED')}>Genehmigen</button>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
+      )}
 
-        {/* Reflections Section */}
-        {viewParam !== 'quizzes' && (
-        <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-          <h2 className="text-foreground mb-4 text-xl font-semibold">Reflektionen</h2>
-          {loading ? (
-            <div className="text-center text-muted">Lade…</div>
-          ) : error ? (
-            <div className="rounded-xl border border-red-700 bg-red-900/20 p-4 text-red-300">{error}</div>
-          ) : reflectionsFiltered.length === 0 ? (
-            <div className="text-muted">Keine Reflektionen.</div>
-          ) : (
-            <ul className="space-y-4">
-              {reflectionsFiltered.map((r) => (
-                <li key={r.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-foreground font-semibold">{r.traineeName}</div>
-                      <div className="text-muted text-xs">{new Date(r.createdAt).toLocaleString()}</div>
-                    </div>
-                    <button
-                      onClick={() => toggleReflectionReviewed(r.id, r.isReviewed)}
-                      className={`rounded-xl px-3 py-2 text-sm ${r.isReviewed ? 'border border-green-600/40 text-green-300 hover:bg-green-900/20' : 'border border-accent/30 text-foreground hover:bg-background/50'}`}
-                    >
-                      {r.isReviewed ? (
-                        <span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Gelesen</span>
-                      ) : (
-                        <span className="inline-flex items-center gap-2"><Circle className="h-4 w-4" /> Als gelesen markieren</span>
-                      )}
-                    </button>
+      {!loading && activeTab==='quizzes' && (
+        <div className="space-y-4">
+          {quizzesFiltered.length === 0 && <div className="text-sm text-muted-foreground">Keine Quiz-Einreichungen.</div>}
+          {quizzesFiltered.map(s => (
+            <div key={s.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                    <HelpCircle className="h-4 w-4" />
                   </div>
-                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <div>
-                      <div className="text-muted mb-1 text-xs">Stärken</div>
-                      <div className="text-foreground whitespace-pre-wrap rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{r.strengths || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-muted mb-1 text-xs">Schwächen</div>
-                      <div className="text-foreground whitespace-pre-wrap rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{r.weaknesses || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-muted mb-1 text-xs">Mehr davon</div>
-                      <div className="text-foreground whitespace-pre-wrap rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{r.mesMore || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-muted mb-1 text-xs">Gleich lassen</div>
-                      <div className="text-foreground whitespace-pre-wrap rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{r.mesEqual || '-'}</div>
-                    </div>
+                  <div>
+                    <div className="font-semibold">{s.quizTitle}</div>
+                    <div className="text-xs text-muted-foreground">{s.traineeName} • {new Date(s.submittedAt).toLocaleString()}</div>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{s.quizType || '-'}</span>
+                  <button onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
+                    {s.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4"/> Bewertet</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4"/> Als bewertet markieren</span>)}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+                <div>
+                  <div className="text-xs text-muted-foreground">Teilnehmer</div>
+                  <div className="text-sm">{s.traineeName}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Score</div>
+                  <div className="text-sm">{s.score ?? 0}%</div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-xs text-muted-foreground">Fortschritt</div>
+                  <div className="mt-1 h-1.5 w-full rounded-full bg-black/30">
+                    <div className="h-1.5 rounded-full bg-primary/90" style={{ width: `${Math.max(0, Math.min(100, s.score ?? 0))}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-        )}
+      )}
 
-        {/* Quiz Submissions Section */}
-        {viewParam !== 'reflections' && (
-        <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-          <h2 className="text-foreground mb-4 text-xl font-semibold">Quiz-Einreichungen</h2>
-          {loading ? (
-            <div className="text-center text-muted">Lade…</div>
-          ) : error ? (
-            <div className="rounded-xl border border-red-700 bg-red-900/20 p-4 text-red-300">{error}</div>
-          ) : submissionsFiltered.length === 0 ? (
-            <div className="text-muted">Keine Quiz-Einreichungen.</div>
-          ) : (
-            <ul className="space-y-4">
-              {submissionsFiltered.map((s) => (
-                <li key={s.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-foreground font-semibold">{s.traineeName}</div>
-                      <div className="text-muted text-xs">{new Date(s.submittedAt).toLocaleString()}</div>
-                    </div>
-                    <button
-                      onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)}
-                      className={`rounded-xl px-3 py-2 text-sm ${s.isReviewed ? 'border border-green-600/40 text-green-300 hover:bg-green-900/20' : 'border border-accent/30 text-foreground hover:bg-background/50'}`}
-                    >
-                      {s.isReviewed ? (
-                        <span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Bewertet</span>
-                      ) : (
-                        <span className="inline-flex items-center gap-2"><Circle className="h-4 w-4" /> Als bewertet markieren</span>
-                      )}
-                    </button>
+      {!loading && activeTab==='reflections' && (
+        <div className="space-y-4">
+          {reflectionsFiltered.length === 0 && <div className="text-sm text-muted-foreground">Keine Reflektionen.</div>}
+          {reflectionsFiltered.map(r => (
+            <div key={r.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                    <MessageSquare className="h-4 w-4" />
                   </div>
-                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div>
-                      <div className="text-muted mb-1 text-xs">Quiz</div>
-                      <div className="text-foreground rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{s.quizTitle}</div>
-                    </div>
-                    <div>
-                      <div className="text-muted mb-1 text-xs">Score</div>
-                      <div className="text-foreground rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{s.score ?? 0}%</div>
-                    </div>
-                    <div>
-                      <div className="text-muted mb-1 text-xs">Status</div>
-                      <div className="text-foreground rounded-xl border border-accent/10 bg-background/50 p-3 text-sm">{s.isReviewed ? 'Bewertet' : 'Offen'}</div>
-                    </div>
+                  <div>
+                    <div className="font-semibold">Reflexion von {r.traineeName}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</div>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                </div>
+                <button onClick={() => toggleReflectionReviewed(r.id, r.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${r.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
+                  {r.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4"/> Gelesen</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4"/> Als gelesen markieren</span>)}
+                </button>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Stärken</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.strengths || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Schwächen</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.weaknesses || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Mehr davon</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.mesMore || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Gleich lassen</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.mesEqual || '-'}</div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
+ 
