@@ -45,14 +45,32 @@ export function MainLayout({
   // Memoize the layout structure to prevent unnecessary re-renders
   const layoutContent = useMemo(
     () => (
-      <div className="from-background flex h-screen bg-gradient-to-br via-red-900/20 to-red-800/30">
-        {/* Sidebar */}
-        <Sidebar
-          currentView={currentView}
-          isOpen={sidebarOpen}
-          onToggle={onToggleSidebar}
-          userRole={userRole}
-        />
+      <div className="from-background relative flex h-screen bg-gradient-to-br via-red-900/20 to-red-800/30">
+        {/* Sidebar + hover edge wrapper */}
+        <div className="relative z-40 group">
+          {/* Hover edge to reveal sidebar when hidden (desktop only) */}
+          <div
+            className="absolute left-0 top-0 hidden h-full w-2 lg:block"
+            aria-hidden="true"
+          />
+
+          {/* Sidebar */}
+          <Sidebar
+            currentView={currentView}
+            isOpen={sidebarOpen}
+            onToggle={onToggleSidebar}
+            userRole={userRole}
+          />
+        </div>
+
+        {/* Mobile overlay when sidebar is open */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden"
+            onClick={onToggleSidebar}
+            aria-hidden="true"
+          />
+        )}
 
         {/* Main Content Area */}
         <main className="flex flex-1 flex-col overflow-hidden">

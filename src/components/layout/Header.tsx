@@ -35,10 +35,18 @@ export function Header({
   }
 
   return (
-    <header className="bg-card/80 border-border/60 flex h-20 items-center justify-between border-b px-6 shadow-lg backdrop-blur-md">
+    <header className="bg-card/80 border-border/60 relative z-50 flex h-20 items-center justify-between border-b px-6 shadow-lg backdrop-blur-md">
       {/* Left side - Breadcrumbs and Sidebar Toggle */}
       <div className="flex items-center gap-4">
         {/* Sidebar Toggle */}
+        <button
+          onClick={onToggleSidebar}
+          aria-label="Toggle sidebar"
+          aria-expanded={sidebarOpen}
+          className="text-muted hover:text-foreground hover:bg-muted rounded-lg p-2 transition-all duration-200"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
           {canGoBack && (
             <button
               onClick={onGoBack}
