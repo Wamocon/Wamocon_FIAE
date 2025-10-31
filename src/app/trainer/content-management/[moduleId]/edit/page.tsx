@@ -258,7 +258,7 @@ export default function EditCoursePage() {
         </div>
 
         <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><BookOpen className="h-4 w-4"/>Enabler</div>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><BookOpen className="h-4 w-4"/>Lessons</div>
           <ul className="space-y-2">
             {enablers.map((e) => (
               <li key={e.id} className="flex items-center justify-between">
@@ -357,7 +357,7 @@ export default function EditCoursePage() {
             className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
             onClick={() => setShowAddEnabler(true)}
           >
-            <Plus className="h-4 w-4"/> Enabler hinzufügen
+            <Plus className="h-4 w-4"/> Lesson hinzufügen
           </button>
         </div>
 
@@ -452,7 +452,7 @@ export default function EditCoursePage() {
           <div className="absolute inset-0 bg-black/50" onClick={() => !enablerSubmitting && setShowAddEnabler(false)} />
           <div className="glass-effect relative z-10 w-full max-w-2xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Neuen Enabler erstellen</h2>
+              <h2 className="text-xl font-semibold">Neue Lesson erstellen</h2>
               <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => !enablerSubmitting && setShowAddEnabler(false)}>Schließen</button>
             </div>
               <div className="space-y-4">
@@ -529,10 +529,10 @@ export default function EditCoursePage() {
                   try {
                     // 1) Create Enabler
                     const res = await fetch(`/api/trainer/courses/${courseId}/enablers?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: enablerTitle.trim(), descriptionText: enablerDescription.trim() || undefined, scenarioText: enablerScenario.trim() || undefined, hintText: enablerHint.trim() || undefined, pptUrl: enablerPpt.trim() || undefined, videoUrl: enablerVideo.trim() || undefined, durationValue: enablerDuration ? Number(enablerDuration) : undefined, durationUnit: enablerDuration ? 'DAYS' : undefined, isActive: enablerActive }) });
-                    if (!res.ok) throw new Error('Enabler konnte nicht erstellt werden');
+                    if (!res.ok) throw new Error('Lesson konnte nicht erstellt werden');
                     const data = await res.json();
                     const enablerId = data.enabler?.id;
-                    if (!enablerId) throw new Error('Fehlende Enabler ID');
+                    if (!enablerId) throw new Error('Fehlende Lesson ID');
 
                     // 2) If quiz provided, create quiz
                     if (cleaned.length) {
