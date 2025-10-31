@@ -78,7 +78,7 @@ export function BreadcrumbProvider({
       else if (segment === 'reflection') label = 'Reflektion';
       else if (segment === 'knowledge-submission') label = 'Wissensabgabe';
       else if (segment === 'modules') label = 'Module';
-      else if (segment === 'lessons') label = 'Lektionen';
+      else if (segment === 'lessons') label = 'Trainer-Feedback';
       else if (segment === 'quizzes') label = 'Quizze';
       else if (segment === 'content-management') label = 'Inhalts-Management';
       else if (segment === 'quiz-management') label = 'Quiz-Verwaltung';
