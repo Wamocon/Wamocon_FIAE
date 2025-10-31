@@ -16,6 +16,7 @@ interface Profile {
   avatar?: string | null;
   training_start_date?: string | null;
   trainer_id?: string | null;
+  isActive?: boolean;
 }
 
 interface AuthContextType {
@@ -88,17 +89,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase
       .from('profiles')
       .select(
-        'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date'
+        'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, is_active'
       )
       .eq('id', userId)
       .single();
 
     if (error) {
       setProfile(null);
-      return;
+      return null;
     }
 
-    setProfile({
+    const mapped = {
       id: data.id,
       email,
       full_name: (data as any).full_name,
@@ -106,7 +107,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       avatar: (data as any).avatar_url || null,
       training_start_date: (data as any).start_of_training_date || null,
       trainer_id: (data as any).assigned_trainer_id || null,
-    });
+      // map DB flag
+      isActive: Boolean((data as any).is_active),
+    };
+    setProfile(mapped);
+    return mapped;
   };
 
   const waitForProfile = async (
@@ -141,7 +146,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser({ id: data.user.id, email: data.user.email || '' });
       // Handle eventual consistency after email confirmation or first-time login
       await waitForProfile(data.user.id);
-      await loadProfile(data.user.id);
+      const loaded = await loadProfile(data.user.id);
+      // Prevent inactive trainees from logging in
+      if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
+        // sign out immediately and inform caller
+        await supabase.auth.signOut();
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        throw new Error('Account ist noch nicht aktiviert. Bitte Ihren Trainer kontaktieren.');
+      }
     }
     setLoading(false);
   };

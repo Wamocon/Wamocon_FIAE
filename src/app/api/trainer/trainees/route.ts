@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
     // Trainees assigned to this trainer
     const traineeRows = await db
-      .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
+      .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl, isActive: profiles.isActive })
       .from(profiles)
       .where(and(eq(profiles.role, 'TRAINEE' as any), eq(profiles.assignedTrainerId, trainerId as any)));
 
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     const trainees = traineeRows.map(t => {
       const completed = completedMap.get(String(t.id)) || 0;
       const pct = totalEnablers > 0 ? Math.round((completed / totalEnablers) * 100) : 0;
-      return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct };
+      return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct, isActive: Boolean((t as any).isActive) };
     });
 
     return NextResponse.json({ trainees });

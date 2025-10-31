@@ -43,6 +43,7 @@ export const profiles = pgTable('profiles', {
   email: text('email').notNull().unique(),
   avatarUrl: text('avatar_url'),
   role: userRole('role').notNull(),
+  isActive: boolean('is_active').default(false),
   startOfTrainingDate: timestamp('start_of_training_date'),
 
   // A trainee can be assigned to a specific trainer
