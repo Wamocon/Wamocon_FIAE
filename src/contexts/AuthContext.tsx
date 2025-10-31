@@ -200,8 +200,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       avatar: (data as any).avatar_url || null,
       training_start_date: (data as any).start_of_training_date || null,
       trainer_id: (data as any).assigned_trainer_id || null,
-      // map DB flag
-      isActive: Boolean((data as any).is_active),
+      // map DB flag; default to true when column is null/undefined
+      isActive:
+        (data as any).is_active === null || (data as any).is_active === undefined
+          ? true
+          : Boolean((data as any).is_active),
     };
     setProfile(mapped);
     return mapped;
