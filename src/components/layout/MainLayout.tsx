@@ -3,6 +3,7 @@
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { useMemo, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 
 // Use the same User interface as AuthContext
 interface User {
@@ -41,6 +42,11 @@ export function MainLayout({
 }: MainLayoutProps) {
   // Determine current view from URL path - optimized with useMemo
   const currentView = useMemo(() => 'dashboard', []);
+  const pathname = usePathname();
+  const hideBackButton = useMemo(() => {
+    if (!pathname) return false;
+    return pathname.startsWith('/trainee/quizzes/');
+  }, [pathname]);
 
   // Memoize the layout structure to prevent unnecessary re-renders
   const layoutContent = useMemo(
@@ -80,6 +86,7 @@ export function MainLayout({
             onToggleSidebar={onToggleSidebar}
             sidebarOpen={sidebarOpen}
             userRole={userRole}
+            hideBackButton={hideBackButton}
           />
 
           {/* Page Content */}

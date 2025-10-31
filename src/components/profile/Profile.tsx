@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { User, Edit3, Award, Clock, Target, TrendingUp, Users, Upload } from 'lucide-react';
+import { User, Edit3, Award, Clock, Target, TrendingUp, Users, Upload, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { FILE_UPLOAD } from '@/lib/constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export function Profile() {
-  const { profile, updateProfile } = useAuth();
+  const { profile, updateProfile, changePassword } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -20,6 +20,11 @@ export function Profile() {
   });
   const [stats, setStats] = useState<{ trainees?: number; activeCourses?: number; pendingReviews?: number; recentActivity7d?: number } | null>(null);
   const [activities, setActivities] = useState<Array<{ id: string; userId: string; activityType: string; createdAt: string }>>([]);
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [showPwSection, setShowPwSection] = useState(false);
 
   if (!profile) {
     return (
@@ -69,6 +74,29 @@ export function Profile() {
       training_start_date: profile.training_start_date || '',
     });
     setIsEditing(false);
+  };
+
+  const handlePasswordChange = async () => {
+    setPwMsg(null);
+    if (!pw1 || pw1.length < 8) {
+      setPwMsg('Das Passwort muss mindestens 8 Zeichen lang sein.');
+      return;
+    }
+    if (pw1 !== pw2) {
+      setPwMsg('Die Passwörter stimmen nicht überein.');
+      return;
+    }
+    try {
+      setPwBusy(true);
+      await changePassword(pw1);
+      setPwMsg('Passwort erfolgreich geändert.');
+      setPw1('');
+      setPw2('');
+    } catch (e: any) {
+      setPwMsg(typeof e?.message === 'string' ? e.message : 'Passwort konnte nicht geändert werden');
+    } finally {
+      setPwBusy(false);
+    }
   };
 
   const handleChooseFile = () => fileInputRef.current?.click();
@@ -262,6 +290,64 @@ export function Profile() {
               </div>
             )}
           </div>
+                    {/* Change Password */}
+              {/* Change Password */}
+              <div className="bg-card border-border mt-6 rounded-3xl border p-0 shadow-lg overflow-hidden">
+                <button
+                  onClick={() => setShowPwSection(s => !s)}
+                  className="flex w-full items-center justify-between px-6 py-5"
+                  aria-expanded={showPwSection}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="from-accent to-primary inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
+                      <Lock className="h-5 w-5 text-white" />
+                    </span>
+                    <span className="text-foreground text-xl font-semibold">Passwort ändern</span>
+                  </div>
+                  <span className="text-muted-foreground text-sm">{showPwSection ? 'Schließen' : 'Öffnen'}</span>
+                </button>
+                {showPwSection && (
+                  <div className="px-6 pb-6">
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div>
+                        <label className="text-muted-foreground mb-2 block text-sm font-medium">Neues Passwort</label>
+                        <input
+                          type="password"
+                          value={pw1}
+                          onChange={(e) => setPw1(e.target.value)}
+                          placeholder="Mindestens 8 Zeichen"
+                          className="bg-muted border-border text-foreground focus:ring-accent w-full rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
+                          autoComplete="new-password"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-muted-foreground mb-2 block text-sm font-medium">Passwort bestätigen</label>
+                        <input
+                          type="password"
+                          value={pw2}
+                          onChange={(e) => setPw2(e.target.value)}
+                          className="bg-muted border-border text-foreground focus:ring-accent w-full rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
+                          autoComplete="new-password"
+                        />
+                      </div>
+                    </div>
+                    {pwMsg && (
+                      <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${pwMsg.includes('erfolgreich') ? 'border-green-500/40 text-green-400' : 'border-red-500/40 text-red-400'}`}>
+                        {pwMsg}
+                      </div>
+                    )}
+                    <div className="mt-6">
+                      <button
+                        onClick={handlePasswordChange}
+                        disabled={pwBusy}
+                        className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-6 py-3 transition-colors disabled:opacity-60"
+                      >
+                        {pwBusy ? 'Ändere…' : 'Passwort ändern'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
         </div>
 
         {isEditing && (

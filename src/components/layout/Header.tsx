@@ -10,6 +10,7 @@ interface HeaderProps {
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
   userRole: 'trainee' | 'trainer';
+  hideBackButton?: boolean;
 }
 
 export function Header({
@@ -17,6 +18,7 @@ export function Header({
   onToggleSidebar,
   sidebarOpen,
   userRole,
+  hideBackButton = false,
 }: HeaderProps) {
   const { profile } = useAuth();
   const { language } = useLanguage();
@@ -47,7 +49,7 @@ export function Header({
         >
           <Menu className="h-5 w-5" />
         </button>
-          {canGoBack && (
+          {canGoBack && !hideBackButton && (
             <button
               onClick={onGoBack}
               className="text-muted hover:text-foreground hover:bg-muted rounded-lg p-2 transition-all duration-200"

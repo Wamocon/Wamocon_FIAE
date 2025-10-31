@@ -40,6 +40,7 @@ interface AuthContextType {
   }) => Promise<void>;
   refreshProfile: () => Promise<void>;
   switchRole: (role: 'trainee' | 'trainer') => Promise<void>;
+  changePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -331,6 +332,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .update({ role: dbRole, updated_at: new Date().toISOString() })
         .eq('id', profile.id);
       if (user) await loadProfile(user.id);
+    },
+    changePassword: async (newPassword: string) => {
+      if (!newPassword || newPassword.length < 8) {
+        throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
+      }
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        throw new Error(error.message || 'Passwort konnte nicht geändert werden');
+      }
     },
   };
 
