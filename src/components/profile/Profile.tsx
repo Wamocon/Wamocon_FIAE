@@ -26,6 +26,35 @@ export function Profile() {
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [showPwSection, setShowPwSection] = useState(false);
 
+  // Load trainer-specific stats (declare hooks before any conditional return)
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (!profile?.id || profile.role !== 'trainer') return;
+        const url = `/api/trainer/profile?trainerId=${profile.id}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data: {
+          counts?: { trainees?: number; activeCourses?: number; pendingReviews?: number; recentActivity7d?: number };
+          recentActivities?: Array<{ id: string; userId?: string; activityType: string; createdAt?: string | null }>;
+        } = await res.json();
+        setStats(data.counts || null);
+        const recent = Array.isArray(data.recentActivities)
+          ? (data.recentActivities as Array<{ id: string; userId?: string; activityType: string; createdAt?: string | null }>).map((r) => ({
+              id: r.id,
+              userId: r.userId || '',
+              activityType: r.activityType,
+              createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : '',
+            }))
+          : [];
+        setActivities(recent);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    load();
+  }, [profile?.id, profile?.role]);
+
   if (!profile) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
@@ -37,26 +66,7 @@ export function Profile() {
     );
   }
 
-  // Load trainer-specific stats
-  useEffect(() => {
-    const load = async () => {
-      if (profile?.role !== 'trainer') return;
-      try {
-        const url = `/api/trainer/profile?trainerId=${profile.id}`;
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        setStats(data.counts || null);
-        const recent = Array.isArray(data.recentActivities)
-          ? data.recentActivities.map((r: any) => ({ ...r, createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : '' }))
-          : [];
-        setActivities(recent);
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    load();
-  }, [profile?.id, profile?.role]);
+  
 
   const handleSave = async () => {
     try {
@@ -92,8 +102,11 @@ export function Profile() {
       setPwMsg('Passwort erfolgreich geändert.');
       setPw1('');
       setPw2('');
-    } catch (e: any) {
-      setPwMsg(typeof e?.message === 'string' ? e.message : 'Passwort konnte nicht geändert werden');
+    } catch (e: unknown) {
+      const message = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string'
+        ? (e as any).message
+        : 'Passwort konnte nicht geändert werden';
+      setPwMsg(message);
     } finally {
       setPwBusy(false);
     }
@@ -131,9 +144,9 @@ export function Profile() {
       const { data } = supabase.storage.from('avatars').getPublicUrl(path);
       const publicUrl = data.publicUrl;
       await updateProfile({ avatar_url: publicUrl });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Avatar upload error:', e);
-      const msg = typeof e?.message === 'string' ? e.message : String(e);
+      const msg = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string' ? (e as any).message : String(e);
       const hint = msg.toLowerCase().includes('not found')
         ? '\nHinweis: Existiert der Storage-Bucket "avatars" und ist er öffentlich?'
         : '';
@@ -440,11 +453,11 @@ export function Profile() {
         ) : (
           <div className="space-y-4">
             <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
-              <span className="text-muted-foreground">Modul "JavaScript Grundlagen" abgeschlossen</span>
+              <span className="text-muted-foreground">Modul &quot;JavaScript Grundlagen&quot; abgeschlossen</span>
               <span className="text-muted-foreground ml-auto text-sm">vor 2 Stunden</span>
             </div>
             <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
-              <span className="text-muted-foreground">Quiz "HTML & CSS" bestanden</span>
+              <span className="text-muted-foreground">Quiz &quot;HTML &amp; CSS&quot; bestanden</span>
               <span className="text-muted-foreground ml-auto text-sm">vor 1 Tag</span>
             </div>
             <div className="bg-muted/50 flex items-center justify-between rounded-xl p-4">

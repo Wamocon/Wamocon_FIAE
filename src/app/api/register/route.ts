@@ -30,13 +30,12 @@ export async function POST(request: Request) {
 
     const allowedList = allowlistCsv ? allowlistCsv.split(',').map((s: string) => s.trim().toLowerCase()) : [];
     const emailLower = email.trim().toLowerCase();
-    const role = allowedList.includes(emailLower) ? 'TRAINER' : 'TRAINEE';
-    const is_active = role === 'TRAINER';
+  const role = allowedList.includes(emailLower) ? 'TRAINER' : 'TRAINEE';
     const full_name = deriveNameFromEmail(email);
 
     // Create auth user via admin
     // Using admin.auth.admin.createUser (some supabase versions expose admin namespace)
-    const createRes = await (admin.auth as any).admin.createUser({
+    const { data: created, error } = await admin.auth.admin.createUser({
       email: email.trim(),
       password,
       email_confirm: true,
@@ -44,16 +43,14 @@ export async function POST(request: Request) {
     });
 
     // Log the raw response for debugging (server-side log)
-    console.debug('admin.createUser response:', createRes);
+    console.debug('admin.createUser response:', { data: created, error });
 
-    // Support different shapes: some SDKs return { data, error }.
-    const maybeError = createRes?.error || createRes?.data?.error;
-    if (maybeError) {
-      console.error('createUser error detail:', maybeError);
-      return NextResponse.json({ error: maybeError?.message || String(maybeError) }, { status: 400 });
+    if (error) {
+      console.error('createUser error detail:', error);
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    const user = createRes.user || createRes.data?.user;
+    const user = created?.user;
     if (!user || !user.id) {
       return NextResponse.json({ error: 'Failed to create auth user' }, { status: 500 });
     }

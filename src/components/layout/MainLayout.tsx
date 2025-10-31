@@ -2,7 +2,7 @@
 
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
-import { useMemo, useCallback } from 'react';
+import { useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 
 // Use the same User interface as AuthContext
@@ -32,8 +32,8 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({
-  user,
-  profile,
+  user: _user,
+  profile: _profile,
   onGoBack,
   sidebarOpen,
   onToggleSidebar,
@@ -96,7 +96,7 @@ export function MainLayout({
         </main>
       </div>
     ),
-    [currentView, sidebarOpen, onToggleSidebar, userRole, onGoBack, children]
+    [currentView, sidebarOpen, onToggleSidebar, userRole, onGoBack, children, hideBackButton]
   );
 
   return layoutContent;

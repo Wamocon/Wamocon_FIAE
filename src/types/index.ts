@@ -107,7 +107,7 @@ export interface NavigationItem {
 export interface Breadcrumb {
   title: string;
   view: string;
-  data?: any;
+  data?: unknown;
 }
 
 // Form and Input Types

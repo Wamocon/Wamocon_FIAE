@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const traineeRows = await db
       .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
       .from(profiles)
-      .where(and(eq(profiles.role, 'TRAINEE' as any), eq(profiles.assignedTrainerId, trainerId as any)));
+      .where(and(eq(profiles.role, 'TRAINEE'), eq(profiles.assignedTrainerId, trainerId)));
     const traineeIds = traineeRows.map(t => t.id);
 
     // Enablers under courses created by this trainer (active)
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       .select({ id: enablers.id, title: enablers.title })
       .from(enablers)
       .innerJoin(courses, eq(enablers.courseId, courses.id))
-      .where(and(eq(courses.createdById, trainerId as any)));
+      .where(and(eq(courses.createdById, trainerId)));
     const enablerIds = trainerEnablers.map(e => e.id);
 
     // Progress per trainee = completed enablers / total enablers
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       const rows = await db
         .select({ traineeId: enablerCompletions.traineeId, c: count() })
         .from(enablerCompletions)
-        .where(and(inArray(enablerCompletions.enablerId, enablerIds as any), inArray(enablerCompletions.traineeId, traineeIds as any)))
+        .where(and(inArray(enablerCompletions.enablerId, enablerIds), inArray(enablerCompletions.traineeId, traineeIds)))
         .groupBy(enablerCompletions.traineeId);
       rows.forEach(r => completedMap.set(String(r.traineeId), Number(r.c)));
     }
@@ -59,25 +59,25 @@ export async function GET(req: NextRequest) {
       const [{ c: pq } = { c: 0 }] = await db
         .select({ c: count() })
         .from(quizSubmissions)
-        .where(and(eq(quizSubmissions.isReviewed, false as any), inArray(quizSubmissions.traineeId, traineeIds as any)));
+        .where(and(eq(quizSubmissions.isReviewed, false), inArray(quizSubmissions.traineeId, traineeIds)));
       pendingQuiz = Number(pq) || 0;
 
       const [{ c: pr } = { c: 0 }] = await db
         .select({ c: count() })
         .from(reflections)
-        .where(and(eq(reflections.isReviewed, false as any), inArray(reflections.traineeId, traineeIds as any)));
+        .where(and(eq(reflections.isReviewed, false), inArray(reflections.traineeId, traineeIds)));
       pendingRefl = Number(pr) || 0;
 
       const [{ c: pu } = { c: 0 }] = await db
         .select({ c: count() })
         .from(useCaseSubmissions)
-        .where(and(eq(useCaseSubmissions.status, 'PENDING' as any), inArray(useCaseSubmissions.traineeId, traineeIds as any)));
+        .where(and(eq(useCaseSubmissions.status, 'PENDING'), inArray(useCaseSubmissions.traineeId, traineeIds)));
       pendingUseCases = Number(pu) || 0;
 
       const [{ c: pe } = { c: 0 }] = await db
         .select({ c: count() })
         .from(enablerSubmissions)
-        .where(and(eq(enablerSubmissions.status, 'PENDING' as any), inArray(enablerSubmissions.traineeId, traineeIds as any)));
+        .where(and(eq(enablerSubmissions.status, 'PENDING'), inArray(enablerSubmissions.traineeId, traineeIds)));
       pendingEnablers = Number(pe) || 0;
     }
   const pendingReviews = pendingQuiz + pendingRefl + pendingUseCases + pendingEnablers;
@@ -86,10 +86,10 @@ export async function GET(req: NextRequest) {
     const lastWeek = new Date();
     lastWeek.setDate(lastWeek.getDate() - 7);
     const [{ c: recentReflections = 0 } = { c: 0 }] = traineeIds.length
-      ? await db
+    ? await db
           .select({ c: count() })
           .from(reflections)
-          .where(and(inArray(reflections.traineeId, traineeIds as any), gt(reflections.createdAt, lastWeek as any)))
+      .where(and(inArray(reflections.traineeId, traineeIds), gt(reflections.createdAt, lastWeek)))
       : [{ c: 0 }];
 
     // Progress trend: count enabler completions and quiz submissions per week bucket for last 6 weeks
@@ -100,12 +100,12 @@ export async function GET(req: NextRequest) {
       const compRows = await db
         .select({ at: enablerCompletions.completedAt })
         .from(enablerCompletions)
-        .where(inArray(enablerCompletions.traineeId, traineeIds as any))
+        .where(inArray(enablerCompletions.traineeId, traineeIds))
         .orderBy(desc(enablerCompletions.completedAt));
       const subRows = await db
         .select({ at: quizSubmissions.submittedAt })
         .from(quizSubmissions)
-        .where(inArray(quizSubmissions.traineeId, traineeIds as any))
+        .where(inArray(quizSubmissions.traineeId, traineeIds))
         .orderBy(desc(quizSubmissions.submittedAt));
       const now = new Date();
       const addToBuckets = (date: Date | null) => {
@@ -117,8 +117,8 @@ export async function GET(req: NextRequest) {
           trendBuckets[idx].progress += 1;
         }
       };
-      compRows.forEach(r => addToBuckets(r.at ? new Date(r.at as any) : null));
-      subRows.forEach(r => addToBuckets(r.at ? new Date(r.at as any) : null));
+  compRows.forEach(r => addToBuckets(r.at ?? null));
+  subRows.forEach(r => addToBuckets(r.at ?? null));
     }
     const maxVal = trendBuckets.reduce((m, b) => Math.max(m, b.progress), 0) || 1;
     const progressTrend = trendBuckets.map(b => ({ week: b.week, progress: Math.round((b.progress / maxVal) * 100) }));
@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
       const [{ c: completedCnt = 0 } = { c: 0 }] = await db
         .select({ c: count() })
         .from(enablerCompletions)
-        .where(and(eq(enablerCompletions.enablerId, en.id as any), inArray(enablerCompletions.traineeId, traineeIds as any)));
+        .where(and(eq(enablerCompletions.enablerId, en.id), inArray(enablerCompletions.traineeId, traineeIds)));
       const completed = Number(completedCnt) || 0;
       const notStarted = Math.max(traineeIds.length - completed, 0);
       // inProgress concept doesn't apply to enabler completion; keep as 0

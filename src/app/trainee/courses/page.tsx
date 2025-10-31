@@ -23,8 +23,9 @@ export default function TraineeCoursesPage() {
         if (!r.ok) throw new Error('Kurse konnten nicht geladen werden');
         const data = await r.json();
         setCourses(data.courses || []);
-      } catch (e: any) {
-        setError(e?.message || 'Unbekannter Fehler');
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Unbekannter Fehler';
+        setError(message);
       } finally {
         setLoading(false);
       }

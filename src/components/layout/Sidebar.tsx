@@ -30,7 +30,7 @@ interface SidebarProps {
 export function Sidebar({
   currentView,
   isOpen,
-  onToggle,
+  onToggle: _onToggle,
   userRole,
 }: SidebarProps) {
   const { profile, signOut } = useAuth();
@@ -104,8 +104,6 @@ export function Sidebar({
       router.push('/login');
     }
   }, [signOut, router]);
-
-  if (!profile) return null;
 
   // Role-based navigation items - optimized with useMemo
   const navigationItems = useMemo(
@@ -194,6 +192,8 @@ export function Sidebar({
     ],
     [userRole, language]
   );
+
+  if (!profile) return null;
 
   return (
     <aside

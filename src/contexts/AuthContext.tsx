@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 interface User {
   id: string;
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Realtime subscription handle for current user's profile
-    let profileChannel: any = null;
+    let profileChannel: RealtimeChannel | null = null;
     const setupRealtime = (userId?: string) => {
       // cleanup previous
       try {
@@ -69,10 +70,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .on(
             'postgres_changes',
             { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
-            (payload: any) => {
+            (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
               try {
-                const newRow = payload?.new;
-                if (newRow && newRow.is_active === false) {
+                const newRow = payload?.new as Record<string, unknown> | null | undefined;
+                if (newRow && newRow['is_active'] === false) {
                   // If current user was deactivated, sign them out immediately
                   supabase.auth.signOut()
                     .catch((err) => console.error('Error signing out after deactivation', err))
@@ -83,7 +84,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     });
                 } else if (newRow) {
                   // Update local profile when changes arrive
-                  setProfile(prev => ({ ...(prev as any), full_name: newRow.full_name ?? prev?.full_name, avatar: newRow.avatar_url ?? prev?.avatar, training_start_date: newRow.start_of_training_date ?? prev?.training_start_date, isActive: Boolean(newRow.is_active) }));
+                  setProfile(prev => {
+                    if (!prev) return prev;
+                    const updated: Profile = {
+                      ...prev,
+                      full_name: typeof newRow['full_name'] === 'string' ? (newRow['full_name'] as string) : prev.full_name,
+                      avatar: typeof newRow['avatar_url'] === 'string' ? (newRow['avatar_url'] as string) : prev.avatar,
+                      training_start_date: typeof newRow['start_of_training_date'] === 'string' ? (newRow['start_of_training_date'] as string) : prev.training_start_date,
+                      isActive: typeof newRow['is_active'] === 'boolean' ? (newRow['is_active'] as boolean) : prev.isActive,
+                    };
+                    return updated;
+                  });
                 }
               } catch (e) {
                 console.error('Realtime profile handler error', e);
@@ -192,19 +203,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
 
-    const mapped = {
-      id: data.id,
+    type ProfileRow = {
+      id: string;
+      full_name: string | null;
+      role: 'TRAINER' | 'TRAINEE';
+      avatar_url: string | null;
+      assigned_trainer_id: string | null;
+      start_of_training_date: string | null;
+      is_active: boolean | null;
+    };
+    const row = data as ProfileRow;
+    const mapped: Profile = {
+      id: row.id,
       email,
-      full_name: (data as any).full_name,
-      role: String(data.role).toLowerCase() as 'trainee' | 'trainer',
-      avatar: (data as any).avatar_url || null,
-      training_start_date: (data as any).start_of_training_date || null,
-      trainer_id: (data as any).assigned_trainer_id || null,
+      full_name: row.full_name ?? '',
+      role: String(row.role).toLowerCase() as 'trainee' | 'trainer',
+      avatar: row.avatar_url || null,
+      training_start_date: row.start_of_training_date || null,
+      trainer_id: row.assigned_trainer_id || null,
       // map DB flag; default to true when column is null/undefined
-      isActive:
-        (data as any).is_active === null || (data as any).is_active === undefined
-          ? true
-          : Boolean((data as any).is_active),
+      isActive: row.is_active === null || row.is_active === undefined ? true : Boolean(row.is_active),
     };
     setProfile(mapped);
     return mapped;
@@ -315,10 +333,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('profiles')
         .update({
           // map legacy keys to new column names when present
-          full_name: (updates as any).full_name,
-          avatar_url: (updates as any).avatar_url,
-          start_of_training_date: (updates as any).training_start_date,
-          assigned_trainer_id: (updates as any).trainer_auth_id ?? (updates as any).assigned_trainer_id,
+          full_name: updates.full_name,
+          avatar_url: updates.avatar_url ?? null,
+          start_of_training_date: updates.training_start_date ?? null,
+          assigned_trainer_id: updates.trainer_auth_id ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', profile.id);

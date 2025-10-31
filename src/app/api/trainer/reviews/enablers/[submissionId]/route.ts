@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { courses, courseMembers, enablers, enablerSubmissions } from '@/db/migrations/schemas/schema';
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
+export async function PATCH(req: NextRequest, { params }: { params: { submissionId: string } }) {
   try {
-    const { submissionId } = await params;
+    const { submissionId } = params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -14,22 +14,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ su
     const trainerFeedback: string | null | undefined = body?.trainerFeedback ?? undefined;
     if (!status) return NextResponse.json({ error: 'Missing status' }, { status: 400 });
 
-    const [sub] = await db.select().from(enablerSubmissions).where(eq(enablerSubmissions.id, submissionId as any));
+    const [sub] = await db.select().from(enablerSubmissions).where(eq(enablerSubmissions.id, submissionId));
     if (!sub) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const [en] = await db.select().from(enablers).where(eq(enablers.id, sub.enablerId as any));
+    const [en] = await db.select().from(enablers).where(eq(enablers.id, sub.enablerId));
     if (!en) return NextResponse.json({ error: 'Invalid submission' }, { status: 400 });
     const member = await db
       .select()
       .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, en.courseId as any), eq(courseMembers.userId, trainerId as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const [courseRow] = await db.select().from(courses).where(eq(courses.id, en.courseId as any));
+      .where(and(eq(courseMembers.courseId, en.courseId), eq(courseMembers.userId, trainerId), eq(courseMembers.role, 'TRAINER')));
+    const [courseRow] = await db.select().from(courses).where(eq(courses.id, en.courseId));
     const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
     if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const [row] = await db
       .update(enablerSubmissions)
-      .set({ status: status as any, trainerFeedback: (trainerFeedback ?? null) as any, reviewedById: trainerId as any, reviewedAt: new Date() as any })
-      .where(eq(enablerSubmissions.id, submissionId as any))
+      .set({ status, trainerFeedback: trainerFeedback ?? null, reviewedById: trainerId, reviewedAt: new Date() })
+      .where(eq(enablerSubmissions.id, submissionId))
       .returning();
 
     return NextResponse.json({ submission: row });
