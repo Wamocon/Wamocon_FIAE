@@ -56,9 +56,9 @@ export default function TraineeCoursesPage() {
                 <Link className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={`/trainee/modules/${c.id}`}>Öffnen</Link>
               </div>
               <div className="mt-4">
-                <div className="mb-2 text-sm font-medium">Enabler</div>
+                <div className="mb-2 text-sm font-medium">Lesson</div>
                 {c.enablers.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Keine aktiven Enabler</div>
+                  <div className="text-sm text-muted-foreground">Keine aktiven Lessons</div>
                 ) : (
                   <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     {c.enablers.map((e) => (

@@ -4,22 +4,20 @@ import { useState } from 'react';
 import { GraduationCap, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({ email: '', password: '', full_name: '', start_of_training_date: '' });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
-  const supabase = createClientComponentClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     // Basic validation
-    if (!formData.email || !formData.password || !formData.full_name) {
+    if (!formData.email || !formData.password) {
       setError('Bitte geben Sie eine E-Mail-Adresse und ein Passwort ein.');
       return;
     }
@@ -30,36 +28,25 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
-      // Determine allowed trainer emails (comma-separated env var)
-      const allowedCsv = (process.env.NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS || '') as string;
-      const allowedList = allowedCsv ? allowedCsv.split(',').map(s => s.trim().toLowerCase()) : ['trainer1@example.com','trainer2@example.com'];
-      const emailLower = formData.email.trim().toLowerCase();
-      const willBeTrainer = allowedList.includes(emailLower);
-      const role = willBeTrainer ? 'TRAINER' : 'TRAINEE';
-
-      const { data: signData, error: signUpError } = await supabase.auth.signUp({
-        email: formData.email.trim(),
-        password: formData.password,
-        options: { data: { full_name: formData.full_name.trim(), role } },
+      // Perform server-side registration which will:
+      // - create the auth user via service role
+      // - create a matching profile where email fields match
+      const resp = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          password: formData.password,
+        }),
       });
 
-      if (signUpError) throw signUpError;
-
-      // If the DB trigger created a profile, update its active flag and extra fields. We attempt an update (safe if trigger already created row).
-      const userId = signData?.user?.id;
-      if (userId) {
-        try {
-          await supabase
-            .from('profiles')
-            .update({ full_name: formData.full_name.trim(), start_of_training_date: formData.start_of_training_date || null, is_active: willBeTrainer })
-            .eq('id', userId);
-        } catch (e) {
-          // non-fatal
-          console.warn('Profile update after signUp failed', e);
-        }
+      const body = await resp.json();
+      if (!resp.ok) {
+        console.error('Server registration failed', body);
+        setError(body?.error || 'Registrierung fehlgeschlagen');
+        return;
       }
 
-      // Redirect to login (email confirmation may be required depending on Supabase settings)
       router.push('/login');
     } catch (err: unknown) {
       console.error('Registration failed:', err);
@@ -100,23 +87,6 @@ export default function RegisterPage() {
 
         <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-8 shadow-2xl">
           <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label
-                htmlFor="full_name"
-                className="text-foreground mb-2 block text-sm font-medium"
-              >
-                Vollständiger Name *
-              </label>
-              <input
-                id="full_name"
-                name="full_name"
-                required
-                className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border px-4 py-3 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
-                placeholder="Max Mustermann"
-                value={formData.full_name}
-                onChange={e => handleInputChange('full_name', e.target.value)}
-              />
-            </div>
             <div>
               <label
                 htmlFor="email"
@@ -170,22 +140,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="start_of_training_date"
-                className="text-foreground mb-2 block text-sm font-medium"
-              >
-                Start der Ausbildung (optional)
-              </label>
-              <input
-                id="start_of_training_date"
-                name="start_of_training_date"
-                type="date"
-                className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border px-4 py-3 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
-                value={formData.start_of_training_date}
-                onChange={e => handleInputChange('start_of_training_date', e.target.value)}
-              />
-            </div>
+            {/* Only email & password required for registration now */}
 
             {error && (
               <div className="bg-destructive/10 border-destructive/20 rounded-xl border p-3">

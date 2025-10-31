@@ -446,7 +446,7 @@ export default function EditCoursePage() {
         </form>
       </div>
 
-      {/* Add Enabler Modal */}
+      {/* Add Lesson Modal */}
       {showAddEnabler && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => !enablerSubmitting && setShowAddEnabler(false)} />
@@ -462,7 +462,7 @@ export default function EditCoursePage() {
               </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">Beschreibung</label>
-                  <textarea value={enablerDescription} onChange={e => setEnablerDescription(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Enablers" />
+                  <textarea value={enablerDescription} onChange={e => setEnablerDescription(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Lessons" />
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -615,13 +615,13 @@ export default function EditCoursePage() {
         </div>
       )}
 
-      {/* Edit Enabler Modal */}
+      {/* Edit Lesson Modal */}
       {showEditEnabler && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowEditEnabler(false)} />
           <div className="glass-effect relative z-10 w-full max-w-2xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Enabler bearbeiten</h2>
+              <h2 className="text-xl font-semibold">Lesson bearbeiten</h2>
               <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditEnabler(false)}>Schließen</button>
             </div>
               <div className="space-y-4">
@@ -631,7 +631,7 @@ export default function EditCoursePage() {
               </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">Beschreibung</label>
-                  <textarea value={enablerDescription} onChange={e => setEnablerDescription(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Enablers" />
+                  <textarea value={enablerDescription} onChange={e => setEnablerDescription(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Lessons" />
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -690,7 +690,7 @@ export default function EditCoursePage() {
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditEnabler(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2" onClick={async () => {
                   if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                  if (!editingEnablerId) { alert('Kein Enabler ausgewählt'); return; }
+                  if (!editingEnablerId) { alert('Kein Lesson ausgewählt'); return; }
                   if (!enablerTitle.trim()) { alert('Bitte Titel eingeben'); return; }
                   try {
                     // PATCH enabler details
@@ -707,7 +707,7 @@ export default function EditCoursePage() {
                         isActive: enablerActive,
                       })
                     });
-                    if (!pr.ok) throw new Error('Enabler-Update fehlgeschlagen');
+                    if (!pr.ok) throw new Error('Lesson-Update fehlgeschlagen');
 
                     // Replace quiz if present
                     const cleaned = enablerQuestions

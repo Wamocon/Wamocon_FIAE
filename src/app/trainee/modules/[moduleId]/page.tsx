@@ -52,9 +52,9 @@ export default function TraineeModuleDetailPage() {
 
       <div className="space-y-5">
         <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
-          <div className="mb-3 text-sm font-semibold">Enabler</div>
+          <div className="mb-3 text-sm font-semibold">Lessons</div>
           {enablers.length === 0 ? (
-            <div className="text-sm text-muted-foreground">Keine aktiven Enabler</div>
+            <div className="text-sm text-muted-foreground">Keine aktiven Lessons</div>
           ) : (
             <ul className="space-y-2">
               {enablers.map((e) => (

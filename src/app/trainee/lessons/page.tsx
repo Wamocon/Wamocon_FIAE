@@ -90,14 +90,14 @@ export default function TraineeFeedbackPage() {
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">Trainer-Feedback</h1>
-            <p className="text-muted">Status deiner Einreichungen und Ergebnisse der Enabler-Quizzes</p>
+            <p className="text-muted">Status deiner Einreichungen und Ergebnisse der Lesson-Quizzes</p>
           </div>
         </div>
       </div>
 
-      {/* Enabler submissions */}
+      {/* Lesson submissions */}
       <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-        <h2 className="text-foreground mb-4 text-xl font-semibold">Enabler-Einreichungen</h2>
+        <h2 className="text-foreground mb-4 text-xl font-semibold">Lesson-Einreichungen</h2>
         {enablers.length === 0 ? (
           <div className="text-muted-foreground">Keine Einreichungen.</div>
         ) : (
@@ -147,9 +147,9 @@ export default function TraineeFeedbackPage() {
         )}
       </div>
 
-      {/* Enabler quiz results */}
+      {/* Lesson quiz results */}
       <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-        <h2 className="text-foreground mb-4 text-xl font-semibold">Enabler-Quiz Ergebnisse</h2>
+        <h2 className="text-foreground mb-4 text-xl font-semibold">Lesson-Quiz Ergebnisse</h2>
         {quizzes.length === 0 ? (
           <div className="text-muted-foreground">Keine Ergebnisse.</div>
         ) : (

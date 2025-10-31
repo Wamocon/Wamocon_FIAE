@@ -39,7 +39,10 @@ export const profiles = pgTable('profiles', {
   id: uuid('id')
     .primaryKey()
     .references(() => authUsers.id, { onDelete: 'cascade' }),
-  fullName: text('full_name').notNull(),
+  // Allow null here because the Supabase auth trigger may create a profile
+  // before our application sets the full name. We set it in the app after
+  // signUp (see `src/app/register/page.tsx`).
+  fullName: text('full_name'),
   email: text('email').notNull().unique(),
   avatarUrl: text('avatar_url'),
   role: userRole('role').notNull(),
