@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 interface User {
@@ -47,8 +48,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
+    // Realtime subscription handle for current user's profile
+    let profileChannel: any = null;
+    const setupRealtime = (userId?: string) => {
+      // cleanup previous
+      try {
+        if (profileChannel) profileChannel.unsubscribe();
+      } catch (e) {
+        /* ignore */
+      }
+      profileChannel = null;
+      if (!userId) return;
+      try {
+        profileChannel = supabase
+          .channel(`public:profiles:id=eq.${userId}`)
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
+            (payload: any) => {
+              try {
+                const newRow = payload?.new;
+                if (newRow && newRow.is_active === false) {
+                  // If current user was deactivated, sign them out immediately
+                  supabase.auth.signOut()
+                    .catch((err) => console.error('Error signing out after deactivation', err))
+                    .finally(() => {
+                      setUser(null);
+                      setProfile(null);
+                      try { router.replace('/login'); } catch (e) { /* ignore */ }
+                    });
+                } else if (newRow) {
+                  // Update local profile when changes arrive
+                  setProfile(prev => ({ ...(prev as any), full_name: newRow.full_name ?? prev?.full_name, avatar: newRow.avatar_url ?? prev?.avatar, training_start_date: newRow.start_of_training_date ?? prev?.training_start_date, isActive: Boolean(newRow.is_active) }));
+                }
+              } catch (e) {
+                console.error('Realtime profile handler error', e);
+              }
+            }
+          )
+          .subscribe();
+      } catch (e) {
+        console.warn('Failed to setup realtime profile subscription', e);
+      }
+    };
+
     const init = async () => {
       setLoading(true);
       const {
@@ -58,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const u = session.user;
         setUser({ id: u.id, email: u.email || '' });
         await loadProfile(u.id);
+        try { setupRealtime(u.id); } catch (e) { /* ignore */ }
       }
       setLoading(false);
     };
@@ -68,9 +115,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const u = session.user;
           setUser({ id: u.id, email: u.email || '' });
           loadProfile(u.id);
+          try { setupRealtime(u.id); } catch (e) { /* ignore */ }
         } else {
           setUser(null);
           setProfile(null);
+          try { if (profileChannel) profileChannel.unsubscribe(); } catch (e) { /* ignore */ }
+          profileChannel = null;
         }
       }
     );
@@ -78,9 +128,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     init();
 
     return () => {
-      authListener.subscription.unsubscribe();
+      try {
+        authListener.subscription.unsubscribe();
+      } catch (e) {
+        // ignore
+      }
+      try {
+        if (profileChannel) profileChannel.unsubscribe();
+      } catch (e) {
+        // ignore
+      }
     };
   }, []);
+
+  // Polling fallback: if realtime is not available or delayed, poll the profile periodically
+  useEffect(() => {
+    if (!user?.id) return;
+    let mounted = true;
+    const check = async () => {
+      try {
+        const loaded = await loadProfile(user.id);
+        if (!mounted) return;
+        if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
+          // force sign out
+          try {
+            await supabase.auth.signOut();
+          } catch (e) {
+            console.error('Error signing out after deactivation', e);
+          } finally {
+            setUser(null);
+            setProfile(null);
+            try { router.replace('/login'); } catch (e) { /* ignore */ }
+          }
+        }
+      } catch (e) {
+        // ignore transient errors
+      }
+    };
+    // initial check
+    check();
+    const id = setInterval(check, 15000); // every 15s
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, [user?.id]);
 
   const loadProfile = async (userId: string) => {
     const { data: authUser } = await supabase.auth.getUser();
@@ -200,7 +292,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
     } catch (error) {
       // Gracefully handle sign-out failures without crashing the app
-      // Keep the current state (user/profile) unchanged on error
       console.error('Auth signOut failed:', error);
     } finally {
       setLoading(false);
