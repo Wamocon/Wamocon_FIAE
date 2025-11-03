@@ -39,7 +39,8 @@ COPY --from=builder /app/scripts ./scripts
 
 # Add entrypoint
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Normalize potential CRLF endings from Windows checkouts
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 3000
 ENTRYPOINT ["/entrypoint.sh"]
