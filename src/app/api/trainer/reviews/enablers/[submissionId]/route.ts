@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { courses, courseMembers, enablers, enablerSubmissions } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, enablers, enablerSubmissions, notifications } from '@/db/migrations/schemas/schema';
 
 export async function PATCH(req: NextRequest, { params }: { params: { submissionId: string } }) {
   try {
@@ -31,6 +31,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { submission
       .set({ status, trainerFeedback: trainerFeedback ?? null, reviewedById: trainerId, reviewedAt: new Date() })
       .where(eq(enablerSubmissions.id, submissionId))
       .returning();
+
+    // Notify trainee about feedback/status
+    try {
+      if (row?.traineeId) {
+        await db.insert(notifications).values({
+          userId: String(row.traineeId),
+          actorId: trainerId,
+          type: 'ENABLER_FEEDBACK',
+          title: 'Feedback zum Enabler',
+          message: `Status: ${status}`,
+          linkUrl: '/trainee/modules',
+          context: { submissionId, enablerId: String(row.enablerId) },
+        });
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainee for enabler feedback', notifyErr);
+    }
 
     return NextResponse.json({ submission: row });
   } catch (e) {

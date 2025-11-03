@@ -3,7 +3,8 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useBreadcrumbs } from '@/contexts/BreadcrumbContext';
-import { Bell, Menu, ChevronLeft } from 'lucide-react';
+import { Menu, ChevronLeft } from 'lucide-react';
+import NotificationsBell from '@/components/ui/NotificationsBell';
 
 interface HeaderProps {
   onGoBack: () => void;
@@ -61,6 +62,10 @@ export function Header({
             {currentBreadcrumb?.label || 'Dashboard'}
           </h2>
       </div>    
+      {/* Right side - Actions */}
+      <div className="flex items-center gap-3">
+        <NotificationsBell />
+      </div>
     </header>
   );
 }

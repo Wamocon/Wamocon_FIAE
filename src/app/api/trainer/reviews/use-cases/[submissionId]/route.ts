@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { courses, courseMembers, useCases, useCaseSubmissions } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, useCases, useCaseSubmissions, notifications } from '@/db/migrations/schemas/schema';
 
 export async function PATCH(req: NextRequest, { params }: { params: { submissionId: string } }) {
   try {
@@ -31,6 +31,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { submission
       .set({ status, trainerFeedback: trainerFeedback ?? null, reviewedById: trainerId, reviewedAt: new Date() })
       .where(eq(useCaseSubmissions.id, submissionId))
       .returning();
+
+    // Notify trainee about feedback/status
+    try {
+      if (row?.traineeId) {
+        await db.insert(notifications).values({
+          userId: String(row.traineeId),
+          actorId: trainerId,
+          type: 'USE_CASE_FEEDBACK',
+          title: 'Feedback zum Use Case',
+          message: `Status: ${status}`,
+          linkUrl: '/trainee/modules',
+          context: { submissionId, useCaseId: String(row.useCaseId) },
+        });
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainee for use-case feedback', notifyErr);
+    }
 
     return NextResponse.json({ submission: row });
   } catch (e) {

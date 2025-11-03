@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { enablers, courseMembers, enablerSubmissions, EnablerSubmission } from '@/db/migrations/schemas/schema';
+import { enablers, courseMembers, enablerSubmissions, EnablerSubmission, notifications, courses } from '@/db/migrations/schemas/schema';
 
 export async function POST(
   req: NextRequest,
@@ -44,6 +44,32 @@ export async function POST(
         .values({ enablerId, traineeId, solutionText, status: 'PENDING' })
         .returning();
       saved = row;
+    }
+
+    // Notify trainers in this course
+    try {
+      const [courseRow] = await db.select().from(courses).where(eq(courses.id, e.courseId));
+      const trainerMemberRows = await db
+        .select({ userId: courseMembers.userId })
+        .from(courseMembers)
+        .where(and(eq(courseMembers.courseId, e.courseId), eq(courseMembers.role, 'TRAINER')));
+      const trainerIds = new Set<string>();
+      if (courseRow?.createdById) trainerIds.add(String(courseRow.createdById));
+      trainerMemberRows.forEach((m) => trainerIds.add(String(m.userId)));
+      if (trainerIds.size) {
+        const values = Array.from(trainerIds).map((uid) => ({
+          userId: uid,
+          actorId: traineeId,
+          type: 'ENABLER_SUBMITTED',
+          title: 'Szenario eingereicht',
+          message: `Ein Trainee hat ein Enabler-Szenario eingereicht: ${e.title}`,
+          linkUrl: '/trainer/reviews?type=enabler',
+          context: { enablerId, courseId: e.courseId },
+        }));
+        await db.insert(notifications).values(values);
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainers for enabler submission', notifyErr);
     }
 
     return NextResponse.json({ submission: { id: saved.id, solutionText: saved.solutionText, status: saved.status } });

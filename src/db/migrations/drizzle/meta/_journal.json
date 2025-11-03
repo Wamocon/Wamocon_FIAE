@@ -22,6 +22,13 @@
       "when": 1761899985870,
       "tag": "0002_white_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762174048401,
+      "tag": "0003_last_celestials",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { enablers, enablerQuizzes, options, questions, quizzes, courseMembers, quizSubmissionAnswers, quizSubmissions } from '@/db/migrations/schemas/schema';
+import { enablers, enablerQuizzes, options, questions, quizzes, courseMembers, quizSubmissionAnswers, quizSubmissions, notifications, courses } from '@/db/migrations/schemas/schema';
 
 // POST submit answers for enabler quiz
 // Body: { traineeId: string, answers: Array<{ questionId: string, selectedOptionId: string }> }
@@ -65,6 +65,32 @@ export async function POST(
         correctOptionId: correctOpt?.id,
       };
     });
+
+    // Notify trainers about quiz submission
+    try {
+      const [courseRow] = await db.select().from(courses).where(eq(courses.id, enabler.courseId));
+      const trainerMemberRows = await db
+        .select({ userId: courseMembers.userId })
+        .from(courseMembers)
+        .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.role, 'TRAINER')));
+      const trainerIds = new Set<string>();
+      if (courseRow?.createdById) trainerIds.add(String(courseRow.createdById));
+      trainerMemberRows.forEach((m) => trainerIds.add(String(m.userId)));
+      if (trainerIds.size) {
+        const values = Array.from(trainerIds).map((uid) => ({
+          userId: uid,
+          actorId: traineeId,
+          type: 'ENABLER_QUIZ_SUBMITTED',
+          title: 'Mini-Quiz eingereicht',
+          message: `Ein Trainee hat ein Mini-Quiz abgegeben: ${enabler.title}`,
+          linkUrl: '/trainer/quiz-management',
+          context: { enablerId, quizId: quiz.id, submissionId: sub.id },
+        }));
+        await db.insert(notifications).values(values);
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainers for enabler quiz submission', notifyErr);
+    }
 
     return NextResponse.json({ submissionId: sub.id, score, feedback });
   } catch (e) {

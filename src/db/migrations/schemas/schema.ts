@@ -407,6 +407,26 @@ export const activityLog = pgTable('activity_log', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Notifications sent between users (trainer/trainee)
+export const notifications = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // recipient of the notification
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  // who triggered the notification (optional)
+  actorId: uuid('actor_id').references(() => profiles.id, { onDelete: 'set null' }),
+  // categorization and content
+  type: text('type').notNull(), // e.g., 'REFLECTION_SUBMITTED'
+  title: text('title').notNull(),
+  message: text('message'),
+  linkUrl: text('link_url'),
+  context: jsonb('context'),
+  isRead: boolean('is_read').notNull().default(false),
+  readAt: timestamp('read_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // Tracks non-submittable progress, like watching a video
 export const enablerCompletions = pgTable(
   'enabler_completions',
@@ -499,6 +519,7 @@ export type Reflection = typeof reflections.$inferSelect;
 export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;
 export type ActivityLog = typeof activityLog.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 export type EnablerCompletion = typeof enablerCompletions.$inferSelect;
 export type EnablerSubmission = typeof enablerSubmissions.$inferSelect;
 // Legacy compatibility types
