@@ -322,6 +322,36 @@ NEXT_PUBLIC_ANALYTICS_ID=your-analytics-id
 NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
 ```
 
+### 🐳 Run with Docker (one command)
+
+This repository includes a production-ready Docker setup that brings up Postgres, runs Drizzle migrations, and starts the Next.js app automatically.
+
+1. Copy env file and fill Supabase values:
+
+   ```bash
+   cp .env.docker.example .env
+   # edit .env and set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY
+   ```
+
+2. Build and start:
+
+   ```bash
+   docker compose up --build
+   ```
+
+3. Open the app:
+
+   - http://localhost:3000
+
+Notes:
+
+- The database runs inside Docker (postgres:16) with credentials: user `fiae`, password `fiae`, db `fiae`.
+- The app waits for DB, applies schema with `drizzle-kit push`, and then starts.
+- To seed data after first run, exec into the container and run `npm run db:seed`.
+- To stop and remove containers (data persists in volume): `docker compose down`.
+
+Optional dev profile (hot reload) can be added later; this setup targets production-like runs.
+
 ### **Build Optimization**
 
 - **Code Splitting**: Automatic route-based splitting
