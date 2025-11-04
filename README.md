@@ -322,35 +322,48 @@ NEXT_PUBLIC_ANALYTICS_ID=your-analytics-id
 NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
 ```
 
-### 🐳 Run with Docker (one command)
+### 🐳 Run with Docker (simple, uses Supabase CLI)
 
-This repository includes a production-ready Docker setup that brings up Postgres, runs Drizzle migrations, and starts the Next.js app automatically.
+This setup uses the Supabase CLI running on your host machine for the database and auth. The Docker container only runs the Next.js app, waits for the DB, applies Drizzle migrations, and starts.
 
-1. Copy env file and fill Supabase values:
+1) Start local Supabase (host). In a separate terminal at the repo root:
 
-   ```bash
-   cp .env.docker.example .env
-   # edit .env and set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY
+   - Install the Supabase CLI if you don't have it yet: https://supabase.com/docs/guides/cli
+   - Start services:
+     - PowerShell: `supabase start`
+   - This exposes:
+     - REST/Auth/Realtime: http://127.0.0.1:54321
+     - Postgres: 127.0.0.1:54322 (user postgres / password postgres / db postgres)
+
+2) Configure env (optional). `.env` is already present with defaults for the CLI on Windows. If needed, verify:
+
+   ```properties
+   NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=...anon key...
+   DB_CONNECTION_STRING=postgresql://postgres:postgres@127.0.0.1:54322/postgres
    ```
 
-2. Build and start:
+   Note: Inside Docker, these automatically map to `host.docker.internal` so you don't need to change them for containers.
 
-   ```bash
-   docker compose up --build
-   ```
+3) Build and start the app container:
 
-3. Open the app:
+   - PowerShell: `docker compose up --build`
+
+4) Open the app:
 
    - http://localhost:3000
 
-Notes:
+What happens under the hood:
 
-- The database runs inside Docker (postgres:16) with credentials: user `fiae`, password `fiae`, db `fiae`.
-- The app waits for DB, applies schema with `drizzle-kit push`, and then starts.
-- To seed data after first run, exec into the container and run `npm run db:seed`.
-- To stop and remove containers (data persists in volume): `docker compose down`.
+- The container converts the entrypoint script to LF, waits for the DB using `scripts/wait-for-db.mjs`, runs `npm run migrate:push` (Drizzle), then `next start`.
+- Environment vars are taken from `.env` and/or docker-compose defaults.
 
-Optional dev profile (hot reload) can be added later; this setup targets production-like runs.
+To seed data after first run, you can exec into the container and run `npm run db:seed`.
+
+To stop:
+
+- `docker compose down` (app only)
+- `supabase stop` (local Supabase services)
 
 ### **Build Optimization**
 

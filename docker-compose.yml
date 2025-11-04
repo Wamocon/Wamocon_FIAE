@@ -1,46 +1,21 @@
-version: "3.9"
-
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: fiae-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: fiae
-      POSTGRES_PASSWORD: fiae
-      POSTGRES_DB: fiae
-    ports:
-      - "5432:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fiae -d fiae"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   web:
     build: .
     container_name: fiae-web
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
     ports:
       - "${APP_PORT:-3000}:3000"
     environment:
-      # Database for Drizzle and runtime
-      DB_CONNECTION_STRING: postgres://fiae:fiae@db:5432/fiae
-
-      # Supabase (provide your own values in .env or env_file)
+      # Use Supabase CLI on host (or hosted Supabase). Inside containers use host.docker.internal for the DB.
+      # We force the container to use host.docker.internal regardless of .env to avoid 127.0.0.1 issues.
+      DB_CONNECTION_STRING: postgresql://postgres:postgres@host.docker.internal:54322/postgres
+      # Client/browser will use NEXT_PUBLIC_SUPABASE_URL from .env (likely http://127.0.0.1:54321).
+      # For server-side calls inside the container, we expose SUPABASE_URL_INTERNAL to point to the host.
+      SUPABASE_URL_INTERNAL: http://host.docker.internal:54321
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-
-      # Next.js
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
     env_file:
       - .env
 
-volumes:
-  db_data:

@@ -1,47 +1,34 @@
-# Multi-stage Dockerfile for Next.js + Drizzle migrations
-FROM node:20-alpine AS base
-WORKDIR /app
+# Simple Ubuntu-based image that builds the Next.js app, runs migrations, then starts the server
+FROM ubuntu:22.04 AS base
 
-# Install OS deps (optional git for some installs)
-RUN apk add --no-cache bash
-
-# Install dependencies
-FROM base AS deps
-COPY package.json package-lock.json ./
-RUN npm ci
-
-# Build the app
-FROM base AS builder
-ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm run build
-
-# Production runner with devDependencies included (to run drizzle-kit at startup)
-FROM base AS runner
-ENV NODE_ENV=production \
+ENV DEBIAN_FRONTEND=noninteractive \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
-# Copy node_modules including devDependencies to allow drizzle-kit usage
-COPY --from=deps /app/node_modules ./node_modules
+WORKDIR /app
 
-# Copy built app
-COPY --from=builder /app/.next ./.next
-# Copy public assets if present (folder may not exist in this project)
-# Not copying 'public' because the repo doesn't include it
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/next.config.ts ./next.config.ts
-COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=builder /app/src ./src
-COPY --from=builder /app/scripts ./scripts
+# Install Node.js 20 and basic tools
+RUN apt-get update && apt-get install -y curl ca-certificates gnupg && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && apt-get install -y nodejs && \
+    npm -v && node -v && \
+    rm -rf /var/lib/apt/lists/*
 
-# Add entrypoint
-COPY docker/entrypoint.sh /entrypoint.sh
-# Normalize potential CRLF endings from Windows checkouts
-RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
+# Install dependencies
+COPY package.json package-lock.json ./
+RUN npm ci --include=dev
+
+# Copy source and build
+COPY . .
+RUN npm run build
+
+# Ensure entrypoint has LF endings and is executable
+RUN sed -i 's/\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh
 
 EXPOSE 3000
-ENTRYPOINT ["/entrypoint.sh"]
+ENV NODE_ENV=production
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["npm", "run", "start"]
