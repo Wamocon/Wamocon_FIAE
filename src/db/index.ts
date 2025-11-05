@@ -18,11 +18,16 @@ if (!process.env.DB_CONNECTION_STRING) {
 
 // Tune pool size to avoid exhausting local Postgres connection limits.
 // postgres-js creates connections lazily; max is the upper bound.
+const needsTls =
+  /supabase\.(co|in)/i.test(process.env.DB_CONNECTION_STRING) ||
+  /sslmode=require/i.test(process.env.DB_CONNECTION_STRING);
+
 const client =
   globalThis.__pgClient__ ||
   postgres(process.env.DB_CONNECTION_STRING, {
     max: 5, // keep small for local/dev; adjust if needed
     idle_timeout: 30, // seconds before idle connections are closed
+    ssl: needsTls ? 'require' : undefined,
   });
 
 const db = globalThis.__drizzleDb__ || drizzle(client);
