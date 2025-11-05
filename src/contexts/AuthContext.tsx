@@ -112,9 +112,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
+      // Handle links that redirect to /?code=... (email OTP/recovery)
+      try {
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          const code = url.searchParams.get('code');
+          if (!session?.user && code) {
+            const { data: exData, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+            if (!exErr && exData.session) {
+              // Clean up the URL and go to reset-password UI for clarity
+              try { router.replace('/reset-password'); } catch (e) { /* ignore */ }
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
       if (session?.user) {
         const u = session.user;
         setUser({ id: u.id, email: u.email || '' });
+        // Ensure profile exists/updated on server
+        try {
+          if (session.access_token) {
+            await fetch('/api/auth/sync-profile', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
         await loadProfile(u.id);
         try { setupRealtime(u.id); } catch (e) { /* ignore */ }
       }
@@ -122,11 +152,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (event, session) => {
         if (session?.user) {
           const u = session.user;
           setUser({ id: u.id, email: u.email || '' });
-          loadProfile(u.id);
+          // If arriving from a password recovery link, send user to the reset page UI
+          try {
+            if (event === 'PASSWORD_RECOVERY') {
+              router.replace('/reset-password');
+            }
+          } catch (e) { /* ignore */ }
+          // Ensure profile exists/updated on server
+          try {
+            if (session.access_token) {
+              await fetch('/api/auth/sync-profile', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              });
+            }
+          } catch (e) {
+            // ignore
+          }
+          await loadProfile(u.id);
           try { setupRealtime(u.id); } catch (e) { /* ignore */ }
         } else {
           setUser(null);
@@ -248,19 +295,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
-      setLoading(false);
-      throw error;
+    // First, try the SDK sign in
+    let userId: string | null = null;
+    let userEmail: string | null = null;
+    const sdkResult = await supabase.auth.signInWithPassword({ email, password });
+    if (sdkResult.error) {
+      // If SDK fails, try direct REST login as a fallback (per hosted quirks)
+      // POST { email, password } to /auth/v1/token?grant_type=password with apikey header (anon key)
+      try {
+        const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/token?grant_type=password`;
+        const apikey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey,
+          },
+          body: JSON.stringify({ email, password }),
+          cache: 'no-store',
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          // eslint-disable-next-line no-console
+          console.error('[auth] REST login failed', resp.status, text);
+          setLoading(false);
+          if (resp.status === 400 && /email/i.test(text) && /confirm/i.test(text)) {
+            throw new Error('E-Mail ist noch nicht bestätigt. Bitte bestätigen oder nutzen Sie "Passwort vergessen?"');
+          }
+          if (resp.status === 400) throw new Error('E-Mail oder Passwort ist falsch.');
+          throw new Error('Anmeldung fehlgeschlagen.');
+        }
+        const data = await resp.json();
+        if (!data?.access_token || !data?.refresh_token) {
+          setLoading(false);
+          throw new Error('Unerwartete Antwort vom Auth-Server.');
+        }
+        const { data: setRes, error: setErr } = await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+        if (setErr || !setRes.session?.user) {
+          setLoading(false);
+          throw new Error(setErr?.message || 'Anmeldung fehlgeschlagen.');
+        }
+        userId = setRes.session.user.id;
+        userEmail = setRes.session.user.email || email;
+      } catch (e: any) {
+        // eslint-disable-next-line no-console
+        console.error('[auth] signIn fallback error:', e);
+        setLoading(false);
+        throw e instanceof Error ? e : new Error('Anmeldung fehlgeschlagen.');
+      }
+    } else if (sdkResult.data.user) {
+      userId = sdkResult.data.user.id;
+      userEmail = sdkResult.data.user.email || email;
     }
-    if (data.user) {
-      setUser({ id: data.user.id, email: data.user.email || '' });
+
+    if (userId) {
+      setUser({ id: userId, email: userEmail || '' });
+      // Ensure profile exists/updated on server
+      try {
+        const { data: sessionRes } = await supabase.auth.getSession();
+        const token = sessionRes.session?.access_token;
+        if (token) {
+          await fetch('/api/auth/sync-profile', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        }
+      } catch (e) {
+        // ignore
+      }
       // Handle eventual consistency after email confirmation or first-time login
-      await waitForProfile(data.user.id);
-      const loaded = await loadProfile(data.user.id);
+      await waitForProfile(userId);
+      const loaded = await loadProfile(userId);
       // Prevent inactive trainees from logging in
       if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
         // sign out immediately and inform caller
@@ -270,8 +378,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         throw new Error('Account ist noch nicht aktiviert. Bitte Ihren Trainer kontaktieren.');
       }
+      setLoading(false);
+      return;
     }
+
+    // If we got here, neither SDK nor fallback succeeded
     setLoading(false);
+    throw new Error('Anmeldung fehlgeschlagen.');
   };
 
   const signUp = async (
