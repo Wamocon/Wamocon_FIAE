@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { Toaster } from 'react-hot-toast';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { BreadcrumbProvider } from '@/contexts/BreadcrumbContext';
@@ -28,7 +29,9 @@ export default function RootLayout({
         <AuthProvider>
           <LanguageProvider>
             <ThemeProvider>
-              <BreadcrumbProvider>{children}</BreadcrumbProvider>
+              <BreadcrumbProvider>
+                {children}
+              </BreadcrumbProvider>
             </ThemeProvider>
           </LanguageProvider>
         </AuthProvider>
@@ -36,3 +39,4 @@ export default function RootLayout({
     </html>
   );
 }
+ 

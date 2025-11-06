@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
@@ -51,6 +51,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Public routes must not perform private API or DB calls
+  const isPublicPath = useMemo(() => {
+    const publicPaths = new Set<string>([
+      '/',
+      '/register',
+      '/forgot-password',
+      '/reset-password',
+    ]);
+    return publicPaths.has(pathname || '');
+  }, [pathname]);
 
   useEffect(() => {
     // Realtime subscription handle for current user's profile
@@ -113,16 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: { session },
       } = await supabase.auth.getSession();
 
-      // Handle links that redirect to /?code=... (email OTP/recovery)
+      // Handle PKCE OAuth redirects only (/?code=...&state=...)
       try {
         if (typeof window !== 'undefined') {
           const url = new URL(window.location.href);
           const code = url.searchParams.get('code');
-          if (!session?.user && code) {
+          const state = url.searchParams.get('state');
+          if (!session?.user && code && state) {
             const { data: exData, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
             if (!exErr && exData.session) {
-              // Clean up the URL and go to reset-password UI for clarity
-              try { router.replace('/reset-password'); } catch (e) { /* ignore */ }
+              // Session established via OAuth PKCE; no redirect needed here.
             }
           }
         }
@@ -132,21 +144,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         const u = session.user;
         setUser({ id: u.id, email: u.email || '' });
-        // Ensure profile exists/updated on server
-        try {
-          if (session.access_token) {
-            await fetch('/api/auth/sync-profile', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
-            });
+        if (!isPublicPath) {
+          // Ensure profile exists/updated on server
+          try {
+            if (session.access_token) {
+              await fetch('/api/auth/sync-profile', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+              });
+            }
+          } catch (e) {
+            // ignore
           }
-        } catch (e) {
-          // ignore
+          await loadProfile(u.id);
+          try { setupRealtime(u.id); } catch (e) { /* ignore */ }
         }
-        await loadProfile(u.id);
-        try { setupRealtime(u.id); } catch (e) { /* ignore */ }
       }
       setLoading(false);
     };
@@ -162,19 +176,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               router.replace('/reset-password');
             }
           } catch (e) { /* ignore */ }
-          // Ensure profile exists/updated on server
-          try {
-            if (session.access_token) {
-              await fetch('/api/auth/sync-profile', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${session.access_token}` },
-              });
+          if (!isPublicPath) {
+            // Ensure profile exists/updated on server
+            try {
+              if (session.access_token) {
+                await fetch('/api/auth/sync-profile', {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${session.access_token}` },
+                });
+              }
+            } catch (e) {
+              // ignore
             }
-          } catch (e) {
-            // ignore
+            await loadProfile(u.id);
+            try { setupRealtime(u.id); } catch (e) { /* ignore */ }
           }
-          await loadProfile(u.id);
-          try { setupRealtime(u.id); } catch (e) { /* ignore */ }
         } else {
           setUser(null);
           setProfile(null);
@@ -198,11 +214,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // ignore
       }
     };
-  }, []);
+  }, [isPublicPath]);
 
   // Polling fallback: if realtime is not available or delayed, poll the profile periodically
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || isPublicPath) return;
     let mounted = true;
     const check = async () => {
       try {
@@ -231,7 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       clearInterval(id);
     };
-  }, [user?.id]);
+  }, [user?.id, isPublicPath]);
 
   const loadProfile = async (userId: string) => {
     const { data: authUser } = await supabase.auth.getUser();
@@ -353,30 +369,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (userId) {
       setUser({ id: userId, email: userEmail || '' });
-      // Ensure profile exists/updated on server
-      try {
-        const { data: sessionRes } = await supabase.auth.getSession();
-        const token = sessionRes.session?.access_token;
-        if (token) {
-          await fetch('/api/auth/sync-profile', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-          });
+      if (!isPublicPath) {
+        // Ensure profile exists/updated on server
+        try {
+          const { data: sessionRes } = await supabase.auth.getSession();
+          const token = sessionRes.session?.access_token;
+          if (token) {
+            await fetch('/api/auth/sync-profile', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          }
+        } catch (e) {
+          // ignore
         }
-      } catch (e) {
-        // ignore
-      }
-      // Handle eventual consistency after email confirmation or first-time login
-      await waitForProfile(userId);
-      const loaded = await loadProfile(userId);
-      // Prevent inactive trainees from logging in
-      if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
-        // sign out immediately and inform caller
-        await supabase.auth.signOut();
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        throw new Error('Account ist noch nicht aktiviert. Bitte Ihren Trainer kontaktieren.');
+        // Handle eventual consistency after email confirmation or first-time login
+        await waitForProfile(userId);
+        const loaded = await loadProfile(userId);
+        // Prevent inactive trainees from logging in
+        if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
+          // sign out immediately and inform caller
+          await supabase.auth.signOut();
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          throw new Error('Account ist noch nicht aktiviert. Bitte Ihren Trainer kontaktieren.');
+        }
       }
       setLoading(false);
       return;

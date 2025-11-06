@@ -1,69 +1,69 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Eye, EyeOff, Lock } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [status, setStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error'; message?: string }>({ type: 'idle' });
-  const [ready, setReady] = useState(false);
+
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const router = useRouter();
+
+  const PublicUrls=['/login', '/forgot-password', '/reset-password'];
+  if (!PublicUrls.includes(typeof window !== 'undefined' ? window.location.pathname : '')) {
+    router.replace('/login');
+  }
   const supabase = createClientComponentClient();
+  const processedRef = useRef(false); // prevent double-verification in React strict/dev
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
     const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setReady(true);
-      }
-      // Support links that come in with ?code=... (exchange for a session)
-      try {
-        if (!data.session && typeof window !== 'undefined') {
-          const url = new URL(window.location.href);
-          const code = url.searchParams.get('code');
-          if (code) {
-            const { data: exData, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
-            if (!exErr && exData.session) {
-              setReady(true);
+      if (processedRef.current) return;
+
+      const cleanupUrl = () => {
+        try {
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            // Always land on a clean reset-password path after processing tokens
+            if (url.pathname !== '/reset-password') {
+              router.replace('/reset-password');
+            } else {
+              window.history.replaceState(null, '', '/reset-password');
             }
           }
-        }
-      } catch {
-        // ignore
-      }
-      const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-        if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-          setReady(true);
-        }
-      });
-      unsub = () => listener.subscription.unsubscribe();
-      // Fallback: if still not ready after short delay but there's a hash, try again
-      setTimeout(async () => {
-        if (!ready && typeof window !== 'undefined' && window.location.hash) {
-          const { data: d2 } = await supabase.auth.getSession();
-          if (d2.session) setReady(true);
-        }
-      }, 500);
+        } catch { /* ignore */ }
+      };
+
+      // mark processed to avoid double run in Strict Mode
+      processedRef.current = true;
     };
-    void init();
-    return () => { try { unsub?.(); } catch { /* ignore */ } };
-  }, [supabase, ready]);
+
+    init();
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [router, supabase]);
+  
+      
+      
 
   const canSubmit = useMemo(() => {
     if (status.type === 'loading') return false;
-    if (!ready) return false;
+    
     if (password.length < 6) return false;
     if (password !== confirm) return false;
     return true;
-  }, [status.type, ready, password, confirm]);
+  }, [status.type, password, confirm]);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) =>{
     e.preventDefault();
     if (password.length < 6) {
       setStatus({ type: 'error', message: 'Passwort muss mindestens 6 Zeichen lang sein.' });
@@ -78,7 +78,8 @@ export default function ResetPasswordPage() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setStatus({ type: 'success', message: 'Passwort aktualisiert. Bitte melden Sie sich erneut an.' });
-      setTimeout(() => router.push('/login'), 1000);
+      toast.success('Passwort erfolgreich aktualisiert. Bitte melden Sie sich erneut an.');
+      setTimeout(() => router.replace('/login'), 800);
     } catch (err: any) {
       setStatus({ type: 'error', message: err?.message || 'Fehler beim Aktualisieren des Passworts.' });
     }
@@ -88,11 +89,7 @@ export default function ResetPasswordPage() {
     <div className="bg-background relative flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border-2 border-accent/30 p-8 shadow-xl">
         <h1 className="mb-2 text-2xl font-bold">Neues Passwort setzen</h1>
-        <p className="mb-6 text-sm text-muted">
-          {ready
-            ? 'Bitte geben Sie Ihr neues Passwort ein.'
-            : 'Einen Moment bitte…'}
-        </p>
+       
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block text-sm">
             Neues Passwort
