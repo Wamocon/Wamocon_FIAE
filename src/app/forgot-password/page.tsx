@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import toast from 'react-hot-toast';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -16,9 +17,10 @@ export default function ForgotPasswordPage() {
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || '';
       const redirectTo = `${origin}/reset-password`;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
       if (error) throw error;
-      setStatus({ type: 'success', message: 'Wenn die E-Mail existiert, wurde ein Link zum Zurücksetzen gesendet.' });
+  setStatus({ type: 'success', message: 'Wenn die E-Mail existiert, wurde ein Link zum Zurücksetzen gesendet.' });
+  toast.success('Wenn die E-Mail existiert, wurde ein Link zum Zurücksetzen gesendet.');
     } catch (err: any) {
       setStatus({ type: 'error', message: err?.message || 'Fehler beim Senden der E-Mail.' });
     }
