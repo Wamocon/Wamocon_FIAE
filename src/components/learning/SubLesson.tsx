@@ -104,7 +104,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
       </div>
 
       <div className="flex justify-end">
-        <Link href={`/trainee/lessons/${data.lesson.id}`} className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors">
+        <Link href={`/trainee/trainer-feedback/${data.lesson.id}`} className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors">
           Zurück zur Lektion
         </Link>
       </div>

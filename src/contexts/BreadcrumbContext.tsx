@@ -101,7 +101,7 @@ export function BreadcrumbProvider({
     const newBreadcrumbs = buildBreadcrumbs(pathname);
     setBreadcrumbs(newBreadcrumbs);
 
-    // Enhance UUID labels with entity names (module/lesson/quiz)
+    // Enhance UUID labels with entity names (module/trainer-feedback/quiz)
     const enhanceLabels = async () => {
       if (!pathname) return;
       const segments = pathname.split('/').filter(Boolean);
