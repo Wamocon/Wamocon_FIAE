@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
         trainerFeedback: enablerSubmissions.trainerFeedback,
         submittedAt: enablerSubmissions.submittedAt,
         reviewedAt: enablerSubmissions.reviewedAt,
+        attemptNumber: enablerSubmissions.attemptNumber,
         enablerTitle: enablers.title,
       })
       .from(enablerSubmissions)
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
         trainerFeedback: useCaseSubmissions.trainerFeedback,
         submittedAt: useCaseSubmissions.submittedAt,
         reviewedAt: useCaseSubmissions.reviewedAt,
+        attemptNumber: useCaseSubmissions.attemptNumber,
         useCaseTitle: useCases.title,
       })
       .from(useCaseSubmissions)
@@ -59,11 +61,13 @@ export async function GET(req: NextRequest) {
         quizId: quizSubmissions.quizId,
         score: quizSubmissions.score,
         isReviewed: quizSubmissions.isReviewed,
+        trainerFeedback: quizSubmissions.trainerFeedback,
         submittedAt: quizSubmissions.submittedAt,
         quizTitle: quizzes.title,
         quizType: quizzes.quizType,
         enablerId: enablerQuizzes.enablerId,
         enablerTitle: enablers.title,
+        attemptNumber: quizSubmissions.attemptNumber,
       })
       .from(quizSubmissions)
       .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
@@ -82,10 +86,20 @@ export async function GET(req: NextRequest) {
     }
     const enablerQuizResults = Array.from(latestByEnabler.values());
 
+    // Also include GLOBAL quiz submissions for the trainee (latest per quiz)
+    const globalLatestByQuiz = new Map<string, any>();
+    for (const r of quizRows) {
+      if (String(r.quizType) !== 'GLOBAL') continue;
+      const key = String(r.quizId);
+      if (!globalLatestByQuiz.has(key)) globalLatestByQuiz.set(key, r);
+    }
+    const globalQuizResults = Array.from(globalLatestByQuiz.values());
+
     return NextResponse.json({
       enablerResults: enablerRows,
       useCaseResults: useCaseRows,
       enablerQuizResults,
+      globalQuizResults,
     });
   } catch (e) {
     console.error('Trainee feedback GET error', e);

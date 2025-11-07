@@ -4,15 +4,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MessageSquare, Award } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null };
-type UseCaseResult = { id: string; useCaseId: string; useCaseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null };
-type EnablerQuizResult = { id: string; enablerId: string; enablerTitle: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string };
+type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
+type UseCaseResult = { id: string; useCaseId: string; useCaseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
+type EnablerQuizResult = { id: string; enablerId: string; enablerTitle: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
+type GlobalQuizResult = { id: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
 
 export default function TraineeFeedbackPage() {
   const { profile, loading } = useAuth();
   const [enablers, setEnablers] = useState<EnablerResult[]>([]);
   const [useCases, setUseCases] = useState<UseCaseResult[]>([]);
   const [quizzes, setQuizzes] = useState<EnablerQuizResult[]>([]);
+  const [globalQuizzes, setGlobalQuizzes] = useState<GlobalQuizResult[]>([]);
 
   // Hooks must be declared before any conditional return
   useEffect(() => {
@@ -33,8 +35,20 @@ export default function TraineeFeedbackPage() {
             quizTitle: q.quizTitle,
             score: q.score,
             submittedAt: q.submittedAt,
+            trainerFeedback: (q as any).trainerFeedback ?? null,
+            attemptNumber: (q as any).attemptNumber ?? null,
           }))
         );
+        const globalResults = (data.globalQuizResults || []) as GlobalQuizResult[];
+        setGlobalQuizzes(globalResults.map((g) => ({
+          id: g.id,
+          quizId: g.quizId,
+          quizTitle: g.quizTitle,
+          score: g.score,
+          submittedAt: g.submittedAt,
+          trainerFeedback: (g as any).trainerFeedback ?? null,
+          attemptNumber: (g as any).attemptNumber ?? null,
+        })));
       } catch (e) {
         console.error(e);
         setEnablers([]); setUseCases([]); setQuizzes([]);
@@ -108,16 +122,21 @@ export default function TraineeFeedbackPage() {
             {enablers.map((e) => (
               <li key={e.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold">{e.enablerTitle}</div>
+                  <div className="font-semibold">
+                    {e.enablerTitle}
+                    {e.attemptNumber ? <span className="ml-2 text-xs rounded-full border border-accent/30 px-2 py-0.5">Versuch {e.attemptNumber}</span> : null}
+                  </div>
                   {statusPill(e.status)}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">Eingereicht am {new Date(e.submittedAt).toLocaleString()}</div>
-                {e.trainerFeedback && (
-                  <div className="mt-2">
-                    <div className="text-xs text-muted-foreground">Feedback</div>
+                <div className="mt-2 rounded-xl border border-accent/20 bg-background/30 p-3">
+                  <div className="text-xs font-medium text-muted-foreground">Feedback</div>
+                  {e.trainerFeedback ? (
                     <div className="text-sm whitespace-pre-wrap">{e.trainerFeedback}</div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="text-xs italic text-muted-foreground">{e.status === 'PENDING' ? 'Noch in Prüfung…' : 'Kein individuelles Feedback vorhanden.'}</div>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
@@ -134,16 +153,21 @@ export default function TraineeFeedbackPage() {
             {useCases.map((u) => (
               <li key={u.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold">{u.useCaseTitle}</div>
+                  <div className="font-semibold">
+                    {u.useCaseTitle}
+                    {u.attemptNumber ? <span className="ml-2 text-xs rounded-full border border-accent/30 px-2 py-0.5">Versuch {u.attemptNumber}</span> : null}
+                  </div>
                   {statusPill(u.status)}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">Eingereicht am {new Date(u.submittedAt).toLocaleString()}</div>
-                {u.trainerFeedback && (
-                  <div className="mt-2">
-                    <div className="text-xs text-muted-foreground">Feedback</div>
+                <div className="mt-2 rounded-xl border border-accent/20 bg-background/30 p-3">
+                  <div className="text-xs font-medium text-muted-foreground">Feedback</div>
+                  {u.trainerFeedback ? (
                     <div className="text-sm whitespace-pre-wrap">{u.trainerFeedback}</div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="text-xs italic text-muted-foreground">{u.status === 'PENDING' ? 'Noch in Prüfung…' : 'Kein individuelles Feedback vorhanden.'}</div>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
@@ -160,11 +184,53 @@ export default function TraineeFeedbackPage() {
             {quizzes.map((q) => (
               <li key={q.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold">{q.enablerTitle}</div>
+                  <div className="font-semibold">
+                    {q.enablerTitle}
+                    {q.attemptNumber ? <span className="ml-2 text-xs rounded-full border border-accent/30 px-2 py-0.5">Versuch {q.attemptNumber}</span> : null}
+                  </div>
                   <div className="inline-flex items-center gap-2 text-sm"><Award className="h-4 w-4"/> {q.score ?? 0}%</div>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">Abgegeben am {new Date(q.submittedAt).toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">Quiz: {q.quizTitle}</div>
+                <div className="mt-2 rounded-xl border border-accent/20 bg-background/30 p-3">
+                  <div className="text-xs font-medium text-muted-foreground">Feedback</div>
+                  {q.trainerFeedback ? (
+                    <div className="text-sm whitespace-pre-wrap">{q.trainerFeedback}</div>
+                  ) : (
+                    <div className="text-xs italic text-muted-foreground">Noch in Prüfung…</div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Global quiz results */}
+      <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
+        <h2 className="text-foreground mb-4 text-xl font-semibold">Global-Quiz Ergebnisse</h2>
+        {globalQuizzes.length === 0 ? (
+          <div className="text-muted-foreground">Keine Ergebnisse.</div>
+        ) : (
+          <ul className="space-y-4">
+            {globalQuizzes.map((q) => (
+              <li key={q.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">
+                    {q.quizTitle}
+                    {q.attemptNumber ? <span className="ml-2 text-xs rounded-full border border-accent/30 px-2 py-0.5">Versuch {q.attemptNumber}</span> : null}
+                  </div>
+                  <div className="inline-flex items-center gap-2 text-sm"><Award className="h-4 w-4"/> {q.score ?? 0}%</div>
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">Abgegeben am {new Date(q.submittedAt).toLocaleString()}</div>
+                <div className="mt-2 rounded-xl border border-accent/20 bg-background/30 p-3">
+                  <div className="text-xs font-medium text-muted-foreground">Feedback</div>
+                  {q.trainerFeedback ? (
+                    <div className="text-sm whitespace-pre-wrap">{q.trainerFeedback}</div>
+                  ) : (
+                    <div className="text-xs italic text-muted-foreground">Noch in Prüfung…</div>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

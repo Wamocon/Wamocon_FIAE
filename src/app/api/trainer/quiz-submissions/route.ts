@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
         score: quizSubmissions.score,
         isReviewed: quizSubmissions.isReviewed,
         submittedAt: quizSubmissions.submittedAt,
+        attemptNumber: quizSubmissions.attemptNumber,
         traineeName: profiles.fullName,
         quizTitle: quizzes.title,
         quizType: quizzes.quizType,

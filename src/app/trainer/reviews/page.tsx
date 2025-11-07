@@ -5,10 +5,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, MessageSquare } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
-type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string };
-type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string };
+type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
+type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
 type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
-type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string };
+type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string; attemptNumber?: number|null };
 
 export default function TrainerReviewsPage() {
   const { profile } = useAuth();
@@ -67,8 +67,8 @@ export default function TrainerReviewsPage() {
         const r = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
         if (!r.ok) throw new Error('Konnte Reviews nicht laden');
         const data = await r.json();
-        setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status })));
-        setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status })));
+  setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+  setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
       } finally {
@@ -94,7 +94,7 @@ export default function TrainerReviewsPage() {
           const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${pendingFilter === 'pending'}`);
           if (!res.ok) throw new Error('Fehler beim Laden der Einreichungen');
           const data = await res.json();
-          setQuizzes(data.submissions || []);
+          setQuizzes((data.submissions || []).map((x: any)=> ({ ...x, attemptNumber: x.attemptNumber })));
         }
       } catch (e: any) {
         setError(e.message || 'Unbekannter Fehler');
@@ -120,8 +120,8 @@ export default function TrainerReviewsPage() {
     const onlyPending = statusFilter === 'pending';
     const rr = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
     const data = await rr.json();
-    setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status })));
-    setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status })));
+  setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+  setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
     setFeedbackMap(prev => ({ ...prev, [id]: '' }));
   };
 
@@ -193,7 +193,7 @@ export default function TrainerReviewsPage() {
                   <span>Typ:</span>
                   <select value={quizTypeFilter} onChange={(e)=>setQuizTypeFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
                     <option value="all">Alle</option>
-                    <option value="ENABLER">Enabler</option>
+                    <option value="LESSON">Lesson</option>
                     <option value="GLOBAL">Global</option>
                   </select>
                 </>
@@ -219,7 +219,7 @@ export default function TrainerReviewsPage() {
                   </div>
                   <div>
                     <div className="font-semibold">{it.enablerTitle}</div>
-                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()} {it.attemptNumber ? `• Versuch ${it.attemptNumber}` : ''}</div>
                   </div>
                 </div>
                 <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
@@ -255,7 +255,7 @@ export default function TrainerReviewsPage() {
                   </div>
                   <div>
                     <div className="font-semibold">{it.useCaseTitle}</div>
-                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()} {it.attemptNumber ? `• Versuch ${it.attemptNumber}` : ''}</div>
                   </div>
                 </div>
                 <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
@@ -291,7 +291,7 @@ export default function TrainerReviewsPage() {
                   </div>
                   <div>
                     <div className="font-semibold">{s.quizTitle}</div>
-                    <div className="text-xs text-muted-foreground">{s.traineeName} • {new Date(s.submittedAt).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{s.traineeName} • {new Date(s.submittedAt).toLocaleString()} {s.attemptNumber ? `• Versuch ${s.attemptNumber}` : ''}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -314,8 +314,37 @@ export default function TrainerReviewsPage() {
                 <div className="md:col-span-2">
                   <div className="text-xs text-muted-foreground">Fortschritt</div>
                   <div className="mt-1 h-1.5 w-full rounded-full bg-black/30">
-                    <div className="h-1.5 rounded-full bg-primary/90" style={{ width: `${Math.max(0, Math.min(100, s.score ?? 0))}%` }} />
+                    <div className="h-1.5 rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, s.score ?? 0))}%` }} ></div>
                   </div>
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium">Feedback</label>
+                <textarea
+                  className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2"
+                  rows={3}
+                  value={feedbackMap[s.id] || ''}
+                  onChange={(e) => setFeedbackMap(prev => ({ ...prev, [s.id]: e.target.value }))}
+                  placeholder="Feedback an den Trainee"
+                />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={async () => {
+                      const feedback = feedbackMap[s.id] || '';
+                      await fetch(`/api/trainer/quiz-submissions/${s.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ trainer_feedback: feedback, reviewer_id: profile?.id }),
+                      });
+                      // Optionally refresh list
+                      const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`);
+                      const data = await res.json();
+                      setQuizzes(data.submissions || []);
+                    }}
+                    className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60"
+                  >
+                    Feedback speichern
+                  </button>
                 </div>
               </div>
             </div>
