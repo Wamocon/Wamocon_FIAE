@@ -296,6 +296,7 @@ export default function TrainerReviewsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{s.quizType || '-'}</span>
+                  <a href={`/trainer/reviews/quizzes/${s.id}`} className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60">Details</a>
                   <button onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
                     {s.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4"/> Bewertet</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4"/> Als bewertet markieren</span>)}
                   </button>

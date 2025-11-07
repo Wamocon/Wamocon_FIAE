@@ -1,13 +1,39 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { Brain, Clock, Target, Play, CheckCircle, Award } from 'lucide-react';
+import { Brain, Play, Award } from 'lucide-react';
 import { useEffect, useState } from 'react';
+
+type QuizCard = {
+  id: string;
+  title: string;
+  difficulty?: string;
+  description?: string;
+  bestScore?: number;
+  questionsCount?: number;
+  timeLimit?: number | string;
+  attempts?: number;
+};
 
 export default function TraineeQuizzesPage() {
   const { profile, loading } = useAuth();
-  const [quizzes, setQuizzes] = useState<any[]>([]);
-  const [fetching, setFetching] = useState(false);
+  const [quizzes, setQuizzes] = useState<QuizCard[]>([]);
+
+  // Always declare hooks before any conditional return
+  useEffect(() => {
+    const load = async () => {
+      if (!profile?.id) return;
+      try {
+        const res = await fetch(`/api/trainee/quizzes?userId=${profile.id}`);
+        const data = (await res.json()) as QuizCard[];
+        setQuizzes(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error(e);
+        setQuizzes([]);
+      }
+    };
+    load();
+  }, [profile?.id]);
 
   if (loading) {
     return (
@@ -42,23 +68,7 @@ export default function TraineeQuizzesPage() {
     );
   }
 
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) return;
-      setFetching(true);
-      try {
-        const res = await fetch(`/api/trainee/quizzes?userId=${profile.id}`);
-        const data = await res.json();
-        setQuizzes(data || []);
-      } catch (e) {
-        console.error(e);
-        setQuizzes([]);
-      } finally {
-        setFetching(false);
-      }
-    };
-    load();
-  }, [profile?.id]);
+  
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -147,7 +157,7 @@ export default function TraineeQuizzesPage() {
             <div className="flex items-center gap-2">
               <a href={`/trainee/quizzes/${quiz.id}`} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-center text-sm font-medium transition-colors">
                 <Play className="mr-2 inline h-4 w-4" />
-                {quiz.bestScore > 0 ? 'Wiederholen' : 'Starten'}
+                {(quiz.bestScore ?? 0) > 0 ? 'Wiederholen' : 'Starten'}
               </a>
               <button className="bg-muted/30 text-muted hover:text-foreground hover:bg-muted/50 rounded-xl px-4 py-2 transition-colors">
                 <Award className="h-4 w-4" />

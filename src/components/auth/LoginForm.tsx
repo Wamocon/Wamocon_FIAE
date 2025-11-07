@@ -1,63 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
 import Link from 'next/link';
-import db from '@/db';
-import { profiles } from '@/db/migrations/schemas/schema';
-import { eq } from 'drizzle-orm';
+import { useAuth } from '@/contexts/AuthContext';
 
-export default function LoginPage() {
+export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const { profile, signIn } = useAuth();
+
+  useEffect(() => {
+    if (profile) {
+      if (profile.role === 'trainer') router.push('/trainer/dashboard');
+      else router.push('/trainee/dashboard');
+    }
+  }, [profile, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-
     try {
-      // 1. Supabase login
-      const { data, error: signInError } =
-        await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-
-      if (signInError) throw signInError;
-      if (!data.user) throw new Error('Benutzer nicht gefunden.');
-
-      // 2. Fetch profile from database using Drizzle
-      const profilesResult = await db
-        .select()
-        .from(profiles)
-        .where(eq(profiles.id, data.user.id));
-
-      const profile = profilesResult[0];
-
-      if (!profile) throw new Error('Profil nicht gefunden.');
-
-      // 3. Redirect based on role
-      if (profile.role === 'TRAINER') {
-        router.push('/trainer/dashboard');
-      } else {
-        router.push('/trainee/dashboard');
-      }
-    } catch (err) {
-      if (err instanceof Error) {
-        console.error('Login error:', err);
-        setError(err.message || 'Anmeldung fehlgeschlagen.');
-      } else {
-        console.error('Login error:', err);
-        setError('Anmeldung fehlgeschlagen.');
-      }
+      await signIn(email.trim(), password);
+      // redirect happens in the effect when profile is loaded
+    } catch (err: any) {
+      setError(err?.message || 'Anmeldung fehlgeschlagen.');
     } finally {
       setIsLoading(false);
     }
@@ -134,6 +107,11 @@ export default function LoginPage() {
                   )}
                 </button>
               </div>
+              <div className="mt-2 text-right">
+                <Link href="/forgot-password" className="text-sm text-accent hover:text-accent/80 underline">
+                  Passwort vergessen?
+                </Link>
+              </div>
             </div>
             {error && (
               <div className="bg-destructive/10 border-destructive/20 rounded-xl border p-3">
@@ -151,10 +129,10 @@ export default function LoginPage() {
                   Anmeldung läuft...
                 </div>
               ) : (
-                'An'
+                'Anmelden'
               )}
             </button>
-            <div className="text-center">
+            <div className="text-center space-y-1">
               <p className="text-gray-400">
                 Noch kein Konto?{' '}
                 <Link

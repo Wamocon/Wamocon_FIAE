@@ -1,44 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import {
-  enablers,
-  enablerQuizzes,
-  options,
-  questions,
-  quizzes,
-  courses,
-  courseMembers,
-  quizSubmissionAnswers,
-  quizSubmissions,
-} from '@/db/migrations/schemas/schema';
+import { enablers, enablerQuizzes, options, questions, quizzes, courseMembers, quizSubmissionAnswers, quizSubmissions, notifications, courses } from '@/db/migrations/schemas/schema';
 
 // POST submit answers for enabler quiz
 // Body: { traineeId: string, answers: Array<{ questionId: string, selectedOptionId: string }> }
-export async function POST(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { enablerId: string } }
+) {
   try {
-    const { enablerId } = await params;
+    const { enablerId } = params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
     const answers: Array<{ questionId: string; selectedOptionId: string }> = Array.isArray(body?.answers) ? body.answers : [];
     if (!traineeId || answers.length === 0) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
-    const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));
+  const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
     if (!enabler || !enabler.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const [member] = await db
       .select()
       .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, enabler.courseId as any), eq(courseMembers.userId, traineeId as any)));
+  .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.userId, traineeId)));
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const [link] = await db.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId as any));
+  const [link] = await db.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId));
     if (!link) return NextResponse.json({ error: 'No quiz' }, { status: 400 });
     const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, link.quizId));
     if (!quiz) return NextResponse.json({ error: 'No quiz' }, { status: 400 });
 
     // Validate answers and compute score
-    const qs = await db.select().from(questions).where(eq(questions.quizId, quiz.id));
-    const qMap = new Map(qs.map((q) => [String(q.id), q]));
+  const qs = await db.select().from(questions).where(eq(questions.quizId, quiz.id));
     const optRows = await db.select().from(options).where(inArray(options.questionId, qs.map((q) => q.id)));
     const optMap = new Map(optRows.map((o) => [String(o.id), o]));
 
@@ -56,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ena
         .returning();
       if (answers.length) {
         await tx.insert(quizSubmissionAnswers).values(
-          answers.map((a) => ({ submissionId: sub.id, questionId: a.questionId as any, selectedOptionId: a.selectedOptionId as any }))
+          answers.map((a) => ({ submissionId: sub.id, questionId: a.questionId, selectedOptionId: a.selectedOptionId }))
         );
       }
       return sub;
@@ -73,6 +65,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ena
         correctOptionId: correctOpt?.id,
       };
     });
+
+    // Notify trainers about quiz submission
+    try {
+      const [courseRow] = await db.select().from(courses).where(eq(courses.id, enabler.courseId));
+      const trainerMemberRows = await db
+        .select({ userId: courseMembers.userId })
+        .from(courseMembers)
+        .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.role, 'TRAINER')));
+      const trainerIds = new Set<string>();
+      if (courseRow?.createdById) trainerIds.add(String(courseRow.createdById));
+      trainerMemberRows.forEach((m) => trainerIds.add(String(m.userId)));
+      if (trainerIds.size) {
+        const values = Array.from(trainerIds).map((uid) => ({
+          userId: uid,
+          actorId: traineeId,
+          type: 'ENABLER_QUIZ_SUBMITTED',
+          title: 'Mini-Quiz eingereicht',
+          message: `Ein Trainee hat ein Mini-Quiz abgegeben: ${enabler.title}`,
+          linkUrl: '/trainer/quiz-management',
+          context: { enablerId, quizId: quiz.id, submissionId: sub.id },
+        }));
+        await db.insert(notifications).values(values);
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainers for enabler quiz submission', notifyErr);
+    }
 
     return NextResponse.json({ submissionId: sub.id, score, feedback });
   } catch (e) {

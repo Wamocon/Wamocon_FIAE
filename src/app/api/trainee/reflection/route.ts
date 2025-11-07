@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { desc, eq } from 'drizzle-orm';
-import { reflections } from '@/db/migrations/schemas/schema';
+import { reflections, profiles, notifications } from '@/db/migrations/schemas/schema';
 
 // GET /api/trainee/reflection?traineeId=...
 // Returns the latest reflection for a trainee, or null if none exists
@@ -55,6 +55,25 @@ export async function POST(req: NextRequest) {
       .values({ traineeId: trainee_id as any, strengths, weaknesses, mesMore: mes_more, mesEqual: mes_equal })
       .returning();
 
+    // Notify assigned trainer if any
+    try {
+      const [p] = await db.select().from(profiles).where(eq(profiles.id, trainee_id as any));
+      const trainerId = p?.assignedTrainerId ? String(p.assignedTrainerId) : null;
+      if (trainerId) {
+        await db.insert(notifications).values({
+          userId: trainerId,
+          actorId: trainee_id,
+          type: 'REFLECTION_SUBMITTED',
+          title: 'Reflexion eingereicht',
+          message: `${p.fullName || 'Trainee'} hat eine Reflexion eingereicht`,
+          linkUrl: '/trainer/reflections',
+          context: { traineeId: trainee_id, reflectionId: row.id },
+        });
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainer for reflection POST', notifyErr);
+    }
+
     return NextResponse.json({ id: row.id }, { status: 201 });
   } catch (e) {
     console.error('Trainee reflection POST error', e);
@@ -88,6 +107,24 @@ export async function PUT(req: NextRequest) {
         .update(reflections)
         .set({ strengths, weaknesses, mesMore: mes_more, mesEqual: mes_equal })
         .where(eq(reflections.id, existing[0].id as any));
+      // Notify trainer on update as well
+      try {
+        const [p] = await db.select().from(profiles).where(eq(profiles.id, trainee_id as any));
+        const trainerId = p?.assignedTrainerId ? String(p.assignedTrainerId) : null;
+        if (trainerId) {
+          await db.insert(notifications).values({
+            userId: trainerId,
+            actorId: trainee_id,
+            type: 'REFLECTION_SUBMITTED',
+            title: 'Reflexion aktualisiert',
+            message: `${p.fullName || 'Trainee'} hat eine Reflexion aktualisiert`,
+            linkUrl: '/trainer/reflections',
+            context: { traineeId: trainee_id, reflectionId: existing[0].id },
+          });
+        }
+      } catch (notifyErr) {
+        console.warn('Failed to notify trainer for reflection PUT', notifyErr);
+      }
       return NextResponse.json({ id: existing[0].id, updated: true });
     } else {
       const [row] = await db

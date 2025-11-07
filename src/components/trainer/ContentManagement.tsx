@@ -223,7 +223,7 @@ export function ContentManagement() {
               <div className="mb-4 space-y-3 flex-1 overflow-y-auto pr-1">
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
-                    <h4 className="text-foreground text-sm font-medium">Enabler</h4>
+                    <h4 className="text-foreground text-sm font-medium">Lessons</h4>
                     <p className="text-muted text-xs">{course.enablersCount} Themen</p>
                   </div>
                   <button
@@ -302,7 +302,7 @@ export function ContentManagement() {
                     <div className="text-muted flex items-center gap-2 text-sm">
                       <span>Jahr {course.year ?? '-'}</span>
                       <span>•</span>
-                      <span>Capital {course.chapter ?? '-'}</span>
+                      <span>Module {course.chapter ?? '-'}</span>
                     </div>
                   </div>
                 </div>
@@ -337,7 +337,7 @@ export function ContentManagement() {
                   <div className="flex-1">
                     <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
                       <FolderOpen className="text-muted h-4 w-4 mt-0.5" />
-                      <span className="truncate">Enabler: {course.enablersCount}</span>
+                      <span className="truncate">Lessons: {course.enablersCount}</span>
                     </h4>
                   </div>
                 </div>
@@ -384,7 +384,7 @@ export function ContentManagement() {
           <div className="absolute inset-0 bg-black/50" onClick={() => !enSubmitting && setShowAddEnabler(false)} />
           <div className="relative z-10 w-full max-w-2xl rounded-xl border border-border bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Neuen Enabler erstellen</h2>
+              <h2 className="text-xl font-semibold">Neuen Lesson erstellen</h2>
               <button className="rounded-md border border-border px-2 py-1 text-sm" onClick={() => !enSubmitting && setShowAddEnabler(false)}>Schließen</button>
             </div>
             <div className="space-y-4">
@@ -394,7 +394,7 @@ export function ContentManagement() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Beschreibung</label>
-                <textarea value={enDescription} onChange={e => setEnDescription(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Enablers" />
+                <textarea value={enDescription} onChange={e => setEnDescription(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Lessons" />
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -460,12 +460,12 @@ export function ContentManagement() {
                     .filter(q => q.questionText && q.options.every(o => o));
                   setEnSubmitting(true);
                   try {
-                    // Create Enabler (active)
+                    // Create Lesson (active)
                     const res = await fetch(`/api/trainer/courses/${activeCourseId}/enablers?trainerId=${profile.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: enTitle.trim(), descriptionText: enDescription.trim() || undefined, scenarioText: enScenario.trim() || undefined, hintText: enHint.trim() || undefined, pptUrl: enPpt.trim() || undefined, videoUrl: enVideo.trim() || undefined, durationValue: enDuration ? Number(enDuration) : undefined, durationUnit: enDuration ? 'DAYS' : undefined, isActive: enActive }) });
-                    if (!res.ok) throw new Error('Enabler konnte nicht erstellt werden');
+                    if (!res.ok) throw new Error('Lesson konnte nicht erstellt werden');
                     const data = await res.json();
                     const enablerId = data.enabler?.id;
-                    if (!enablerId) throw new Error('Fehlende Enabler ID');
+                    if (!enablerId) throw new Error('Fehlende Lesson ID');
 
                     // Create quiz if defined
                     if (cleaned.length) {

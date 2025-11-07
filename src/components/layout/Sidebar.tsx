@@ -30,7 +30,7 @@ interface SidebarProps {
 export function Sidebar({
   currentView,
   isOpen,
-  onToggle,
+  onToggle: _onToggle,
   userRole,
 }: SidebarProps) {
   const { profile, signOut } = useAuth();
@@ -104,8 +104,6 @@ export function Sidebar({
       router.push('/login');
     }
   }, [signOut, router]);
-
-  if (!profile) return null;
 
   // Role-based navigation items - optimized with useMemo
   const navigationItems = useMemo(
@@ -195,9 +193,21 @@ export function Sidebar({
     [userRole, language]
   );
 
+  if (!profile) return null;
+
   return (
     <aside
-      className={`${isOpen ? 'translate-x-0' : '-translate-x-full'} glass-effect border-border/50 fixed inset-y-0 left-0 z-50 w-64 border-r transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0`}
+      className={[
+        'glass-effect border-border/50 border-r transition-all duration-300 ease-in-out',
+        // Mobile: slide-in drawer
+        'fixed inset-y-0 left-0 z-40 w-64',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
+        // Desktop: in-flow sidebar that pushes content
+        'lg:static lg:inset-auto lg:translate-x-0 lg:h-full lg:overflow-hidden lg:shrink-0',
+        isOpen ? 'lg:w-64 lg:pointer-events-auto' : 'lg:w-0 lg:pointer-events-none',
+        // Desktop hover to reveal when collapsed
+        'group-hover:lg:w-64 group-hover:lg:pointer-events-auto'
+      ].join(' ')}
     >
       <div className="flex h-full flex-col">
         {/* Logo Section */}

@@ -13,9 +13,9 @@ export async function GET(req: NextRequest) {
 
     // Trainees assigned to this trainer
     const traineeRows = await db
-      .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
+      .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl, isActive: profiles.isActive })
       .from(profiles)
-      .where(and(eq(profiles.role, 'TRAINEE' as any), eq(profiles.assignedTrainerId, trainerId as any)));
+  .where(and(eq(profiles.role, 'TRAINEE'), eq(profiles.assignedTrainerId, trainerId)));
 
     const traineeIds = traineeRows.map(t => t.id);
     // Enablers under this trainer's courses
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       .select({ id: enablers.id })
       .from(enablers)
       .innerJoin(courses, eq(enablers.courseId, courses.id))
-      .where(eq(courses.createdById, trainerId as any));
+  .where(eq(courses.createdById, trainerId));
     const enablerIds = trainerEnablers.map(e => e.id);
 
     // Progress = completed enablers / total enablers
@@ -33,14 +33,14 @@ export async function GET(req: NextRequest) {
       const rows = await db
         .select({ traineeId: enablerCompletions.traineeId, c: count() })
         .from(enablerCompletions)
-        .where(and(inArray(enablerCompletions.enablerId, enablerIds as any), inArray(enablerCompletions.traineeId, traineeIds as any)))
+  .where(and(inArray(enablerCompletions.enablerId, enablerIds), inArray(enablerCompletions.traineeId, traineeIds)))
         .groupBy(enablerCompletions.traineeId);
       rows.forEach(r => completedMap.set(String(r.traineeId), Number(r.c)));
     }
     const trainees = traineeRows.map(t => {
       const completed = completedMap.get(String(t.id)) || 0;
       const pct = totalEnablers > 0 ? Math.round((completed / totalEnablers) * 100) : 0;
-      return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct };
+  return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct, isActive: Boolean(t.isActive) };
     });
 
     return NextResponse.json({ trainees });

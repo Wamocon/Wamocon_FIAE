@@ -91,6 +91,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     if (typeof body?.avatar_url === 'string') updates.avatarUrl = body.avatar_url.trim();
     if (body?.start_of_training_date) updates.startOfTrainingDate = new Date(body.start_of_training_date);
     if (typeof body?.assigned_trainer_id === 'string') updates.assignedTrainerId = body.assigned_trainer_id;
+  if (typeof body?.isActive === 'boolean') updates.isActive = body.isActive;
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });

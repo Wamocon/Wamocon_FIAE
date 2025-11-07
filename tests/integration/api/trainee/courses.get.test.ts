@@ -18,7 +18,7 @@ async function importDetailHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
   const mod = await import('@/app/api/trainee/courses/[courseId]/route');
-  return mod.GET as (req: any, ctx: { params: Promise<{ courseId: string }> }) => Promise<Response>;
+  return mod.GET as unknown as (req: any, ctx: { params: Promise<{ courseId: string }> }) => Promise<Response>;
 }
 
 describe('API: Trainee Courses', () => {

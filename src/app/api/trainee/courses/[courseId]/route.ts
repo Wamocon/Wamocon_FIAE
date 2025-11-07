@@ -5,31 +5,34 @@ import { courses, courseMembers, enablers, useCases } from '@/db/migrations/sche
 
 // GET course details for a trainee: includes active enablers and use-cases
 // query: traineeId
-export async function GET(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
+export async function GET(
+  req: NextRequest,
+  context: { params: { courseId: string } }
+) {
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { courseId } = await params;
+    const { courseId } = context.params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [member] = await db
       .select()
       .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, courseId as any), eq(courseMembers.userId, traineeId as any)));
+      .where(and(eq(courseMembers.courseId, courseId), eq(courseMembers.userId, traineeId)));
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const [c] = await db.select().from(courses).where(eq(courses.id, courseId as any));
+    const [c] = await db.select().from(courses).where(eq(courses.id, courseId));
     if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const ens = await db
       .select()
       .from(enablers)
-      .where(and(eq(enablers.courseId, courseId as any), eq(enablers.isActive, true)))
+      .where(and(eq(enablers.courseId, courseId), eq(enablers.isActive, true)))
       .orderBy(enablers.orderIndex);
     const ucs = await db
       .select()
       .from(useCases)
-      .where(and(eq(useCases.courseId, courseId as any), eq(useCases.isActive, true)))
+      .where(and(eq(useCases.courseId, courseId), eq(useCases.isActive, true)))
       .orderBy(useCases.orderIndex);
 
     return NextResponse.json({

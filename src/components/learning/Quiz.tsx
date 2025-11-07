@@ -2,14 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Award,
-  Target,
-} from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Award, Target } from 'lucide-react';
 import type { QuizWithQuestions } from '@/db/queries';
 
 interface QuizProps {
@@ -40,9 +33,9 @@ export default function Quiz({ quiz }: QuizProps) {
     setScore(0);
   }, [quiz.timeLimitMinutes]);
 
-  const handleGoBack = useCallback(() => {
-    router.push('/trainee/modules');
-  }, [router]);
+  const handlePrevQuestion = useCallback(() => {
+    setCurrentQuestion(prev => (prev > 0 ? prev - 1 : prev));
+  }, []);
 
   const handleAnswerSelect = useCallback(
     (questionId: string, optionIndex: number) => {
@@ -190,8 +183,10 @@ export default function Quiz({ quiz }: QuizProps) {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-4">
           <button
-            onClick={handleGoBack}
-            className="text-muted hover:text-foreground hover:bg-accent/20 rounded-xl p-2 transition-all duration-200"
+            onClick={handlePrevQuestion}
+            className="text-muted hover:text-foreground hover:bg-accent/20 rounded-xl p-2 transition-all duration-200 disabled:opacity-50"
+            disabled={currentQuestion === 0}
+            aria-label="Vorherige Frage"
           >
             <ArrowLeft className="h-6 w-6" />
           </button>
@@ -201,6 +196,14 @@ export default function Quiz({ quiz }: QuizProps) {
             </h1>
             <p className="text-muted mt-1">{quizData.description}</p>
           </div>
+          <button
+            onClick={handleNextQuestion}
+            className="text-muted hover:text-foreground hover:bg-accent/20 rounded-xl p-2 transition-all duration-200 disabled:opacity-50"
+            disabled={!isAnswerSelected && currentQuestion !== quizData.totalQuestions - 1}
+            aria-label={currentQuestion === quizData.totalQuestions - 1 ? 'Abschließen' : 'Nächste Frage'}
+          >
+            <ArrowRight className="h-6 w-6" />
+          </button>
         </div>
 
         {/* Progress Bar */}
@@ -282,10 +285,11 @@ export default function Quiz({ quiz }: QuizProps) {
         {/* Navigation Buttons */}
         <div className="mt-8 flex justify-between">
           <button
-            onClick={handleGoBack}
-            className="text-muted bg-muted/30 hover:bg-muted/50 rounded-2xl px-6 py-3 font-medium transition-all duration-200"
+            onClick={handlePrevQuestion}
+            disabled={currentQuestion === 0}
+            className="text-muted bg-muted/30 hover:bg-muted/50 rounded-2xl px-6 py-3 font-medium transition-all duration-200 disabled:opacity-50"
           >
-            Zurück
+            Vorherige Frage
           </button>
 
           <button
