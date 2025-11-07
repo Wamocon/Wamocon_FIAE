@@ -261,6 +261,10 @@ export const quizSubmissions = pgTable('quiz_submissions', {
 
   // For "Action Required" dashboard
   isReviewed: boolean('is_reviewed').default(false),
+  trainerFeedback: text('trainer_feedback'),
+  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
+  reviewedAt: timestamp('reviewed_at'),
+  attemptNumber: integer('attempt_number'),
 });
 
 // Trainee's answer for each question in that submission
@@ -294,6 +298,7 @@ export const useCaseSubmissions = pgTable('use_case_submissions', {
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
   reviewedAt: timestamp('reviewed_at'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+  attemptNumber: integer('attempt_number'),
 });
 
 // Stores multiple links for a single use case submission
@@ -460,6 +465,7 @@ export const enablerSubmissions = pgTable('enabler_submissions', {
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
   reviewedAt: timestamp('reviewed_at'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+  attemptNumber: integer('attempt_number'),
 });
 
 // ---------------------------------------------

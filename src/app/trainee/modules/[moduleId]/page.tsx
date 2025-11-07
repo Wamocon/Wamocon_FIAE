@@ -12,8 +12,8 @@ export default function TraineeModuleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [course, setCourse] = useState<{ id: string; title: string; year: number | null; chapter: number | null } | null>(null);
-  const [enablers, setEnablers] = useState<Array<{ id: string; title: string }>>([]);
-  const [useCases, setUseCases] = useState<Array<{ id: string; title: string }>>([]);
+  const [enablers, setEnablers] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
+  const [useCases, setUseCases] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -59,7 +59,7 @@ export default function TraineeModuleDetailPage() {
             <ul className="space-y-2">
               {enablers.map((e) => (
                 <li key={e.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
-                  <span className="truncate">{e.title}</span>
+                  <span className="truncate">{e.title} {e.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {e.attemptNumber}</span> : null}</span>
                   <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
                 </li>
               ))}
@@ -75,7 +75,7 @@ export default function TraineeModuleDetailPage() {
             <ul className="space-y-2">
               {useCases.map((u) => (
                 <li key={u.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
-                  <span className="truncate">{u.title}</span>
+                  <span className="truncate">{u.title} {u.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {u.attemptNumber}</span> : null}</span>
                   <Link href={`/trainee/use-cases/${u.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
                 </li>
               ))}

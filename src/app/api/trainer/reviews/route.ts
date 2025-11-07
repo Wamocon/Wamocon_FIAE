@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
       submittedAt: Date;
       enablerTitle?: string;
       traineeName?: string;
+      attemptNumber?: number | null;
     }> = [];
     let useCaseRows: Array<{
       id: string;
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
       submittedAt: Date;
       useCaseTitle?: string;
       traineeName?: string;
+      attemptNumber?: number | null;
     }> = [];
 
     if (!type || type === 'enabler') {
@@ -50,6 +52,7 @@ export async function GET(req: NextRequest) {
           solutionText: enablerSubmissions.solutionText,
           status: enablerSubmissions.status,
           submittedAt: enablerSubmissions.submittedAt,
+          attemptNumber: enablerSubmissions.attemptNumber,
         })
         .from(enablerSubmissions)
         .leftJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
@@ -64,7 +67,7 @@ export async function GET(req: NextRequest) {
   const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
         const enMap = Object.fromEntries(enMapArr.map((e) => [String(e.id), e.title]));
         const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));
-        enablerRows = enablerRows.map(r => ({ ...r, enablerTitle: enMap[String(r.enablerId)] || 'Enabler', traineeName: trMap[String(r.traineeId)] || 'Unbekannt' }));
+  enablerRows = enablerRows.map(r => ({ ...r, enablerTitle: enMap[String(r.enablerId)] || 'Enabler', traineeName: trMap[String(r.traineeId)] || 'Unbekannt', attemptNumber: (r as any).attemptNumber }));
       }
     }
 
@@ -77,6 +80,7 @@ export async function GET(req: NextRequest) {
           submissionText: useCaseSubmissions.submissionText,
           status: useCaseSubmissions.status,
           submittedAt: useCaseSubmissions.submittedAt,
+          attemptNumber: useCaseSubmissions.attemptNumber,
         })
         .from(useCaseSubmissions)
         .leftJoin(useCases, eq(useCases.id, useCaseSubmissions.useCaseId))
@@ -90,7 +94,7 @@ export async function GET(req: NextRequest) {
   const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
         const ucMap = Object.fromEntries(ucMapArr.map((e) => [String(e.id), e.title]));
         const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));
-        useCaseRows = useCaseRows.map(r => ({ ...r, useCaseTitle: ucMap[String(r.useCaseId)] || 'Use Case', traineeName: trMap[String(r.traineeId)] || 'Unbekannt' }));
+  useCaseRows = useCaseRows.map(r => ({ ...r, useCaseTitle: ucMap[String(r.useCaseId)] || 'Use Case', traineeName: trMap[String(r.traineeId)] || 'Unbekannt', attemptNumber: (r as any).attemptNumber }));
       }
     }
 
