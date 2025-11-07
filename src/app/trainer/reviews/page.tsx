@@ -8,7 +8,7 @@ import { useSearchParams } from 'next/navigation';
 type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string };
 type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string };
 type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
-type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'ENABLER' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string };
+type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string };
 
 export default function TrainerReviewsPage() {
   const { profile } = useAuth();
@@ -29,7 +29,7 @@ export default function TrainerReviewsPage() {
   const [reflections, setReflections] = useState<ReflectionItem[]>([]);
   const [quizzes, setQuizzes] = useState<QuizSubmissionItem[]>([]);
   const [pendingFilter, setPendingFilter] = useState<'pending' | 'all'>('pending');
-  const [quizTypeFilter, setQuizTypeFilter] = useState<'all' | 'ENABLER' | 'GLOBAL'>('all');
+  const [quizTypeFilter, setQuizTypeFilter] = useState<'all' | 'LESSON' | 'GLOBAL'>('all');
 
   const filteredEnablers = useMemo(() => enablerSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [enablerSubs, statusFilter]);
   const filteredUseCases = useMemo(() => useCaseSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [useCaseSubs, statusFilter]);

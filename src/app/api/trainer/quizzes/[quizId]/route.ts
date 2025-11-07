@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ quizId: st
       id: qz.id,
       title: qz.title,
       is_active: qz.isActive,
-      quiz_type: qz.quizType === 'ENABLER' ? 'mini' : 'big',
+      quiz_type: qz.quizType === 'LESSON' ? 'mini' : 'big',
       questions: questionsOut,
       assigned_trainee_ids: assignedRows.map((r) => String(r.traineeId)),
     });
