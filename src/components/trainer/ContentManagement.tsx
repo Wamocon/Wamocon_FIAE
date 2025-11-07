@@ -183,29 +183,7 @@ export function ContentManagement() {
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
                   <BookOpen className="h-6 w-6 text-white" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => router.push(`/trainer/content-management/${course.id}/edit`)}
-                    className="text-muted hover:text-accent hover:bg-accent/10 rounded-xl p-2 transition-all duration-200"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
-                      try {
-                        const res = await fetch(`/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`, { method: 'DELETE' });
-                        if (!res.ok) throw new Error('Fehler beim Löschen');
-                        setCourses(prev => prev.filter(c => c.id !== course.id));
-                      } catch (e: any) {
-                        alert(e?.message || 'Unbekannter Fehler');
-                      }
-                    }}
-                    className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                <img src="/WMC_Logo.png" alt={course.title} className="h-14 w-12 rounded-2xl object-cover" />
               </div>
 
               <h3 className="text-foreground mb-2 text-xl font-bold truncate">
@@ -276,9 +254,21 @@ export function ContentManagement() {
                     Bearbeiten
                   </button>
                 </div>
-                <button className="text-muted hover:text-foreground text-sm">
-                  <MoreVertical className="h-4 w-4" />
-                </button>
+                <button
+                    onClick={async () => {
+                      if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
+                      try {
+                        const res = await fetch(`/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`, { method: 'DELETE' });
+                        if (!res.ok) throw new Error('Fehler beim Löschen');
+                        setCourses(prev => prev.filter(c => c.id !== course.id));
+                      } catch (e: any) {
+                        alert(e?.message || 'Unbekannter Fehler');
+                      }
+                    }}
+                    className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
               </div>
             </div>
           ))}
