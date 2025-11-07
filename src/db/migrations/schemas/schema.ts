@@ -25,7 +25,7 @@ export const authUsers = auth.table('users', {
 
 export const userRole = pgEnum('user_role', ['TRAINER', 'TRAINEE']);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
-export const quizType = pgEnum('quiz_type', ['ENABLER', 'GLOBAL']);
+export const quizType = pgEnum('quiz_type', ['LESSON', 'GLOBAL']);
 export const reviewStatus = pgEnum('review_status', [
   'PENDING',
   'APPROVED',

@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     const out = rows.map((r) => ({
       id: r.id,
       title: r.title,
-      quiz_type: r.quizType === 'ENABLER' ? 'mini' : 'big',
+      quiz_type: r.quizType === 'LESSON' ? 'mini' : 'big',
       is_active: r.isActive,
       training_year: r.courseYear ?? 0,
       time_limit_minutes: 0,
@@ -95,14 +95,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'quiz_type must be mini or big' }, { status: 400 });
     }
 
-    const qt = quiz_type === 'mini' ? 'ENABLER' : 'GLOBAL';
+    const qt = quiz_type === 'mini' ? 'LESSON' : 'GLOBAL';
 
     const [qz] = await db
       .insert(quizzes)
       .values({ title, quizType: qt, createdById: trainer_id, isActive: is_active })
       .returning();
 
-    if (qt === 'ENABLER') {
+    if (qt === 'LESSON') {
       if (!enabler_id) return NextResponse.json({ error: 'enabler_id required for mini quiz' }, { status: 400 });
       await db.insert(enablerQuizzes).values({ enablerId: enabler_id, quizId: qz.id });
     }
