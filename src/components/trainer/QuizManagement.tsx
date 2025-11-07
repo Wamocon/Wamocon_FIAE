@@ -349,7 +349,9 @@ export function QuizManagement() {
           <tbody className="divide-y divide-slate-200">
             {quizzes.map((q) => (
               <tr key={q.id} className="transition-colors hover:bg-accent/10">
-                <td className="px-4 py-3 text-sm font-medium text-foreground">{q.title}</td>
+                <td className="px-4 py-3 text-sm font-medium text-foreground">
+                  <a href={`/trainer/quiz-management/${q.id}`} className="underline hover:text-primary">{q.title}</a>
+                </td>
                 <td className="px-4 py-3">
                   {q.is_active ? (
                     <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">Active</span>
@@ -364,6 +366,7 @@ export function QuizManagement() {
                     <Button className="h-8 gap-1 px-3" onClick={() => openEdit(q.id)}>
                       <Pencil className="h-4 w-4" /> Edit
                     </Button>
+                    <a href={`/trainer/quiz-management/${q.id}`} className="inline-flex h-8 items-center gap-1 rounded-md border border-accent/30 px-3 text-sm hover:bg-background/60">View</a>
                     <Button variant="destructive" className="h-8 gap-1 px-3" onClick={() => onDelete(q.id)}>
                       <Trash2 className="h-4 w-4" /> Delete
                     </Button>

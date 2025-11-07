@@ -71,6 +71,84 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     router.push('/trainer/acceptance-protocol');
   };
 
+  const generatePdfBlob = async () => {
+    // dynamically import to keep bundle small and avoid SSR issues
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595, 842]); // A4 portrait in points
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontSizeHeading = 18;
+    const fontSize = 12;
+    const left = 50;
+    let y = 800;
+
+    page.drawText(`Auszubildender: ${trainee?.full_name || ''}`, { x: left, y, size: fontSizeHeading, font });
+    y -= 26;
+    page.drawText(`ID: ${trainee?.id || ''}`, { x: left, y, size: fontSize, font });
+    y -= 18;
+    page.drawText(`Start der Ausbildung: ${trainee?.training_start_date || '—'}`, { x: left, y, size: fontSize, font });
+    y -= 18;
+    page.drawText(`Fortschritt: ${trainee?.progress ?? 0}%`, { x: left, y, size: fontSize, font });
+    y -= 26;
+
+    page.drawText('Kurzstatistiken', { x: left, y, size: fontSizeHeading, font });
+    y -= 22;
+    page.drawText(`Gesamtfortschritt: ${trainee?.progress ?? 0}%`, { x: left, y, size: fontSize, font });
+    y -= 16;
+    page.drawText('Module abgeschlossen: —', { x: left, y, size: fontSize, font });
+    y -= 16;
+    page.drawText('Durchschnitt: 82%', { x: left, y, size: fontSize, font });
+
+    const pdfBytes = await pdfDoc.save();
+    // pdfBytes is a Uint8Array - convert to a plain ArrayBuffer slice to satisfy strict BlobPart typing
+    const ab = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
+    const blob = new Blob([ab], { type: 'application/pdf' });
+    return blob;
+  };
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    try {
+      setExporting(true);
+      const blob = await generatePdfBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${trainee?.full_name || 'trainee'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message || 'Fehler beim Exportieren als PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleSharePdf = async () => {
+    try {
+      setExporting(true);
+      const blob = await generatePdfBlob();
+      const file = new File([blob], `${trainee?.full_name || 'trainee'}.pdf`, { type: 'application/pdf' });
+      // Use Web Share API if available
+      const nav: any = navigator as any;
+      if (nav?.canShare && nav.canShare({ files: [file] })) {
+        await nav.share({ files: [file], title: `Auszubildender: ${trainee?.full_name || ''}`, text: 'Auszubildenden-Report' });
+      } else {
+        // Fallback to download
+        handleDownloadPdf();
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message || 'Fehler beim Teilen');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!profile?.id || !trainee?.id) return;
     try {
@@ -151,13 +229,21 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               >
                 {showEdit ? 'Bearbeiten ausblenden' : 'Bearbeiten'}
               </button>
-            <button className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200">
+            <button
+              onClick={handleSharePdf}
+              disabled={exporting}
+              className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200 disabled:opacity-60"
+            >
               <Share2 className="h-4 w-4" />
-              Teilen
+              {exporting ? 'Teilen…' : 'Teilen'}
             </button>
-            <button className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200">
+            <button
+              onClick={handleDownloadPdf}
+              disabled={exporting}
+              className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200 disabled:opacity-60"
+            >
               <Download className="h-4 w-4" />
-              Export
+              {exporting ? 'Export…' : 'Export'}
             </button>
             <button
               onClick={handleAcceptanceProtocol}

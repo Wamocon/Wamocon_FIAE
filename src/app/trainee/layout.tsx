@@ -13,7 +13,7 @@ const TraineeLayoutComponent = ({
 }) => {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Memoize authentication check to prevent unnecessary re-renders
   const isAuthenticated = useMemo(() => {

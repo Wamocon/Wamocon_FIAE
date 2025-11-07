@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { courseMembers, profiles, userRole, courses } from '@/db/migrations/schemas/schema';
+import { courseMembers, profiles, userRole, courses, notifications } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
@@ -48,6 +48,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
     const role: 'TRAINER' | 'TRAINEE' | undefined = body?.role;
     if (!userId || !role) return NextResponse.json({ error: 'Missing userId or role' }, { status: 400 });
     const [row] = await db.insert(courseMembers).values({ courseId: courseId as any, userId, role }).returning();
+
+    // Notify the added user
+    try {
+      const isTrainer = role === 'TRAINER';
+      await db.insert(notifications).values({
+        userId,
+        actorId: trainerId,
+        type: isTrainer ? 'COURSE_CO_TRAINER_ADDED' : 'COURSE_ASSIGNED',
+        title: isTrainer ? 'Als Trainer hinzugefügt' : 'Zu Kurs hinzugefügt',
+        message: isTrainer ? `Du wurdest als Trainer zu einem Kurs hinzugefügt` : `Du wurdest einem Kurs zugewiesen`,
+        linkUrl: isTrainer ? `/trainer/courses/${courseId}` : '/trainee/modules',
+        context: { courseId },
+      });
+    } catch (notifyErr) {
+      console.warn('Failed to notify added course member', notifyErr);
+    }
+
     return NextResponse.json({ member: row });
   } catch (e) {
     console.error('Add course member error', e);

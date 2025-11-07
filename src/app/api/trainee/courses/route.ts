@@ -14,15 +14,15 @@ export async function GET(req: NextRequest) {
     const memberships = await db
       .select()
       .from(courseMembers)
-      .where(eq(courseMembers.userId, traineeId as any));
-    const courseIds = memberships.map((m) => m.courseId);
+      .where(eq(courseMembers.userId, traineeId));
+    const courseIds: string[] = memberships.map((m) => m.courseId);
     if (!courseIds.length) return NextResponse.json({ courses: [] });
 
-    const rows = await db.select().from(courses).where(inArray(courses.id, courseIds as any));
+    const rows = await db.select().from(courses).where(inArray(courses.id, courseIds));
     const enablerRows = await db
       .select()
       .from(enablers)
-      .where(and(inArray(enablers.courseId, courseIds as any), eq(enablers.isActive, true)))
+      .where(and(inArray(enablers.courseId, courseIds), eq(enablers.isActive, true)))
       .orderBy(enablers.orderIndex);
 
     const result = rows.map((c) => ({

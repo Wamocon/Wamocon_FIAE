@@ -83,7 +83,7 @@ export default function NewCoursePage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Kapitel/Abschnitt (z.B. Capital 1)</label>
+          <label className="mb-1 block text-sm font-medium">Module (z.B. Modul 1)</label>
           <input
             value={chapter}
             onChange={(e) => setChapter(e.target.value)}

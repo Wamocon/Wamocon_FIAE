@@ -5,7 +5,7 @@ import { Users, Eye, MessageSquare, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-type TraineeItem = { id: string; full_name: string; avatar_url?: string | null; progress: number };
+type TraineeItem = { id: string; full_name: string; avatar_url?: string | null; progress: number; isActive?: boolean };
 
 export default function TrainerTraineesPage() {
   const { profile, user, loading } = useAuth() as any;
@@ -108,9 +108,10 @@ export default function TrainerTraineesPage() {
                   <h3 className="text-foreground text-xl font-bold">
                     {trainee.full_name}
                   </h3>
-                  <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">
-                    Auszubildender
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">Auszubildender</span>
+                    <span className={`text-xs rounded-full px-2 py-0.5 border ${trainee.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{trainee.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -145,16 +146,29 @@ export default function TrainerTraineesPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => router.push(`/trainer/trainees/${trainee.id}`)}
-                className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-colors"
+                className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-4 py-2 text-sm font-medium transition-colors"
               >
                 <Eye className="mr-2 inline h-4 w-4" />
                 Details
               </button>
-              <button className="bg-muted/30 text-muted hover:text-foreground hover:bg-muted/50 rounded-xl px-4 py-2 transition-colors">
-                <MessageSquare className="h-4 w-4" />
-              </button>
-              <button className="bg-muted/30 text-muted hover:text-foreground hover:bg-muted/50 rounded-xl px-4 py-2 transition-colors">
-                <TrendingUp className="h-4 w-4" />
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch(`/api/trainer/trainees/${trainee.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trainer_id: profile?.id, isActive: !trainee.isActive }) });
+                    // refresh list
+                    const params = new URLSearchParams();
+                    if (profile?.id) params.set('trainerProfileId', profile.id);
+                    const res = await fetch(`/api/trainer/trainees?${params.toString()}`);
+                    const data = await res.json();
+                    setTrainees(data.trainees || []);
+                  } catch (e) {
+                    console.error(e);
+                    alert('Fehler beim Aktualisieren des Status');
+                  }
+                }}
+                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-700' : 'bg-green-600 text-white hover:bg-green-700'}`}
+              >
+                {trainee.isActive ? 'Deaktivieren' : 'Aktivieren'}
               </button>
             </div>
           </div>

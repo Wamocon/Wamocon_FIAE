@@ -1,0 +1,2 @@
+# Enforce LF endings for shell scripts to prevent shebang/env errors in containers
+*.sh text eol=lf

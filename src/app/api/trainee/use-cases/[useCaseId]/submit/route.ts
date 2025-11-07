@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks } from '@/db/migrations/schemas/schema';
+import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, notifications, courses } from '@/db/migrations/schemas/schema';
 
 // POST submit or update a use-case submission
 // Body: { traineeId: string, submissionText?: string, links?: Array<{ url: string, description?: string }> }
@@ -54,6 +54,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
       }
       return submissionId;
     });
+
+    // Notify trainers
+    try {
+      const [courseRow] = await db.select().from(courses).where(eq(courses.id, u.courseId as any));
+      const trainerMemberRows = await db
+        .select({ userId: courseMembers.userId })
+        .from(courseMembers)
+        .where(and(eq(courseMembers.courseId, u.courseId as any), eq(courseMembers.role, 'TRAINER' as any)));
+      const trainerIds = new Set<string>();
+      if (courseRow?.createdById) trainerIds.add(String(courseRow.createdById));
+      trainerMemberRows.forEach((m) => trainerIds.add(String(m.userId)));
+      if (trainerIds.size) {
+        const values = Array.from(trainerIds).map((uid) => ({
+          userId: uid,
+          actorId: traineeId,
+          type: 'USE_CASE_SUBMITTED',
+          title: 'Use Case eingereicht',
+          message: `Ein Trainee hat einen Use Case eingereicht: ${u.title}`,
+          linkUrl: '/trainer/reviews?type=usecase',
+          context: { useCaseId, submissionId: result },
+        }));
+        await db.insert(notifications).values(values);
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainers for use-case submission', notifyErr);
+    }
 
     return NextResponse.json({ ok: true, submissionId: result });
   } catch (e) {

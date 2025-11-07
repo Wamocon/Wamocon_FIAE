@@ -33,13 +33,12 @@ export async function GET(req: NextRequest) {
       .leftJoin(enablers, eq(enablerQuizzes.enablerId, enablers.id))
       .leftJoin(courses, eq(enablers.courseId, courses.id))
       .leftJoin(quizAssignments, eq(quizAssignments.quizId, quizzes.id))
-      .where(
-        and(
-          eq(quizzes.createdById, trainerId as any),
-          q ? ilike(quizzes.title, `%${q}%`) : undefined,
-          year && year !== 'all' ? eq(courses.year, Number(year) as any) : undefined,
-        ) as any,
-      )
+      .where(() => {
+        const conds = [eq(quizzes.createdById, trainerId)];
+        if (q) conds.push(ilike(quizzes.title, `%${q}%`));
+        if (year && year !== 'all') conds.push(eq(courses.year, Number(year)));
+        return and(...conds);
+      })
       .groupBy(
         quizzes.id,
         quizzes.title,
@@ -51,7 +50,7 @@ export async function GET(req: NextRequest) {
         quizzes.updatedAt,
         quizzes.createdAt,
       )
-      .orderBy(desc((quizzes as any).updatedAt ?? (quizzes as any).createdAt));
+      .orderBy(desc(quizzes.updatedAt), desc(quizzes.createdAt));
 
     const out = rows.map((r) => ({
       id: r.id,
@@ -100,7 +99,7 @@ export async function POST(req: NextRequest) {
 
     const [qz] = await db
       .insert(quizzes)
-      .values({ title, quizType: qt as any, createdById: trainer_id, isActive: is_active })
+      .values({ title, quizType: qt, createdById: trainer_id, isActive: is_active })
       .returning();
 
     if (qt === 'ENABLER') {

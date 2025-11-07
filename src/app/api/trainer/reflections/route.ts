@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const traineeRows = await db
       .select({ id: profiles.id, fullName: profiles.fullName })
       .from(profiles)
-      .where(and(eq(profiles.role, 'TRAINEE' as any), eq(profiles.assignedTrainerId, trainerProfileId as any)));
+  .where(and(eq(profiles.role, 'TRAINEE'), eq(profiles.assignedTrainerId, trainerProfileId)));
 
     if (traineeRows.length === 0) {
       return NextResponse.json({ reflections: [], summary: { total: 0, reviewed: 0, unread: 0 } });
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       })
       .from(reflections)
       .innerJoin(profiles, eq(reflections.traineeId, profiles.id))
-      .where(inArray(reflections.traineeId, traineeIds as any))
+  .where(inArray(reflections.traineeId, traineeIds))
       .orderBy(desc(reflections.createdAt))
       .limit(200);
 

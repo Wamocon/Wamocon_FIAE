@@ -1,10 +1,10 @@
 "use client";
 
-import { ArrowLeft, BookOpen, CheckCircle, ChevronRight } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { LessonWithSubLessons } from '@/db/queries';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface LessonProps {
@@ -17,19 +17,7 @@ export default function Lesson({ data }: LessonProps) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState<string | null>(null);
 
-  if (!data) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Lektion nicht gefunden...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const handleGoBack = () => router.back();
-
+  // Ensure hooks run before any conditional return
   useEffect(() => {
     const load = async () => {
       if (!data?.lesson.id || !profile?.id) return;
@@ -46,6 +34,21 @@ export default function Lesson({ data }: LessonProps) {
     };
     load();
   }, [data?.lesson.id, profile?.id]);
+
+  if (!data) {
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <p className="text-muted-foreground">Lektion nicht gefunden...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleGoBack = () => router.back();
+
+  
 
   const toggleCompletion = async (subLessonId: string, next: boolean) => {
     if (!profile?.id) return;

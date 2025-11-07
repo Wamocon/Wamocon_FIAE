@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { MessageSquare, CheckCircle2, XCircle, HelpCircle, Award } from 'lucide-react';
+import { MessageSquare, Award } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null };
@@ -10,11 +10,40 @@ type EnablerQuizResult = { id: string; enablerId: string; enablerTitle: string; 
 
 export default function TraineeFeedbackPage() {
   const { profile, loading } = useAuth();
-  const [fetching, setFetching] = useState(false);
   const [enablers, setEnablers] = useState<EnablerResult[]>([]);
   const [useCases, setUseCases] = useState<UseCaseResult[]>([]);
   const [quizzes, setQuizzes] = useState<EnablerQuizResult[]>([]);
 
+  // Hooks must be declared before any conditional return
+  useEffect(() => {
+    const load = async () => {
+      if (!profile?.id) return;
+      try {
+        const res = await fetch(`/api/trainee/feedback?traineeId=${profile.id}`, { cache: 'no-store' });
+        const data = await res.json();
+        setEnablers(data.enablerResults || []);
+        setUseCases(data.useCaseResults || []);
+        const quizResults = (data.enablerQuizResults || []) as EnablerQuizResult[];
+        setQuizzes(
+          quizResults.map((q) => ({
+            id: q.id,
+            enablerId: q.enablerId,
+            enablerTitle: q.enablerTitle,
+            quizId: q.quizId,
+            quizTitle: q.quizTitle,
+            score: q.score,
+            submittedAt: q.submittedAt,
+          }))
+        );
+      } catch (e) {
+        console.error(e);
+        setEnablers([]); setUseCases([]); setQuizzes([]);
+      } finally {
+        // no-op
+      }
+    };
+    load();
+  }, [profile?.id]);
   if (loading) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
@@ -48,33 +77,7 @@ export default function TraineeFeedbackPage() {
     );
   }
 
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) return;
-      setFetching(true);
-      try {
-        const res = await fetch(`/api/trainee/feedback?traineeId=${profile.id}`, { cache: 'no-store' });
-        const data = await res.json();
-        setEnablers(data.enablerResults || []);
-        setUseCases(data.useCaseResults || []);
-        setQuizzes((data.enablerQuizResults || []).map((q: any) => ({
-          id: q.id,
-          enablerId: q.enablerId,
-          enablerTitle: q.enablerTitle,
-          quizId: q.quizId,
-          quizTitle: q.quizTitle,
-          score: q.score,
-          submittedAt: q.submittedAt,
-        })));
-      } catch (e) {
-        console.error(e);
-        setEnablers([]); setUseCases([]); setQuizzes([]);
-      } finally {
-        setFetching(false);
-      }
-    };
-    load();
-  }, [profile?.id]);
+
 
   const statusPill = (s: 'PENDING'|'APPROVED'|'REJECTED') => (
     <span className={`text-xs rounded-full px-2 py-1 border ${s==='PENDING'?'border-yellow-500 text-yellow-600': s==='APPROVED'?'border-green-500 text-green-600':'border-red-500 text-red-600'}`}>{s}</span>
@@ -90,14 +93,14 @@ export default function TraineeFeedbackPage() {
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">Trainer-Feedback</h1>
-            <p className="text-muted">Status deiner Einreichungen und Ergebnisse der Enabler-Quizzes</p>
+            <p className="text-muted">Status deiner Einreichungen und Ergebnisse der Lesson-Quizzes</p>
           </div>
         </div>
       </div>
 
-      {/* Enabler submissions */}
+      {/* Lesson submissions */}
       <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-        <h2 className="text-foreground mb-4 text-xl font-semibold">Enabler-Einreichungen</h2>
+        <h2 className="text-foreground mb-4 text-xl font-semibold">Lesson-Einreichungen</h2>
         {enablers.length === 0 ? (
           <div className="text-muted-foreground">Keine Einreichungen.</div>
         ) : (
@@ -147,9 +150,9 @@ export default function TraineeFeedbackPage() {
         )}
       </div>
 
-      {/* Enabler quiz results */}
+      {/* Lesson quiz results */}
       <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-        <h2 className="text-foreground mb-4 text-xl font-semibold">Enabler-Quiz Ergebnisse</h2>
+        <h2 className="text-foreground mb-4 text-xl font-semibold">Lesson-Quiz Ergebnisse</h2>
         {quizzes.length === 0 ? (
           <div className="text-muted-foreground">Keine Ergebnisse.</div>
         ) : (

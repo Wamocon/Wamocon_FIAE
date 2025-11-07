@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BookOpen, CheckCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -13,6 +13,22 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
   const [completed, setCompleted] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Ensure hooks run before any conditional returns
+  useEffect(() => {
+    const load = async () => {
+      if (!profile?.id || !data?.lesson.id || !data?.id) return;
+      try {
+        const res = await fetch(`/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`);
+        const j = await res.json();
+        const set: string[] = j.completedIds || [];
+        setCompleted(set.includes(data.id));
+      } catch {
+        // no-op
+      }
+    };
+    load();
+  }, [profile?.id, data?.lesson.id, data?.id]);
+
   if (!data) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
@@ -24,18 +40,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
     );
   }
 
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) return;
-      try {
-        const res = await fetch(`/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`);
-        const j = await res.json();
-        const set: string[] = j.completedIds || [];
-        setCompleted(set.includes(data.id));
-      } catch {}
-    };
-    load();
-  }, [profile?.id, data?.lesson.id, data?.id]);
+  
 
   const toggle = async (next: boolean) => {
     if (!profile?.id) return;

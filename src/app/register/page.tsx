@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { GraduationCap, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -12,7 +11,6 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
-  const supabase = createClientComponentClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,14 +28,25 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: formData.email.trim(),
-        password: formData.password,
+      // Perform server-side registration which will:
+      // - create the auth user via service role
+      // - create a matching profile where email fields match
+      const resp = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          password: formData.password,
+        }),
       });
 
-      if (signUpError) throw signUpError;
+      const body = await resp.json();
+      if (!resp.ok) {
+        console.error('Server registration failed', body);
+        setError(body?.error || 'Registrierung fehlgeschlagen');
+        return;
+      }
 
-      // Immediately redirect to login
       router.push('/login');
     } catch (err: unknown) {
       console.error('Registration failed:', err);
@@ -130,6 +139,8 @@ export default function RegisterPage() {
                 </button>
               </div>
             </div>
+
+            {/* Only email & password required for registration now */}
 
             {error && (
               <div className="bg-destructive/10 border-destructive/20 rounded-xl border p-3">

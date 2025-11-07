@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
-  const { useCases, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
+  const { useCases, courseMembers, courses, notifications } = await import('@/db/migrations/schemas/schema');
     const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
@@ -47,6 +47,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ us
       updates.activatedAt = new Date();
     }
     const [row] = await db.update(useCases).set(updates).where(eq(useCases.id, useCaseId as any)).returning();
+
+    // Notify trainees when activated
+    try {
+      if (updates.activatedAt) {
+        const traineeMemberRows = await db
+          .select({ userId: courseMembers.userId })
+          .from(courseMembers)
+          .where(and(eq(courseMembers.courseId, row0.courseId as any), eq(courseMembers.role, 'TRAINEE' as any)));
+        if (traineeMemberRows.length) {
+          const values = traineeMemberRows.map((m) => ({
+            userId: String(m.userId),
+            actorId: trainerId,
+            type: 'USE_CASE_ACTIVATED',
+            title: 'Neuer Use Case aktiviert',
+            message: `Ein Use Case wurde aktiviert: ${row0.title}`,
+            linkUrl: '/trainee/modules',
+            context: { useCaseId, courseId: row0.courseId },
+          }));
+          await db.insert(notifications).values(values);
+        }
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainees for use-case activation', notifyErr);
+    }
     return NextResponse.json({ useCase: row });
   } catch (e) {
     console.error('Update use-case error', e);

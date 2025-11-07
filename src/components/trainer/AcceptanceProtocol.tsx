@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   FileCheck2,
@@ -28,6 +28,8 @@ export function AcceptanceProtocol() {
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
   const [trainees, setTrainees] = useState<TraineeItem[]>([]);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -79,6 +81,143 @@ export function AcceptanceProtocol() {
     }
   };
 
+  // Generate a simple PDF client-side using pdf-lib
+  const generatePdfBlob = async () => {
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595.28, 841.89]); // A4 portrait in points
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const titleFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const margin = 50;
+    let y = page.getHeight() - margin;
+
+    const drawText = (text: string, opts?: { size?: number; color?: any; bold?: boolean }) => {
+      const size = opts?.size ?? 12;
+      const f = opts?.bold ? titleFont : font;
+      y -= size + 8;
+      page.drawText(text, { x: margin, y, size, font: f, color: opts?.color ?? rgb(0, 0, 0) });
+    };
+
+    // Header
+    drawText('Digitales Abnahmeprotokoll', { size: 20, bold: true });
+    drawText(`Protokoll-ID: ${successId ?? '-'}`, { size: 10, color: rgb(0.3, 0.3, 0.3) });
+
+    const trainee = trainees.find(t => t.id === formData.trainee_id);
+    const traineeName = trainee?.full_name ?? formData.trainee_id;
+    const trainerName = profile?.full_name ?? '-';
+
+    // Meta
+    drawText(`Auszubildender: ${traineeName}`);
+    drawText(`Ausbilder: ${trainerName}`);
+    drawText(`Datum: ${formData.date}`);
+
+    // Content
+    y -= 6;
+    drawText('Abgenommener Meilenstein:', { bold: true });
+    drawText(formData.milestone);
+
+    y -= 6;
+    drawText('Kommentare:', { bold: true });
+
+    // Wrap comments roughly
+    const wrap = (text: string, max = 90) => {
+      const words = text.split(/\s+/);
+      const lines: string[] = [];
+      let line = '';
+      for (const w of words) {
+        if ((line + ' ' + w).trim().length > max) {
+          lines.push(line.trim());
+          line = w;
+        } else {
+          line += ' ' + w;
+        }
+      }
+      if (line.trim()) lines.push(line.trim());
+      return lines;
+    };
+    for (const l of wrap(formData.comments, 95)) {
+      drawText(l);
+      if (y < margin + 50) break; // simplistic overflow guard
+    }
+
+    // Footer
+    y = margin + 20;
+    page.drawText('Dieses Dokument wurde automatisch generiert.', {
+      x: margin,
+      y,
+      size: 9,
+      font,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+
+  const bytes = await pdfDoc.save();
+  // Normalize to a real ArrayBuffer (not SharedArrayBuffer) for BlobPart
+  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  // Cast to satisfy strict TS typings across environments
+  return new Blob([ab as unknown as ArrayBuffer], { type: 'application/pdf' });
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      setIsDownloading(true);
+      const blob = await generatePdfBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const trainee = trainees.find(t => t.id === formData.trainee_id);
+      const traineeSlug = (trainee?.full_name || 'auszubildender').toLowerCase().replace(/\s+/g, '-');
+      a.href = url;
+      a.download = `abnahmeprotokoll-${traineeSlug}-${formData.date}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'PDF konnte nicht erzeugt werden');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleSharePdf = async () => {
+    try {
+      setIsSharing(true);
+      const blob = await generatePdfBlob();
+      const trainee = trainees.find(t => t.id === formData.trainee_id);
+      const traineeSlug = (trainee?.full_name || 'auszubildender').toLowerCase().replace(/\s+/g, '-');
+      const file = new File([blob], `abnahmeprotokoll-${traineeSlug}-${formData.date}.pdf`, { type: 'application/pdf' });
+      if ((navigator as any).canShare && (navigator as any).canShare({ files: [file] })) {
+        await (navigator as any).share({
+          title: 'Digitales Abnahmeprotokoll',
+          text: 'Hier ist das digitale Abnahmeprotokoll.',
+          files: [file],
+        });
+      } else if (navigator.share) {
+        // Fallback to blob URL share if files not supported
+        const url = URL.createObjectURL(blob);
+        try {
+          await navigator.share({ title: 'Digitales Abnahmeprotokoll', url });
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      } else {
+        // Final fallback: trigger a download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `abnahmeprotokoll-${traineeSlug}-${formData.date}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Teilen fehlgeschlagen');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   if (isGenerated) {
     return (
       <div className="mx-auto max-w-2xl p-6">
@@ -95,13 +234,29 @@ export function AcceptanceProtocol() {
           </p>
 
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <button disabled className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60">
-              <Download className="h-5 w-5" />
-              PDF herunterladen
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isDownloading}
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+            >
+              {isDownloading ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <Download className="h-5 w-5" />
+              )}
+              {isDownloading ? 'Wird vorbereitet…' : 'PDF herunterladen'}
             </button>
-            <button className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-6 py-3 font-medium transition-all duration-200">
-              <Share2 className="h-5 w-5" />
-              Teilen
+            <button
+              onClick={handleSharePdf}
+              disabled={isSharing}
+              className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-6 py-3 font-medium transition-all duration-200 disabled:opacity-60"
+            >
+              {isSharing ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-foreground/80 border-t-transparent" />
+              ) : (
+                <Share2 className="h-5 w-5" />
+              )}
+              {isSharing ? 'Wird geteilt…' : 'Teilen'}
             </button>
             {successId && (
               <div className="text-xs text-muted">ID: {successId}</div>
@@ -140,7 +295,7 @@ export function AcceptanceProtocol() {
           {/* Participant Information */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium">
+              <label className="text-foreground mb-2 flex items-center gap-2 text-sm font-medium">
                 <User className="h-4 w-4" />
                 Auszubildender
               </label>
@@ -156,7 +311,7 @@ export function AcceptanceProtocol() {
               </select>
             </div>
             <div>
-              <label className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium">
+              <label className="text-foreground mb-2 flex items-center gap-2 text-sm font-medium">
                 <Building className="h-4 w-4" />
                 Ausbilder
               </label>
@@ -171,7 +326,7 @@ export function AcceptanceProtocol() {
 
           {/* Date */}
           <div>
-            <label className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium">
+            <label className="text-foreground mb-2 flex items-center gap-2 text-sm font-medium">
               <Calendar className="h-4 w-4" />
               Datum der Abnahme
             </label>
@@ -189,7 +344,7 @@ export function AcceptanceProtocol() {
           <div>
             <label
               htmlFor="milestone_name"
-              className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium"
+              className="text-foreground mb-2 flex items-center gap-2 text-sm font-medium"
             >
               <Award className="h-4 w-4" />
               Abgenommener Meilenstein
@@ -211,7 +366,7 @@ export function AcceptanceProtocol() {
           <div>
             <label
               htmlFor="comments"
-              className="text-foreground mb-2 block flex items-center gap-2 text-sm font-medium"
+              className="text-foreground mb-2 flex items-center gap-2 text-sm font-medium"
             >
               <FileCheck2 className="h-4 w-4" />
               Finale Kommentare des Ausbilders

@@ -1,0 +1,582 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Wamocon FIAE API",
+    "version": "0.1.0",
+    "description": "Concise endpoint inventory for Trainer, Trainee, and Other routes"
+  },
+  "servers": [
+    { "url": "/" }
+  ],
+  "tags": [
+    { "name": "Trainer" },
+    { "name": "Trainee" },
+    { "name": "Other" }
+  ],
+  "paths": {
+    "/api/trainer/dashboard": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Trainer dashboard metrics",
+        "parameters": [
+          { "in": "query", "name": "trainerProfileId", "schema": { "type": "string" } },
+          { "in": "query", "name": "trainerAuthId", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainer/profile": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Trainer profile analytics",
+        "parameters": [
+          { "in": "query", "name": "trainerId", "schema": { "type": "string" }, "required": true }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainer/profiles": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List/search trainer profiles",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainer/trainees": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List trainees for trainer",
+        "parameters": [
+          { "in": "query", "name": "trainerProfileId", "schema": { "type": "string" } },
+          { "in": "query", "name": "trainerAuthId", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainer/trainees/{traineeId}": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Get trainee details",
+        "parameters": [
+          { "in": "path", "name": "traineeId", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Update trainee",
+        "parameters": [
+          { "in": "path", "name": "traineeId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/trainer/courses": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List courses",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Create course",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainer/courses/{courseId}": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Get course by ID",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Update course",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Trainer"],
+        "summary": "Delete course",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/api/trainer/courses/{courseId}/members": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List course members",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Add course member",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Added" } }
+      },
+      "delete": {
+        "tags": ["Trainer"],
+        "summary": "Remove course member",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Removed" } }
+      }
+    },
+    "/api/trainer/courses/{courseId}/enablers": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List enablers for course",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Create enabler for course",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainer/courses/{courseId}/use-cases": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List use-cases for course",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Create use-case for course",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainer/enablers/{enablerId}": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Get enabler",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Update enabler",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Trainer"],
+        "summary": "Delete enabler",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/api/trainer/enablers/{enablerId}/quiz": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Get or preview enabler quiz",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Create or attach quiz for enabler",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainer/use-cases/{useCaseId}": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Get use-case",
+        "parameters": [{ "in": "path", "name": "useCaseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Update use-case",
+        "parameters": [{ "in": "path", "name": "useCaseId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Trainer"],
+        "summary": "Delete use-case",
+        "parameters": [{ "in": "path", "name": "useCaseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/api/trainer/quizzes": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List quizzes with filters",
+        "parameters": [
+          { "in": "query", "name": "trainerId", "schema": { "type": "string" } },
+          { "in": "query", "name": "q", "schema": { "type": "string" } },
+          { "in": "query", "name": "year", "schema": { "type": "string" }, "description": "number or 'all'" }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Create quiz (mini or big)",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainer/quizzes/{quizId}": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Get quiz by ID",
+        "parameters": [{ "in": "path", "name": "quizId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Update quiz",
+        "parameters": [{ "in": "path", "name": "quizId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Trainer"],
+        "summary": "Delete quiz",
+        "parameters": [{ "in": "path", "name": "quizId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/api/trainer/quiz-submissions": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List quiz submissions",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainer/quiz-submissions/{submissionId}": {
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Review quiz submission",
+        "parameters": [{ "in": "path", "name": "submissionId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/trainer/reflections": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List trainee reflections for trainer",
+        "parameters": [{ "in": "query", "name": "trainerProfileId", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainer/reflections/{reflectionId}": {
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Review/update reflection",
+        "parameters": [{ "in": "path", "name": "reflectionId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/trainer/reviews": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Review queue (enablers/use-cases)",
+        "parameters": [
+          { "in": "query", "name": "trainerId", "schema": { "type": "string" }, "required": true },
+          { "in": "query", "name": "onlyPending", "schema": { "type": "boolean" } },
+          { "in": "query", "name": "type", "schema": { "type": "string", "enum": ["enabler", "usecase"] } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainer/reviews/enablers/{submissionId}": {
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Review enabler submission",
+        "parameters": [
+          { "in": "path", "name": "submissionId", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "trainerId", "schema": { "type": "string" }, "required": true }
+        ],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/trainer/reviews/use-cases/{submissionId}": {
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Review use-case submission",
+        "parameters": [
+          { "in": "path", "name": "submissionId", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "trainerId", "schema": { "type": "string" }, "required": true }
+        ],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/trainer/acceptance-protocols": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "List acceptance protocols",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Create acceptance protocol",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainer/content": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Content overview",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainer/content/modules": {
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Create module",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainer/content/modules/{moduleId}": {
+      "get": {
+        "tags": ["Trainer"],
+        "summary": "Get module",
+        "parameters": [{ "in": "path", "name": "moduleId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Update module",
+        "parameters": [{ "in": "path", "name": "moduleId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Trainer"],
+        "summary": "Delete module",
+        "parameters": [{ "in": "path", "name": "moduleId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/api/trainer/content/modules/{moduleId}/lessons": {
+      "post": {
+        "tags": ["Trainer"],
+        "summary": "Create lesson in module",
+        "parameters": [{ "in": "path", "name": "moduleId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainer/content/lessons/{lessonId}": {
+      "patch": {
+        "tags": ["Trainer"],
+        "summary": "Update lesson",
+        "parameters": [{ "in": "path", "name": "lessonId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Trainer"],
+        "summary": "Delete lesson",
+        "parameters": [{ "in": "path", "name": "lessonId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+
+    "/api/trainee/dashboard": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "Trainee dashboard",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/courses": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "List trainee courses",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/courses/{courseId}": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "Get course detail for trainee",
+        "parameters": [{ "in": "path", "name": "courseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/enablers/{enablerId}": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "Get enabler detail",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/enablers/{enablerId}/submit": {
+      "post": {
+        "tags": ["Trainee"],
+        "summary": "Submit enabler solution",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Submitted" } }
+      }
+    },
+    "/api/trainee/enablers/{enablerId}/quiz": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "Get enabler quiz",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/enablers/{enablerId}/quiz/submit": {
+      "post": {
+        "tags": ["Trainee"],
+        "summary": "Submit enabler quiz",
+        "parameters": [{ "in": "path", "name": "enablerId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Submitted" } }
+      }
+    },
+    "/api/trainee/lessons": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "List lessons",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/lesson-progress": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "Get lesson progress",
+        "parameters": [
+          { "in": "query", "name": "userId", "schema": { "type": "string" } },
+          { "in": "query", "name": "lessonId", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/progress": {
+      "post": {
+        "tags": ["Trainee"],
+        "summary": "Update sub-lesson progress",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/trainee/quizzes": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "List available quizzes",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/reflection": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "Get trainee reflection",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainee"],
+        "summary": "Create reflection",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      },
+      "put": {
+        "tags": ["Trainee"],
+        "summary": "Update reflection",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/trainee/feedback": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "List feedback items",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/knowledge-notes": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "List knowledge notes",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Trainee"],
+        "summary": "Create knowledge note",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/trainee/knowledge-notes/{noteId}": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "Get knowledge note",
+        "parameters": [{ "in": "path", "name": "noteId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "patch": {
+        "tags": ["Trainee"],
+        "summary": "Update knowledge note",
+        "parameters": [{ "in": "path", "name": "noteId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Trainee"],
+        "summary": "Delete knowledge note",
+        "parameters": [{ "in": "path", "name": "noteId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/api/trainee/use-cases/{useCaseId}": {
+      "get": {
+        "tags": ["Trainee"],
+        "summary": "Get use-case for trainee",
+        "parameters": [{ "in": "path", "name": "useCaseId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/trainee/use-cases/{useCaseId}/submit": {
+      "post": {
+        "tags": ["Trainee"],
+        "summary": "Submit use-case solution",
+        "parameters": [{ "in": "path", "name": "useCaseId", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Submitted" } }
+      }
+    },
+
+    "/api/register": {
+      "post": {
+        "tags": ["Other"],
+        "summary": "Register user",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "201": { "description": "Registered" } }
+      }
+    },
+    "/api/breadcrumb/label": {
+      "get": {
+        "tags": ["Other"],
+        "summary": "Resolve breadcrumb label",
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  }
+}

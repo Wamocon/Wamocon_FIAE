@@ -1,0 +1,163 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Bell } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+
+export type UINotification = {
+  id: string;
+  userId: string;
+  actorId: string | null;
+  type: string;
+  title: string;
+  message: string | null;
+  linkUrl: string | null;
+  context?: Record<string, unknown> | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export default function NotificationsBell() {
+  const { profile } = useAuth();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<UINotification[]>([]);
+  const [loading, setLoading] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const unread = useMemo(() => items.filter(i => !i.isRead).length, [items]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/notifications?userId=${profile.id}&limit=30`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (mounted) setItems(data.notifications || []);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+
+    // Realtime subscription for this user's notifications
+    const channel = supabase
+      .channel(`public:notifications:user=${profile.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${profile.id}`,
+      }, (payload) => {
+        try {
+          if (!mounted) return;
+          if (payload.eventType === 'INSERT') {
+            const row = payload.new as any;
+            setItems(prev => [{
+              id: row.id,
+              userId: row.user_id,
+              actorId: row.actor_id ?? null,
+              type: row.type,
+              title: row.title,
+              message: row.message ?? null,
+              linkUrl: row.link_url ?? null,
+              context: row.context ?? null,
+              isRead: Boolean(row.is_read),
+              readAt: row.read_at ?? null,
+              createdAt: row.created_at,
+            }, ...prev].slice(0, 50));
+          } else if (payload.eventType === 'UPDATE') {
+            const row = payload.new as any;
+            setItems(prev => prev.map(i => i.id === row.id ? {
+              ...i,
+              isRead: Boolean(row.is_read),
+              readAt: row.read_at ?? null,
+            } : i));
+          }
+        } catch {
+          // ignore
+        }
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      try { channel.unsubscribe(); } catch {}
+    };
+  }, [profile?.id]);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!dropdownRef.current) return;
+      if (!dropdownRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const markAsRead = async (id: string) => {
+    try {
+      const res = await fetch(`/api/notifications/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isRead: true }) });
+      if (res.ok) {
+        setItems(prev => prev.map(i => i.id === id ? { ...i, isRead: true, readAt: new Date().toISOString() } : i));
+      }
+    } catch {}
+  };
+
+  const onItemClick = async (n: UINotification) => {
+    if (!n.isRead) await markAsRead(n.id);
+    if (n.linkUrl) router.push(n.linkUrl);
+    setOpen(false);
+  };
+
+  if (!profile) return null;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        className="relative rounded-lg p-2 hover:bg-muted text-muted hover:text-foreground"
+        onClick={() => setOpen(o => !o)}
+        aria-label="Benachrichtigungen"
+      >
+        <Bell className="h-5 w-5" />
+        {unread > 0 && (
+          <span className="bg-accent text-accent-foreground absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-xs">
+            {unread}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="bg-card border-border absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border shadow-xl">
+          <div className="border-border bg-muted/40 border-b px-4 py-2 text-sm font-semibold">Benachrichtigungen</div>
+          <div className="max-h-96 overflow-y-auto">
+            {loading && (
+              <div className="text-muted-foreground p-4 text-center text-sm">Lade…</div>
+            )}
+            {!loading && items.length === 0 && (
+              <div className="text-muted-foreground p-4 text-center text-sm">Keine Benachrichtigungen</div>
+            )}
+            {items.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => onItemClick(n)}
+                className={`w-full px-4 py-3 text-left text-sm hover:bg-muted ${n.isRead ? 'opacity-80' : 'bg-accent/10'}`}
+              >
+                <div className="text-foreground line-clamp-1 font-medium">{n.title}</div>
+                {n.message && <div className="text-muted-foreground line-clamp-2 text-xs">{n.message}</div>}
+                <div className="text-muted-foreground mt-1 text-[10px]">{new Date(n.createdAt).toLocaleString()}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

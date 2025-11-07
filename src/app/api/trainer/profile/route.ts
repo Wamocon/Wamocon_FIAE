@@ -22,14 +22,14 @@ export async function GET(req: NextRequest) {
     const traineeRows = await db
       .select({ id: profiles.id })
       .from(profiles)
-      .where(and(eq(profiles.role, 'TRAINEE' as any), eq(profiles.assignedTrainerId, trainerId as any)));
+      .where(and(eq(profiles.role, 'TRAINEE'), eq(profiles.assignedTrainerId, trainerId)));
     const traineeIds = traineeRows.map(t => t.id);
 
     // Active courses created by trainer
     const [{ c: activeCourses = 0 } = { c: 0 }] = await db
       .select({ c: count() })
       .from(courses)
-      .where(and(eq(courses.createdById, trainerId as any), eq(courses.isActive, true as any)));
+      .where(and(eq(courses.createdById, trainerId), eq(courses.isActive, true)));
 
     // Pending reviews: unreviewed quiz submissions + reflections + pending use case submissions
     let pendingReviews = 0;
@@ -37,15 +37,15 @@ export async function GET(req: NextRequest) {
       const [{ c: pq = 0 } = { c: 0 }] = await db
         .select({ c: count() })
         .from(quizSubmissions)
-        .where(and(eq(quizSubmissions.isReviewed, false as any), inArray(quizSubmissions.traineeId, traineeIds as any)));
+        .where(and(eq(quizSubmissions.isReviewed, false), inArray(quizSubmissions.traineeId, traineeIds)));
       const [{ c: pr = 0 } = { c: 0 }] = await db
         .select({ c: count() })
         .from(reflections)
-        .where(and(eq(reflections.isReviewed, false as any), inArray(reflections.traineeId, traineeIds as any)));
+        .where(and(eq(reflections.isReviewed, false), inArray(reflections.traineeId, traineeIds)));
       const [{ c: pu = 0 } = { c: 0 }] = await db
         .select({ c: count() })
         .from(useCaseSubmissions)
-        .where(and(eq(useCaseSubmissions.status, 'PENDING' as any), inArray(useCaseSubmissions.traineeId, traineeIds as any)));
+        .where(and(eq(useCaseSubmissions.status, 'PENDING'), inArray(useCaseSubmissions.traineeId, traineeIds)));
       pendingReviews = Number(pq) + Number(pr) + Number(pu);
     }
 
@@ -58,13 +58,13 @@ export async function GET(req: NextRequest) {
       recentActivities = await db
         .select({ id: activityLog.id, userId: activityLog.userId, activityType: activityLog.activityType, createdAt: activityLog.createdAt })
         .from(activityLog)
-        .where(inArray(activityLog.userId, traineeIds as any))
+        .where(inArray(activityLog.userId, traineeIds))
         .orderBy(desc(activityLog.createdAt))
         .limit(5);
       const [{ c: c7 = 0 } = { c: 0 }] = await db
         .select({ c: count() })
         .from(activityLog)
-        .where(inArray(activityLog.userId, traineeIds as any));
+        .where(inArray(activityLog.userId, traineeIds));
       recentCount7d = Number(c7) || 0; // simple count; could add timestamp filter if stored reliably
     }
 

@@ -1,36 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import {
-  enablers,
-  enablerQuizzes,
-  options,
-  questions,
-  quizzes,
-  courses,
-  courseMembers,
-} from '@/db/migrations/schemas/schema';
+import { enablers, enablerQuizzes, options, questions, quizzes, courseMembers } from '@/db/migrations/schemas/schema';
 
 // GET trainee-facing enabler quiz (requires membership and enabler active)
 // query: traineeId
-export async function GET(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { enablerId: string } }
+) {
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { enablerId } = await params;
+    const { enablerId } = params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
-    const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));
+    const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
     if (!enabler || !enabler.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Membership check: trainee must be member of the course
     const [member] = await db
       .select()
       .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, enabler.courseId as any), eq(courseMembers.userId, traineeId as any)));
+      .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.userId, traineeId)));
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const [link] = await db.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId as any));
+    const [link] = await db.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId));
     if (!link) return NextResponse.json({ quiz: null });
     const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, link.quizId));
     if (!quiz) return NextResponse.json({ quiz: null });

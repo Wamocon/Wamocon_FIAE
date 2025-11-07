@@ -1,0 +1,13 @@
+node_modules
+.next
+coverage
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+*.log
+tmp
+dist
+build
+**/*.tsbuildinfo
+supabase/.temp

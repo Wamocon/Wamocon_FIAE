@@ -39,10 +39,14 @@ export const profiles = pgTable('profiles', {
   id: uuid('id')
     .primaryKey()
     .references(() => authUsers.id, { onDelete: 'cascade' }),
-  fullName: text('full_name').notNull(),
+  // Allow null here because the Supabase auth trigger may create a profile
+  // before our application sets the full name. We set it in the app after
+  // signUp (see `src/app/register/page.tsx`).
+  fullName: text('full_name'),
   email: text('email').notNull().unique(),
   avatarUrl: text('avatar_url'),
   role: userRole('role').notNull(),
+  isActive: boolean('is_active').default(false),
   startOfTrainingDate: timestamp('start_of_training_date'),
 
   // A trainee can be assigned to a specific trainer
@@ -403,6 +407,26 @@ export const activityLog = pgTable('activity_log', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Notifications sent between users (trainer/trainee)
+export const notifications = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // recipient of the notification
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  // who triggered the notification (optional)
+  actorId: uuid('actor_id').references(() => profiles.id, { onDelete: 'set null' }),
+  // categorization and content
+  type: text('type').notNull(), // e.g., 'REFLECTION_SUBMITTED'
+  title: text('title').notNull(),
+  message: text('message'),
+  linkUrl: text('link_url'),
+  context: jsonb('context'),
+  isRead: boolean('is_read').notNull().default(false),
+  readAt: timestamp('read_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // Tracks non-submittable progress, like watching a video
 export const enablerCompletions = pgTable(
   'enabler_completions',
@@ -495,6 +519,7 @@ export type Reflection = typeof reflections.$inferSelect;
 export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;
 export type ActivityLog = typeof activityLog.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 export type EnablerCompletion = typeof enablerCompletions.$inferSelect;
 export type EnablerSubmission = typeof enablerSubmissions.$inferSelect;
 // Legacy compatibility types

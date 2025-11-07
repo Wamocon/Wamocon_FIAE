@@ -34,9 +34,9 @@ async function main() {
   const db = drizzle(sql);
 
   // Provided auth IDs
-  const trainerId = '4bdfa8e5-91d5-4cbe-9e1c-882a93190292';
-  const trainee1Id = 'c4fd8987-87ee-443a-aac7-6e7c0808c26d';
-  const trainee2Id = '4bf8c2fc-b38f-4ef9-aebb-76eaa2beef65';
+  const trainerId = 'f178409e-4991-4f81-8052-f90951ce1f81';
+  const trainee1Id = 'e09b9c61-a86a-4ac2-9eb8-55fc49662b3e';
+  const trainee2Id = 'b5abfe96-31a8-4160-8d60-100541bde1a7';
 
   await db.transaction(async (tx) => {
     // Clean relevant tables for repeatable seeding (FK-safe order)

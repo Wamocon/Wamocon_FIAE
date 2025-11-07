@@ -23,7 +23,7 @@ import {
 } from 'recharts';
 
 export default function TrainerAnalyticsPage() {
-  const { profile, user, loading } = useAuth() as any;
+  const { profile, user, loading } = useAuth();
 
   const [trainees, setTrainees] = useState<Array<{ id: string; full_name: string; progress: number }>>([]);
   const [counts, setCounts] = useState<{ activeTrainees: number; pendingReviews: number; recentReflections: number }>({ activeTrainees: 0, pendingReviews: 0, recentReflections: 0 });
@@ -45,12 +45,21 @@ export default function TrainerAnalyticsPage() {
         setCounts(data.counts || { activeTrainees: 0, pendingReviews: 0, recentReflections: 0 });
         setProgressTrend(data.charts?.progressTrend || []);
         setModuleProgress(data.charts?.moduleProgress || []);
-      } catch (e: any) {
-        setError(e?.message || 'Unbekannter Fehler');
+      } catch (e: unknown) {
+        const message = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string'
+          ? (e as any).message
+          : 'Unbekannter Fehler';
+        setError(message);
       }
     };
     if (profile?.role === 'trainer') load();
   }, [user, profile]);
+
+  const avgProgress = useMemo(() => {
+    if (!trainees.length) return 0;
+    const total = trainees.reduce((acc, t) => acc + (t.progress || 0), 0);
+    return Math.round(total / trainees.length);
+  }, [trainees]);
 
   if (loading) {
     return (
@@ -85,11 +94,7 @@ export default function TrainerAnalyticsPage() {
     );
   }
 
-  const avgProgress = useMemo(() => {
-    if (!trainees.length) return 0;
-    const total = trainees.reduce((acc, t) => acc + (t.progress || 0), 0);
-    return Math.round(total / trainees.length);
-  }, [trainees]);
+  
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
