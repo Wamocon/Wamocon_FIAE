@@ -92,6 +92,15 @@ export function AcceptanceProtocol() {
     const margin = 50;
     let y = page.getHeight() - margin;
 
+    // Fetch and embed the logo image
+    const imageBytes = await fetch('/WMC_Logo.png').then(res => res.arrayBuffer());
+    const logoImage = await pdfDoc.embedPng(imageBytes);
+    const logoWidth = 100;
+    const logoHeight = 100;
+    const logoX = page.getWidth() - logoWidth - margin;
+    const logoY = page.getHeight() - logoHeight - margin;
+    page.drawImage(logoImage, { x: logoX, y: logoY, width: logoWidth, height: logoHeight });
+
     const drawText = (text: string, opts?: { size?: number; color?: any; bold?: boolean }) => {
       const size = opts?.size ?? 12;
       const f = opts?.bold ? titleFont : font;
