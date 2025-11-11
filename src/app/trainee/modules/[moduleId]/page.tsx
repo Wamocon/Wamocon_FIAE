@@ -13,6 +13,7 @@ export default function TraineeModuleDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [course, setCourse] = useState<{ id: string; title: string; year: number | null; chapter: number | null } | null>(null);
   const [enablers, setEnablers] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
+  const [gesetzesprozesse, setGesetzesprozesse] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
   const [useCases, setUseCases] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
 
   useEffect(() => {
@@ -25,7 +26,8 @@ export default function TraineeModuleDetailPage() {
         if (!r.ok) throw new Error('Kurs konnte nicht geladen werden');
         const data = await r.json();
         setCourse(data.course);
-        setEnablers(data.enablers || []);
+  setEnablers(data.enablers || []);
+  setGesetzesprozesse(data.gesetzesprozesse || []);
         setUseCases(data.useCases || []);
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
@@ -61,6 +63,22 @@ export default function TraineeModuleDetailPage() {
                 <li key={e.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
                   <span className="truncate">{e.title} {e.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {e.attemptNumber}</span> : null}</span>
                   <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+          <div className="mb-3 text-sm font-semibold">Gesetzesprozesse</div>
+          {gesetzesprozesse.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Keine aktiven Gesetzesprozesse</div>
+          ) : (
+            <ul className="space-y-2">
+              {gesetzesprozesse.map((g) => (
+                <li key={g.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
+                  <span className="truncate">{g.title} {g.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {g.attemptNumber}</span> : null}</span>
+                  <a href={`/trainee/gesetzesprozesse/${g.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</a>
                 </li>
               ))}
             </ul>

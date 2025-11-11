@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { courses, courseMembers, enablers, useCases, enablerSubmissions, useCaseSubmissions } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, enablers, useCases, enablerSubmissions, useCaseSubmissions, gesetzesprozesse, gesetzesprozessSubmissions } from '@/db/migrations/schemas/schema';
 
 // GET course details for a trainee: includes active enablers and use-cases
 // query: traineeId
@@ -12,7 +12,7 @@ export async function GET(
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { courseId } = context.params;
+    const { courseId } = await context.params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [member] = await db
@@ -34,6 +34,11 @@ export async function GET(
       .from(useCases)
       .where(and(eq(useCases.courseId, courseId), eq(useCases.isActive, true)))
       .orderBy(useCases.orderIndex);
+    const gps = await db
+      .select()
+      .from(gesetzesprozesse)
+      .where(and(eq(gesetzesprozesse.courseId, courseId), eq(gesetzesprozesse.isActive, true)))
+      .orderBy(gesetzesprozesse.orderIndex);
 
     // Latest attempts for this trainee per enabler/use-case
     const enIds = ens.map((e) => String(e.id));
@@ -51,6 +56,13 @@ export async function GET(
           .from(useCaseSubmissions)
           .where(and(eq(useCaseSubmissions.traineeId, traineeId as any)))
       : [];
+    const gpIds = gps.map((g) => String(g.id));
+    const gpAttempts = gpIds.length
+      ? await db
+          .select({ id: gesetzesprozessSubmissions.id, gesetzesprozessId: gesetzesprozessSubmissions.gesetzesprozessId, attemptNumber: gesetzesprozessSubmissions.attemptNumber, submittedAt: gesetzesprozessSubmissions.submittedAt })
+          .from(gesetzesprozessSubmissions)
+          .where(and(eq(gesetzesprozessSubmissions.traineeId, traineeId as any)))
+      : [];
 
     // Reduce to latest by submittedAt
     const latestEn: Record<string, { attemptNumber: number | null }> = {};
@@ -67,10 +79,18 @@ export async function GET(
         latestUc[key] = { attemptNumber: row.attemptNumber ?? null };
       }
     }
+    const latestGp: Record<string, { attemptNumber: number | null }> = {};
+    for (const row of gpAttempts) {
+      const key = String((row as any).gesetzesprozessId);
+      if (!latestGp[key] || new Date(latestGp[key] as any).getTime() < new Date((row as any).submittedAt as any).getTime()) {
+        latestGp[key] = { attemptNumber: (row as any).attemptNumber ?? null };
+      }
+    }
 
     return NextResponse.json({
       course: { id: c.id, title: c.title, year: c.year, chapter: c.chapter },
       enablers: ens.map((e) => ({ id: e.id, title: e.title, attemptNumber: latestEn[String(e.id)]?.attemptNumber ?? null })),
+      gesetzesprozesse: gps.map((g) => ({ id: g.id, title: g.title, attemptNumber: latestGp[String(g.id)]?.attemptNumber ?? null })),
       useCases: ucs.map((u) => ({ id: u.id, title: u.title, attemptNumber: latestUc[String(u.id)]?.attemptNumber ?? null })),
     });
   } catch (e) {

@@ -7,12 +7,14 @@ import { useEffect, useState } from 'react';
 type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type UseCaseResult = { id: string; useCaseId: string; useCaseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type EnablerQuizResult = { id: string; enablerId: string; enablerTitle: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
+type GesetzResult = { id: string; gesetzesprozessId: string; gesetzesprozessTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type GlobalQuizResult = { id: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
 
 export default function TraineeFeedbackPage() {
   const { profile, loading } = useAuth();
   const [enablers, setEnablers] = useState<EnablerResult[]>([]);
   const [useCases, setUseCases] = useState<UseCaseResult[]>([]);
+  const [gesetzes, setGesetzes] = useState<GesetzResult[]>([]);
   const [quizzes, setQuizzes] = useState<EnablerQuizResult[]>([]);
   const [globalQuizzes, setGlobalQuizzes] = useState<GlobalQuizResult[]>([]);
 
@@ -23,8 +25,9 @@ export default function TraineeFeedbackPage() {
       try {
         const res = await fetch(`/api/trainee/feedback?traineeId=${profile.id}`, { cache: 'no-store' });
         const data = await res.json();
-        setEnablers(data.enablerResults || []);
-        setUseCases(data.useCaseResults || []);
+  setEnablers(data.enablerResults || []);
+  setUseCases(data.useCaseResults || []);
+  setGesetzes(data.gesetzesprozessResults || []);
         const quizResults = (data.enablerQuizResults || []) as EnablerQuizResult[];
         setQuizzes(
           quizResults.map((q) => ({
@@ -135,6 +138,38 @@ export default function TraineeFeedbackPage() {
                     <div className="text-sm whitespace-pre-wrap">{e.trainerFeedback}</div>
                   ) : (
                     <div className="text-xs italic text-muted-foreground">{e.status === 'PENDING' ? 'Noch in Prüfung…' : 'Kein individuelles Feedback vorhanden.'}</div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Use case submissions */}
+      {/* Gesetzesprozess submissions */}
+      <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
+        <h2 className="text-foreground mb-4 text-xl font-semibold">Gesetzesprozess-Einreichungen</h2>
+        {gesetzes.length === 0 ? (
+          <div className="text-muted-foreground">Keine Einreichungen.</div>
+        ) : (
+          <ul className="space-y-4">
+            {gesetzes.map((g) => (
+              <li key={g.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">
+                    {g.gesetzesprozessTitle}
+                    {g.attemptNumber ? <span className="ml-2 text-xs rounded-full border border-accent/30 px-2 py-0.5">Versuch {g.attemptNumber}</span> : null}
+                  </div>
+                  {statusPill(g.status)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">Eingereicht am {new Date(g.submittedAt).toLocaleString()}</div>
+                <div className="mt-2 rounded-xl border border-accent/20 bg-background/30 p-3">
+                  <div className="text-xs font-medium text-muted-foreground">Feedback</div>
+                  {g.trainerFeedback ? (
+                    <div className="text-sm whitespace-pre-wrap">{g.trainerFeedback}</div>
+                  ) : (
+                    <div className="text-xs italic text-muted-foreground">{g.status === 'PENDING' ? 'Noch in Prüfung…' : 'Kein individuelles Feedback vorhanden.'}</div>
                   )}
                 </div>
               </li>

@@ -23,16 +23,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const result = await db.transaction(async (tx) => {
-      // Check if a submission already exists for this trainee/useCase
+      // Determine next attempt number
       const existing = await tx
         .select()
         .from(useCaseSubmissions)
         .where(and(eq(useCaseSubmissions.useCaseId, useCaseId as any), eq(useCaseSubmissions.traineeId, traineeId as any)));
+      const lastAttempt = existing.sort((a, b) => (new Date(b.submittedAt || '').getTime() - new Date(a.submittedAt || '').getTime()))[0];
+      const nextAttempt = (lastAttempt?.attemptNumber ?? 0) + 1;
       let submissionId: string;
       if (existing.length) {
         const [updated] = await tx
           .update(useCaseSubmissions)
-          .set({ submissionText: submissionText as any, status: 'PENDING' as any, reviewedById: null as any, reviewedAt: null as any })
+          .set({ submissionText: submissionText as any, status: 'PENDING' as any, reviewedById: null as any, reviewedAt: null as any, attemptNumber: nextAttempt as any, submittedAt: new Date() as any })
           .where(and(eq(useCaseSubmissions.useCaseId, useCaseId as any), eq(useCaseSubmissions.traineeId, traineeId as any)))
           .returning();
         submissionId = updated.id as any;
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
       } else {
         const [created] = await tx
           .insert(useCaseSubmissions)
-          .values({ traineeId: traineeId as any, useCaseId: useCaseId as any, submissionText: submissionText as any, status: 'PENDING' as any })
+          .values({ traineeId: traineeId as any, useCaseId: useCaseId as any, submissionText: submissionText as any, status: 'PENDING' as any, attemptNumber: nextAttempt as any })
           .returning();
         submissionId = created.id as any;
       }
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
           type: 'USE_CASE_SUBMITTED',
           title: 'Use Case eingereicht',
           message: `Ein Trainee hat einen Use Case eingereicht: ${u.title}`,
-          linkUrl: '/trainer/reviews?type=usecase',
+          linkUrl: '/trainer/reviews?view=usecases&onlyPending=true',
           context: { useCaseId, submissionId: result },
         }));
         await db.insert(notifications).values(values);

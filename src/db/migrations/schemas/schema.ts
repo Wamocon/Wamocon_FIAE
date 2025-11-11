@@ -311,6 +311,53 @@ export const useCaseSubmissionLinks = pgTable('use_case_submission_links', {
   description: text('description'), // e.g., "GitHub Repo", "OneDrive"
 });
 
+// --- Gesetzesprozess (Legislative Process) Tables (mirror Use Case) ---
+
+export const gesetzesprozesse = pgTable('gesetzesprozesse', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  courseId: uuid('course_id')
+    .notNull()
+    .references(() => courses.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  descriptionText: text('description_text').notNull(),
+  orderIndex: integer('order_index').notNull(),
+
+  // Settings (same shape as use cases)
+  durationValue: integer('duration_value'),
+  durationUnit: durationUnit('duration_unit'),
+  isActive: boolean('is_active').default(false),
+  activatedAt: timestamp('activated_at'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()),
+});
+
+export const gesetzesprozessSubmissions = pgTable('gesetzesprozess_submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  gesetzesprozessId: uuid('gesetzesprozess_id')
+    .notNull()
+    .references(() => gesetzesprozesse.id, { onDelete: 'cascade' }),
+  submissionText: text('submission_text'),
+  status: reviewStatus('status').default('PENDING'),
+  trainerFeedback: text('trainer_feedback'),
+  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
+  reviewedAt: timestamp('reviewed_at'),
+  submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+  attemptNumber: integer('attempt_number'),
+});
+
+export const gesetzesprozessSubmissionLinks = pgTable('gesetzesprozess_submission_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  submissionId: uuid('submission_id')
+    .notNull()
+    .references(() => gesetzesprozessSubmissions.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  description: text('description'),
+});
+
 // --- 4. TRAINEE-SPECIFIC TABLES ---
 
 export const reflections = pgTable('reflections', {
@@ -521,6 +568,10 @@ export type QuizSubmission = typeof quizSubmissions.$inferSelect;
 export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
 export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
+
+export type Gesetzesprozess = typeof gesetzesprozesse.$inferSelect;
+export type GesetzesprozessSubmission = typeof gesetzesprozessSubmissions.$inferSelect;
+export type GesetzesprozessSubmissionLink = typeof gesetzesprozessSubmissionLinks.$inferSelect;
 export type Reflection = typeof reflections.$inferSelect;
 export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;

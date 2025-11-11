@@ -37,7 +37,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cou
       .where(eq(enablers.courseId, courseId as any))
       .orderBy(enablers.orderIndex);
 
-    const { useCases } = await import('@/db/migrations/schemas/schema');
+  const { useCases, gesetzesprozesse } = await import('@/db/migrations/schemas/schema');
+    const gps = await db
+      .select({
+        id: gesetzesprozesse.id,
+        title: gesetzesprozesse.title,
+        orderIndex: gesetzesprozesse.orderIndex,
+        isActive: gesetzesprozesse.isActive,
+        durationValue: gesetzesprozesse.durationValue,
+        durationUnit: gesetzesprozesse.durationUnit,
+        descriptionText: gesetzesprozesse.descriptionText,
+      })
+      .from(gesetzesprozesse)
+      .where(eq(gesetzesprozesse.courseId, courseId as any))
+      .orderBy(gesetzesprozesse.orderIndex);
+
     const ucs = await db
       .select({
         id: useCases.id,
@@ -51,8 +65,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cou
       .from(useCases)
       .where(eq(useCases.courseId, courseId as any))
       .orderBy(useCases.orderIndex);
-
-    return NextResponse.json({ course, skills: attachedSkills.map((s) => s.name), enablers: ens, useCases: ucs });
+  return NextResponse.json({ course, skills: attachedSkills.map((s) => s.name), enablers: ens, gesetzesprozesse: gps, useCases: ucs });
   } catch (e) {
     console.error('Get course error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
