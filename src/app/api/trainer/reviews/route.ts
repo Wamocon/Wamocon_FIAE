@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { courses, courseMembers, enablers, enablerSubmissions, profiles, useCases, useCaseSubmissions } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, enablers, enablerSubmissions, profiles, useCases, useCaseSubmissions, gesetzesprozesse, gesetzesprozessSubmissions } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     const onlyPending = searchParams.get('onlyPending') === 'true';
-    const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (both)
+  const type = searchParams.get('type'); // 'enabler' | 'usecase' | 'gesetzesprozess' | undefined (all)
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
 
     // Determine courses the trainer can review: creator or member (TRAINER)
@@ -38,6 +38,17 @@ export async function GET(req: NextRequest) {
       status: string | null;
       submittedAt: Date;
       useCaseTitle?: string;
+      traineeName?: string;
+      attemptNumber?: number | null;
+    }> = [];
+    let gesetzRows: Array<{
+      id: string;
+      gesetzesprozessId: string;
+      traineeId: string;
+      submissionText: string | null;
+      status: string | null;
+      submittedAt: Date;
+      gesetzesprozessTitle?: string;
       traineeName?: string;
       attemptNumber?: number | null;
     }> = [];
@@ -98,7 +109,34 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ enablerSubmissions: enablerRows, useCaseSubmissions: useCaseRows });
+    if (!type || type === 'gesetzesprozess') {
+      const gs = await db
+        .select({
+          id: gesetzesprozessSubmissions.id,
+          gesetzesprozessId: gesetzesprozessSubmissions.gesetzesprozessId,
+          traineeId: gesetzesprozessSubmissions.traineeId,
+          submissionText: gesetzesprozessSubmissions.submissionText,
+          status: gesetzesprozessSubmissions.status,
+          submittedAt: gesetzesprozessSubmissions.submittedAt,
+          attemptNumber: gesetzesprozessSubmissions.attemptNumber,
+        })
+        .from(gesetzesprozessSubmissions)
+        .leftJoin(gesetzesprozesse, eq(gesetzesprozesse.id, gesetzesprozessSubmissions.gesetzesprozessId))
+        .where(inArray(gesetzesprozesse.courseId, courseIds));
+      gesetzRows = statuses ? gs.filter((r) => statuses.includes(String(r.status))) : gs;
+
+      if (gesetzRows.length) {
+        const gIds = Array.from(new Set(gesetzRows.map(r => String(r.gesetzesprozessId))));
+        const trIds = Array.from(new Set(gesetzRows.map(r => String(r.traineeId))));
+        const gMapArr = await db.select({ id: gesetzesprozesse.id, title: gesetzesprozesse.title }).from(gesetzesprozesse).where(inArray(gesetzesprozesse.id, gIds));
+        const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
+        const gMap = Object.fromEntries(gMapArr.map((e) => [String(e.id), e.title]));
+        const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));
+        gesetzRows = gesetzRows.map(r => ({ ...r, gesetzesprozessTitle: gMap[String(r.gesetzesprozessId)] || 'Gesetzesprozess', traineeName: trMap[String(r.traineeId)] || 'Unbekannt', attemptNumber: (r as any).attemptNumber }));
+      }
+    }
+
+    return NextResponse.json({ enablerSubmissions: enablerRows, useCaseSubmissions: useCaseRows, gesetzesprozessSubmissions: gesetzRows });
   } catch (e) {
     console.error('Trainer reviews GET error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

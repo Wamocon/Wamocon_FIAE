@@ -183,7 +183,7 @@ export function ContentManagement() {
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
                   <BookOpen className="h-6 w-6 text-white" />
                 </div>
-                <img src="/WMC_Logo.png" alt={course.title} className="h-14 w-12 rounded-2xl object-cover" />
+                <img src="/WMC_Logo_1.png" alt={course.title} className="h-12 w-40 rounded-2xl object-cover" />
               </div>
 
               <h3 className="text-foreground mb-2 text-xl font-bold truncate">

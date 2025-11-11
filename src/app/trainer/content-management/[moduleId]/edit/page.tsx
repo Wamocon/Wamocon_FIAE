@@ -18,6 +18,8 @@ export default function EditCoursePage() {
   const [skills, setSkills] = useState<string>('');
   const [enablers, setEnablers] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
   const [useCases, setUseCases] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
+  // Gesetzesprozesse (gesetz processes) list
+  const [gesetzesprozesse, setGesetzesprozesse] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
   const [membersTrainers, setMembersTrainers] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
   const [membersTrainees, setMembersTrainees] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
   const [searchTrainer, setSearchTrainer] = useState('');
@@ -61,6 +63,21 @@ export default function EditCoursePage() {
   const [useCaseEditDuration, setUseCaseEditDuration] = useState<string>('');
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
 
+  // UI: Add Gesetzesprozess Modal state
+  const [showAddGesetzesprozess, setShowAddGesetzesprozess] = useState(false);
+  const [gpTitle, setGpTitle] = useState('');
+  const [gpDesc, setGpDesc] = useState('');
+  const [gpDuration, setGpDuration] = useState<string>('');
+  const [gpActive, setGpActive] = useState<boolean>(false);
+  const [gpSubmitting, setGpSubmitting] = useState(false);
+  // Edit Gesetzesprozess state
+  const [showEditGesetzesprozess, setShowEditGesetzesprozess] = useState(false);
+  const [editingGesetzesprozessId, setEditingGesetzesprozessId] = useState<string | null>(null);
+  const [gpEditTitle, setGpEditTitle] = useState('');
+  const [gpEditDesc, setGpEditDesc] = useState('');
+  const [gpEditDuration, setGpEditDuration] = useState<string>('');
+  const [gpEditActive, setGpEditActive] = useState<boolean>(false);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -74,6 +91,7 @@ export default function EditCoursePage() {
         setSkills((data.skills || []).join(', '));
         setEnablers((data.enablers || []).map((e: any) => ({ id: e.id, title: e.title, isActive: !!e.isActive })));
         setUseCases((data.useCases || []).map((u: any) => ({ id: u.id, title: u.title, isActive: !!u.isActive })));
+  setGesetzesprozesse((data.gesetzesprozesse || []).map((g: any) => ({ id: g.id, title: g.title, isActive: !!g.isActive })));
         // load members
           const memRes = await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { cache: 'no-store' });
         if (memRes.ok) {
@@ -361,6 +379,90 @@ export default function EditCoursePage() {
           </button>
         </div>
 
+        {/* Gesetzesprozesse Section */}
+        <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
+          <div className="mb-3 text-sm font-semibold">Gesetzesprozesse</div>
+          <ul className="space-y-2">
+            {gesetzesprozesse.map((g) => (
+              <li key={g.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="truncate font-medium">{g.title}</span>
+                  <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${g.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{g.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                    onClick={async () => {
+                      await fetch(`/api/trainer/gesetzesprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !g.isActive }) });
+                      const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
+                      const data = await r.json();
+                      setGesetzesprozesse((data.gesetzesprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                    }}
+                  >
+                    {g.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                    onClick={async () => {
+                      try {
+                        setEditingGesetzesprozessId(g.id);
+                        const gr = await fetch(`/api/trainer/gesetzesprozesse/${g.id}`);
+                        if (gr.ok) {
+                          const gj = await gr.json();
+                          const gp = gj.gesetzesprozess || {};
+                          setGpEditTitle(gp.title || '');
+                          setGpEditDesc(gp.descriptionText || '');
+                          setGpEditDuration(gp.durationValue ? String(gp.durationValue) : '');
+                          setGpEditActive(!!gp.isActive);
+                        } else {
+                          setGpEditTitle(g.title);
+                          setGpEditDesc('');
+                          setGpEditDuration('');
+                          setGpEditActive(false);
+                        }
+                        setShowEditGesetzesprozess(true);
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                  >
+                    Bearbeiten
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
+                    onClick={async () => {
+                      if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                      const ok = window.confirm('Diesen Gesetzesprozess wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
+                      if (!ok) return;
+                      try {
+                        const del = await fetch(`/api/trainer/gesetzesprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                        if (!del.ok) throw new Error('Löschen fehlgeschlagen');
+                        const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
+                        const data = await r.json();
+                        setGesetzesprozesse((data.gesetzesprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                      } catch (err: any) {
+                        alert(err?.message || 'Unbekannter Fehler');
+                      }
+                    }}
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
+            onClick={() => setShowAddGesetzesprozess(true)}
+          >
+            <Plus className="h-4 w-4"/> Gesetzesprozess hinzufügen
+          </button>
+        </div>
+
         <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
           <div className="mb-3 text-sm font-semibold">Use Cases</div>
           <ul className="space-y-2">
@@ -615,6 +717,63 @@ export default function EditCoursePage() {
         </div>
       )}
 
+      {/* Add Gesetzesprozess Modal */}
+      {showAddGesetzesprozess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !gpSubmitting && setShowAddGesetzesprozess(false)} />
+          <div className="glass-effect relative z-10 w-full max-w-xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Neuen Gesetzesprozess erstellen</h2>
+              <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => !gpSubmitting && setShowAddGesetzesprozess(false)}>Schließen</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Titel</label>
+                <input value={gpTitle} onChange={e => setGpTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Beschreibung</label>
+                <textarea value={gpDesc} onChange={e => setGpDesc(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
+                  <input type="number" min={0} value={gpDuration} onChange={e => setGpDuration(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 10" />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={gpActive} onChange={e => setGpActive(e.target.checked)} />
+                    <span>Aktiv</span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => !gpSubmitting && setShowAddGesetzesprozess(false)}>Abbrechen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={gpSubmitting} onClick={async () => {
+                  if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                  if (!gpTitle.trim()) { alert('Bitte Titel eingeben'); return; }
+                  if (!gpDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
+                  setGpSubmitting(true);
+                  try {
+                    const res = await fetch(`/api/trainer/courses/${courseId}/gesetzesprozesse?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpTitle.trim(), descriptionText: gpDesc.trim(), durationValue: gpDuration ? Number(gpDuration) : undefined, durationUnit: gpDuration ? 'DAYS' : undefined, isActive: gpActive }) });
+                    if (!res.ok) throw new Error('Gesetzesprozess konnte nicht erstellt werden');
+                    const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
+                    const fresh = await r.json();
+                    setGesetzesprozesse((fresh.gesetzesprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                    setShowAddGesetzesprozess(false);
+                    setGpTitle(''); setGpDesc(''); setGpDuration(''); setGpActive(false);
+                  } catch (e: any) {
+                    alert(e?.message || 'Unbekannter Fehler');
+                  } finally {
+                    setGpSubmitting(false);
+                  }
+                }}>Erstellen</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Lesson Modal */}
       {showEditEnabler && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -779,6 +938,61 @@ export default function EditCoursePage() {
                     setUseCases((fresh.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                     setShowEditUseCase(false);
                     setEditingUseCaseId(null);
+                  } catch (e: any) {
+                    alert(e?.message || 'Unbekannter Fehler');
+                  }
+                }}>Speichern</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Gesetzesprozess Modal */}
+      {showEditGesetzesprozess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowEditGesetzesprozess(false)} />
+          <div className="glass-effect relative z-10 w-full max-w-xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Gesetzesprozess bearbeiten</h2>
+              <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditGesetzesprozess(false)}>Schließen</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Titel</label>
+                <input value={gpEditTitle} onChange={e => setGpEditTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Beschreibung</label>
+                <textarea value={gpEditDesc} onChange={e => setGpEditDesc(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
+                  <input type="number" min={0} value={gpEditDuration} onChange={e => setGpEditDuration(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 10" />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={gpEditActive} onChange={e => setGpEditActive(e.target.checked)} />
+                    <span>Aktiv</span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditGesetzesprozess(false)}>Abbrechen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2" onClick={async () => {
+                  if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                  if (!editingGesetzesprozessId) { alert('Kein Gesetzesprozess ausgewählt'); return; }
+                  if (!gpEditTitle.trim()) { alert('Bitte Titel eingeben'); return; }
+                  if (!gpEditDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
+                  try {
+                    const pr = await fetch(`/api/trainer/gesetzesprozesse/${editingGesetzesprozessId}?trainerId=${trainerId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpEditTitle.trim(), descriptionText: gpEditDesc.trim(), durationValue: gpEditDuration ? Number(gpEditDuration) : null, durationUnit: gpEditDuration ? 'DAYS' : null, isActive: gpEditActive }) });
+                    if (!pr.ok) throw new Error('Update fehlgeschlagen');
+                    const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
+                    const fresh = await r.json();
+                    setGesetzesprozesse((fresh.gesetzesprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                    setShowEditGesetzesprozess(false);
+                    setEditingGesetzesprozessId(null);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   }

@@ -6,6 +6,8 @@ import {
   enablers,
   useCaseSubmissions,
   useCases,
+  gesetzesprozessSubmissions,
+  gesetzesprozesse,
   quizSubmissions,
   quizzes,
   enablerQuizzes,
@@ -54,6 +56,24 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(useCaseSubmissions.submittedAt))
       .limit(200);
 
+    // Gesetzesprozess submissions with titles
+    const gesetzRows = await db
+      .select({
+        id: gesetzesprozessSubmissions.id,
+        gesetzesprozessId: gesetzesprozessSubmissions.gesetzesprozessId,
+        status: gesetzesprozessSubmissions.status,
+        trainerFeedback: gesetzesprozessSubmissions.trainerFeedback,
+        submittedAt: gesetzesprozessSubmissions.submittedAt,
+        reviewedAt: gesetzesprozessSubmissions.reviewedAt,
+        attemptNumber: gesetzesprozessSubmissions.attemptNumber,
+        gesetzesprozessTitle: gesetzesprozesse.title,
+      })
+      .from(gesetzesprozessSubmissions)
+      .innerJoin(gesetzesprozesse, eq(gesetzesprozessSubmissions.gesetzesprozessId, gesetzesprozesse.id))
+      .where(eq(gesetzesprozessSubmissions.traineeId, traineeId as any))
+      .orderBy(desc(gesetzesprozessSubmissions.submittedAt))
+      .limit(200);
+
     // Enabler quiz submissions: join quizSubmissions -> quizzes (quizType ENABLER) -> enablerQuizzes -> enablers for title
     const quizRows = await db
       .select({
@@ -98,6 +118,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       enablerResults: enablerRows,
       useCaseResults: useCaseRows,
+      gesetzesprozessResults: gesetzRows,
       enablerQuizResults,
       globalQuizResults,
     });
