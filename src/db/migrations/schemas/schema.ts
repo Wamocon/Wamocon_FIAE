@@ -26,6 +26,7 @@ export const authUsers = auth.table('users', {
 export const userRole = pgEnum('user_role', ['TRAINER', 'TRAINEE']);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
 export const quizType = pgEnum('quiz_type', ['LESSON', 'GLOBAL']);
+export const questionType = pgEnum('question_type', ['MCQ', 'TEXT']);
 export const quizDifficulty = pgEnum('quiz_difficulty', ['LOW', 'MEDIUM', 'HIGH']);
 export const reviewStatus = pgEnum('review_status', [
   'PENDING',
@@ -231,6 +232,10 @@ export const questions = pgTable('questions', {
     .notNull()
     .references(() => quizzes.id, { onDelete: 'cascade' }),
   questionText: text('question_text').notNull(),
+  // MCQ or free-text question
+  questionType: questionType('question_type').notNull().default('MCQ'),
+  // For TEXT questions, an optional expected answer for trainer reference
+  expectedAnswer: text('expected_answer'),
   orderIndex: integer('order_index'),
 });
 
@@ -298,9 +303,11 @@ export const quizSubmissionAnswers = pgTable('quiz_submission_answers', {
   questionId: uuid('question_id')
     .notNull()
     .references(() => questions.id, { onDelete: 'cascade' }),
+  // For MCQ answers; nullable to support TEXT questions
   selectedOptionId: uuid('selected_option_id')
-    .notNull()
     .references(() => options.id, { onDelete: 'cascade' }),
+  // For TEXT answers
+  textAnswer: text('text_answer'),
 });
 
 // Submissions for Use Cases
@@ -333,9 +340,11 @@ export const useCaseSubmissionLinks = pgTable('use_case_submission_links', {
   description: text('description'), // e.g., "GitHub Repo", "OneDrive"
 });
 
-// --- Gesetzesprozess (Legislative Process) Tables (mirror Use Case) ---
+// --- geschäftsprozesse (Legislative Process) Tables (mirror Use Case) ---
 
-export const Geschäftsprozesse = pgTable('Geschäftsprozesse', {
+// NOTE: Renamed physical table to ASCII 'geschaeftsprozesse' for portability (Supabase & Drizzle migrations)
+// Variable name keeps the correct German spelling for display purposes.
+export const Geschäftsprozesse = pgTable('geschaeftsprozesse', {
   id: uuid('id').primaryKey().defaultRandom(),
   courseId: uuid('course_id')
     .notNull()
@@ -354,12 +363,14 @@ export const Geschäftsprozesse = pgTable('Geschäftsprozesse', {
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()),
 });
 
-export const gesetzesprozessSubmissions = pgTable('gesetzesprozess_submissions', {
+// Renamed physical submissions table to ASCII
+export const geschäftsprozesseSubmissions = pgTable('geschaeftsprozesse_submissions', {
   id: uuid('id').primaryKey().defaultRandom(),
   traineeId: uuid('trainee_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
-  gesetzesprozessId: uuid('gesetzesprozess_id')
+  // Use ASCII column name; keep TS property with correct spelling
+  geschäftsprozesseId: uuid('geschaeftsprozesse_id')
     .notNull()
     .references(() => Geschäftsprozesse.id, { onDelete: 'cascade' }),
   submissionText: text('submission_text'),
@@ -371,11 +382,12 @@ export const gesetzesprozessSubmissions = pgTable('gesetzesprozess_submissions',
   attemptNumber: integer('attempt_number'),
 });
 
-export const gesetzesprozessSubmissionLinks = pgTable('gesetzesprozess_submission_links', {
+// Renamed physical links table to ASCII
+export const geschäftsprozesseSubmissionLinks = pgTable('geschaeftsprozesse_submission_links', {
   id: uuid('id').primaryKey().defaultRandom(),
   submissionId: uuid('submission_id')
     .notNull()
-    .references(() => gesetzesprozessSubmissions.id, { onDelete: 'cascade' }),
+    .references(() => geschäftsprozesseSubmissions.id, { onDelete: 'cascade' }),
   url: text('url').notNull(),
   description: text('description'),
 });
@@ -592,9 +604,9 @@ export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
 export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
 
-export type Gesetzesprozess = typeof Geschäftsprozesse.$inferSelect;
-export type GesetzesprozessSubmission = typeof gesetzesprozessSubmissions.$inferSelect;
-export type GesetzesprozessSubmissionLink = typeof gesetzesprozessSubmissionLinks.$inferSelect;
+export type geschäftsprozesse = typeof Geschäftsprozesse.$inferSelect;
+export type geschäftsprozesseSubmission = typeof geschäftsprozesseSubmissions.$inferSelect;
+export type geschäftsprozesseSubmissionLink = typeof geschäftsprozesseSubmissionLinks.$inferSelect;
 export type Reflection = typeof reflections.$inferSelect;
 export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;

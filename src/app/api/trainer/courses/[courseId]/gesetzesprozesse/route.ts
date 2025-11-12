@@ -69,9 +69,9 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
       })
       .returning();
 
-    return NextResponse.json({ gesetzesprozess: inserted });
+    return NextResponse.json({ geschäftsprozesse: inserted });
   } catch (e) {
-    console.error('Create gesetzesprozess error', e);
+    console.error('Create geschäftsprozesse error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
     if (!link) return NextResponse.json({ quiz: null });
     const [qz] = await db.select().from(quizzes).where(eq(quizzes.id, quizId));
     if (!qz) return NextResponse.json({ quiz: null });
-    const qs = await db.select().from(questions).where(eq(questions.quizId, quizId)).orderBy(questions.orderIndex);
+  const qs = await db.select().from(questions).where(eq(questions.quizId, quizId)).orderBy(questions.orderIndex);
     const qIds = qs.map((q) => q.id);
     const opts = qIds.length ? await db.select().from(options).where(inArray(options.questionId, qIds)) : [];
     return NextResponse.json({
@@ -32,6 +32,8 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
           id: q.id,
           questionText: q.questionText,
           orderIndex: q.orderIndex,
+          questionType: (q as any).questionType || 'MCQ',
+          expectedAnswer: (q as any).expectedAnswer || null,
           options: opts
             .filter((o) => String(o.questionId) === String(q.id))
             .map((o) => ({ id: o.id, optionText: o.optionText, isCorrect: o.isCorrect, explanation: o.explanation })),
@@ -83,19 +85,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { enablerId:
 
         for (let i = 0; i < body.questions.length; i++) {
           const q = body.questions[i];
+          const qType = (q.questionType || 'MCQ') as 'MCQ'|'TEXT';
           const [qRow] = await tx
             .insert(questions)
-            .values({ quizId, questionText: q.questionText, orderIndex: i + 1 })
+            .values({ quizId, questionText: q.questionText, orderIndex: i + 1, questionType: qType as any, expectedAnswer: qType==='TEXT' ? (q.expectedAnswer ?? null) : null } as any)
             .returning();
-          const opts = q.options || [];
-          for (let j = 0; j < opts.length; j++) {
-            const o = opts[j];
-            await tx.insert(options).values({
-              questionId: qRow.id,
-              optionText: o.optionText,
-              isCorrect: !!o.isCorrect,
-              explanation: o.explanation ?? null,
-            });
+          if (qType === 'MCQ') {
+            const opts = Array.isArray(q.options) ? q.options : [];
+            for (let j = 0; j < opts.length; j++) {
+              const o = opts[j];
+              await tx.insert(options).values({
+                questionId: qRow.id,
+                optionText: o.optionText,
+                isCorrect: !!o.isCorrect,
+                explanation: o.explanation ?? null,
+              });
+            }
           }
         }
       }

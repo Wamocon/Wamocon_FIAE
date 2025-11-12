@@ -48,11 +48,17 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
 
   const answerMap = new Map(answers.map((a) => [a.questionId, a.selectedOptionId] as const));
 
+  // Build grouped question data including text answers
+  const answerRows = answers;
+  const textAnswerMap = new Map(answerRows.map(a => [a.questionId, (a as any).textAnswer]));
   const grouped = qs.map((q) => ({
     id: q.id,
     text: q.questionText,
+    questionType: (q as any).questionType || 'MCQ',
+    expectedAnswer: (q as any).expectedAnswer || null,
     options: allOpts.filter((o) => o.questionId === q.id),
     selectedOptionId: answerMap.get(q.id) ?? null,
+    textAnswer: textAnswerMap.get(q.id) || null,
   }));
 
   return (
@@ -81,30 +87,53 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
 
       <div className="space-y-4">
         {grouped.map((q, i) => {
+          const isText = q.questionType === 'TEXT';
           return (
             <div key={q.id} className="rounded-2xl border border-accent/30 bg-black/30 p-5">
-              <div className="mb-3 text-foreground font-medium">{i + 1}. {q.text}</div>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                {q.options.map((opt) => {
-                  const isSelected = q.selectedOptionId === opt.id;
-                  const isCorrect = !!opt.isCorrect;
-                  const className = isSelected
-                    ? isCorrect
-                      ? 'border-green-500/40 bg-green-500/10'
-                      : 'border-red-500/40 bg-red-500/10'
-                    : isCorrect
-                      ? 'border-green-500/40 bg-green-500/10'
-                      : 'border-accent/20 bg-transparent';
-                  return (
-                    <div key={opt.id} className={`rounded-lg border p-3 text-sm ${className}`}>
-                      {opt.optionText}
-                      {isCorrect && <span className="ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs text-white">Correct</span>}
-                      {isSelected && !isCorrect && <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs text-white">Selected</span>}
-                      {isSelected && isCorrect && <span className="ml-2 rounded bg-green-700 px-1.5 py-0.5 text-xs text-white">Selected</span>}
+              <div className="mb-3 text-foreground font-medium">{i + 1}. {q.text} {isText && <span className="ml-2 rounded bg-blue-600/50 px-2 py-0.5 text-xs">Text</span>}</div>
+              {isText ? (
+                <div className="space-y-2 text-sm">
+                  <div className="rounded-lg border border-accent/30 bg-black/20 p-3">
+                    <div className="text-xs uppercase text-muted-foreground mb-1">Antwort des Trainees</div>
+                    <div className="whitespace-pre-wrap">{q.textAnswer || <span className="italic text-muted-foreground">(keine Antwort)</span>}</div>
+                  </div>
+                  <div className="rounded-lg border border-accent/30 bg-black/10 p-3">
+                    <div className="text-xs uppercase text-muted-foreground mb-1">Erwartete Antwort</div>
+                    <div className="whitespace-pre-wrap">{q.expectedAnswer || <span className="italic text-muted-foreground">(nicht festgelegt)</span>}</div>
+                  </div>
+                  {q.expectedAnswer && q.textAnswer && (
+                    <div className="text-xs mt-1">
+                      {q.textAnswer.trim().toLowerCase() === q.expectedAnswer.trim().toLowerCase() ? (
+                        <span className="rounded bg-green-600 px-2 py-0.5 text-white">Automatisch als korrekt bewertet</span>
+                      ) : (
+                        <span className="rounded bg-red-600 px-2 py-0.5 text-white">Nicht exakt übereinstimmend</span>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {q.options.map((opt) => {
+                    const isSelected = q.selectedOptionId === opt.id;
+                    const isCorrect = !!opt.isCorrect;
+                    const className = isSelected
+                      ? isCorrect
+                        ? 'border-green-500/40 bg-green-500/10'
+                        : 'border-red-500/40 bg-red-500/10'
+                      : isCorrect
+                        ? 'border-green-500/40 bg-green-500/10'
+                        : 'border-accent/20 bg-transparent';
+                    return (
+                      <div key={opt.id} className={`rounded-lg border p-3 text-sm ${className}`}>
+                        {opt.optionText}
+                        {isCorrect && <span className="ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs text-white">Correct</span>}
+                        {isSelected && !isCorrect && <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs text-white">Selected</span>}
+                        {isSelected && isCorrect && <span className="ml-2 rounded bg-green-700 px-1.5 py-0.5 text-xs text-white">Selected</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}

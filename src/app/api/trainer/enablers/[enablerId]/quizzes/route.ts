@@ -49,7 +49,17 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
 }
 
 // POST: Create or replace quiz for a difficulty on this enabler
-// Body: { title: string, createdById: string, difficulty: 'LOW'|'MEDIUM'|'HIGH', isActive?: boolean, questions: [{ questionText: string, options: [string,string,string,string], correctIndex: number, explanation?: string }] }
+// Body supports MCQ and TEXT questions mixed:
+// {
+//   title: string,
+//   createdById: string,
+//   difficulty: 'LOW'|'MEDIUM'|'HIGH',
+//   isActive?: boolean,
+//   questions: Array<
+//     | { questionText: string, questionType: 'MCQ', options: [string,string,string,string], correctIndex: number, explanation?: string }
+//     | { questionText: string, questionType: 'TEXT', expectedAnswer?: string }
+//   >
+// }
 export async function POST(req: NextRequest, { params }: { params: { enablerId: string } }) {
   try {
     const { enablerId } = params;
@@ -58,8 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: { enablerId: 
     const createdById: string | undefined = body?.createdById;
     const difficulty: 'LOW'|'MEDIUM'|'HIGH' | undefined = body?.difficulty;
     const isActive: boolean = !!body?.isActive;
-    const items: Array<{ questionText: string; options: string[]; correctIndex: number; explanation?: string }>
-      = Array.isArray(body?.questions) ? body.questions : [];
+    const items: Array<any> = Array.isArray(body?.questions) ? body.questions : [];
     if (!title || !createdById || !difficulty || items.length === 0) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
@@ -97,22 +106,26 @@ export async function POST(req: NextRequest, { params }: { params: { enablerId: 
         .returning();
       await tx.insert(enablerQuizLinks).values({ enablerId, quizId: qz.id, difficulty: difficulty as any });
 
-      // Insert questions+options
+      // Insert questions (MCQ or TEXT) + options
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
-        const [qRow] = await tx
-          .insert(questions)
-          .values({ quizId: qz.id, questionText: it.questionText, orderIndex: i + 1 })
-          .returning();
-        for (let j = 0; j < 4; j++) {
-          const text = it.options[j];
-          if (!text) continue;
-          await tx.insert(options).values({
-            questionId: qRow.id,
-            optionText: text,
-            isCorrect: j === Number(it.correctIndex),
-            explanation: j === Number(it.correctIndex) ? (it.explanation || null) : null,
-          });
+        const qType = (it.questionType || 'MCQ') as 'MCQ' | 'TEXT';
+        const baseValues: any = { quizId: qz.id, questionText: it.questionText, orderIndex: i + 1, questionType: qType };
+        if (qType === 'TEXT') {
+          baseValues.expectedAnswer = it.expectedAnswer ?? null;
+        }
+        const [qRow] = await tx.insert(questions).values(baseValues).returning();
+        if (qType === 'MCQ') {
+          for (let j = 0; j < 4; j++) {
+            const text = (it.options?.[j] ?? '').trim();
+            if (!text) continue;
+            await tx.insert(options).values({
+              questionId: qRow.id,
+              optionText: text,
+              isCorrect: j === Number(it.correctIndex),
+              explanation: j === Number(it.correctIndex) ? ((it.explanation || '').trim() || null) : null,
+            });
+          }
         }
       }
       return qz;

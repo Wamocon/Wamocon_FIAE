@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function TraineeGesetzesprozessDetailPage() {
+export default function TraineegeschäftsprozesseDetailPage() {
   const params = useParams<{ gesetzesprozessid: string }>();
-  const gesetzesprozessId = params?.gesetzesprozessid as string;
+  const geschäftsprozesseId = params?.gesetzesprozessid as string;
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,14 +18,14 @@ export default function TraineeGesetzesprozessDetailPage() {
 
   useEffect(() => {
     const load = async () => {
-      if (!profile?.id || !gesetzesprozessId) return;
+      if (!profile?.id || !geschäftsprozesseId) return;
       setLoading(true);
       setError(null);
       try {
-        const r = await fetch(`/api/trainee/Geschäftsprozesse/${gesetzesprozessId}?traineeId=${profile.id}`, { cache: 'no-store' });
-        if (!r.ok) throw new Error('Gesetzesprozess konnte nicht geladen werden');
+  const r = await fetch(`/api/trainee/gesetzesprozesse/${geschäftsprozesseId}?traineeId=${profile.id}`, { cache: 'no-store' });
+        if (!r.ok) throw new Error('geschäftsprozesse konnte nicht geladen werden');
         const data = await r.json();
-        setItem(data.gesetzesprozess);
+        setItem(data.geschäftsprozesse);
         if (data.submission) {
           setSubmissionText(data.submission.submissionText || '');
           const mapped = (data.submission.links || []).map((l: any) => ({ url: l.url as string, description: (l.description as string) || '' }));
@@ -38,7 +38,7 @@ export default function TraineeGesetzesprozessDetailPage() {
       }
     };
     load();
-  }, [profile?.id, gesetzesprozessId]);
+  }, [profile?.id, geschäftsprozesseId]);
 
   const submit = async () => {
     if (!profile?.id) return setError('Profil fehlt');
@@ -50,7 +50,7 @@ export default function TraineeGesetzesprozessDetailPage() {
         submissionText: submissionText || null,
         links: links.filter((l) => l.url && l.url.trim()),
       };
-      const r = await fetch(`/api/trainee/Geschäftsprozesse/${gesetzesprozessId}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const r = await fetch(`/api/trainee/gesetzesprozesse/${geschäftsprozesseId}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
       setSuccess('Abgabe gespeichert. Status: Ausstehend');
     } catch (e: any) {

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { Geschäftsprozesse, gesetzesprozessSubmissions, gesetzesprozessSubmissionLinks, courseMembers } from '@/db/migrations/schemas/schema';
+import { Geschäftsprozesse, geschäftsprozesseSubmissions, geschäftsprozesseSubmissionLinks, courseMembers } from '@/db/migrations/schemas/schema';
 
-// GET trainee-facing gesetzesprozess detail; include latest submission by trainee
+// GET trainee-facing geschäftsprozesse detail; include latest submission by trainee
 // query: traineeId
-export async function GET(req: NextRequest, { params }: { params: Promise<{ gesetzesprozessid: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: { gesetzesprozessid: string } }) {
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { gesetzesprozessid } = await params;
+    const { gesetzesprozessid } = params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [g] = await db.select().from(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessid as any));
@@ -24,25 +24,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ gese
     // Latest submission by this trainee
     const subs = await db
       .select()
-      .from(gesetzesprozessSubmissions)
-      .where(and(eq(gesetzesprozessSubmissions.gesetzesprozessId, gesetzesprozessid as any), eq(gesetzesprozessSubmissions.traineeId, traineeId as any)));
+      .from(geschäftsprozesseSubmissions)
+  .where(and(eq(geschäftsprozesseSubmissions.geschäftsprozesseId, gesetzesprozessid as any), eq(geschäftsprozesseSubmissions.traineeId, traineeId as any)));
     const latest = subs.sort((a, b) => (new Date(b.submittedAt || '').getTime() - new Date(a.submittedAt || '').getTime()))[0];
     let links: { id: string; url: string; description: string | null }[] = [];
     if (latest) {
       links = await db
         .select()
-        .from(gesetzesprozessSubmissionLinks)
-        .where(eq(gesetzesprozessSubmissionLinks.submissionId, latest.id as any));
+        .from(geschäftsprozesseSubmissionLinks)
+        .where(eq(geschäftsprozesseSubmissionLinks.submissionId, latest.id as any));
     }
 
     return NextResponse.json({
-      gesetzesprozess: { id: g.id, title: g.title, descriptionText: g.descriptionText, isActive: g.isActive, durationValue: g.durationValue, durationUnit: g.durationUnit, activatedAt: g.activatedAt },
+      geschäftsprozesse: { id: g.id, title: g.title, descriptionText: g.descriptionText, isActive: g.isActive, durationValue: g.durationValue, durationUnit: g.durationUnit, activatedAt: g.activatedAt },
       submission: latest
         ? { id: latest.id, submissionText: latest.submissionText, status: latest.status, links, attemptNumber: latest.attemptNumber }
         : null,
     });
   } catch (e) {
-    console.error('Trainee gesetzesprozess detail GET error', e);
+    console.error('Trainee geschäftsprozesse detail GET error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

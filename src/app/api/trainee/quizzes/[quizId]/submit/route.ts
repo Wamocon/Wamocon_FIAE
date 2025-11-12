@@ -15,13 +15,13 @@ import {
 } from '@/db/migrations/schemas/schema';
 
 // POST: submit answers for a quiz attempt
-// Body: { traineeId: string, answers: [{ questionId, selectedOptionId }] }
+// Body: { traineeId: string, answers: [{ questionId, selectedOptionId? , textAnswer? }] }
 export async function POST(req: NextRequest, { params }: { params: { quizId: string } }) {
   try {
     const { quizId } = params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
-    const answers: Array<{ questionId: string; selectedOptionId: string }> = Array.isArray(body?.answers) ? body.answers : [];
+  const answers: Array<any> = Array.isArray(body?.answers) ? body.answers : [];
     if (!traineeId || answers.length === 0) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
     const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, quizId));
@@ -39,9 +39,9 @@ export async function POST(req: NextRequest, { params }: { params: { quizId: str
       .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.userId, traineeId)));
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const qs = await db.select().from(questions).where(eq(questions.quizId, quizId));
+  const qs = await db.select().from(questions).where(eq(questions.quizId, quizId));
     const qIds = qs.map((q) => q.id);
-    const optRows = qIds.length ? await db.select().from(options).where(inArray(options.questionId, qIds)) : [];
+  const optRows = qIds.length ? await db.select().from(options).where(inArray(options.questionId, qIds)) : [];
     const optMap = new Map(optRows.map((o) => [String(o.id), o]));
 
     // Check for existing submission (single-attempt enforcement)
@@ -56,25 +56,63 @@ export async function POST(req: NextRequest, { params }: { params: { quizId: str
         .select()
         .from(quizSubmissionAnswers)
         .where(eq(quizSubmissionAnswers.submissionId, sub.id));
-      const answerMap = new Map(storedAnswers.map((sa) => [String(sa.questionId), sa.selectedOptionId]));
+      const answerMapOpt = new Map(storedAnswers.map((sa) => [String(sa.questionId), sa.selectedOptionId]));
+      const answerMapText = new Map(storedAnswers.map((sa) => [String(sa.questionId), (sa as any).textAnswer]));
       const feedback = qs.map((q) => {
-        const chosenOptId = answerMap.get(String(q.id));
-        const chosenOpt = chosenOptId ? optMap.get(String(chosenOptId)) : undefined;
-        const correctOpt = optRows.find((o) => String(o.questionId) === String(q.id) && o.isCorrect);
-        return {
-          questionId: q.id,
-          correct: !!chosenOpt?.isCorrect,
-          correctOptionId: correctOpt?.id,
-          explanation: correctOpt?.explanation || null,
-        };
+        const qType = (q as any).questionType || 'MCQ';
+        if (qType === 'TEXT') {
+          const given = (answerMapText.get(String(q.id)) || '') as string;
+          const expected = ((q as any).expectedAnswer || '') as string;
+          const correct = expected ? given.trim().toLowerCase() === expected.trim().toLowerCase() : false;
+          return {
+            questionId: q.id,
+            correct,
+            correctOptionId: null,
+            explanation: null,
+            selectedOptionId: null,
+            selectedText: given,
+            correctAnswerText: expected || null,
+          };
+        } else {
+          const chosenOptId = answerMapOpt.get(String(q.id));
+          const chosenOpt = chosenOptId ? optMap.get(String(chosenOptId)) : undefined;
+          const correctOpt = optRows.find((o) => String(o.questionId) === String(q.id) && o.isCorrect);
+          return {
+            questionId: q.id,
+            correct: !!chosenOpt?.isCorrect,
+            correctOptionId: correctOpt?.id,
+            explanation: correctOpt?.explanation || null,
+            selectedOptionId: chosenOptId || null,
+            selectedText: null,
+            correctAnswerText: null,
+          };
+        }
       });
       return NextResponse.json({ submissionId: sub.id, score: sub.score, feedback, locked: true });
     }
 
+    // Normalize answers and compute score.
+    const normalized = answers.map((a) => {
+      const q = qs.find((qq) => String(qq.id) === String(a.questionId));
+      const qType = (q as any)?.questionType || 'MCQ';
+      if (qType === 'TEXT') {
+        const text = (a as any).textAnswer ?? (typeof a.selectedOptionId === 'string' ? a.selectedOptionId : '');
+        return { questionId: a.questionId, textAnswer: String(text || '') };
+      }
+      return { questionId: a.questionId, selectedOptionId: a.selectedOptionId };
+    });
+
     let correctCount = 0;
-    for (const a of answers) {
-      const opt = optMap.get(String(a.selectedOptionId));
-      if (opt?.isCorrect) correctCount++;
+    for (const a of normalized) {
+      const q = qs.find((qq) => String(qq.id) === String(a.questionId));
+      const qType = (q as any)?.questionType || 'MCQ';
+      if (qType === 'TEXT') {
+        const given = (a as any).textAnswer ? String((a as any).textAnswer).trim() : '';
+        if (given.length > 0) correctCount++; // treat any non-empty text as correct
+      } else {
+        const opt = a.selectedOptionId ? optMap.get(String(a.selectedOptionId)) : undefined;
+        if (opt?.isCorrect) correctCount++;
+      }
     }
     const score = Math.round((correctCount / Math.max(1, qs.length)) * 100);
 
@@ -90,22 +128,46 @@ export async function POST(req: NextRequest, { params }: { params: { quizId: str
         .values({ traineeId, quizId, score, isReviewed: false, attemptNumber })
         .returning();
       await tx.insert(quizSubmissionAnswers).values(
-        answers.map((a) => ({ submissionId: sub.id, questionId: a.questionId, selectedOptionId: a.selectedOptionId }))
+        normalized.map((a) => ({
+          submissionId: sub.id,
+          questionId: a.questionId,
+          selectedOptionId: (a as any).selectedOptionId ?? null,
+          textAnswer: (a as any).textAnswer ?? null,
+        }))
       );
       return sub;
     });
 
     // Build per-question feedback with explanation for correct option
     const feedback = qs.map((q) => {
-      const chosen = answers.find((a) => String(a.questionId) === String(q.id));
-      const chosenOpt = chosen ? optMap.get(String(chosen.selectedOptionId)) : undefined;
-      const correctOpt = optRows.find((o) => String(o.questionId) === String(q.id) && o.isCorrect);
-      return {
-        questionId: q.id,
-        correct: !!chosenOpt?.isCorrect,
-        correctOptionId: correctOpt?.id,
-        explanation: correctOpt?.explanation || null,
-      };
+      const qType = (q as any).questionType || 'MCQ';
+      if (qType === 'TEXT') {
+        const chosen = normalized.find((a) => String(a.questionId) === String(q.id));
+        const given = chosen && (chosen as any).textAnswer ? String((chosen as any).textAnswer) : '';
+        const correct = given.trim().length > 0;
+        return {
+          questionId: q.id,
+          correct,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: null,
+          selectedText: given,
+          correctAnswerText: ((q as any).expectedAnswer || null) as any,
+        };
+      } else {
+        const chosen = normalized.find((a) => String(a.questionId) === String(q.id));
+        const chosenOpt = chosen?.selectedOptionId ? optMap.get(String(chosen.selectedOptionId)) : undefined;
+        const correctOpt = optRows.find((o) => String(o.questionId) === String(q.id) && o.isCorrect);
+        return {
+          questionId: q.id,
+          correct: !!chosenOpt?.isCorrect,
+          correctOptionId: correctOpt?.id,
+          explanation: correctOpt?.explanation || null,
+          selectedOptionId: chosen?.selectedOptionId || null,
+          selectedText: null,
+          correctAnswerText: null,
+        };
+      }
     });
 
     // Notify trainers (reuse existing pattern)
@@ -170,7 +232,21 @@ export async function GET(req: NextRequest, { params }: { params: { quizId: stri
       .where(eq(quizSubmissionAnswers.submissionId, latest.id));
     const answerMap = new Map(storedAnswers.map((sa) => [String(sa.questionId), sa.selectedOptionId]));
 
+    const storedAnswerMapText = new Map(storedAnswers.map(sa => [String(sa.questionId), (sa as any).textAnswer]));
     const feedback = qs.map((q) => {
+      const qType = (q as any).questionType || 'MCQ';
+      if (qType === 'TEXT') {
+        const given = (storedAnswerMapText.get(String(q.id)) || '') as string;
+        return {
+          questionId: q.id,
+          correct: given.trim().length > 0,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: null,
+          selectedText: given,
+          correctAnswerText: ((q as any).expectedAnswer || null) as any,
+        };
+      }
       const chosenOptId = answerMap.get(String(q.id));
       const chosenOpt = chosenOptId ? optMap.get(String(chosenOptId)) : undefined;
       const correctOpt = optRows.find((o) => String(o.questionId) === String(q.id) && o.isCorrect);
@@ -180,10 +256,12 @@ export async function GET(req: NextRequest, { params }: { params: { quizId: stri
         correctOptionId: correctOpt?.id,
         explanation: correctOpt?.explanation || null,
         selectedOptionId: chosenOptId || null,
+        selectedText: null,
+        correctAnswerText: null,
       };
     });
 
-    return NextResponse.json({ submissionId: latest.id, score: latest.score, feedback });
+  return NextResponse.json({ submissionId: latest.id, score: latest.score, feedback });
   } catch (e) {
     console.error('Get quiz latest submission error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

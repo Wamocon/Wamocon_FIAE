@@ -64,16 +64,16 @@ export default function EditCoursePage() {
   const [useCaseEditDuration, setUseCaseEditDuration] = useState<string>('');
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
 
-  // UI: Add Gesetzesprozess Modal state
-  const [showAddGesetzesprozess, setShowAddGesetzesprozess] = useState(false);
+  // UI: Add geschäftsprozesse Modal state
+  const [showAddgeschäftsprozesse, setShowAddgeschäftsprozesse] = useState(false);
   const [gpTitle, setGpTitle] = useState('');
   const [gpDesc, setGpDesc] = useState('');
   const [gpDuration, setGpDuration] = useState<string>('');
   const [gpActive, setGpActive] = useState<boolean>(false);
   const [gpSubmitting, setGpSubmitting] = useState(false);
-  // Edit Gesetzesprozess state
-  const [showEditGesetzesprozess, setShowEditGesetzesprozess] = useState(false);
-  const [editingGesetzesprozessId, setEditingGesetzesprozessId] = useState<string | null>(null);
+  // Edit geschäftsprozesse state
+  const [showEditgeschäftsprozesse, setShowEditgeschäftsprozesse] = useState(false);
+  const [editinggeschäftsprozesseId, setEditinggeschäftsprozesseId] = useState<string | null>(null);
   const [gpEditTitle, setGpEditTitle] = useState('');
   const [gpEditDesc, setGpEditDesc] = useState('');
   const [gpEditDuration, setGpEditDuration] = useState<string>('');
@@ -384,7 +384,7 @@ export default function EditCoursePage() {
                     type="button"
                     className="text-xs rounded-md border border-accent/30 px-2 py-1"
                     onClick={async () => {
-                      await fetch(`/api/trainer/Geschäftsprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !g.isActive }) });
+                      await fetch(`/api/trainer/gesetzesprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !g.isActive }) });
                       const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
                       const data = await r.json();
                       setGeschäftsprozesse((data.Geschäftsprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
@@ -397,11 +397,11 @@ export default function EditCoursePage() {
                     className="text-xs rounded-md border border-accent/30 px-2 py-1"
                     onClick={async () => {
                       try {
-                        setEditingGesetzesprozessId(g.id);
-                        const gr = await fetch(`/api/trainer/Geschäftsprozesse/${g.id}`);
+                        setEditinggeschäftsprozesseId(g.id);
+                        const gr = await fetch(`/api/trainer/gesetzesprozesse/${g.id}`);
                         if (gr.ok) {
                           const gj = await gr.json();
-                          const gp = gj.gesetzesprozess || {};
+                          const gp = gj.geschäftsprozesse || {};
                           setGpEditTitle(gp.title || '');
                           setGpEditDesc(gp.descriptionText || '');
                           setGpEditDuration(gp.durationValue ? String(gp.durationValue) : '');
@@ -412,7 +412,7 @@ export default function EditCoursePage() {
                           setGpEditDuration('');
                           setGpEditActive(false);
                         }
-                        setShowEditGesetzesprozess(true);
+                        setShowEditgeschäftsprozesse(true);
                       } catch (e) {
                         console.error(e);
                       }
@@ -425,10 +425,10 @@ export default function EditCoursePage() {
                     className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
                     onClick={async () => {
                       if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                      const ok = window.confirm('Diesen Gesetzesprozess wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
+                      const ok = window.confirm('Diesen geschäftsprozesse wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
                       if (!ok) return;
                       try {
-                        const del = await fetch(`/api/trainer/Geschäftsprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                        const del = await fetch(`/api/trainer/gesetzesprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
                         if (!del.ok) throw new Error('Löschen fehlgeschlagen');
                         const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
                         const data = await r.json();
@@ -447,9 +447,9 @@ export default function EditCoursePage() {
           <button
             type="button"
             className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
-            onClick={() => setShowAddGesetzesprozess(true)}
+            onClick={() => setShowAddgeschäftsprozesse(true)}
           >
-            <Plus className="h-4 w-4"/> Gesetzesprozess hinzufügen
+            <Plus className="h-4 w-4"/> Geschäftsprozesse hinzufügen
           </button>
         </div>
 
@@ -706,14 +706,14 @@ export default function EditCoursePage() {
         </div>
       )}
 
-      {/* Add Gesetzesprozess Modal */}
-      {showAddGesetzesprozess && (
+      {/* Add geschäftsprozesse Modal */}
+      {showAddgeschäftsprozesse && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => !gpSubmitting && setShowAddGesetzesprozess(false)} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => !gpSubmitting && setShowAddgeschäftsprozesse(false)} />
           <div className="glass-effect relative z-10 w-full max-w-xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Neuen Gesetzesprozess erstellen</h2>
-              <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => !gpSubmitting && setShowAddGesetzesprozess(false)}>Schließen</button>
+              <h2 className="text-xl font-semibold">Neuen geschäftsprozesse erstellen</h2>
+              <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => !gpSubmitting && setShowAddgeschäftsprozesse(false)}>Schließen</button>
             </div>
             <div className="space-y-4">
               <div>
@@ -737,19 +737,19 @@ export default function EditCoursePage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => !gpSubmitting && setShowAddGesetzesprozess(false)}>Abbrechen</button>
+                <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => !gpSubmitting && setShowAddgeschäftsprozesse(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={gpSubmitting} onClick={async () => {
                   if (!trainerId) { alert('Kein Trainerprofil'); return; }
                   if (!gpTitle.trim()) { alert('Bitte Titel eingeben'); return; }
                   if (!gpDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
                   setGpSubmitting(true);
                   try {
-                    const res = await fetch(`/api/trainer/courses/${courseId}/Geschäftsprozesse?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpTitle.trim(), descriptionText: gpDesc.trim(), durationValue: gpDuration ? Number(gpDuration) : undefined, durationUnit: gpDuration ? 'DAYS' : undefined, isActive: gpActive }) });
-                    if (!res.ok) throw new Error('Gesetzesprozess konnte nicht erstellt werden');
+                    const res = await fetch(`/api/trainer/courses/${courseId}/gesetzesprozesse?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpTitle.trim(), descriptionText: gpDesc.trim(), durationValue: gpDuration ? Number(gpDuration) : undefined, durationUnit: gpDuration ? 'DAYS' : undefined, isActive: gpActive }) });
+                    if (!res.ok) throw new Error('geschäftsprozesse konnte nicht erstellt werden');
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();
                     setGeschäftsprozesse((fresh.Geschäftsprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                    setShowAddGesetzesprozess(false);
+                    setShowAddgeschäftsprozesse(false);
                     setGpTitle(''); setGpDesc(''); setGpDuration(''); setGpActive(false);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
@@ -958,14 +958,14 @@ export default function EditCoursePage() {
         </div>
       )}
 
-      {/* Edit Gesetzesprozess Modal */}
-      {showEditGesetzesprozess && (
+      {/* Edit geschäftsprozesse Modal */}
+      {showEditgeschäftsprozesse && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowEditGesetzesprozess(false)} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowEditgeschäftsprozesse(false)} />
           <div className="glass-effect relative z-10 w-full max-w-xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Gesetzesprozess bearbeiten</h2>
-              <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditGesetzesprozess(false)}>Schließen</button>
+              <h2 className="text-xl font-semibold">Geschäftsprozesse bearbeiten</h2>
+              <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditgeschäftsprozesse(false)}>Schließen</button>
             </div>
             <div className="space-y-4">
               <div>
@@ -989,20 +989,20 @@ export default function EditCoursePage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditGesetzesprozess(false)}>Abbrechen</button>
+                <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditgeschäftsprozesse(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2" onClick={async () => {
                   if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                  if (!editingGesetzesprozessId) { alert('Kein Gesetzesprozess ausgewählt'); return; }
+                  if (!editinggeschäftsprozesseId) { alert('Kein geschäftsprozesse ausgewählt'); return; }
                   if (!gpEditTitle.trim()) { alert('Bitte Titel eingeben'); return; }
                   if (!gpEditDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
                   try {
-                    const pr = await fetch(`/api/trainer/Geschäftsprozesse/${editingGesetzesprozessId}?trainerId=${trainerId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpEditTitle.trim(), descriptionText: gpEditDesc.trim(), durationValue: gpEditDuration ? Number(gpEditDuration) : null, durationUnit: gpEditDuration ? 'DAYS' : null, isActive: gpEditActive }) });
+                    const pr = await fetch(`/api/trainer/gesetzesprozesse/${editinggeschäftsprozesseId}?trainerId=${trainerId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpEditTitle.trim(), descriptionText: gpEditDesc.trim(), durationValue: gpEditDuration ? Number(gpEditDuration) : null, durationUnit: gpEditDuration ? 'DAYS' : null, isActive: gpEditActive }) });
                     if (!pr.ok) throw new Error('Update fehlgeschlagen');
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();
                     setGeschäftsprozesse((fresh.Geschäftsprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                    setShowEditGesetzesprozess(false);
-                    setEditingGesetzesprozessId(null);
+                    setShowEditgeschäftsprozesse(false);
+                    setEditinggeschäftsprozesseId(null);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   }

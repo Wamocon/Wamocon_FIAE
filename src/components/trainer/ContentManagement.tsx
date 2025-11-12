@@ -61,8 +61,8 @@ export function ContentManagement() {
   const [ucSubmitting, setUcSubmitting] = useState(false);
   const [ucDuration, setUcDuration] = useState<string>('');
   const [ucActive, setUcActive] = useState<boolean>(false);
-  // Quick-add Gesetzesprozess modal state
-  const [showAddGesetzesprozess, setShowAddGesetzesprozess] = useState(false);
+  // Quick-add geschäftsprozesse modal state
+  const [showAddgeschäftsprozesse, setShowAddgeschäftsprozesse] = useState(false);
   const [gpTitle, setGpTitle] = useState('');
   const [gpDesc, setGpDesc] = useState('');
   const [gpSubmitting, setGpSubmitting] = useState(false);
@@ -245,7 +245,7 @@ export function ContentManagement() {
                       setGpDesc('');
                       setGpDuration('');
                       setGpActive(false);
-                      setShowAddGesetzesprozess(true);
+                      setShowAddgeschäftsprozesse(true);
                     }}
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >

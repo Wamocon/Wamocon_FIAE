@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 
 type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
 type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
-type GesetzReviewItem = { id: string; gesetzesprozessId: string; gesetzesprozessTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
+type GesetzReviewItem = { id: string; geschäftsprozesseId: string; geschäftsprozesseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
 type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
 type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string; attemptNumber?: number|null; difficulty?: 'LOW'|'MEDIUM'|'HIGH'|null; enablerTitle?: string|null };
 
@@ -71,7 +71,7 @@ export default function TrainerReviewsPage() {
         const data = await r.json();
   setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
   setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-        setGesetzSubs((data.gesetzesprozessSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+        setGesetzSubs((data.geschäftsprozesseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
       } finally {
@@ -108,14 +108,14 @@ export default function TrainerReviewsPage() {
     if (activeTab === 'reflections' || activeTab === 'quizzes') loadQR();
   }, [profile?.id, activeTab, pendingFilter]);
 
-  const reviewItem = async (kind: 'enabler' | 'gesetzesprozess' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
+  const reviewItem = async (kind: 'enabler' | 'geschäftsprozesse' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
     if (!profile?.id) return;
     const feedback = feedbackMap[id] || '';
     const url = kind === 'enabler'
       ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
       : kind === 'usecase'
         ? `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`
-        : `/api/trainer/reviews/Geschäftsprozesse/${id}?trainerId=${profile.id}`;
+  : `/api/trainer/reviews/gesetzesprozesse/${id}?trainerId=${profile.id}`;
     const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, trainerFeedback: feedback }) });
     if (!r.ok) {
       alert('Konnte Review nicht speichern');
@@ -127,7 +127,7 @@ export default function TrainerReviewsPage() {
     const data = await rr.json();
   setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
   setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-    setGesetzSubs((data.gesetzesprozessSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+    setGesetzSubs((data.geschäftsprozesseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
     setFeedbackMap(prev => ({ ...prev, [id]: '' }));
   };
 
@@ -261,7 +261,7 @@ export default function TrainerReviewsPage() {
                     <Scale className="h-4 w-4" />
                   </div>
                   <div>
-                    <div className="font-semibold">{it.gesetzesprozessTitle}</div>
+                    <div className="font-semibold">{it.geschäftsprozesseTitle}</div>
                     <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()} {it.attemptNumber ? `• Versuch ${it.attemptNumber}` : ''}</div>
                   </div>
                 </div>
@@ -278,8 +278,8 @@ export default function TrainerReviewsPage() {
                 <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('gesetzesprozess', it.id, 'REJECTED')}>Ablehnen</button>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('gesetzesprozess', it.id, 'APPROVED')}>Genehmigen</button>
+                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('geschäftsprozesse', it.id, 'REJECTED')}>Ablehnen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('geschäftsprozesse', it.id, 'APPROVED')}>Genehmigen</button>
               </div>
             </div>
           ))}
