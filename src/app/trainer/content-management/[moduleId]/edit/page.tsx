@@ -46,6 +46,7 @@ export default function EditCoursePage() {
   // Edit Enabler state
   const [showEditEnabler, setShowEditEnabler] = useState(false);
   const [editingEnablerId, setEditingEnablerId] = useState<string | null>(null);
+  const [enablerQuizList, setEnablerQuizList] = useState<Array<{ difficulty: 'LOW'|'MEDIUM'|'HIGH'; quizId: string; title: string; isActive?: boolean; questionCount?: number }>>([]);
 
 
   // UI: Add Use Case Modal state
@@ -318,26 +319,15 @@ export default function EditCoursePage() {
                           setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
                           setEnablerActive(!!en.isActive);
                         }
-                        // Load quiz
-                        const qr = await fetch(`/api/trainer/enablers/${e.id}/quiz`);
-                        if (qr.ok) {
-                          const qj = await qr.json();
-                          const quiz = qj.quiz;
-                          if (quiz && Array.isArray(quiz.questions) && quiz.questions.length) {
-                            const mapped = quiz.questions.map((q: any) => {
-                              const options: [string, string, string, string] = ["", "", "", ""] as any;
-                              let correctIndex = 0;
-                              q.options.forEach((o: any, idx: number) => {
-                                options[idx] = o.optionText || '';
-                                if (o.isCorrect) correctIndex = idx;
-                              });
-                              return { questionText: q.questionText || '', options, correctIndex };
-                            });
-                            setEnablerQuestions(mapped);
-                          } else {
-                            setEnablerQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
-                          }
+                        // Load multi-difficulty quiz list
+                        const ql = await fetch(`/api/trainer/enablers/${e.id}/quizzes`);
+                        if (ql.ok) {
+                          const qlj = await ql.json();
+                          setEnablerQuizList(qlj.quizzes || []);
+                        } else {
+                          setEnablerQuizList([]);
                         }
+                        // Quizzes are managed via multi-difficulty section below; legacy single-quiz flow removed
                         setShowEditEnabler(true);
                       } catch (e) {
                         console.error(e);
@@ -596,58 +586,57 @@ export default function EditCoursePage() {
                   <label className="mb-1 block text-sm font-medium">Hinweis (für Trainees sichtbar)</label>
                   <textarea value={enablerHint} onChange={e => setEnablerHint(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Tipp zur Lösung des Szenarios" />
                 </div>
-              <div className="mt-2">
-                <div className="mb-2 text-sm font-semibold">Quiz-Fragen</div>
-                <div className="max-h-[40vh] space-y-4 overflow-y-auto pr-1">
-                  {enablerQuestions.map((q, qi) => (
-                    <div key={qi} className="rounded-lg border border-accent/20 bg-background/40 p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium">Frage {qi + 1}</div>
-                        <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={() => setEnablerQuestions(prev => prev.filter((_, i) => i !== qi))}>Entfernen</button>
-                      </div>
-                      <input className="mt-2 w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="Fragetext" value={q.questionText} onChange={e => setEnablerQuestions(prev => prev.map((x,i)=> i===qi?{...x, questionText: e.target.value}:x))} />
-                      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                        {q.options.map((opt, oi) => (
-                          <label key={oi} className="flex items-center gap-2">
-                            <input type="radio" name={`correct-${qi}`} checked={q.correctIndex === oi} onChange={() => setEnablerQuestions(prev => prev.map((x,i)=> i===qi?{...x, correctIndex: oi}:x))} />
-                            <input className="flex-1 rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder={`Option ${oi+1}`} value={opt} onChange={e => setEnablerQuestions(prev => prev.map((x,i)=> i===qi?{...x, options: x.options.map((o,j)=> j===oi? e.target.value: o) as [string,string,string,string]}:x))} />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button type="button" className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm" onClick={() => setEnablerQuestions(prev => [...prev, { questionText: '', options: ['', '', '', ''], correctIndex: 0 }])}><Plus className="h-4 w-4"/> Frage hinzufügen</button>
-              </div>
+              {/* Legacy inline Quiz-Fragen removed from Add Lesson modal. Create the lesson first, then add quizzes in the edit modal using the multi-difficulty section. */}
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => !enablerSubmitting && setShowAddEnabler(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={enablerSubmitting} onClick={async () => {
                   if (!trainerId) { alert('Kein Trainerprofil'); return; }
                   if (!enablerTitle.trim()) { alert('Bitte Titel eingeben'); return; }
-                  const cleaned = enablerQuestions
-                    .map(q => ({ questionText: q.questionText.trim(), options: q.options.map(o => o.trim()) as [string,string,string,string], correctIndex: Number(q.correctIndex) }))
-                    .filter(q => q.questionText && q.options.every(o => o));
                   setEnablerSubmitting(true);
                   try {
                     // 1) Create Enabler
                     const res = await fetch(`/api/trainer/courses/${courseId}/enablers?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: enablerTitle.trim(), descriptionText: enablerDescription.trim() || undefined, scenarioText: enablerScenario.trim() || undefined, hintText: enablerHint.trim() || undefined, pptUrl: enablerPpt.trim() || undefined, videoUrl: enablerVideo.trim() || undefined, durationValue: enablerDuration ? Number(enablerDuration) : undefined, durationUnit: enablerDuration ? 'DAYS' : undefined, isActive: enablerActive }) });
                     if (!res.ok) throw new Error('Lesson konnte nicht erstellt werden');
                     const data = await res.json();
-                    const enablerId = data.enabler?.id;
-                    if (!enablerId) throw new Error('Fehlende Lesson ID');
-
-                    // 2) If quiz provided, create quiz
-                    if (cleaned.length) {
-                      const rq = await fetch(`/api/trainer/enablers/${enablerId}/quiz`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: `Quiz: ${enablerTitle.trim()}`, createdById: trainerId, questions: cleaned }) });
-                      if (!rq.ok) throw new Error('Quiz konnte nicht gespeichert werden');
-                    }
+                    const newEnablerId = data.enabler?.id as string | undefined;
+                    // No inline quiz creation; use edit modal to add quizzes per difficulty
 
                     // 3) Refresh and close
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();
                     setEnablers((fresh.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                    setShowAddEnabler(false);
-                    setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false); setEnablerQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
+                    // After creating, open Edit Lesson modal for the new enabler so quizzes can be created immediately
+                    if (newEnablerId) {
+                      setEditingEnablerId(newEnablerId);
+                      try {
+                        const er = await fetch(`/api/trainer/enablers/${newEnablerId}`);
+                        if (er.ok) {
+                          const ej = await er.json();
+                          const en = ej.enabler || {};
+                          setEnablerTitle(en.title || '');
+                          setEnablerDescription(en.descriptionText || '');
+                          setEnablerScenario(en.scenarioText || '');
+                          setEnablerPpt(en.pptUrl || '');
+                          setEnablerVideo(en.videoUrl || '');
+                          setEnablerHint(en.hintText || '');
+                          setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
+                          setEnablerActive(!!en.isActive);
+                        }
+                        const ql = await fetch(`/api/trainer/enablers/${newEnablerId}/quizzes`);
+                        if (ql.ok) {
+                          const qlj = await ql.json();
+                          setEnablerQuizList(qlj.quizzes || []);
+                        } else {
+                          setEnablerQuizList([]);
+                        }
+                      } catch {}
+                      setShowAddEnabler(false);
+                      setShowEditEnabler(true);
+                    } else {
+                      setShowAddEnabler(false);
+                    }
+                    // Reset add form fields
+                    setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   } finally {
@@ -784,6 +773,58 @@ export default function EditCoursePage() {
               <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditEnabler(false)}>Schließen</button>
             </div>
               <div className="space-y-4">
+              {/* Multi-difficulty quizzes management */}
+              <div className="rounded-xl border border-accent/20 bg-background/50 p-3">
+                <div className="mb-2 text-sm font-semibold">Lesson-Quizzes (Low / Medium / High)</div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  {(['LOW','MEDIUM','HIGH'] as const).map((level) => {
+                    const item = enablerQuizList.find(q => q.difficulty === level);
+                    return (
+                      <div key={level} className="rounded-lg border border-accent/20 bg-background/40 p-3">
+                        <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{level}</div>
+                        {item ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <button type="button" className="truncate text-left font-medium hover:underline" onClick={() => router.push(`/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`)} title={item.title}>{item.title || 'Ohne Titel'}</button>
+                              <span className={`text-xs rounded-full px-2 py-0.5 border ${item.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{item.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">Fragen: {item.questionCount ?? '-'}</div>
+                            <div className="flex flex-wrap gap-2">
+                              <button type="button" className="rounded-md border border-accent/30 px-2 py-1 text-xs" onClick={() => router.push(`/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`)}>Bearbeiten</button>
+                              <button type="button" className="rounded-md border border-accent/30 px-2 py-1 text-xs" onClick={async () => {
+                                if (!editingEnablerId) return;
+                                try {
+                                  await fetch(`/api/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !item.isActive }) });
+                                  const ql = await fetch(`/api/trainer/enablers/${editingEnablerId}/quizzes`);
+                                  const qlj = await ql.json();
+                                  setEnablerQuizList(qlj.quizzes || []);
+                                } catch (e) { console.error(e); }
+                              }}>{item.isActive ? 'Deaktivieren' : 'Aktivieren'}</button>
+                              <button type="button" className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600" onClick={async () => {
+                                if (!editingEnablerId) return;
+                                const ok = window.confirm('Dieses Quiz löschen?');
+                                if (!ok) return;
+                                try {
+                                  await fetch(`/api/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`, { method: 'DELETE' });
+                                  const ql = await fetch(`/api/trainer/enablers/${editingEnablerId}/quizzes`);
+                                  const qlj = await ql.json();
+                                  setEnablerQuizList(qlj.quizzes || []);
+                                } catch (e) { console.error(e); }
+                              }}>Löschen</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="text-sm text-muted-foreground">Kein {level}-Quiz</div>
+                            <button type="button" className="rounded-md border border-accent/30 px-2 py-1 text-xs" onClick={() => router.push(`/trainer/enablers/${editingEnablerId}/quizzes/new?difficulty=${level}`)}>Erstellen</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label className="mb-1 block text-sm font-medium">Titel</label>
                 <input value={enablerTitle} onChange={e => setEnablerTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
@@ -822,29 +863,7 @@ export default function EditCoursePage() {
                   <label className="mb-1 block text-sm font-medium">Hinweis (für Trainees sichtbar)</label>
                   <textarea value={enablerHint} onChange={e => setEnablerHint(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Tipp zur Lösung des Szenarios" />
                 </div>
-              <div className="mt-2">
-                <div className="mb-2 text-sm font-semibold">Quiz-Fragen</div>
-                <div className="max-h-[40vh] space-y-4 overflow-y-auto pr-1">
-                  {enablerQuestions.map((q, qi) => (
-                    <div key={qi} className="rounded-lg border border-accent/20 bg-background/40 p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium">Frage {qi + 1}</div>
-                        <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={() => setEnablerQuestions(prev => prev.filter((_, i) => i !== qi))}>Entfernen</button>
-                      </div>
-                      <input className="mt-2 w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="Fragetext" value={q.questionText} onChange={e => setEnablerQuestions(prev => prev.map((x,i)=> i===qi?{...x, questionText: e.target.value}:x))} />
-                      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                        {q.options.map((opt, oi) => (
-                          <label key={oi} className="flex items-center gap-2">
-                            <input type="radio" name={`correct-edit-${qi}`} checked={q.correctIndex === oi} onChange={() => setEnablerQuestions(prev => prev.map((x,i)=> i===qi?{...x, correctIndex: oi}:x))} />
-                            <input className="flex-1 rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder={`Option ${oi+1}`} value={opt} onChange={e => setEnablerQuestions(prev => prev.map((x,i)=> i===qi?{...x, options: x.options.map((o,j)=> j===oi? e.target.value: o) as [string,string,string,string]}:x))} />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button type="button" className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm" onClick={() => setEnablerQuestions(prev => [...prev, { questionText: '', options: ['', '', '', ''], correctIndex: 0 }])}><Plus className="h-4 w-4"/> Frage hinzufügen</button>
-              </div>
+              {/* Legacy inline Quiz-Fragen removed. Use the multi-difficulty section above to manage quizzes. */}
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditEnabler(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2" onClick={async () => {
@@ -867,15 +886,6 @@ export default function EditCoursePage() {
                       })
                     });
                     if (!pr.ok) throw new Error('Lesson-Update fehlgeschlagen');
-
-                    // Replace quiz if present
-                    const cleaned = enablerQuestions
-                      .map(q => ({ questionText: q.questionText.trim(), options: q.options.map(o => o.trim()) as [string,string,string,string], correctIndex: Number(q.correctIndex) }))
-                      .filter(q => q.questionText && q.options.every(o => o));
-                    if (cleaned.length) {
-                      const rq = await fetch(`/api/trainer/enablers/${editingEnablerId}/quiz`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: `Quiz: ${enablerTitle.trim()}`, createdById: trainerId, questions: cleaned }) });
-                      if (!rq.ok) throw new Error('Quiz konnte nicht gespeichert werden');
-                    }
 
                     // Refresh and close
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);

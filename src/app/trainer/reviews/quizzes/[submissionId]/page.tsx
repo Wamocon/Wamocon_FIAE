@@ -1,5 +1,5 @@
 import db from '@/db';
-import { quizzes, questions, options, quizSubmissions, quizSubmissionAnswers, profiles } from '@/db/migrations/schemas/schema';
+import { quizzes, questions, options, quizSubmissions, quizSubmissionAnswers, profiles, enablerQuizLinks, enablers } from '@/db/migrations/schemas/schema';
 import { asc, eq, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 
@@ -33,6 +33,10 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
   const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, sub.quizId as any)).limit(1);
   const [trainee] = await db.select().from(profiles).where(eq(profiles.id, sub.traineeId as any)).limit(1);
 
+  // Get lesson context (difficulty and enabler title) if applicable
+  const [link] = await db.select().from(enablerQuizLinks).where(eq(enablerQuizLinks.quizId, sub.quizId as any)).limit(1);
+  const enabler = link ? (await db.select().from(enablers).where(eq(enablers.id, link.enablerId as any)).limit(1))[0] : undefined;
+
   const qs = await db
     .select()
     .from(questions)
@@ -62,6 +66,16 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
         <h1 className="text-foreground text-2xl font-bold">{quiz?.title ?? 'Quiz'}</h1>
         <div className="mt-1 text-sm text-muted-foreground">
           Trainee: {trainee?.fullName ?? trainee?.email ?? sub.traineeId} • Score: {sub.score ?? 0}%
+          {quiz?.quizType === 'LESSON' && link?.difficulty && (
+            <>
+              {' '}• Schwierigkeit: <span className="inline-flex items-center rounded bg-black/40 px-2 py-0.5 text-xs">{link.difficulty}</span>
+            </>
+          )}
+          {enabler?.title && (
+            <>
+              {' '}• Enabler: {enabler.title}
+            </>
+          )}
         </div>
       </div>
 

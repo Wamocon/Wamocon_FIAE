@@ -26,6 +26,7 @@ export const authUsers = auth.table('users', {
 export const userRole = pgEnum('user_role', ['TRAINER', 'TRAINEE']);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
 export const quizType = pgEnum('quiz_type', ['LESSON', 'GLOBAL']);
+export const quizDifficulty = pgEnum('quiz_difficulty', ['LOW', 'MEDIUM', 'HIGH']);
 export const reviewStatus = pgEnum('review_status', [
   'PENDING',
   'APPROVED',
@@ -205,6 +206,25 @@ export const enablerQuizzes = pgTable('enabler_quizzes', {
     .references(() => quizzes.id, { onDelete: 'cascade' }),
 });
 
+// New: allow up to three quizzes per enabler, one per difficulty
+export const enablerQuizLinks = pgTable(
+  'enabler_quiz_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    enablerId: uuid('enabler_id')
+      .notNull()
+      .references(() => enablers.id, { onDelete: 'cascade' }),
+    quizId: uuid('quiz_id')
+      .notNull()
+      .references(() => quizzes.id, { onDelete: 'cascade' }),
+    difficulty: quizDifficulty('difficulty').notNull(),
+  },
+  (table) => ({
+    unqEnablerDifficulty: unique().on(table.enablerId, table.difficulty),
+    unqQuiz: unique().on(table.quizId),
+  }),
+);
+
 export const questions = pgTable('questions', {
   id: uuid('id').primaryKey().defaultRandom(),
   quizId: uuid('quiz_id')
@@ -221,6 +241,8 @@ export const options = pgTable('options', {
     .references(() => questions.id, { onDelete: 'cascade' }),
   optionText: text('option_text').notNull(),
   isCorrect: boolean('is_correct').notNull().default(false),
+  // Optional explanation (store on the correct option)
+  explanation: text('explanation'),
 });
 
 // --- Trainee Submissions & Progress ---
@@ -561,6 +583,7 @@ export type Enabler = typeof enablers.$inferSelect;
 export type UseCase = typeof useCases.$inferSelect;
 export type Quiz = typeof quizzes.$inferSelect;
 export type EnablerQuiz = typeof enablerQuizzes.$inferSelect;
+export type EnablerQuizLink = typeof enablerQuizLinks.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type QuizAssignment = typeof quizAssignments.$inferSelect;
