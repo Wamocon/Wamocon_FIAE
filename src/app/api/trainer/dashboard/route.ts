@@ -4,6 +4,7 @@ import { and, count, desc, eq, inArray, gt } from 'drizzle-orm';
 import {
   profiles,
   courses,
+  courseMembers,
   enablers,
   enablerCompletions,
   enablerSubmissions,
@@ -22,19 +23,60 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing trainer id' }, { status: 400 });
     }
 
-    // Trainees assigned to this trainer
-    const traineeRows = await db
+    // Discover courses the trainer owns or co-teaches
+    const createdCourses = await db
+      .select({ id: courses.id })
+      .from(courses)
+      .where(eq(courses.createdById, trainerId));
+    const memberCourses = await db
+      .select({ courseId: courseMembers.courseId })
+      .from(courseMembers)
+      .where(and(eq(courseMembers.userId, trainerId), eq(courseMembers.role, 'TRAINER')));
+    const courseIds = Array.from(new Set([...
+      createdCourses.map(c => String(c.id)),
+      ...memberCourses.map(m => String(m.courseId)),
+    ]));
+
+    // Trainees either directly assigned to this trainer OR enrolled in their courses
+    const directlyAssigned = await db
       .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
       .from(profiles)
       .where(and(eq(profiles.role, 'TRAINEE'), eq(profiles.assignedTrainerId, trainerId)));
-    const traineeIds = traineeRows.map(t => t.id);
 
-    // Enablers under courses created by this trainer (active)
-    const trainerEnablers = await db
-      .select({ id: enablers.id, title: enablers.title })
-      .from(enablers)
-      .innerJoin(courses, eq(enablers.courseId, courses.id))
-      .where(and(eq(courses.createdById, trainerId)));
+    let courseTraineeIds: string[] = [];
+    if (courseIds.length > 0) {
+      const courseTrainees = await db
+        .select({ userId: courseMembers.userId })
+        .from(courseMembers)
+        .where(and(inArray(courseMembers.courseId, courseIds), eq(courseMembers.role, 'TRAINEE')));
+      courseTraineeIds = courseTrainees.map(t => String(t.userId));
+    }
+    const traineeIdSet = new Set<string>([
+      ...directlyAssigned.map(t => String(t.id)),
+      ...courseTraineeIds,
+    ]);
+    const traineeIds = Array.from(traineeIdSet);
+
+    // Build full trainee objects (merge assigned list with any extra from course members)
+    let traineeRows = directlyAssigned;
+    if (traineeIds.length > directlyAssigned.length) {
+      const missingIds = traineeIds.filter(id => !directlyAssigned.some(t => String(t.id) === id));
+      if (missingIds.length) {
+        const extras = await db
+          .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
+          .from(profiles)
+          .where(inArray(profiles.id, missingIds as any));
+        traineeRows = [...directlyAssigned, ...extras];
+      }
+    }
+
+    // Enablers under trainer's courses (owned or co-taught)
+    const trainerEnablers = courseIds.length
+      ? await db
+          .select({ id: enablers.id, title: enablers.title })
+          .from(enablers)
+          .where(inArray(enablers.courseId, courseIds as any))
+      : [];
     const enablerIds = trainerEnablers.map(e => e.id);
 
     // Progress per trainee = completed enablers / total enablers
