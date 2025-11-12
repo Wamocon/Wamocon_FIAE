@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import { profiles, quizzes, quizSubmissions, enablerQuizLinks, enablers } from '@/db/migrations/schemas/schema';
+import { profiles, quizzes, quizSubmissions, enablerQuizLinks, enablers, courses, courseMembers } from '@/db/migrations/schemas/schema';
 
 // GET /api/trainer/quiz-submissions?trainerProfileId=...&onlyPending=true
 export async function GET(req: NextRequest) {
@@ -11,12 +11,38 @@ export async function GET(req: NextRequest) {
     const onlyPending = searchParams.get('onlyPending') === 'true';
     if (!trainerProfileId) return NextResponse.json({ error: 'Missing trainerProfileId' }, { status: 400 });
 
-    // Find trainees assigned to trainer
-    const traineeRows = await db
+    // Primary: trainees assigned to trainer
+    const assignedTrainees = await db
       .select({ id: profiles.id, fullName: profiles.fullName })
       .from(profiles)
       .where(and(eq(profiles.role, 'TRAINEE' as any), eq(profiles.assignedTrainerId, trainerProfileId as any)));
-    const traineeIds = traineeRows.map(t => t.id);
+
+    // Union with trainees from trainer's courses (created or co-trainer)
+    const createdCourses = await db
+      .select({ id: courses.id })
+      .from(courses)
+      .where(eq(courses.createdById, trainerProfileId as any));
+    const trainerMemberCourses = await db
+      .select({ courseId: courseMembers.courseId })
+      .from(courseMembers)
+      .where(and(eq(courseMembers.userId, trainerProfileId as any), eq(courseMembers.role, 'TRAINER' as any)));
+    const courseIds = Array.from(new Set([...
+      createdCourses.map(c => String(c.id)),
+      ...trainerMemberCourses.map(m => String(m.courseId)),
+    ]));
+    let courseTraineeIds: string[] = [];
+    if (courseIds.length > 0) {
+      const courseTrainees = await db
+        .select({ userId: courseMembers.userId })
+        .from(courseMembers)
+        .where(and(inArray(courseMembers.courseId, courseIds as any), eq(courseMembers.role, 'TRAINEE' as any)));
+      courseTraineeIds = courseTrainees.map(t => String(t.userId));
+    }
+
+    const traineeIds = Array.from(new Set([...
+      assignedTrainees.map(t => String(t.id)),
+      ...courseTraineeIds,
+    ]));
 
     if (traineeIds.length === 0) return NextResponse.json({ submissions: [] });
 
@@ -40,7 +66,7 @@ export async function GET(req: NextRequest) {
       .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
       .leftJoin(enablerQuizLinks, eq(enablerQuizLinks.quizId, quizSubmissions.quizId))
       .leftJoin(enablers, eq(enablers.id, enablerQuizLinks.enablerId))
-      .where(and(inArray(quizSubmissions.traineeId, traineeIds as any), onlyPending ? eq(quizSubmissions.isReviewed, false as any) : eq(quizSubmissions.isReviewed, quizSubmissions.isReviewed)))
+  .where(and(inArray(quizSubmissions.traineeId, traineeIds as any), onlyPending ? eq(quizSubmissions.isReviewed, false as any) : eq(quizSubmissions.isReviewed, quizSubmissions.isReviewed)))
       .orderBy(desc(quizSubmissions.submittedAt))
       .limit(200);
 
