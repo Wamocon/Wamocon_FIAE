@@ -71,7 +71,7 @@ export default function EditEnablerQuizPage() {
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto mt-6 max-w-3xl bg-background border border-accent/20 rounded-2xl space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Lesson-Quiz</h1>
         <div className="flex items-center gap-2">

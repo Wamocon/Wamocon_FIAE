@@ -32,7 +32,7 @@ export default function NewEnablerQuizPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto mt-6 max-w-3xl bg-background  border border-accent/20 rounded-2xl space-y-6 p-6">
       <div>
         <h1 className="text-xl font-bold">Neues Quiz für Lesson</h1>
         <p className="text-sm text-muted-foreground">Wählen Sie Schwierigkeit, geben Sie einen Titel ein und fügen Sie Fragen hinzu.</p>
