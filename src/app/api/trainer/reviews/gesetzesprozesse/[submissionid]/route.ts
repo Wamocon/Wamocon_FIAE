@@ -3,9 +3,11 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { courses, courseMembers, gesetzesprozesse, gesetzesprozessSubmissions, notifications } from '@/db/migrations/schemas/schema';
 
-export async function PATCH(req: NextRequest, { params }: { params: { submissionId: string } }) {
+// Note: dynamic route folder is [submissionid], so the param key is "submissionid" (all lowercase)
+export async function PATCH(req: NextRequest, { params }: { params: { submissionid: string } }) {
   try {
-    const { submissionId } = params;
+    const submissionId = params.submissionid;
+    if (!submissionId) return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });

@@ -10,6 +10,7 @@ import {
   quizSubmissions,
   reflections,
   useCaseSubmissions,
+  enablerQuizLinks,
 } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
@@ -54,13 +55,21 @@ export async function GET(req: NextRequest) {
     });
 
     // Pending reviews: unreviewed quiz submissions + reflections + pending use case submissions + pending enabler submissions
-  let pendingQuiz = 0, pendingRefl = 0, pendingUseCases = 0, pendingEnablers = 0;
+  let pendingQuiz = 0, pendingRefl = 0, pendingUseCases = 0, pendingEnablers = 0, pendingLessonQuiz = 0;
     if (traineeIds.length > 0) {
       const [{ c: pq } = { c: 0 }] = await db
         .select({ c: count() })
         .from(quizSubmissions)
         .where(and(eq(quizSubmissions.isReviewed, false), inArray(quizSubmissions.traineeId, traineeIds)));
       pendingQuiz = Number(pq) || 0;
+
+      // Lesson quiz (multi-difficulty) pending subset where quiz has lesson link
+      const [{ c: plq } = { c: 0 }] = await db
+        .select({ c: count() })
+        .from(quizSubmissions)
+        .innerJoin(enablerQuizLinks, eq(quizSubmissions.quizId, enablerQuizLinks.quizId))
+        .where(and(eq(quizSubmissions.isReviewed, false), inArray(quizSubmissions.traineeId, traineeIds)));
+      pendingLessonQuiz = Number(plq) || 0;
 
       const [{ c: pr } = { c: 0 }] = await db
         .select({ c: count() })
@@ -145,7 +154,8 @@ export async function GET(req: NextRequest) {
       counts: {
         activeTrainees: trainees.length,
         pendingReviews,
-        pendingQuiz,
+  pendingQuiz,
+  pendingLessonQuiz,
         pendingReflections: pendingRefl,
         pendingEnablers,
         pendingUseCases,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import { profiles, quizzes, quizSubmissions } from '@/db/migrations/schemas/schema';
+import { profiles, quizzes, quizSubmissions, enablerQuizLinks, enablers } from '@/db/migrations/schemas/schema';
 
 // GET /api/trainer/quiz-submissions?trainerProfileId=...&onlyPending=true
 export async function GET(req: NextRequest) {
@@ -32,10 +32,14 @@ export async function GET(req: NextRequest) {
         traineeName: profiles.fullName,
         quizTitle: quizzes.title,
         quizType: quizzes.quizType,
+        difficulty: enablerQuizLinks.difficulty,
+        enablerTitle: enablers.title,
       })
       .from(quizSubmissions)
       .innerJoin(profiles, eq(quizSubmissions.traineeId, profiles.id))
       .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
+      .leftJoin(enablerQuizLinks, eq(enablerQuizLinks.quizId, quizSubmissions.quizId))
+      .leftJoin(enablers, eq(enablers.id, enablerQuizLinks.enablerId))
       .where(and(inArray(quizSubmissions.traineeId, traineeIds as any), onlyPending ? eq(quizSubmissions.isReviewed, false as any) : eq(quizSubmissions.isReviewed, quizSubmissions.isReviewed)))
       .orderBy(desc(quizSubmissions.submittedAt))
       .limit(200);

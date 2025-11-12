@@ -54,7 +54,7 @@ const TrainerLayoutComponent = ({
         <div className="text-center">
           <LoadingSpinner />
           <p className="text-muted-foreground mt-4">
-            Lade Trainer Dashboard...
+            Lade...
           </p>
         </div>
       </div>

@@ -24,6 +24,7 @@ type CourseCard = {
   chapter: number | null;
   enablersCount: number;
   useCasesCount: number;
+  gpCount: number;
 };
 
 export function ContentManagement() {
@@ -60,6 +61,14 @@ export function ContentManagement() {
   const [ucSubmitting, setUcSubmitting] = useState(false);
   const [ucDuration, setUcDuration] = useState<string>('');
   const [ucActive, setUcActive] = useState<boolean>(false);
+  // Quick-add Gesetzesprozess modal state
+  const [showAddGesetzesprozess, setShowAddGesetzesprozess] = useState(false);
+  const [gpTitle, setGpTitle] = useState('');
+  const [gpDesc, setGpDesc] = useState('');
+  const [gpSubmitting, setGpSubmitting] = useState(false);
+  const [gpDuration, setGpDuration] = useState<string>('');
+  const [gpActive, setGpActive] = useState<boolean>(false); 
+  
 
   useEffect(() => {
     const load = async () => {
@@ -177,7 +186,7 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[420px] flex flex-col"
+              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[480px] flex flex-col"
             >
               <div className="mb-4 flex items-start justify-between">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
@@ -223,6 +232,27 @@ export function ContentManagement() {
                     + Hinzufügen
                   </button>
                 </div>
+                
+                <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
+                  <div className="min-w-0">
+                    <h4 className="text-foreground text-sm font-medium">Gesetzesprozesse</h4>
+                    <p className="text-muted text-xs">{course.gpCount} Aufgaben</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveCourseId(course.id);
+                      setGpTitle('');
+                      setGpDesc('');
+                      setGpDuration('');
+                      setGpActive(false);
+                      setShowAddGesetzesprozess(true);
+                    }}
+                    className="text-accent hover:text-accent/90 text-sm font-medium"
+                  >
+                    + Hinzufügen
+                  </button>
+                </div>
+            
 
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
@@ -328,6 +358,15 @@ export function ContentManagement() {
                     <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
                       <FolderOpen className="text-muted h-4 w-4 mt-0.5" />
                       <span className="truncate">Lessons: {course.enablersCount}</span>
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="bg-muted/30 border-accent/30 rounded-xl border p-4 h-28 flex flex-col overflow-hidden">
+                  <div className="flex-1">
+                    <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
+                      <FileText className="h-4 w-4" />
+                      <span className="truncate">Gesetzesprozesse: {course.gpCount}</span>
                     </h4>
                   </div>
                 </div>

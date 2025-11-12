@@ -1,0 +1,109 @@
+'use client';
+
+import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { useEffect, useState } from 'react';
+
+type BuilderQ = { questionText: string; options: [string, string, string, string]; correctIndex: number; explanation: string };
+
+export default function NewEnablerQuizPage() {
+  const params = useParams<{ enablerId: string }>();
+  const enablerId = params?.enablerId as string;
+  const { profile } = useAuth();
+  const router = useRouter();
+
+  const [difficulty, setDifficulty] = useState<'LOW'|'MEDIUM'|'HIGH'>('LOW');
+  const [title, setTitle] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [questions, setQuestions] = useState<BuilderQ[]>([
+    { questionText: '', options: ['', '', '', ''], correctIndex: 0, explanation: '' },
+  ]);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    // no-op; page for creating only
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <div>
+        <h1 className="text-xl font-bold">Neues Quiz für Lesson</h1>
+        <p className="text-sm text-muted-foreground">Wählen Sie Schwierigkeit, geben Sie einen Titel ein und fügen Sie Fragen hinzu.</p>
+      </div>
+
+      <div className="rounded-2xl border border-accent/20 bg-background/40 p-5 space-y-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Schwierigkeit</label>
+            <select value={difficulty} onChange={(e)=>setDifficulty(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium">Quiz-Titel</label>
+            <input value={title} onChange={(e)=>setTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. Grundlagen" />
+          </div>
+        </div>
+        <label className="inline-flex items-center gap-2">
+          <input type="checkbox" checked={isActive} onChange={(e)=>setIsActive(e.target.checked)} />
+          <span>Aktiv</span>
+        </label>
+
+        <div className="mt-2">
+          <div className="mb-2 text-sm font-semibold">Fragen</div>
+          <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+            {questions.map((q, qi) => (
+              <div key={qi} className="rounded-lg border border-accent/20 bg-background/40 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">Frage {qi + 1}</div>
+                  <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={() => setQuestions(prev => prev.filter((_, i) => i !== qi))}>Entfernen</button>
+                </div>
+                <input className="mt-2 w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="Fragetext" value={q.questionText} onChange={e => setQuestions(prev => prev.map((x,i)=> i===qi?{...x, questionText: e.target.value}:x))} />
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {q.options.map((opt, oi) => (
+                    <label key={oi} className="flex items-center gap-2">
+                      <input type="radio" name={`correct-${qi}`} checked={q.correctIndex === oi} onChange={() => setQuestions(prev => prev.map((x,i)=> i===qi?{...x, correctIndex: oi}:x))} />
+                      <input className="flex-1 rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder={`Option ${oi+1}`} value={opt} onChange={e => setQuestions(prev => prev.map((x,i)=> i===qi?{...x, options: x.options.map((o,j)=> j===oi? e.target.value: o) as [string,string,string,string]}:x))} />
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <label className="mb-1 block text-sm font-medium">Erklärung (warum ist die richtige Antwort korrekt?)</label>
+                  <textarea className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={2} value={q.explanation} onChange={(e)=> setQuestions(prev => prev.map((x,i)=> i===qi?{...x, explanation: e.target.value}:x))} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm" onClick={() => setQuestions(prev => [...prev, { questionText: '', options: ['', '', '', ''], correctIndex: 0, explanation: '' }])}>+ Frage hinzufügen</button>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => router.back()}>Abbrechen</button>
+          <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={submitting} onClick={async () => {
+            if (!profile?.id) { alert('Kein Trainerprofil'); return; }
+            if (!title.trim()) { alert('Bitte Titel eingeben'); return; }
+            const cleaned = questions
+              .map(q => ({ questionText: q.questionText.trim(), options: q.options.map(o => o.trim()) as [string,string,string,string], correctIndex: Number(q.correctIndex), explanation: (q.explanation || '').trim() }))
+              .filter(q => q.questionText && q.options.every(o => o));
+            setSubmitting(true);
+            try {
+              const r = await fetch(`/api/trainer/enablers/${enablerId}/quizzes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title.trim(), createdById: profile.id, difficulty, isActive, questions: cleaned }),
+              });
+              if (!r.ok) throw new Error('Quiz speichern fehlgeschlagen');
+              router.back();
+            } catch (e: any) {
+              alert(e?.message || 'Unbekannter Fehler');
+            } finally {
+              setSubmitting(false);
+            }
+          }}>Speichern</button>
+        </div>
+      </div>
+    </div>
+  );
+}
