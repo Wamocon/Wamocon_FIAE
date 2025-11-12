@@ -335,7 +335,7 @@ export const useCaseSubmissionLinks = pgTable('use_case_submission_links', {
 
 // --- Gesetzesprozess (Legislative Process) Tables (mirror Use Case) ---
 
-export const gesetzesprozesse = pgTable('gesetzesprozesse', {
+export const Geschäftsprozesse = pgTable('Geschäftsprozesse', {
   id: uuid('id').primaryKey().defaultRandom(),
   courseId: uuid('course_id')
     .notNull()
@@ -361,7 +361,7 @@ export const gesetzesprozessSubmissions = pgTable('gesetzesprozess_submissions',
     .references(() => profiles.id, { onDelete: 'cascade' }),
   gesetzesprozessId: uuid('gesetzesprozess_id')
     .notNull()
-    .references(() => gesetzesprozesse.id, { onDelete: 'cascade' }),
+    .references(() => Geschäftsprozesse.id, { onDelete: 'cascade' }),
   submissionText: text('submission_text'),
   status: reviewStatus('status').default('PENDING'),
   trainerFeedback: text('trainer_feedback'),
@@ -592,7 +592,7 @@ export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
 export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
 
-export type Gesetzesprozess = typeof gesetzesprozesse.$inferSelect;
+export type Gesetzesprozess = typeof Geschäftsprozesse.$inferSelect;
 export type GesetzesprozessSubmission = typeof gesetzesprozessSubmissions.$inferSelect;
 export type GesetzesprozessSubmissionLink = typeof gesetzesprozessSubmissionLinks.$inferSelect;
 export type Reflection = typeof reflections.$inferSelect;

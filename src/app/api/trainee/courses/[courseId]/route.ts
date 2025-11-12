@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { courses, courseMembers, enablers, useCases, enablerSubmissions, useCaseSubmissions, gesetzesprozesse, gesetzesprozessSubmissions } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, enablers, useCases, enablerSubmissions, useCaseSubmissions, Geschäftsprozesse, gesetzesprozessSubmissions } from '@/db/migrations/schemas/schema';
 
 // GET course details for a trainee: includes active enablers and use-cases
 // query: traineeId
@@ -36,9 +36,9 @@ export async function GET(
       .orderBy(useCases.orderIndex);
     const gps = await db
       .select()
-      .from(gesetzesprozesse)
-      .where(and(eq(gesetzesprozesse.courseId, courseId), eq(gesetzesprozesse.isActive, true)))
-      .orderBy(gesetzesprozesse.orderIndex);
+      .from(Geschäftsprozesse)
+      .where(and(eq(Geschäftsprozesse.courseId, courseId), eq(Geschäftsprozesse.isActive, true)))
+      .orderBy(Geschäftsprozesse.orderIndex);
 
     // Latest attempts for this trainee per enabler/use-case
     const enIds = ens.map((e) => String(e.id));
@@ -90,7 +90,7 @@ export async function GET(
     return NextResponse.json({
       course: { id: c.id, title: c.title, year: c.year, chapter: c.chapter },
       enablers: ens.map((e) => ({ id: e.id, title: e.title, attemptNumber: latestEn[String(e.id)]?.attemptNumber ?? null })),
-      gesetzesprozesse: gps.map((g) => ({ id: g.id, title: g.title, attemptNumber: latestGp[String(g.id)]?.attemptNumber ?? null })),
+      Geschäftsprozesse: gps.map((g) => ({ id: g.id, title: g.title, attemptNumber: latestGp[String(g.id)]?.attemptNumber ?? null })),
       useCases: ucs.map((u) => ({ id: u.id, title: u.title, attemptNumber: latestUc[String(u.id)]?.attemptNumber ?? null })),
     });
   } catch (e) {

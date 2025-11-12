@@ -37,20 +37,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cou
       .where(eq(enablers.courseId, courseId as any))
       .orderBy(enablers.orderIndex);
 
-  const { useCases, gesetzesprozesse } = await import('@/db/migrations/schemas/schema');
+  const { useCases, Geschäftsprozesse } = await import('@/db/migrations/schemas/schema');
     const gps = await db
       .select({
-        id: gesetzesprozesse.id,
-        title: gesetzesprozesse.title,
-        orderIndex: gesetzesprozesse.orderIndex,
-        isActive: gesetzesprozesse.isActive,
-        durationValue: gesetzesprozesse.durationValue,
-        durationUnit: gesetzesprozesse.durationUnit,
-        descriptionText: gesetzesprozesse.descriptionText,
+        id: Geschäftsprozesse.id,
+        title: Geschäftsprozesse.title,
+        orderIndex: Geschäftsprozesse.orderIndex,
+        isActive: Geschäftsprozesse.isActive,
+        durationValue: Geschäftsprozesse.durationValue,
+        durationUnit: Geschäftsprozesse.durationUnit,
+        descriptionText: Geschäftsprozesse.descriptionText,
       })
-      .from(gesetzesprozesse)
-      .where(eq(gesetzesprozesse.courseId, courseId as any))
-      .orderBy(gesetzesprozesse.orderIndex);
+      .from(Geschäftsprozesse)
+      .where(eq(Geschäftsprozesse.courseId, courseId as any))
+      .orderBy(Geschäftsprozesse.orderIndex);
 
     const ucs = await db
       .select({
@@ -65,7 +65,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cou
       .from(useCases)
       .where(eq(useCases.courseId, courseId as any))
       .orderBy(useCases.orderIndex);
-  return NextResponse.json({ course, skills: attachedSkills.map((s) => s.name), enablers: ens, gesetzesprozesse: gps, useCases: ucs });
+  return NextResponse.json({ course, skills: attachedSkills.map((s) => s.name), enablers: ens, Geschäftsprozesse: gps, useCases: ucs });
   } catch (e) {
     console.error('Get course error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

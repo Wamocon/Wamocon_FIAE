@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { courses, courseMembers, gesetzesprozesse, gesetzesprozessSubmissions, notifications } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, Geschäftsprozesse, gesetzesprozessSubmissions, notifications } from '@/db/migrations/schemas/schema';
 
 // Note: dynamic route folder is [submissionid], so the param key is "submissionid" (all lowercase)
 export async function PATCH(req: NextRequest, { params }: { params: { submissionid: string } }) {
@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { submission
 
     const [sub] = await db.select().from(gesetzesprozessSubmissions).where(eq(gesetzesprozessSubmissions.id, submissionId));
     if (!sub) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const [gp] = await db.select().from(gesetzesprozesse).where(eq(gesetzesprozesse.id, sub.gesetzesprozessId));
+    const [gp] = await db.select().from(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, sub.gesetzesprozessId));
     if (!gp) return NextResponse.json({ error: 'Invalid submission' }, { status: 400 });
     const member = await db
       .select()

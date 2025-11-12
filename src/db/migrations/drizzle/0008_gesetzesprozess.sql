@@ -1,7 +1,7 @@
 -- Migration: Add Gesetzesprozess (legislative process) content & submission tables
 -- Mirrors use_cases and use_case_submissions structure.
 
-CREATE TABLE IF NOT EXISTS gesetzesprozesse (
+CREATE TABLE IF NOT EXISTS Geschäftsprozesse (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   course_id uuid NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   title text NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS gesetzesprozesse (
 CREATE TABLE IF NOT EXISTS gesetzesprozess_submissions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   trainee_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  gesetzesprozess_id uuid NOT NULL REFERENCES gesetzesprozesse(id) ON DELETE CASCADE,
+  gesetzesprozess_id uuid NOT NULL REFERENCES Geschäftsprozesse(id) ON DELETE CASCADE,
   submission_text text,
   status review_status DEFAULT 'PENDING',
   trainer_feedback text,
@@ -36,6 +36,6 @@ CREATE TABLE IF NOT EXISTS gesetzesprozess_submission_links (
 );
 
 -- Basic indexes (optional for performance)
-CREATE INDEX IF NOT EXISTS idx_gesetzesprozesse_course ON gesetzesprozesse(course_id);
+CREATE INDEX IF NOT EXISTS idx_Geschäftsprozesse_course ON Geschäftsprozesse(course_id);
 CREATE INDEX IF NOT EXISTS idx_gesetzesprozess_sub_trainee ON gesetzesprozess_submissions(trainee_id);
 CREATE INDEX IF NOT EXISTS idx_gesetzesprozess_sub_gp ON gesetzesprozess_submissions(gesetzesprozess_id);

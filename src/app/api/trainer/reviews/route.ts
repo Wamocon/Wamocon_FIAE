@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { courses, courseMembers, enablers, enablerSubmissions, profiles, useCases, useCaseSubmissions, gesetzesprozesse, gesetzesprozessSubmissions } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, enablers, enablerSubmissions, profiles, useCases, useCaseSubmissions, Geschäftsprozesse, gesetzesprozessSubmissions } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
   try {
@@ -121,14 +121,14 @@ export async function GET(req: NextRequest) {
           attemptNumber: gesetzesprozessSubmissions.attemptNumber,
         })
         .from(gesetzesprozessSubmissions)
-        .leftJoin(gesetzesprozesse, eq(gesetzesprozesse.id, gesetzesprozessSubmissions.gesetzesprozessId))
-        .where(inArray(gesetzesprozesse.courseId, courseIds));
+        .leftJoin(Geschäftsprozesse, eq(Geschäftsprozesse.id, gesetzesprozessSubmissions.gesetzesprozessId))
+        .where(inArray(Geschäftsprozesse.courseId, courseIds));
       gesetzRows = statuses ? gs.filter((r) => statuses.includes(String(r.status))) : gs;
 
       if (gesetzRows.length) {
         const gIds = Array.from(new Set(gesetzRows.map(r => String(r.gesetzesprozessId))));
         const trIds = Array.from(new Set(gesetzRows.map(r => String(r.traineeId))));
-        const gMapArr = await db.select({ id: gesetzesprozesse.id, title: gesetzesprozesse.title }).from(gesetzesprozesse).where(inArray(gesetzesprozesse.id, gIds));
+        const gMapArr = await db.select({ id: Geschäftsprozesse.id, title: Geschäftsprozesse.title }).from(Geschäftsprozesse).where(inArray(Geschäftsprozesse.id, gIds));
         const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
         const gMap = Object.fromEntries(gMapArr.map((e) => [String(e.id), e.title]));
         const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));

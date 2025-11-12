@@ -4,9 +4,9 @@ import { and, eq } from 'drizzle-orm';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ gesetzesprozessId: string }> }) {
   try {
-    const { gesetzesprozesse } = await import('@/db/migrations/schemas/schema');
+    const { Geschäftsprozesse } = await import('@/db/migrations/schemas/schema');
     const { gesetzesprozessId } = await params;
-    const [row] = await db.select().from(gesetzesprozesse).where(eq(gesetzesprozesse.id, gesetzesprozessId as any));
+    const [row] = await db.select().from(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any));
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ gesetzesprozess: row });
   } catch (e) {
@@ -17,12 +17,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ges
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ gesetzesprozessId: string }> }) {
   try {
-    const { gesetzesprozesse, courseMembers, courses, notifications } = await import('@/db/migrations/schemas/schema');
+    const { Geschäftsprozesse, courseMembers, courses, notifications } = await import('@/db/migrations/schemas/schema');
     const { gesetzesprozessId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    const [row0] = await db.select().from(gesetzesprozesse).where(eq(gesetzesprozesse.id, gesetzesprozessId as any));
+    const [row0] = await db.select().from(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any));
     if (!row0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const member = await db
       .select()
@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ge
     if (typeof body?.isActive === 'boolean' && body.isActive && !row0.isActive && !row0.activatedAt) {
       updates.activatedAt = new Date();
     }
-    const [row] = await db.update(gesetzesprozesse).set(updates).where(eq(gesetzesprozesse.id, gesetzesprozessId as any)).returning();
+    const [row] = await db.update(Geschäftsprozesse).set(updates).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any)).returning();
 
     try {
       if (updates.activatedAt) {
@@ -79,12 +79,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ge
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ gesetzesprozessId: string }> }) {
   try {
-    const { gesetzesprozesse, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
+    const { Geschäftsprozesse, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
     const { gesetzesprozessId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    const [row0] = await db.select().from(gesetzesprozesse).where(eq(gesetzesprozesse.id, gesetzesprozessId as any));
+    const [row0] = await db.select().from(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any));
     if (!row0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const member = await db
       .select()
@@ -93,7 +93,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ g
     const [courseRow] = await db.select().from(courses).where(eq(courses.id, row0.courseId as any));
     const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
     if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    await db.delete(gesetzesprozesse).where(eq(gesetzesprozesse.id, gesetzesprozessId as any));
+    await db.delete(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any));
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('Delete gesetzesprozess error', e);
