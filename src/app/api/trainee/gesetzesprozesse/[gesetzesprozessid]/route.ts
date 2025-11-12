@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { gesetzesprozesse, gesetzesprozessSubmissions, gesetzesprozessSubmissionLinks, courseMembers } from '@/db/migrations/schemas/schema';
+import { Geschäftsprozesse, gesetzesprozessSubmissions, gesetzesprozessSubmissionLinks, courseMembers } from '@/db/migrations/schemas/schema';
 
 // GET trainee-facing gesetzesprozess detail; include latest submission by trainee
 // query: traineeId
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ gese
     const { gesetzesprozessid } = await params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
-    const [g] = await db.select().from(gesetzesprozesse).where(eq(gesetzesprozesse.id, gesetzesprozessid as any));
+    const [g] = await db.select().from(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessid as any));
     if (!g || !g.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const [member] = await db

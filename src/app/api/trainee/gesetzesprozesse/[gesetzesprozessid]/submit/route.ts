@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { gesetzesprozesse, gesetzesprozessSubmissions, gesetzesprozessSubmissionLinks, courseMembers, notifications, courses } from '@/db/migrations/schemas/schema';
+import { Geschäftsprozesse, gesetzesprozessSubmissions, gesetzesprozessSubmissionLinks, courseMembers, notifications, courses } from '@/db/migrations/schemas/schema';
 
 // POST submit a gesetzesprozess submission (creates new attempt or updates with incremented attemptNumber)
 // Body: { traineeId: string, submissionText?: string, links?: Array<{ url: string, description?: string }> }
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ges
     const links: Array<{ url: string; description?: string }> = Array.isArray(body?.links) ? body.links : [];
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
-    const [g] = await db.select().from(gesetzesprozesse).where(eq(gesetzesprozesse.id, gesetzesprozessid as any));
+    const [g] = await db.select().from(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessid as any));
     if (!g || !g.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const [member] = await db
       .select()
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ges
           type: 'GESETZESPROZESS_SUBMITTED',
           title: 'Gesetzesprozess eingereicht',
           message: `Ein Trainee hat einen Gesetzesprozess eingereicht: ${g.title}`,
-          linkUrl: '/trainer/reviews?view=gesetzesprozesse&onlyPending=true',
+          linkUrl: '/trainer/reviews?view=Geschäftsprozesse&onlyPending=true',
           context: { gesetzesprozessId: gesetzesprozessid, submissionId: result },
         }));
         await db.insert(notifications).values(values);

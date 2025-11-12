@@ -235,7 +235,7 @@ export function ContentManagement() {
                 
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
-                    <h4 className="text-foreground text-sm font-medium">Gesetzesprozesse</h4>
+                    <h4 className="text-foreground text-sm font-medium">Geschäftsprozesse</h4>
                     <p className="text-muted text-xs">{course.gpCount} Aufgaben</p>
                   </div>
                   <button
@@ -366,7 +366,7 @@ export function ContentManagement() {
                   <div className="flex-1">
                     <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
                       <FileText className="h-4 w-4" />
-                      <span className="truncate">Gesetzesprozesse: {course.gpCount}</span>
+                      <span className="truncate">Geschäftsprozesse: {course.gpCount}</span>
                     </h4>
                   </div>
                 </div>

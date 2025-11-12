@@ -4,23 +4,23 @@ import { and, eq, max } from 'drizzle-orm';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
-    const { gesetzesprozesse } = await import('@/db/migrations/schemas/schema');
+    const { Geschäftsprozesse } = await import('@/db/migrations/schemas/schema');
     const { courseId } = await params;
     const list = await db
-      .select({ id: gesetzesprozesse.id, title: gesetzesprozesse.title, orderIndex: gesetzesprozesse.orderIndex, isActive: gesetzesprozesse.isActive })
-      .from(gesetzesprozesse)
-      .where(eq(gesetzesprozesse.courseId, courseId as any))
-      .orderBy(gesetzesprozesse.orderIndex);
-    return NextResponse.json({ gesetzesprozesse: list });
+      .select({ id: Geschäftsprozesse.id, title: Geschäftsprozesse.title, orderIndex: Geschäftsprozesse.orderIndex, isActive: Geschäftsprozesse.isActive })
+      .from(Geschäftsprozesse)
+      .where(eq(Geschäftsprozesse.courseId, courseId as any))
+      .orderBy(Geschäftsprozesse.orderIndex);
+    return NextResponse.json({ Geschäftsprozesse: list });
   } catch (e) {
-    console.error('List gesetzesprozesse error', e);
+    console.error('List Geschäftsprozesse error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest, { params }: { params: { courseId: string } }) {
   try {
-    const { gesetzesprozesse, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
+    const { Geschäftsprozesse, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
@@ -48,15 +48,15 @@ export async function POST(req: NextRequest, { params }: { params: { courseId: s
     let finalOrderIndex = orderIndex;
     if (typeof finalOrderIndex === 'undefined' || Number.isNaN(finalOrderIndex)) {
       const [m] = await db
-        .select({ m: max(gesetzesprozesse.orderIndex) })
-        .from(gesetzesprozesse)
-        .where(eq(gesetzesprozesse.courseId, courseId as any));
+        .select({ m: max(Geschäftsprozesse.orderIndex) })
+        .from(Geschäftsprozesse)
+        .where(eq(Geschäftsprozesse.courseId, courseId as any));
       finalOrderIndex = (Number(m?.m ?? 0) || 0) + 1;
     }
 
     const activatedAt = isActive ? new Date() : null;
     const [inserted] = await db
-      .insert(gesetzesprozesse)
+      .insert(Geschäftsprozesse)
       .values({
         courseId: courseId as any,
         title,

@@ -18,8 +18,8 @@ export default function EditCoursePage() {
   const [skills, setSkills] = useState<string>('');
   const [enablers, setEnablers] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
   const [useCases, setUseCases] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
-  // Gesetzesprozesse (gesetz processes) list
-  const [gesetzesprozesse, setGesetzesprozesse] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
+  // Geschäftsprozesse (gesetz processes) list
+  const [Geschäftsprozesse, setGeschäftsprozesse] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
   const [membersTrainers, setMembersTrainers] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
   const [membersTrainees, setMembersTrainees] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
   const [searchTrainer, setSearchTrainer] = useState('');
@@ -92,7 +92,7 @@ export default function EditCoursePage() {
         setSkills((data.skills || []).join(', '));
         setEnablers((data.enablers || []).map((e: any) => ({ id: e.id, title: e.title, isActive: !!e.isActive })));
         setUseCases((data.useCases || []).map((u: any) => ({ id: u.id, title: u.title, isActive: !!u.isActive })));
-  setGesetzesprozesse((data.gesetzesprozesse || []).map((g: any) => ({ id: g.id, title: g.title, isActive: !!g.isActive })));
+  setGeschäftsprozesse((data.Geschäftsprozesse || []).map((g: any) => ({ id: g.id, title: g.title, isActive: !!g.isActive })));
         // load members
           const memRes = await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { cache: 'no-store' });
         if (memRes.ok) {
@@ -369,11 +369,11 @@ export default function EditCoursePage() {
           </button>
         </div>
 
-        {/* Gesetzesprozesse Section */}
+        {/* Geschäftsprozesse Section */}
         <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
-          <div className="mb-3 text-sm font-semibold">Gesetzesprozesse</div>
+          <div className="mb-3 text-sm font-semibold">Geschäftsprozesse</div>
           <ul className="space-y-2">
-            {gesetzesprozesse.map((g) => (
+            {Geschäftsprozesse.map((g) => (
               <li key={g.id} className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="truncate font-medium">{g.title}</span>
@@ -384,10 +384,10 @@ export default function EditCoursePage() {
                     type="button"
                     className="text-xs rounded-md border border-accent/30 px-2 py-1"
                     onClick={async () => {
-                      await fetch(`/api/trainer/gesetzesprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !g.isActive }) });
+                      await fetch(`/api/trainer/Geschäftsprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !g.isActive }) });
                       const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
                       const data = await r.json();
-                      setGesetzesprozesse((data.gesetzesprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                      setGeschäftsprozesse((data.Geschäftsprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                     }}
                   >
                     {g.isActive ? 'Deaktivieren' : 'Aktivieren'}
@@ -398,7 +398,7 @@ export default function EditCoursePage() {
                     onClick={async () => {
                       try {
                         setEditingGesetzesprozessId(g.id);
-                        const gr = await fetch(`/api/trainer/gesetzesprozesse/${g.id}`);
+                        const gr = await fetch(`/api/trainer/Geschäftsprozesse/${g.id}`);
                         if (gr.ok) {
                           const gj = await gr.json();
                           const gp = gj.gesetzesprozess || {};
@@ -428,11 +428,11 @@ export default function EditCoursePage() {
                       const ok = window.confirm('Diesen Gesetzesprozess wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
                       if (!ok) return;
                       try {
-                        const del = await fetch(`/api/trainer/gesetzesprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                        const del = await fetch(`/api/trainer/Geschäftsprozesse/${g.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
                         if (!del.ok) throw new Error('Löschen fehlgeschlagen');
                         const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
                         const data = await r.json();
-                        setGesetzesprozesse((data.gesetzesprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                        setGeschäftsprozesse((data.Geschäftsprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                       } catch (err: any) {
                         alert(err?.message || 'Unbekannter Fehler');
                       }
@@ -744,11 +744,11 @@ export default function EditCoursePage() {
                   if (!gpDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
                   setGpSubmitting(true);
                   try {
-                    const res = await fetch(`/api/trainer/courses/${courseId}/gesetzesprozesse?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpTitle.trim(), descriptionText: gpDesc.trim(), durationValue: gpDuration ? Number(gpDuration) : undefined, durationUnit: gpDuration ? 'DAYS' : undefined, isActive: gpActive }) });
+                    const res = await fetch(`/api/trainer/courses/${courseId}/Geschäftsprozesse?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpTitle.trim(), descriptionText: gpDesc.trim(), durationValue: gpDuration ? Number(gpDuration) : undefined, durationUnit: gpDuration ? 'DAYS' : undefined, isActive: gpActive }) });
                     if (!res.ok) throw new Error('Gesetzesprozess konnte nicht erstellt werden');
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();
-                    setGesetzesprozesse((fresh.gesetzesprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                    setGeschäftsprozesse((fresh.Geschäftsprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                     setShowAddGesetzesprozess(false);
                     setGpTitle(''); setGpDesc(''); setGpDuration(''); setGpActive(false);
                   } catch (e: any) {
@@ -996,11 +996,11 @@ export default function EditCoursePage() {
                   if (!gpEditTitle.trim()) { alert('Bitte Titel eingeben'); return; }
                   if (!gpEditDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
                   try {
-                    const pr = await fetch(`/api/trainer/gesetzesprozesse/${editingGesetzesprozessId}?trainerId=${trainerId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpEditTitle.trim(), descriptionText: gpEditDesc.trim(), durationValue: gpEditDuration ? Number(gpEditDuration) : null, durationUnit: gpEditDuration ? 'DAYS' : null, isActive: gpEditActive }) });
+                    const pr = await fetch(`/api/trainer/Geschäftsprozesse/${editingGesetzesprozessId}?trainerId=${trainerId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: gpEditTitle.trim(), descriptionText: gpEditDesc.trim(), durationValue: gpEditDuration ? Number(gpEditDuration) : null, durationUnit: gpEditDuration ? 'DAYS' : null, isActive: gpEditActive }) });
                     if (!pr.ok) throw new Error('Update fehlgeschlagen');
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();
-                    setGesetzesprozesse((fresh.gesetzesprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                    setGeschäftsprozesse((fresh.Geschäftsprozesse || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                     setShowEditGesetzesprozess(false);
                     setEditingGesetzesprozessId(null);
                   } catch (e: any) {

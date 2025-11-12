@@ -7,7 +7,7 @@ import {
   useCaseSubmissions,
   useCases,
   gesetzesprozessSubmissions,
-  gesetzesprozesse,
+  Geschäftsprozesse,
   quizSubmissions,
   quizzes,
   enablerQuizzes,
@@ -66,10 +66,10 @@ export async function GET(req: NextRequest) {
         submittedAt: gesetzesprozessSubmissions.submittedAt,
         reviewedAt: gesetzesprozessSubmissions.reviewedAt,
         attemptNumber: gesetzesprozessSubmissions.attemptNumber,
-        gesetzesprozessTitle: gesetzesprozesse.title,
+        gesetzesprozessTitle: Geschäftsprozesse.title,
       })
       .from(gesetzesprozessSubmissions)
-      .innerJoin(gesetzesprozesse, eq(gesetzesprozessSubmissions.gesetzesprozessId, gesetzesprozesse.id))
+      .innerJoin(Geschäftsprozesse, eq(gesetzesprozessSubmissions.gesetzesprozessId, Geschäftsprozesse.id))
       .where(eq(gesetzesprozessSubmissions.traineeId, traineeId as any))
       .orderBy(desc(gesetzesprozessSubmissions.submittedAt))
       .limit(200);

@@ -22,7 +22,7 @@ export default function TraineeGesetzesprozessDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const r = await fetch(`/api/trainee/gesetzesprozesse/${gesetzesprozessId}?traineeId=${profile.id}`, { cache: 'no-store' });
+        const r = await fetch(`/api/trainee/Geschäftsprozesse/${gesetzesprozessId}?traineeId=${profile.id}`, { cache: 'no-store' });
         if (!r.ok) throw new Error('Gesetzesprozess konnte nicht geladen werden');
         const data = await r.json();
         setItem(data.gesetzesprozess);
@@ -50,7 +50,7 @@ export default function TraineeGesetzesprozessDetailPage() {
         submissionText: submissionText || null,
         links: links.filter((l) => l.url && l.url.trim()),
       };
-      const r = await fetch(`/api/trainee/gesetzesprozesse/${gesetzesprozessId}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const r = await fetch(`/api/trainee/Geschäftsprozesse/${gesetzesprozessId}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
       setSuccess('Abgabe gespeichert. Status: Ausstehend');
     } catch (e: any) {

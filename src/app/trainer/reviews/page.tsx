@@ -18,7 +18,7 @@ export default function TrainerReviewsPage() {
   const onlyPendingParam = searchParams.get('onlyPending'); // 'true' | 'false'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'enablers' | 'gesetzesprozesse' | 'usecases' | 'quizzes' | 'reflections'>('enablers');
+  const [activeTab, setActiveTab] = useState<'enablers' | 'Geschäftsprozesse' | 'usecases' | 'quizzes' | 'reflections'>('enablers');
 
   // Enabler/UseCase state
   const [enablerSubs, setEnablerSubs] = useState<EnablerReviewItem[]>([]);
@@ -44,7 +44,7 @@ export default function TrainerReviewsPage() {
 
   // Sync state from URL params (deep-linking from dashboard)
   useEffect(() => {
-  const allowed = ['enablers', 'gesetzesprozesse', 'usecases', 'quizzes', 'reflections'] as const;
+  const allowed = ['enablers', 'Geschäftsprozesse', 'usecases', 'quizzes', 'reflections'] as const;
     if (viewParam && (allowed as readonly string[]).includes(viewParam)) {
       setActiveTab(viewParam as any);
     }
@@ -58,7 +58,7 @@ export default function TrainerReviewsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewParam, onlyPendingParam]);
 
-  // load Enablers/UseCases/Gesetzesprozesse
+  // load Enablers/UseCases/Geschäftsprozesse
   useEffect(() => {
     const loadEU = async () => {
       if (!profile?.id) return;
@@ -78,7 +78,7 @@ export default function TrainerReviewsPage() {
         setLoading(false);
       }
     };
-    if (activeTab === 'enablers' || activeTab === 'usecases' || activeTab === 'gesetzesprozesse') loadEU();
+    if (activeTab === 'enablers' || activeTab === 'usecases' || activeTab === 'Geschäftsprozesse') loadEU();
   }, [profile?.id, statusFilter, activeTab]);
 
   // load Quizzes/Reflections
@@ -115,7 +115,7 @@ export default function TrainerReviewsPage() {
       ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
       : kind === 'usecase'
         ? `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`
-        : `/api/trainer/reviews/gesetzesprozesse/${id}?trainerId=${profile.id}`;
+        : `/api/trainer/reviews/Geschäftsprozesse/${id}?trainerId=${profile.id}`;
     const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, trainerFeedback: feedback }) });
     if (!r.ok) {
       alert('Konnte Review nicht speichern');
@@ -155,7 +155,7 @@ export default function TrainerReviewsPage() {
     setQuizzes(data.submissions || []);
   };
 
-  const forcedView = viewParam === 'enablers' || viewParam === 'gesetzesprozesse' || viewParam === 'usecases' || viewParam === 'quizzes' || viewParam === 'reflections';
+  const forcedView = viewParam === 'enablers' || viewParam === 'Geschäftsprozesse' || viewParam === 'usecases' || viewParam === 'quizzes' || viewParam === 'reflections';
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -167,18 +167,18 @@ export default function TrainerReviewsPage() {
         {!forcedView ? (
           <>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='enablers'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Enabler</button>
-            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='gesetzesprozesse'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('gesetzesprozesse')}>Gesetzesprozesse</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='Geschäftsprozesse'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('Geschäftsprozesse')}>Geschäftsprozesse</button>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='usecases'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='quizzes'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='reflections'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
           </>
         ) : (
           <div className="rounded-xl border border-accent/30 bg-black/30 px-3 py-1.5 text-sm">
-            {activeTab === 'enablers' ? 'Enabler' : activeTab === 'gesetzesprozesse' ? 'Gesetzesprozesse' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
+            {activeTab === 'enablers' ? 'Enabler' : activeTab === 'Geschäftsprozesse' ? 'Geschäftsprozesse' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
           </div>
         )}
         <div className="ml-auto flex items-center gap-2 text-sm">
-          {activeTab === 'enablers' || activeTab === 'gesetzesprozesse' || activeTab === 'usecases' ? (
+          {activeTab === 'enablers' || activeTab === 'Geschäftsprozesse' || activeTab === 'usecases' ? (
             <>
               <span>Filter:</span>
               <select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
@@ -250,7 +250,7 @@ export default function TrainerReviewsPage() {
         </div>
       )}
 
-      {!loading && activeTab==='gesetzesprozesse' && (
+      {!loading && activeTab==='Geschäftsprozesse' && (
         <div className="space-y-4">
           {gesetzSubs.length === 0 && <div className="text-sm text-muted-foreground">Keine Einreichungen</div>}
           {gesetzSubs.map(it => (
