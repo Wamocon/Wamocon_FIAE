@@ -2,23 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ gesetzesprozessId: string }> }) {
+export async function GET(_req: NextRequest, { params }: { params: { gesetzesprozessId: string } }) {
   try {
     const { Geschäftsprozesse } = await import('@/db/migrations/schemas/schema');
-    const { gesetzesprozessId } = await params;
+    const { gesetzesprozessId } = params;
     const [row] = await db.select().from(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any));
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ gesetzesprozess: row });
+    return NextResponse.json({ geschäftsprozesse: row });
   } catch (e) {
-    console.error('Get gesetzesprozess error', e);
+    console.error('Get geschäftsprozesse error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ gesetzesprozessId: string }> }) {
+export async function PATCH(req: NextRequest, { params }: { params: { gesetzesprozessId: string } }) {
   try {
     const { Geschäftsprozesse, courseMembers, courses, notifications } = await import('@/db/migrations/schemas/schema');
-    const { gesetzesprozessId } = await params;
+    const { gesetzesprozessId } = params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ge
     if (typeof body?.isActive === 'boolean' && body.isActive && !row0.isActive && !row0.activatedAt) {
       updates.activatedAt = new Date();
     }
-    const [row] = await db.update(Geschäftsprozesse).set(updates).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any)).returning();
+  const [row] = await db.update(Geschäftsprozesse).set(updates).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any)).returning();
 
     try {
       if (updates.activatedAt) {
@@ -59,28 +59,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ge
             userId: String(m.userId),
             actorId: trainerId,
             type: 'USE_CASE_ACTIVATED',
-            title: 'Neuer Gesetzesprozess aktiviert',
-            message: `Ein Gesetzesprozess wurde aktiviert: ${row0.title}`,
+            title: 'Neuer geschäftsprozesse aktiviert',
+            message: `Ein geschäftsprozesse wurde aktiviert: ${row0.title}`,
             linkUrl: '/trainee/modules',
-            context: { gesetzesprozessId, courseId: row0.courseId },
+            context: { geschäftsprozesseId: gesetzesprozessId, courseId: row0.courseId },
           }));
           await db.insert(notifications).values(values);
         }
       }
     } catch (notifyErr) {
-      console.warn('Failed to notify trainees for gesetzesprozess activation', notifyErr);
+      console.warn('Failed to notify trainees for geschäftsprozesse activation', notifyErr);
     }
-    return NextResponse.json({ gesetzesprozess: row });
+    return NextResponse.json({ geschäftsprozesse: row });
   } catch (e) {
-    console.error('Update gesetzesprozess error', e);
+    console.error('Update geschäftsprozesse error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ gesetzesprozessId: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: { gesetzesprozessId: string } }) {
   try {
     const { Geschäftsprozesse, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
-    const { gesetzesprozessId } = await params;
+    const { gesetzesprozessId } = params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -96,7 +96,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ g
     await db.delete(Geschäftsprozesse).where(eq(Geschäftsprozesse.id, gesetzesprozessId as any));
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error('Delete gesetzesprozess error', e);
+    console.error('Delete geschäftsprozesse error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -6,7 +6,7 @@ import {
   enablers,
   useCaseSubmissions,
   useCases,
-  gesetzesprozessSubmissions,
+  geschäftsprozesseSubmissions,
   Geschäftsprozesse,
   quizSubmissions,
   quizzes,
@@ -56,22 +56,22 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(useCaseSubmissions.submittedAt))
       .limit(200);
 
-    // Gesetzesprozess submissions with titles
+    // geschäftsprozesse submissions with titles
     const gesetzRows = await db
       .select({
-        id: gesetzesprozessSubmissions.id,
-        gesetzesprozessId: gesetzesprozessSubmissions.gesetzesprozessId,
-        status: gesetzesprozessSubmissions.status,
-        trainerFeedback: gesetzesprozessSubmissions.trainerFeedback,
-        submittedAt: gesetzesprozessSubmissions.submittedAt,
-        reviewedAt: gesetzesprozessSubmissions.reviewedAt,
-        attemptNumber: gesetzesprozessSubmissions.attemptNumber,
-        gesetzesprozessTitle: Geschäftsprozesse.title,
+        id: geschäftsprozesseSubmissions.id,
+        geschäftsprozesseId: geschäftsprozesseSubmissions.geschäftsprozesseId,
+        status: geschäftsprozesseSubmissions.status,
+        trainerFeedback: geschäftsprozesseSubmissions.trainerFeedback,
+        submittedAt: geschäftsprozesseSubmissions.submittedAt,
+        reviewedAt: geschäftsprozesseSubmissions.reviewedAt,
+        attemptNumber: geschäftsprozesseSubmissions.attemptNumber,
+        geschäftsprozesseTitle: Geschäftsprozesse.title,
       })
-      .from(gesetzesprozessSubmissions)
-      .innerJoin(Geschäftsprozesse, eq(gesetzesprozessSubmissions.gesetzesprozessId, Geschäftsprozesse.id))
-      .where(eq(gesetzesprozessSubmissions.traineeId, traineeId as any))
-      .orderBy(desc(gesetzesprozessSubmissions.submittedAt))
+      .from(geschäftsprozesseSubmissions)
+      .innerJoin(Geschäftsprozesse, eq(geschäftsprozesseSubmissions.geschäftsprozesseId, Geschäftsprozesse.id))
+      .where(eq(geschäftsprozesseSubmissions.traineeId, traineeId as any))
+      .orderBy(desc(geschäftsprozesseSubmissions.submittedAt))
       .limit(200);
 
     // Enabler quiz submissions: join quizSubmissions -> quizzes (quizType ENABLER) -> enablerQuizzes -> enablers for title
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       enablerResults: enablerRows,
       useCaseResults: useCaseRows,
-      gesetzesprozessResults: gesetzRows,
+      geschäftsprozesseResults: gesetzRows,
       enablerQuizResults,
       globalQuizResults,
     });

@@ -8,9 +8,9 @@ import { useAuth } from '@/contexts/AuthContext';
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
 type QuizOption = { id: string; optionText: string; explanation?: string | null };
-type QuizQuestion = { id: string; questionText: string; options: QuizOption[] };
+type QuizQuestion = { id: string; questionText: string; questionType?: 'MCQ'|'TEXT'; options: QuizOption[] };
 type QuizContent = { quizId: string; title: string; questions: QuizQuestion[] };
-type QuizFeedback = { questionId: string; correct: boolean; correctOptionId?: string; selectedOptionId?: string; explanation?: string | null };
+type QuizFeedback = { questionId: string; correct: boolean; correctOptionId?: string|null; selectedOptionId?: string|null; selectedText?: string|null; correctAnswerText?: string|null; explanation?: string | null };
 type GatedQuizInfo = { difficulty: Difficulty; quizId?: string; title?: string; unlocked: boolean; isActive?: boolean; completed?: boolean };
 
 export default function TraineeEnablerPage() {
@@ -82,6 +82,7 @@ export default function TraineeEnablerPage() {
         questions: (j.quiz?.questions || j.questions || []).map((q: any) => ({
           id: String(q.id),
           questionText: String(q.questionText || q.question),
+          questionType: (q.questionType as any) || 'MCQ',
           options: (q.options || []).map((o: any) => ({
             id: String(o.id),
             optionText: String(o.optionText || o.text || o.value),
@@ -110,7 +111,8 @@ export default function TraineeEnablerPage() {
             if (Array.isArray(vj.feedback)) {
               const ans: Record<string, string> = {};
               vj.feedback.forEach((f: any) => {
-                if (f.selectedOptionId) ans[String(f.questionId)] = String(f.selectedOptionId);
+              if (f.selectedOptionId) ans[String(f.questionId)] = String(f.selectedOptionId);
+              if (!f.selectedOptionId && f.selectedText) ans[String(f.questionId)] = String(f.selectedText);
               });
               setAnswers(ans);
             }
@@ -124,9 +126,18 @@ export default function TraineeEnablerPage() {
 
   const submitQuiz = async () => {
     if (!profile?.id || !quizContent?.quizId) return setError('Profil oder Quiz-ID fehlt');
+    // Build answers payload including text answers
+    const payloadAnswers = quizContent.questions.map(q => {
+      const val = answers[q.id];
+      if (q.questionType === 'TEXT' || q.options.length === 0) {
+        return { questionId: q.id, textAnswer: val || '' };
+      } else {
+        return { questionId: q.id, selectedOptionId: val || '' };
+      }
+    });
     const payload = {
       traineeId: profile.id,
-      answers: Object.entries(answers).map(([questionId, selectedOptionId]) => ({ questionId, selectedOptionId })),
+      answers: payloadAnswers,
     };
     try {
       const r = await fetch(`/api/trainee/quizzes/${quizContent.quizId}/submit`, {
@@ -285,7 +296,18 @@ export default function TraineeEnablerPage() {
                   <div className="space-y-3">
                     <div className="font-medium">{currentQuestion.questionText}</div>
                     <div className="space-y-2">
-                      {currentQuestion.options.map(o => (
+                      {(currentQuestion.questionType === 'TEXT' || currentQuestion.options.length === 0) ? (
+                        <div>
+                          <textarea
+                            className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2"
+                            rows={3}
+                            placeholder="Antwort eingeben..."
+                            value={answers[currentQuestion.id] || ''}
+                            onChange={(e) => setAnswers(prev => ({ ...prev, [currentQuestion.id]: e.target.value }))}
+                          />
+                        </div>
+                      ) : (
+                        currentQuestion.options.map(o => (
                         <label key={o.id} className="flex items-center gap-2">
                           <input
                             type="radio"
@@ -295,7 +317,8 @@ export default function TraineeEnablerPage() {
                           />
                           <span>{o.optionText}</span>
                         </label>
-                      ))}
+                      ))
+                    )}
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">
@@ -310,7 +333,7 @@ export default function TraineeEnablerPage() {
                         <button
                           className="rounded-md border border-accent/30 px-3 py-1.5 hover:bg-background/60 disabled:opacity-60"
                           onClick={() => setCurrentIndex(i => Math.min(quizContent.questions.length - 1, i + 1))}
-                          disabled={!answers[currentQuestion.id]}
+                          disabled={currentQuestion.questionType === 'TEXT' ? !String(answers[currentQuestion.id] || '').trim() : !answers[currentQuestion.id]}
                         >
                           Weiter
                         </button>
@@ -318,7 +341,7 @@ export default function TraineeEnablerPage() {
                         <button
                           className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                           onClick={submitQuiz}
-                          disabled={Object.keys(answers).length !== quizContent.questions.length}
+                          disabled={quizContent.questions.some(q => q.questionType === 'TEXT' ? !String(answers[q.id] || '').trim() : !answers[q.id])}
                         >
                           Quiz abgeben
                         </button>
@@ -336,14 +359,20 @@ export default function TraineeEnablerPage() {
                   {quizContent.questions.map(q => {
                     const fb = result?.feedback.find(f => String(f.questionId) === String(q.id));
                     const chosen = answers[q.id];
-                    const correctOption = q.options.find(o => String(o.id) === String(fb?.correctOptionId));
+                    const correctOption = q.options.find(o => String(o.id) === String(fb?.correctOptionId || ''));
                     const explanation = fb?.explanation || correctOption?.explanation;
                     return (
                       <li key={q.id} className={`rounded-xl border p-3 ${fb?.correct ? 'border-green-600/50 bg-green-500/10' : 'border-red-600/50 bg-red-500/10'}`}>
                         <div className="font-medium">{q.questionText}</div>
-                        <div className="mt-1 text-sm">Deine Antwort: {q.options.find(o => String(o.id) === String(chosen))?.optionText || '-'}</div>
-                        {!fb?.correct && (
-                          <div className="mt-1 text-sm text-green-400">Richtig: {correctOption?.optionText || '-'}</div>
+                        <div className="mt-1 text-sm">
+                          Deine Antwort: {q.questionType === 'TEXT' || q.options.length === 0
+                            ? (fb?.selectedText || chosen || '-')
+                            : (q.options.find(o => String(o.id) === String(chosen))?.optionText || '-')}
+                        </div>
+                        {q.questionType !== 'TEXT' && !fb?.correct && (
+                          <div className="mt-1 text-sm text-green-400">
+                            Richtig: {correctOption?.optionText || '-'}
+                          </div>
                         )}
                         {explanation && (
                           <div className="mt-2 rounded-md border border-accent/20 bg-black/30 p-2 text-xs text-muted-foreground">Erklärung: {explanation}</div>

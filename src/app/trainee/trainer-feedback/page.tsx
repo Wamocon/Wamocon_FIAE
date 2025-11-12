@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type UseCaseResult = { id: string; useCaseId: string; useCaseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type EnablerQuizResult = { id: string; enablerId: string; enablerTitle: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
-type GesetzResult = { id: string; gesetzesprozessId: string; gesetzesprozessTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
+type GesetzResult = { id: string; geschäftsprozesseId: string; geschäftsprozesseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type GlobalQuizResult = { id: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
 
 export default function TraineeFeedbackPage() {
@@ -27,7 +27,7 @@ export default function TraineeFeedbackPage() {
         const data = await res.json();
   setEnablers(data.enablerResults || []);
   setUseCases(data.useCaseResults || []);
-  setGesetzes(data.gesetzesprozessResults || []);
+  setGesetzes(data.geschäftsprozesseResults || []);
         const quizResults = (data.enablerQuizResults || []) as EnablerQuizResult[];
         setQuizzes(
           quizResults.map((q) => ({
@@ -147,9 +147,9 @@ export default function TraineeFeedbackPage() {
       </div>
 
       {/* Use case submissions */}
-      {/* Gesetzesprozess submissions */}
+      {/* geschäftsprozesse submissions */}
       <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-        <h2 className="text-foreground mb-4 text-xl font-semibold">Gesetzesprozess-Einreichungen</h2>
+        <h2 className="text-foreground mb-4 text-xl font-semibold">geschäftsprozesse-Einreichungen</h2>
         {gesetzes.length === 0 ? (
           <div className="text-muted-foreground">Keine Einreichungen.</div>
         ) : (
@@ -158,7 +158,7 @@ export default function TraineeFeedbackPage() {
               <li key={g.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
                 <div className="flex items-center justify-between">
                   <div className="font-semibold">
-                    {g.gesetzesprozessTitle}
+                    {g.geschäftsprozesseTitle}
                     {g.attemptNumber ? <span className="ml-2 text-xs rounded-full border border-accent/30 px-2 py-0.5">Versuch {g.attemptNumber}</span> : null}
                   </div>
                   {statusPill(g.status)}

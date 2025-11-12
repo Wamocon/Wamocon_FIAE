@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { courses, courseMembers, enablers, useCases, enablerSubmissions, useCaseSubmissions, Geschäftsprozesse, gesetzesprozessSubmissions } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, enablers, useCases, enablerSubmissions, useCaseSubmissions, Geschäftsprozesse, geschäftsprozesseSubmissions } from '@/db/migrations/schemas/schema';
 
 // GET course details for a trainee: includes active enablers and use-cases
 // query: traineeId
@@ -59,9 +59,9 @@ export async function GET(
     const gpIds = gps.map((g) => String(g.id));
     const gpAttempts = gpIds.length
       ? await db
-          .select({ id: gesetzesprozessSubmissions.id, gesetzesprozessId: gesetzesprozessSubmissions.gesetzesprozessId, attemptNumber: gesetzesprozessSubmissions.attemptNumber, submittedAt: gesetzesprozessSubmissions.submittedAt })
-          .from(gesetzesprozessSubmissions)
-          .where(and(eq(gesetzesprozessSubmissions.traineeId, traineeId as any)))
+          .select({ id: geschäftsprozesseSubmissions.id, geschäftsprozesseId: geschäftsprozesseSubmissions.geschäftsprozesseId, attemptNumber: geschäftsprozesseSubmissions.attemptNumber, submittedAt: geschäftsprozesseSubmissions.submittedAt })
+          .from(geschäftsprozesseSubmissions)
+          .where(and(eq(geschäftsprozesseSubmissions.traineeId, traineeId as any)))
       : [];
 
     // Reduce to latest by submittedAt
@@ -81,7 +81,7 @@ export async function GET(
     }
     const latestGp: Record<string, { attemptNumber: number | null }> = {};
     for (const row of gpAttempts) {
-      const key = String((row as any).gesetzesprozessId);
+      const key = String((row as any).geschäftsprozesseId);
       if (!latestGp[key] || new Date(latestGp[key] as any).getTime() < new Date((row as any).submittedAt as any).getTime()) {
         latestGp[key] = { attemptNumber: (row as any).attemptNumber ?? null };
       }

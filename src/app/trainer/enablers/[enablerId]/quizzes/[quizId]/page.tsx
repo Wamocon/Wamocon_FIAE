@@ -5,7 +5,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 
 type Opt = { id: string; optionText: string; isCorrect: boolean; explanation?: string | null };
-type Q = { id: string; questionText: string; orderIndex: number | null; options: Opt[] };
+type Q = {
+  id: string;
+  questionText: string;
+  orderIndex: number | null;
+  questionType?: 'MCQ' | 'TEXT';
+  expectedAnswer?: string | null;
+  options: Opt[];
+};
 
 export default function EditEnablerQuizPage() {
   const params = useParams<{ enablerId: string; quizId: string }>();
@@ -23,11 +30,13 @@ export default function EditEnablerQuizPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   
-  const newBlankQuestion = (): Q => ({
+  const newBlankQuestion = (type: 'MCQ' | 'TEXT' = 'MCQ'): Q => ({
     id: '',
     questionText: '',
     orderIndex: null,
-    options: [0,1,2,3].map((i) => ({ id: '', optionText: '', isCorrect: i===0, explanation: '' }))
+    questionType: type,
+    expectedAnswer: type === 'TEXT' ? '' : null,
+    options: type === 'MCQ' ? [0, 1, 2, 3].map((i) => ({ id: '', optionText: '', isCorrect: i === 0, explanation: '' })) : []
   });
 
   useEffect(() => {
@@ -41,7 +50,14 @@ export default function EditEnablerQuizPage() {
         setTitle(qz.title);
         setIsActive(!!qz.isActive);
         setDifficulty(qz.difficulty);
-        setQuestions(qz.questions || []);
+        setQuestions((qz.questions || []).map((q: any) => ({
+          id: q.id,
+          questionText: q.questionText,
+          orderIndex: q.orderIndex ?? null,
+          questionType: q.questionType || 'MCQ',
+          expectedAnswer: q.expectedAnswer ?? null,
+          options: (q.options || [])
+        })));
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
       } finally {
@@ -130,80 +146,135 @@ export default function EditEnablerQuizPage() {
                   ) : (
                     <div className="text-sm">{q.questionText}</div>
                   )}
+                  {editing && (
+                    <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name={`type-${qi}`}
+                          checked={(q.questionType || 'MCQ') === 'MCQ'}
+                          onChange={() => setQuestions(prev => prev.map((x,i)=> i===qi ? {
+                            ...x,
+                            questionType: 'MCQ',
+                            expectedAnswer: null,
+                            options: x.options && x.options.length ? x.options : [0,1,2,3].map((j) => ({ id: '', optionText: '', isCorrect: j===0, explanation: '' }))
+                          } : x))}
+                        /> Multiple Choice
+                      </label>
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name={`type-${qi}`}
+                          checked={q.questionType === 'TEXT'}
+                          onChange={() => setQuestions(prev => prev.map((x,i)=> i===qi ? {
+                            ...x,
+                            questionType: 'TEXT',
+                            expectedAnswer: x.expectedAnswer ?? '',
+                            options: []
+                          } : x))}
+                        /> Textantwort
+                      </label>
+                    </div>
+                  )}
                   <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                    {q.options.map((o, oi) => (
-                      <div key={o.id || oi} className={`rounded-md border ${o.isCorrect ? 'border-green-400' : 'border-accent/20'} bg-background/30 p-2`}>
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs uppercase tracking-wide">{o.isCorrect ? 'Richtig' : 'Option'}</div>
-                          {editing && (
-                            <label className="flex items-center gap-1 text-xs">
-                              <input
-                                type="radio"
-                                name={`correct-${qi}`}
-                                checked={o.isCorrect}
-                                onChange={() => {
-                                  setQuestions(prev => prev.map((x,i)=> {
-                                    if (i !== qi) return x;
-                                    const prevCorrect = x.options.findIndex(oo => oo.isCorrect);
-                                    const prevExpl = prevCorrect >=0 ? (x.options[prevCorrect].explanation || '') : '';
-                                    return {
-                                      ...x,
-                                      options: x.options.map((oo,j) => {
-                                        if (j === oi) {
-                                          // move prev explanation if new target has none
-                                          return { ...oo, isCorrect: true, explanation: oo.explanation || prevExpl };
-                                        }
-                                        if (j === prevCorrect) {
-                                          return { ...oo, isCorrect: false };
-                                        }
-                                        return { ...oo, isCorrect: false };
-                                      })
-                                    };
-                                  }));
-                                }}
-                              />
-                              <span>Als richtig markieren</span>
-                            </label>
-                          )}
-                        </div>
+                    {q.questionType === 'TEXT' ? (
+                      <div className="col-span-2 space-y-2">
+                        <div className="text-xs uppercase tracking-wide">Textantwort</div>
                         {editing ? (
-                          <input className="mt-1 w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" value={o.optionText} onChange={(e)=> setQuestions(prev => prev.map((x,i)=> i===qi?{...x, options: x.options.map((oo,j)=> j===oi?{...oo, optionText: e.target.value}:oo)}:x))} />
+                          <textarea
+                            rows={2}
+                            className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2"
+                            placeholder="Erwartete korrekte Antwort (optional für automatische Bewertung)"
+                            value={q.expectedAnswer || ''}
+                            onChange={(e)=> setQuestions(prev => prev.map((x,i)=> i===qi?{...x, expectedAnswer: e.target.value}:x))}
+                          />
                         ) : (
-                          <div className="text-sm">{o.optionText}</div>
+                          <div className="text-sm text-muted-foreground">Erwartete Antwort: {q.expectedAnswer || '–'}</div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                  <div className="mt-3">
-                    <label className="mb-1 block text-xs font-medium">Erklärung (für die richtige Antwort)</label>
-                    {editing ? (
-                      <textarea
-                        className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2"
-                        rows={2}
-                        value={correctExplanation}
-                        onChange={(e)=> setQuestions(prev => prev.map((x,i)=> {
-                          if (i !== qi) return x;
-                          const ci = x.options.findIndex(o => o.isCorrect);
-                          return {
-                            ...x,
-                            options: x.options.map((oo,j)=> j===ci? { ...oo, explanation: e.target.value } : oo)
-                          };
-                        }))}
-                      />
                     ) : (
-                      <div className="text-sm text-muted-foreground whitespace-pre-wrap">{correctExplanation || '-'}</div>
+                      q.options.map((o, oi) => (
+                        <div key={o.id || oi} className={`rounded-md border ${o.isCorrect ? 'border-green-400' : 'border-accent/20'} bg-background/30 p-2`}>
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs uppercase tracking-wide">{o.isCorrect ? 'Richtig' : 'Option'}</div>
+                            {editing && (
+                              <label className="flex items-center gap-1 text-xs">
+                                <input
+                                  type="radio"
+                                  name={`correct-${qi}`}
+                                  checked={o.isCorrect}
+                                  onChange={() => {
+                                    setQuestions(prev => prev.map((x,i)=> {
+                                      if (i !== qi) return x;
+                                      const prevCorrect = x.options.findIndex(oo => oo.isCorrect);
+                                      const prevExpl = prevCorrect >=0 ? (x.options[prevCorrect].explanation || '') : '';
+                                      return {
+                                        ...x,
+                                        options: x.options.map((oo,j) => {
+                                          if (j === oi) {
+                                            return { ...oo, isCorrect: true, explanation: oo.explanation || prevExpl };
+                                          }
+                                          if (j === prevCorrect) {
+                                            return { ...oo, isCorrect: false };
+                                          }
+                                          return { ...oo, isCorrect: false };
+                                        })
+                                      };
+                                    }));
+                                  }}
+                                />
+                                <span>Als richtig markieren</span>
+                              </label>
+                            )}
+                          </div>
+                          {editing ? (
+                            <input className="mt-1 w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" value={o.optionText} onChange={(e)=> setQuestions(prev => prev.map((x,i)=> i===qi?{...x, options: x.options.map((oo,j)=> j===oi?{...oo, optionText: e.target.value}:oo)}:x))} />
+                          ) : (
+                            <div className="text-sm">{o.optionText}</div>
+                          )}
+                        </div>
+                      ))
                     )}
                   </div>
+                  {q.questionType !== 'TEXT' && (
+                    <div className="mt-3">
+                      <label className="mb-1 block text-xs font-medium">Erklärung (für die richtige Antwort)</label>
+                      {editing ? (
+                        <textarea
+                          className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2"
+                          rows={2}
+                          value={correctExplanation}
+                          onChange={(e)=> setQuestions(prev => prev.map((x,i)=> {
+                            if (i !== qi) return x;
+                            const ci = x.options.findIndex(o => o.isCorrect);
+                            return {
+                              ...x,
+                              options: x.options.map((oo,j)=> j===ci? { ...oo, explanation: e.target.value } : oo)
+                            };
+                          }))}
+                        />
+                      ) : (
+                        <div className="text-sm text-muted-foreground whitespace-pre-wrap">{correctExplanation || '-'}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
           {editing && (
-            <button
-              type="button"
-              className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
-              onClick={() => setQuestions(prev => [...prev, newBlankQuestion()])}
-            >+ Frage hinzufügen</button>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
+                onClick={() => setQuestions(prev => [...prev, newBlankQuestion('MCQ')])}
+              >+ MCQ Frage</button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
+                onClick={() => setQuestions(prev => [...prev, newBlankQuestion('TEXT')])}
+              >+ Textfrage</button>
+            </div>
           )}
         </div>
 
@@ -218,10 +289,11 @@ export default function EditEnablerQuizPage() {
                   title,
                   isActive,
                   difficulty,
-                  questions: questions.map((q) => ({
-                    questionText: q.questionText,
-                    options: q.options.map((o) => ({ optionText: o.optionText, isCorrect: o.isCorrect, explanation: (o.explanation ?? '') || null })),
-                  })),
+                  questions: questions.map((q) => (
+                    (q.questionType === 'TEXT')
+                      ? ({ questionText: q.questionText, questionType: 'TEXT', expectedAnswer: q.expectedAnswer })
+                      : ({ questionText: q.questionText, questionType: 'MCQ', options: q.options.map((o) => ({ optionText: o.optionText, isCorrect: o.isCorrect, explanation: (o.explanation ?? '') || null })) })
+                  )),
                 };
                 const r = await fetch(`/api/trainer/enablers/${enablerId}/quizzes/${quizId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!r.ok) throw new Error('Speichern fehlgeschlagen');

@@ -78,7 +78,7 @@ export default function TraineeModuleDetailPage() {
               {Geschäftsprozesse.map((g) => (
                 <li key={g.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
                   <span className="truncate">{g.title} {g.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {g.attemptNumber}</span> : null}</span>
-                  <a href={`/trainee/Geschäftsprozesse/${g.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</a>
+                  <a href={`/trainee/gesetzesprozesse/${g.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</a>
                 </li>
               ))}
             </ul>

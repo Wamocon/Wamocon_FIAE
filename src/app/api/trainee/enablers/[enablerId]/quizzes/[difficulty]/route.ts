@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: { enablerId: s
     const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, link.quizId));
     if (!quiz || !quiz.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const qs = await db.select().from(questions).where(eq(questions.quizId, quiz.id)).orderBy(questions.orderIndex);
+  const qs = await db.select().from(questions).where(eq(questions.quizId, quiz.id)).orderBy(questions.orderIndex);
     const qIds = qs.map((q) => q.id);
     const opts = qIds.length ? await db.select().from(options).where(inArray(options.questionId, qIds)) : [];
     return NextResponse.json({
@@ -47,6 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: { enablerId: s
         questions: qs.map((q) => ({
           id: q.id,
           questionText: q.questionText,
+          questionType: (q as any).questionType || 'MCQ',
           options: opts
             .filter((o) => String(o.questionId) === String(q.id))
             .map((o) => ({ id: o.id, optionText: o.optionText, explanation: o.explanation ?? null })),
