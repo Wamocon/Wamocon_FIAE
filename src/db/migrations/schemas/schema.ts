@@ -25,7 +25,9 @@ export const authUsers = auth.table('users', {
 
 export const userRole = pgEnum('user_role', ['TRAINER', 'TRAINEE']);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
-export const quizType = pgEnum('quiz_type', ['ENABLER', 'GLOBAL']);
+export const quizType = pgEnum('quiz_type', ['LESSON', 'GLOBAL']);
+export const questionType = pgEnum('question_type', ['MCQ', 'TEXT']);
+export const quizDifficulty = pgEnum('quiz_difficulty', ['LOW', 'MEDIUM', 'HIGH']);
 export const reviewStatus = pgEnum('review_status', [
   'PENDING',
   'APPROVED',
@@ -205,12 +207,35 @@ export const enablerQuizzes = pgTable('enabler_quizzes', {
     .references(() => quizzes.id, { onDelete: 'cascade' }),
 });
 
+// New: allow up to three quizzes per enabler, one per difficulty
+export const enablerQuizLinks = pgTable(
+  'enabler_quiz_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    enablerId: uuid('enabler_id')
+      .notNull()
+      .references(() => enablers.id, { onDelete: 'cascade' }),
+    quizId: uuid('quiz_id')
+      .notNull()
+      .references(() => quizzes.id, { onDelete: 'cascade' }),
+    difficulty: quizDifficulty('difficulty').notNull(),
+  },
+  (table) => ({
+    unqEnablerDifficulty: unique().on(table.enablerId, table.difficulty),
+    unqQuiz: unique().on(table.quizId),
+  }),
+);
+
 export const questions = pgTable('questions', {
   id: uuid('id').primaryKey().defaultRandom(),
   quizId: uuid('quiz_id')
     .notNull()
     .references(() => quizzes.id, { onDelete: 'cascade' }),
   questionText: text('question_text').notNull(),
+  // MCQ or free-text question
+  questionType: questionType('question_type').notNull().default('MCQ'),
+  // For TEXT questions, an optional expected answer for trainer reference
+  expectedAnswer: text('expected_answer'),
   orderIndex: integer('order_index'),
 });
 
@@ -221,6 +246,8 @@ export const options = pgTable('options', {
     .references(() => questions.id, { onDelete: 'cascade' }),
   optionText: text('option_text').notNull(),
   isCorrect: boolean('is_correct').notNull().default(false),
+  // Optional explanation (store on the correct option)
+  explanation: text('explanation'),
 });
 
 // --- Trainee Submissions & Progress ---
@@ -261,6 +288,10 @@ export const quizSubmissions = pgTable('quiz_submissions', {
 
   // For "Action Required" dashboard
   isReviewed: boolean('is_reviewed').default(false),
+  trainerFeedback: text('trainer_feedback'),
+  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
+  reviewedAt: timestamp('reviewed_at'),
+  attemptNumber: integer('attempt_number'),
 });
 
 // Trainee's answer for each question in that submission
@@ -272,9 +303,11 @@ export const quizSubmissionAnswers = pgTable('quiz_submission_answers', {
   questionId: uuid('question_id')
     .notNull()
     .references(() => questions.id, { onDelete: 'cascade' }),
+  // For MCQ answers; nullable to support TEXT questions
   selectedOptionId: uuid('selected_option_id')
-    .notNull()
     .references(() => options.id, { onDelete: 'cascade' }),
+  // For TEXT answers
+  textAnswer: text('text_answer'),
 });
 
 // Submissions for Use Cases
@@ -294,6 +327,7 @@ export const useCaseSubmissions = pgTable('use_case_submissions', {
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
   reviewedAt: timestamp('reviewed_at'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+  attemptNumber: integer('attempt_number'),
 });
 
 // Stores multiple links for a single use case submission
@@ -304,6 +338,58 @@ export const useCaseSubmissionLinks = pgTable('use_case_submission_links', {
     .references(() => useCaseSubmissions.id, { onDelete: 'cascade' }),
   url: text('url').notNull(),
   description: text('description'), // e.g., "GitHub Repo", "OneDrive"
+});
+
+// --- geschäftsprozesse (Legislative Process) Tables (mirror Use Case) ---
+
+// NOTE: Renamed physical table to ASCII 'geschaeftsprozesse' for portability (Supabase & Drizzle migrations)
+// Variable name keeps the correct German spelling for display purposes.
+export const Geschäftsprozesse = pgTable('geschaeftsprozesse', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  courseId: uuid('course_id')
+    .notNull()
+    .references(() => courses.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  descriptionText: text('description_text').notNull(),
+  orderIndex: integer('order_index').notNull(),
+
+  // Settings (same shape as use cases)
+  durationValue: integer('duration_value'),
+  durationUnit: durationUnit('duration_unit'),
+  isActive: boolean('is_active').default(false),
+  activatedAt: timestamp('activated_at'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()),
+});
+
+// Renamed physical submissions table to ASCII
+export const geschäftsprozesseSubmissions = pgTable('geschaeftsprozesse_submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  // Use ASCII column name; keep TS property with correct spelling
+  geschäftsprozesseId: uuid('geschaeftsprozesse_id')
+    .notNull()
+    .references(() => Geschäftsprozesse.id, { onDelete: 'cascade' }),
+  submissionText: text('submission_text'),
+  status: reviewStatus('status').default('PENDING'),
+  trainerFeedback: text('trainer_feedback'),
+  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
+  reviewedAt: timestamp('reviewed_at'),
+  submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+  attemptNumber: integer('attempt_number'),
+});
+
+// Renamed physical links table to ASCII
+export const geschäftsprozesseSubmissionLinks = pgTable('geschaeftsprozesse_submission_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  submissionId: uuid('submission_id')
+    .notNull()
+    .references(() => geschäftsprozesseSubmissions.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  description: text('description'),
 });
 
 // --- 4. TRAINEE-SPECIFIC TABLES ---
@@ -460,6 +546,7 @@ export const enablerSubmissions = pgTable('enabler_submissions', {
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
   reviewedAt: timestamp('reviewed_at'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+  attemptNumber: integer('attempt_number'),
 });
 
 // ---------------------------------------------
@@ -508,6 +595,7 @@ export type Enabler = typeof enablers.$inferSelect;
 export type UseCase = typeof useCases.$inferSelect;
 export type Quiz = typeof quizzes.$inferSelect;
 export type EnablerQuiz = typeof enablerQuizzes.$inferSelect;
+export type EnablerQuizLink = typeof enablerQuizLinks.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type QuizAssignment = typeof quizAssignments.$inferSelect;
@@ -515,6 +603,10 @@ export type QuizSubmission = typeof quizSubmissions.$inferSelect;
 export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
 export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
+
+export type geschäftsprozesse = typeof Geschäftsprozesse.$inferSelect;
+export type geschäftsprozesseSubmission = typeof geschäftsprozesseSubmissions.$inferSelect;
+export type geschäftsprozesseSubmissionLink = typeof geschäftsprozesseSubmissionLinks.$inferSelect;
 export type Reflection = typeof reflections.$inferSelect;
 export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;

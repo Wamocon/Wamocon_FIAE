@@ -12,8 +12,9 @@ export default function TraineeModuleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [course, setCourse] = useState<{ id: string; title: string; year: number | null; chapter: number | null } | null>(null);
-  const [enablers, setEnablers] = useState<Array<{ id: string; title: string }>>([]);
-  const [useCases, setUseCases] = useState<Array<{ id: string; title: string }>>([]);
+  const [enablers, setEnablers] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
+  const [Geschäftsprozesse, setGeschäftsprozesse] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
+  const [useCases, setUseCases] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -25,7 +26,8 @@ export default function TraineeModuleDetailPage() {
         if (!r.ok) throw new Error('Kurs konnte nicht geladen werden');
         const data = await r.json();
         setCourse(data.course);
-        setEnablers(data.enablers || []);
+  setEnablers(data.enablers || []);
+  setGeschäftsprozesse(data.Geschäftsprozesse || []);
         setUseCases(data.useCases || []);
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
@@ -59,8 +61,24 @@ export default function TraineeModuleDetailPage() {
             <ul className="space-y-2">
               {enablers.map((e) => (
                 <li key={e.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
-                  <span className="truncate">{e.title}</span>
+                  <span className="truncate">{e.title} {e.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {e.attemptNumber}</span> : null}</span>
                   <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+          <div className="mb-3 text-sm font-semibold">Geschäftsprozesse</div>
+          {Geschäftsprozesse.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Keine aktiven Geschäftsprozesse</div>
+          ) : (
+            <ul className="space-y-2">
+              {Geschäftsprozesse.map((g) => (
+                <li key={g.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
+                  <span className="truncate">{g.title} {g.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {g.attemptNumber}</span> : null}</span>
+                  <a href={`/trainee/gesetzesprozesse/${g.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</a>
                 </li>
               ))}
             </ul>
@@ -75,7 +93,7 @@ export default function TraineeModuleDetailPage() {
             <ul className="space-y-2">
               {useCases.map((u) => (
                 <li key={u.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
-                  <span className="truncate">{u.title}</span>
+                  <span className="truncate">{u.title} {u.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {u.attemptNumber}</span> : null}</span>
                   <Link href={`/trainee/use-cases/${u.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
                 </li>
               ))}

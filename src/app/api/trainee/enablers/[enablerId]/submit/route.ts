@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: { enablerId: string } }
 ) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
     const solutionText: string | null = (body?.solutionText ?? null);

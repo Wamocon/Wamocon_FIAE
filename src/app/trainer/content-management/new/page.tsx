@@ -53,68 +53,76 @@ export default function NewCoursePage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-6 text-2xl font-bold">Neuen Kurs anlegen</h1>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {error && <div className="text-red-500">{error}</div>}
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      {/* Header card */}
+      <div className="glass-effect rounded-3xl border border-accent/30 bg-black/30 p-6 shadow-lg">
+        <h1 className="text-foreground text-2xl font-bold">Neuen Kurs anlegen</h1>
+        <p className="text-muted mt-1 text-sm">Erstellen Sie einen Kurs und definieren Sie Jahr, Modul und Skills.</p>
+      </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium">Kurstitel</label>
-          <input
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
-            placeholder="z.B. Einführung in Webentwicklung"
-          />
+      {/* Form card */}
+      <form onSubmit={handleSubmit} className="glass-effect rounded-3xl border border-accent/30 bg-black/30 p-6 shadow-lg">
+        {error && <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
+
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium">Kurstitel</label>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
+              placeholder="z.B. Einführung in Webentwicklung"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">Trainingsjahr</label>
+            <select
+              value={year}
+              onChange={e => setYear(e.target.value as any)}
+              className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
+            >
+              <option value="">Bitte wählen</option>
+              <option value="1">Jahr 1</option>
+              <option value="2">Jahr 2</option>
+              <option value="3">Jahr 3</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">Modul</label>
+            <input
+              value={chapter}
+              onChange={(e) => setChapter(e.target.value)}
+              className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
+              placeholder="z.B. 1"
+              inputMode="numeric"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium">Skills (Kommagetrennt)</label>
+            <input
+              value={skills}
+              onChange={(e) => setSkills(e.target.value)}
+              className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
+              placeholder="z.B. Git, HTML, CSS, JavaScript"
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium">Trainingsjahr</label>
-          <select
-            value={year}
-            onChange={e => setYear(e.target.value as any)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
-          >
-            <option value="">Bitte wählen</option>
-            <option value="1">Jahr 1</option>
-            <option value="2">Jahr 2</option>
-            <option value="3">Jahr 3</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Module (z.B. Modul 1)</label>
-          <input
-            value={chapter}
-            onChange={(e) => setChapter(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
-            placeholder="z.B. 1"
-            inputMode="numeric"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Skills (Kommagetrennt)</label>
-          <input
-            value={skills}
-            onChange={(e) => setSkills(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
-            placeholder="z.B. Git, HTML, CSS, JavaScript"
-          />
-        </div>
-
-        <div className="flex items-center gap-3">
+        <div className="mt-6 flex items-center gap-3">
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary/90 disabled:opacity-60"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl px-4 py-2 disabled:opacity-60"
           >
             {submitting ? 'Speichern…' : 'Speichern'}
           </button>
           <button
             type="button"
             onClick={() => router.back()}
-            className="rounded-md border border-border px-4 py-2 hover:bg-background/60"
+            className="rounded-xl border border-accent/30 px-4 py-2 hover:bg-background/60"
           >
             Abbrechen
           </button>

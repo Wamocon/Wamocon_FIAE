@@ -7,7 +7,7 @@ import { notifications } from '@/db/migrations/schemas/schema';
 // Body: { isRead?: boolean }
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
     const body = await req.json();
     const isRead = body?.isRead !== undefined ? Boolean(body.isRead) : true;

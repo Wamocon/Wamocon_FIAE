@@ -110,9 +110,9 @@ export default function TraineeDashboard() {
         break;
       case 'lessons':
         if (data?.lessonId) {
-          router.push(`/trainee/lessons/${data.lessonId}`);
+          router.push(`/trainee/trainer-feedback/${data.lessonId}`);
         } else {
-          router.push('/trainee/lessons');
+          router.push('/trainee/trainer-feedback');
         }
         break;
       case 'quizzes':

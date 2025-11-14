@@ -6,6 +6,8 @@ import {
   enablers,
   useCaseSubmissions,
   useCases,
+  geschäftsprozesseSubmissions,
+  Geschäftsprozesse,
   quizSubmissions,
   quizzes,
   enablerQuizzes,
@@ -27,6 +29,7 @@ export async function GET(req: NextRequest) {
         trainerFeedback: enablerSubmissions.trainerFeedback,
         submittedAt: enablerSubmissions.submittedAt,
         reviewedAt: enablerSubmissions.reviewedAt,
+        attemptNumber: enablerSubmissions.attemptNumber,
         enablerTitle: enablers.title,
       })
       .from(enablerSubmissions)
@@ -44,12 +47,31 @@ export async function GET(req: NextRequest) {
         trainerFeedback: useCaseSubmissions.trainerFeedback,
         submittedAt: useCaseSubmissions.submittedAt,
         reviewedAt: useCaseSubmissions.reviewedAt,
+        attemptNumber: useCaseSubmissions.attemptNumber,
         useCaseTitle: useCases.title,
       })
       .from(useCaseSubmissions)
       .innerJoin(useCases, eq(useCaseSubmissions.useCaseId, useCases.id))
       .where(eq(useCaseSubmissions.traineeId, traineeId as any))
       .orderBy(desc(useCaseSubmissions.submittedAt))
+      .limit(200);
+
+    // geschäftsprozesse submissions with titles
+    const gesetzRows = await db
+      .select({
+        id: geschäftsprozesseSubmissions.id,
+        geschäftsprozesseId: geschäftsprozesseSubmissions.geschäftsprozesseId,
+        status: geschäftsprozesseSubmissions.status,
+        trainerFeedback: geschäftsprozesseSubmissions.trainerFeedback,
+        submittedAt: geschäftsprozesseSubmissions.submittedAt,
+        reviewedAt: geschäftsprozesseSubmissions.reviewedAt,
+        attemptNumber: geschäftsprozesseSubmissions.attemptNumber,
+        geschäftsprozesseTitle: Geschäftsprozesse.title,
+      })
+      .from(geschäftsprozesseSubmissions)
+      .innerJoin(Geschäftsprozesse, eq(geschäftsprozesseSubmissions.geschäftsprozesseId, Geschäftsprozesse.id))
+      .where(eq(geschäftsprozesseSubmissions.traineeId, traineeId as any))
+      .orderBy(desc(geschäftsprozesseSubmissions.submittedAt))
       .limit(200);
 
     // Enabler quiz submissions: join quizSubmissions -> quizzes (quizType ENABLER) -> enablerQuizzes -> enablers for title
@@ -59,11 +81,13 @@ export async function GET(req: NextRequest) {
         quizId: quizSubmissions.quizId,
         score: quizSubmissions.score,
         isReviewed: quizSubmissions.isReviewed,
+        trainerFeedback: quizSubmissions.trainerFeedback,
         submittedAt: quizSubmissions.submittedAt,
         quizTitle: quizzes.title,
         quizType: quizzes.quizType,
         enablerId: enablerQuizzes.enablerId,
         enablerTitle: enablers.title,
+        attemptNumber: quizSubmissions.attemptNumber,
       })
       .from(quizSubmissions)
       .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
@@ -82,10 +106,21 @@ export async function GET(req: NextRequest) {
     }
     const enablerQuizResults = Array.from(latestByEnabler.values());
 
+    // Also include GLOBAL quiz submissions for the trainee (latest per quiz)
+    const globalLatestByQuiz = new Map<string, any>();
+    for (const r of quizRows) {
+      if (String(r.quizType) !== 'GLOBAL') continue;
+      const key = String(r.quizId);
+      if (!globalLatestByQuiz.has(key)) globalLatestByQuiz.set(key, r);
+    }
+    const globalQuizResults = Array.from(globalLatestByQuiz.values());
+
     return NextResponse.json({
       enablerResults: enablerRows,
       useCaseResults: useCaseRows,
+      geschäftsprozesseResults: gesetzRows,
       enablerQuizResults,
+      globalQuizResults,
     });
   } catch (e) {
     console.error('Trainee feedback GET error', e);

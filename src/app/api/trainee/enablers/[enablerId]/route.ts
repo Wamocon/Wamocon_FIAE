@@ -12,7 +12,7 @@ export async function GET(
   try {
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
-    const { enablerId } = params;
+    const { enablerId } = await params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [e] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
