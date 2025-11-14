@@ -156,7 +156,7 @@ async function main() {
       .insert(quizzes)
       .values({
         title: 'Enabler Quiz: HTML & CSS',
-        quizType: 'ENABLER',
+        quizType: 'LESSON',
         createdById: trainerId,
         isActive: true,
       })

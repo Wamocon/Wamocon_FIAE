@@ -8,6 +8,7 @@ import {
   enablers,
   profiles,
   skills,
+  Geschäftsprozesse,
 } from '@/db/migrations/schemas/schema';
 
 // GET /api/trainer/courses?trainerProfileId=...
@@ -52,6 +53,14 @@ export async function GET(req: NextRequest) {
       .groupBy(useCases.courseId);
     const ucMap = new Map<string, number>(ucCounts.map((r) => [String(r.courseId), Number(r.cnt)]));
 
+    // Geschäftsprozesse counts
+    const gpCounts = await db
+      .select({ courseId: Geschäftsprozesse.courseId, cnt: count() })
+      .from(Geschäftsprozesse)
+      .where(inArray(Geschäftsprozesse.courseId, courseIds))
+      .groupBy(Geschäftsprozesse.courseId);
+    const gpMap = new Map<string, number>(gpCounts.map((r) => [String(r.courseId), Number(r.cnt)]));
+
     const out = list.map((c) => ({
       id: c.id,
       title: c.title,
@@ -59,6 +68,7 @@ export async function GET(req: NextRequest) {
       chapter: c.chapter,
       enablersCount: enMap.get(String(c.id)) || 0,
       useCasesCount: ucMap.get(String(c.id)) || 0,
+      gpCount: gpMap.get(String(c.id)) || 0,
     }));
 
     return NextResponse.json({ courses: out });

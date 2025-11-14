@@ -80,7 +80,7 @@ export function Sidebar({
           router.push('/trainee/courses');
           break;
         case 'lessons':
-          router.push('/trainee/lessons');
+          router.push('/trainee/trainer-feedback');
           break;
         case 'quizzes':
           router.push('/trainee/quizzes');
@@ -174,7 +174,7 @@ export function Sidebar({
               id: 'lessons',
               label: language === 'de' ? 'Trainer-Feedback' : 'Trainer Feedback',
               icon: GraduationCap,
-              href: '/trainee/lessons',
+              href: '/trainee/trainer-feedback',
             },
             {
               id: 'quizzes',

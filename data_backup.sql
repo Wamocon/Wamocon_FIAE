@@ -599,11 +599,11 @@ INSERT INTO "public"."enabler_completions" ("trainee_id", "enabler_id", "complet
 --
 
 INSERT INTO "public"."quizzes" ("id", "title", "quiz_type", "created_by_id", "is_active", "created_at", "updated_at") VALUES
-	('3bd11d4b-d48c-43ba-8e8d-c7f91811135b', 'Enabler Quiz: HTML & CSS', 'ENABLER', '4bdfa8e5-91d5-4cbe-9e1c-882a93190292', true, '2025-10-28 09:27:25.524494', '2025-10-28 09:27:25.524494'),
+	('3bd11d4b-d48c-43ba-8e8d-c7f91811135b', 'Enabler Quiz: HTML & CSS', 'LESSON', '4bdfa8e5-91d5-4cbe-9e1c-882a93190292', true, '2025-10-28 09:27:25.524494', '2025-10-28 09:27:25.524494'),
 	('03ad5ccc-667a-4468-aedb-2b4fd12fcfc3', 'Global Quiz: Web Basics', 'GLOBAL', '4bdfa8e5-91d5-4cbe-9e1c-882a93190292', true, '2025-10-28 09:27:25.524494', '2025-10-28 09:27:25.524494'),
 	('6ccbe1ab-0b04-4233-a6f1-dfa5d919c260', 'Testing', 'GLOBAL', '4bdfa8e5-91d5-4cbe-9e1c-882a93190292', true, '2025-10-28 09:45:47.544355', '2025-10-28 09:45:47.544355'),
-	('4fc5f178-289d-4c16-951a-28be36374d07', 'Quiz: Test', 'ENABLER', '4bdfa8e5-91d5-4cbe-9e1c-882a93190292', true, '2025-10-28 13:01:09.461071', '2025-10-28 13:01:09.461071'),
-	('09df3b88-8650-4ec5-8101-3e6ed70f53e6', 'Quiz: Test 1', 'ENABLER', '4bdfa8e5-91d5-4cbe-9e1c-882a93190292', true, '2025-10-29 09:01:09.117351', '2025-10-29 09:01:09.117351');
+	('4fc5f178-289d-4c16-951a-28be36374d07', 'Quiz: Test', 'LESSON', '4bdfa8e5-91d5-4cbe-9e1c-882a93190292', true, '2025-10-28 13:01:09.461071', '2025-10-28 13:01:09.461071'),
+	('09df3b88-8650-4ec5-8101-3e6ed70f53e6', 'Quiz: Test 1', 'LESSON', '4bdfa8e5-91d5-4cbe-9e1c-882a93190292', true, '2025-10-29 09:01:09.117351', '2025-10-29 09:01:09.117351');
 
 
 --

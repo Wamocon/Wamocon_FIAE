@@ -92,7 +92,7 @@ export default function ModuleDetail({ data }: ModuleDetailProps) {
             {data.lessons.map((lesson) => (
               <Link
                 key={lesson.id}
-                href={`/trainee/lessons/${lesson.id}`}
+                href={`/trainee/trainer-feedback/${lesson.id}`}
                 className="bg-background/50 border-accent/20 hover:border-accent/40 rounded-xl border p-4 transition-colors block"
               >
                 <div className="mb-2 flex items-center justify-between">

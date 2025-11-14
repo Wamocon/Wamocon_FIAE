@@ -1,5 +1,5 @@
 CREATE TYPE "public"."duration_unit" AS ENUM('DAYS', 'WEEKS');--> statement-breakpoint
-CREATE TYPE "public"."quiz_type" AS ENUM('ENABLER', 'GLOBAL');--> statement-breakpoint
+CREATE TYPE "public"."quiz_type" AS ENUM('LESSON', 'GLOBAL');--> statement-breakpoint
 CREATE TYPE "public"."review_status" AS ENUM('PENDING', 'APPROVED', 'REJECTED');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('TRAINER', 'TRAINEE');--> statement-breakpoint
 CREATE TABLE "acceptance_protocols" (

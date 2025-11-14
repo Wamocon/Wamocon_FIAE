@@ -76,7 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ena
       }
 
       // Create quiz
-      const [quiz] = await tx.insert(quizzes).values({ title, quizType: 'ENABLER' as any, createdById, isActive: true }).returning();
+      const [quiz] = await tx.insert(quizzes).values({ title, quizType: 'LESSON' as any, createdById, isActive: true }).returning();
       await tx.insert(enablerQuizzes).values({ enablerId: enablerId as any, quizId: quiz.id });
 
       // Insert questions and options

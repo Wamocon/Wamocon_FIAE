@@ -1,0 +1,41 @@
+-- Migration: Add geschäftsprozesse (legislative process) content & submission tables
+-- Mirrors use_cases and use_case_submissions structure.
+
+CREATE TABLE IF NOT EXISTS Geschäftsprozesse (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id uuid NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  description_text text NOT NULL,
+  order_index integer NOT NULL,
+  duration_value integer,
+  duration_unit duration_unit,
+  is_active boolean DEFAULT false,
+  activated_at timestamp,
+  created_at timestamp DEFAULT now() NOT NULL,
+  updated_at timestamp DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS geschäftsprozesse_submissions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  trainee_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  geschäftsprozesse_id uuid NOT NULL REFERENCES Geschäftsprozesse(id) ON DELETE CASCADE,
+  submission_text text,
+  status review_status DEFAULT 'PENDING',
+  trainer_feedback text,
+  reviewed_by_id uuid REFERENCES profiles(id),
+  reviewed_at timestamp,
+  submitted_at timestamp DEFAULT now() NOT NULL,
+  attempt_number integer
+);
+
+CREATE TABLE IF NOT EXISTS geschäftsprozesse_submission_links (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  submission_id uuid NOT NULL REFERENCES geschäftsprozesse_submissions(id) ON DELETE CASCADE,
+  url text NOT NULL,
+  description text
+);
+
+-- Basic indexes (optional for performance)
+CREATE INDEX IF NOT EXISTS idx_Geschäftsprozesse_course ON Geschäftsprozesse(course_id);
+CREATE INDEX IF NOT EXISTS idx_geschäftsprozesse_sub_trainee ON geschäftsprozesse_submissions(trainee_id);
+CREATE INDEX IF NOT EXISTS idx_geschäftsprozesse_sub_gp ON geschäftsprozesse_submissions(geschäftsprozesse_id);

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { courses, courseMembers, enablers, enablerSubmissions, profiles, useCases, useCaseSubmissions } from '@/db/migrations/schemas/schema';
+import { courses, courseMembers, enablers, enablerSubmissions, profiles, useCases, useCaseSubmissions, Geschäftsprozesse, geschäftsprozesseSubmissions } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     const onlyPending = searchParams.get('onlyPending') === 'true';
-    const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (both)
+  const type = searchParams.get('type'); // 'enabler' | 'usecase' | 'geschäftsprozesse' | undefined (all)
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
 
     // Determine courses the trainer can review: creator or member (TRAINER)
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
       submittedAt: Date;
       enablerTitle?: string;
       traineeName?: string;
+      attemptNumber?: number | null;
     }> = [];
     let useCaseRows: Array<{
       id: string;
@@ -38,6 +39,18 @@ export async function GET(req: NextRequest) {
       submittedAt: Date;
       useCaseTitle?: string;
       traineeName?: string;
+      attemptNumber?: number | null;
+    }> = [];
+    let gesetzRows: Array<{
+      id: string;
+      geschäftsprozesseId: string;
+      traineeId: string;
+      submissionText: string | null;
+      status: string | null;
+      submittedAt: Date;
+      geschäftsprozesseTitle?: string;
+      traineeName?: string;
+      attemptNumber?: number | null;
     }> = [];
 
     if (!type || type === 'enabler') {
@@ -50,6 +63,7 @@ export async function GET(req: NextRequest) {
           solutionText: enablerSubmissions.solutionText,
           status: enablerSubmissions.status,
           submittedAt: enablerSubmissions.submittedAt,
+          attemptNumber: enablerSubmissions.attemptNumber,
         })
         .from(enablerSubmissions)
         .leftJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
@@ -64,7 +78,7 @@ export async function GET(req: NextRequest) {
   const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
         const enMap = Object.fromEntries(enMapArr.map((e) => [String(e.id), e.title]));
         const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));
-        enablerRows = enablerRows.map(r => ({ ...r, enablerTitle: enMap[String(r.enablerId)] || 'Enabler', traineeName: trMap[String(r.traineeId)] || 'Unbekannt' }));
+  enablerRows = enablerRows.map(r => ({ ...r, enablerTitle: enMap[String(r.enablerId)] || 'Enabler', traineeName: trMap[String(r.traineeId)] || 'Unbekannt', attemptNumber: (r as any).attemptNumber }));
       }
     }
 
@@ -77,6 +91,7 @@ export async function GET(req: NextRequest) {
           submissionText: useCaseSubmissions.submissionText,
           status: useCaseSubmissions.status,
           submittedAt: useCaseSubmissions.submittedAt,
+          attemptNumber: useCaseSubmissions.attemptNumber,
         })
         .from(useCaseSubmissions)
         .leftJoin(useCases, eq(useCases.id, useCaseSubmissions.useCaseId))
@@ -90,11 +105,38 @@ export async function GET(req: NextRequest) {
   const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
         const ucMap = Object.fromEntries(ucMapArr.map((e) => [String(e.id), e.title]));
         const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));
-        useCaseRows = useCaseRows.map(r => ({ ...r, useCaseTitle: ucMap[String(r.useCaseId)] || 'Use Case', traineeName: trMap[String(r.traineeId)] || 'Unbekannt' }));
+  useCaseRows = useCaseRows.map(r => ({ ...r, useCaseTitle: ucMap[String(r.useCaseId)] || 'Use Case', traineeName: trMap[String(r.traineeId)] || 'Unbekannt', attemptNumber: (r as any).attemptNumber }));
       }
     }
 
-    return NextResponse.json({ enablerSubmissions: enablerRows, useCaseSubmissions: useCaseRows });
+    if (!type || type === 'geschäftsprozesse') {
+      const gs = await db
+        .select({
+          id: geschäftsprozesseSubmissions.id,
+          geschäftsprozesseId: geschäftsprozesseSubmissions.geschäftsprozesseId,
+          traineeId: geschäftsprozesseSubmissions.traineeId,
+          submissionText: geschäftsprozesseSubmissions.submissionText,
+          status: geschäftsprozesseSubmissions.status,
+          submittedAt: geschäftsprozesseSubmissions.submittedAt,
+          attemptNumber: geschäftsprozesseSubmissions.attemptNumber,
+        })
+        .from(geschäftsprozesseSubmissions)
+        .leftJoin(Geschäftsprozesse, eq(Geschäftsprozesse.id, geschäftsprozesseSubmissions.geschäftsprozesseId))
+        .where(inArray(Geschäftsprozesse.courseId, courseIds));
+      gesetzRows = statuses ? gs.filter((r) => statuses.includes(String(r.status))) : gs;
+
+      if (gesetzRows.length) {
+        const gIds = Array.from(new Set(gesetzRows.map(r => String(r.geschäftsprozesseId))));
+        const trIds = Array.from(new Set(gesetzRows.map(r => String(r.traineeId))));
+        const gMapArr = await db.select({ id: Geschäftsprozesse.id, title: Geschäftsprozesse.title }).from(Geschäftsprozesse).where(inArray(Geschäftsprozesse.id, gIds));
+        const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
+        const gMap = Object.fromEntries(gMapArr.map((e) => [String(e.id), e.title]));
+        const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));
+        gesetzRows = gesetzRows.map(r => ({ ...r, geschäftsprozesseTitle: gMap[String(r.geschäftsprozesseId)] || 'geschäftsprozesse', traineeName: trMap[String(r.traineeId)] || 'Unbekannt', attemptNumber: (r as any).attemptNumber }));
+      }
+    }
+
+    return NextResponse.json({ enablerSubmissions: enablerRows, useCaseSubmissions: useCaseRows, geschäftsprozesseSubmissions: gesetzRows });
   } catch (e) {
     console.error('Trainer reviews GET error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

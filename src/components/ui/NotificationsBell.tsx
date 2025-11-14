@@ -112,9 +112,14 @@ export default function NotificationsBell() {
   };
 
   const onItemClick = async (n: UINotification) => {
-    if (!n.isRead) await markAsRead(n.id);
-    if (n.linkUrl) router.push(n.linkUrl);
-    setOpen(false);
+    try {
+      if (!n.isRead) await markAsRead(n.id);
+    } finally {
+      // Remove clicked notification from the dropdown so it doesn't linger
+      setItems(prev => prev.filter(i => i.id !== n.id));
+      if (n.linkUrl) router.push(n.linkUrl);
+      setOpen(false);
+    }
   };
 
   if (!profile) return null;

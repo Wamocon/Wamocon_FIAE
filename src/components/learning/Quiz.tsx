@@ -240,22 +240,22 @@ export default function Quiz({ quiz }: QuizProps) {
       </div>
 
       {/* Current Question */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-lg">
+      <div className="rounded-3xl border glass-effect border-accent/30 p-8 shadow-lg">
         <div className="mb-6">
-          <h3 className="mb-2 text-xl font-bold text-slate-800">
+          <h3 className="mb-2 text-xl font-bold text-foreground">
             Frage {currentQuestion + 1}
           </h3>
-          <p className="text-lg text-slate-700">{currentQ.question}</p>
+          <p className="text-lg text-foreground">{currentQ.question}</p>
         </div>
 
         <div className="space-y-4">
           {currentQ.options.map((option, oIndex) => (
             <label
               key={oIndex}
-              className={`flex cursor-pointer items-center rounded-2xl border-2 p-4 transition-all duration-200 ${
+              className={`flex cursor-pointer items-center rounded-2xl glass-effect border-accent/30 border-2 p-4 transition-all duration-200 ${
                 selectedAnswers[currentQ.id] === oIndex
-                  ? 'border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50 shadow-md'
-                  : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
+                  ? 'border-red-300 bg-gradient-to-r from-red-50 to-indigo-50 shadow-md'
+                  : 'border-red-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
               }`}
             >
               <input
@@ -269,15 +269,15 @@ export default function Quiz({ quiz }: QuizProps) {
               <div
                 className={`mr-4 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
                   selectedAnswers[currentQ.id] === oIndex
-                    ? 'border-blue-500 bg-blue-500'
+                    ? 'border-red-500 bg-red-500'
                     : 'border-slate-400'
                 }`}
               >
                 {selectedAnswers[currentQ.id] === oIndex && (
-                  <CheckCircle className="h-3 w-3 text-white" />
+                  <CheckCircle className="h-3 w-3 text-foreground" />
                 )}
               </div>
-              <span className="text-slate-700">{option}</span>
+              <span className="text-foreground">{option}</span>
             </label>
           ))}
         </div>
@@ -287,7 +287,7 @@ export default function Quiz({ quiz }: QuizProps) {
           <button
             onClick={handlePrevQuestion}
             disabled={currentQuestion === 0}
-            className="text-muted bg-muted/30 hover:bg-muted/50 rounded-2xl px-6 py-3 font-medium transition-all duration-200 disabled:opacity-50"
+            className="text-foreground rounded-2xl px-6 py-3 font-medium transition-all duration-200 disabled:opacity-50"
           >
             Vorherige Frage
           </button>
@@ -295,7 +295,7 @@ export default function Quiz({ quiz }: QuizProps) {
           <button
             onClick={handleNextQuestion}
             disabled={!isAnswerSelected}
-            className="min-w-[160px] flex items-center justify-center rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-lg transition duration-200 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-w-[160px] flex items-center justify-center rounded-2xl bg-red-600 px-6 py-3 font-semibold text-white shadow-lg transition duration-200 hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {currentQuestion === quizData.totalQuestions - 1 ? 'Abschließen' : 'Nächste Frage'}
           </button>
@@ -304,3 +304,4 @@ export default function Quiz({ quiz }: QuizProps) {
     </div>
   );
 }
+
