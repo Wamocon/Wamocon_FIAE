@@ -166,7 +166,7 @@ export default function TrainerReviewsPage() {
         <div className="flex flex-wrap items-center gap-2">
         {!forcedView ? (
           <>
-            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='enablers'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Enabler</button>
+            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='enablers'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Lesson</button>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='Geschäftsprozesse'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('Geschäftsprozesse')}>Geschäftsprozesse</button>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='usecases'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='quizzes'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
@@ -359,7 +359,7 @@ export default function TrainerReviewsPage() {
                 </div>
                 {s.quizType==='LESSON' && (
                   <div>
-                    <div className="text-xs text-muted-foreground">Enabler</div>
+                    <div className="text-xs text-muted-foreground">Lesson</div>
                     <div className="text-sm">{s.enablerTitle || '-'}</div>
                   </div>
                 )}
