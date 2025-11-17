@@ -149,7 +149,7 @@ export default function TraineeFeedbackPage() {
       {/* Use case submissions */}
       {/* geschäftsprozesse submissions */}
       <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-        <h2 className="text-foreground mb-4 text-xl font-semibold">geschäftsprozesse-Einreichungen</h2>
+        <h2 className="text-foreground mb-4 text-xl font-semibold">ÜGeschäftsprozesse-Einreichungen</h2>
         {gesetzes.length === 0 ? (
           <div className="text-muted-foreground">Keine Einreichungen.</div>
         ) : (

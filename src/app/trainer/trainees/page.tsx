@@ -166,7 +166,7 @@ export default function TrainerTraineesPage() {
                     alert('Fehler beim Aktualisieren des Status');
                   }
                 }}
-                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-700' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'bg-green-600 text-white hover:bg-green-700'}`}
               >
                 {trainee.isActive ? 'Deaktivieren' : 'Aktivieren'}
               </button>
