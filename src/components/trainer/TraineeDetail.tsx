@@ -44,6 +44,19 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
   });
   const [saving, setSaving] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [overview, setOverview] = useState<null | {
+    stats: {
+      progressPct: number;
+      completedEnablers: number;
+      totalEnablers: number;
+      pending: { quizzes: number; useCases: number; geschaeftsprozesse: number };
+    };
+    enablers: Array<{ id: string; title: string; completed: boolean; isActive: boolean; link: string }>;
+    useCases: Array<{ id: string; title: string; status: string | null; isActive: boolean; attemptNumber?: number | null; link: string }>;
+    geschaeftsprozesse: Array<{ id: string; title: string; status: string | null; isActive: boolean; attemptNumber?: number | null; link: string }>;
+    enablerQuizzes: Array<{ enablerId: string; quizId: string; difficulty: string; lastScore: number | null; attemptNumber: number | null; isReviewed: boolean | null; link: string }>;
+    globalQuizzes: Array<{ quizId: string; title: string; lastScore: number | null; attemptNumber: number | null; isReviewed: boolean | null; link: string }>;
+  }>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -58,6 +71,12 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           avatar_url: data.trainee?.avatar_url || '',
           start_of_training_date: data.trainee?.training_start_date ? String(data.trainee.training_start_date).slice(0, 10) : '',
         });
+        // Load overview
+        const oRes = await fetch(`/api/trainer/trainees/${traineeId}/overview`, { cache: 'no-store' });
+        if (oRes.ok) {
+          const oData = await oRes.json();
+          setOverview(oData);
+        }
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
       } finally {
@@ -180,12 +199,27 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     }
   };
 
-  const tabs = [
-    { id: 'overview', label: 'Übersicht', icon: Eye },
-    { id: 'progress', label: 'Fortschritt', icon: TrendingUp },
-    // { id: 'submissions', label: 'Einreichungen', icon: FileCheck2 },
-    // { id: 'notes', label: 'Notizen', icon: MessageSquare },
-  ];
+  // Helpers
+  const toggleItem = async (
+    itemType: 'ENABLER' | 'USE_CASE' | 'GESCHAEFTSPROZESS' | 'GLOBAL_QUIZ',
+    itemId: string,
+    isActive: boolean,
+  ) => {
+    if (!trainee?.id) return;
+    const payload: any = { itemType, itemId, isActive };
+    if (profile?.role === 'trainer' && profile?.id) payload.trainerId = profile.id;
+    await fetch(`/api/trainer/trainees/${trainee.id}/activate`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    // refresh overview
+    const oRes = await fetch(`/api/trainer/trainees/${trainee.id}/overview`, { cache: 'no-store' });
+    if (oRes.ok) {
+      const oData = await oRes.json();
+      setOverview(oData);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -257,7 +291,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+      {/* <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
@@ -276,8 +310,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <BookOpen className="h-6 w-6 text-white" />
             </div>
             <div>
-              <p className="text-muted text-sm">Module abgeschlossen</p>
-              <p className="text-foreground text-2xl font-bold">—</p>
+              <p className="text-muted text-sm">Enabler abgeschlossen</p>
+              <p className="text-foreground text-2xl font-bold">{overview ? `${overview.stats.completedEnablers}/${overview.stats.totalEnablers}` : '—'}</p>
             </div>
           </div>
         </div>
@@ -289,7 +323,17 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
             </div>
             <div>
               <p className="text-muted text-sm">Durchschnitt</p>
-              <p className="text-foreground text-2xl font-bold">82%</p>
+              <p className="text-foreground text-2xl font-bold">{
+                (() => {
+                  if (!overview) return '—';
+                  const scores: number[] = [];
+                  overview.enablerQuizzes.forEach(q => { if (typeof q.lastScore === 'number') scores.push(q.lastScore); });
+                  overview.globalQuizzes.forEach(q => { if (typeof q.lastScore === 'number') scores.push(q.lastScore); });
+                  if (scores.length === 0) return '—';
+                  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+                  return `${avg}%`;
+                })()
+              }</p>
             </div>
           </div>
         </div>
@@ -301,63 +345,49 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
             </div>
             <div>
               <p className="text-muted text-sm">Letzte Aktivität</p>
-              <p className="text-foreground text-2xl font-bold">Heute</p>
+              <p className="text-foreground text-2xl font-bold">{
+                (() => {
+                  if (!overview) return '—';
+                  const dates: Date[] = [];
+                  // We don't store activity feed here; infer from quiz submissions datasets when present
+                  // As the API only returns latest entries per item, we can't derive a precise timestamp easily; show em dash
+                  return '—';
+                })()
+              }</p>
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
-      {/* Tabs */}
-      <div className="rounded-3xl border border-slate-200 bg-white shadow-lg">
-        <div className="border-b border-slate-200">
-          <div className="flex overflow-x-auto">
-            {tabs.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 border-b-2 px-6 py-4 text-sm font-medium transition-all duration-200 ${
-                    activeTab === tab.id
-                      ? 'border-blue-500 bg-blue-50 text-blue-600'
-                      : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-800'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
+      {/* Row 3: Assignments & Progress */}
+      <div className="glass-effect bg-background border-accent/30 rounded-3xl border p-6 shadow-lg">
         <div className="p-8">
           {/* Edit form for trainers */}
           {profile?.role === 'trainer' && trainee && showEdit && (
-            <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-6">
-              <h3 className="mb-4 text-lg font-semibold text-slate-800">Stammdaten bearbeiten</h3>
+            <div className="mb-8 rounded-2xl border border-accent/30 bg-background p-6">
+              <h3 className="mb-4 text-lg font-semibold text-white">Stammdaten bearbeiten</h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-1 block text-sm text-slate-600">Vollständiger Name</label>
+                  <label className="mb-1 block text-sm text-white">Vollständiger Name</label>
                   <input
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800"
+                    className="w-full rounded-xl border bg-background px-3 py-2 text-white"
                     value={edit.full_name}
                     onChange={(e) => setEdit((p) => ({ ...p, full_name: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm text-slate-600">Avatar URL</label>
+                  <label className="mb-1 block text-white">Avatar URL</label>
                   <input
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800"
+                    className="w-full rounded-xl border bg-background px-3 py-2 text-white"
                     value={edit.avatar_url}
                     onChange={(e) => setEdit((p) => ({ ...p, avatar_url: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm text-slate-600">Start der Ausbildung</label>
+                  <label className="mb-1 block text-sm text-white">Start der Ausbildung</label>
                   <input
                     type="date"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800"
+                    className="w-full rounded-xl border bg-background px-3 py-2 text-white"
                     value={edit.start_of_training_date}
                     onChange={(e) => setEdit((p) => ({ ...p, start_of_training_date: e.target.value }))}
                   />
@@ -367,7 +397,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                 >
                   {saving ? 'Speichern…' : 'Speichern'}
                 </button>
@@ -376,56 +406,134 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
             </div>
           )}
 
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <h3 className="mb-4 text-xl font-bold text-slate-800">
-                Aktuelle Lernaktivitäten
-              </h3>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
-                  <h4 className="mb-2 font-semibold text-blue-800">
-                    Aktuelles Modul
-                  </h4>
-                  <p className="text-blue-700">—</p>
-                  <div className="mt-3 h-2 w-full rounded-full bg-blue-200">
-                    <div
-                      className="h-2 rounded-full bg-blue-600"
-                      style={{ width: `${trainee?.progress ?? 0}%` }}
-                    ></div>
-                  </div>
-                  <p className="mt-1 text-sm text-blue-600">
-                    {trainee?.progress ?? 0}% abgeschlossen
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 p-6">
-                  <h4 className="mb-2 font-semibold text-green-800">
-                    Nächster Termin
-                  </h4>
-                  <p className="text-green-700">—</p>
-                  <p className="mt-1 text-sm text-green-600">—</p>
-                </div>
+          {/* Redesigned third row content */}
+          <div className="space-y-8">
+            {/* Enablers (Modules) */}
+            <section>
+              <div className="mb-3 flex bg-background text-white items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Module (Lesson)</h3>
+                <div className="text-sm text-white">Abgeschlossen: {overview?.stats.completedEnablers ?? 0} / {overview?.stats.totalEnablers ?? 0}</div>
               </div>
-            </div>
-          )}
+              {overview?.enablers?.length ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {overview.enablers.map((e) => (
+                    <div key={e.id} className="rounded-2xl border border-accent/30 p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="font-semibold text-white">{e.title}</div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.completed ? 'border-green-500 text-green-500' : 'border-slate-300 text-white'}`}>{e.completed ? 'Teilgenommen' : 'Nicht teilgenommen'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-white'}`}>{e.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {profile?.role === 'trainer' && (
+                          <button onClick={() => toggleItem('ENABLER', e.id, !e.isActive)} className={`text-sm rounded-md px-2 py-1 border ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}>{e.isActive ? 'Deaktivieren' : 'Aktivieren'}</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-white">Keine Enabler gefunden.</div>
+              )}
+            </section>
 
-          {activeTab === 'progress' && (
-            <div className="space-y-6">
-              <h3 className="mb-4 text-xl font-bold text-slate-800">
-                Lernfortschritt
-              </h3>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h4 className="font-semibold text-slate-800">Gesamt</h4>
-                  <span className="text-lg font-bold text-blue-600">{trainee?.progress ?? 0}%</span>
+            {/* Enabler Quizzes by difficulty */}
+            <section>
+              <h3 className="mb-3 text-xl font-bold text-white">Lesson-Quizzes</h3>
+              {overview?.enablerQuizzes?.length ? (
+                <div className="space-y-2">
+                  {overview.enablerQuizzes.map((q) => (
+                    <div key={`${q.enablerId}-${q.quizId}`} className="flex items-center justify-between rounded-2xl border border-accent/30 p-4">
+                      <div>
+                        <div className="text-white font-medium">Schwierigkeit: {q.difficulty}</div>
+                        <div className="text-white text-sm">Versuche: {q.attemptNumber ?? 0} · Ergebnis: {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? '· Zur Überprüfung' : ''}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="h-3 w-full rounded-full bg-slate-200">
-                  <div className="h-3 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500" style={{ width: `${trainee?.progress ?? 0}%` }} />
+              ) : (
+                <div className="text-sm text-white">Keine Enabler-Quizzes vorhanden.</div>
+              )}
+            </section>   
+            {/* Use Cases */}
+            <section>
+              <h3 className="mb-3 text-xl font-bold text-white">Use Cases</h3>
+              {overview?.useCases?.length ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {overview.useCases.map((u) => (
+                    <div key={u.id} className="rounded-2xl border border-accent/30 p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="font-semibold text-white">{u.title}</div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : u.status ? 'border-green-500 text-green-500' : 'border-slate-300 text-white'}`}>{u.status ?? 'Nicht eingereicht'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-white'}`}>{u.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {profile?.role === 'trainer' && (
+                          <button onClick={() => toggleItem('USE_CASE', u.id, !u.isActive)} className={`text-sm rounded-md px-2 py-1 border ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}>{u.isActive ? 'Deaktivieren' : 'Aktivieren'}</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            </div>
-          )}
-          {/* Additional tabs (submissions, notes) can be reintroduced once data is wired */}
+              ) : (
+                <div className="text-sm text-white">Keine Use Cases gefunden.</div>
+              )}
+            </section>
+
+            {/* Geschäftsprozesse */}
+            <section>
+              <h3 className="mb-3 text-xl font-bold text-white">Geschäftsprozesse</h3>
+              {overview?.geschaeftsprozesse?.length ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {overview.geschaeftsprozesse.map((g) => (
+                    <div key={g.id} className="rounded-2xl border border-accent/30 p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="font-semibold text-white">{g.title}</div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${g.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : g.status ? 'border-green-500 text-green-500' : 'border-slate-300 text-white'}`}>{g.status ?? 'Nicht eingereicht'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${g.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-white'}`}>{g.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {profile?.role === 'trainer' && (
+                          <button onClick={() => toggleItem('GESCHAEFTSPROZESS', g.id, !g.isActive)} className={`text-sm rounded-md px-2 py-1 border ${g.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}>{g.isActive ? 'Deaktivieren' : 'Aktivieren'}</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-white">Keine Geschäftsprozesse gefunden.</div>
+              )}
+            </section>
+
+            {/* Global (Big) Quizzes */}
+            <section>
+              <h3 className="mb-3 text-xl font-bold text-white">Global-Quizzes</h3>
+              {overview?.globalQuizzes?.length ? (
+                <div className="space-y-2">
+                  {overview.globalQuizzes.map((q) => (
+                    <div key={q.quizId} className="flex items-center justify-between rounded-2xl border border-accent/30 p-4">
+                      <div>
+                        <div className="text-white font-medium">{q.title}</div>
+                        <div className="text-white text-sm">Versuche: {q.attemptNumber ?? 0} · Ergebnis: {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? '· Zur Überprüfung' : ''}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {profile?.role === 'trainer' && (
+                          <button onClick={() => toggleItem('GLOBAL_QUIZ', q.quizId, false)} className="text-sm rounded-md px-2 py-1 border border-yellow-500 text-yellow-500">Entfernen</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-white">Keine Global-Quizzes zugewiesen.</div>
+              )}
+            </section>
+          </div>
         </div>
       </div>
     </div>

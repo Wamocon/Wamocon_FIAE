@@ -531,6 +531,58 @@ export const enablerCompletions = pgTable(
   }),
 );
 
+// Per-trainee activation overrides (nullable isActive => inherit default)
+export const traineeEnablerOverrides = pgTable(
+  'trainee_enabler_overrides',
+  {
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    enablerId: uuid('enabler_id')
+      .notNull()
+      .references(() => enablers.id, { onDelete: 'cascade' }),
+    isActive: boolean('is_active'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.traineeId, table.enablerId] }),
+  }),
+);
+
+export const traineeUseCaseOverrides = pgTable(
+  'trainee_use_case_overrides',
+  {
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    useCaseId: uuid('use_case_id')
+      .notNull()
+      .references(() => useCases.id, { onDelete: 'cascade' }),
+    isActive: boolean('is_active'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.traineeId, table.useCaseId] }),
+  }),
+);
+
+export const traineeGeschaeftsprozesseOverrides = pgTable(
+  'trainee_geschaeftsprozesse_overrides',
+  {
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    geschaeftsprozesseId: uuid('geschaeftsprozesse_id')
+      .notNull()
+      .references(() => Geschäftsprozesse.id, { onDelete: 'cascade' }),
+    isActive: boolean('is_active'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.traineeId, table.geschaeftsprozesseId] }),
+  }),
+);
+
 // Trainee submissions for Enabler scenarios
 export const enablerSubmissions = pgTable('enabler_submissions', {
   id: uuid('id').primaryKey().defaultRandom(),
