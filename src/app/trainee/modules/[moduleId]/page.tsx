@@ -70,9 +70,9 @@ export default function TraineeModuleDetailPage() {
         </div>
 
         <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
-          <div className="mb-3 text-sm font-semibold">Geschäftsprozesse</div>
+          <div className="mb-3 text-sm font-semibold">Ügeschäftsprozesse</div>
           {Geschäftsprozesse.length === 0 ? (
-            <div className="text-sm text-muted-foreground">Keine aktiven Geschäftsprozesse</div>
+            <div className="text-sm text-muted-foreground">Keine aktiven Ügeschäftsprozesse</div>
           ) : (
             <ul className="space-y-2">
               {Geschäftsprozesse.map((g) => (

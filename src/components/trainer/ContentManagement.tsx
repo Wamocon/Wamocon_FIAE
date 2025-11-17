@@ -186,7 +186,7 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[480px] flex flex-col"
+              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[420px] flex flex-col"
             >
               <div className="mb-4 flex items-start justify-between">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
@@ -203,7 +203,7 @@ export function ContentManagement() {
                   Jahr {course.year ?? '-'}
                 </span>
                 <span className="bg-muted/30 text-muted rounded-full px-3 py-1">
-                  Capital {course.chapter ?? '-'}
+                  Kapitel {course.chapter ?? '-'}
                 </span>
               </div>
 
@@ -211,9 +211,9 @@ export function ContentManagement() {
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
                     <h4 className="text-foreground text-sm font-medium">Lessons</h4>
-                    <p className="text-muted text-xs">{course.enablersCount} Themen</p>
                   </div>
-                  <button
+                    <p className="text-muted text-xs">{course.enablersCount} Themen</p>
+                  {/* <button
                     onClick={() => {
                       setActiveCourseId(course.id);
                       setEnTitle('');
@@ -230,15 +230,16 @@ export function ContentManagement() {
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >
                     + Hinzufügen
-                  </button>
+                  </button> */}
                 </div>
                 
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
                     <h4 className="text-foreground text-sm font-medium">Geschäftsprozesse</h4>
-                    <p className="text-muted text-xs">{course.gpCount} Aufgaben</p>
+                    
                   </div>
-                  <button
+                  <p className="text-muted text-xs">{course.gpCount} Aufgaben</p>
+                  {/* <button
                     onClick={() => {
                       setActiveCourseId(course.id);
                       setGpTitle('');
@@ -250,16 +251,16 @@ export function ContentManagement() {
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >
                     + Hinzufügen
-                  </button>
+                  </button> */}
                 </div>
             
 
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
                     <h4 className="text-foreground text-sm font-medium">Use Cases</h4>
-                    <p className="text-muted text-xs">{course.useCasesCount} Aufgaben</p>
                   </div>
-                  <button
+                    <p className="text-muted text-xs">{course.useCasesCount} Aufgaben</p> 
+                  {/* <button
                     onClick={() => {
                       setActiveCourseId(course.id);
                       setUcTitle('');
@@ -271,7 +272,7 @@ export function ContentManagement() {
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >
                     + Hinzufügen
-                  </button>
+                  </button> */}
                 </div>
               </div>
 
@@ -322,7 +323,7 @@ export function ContentManagement() {
                     <div className="text-muted flex items-center gap-2 text-sm">
                       <span>Jahr {course.year ?? '-'}</span>
                       <span>•</span>
-                      <span>Module {course.chapter ?? '-'}</span>
+                      <span>Kapitel {course.chapter ?? '-'}</span>
                     </div>
                   </div>
                 </div>

@@ -79,7 +79,7 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
           )}
           {enabler?.title && (
             <>
-              {' '}• Enabler: {enabler.title}
+              {' '}• Lessson: {enabler.title}
             </>
           )}
         </div>
