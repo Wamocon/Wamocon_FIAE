@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import LinkifyText from '@/components/ui/LinkifyText';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -194,7 +195,7 @@ export default function TraineeEnablerPage() {
       <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
         <h1 className="text-foreground text-2xl font-bold">{enabler.title}</h1>
         {enabler.descriptionText && (
-          <p className="text-muted-foreground mt-2 whitespace-pre-line">{enabler.descriptionText}</p>
+          <LinkifyText className="text-muted-foreground mt-2" text={String(enabler.descriptionText)} preserveLineBreaks />
         )}
         {enabler.isActive && enabler.durationValue && enabler.activatedAt && (
           <div className="mt-3 text-sm">
@@ -220,13 +221,13 @@ export default function TraineeEnablerPage() {
         {enabler.scenarioText && (
           <div className="mt-4 rounded-xl border border-accent/20 bg-black/20 p-4">
             <div className="mb-1 text-sm font-semibold">Szenario</div>
-            <p className="whitespace-pre-line">{enabler.scenarioText}</p>
+            <LinkifyText className="text-foreground/90" text={String(enabler.scenarioText)} preserveLineBreaks />
           </div>
         )}
         {enabler.hintText && (
           <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-4">
             <div className="mb-1 text-sm font-semibold">Hinweis</div>
-            <p className="whitespace-pre-line text-muted-foreground">{enabler.hintText}</p>
+            <LinkifyText className="text-muted-foreground" text={String(enabler.hintText)} preserveLineBreaks />
           </div>
         )}
       </div>
