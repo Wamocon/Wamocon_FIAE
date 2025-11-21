@@ -49,11 +49,11 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       progressPct: number;
       completedEnablers: number;
       totalEnablers: number;
-      pending: { quizzes: number; useCases: number; geschaeftsprozesse: number };
+      pending: { quizzes: number; useCases: number }; // geschaeftsprozesse removed
     };
     enablers: Array<{ id: string; title: string; completed: boolean; isActive: boolean; link: string }>;
     useCases: Array<{ id: string; title: string; status: string | null; isActive: boolean; attemptNumber?: number | null; link: string }>;
-    geschaeftsprozesse: Array<{ id: string; title: string; status: string | null; isActive: boolean; attemptNumber?: number | null; link: string }>;
+    // geschaeftsprozesse removed
     enablerQuizzes: Array<{ enablerId: string; quizId: string; difficulty: string; lastScore: number | null; attemptNumber: number | null; isReviewed: boolean | null; link: string }>;
     globalQuizzes: Array<{ quizId: string; title: string; lastScore: number | null; attemptNumber: number | null; isReviewed: boolean | null; link: string }>;
   }>(null);
@@ -201,7 +201,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
 
   // Helpers
   const toggleItem = async (
-    itemType: 'ENABLER' | 'USE_CASE' | 'GESCHAEFTSPROZESS' | 'GLOBAL_QUIZ',
+    itemType: 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ',
     itemId: string,
     isActive: boolean,
   ) => {
@@ -483,32 +483,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               )}
             </section>
 
-            {/* Geschäftsprozesse */}
-            <section>
-              <h3 className="mb-3 text-xl font-bold text-white">Geschäftsprozesse</h3>
-              {overview?.geschaeftsprozesse?.length ? (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {overview.geschaeftsprozesse.map((g) => (
-                    <div key={g.id} className="rounded-2xl border border-accent/30 p-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="font-semibold text-white">{g.title}</div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${g.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : g.status ? 'border-green-500 text-green-500' : 'border-slate-300 text-white'}`}>{g.status ?? 'Nicht eingereicht'}</span>
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${g.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-white'}`}>{g.isActive ? 'Aktiv' : 'Inaktiv'}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {profile?.role === 'trainer' && (
-                          <button onClick={() => toggleItem('GESCHAEFTSPROZESS', g.id, !g.isActive)} className={`text-sm rounded-md px-2 py-1 border ${g.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}>{g.isActive ? 'Deaktivieren' : 'Aktivieren'}</button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-white">Keine Geschäftsprozesse gefunden.</div>
-              )}
-            </section>
+            {/* Geschäftsprozesse section removed */}
 
             {/* Global (Big) Quizzes */}
             <section>

@@ -5,11 +5,10 @@ import {
   profiles,
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
-  traineeGeschaeftsprozesseOverrides,
   quizAssignments,
 } from '@/db/migrations/schemas/schema';
 
-type ItemType = 'ENABLER' | 'USE_CASE' | 'GESCHAEFTSPROZESS' | 'GLOBAL_QUIZ';
+type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
 
 export async function PATCH(req: NextRequest, { params }: { params: { traineeId: string } }) {
   try {
@@ -54,16 +53,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { traineeId:
           });
         break;
       }
-      case 'GESCHAEFTSPROZESS': {
-        await db
-          .insert(traineeGeschaeftsprozesseOverrides)
-          .values({ traineeId: traineeId as any, geschaeftsprozesseId: itemId as any, isActive })
-          .onConflictDoUpdate({
-            target: [traineeGeschaeftsprozesseOverrides.traineeId, traineeGeschaeftsprozesseOverrides.geschaeftsprozesseId],
-            set: { isActive },
-          });
-        break;
-      }
+      // Geschäftsprozesse removed
       case 'GLOBAL_QUIZ': {
         // For global quizzes, assignment table represents active state: insert/delete
         if (isActive) {
