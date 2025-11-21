@@ -194,9 +194,6 @@ export default function TraineeEnablerPage() {
       {/* Enabler header */}
       <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
         <h1 className="text-foreground text-2xl font-bold">{enabler.title}</h1>
-        {enabler.descriptionText && (
-          <LinkifyText className="text-muted-foreground mt-2" text={String(enabler.descriptionText)} preserveLineBreaks />
-        )}
         {enabler.isActive && enabler.durationValue && enabler.activatedAt && (
           <div className="mt-3 text-sm">
             {(() => {
@@ -208,8 +205,14 @@ export default function TraineeEnablerPage() {
               const dueDate = new Date(started + total * 24 * 60 * 60 * 1000);
               return <span>Restzeit: {left} Tage • Fällig am {dueDate.toLocaleDateString()}</span>;
             })()}
+           
           </div>
         )}
+        <div className="mt-3">
+          {enabler.descriptionText && (
+          <LinkifyText className="text-muted-foreground mt-2" text={String(enabler.descriptionText)} preserveLineBreaks />
+        )}
+        </div>
         <div className="mt-3 flex flex-wrap gap-3">
           {enabler.videoUrl && (
             <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.videoUrl} target="_blank" rel="noreferrer">Video ansehen</a>
