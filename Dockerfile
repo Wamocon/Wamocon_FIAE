@@ -25,10 +25,7 @@ RUN npm ci --include=dev
 COPY . .
 RUN npm run build
 
-# Ensure entrypoint has LF endings and is executable
-RUN sed -i 's/\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh
 
 EXPOSE 3000
 ENV NODE_ENV=production
-ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["npm", "run", "start"]
