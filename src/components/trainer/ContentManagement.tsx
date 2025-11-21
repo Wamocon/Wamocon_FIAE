@@ -24,7 +24,6 @@ type CourseCard = {
   chapter: number | null;
   enablersCount: number;
   useCasesCount: number;
-  gpCount: number;
 };
 
 export function ContentManagement() {
@@ -186,7 +185,7 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[420px] flex flex-col"
+              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[360px] flex flex-col"
             >
               <div className="mb-4 flex items-start justify-between">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
@@ -232,28 +231,6 @@ export function ContentManagement() {
                     + Hinzufügen
                   </button> */}
                 </div>
-                
-                <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
-                  <div className="min-w-0">
-                    <h4 className="text-foreground text-sm font-medium">Geschäftsprozesse</h4>
-                    
-                  </div>
-                  <p className="text-muted text-xs">{course.gpCount} Aufgaben</p>
-                  {/* <button
-                    onClick={() => {
-                      setActiveCourseId(course.id);
-                      setGpTitle('');
-                      setGpDesc('');
-                      setGpDuration('');
-                      setGpActive(false);
-                      setShowAddgeschäftsprozesse(true);
-                    }}
-                    className="text-accent hover:text-accent/90 text-sm font-medium"
-                  >
-                    + Hinzufügen
-                  </button> */}
-                </div>
-            
 
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
@@ -309,32 +286,28 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 rounded-2xl border p-6 shadow-lg"
+              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg"
             >
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-                    <BookOpen className="h-6 w-6 text-white" />
+              {/* Header Row */}
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="from-accent to-primary flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br shrink-0">
+                    <BookOpen className="h-7 w-7 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-foreground text-xl font-bold truncate">
-                      {course.title}
-                    </h3>
-                    <div className="text-muted flex items-center gap-2 text-sm">
-                      <span>Jahr {course.year ?? '-'}</span>
-                      <span>•</span>
-                      <span>Kapitel {course.chapter ?? '-'}</span>
+                    <h3 className="text-foreground text-2xl font-bold truncate mb-1">{course.title}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="bg-accent rounded-full px-3 py-1 text-xs font-semibold text-white">Jahr {course.year ?? '-'}</span>
+                      <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">Kapitel {course.chapter ?? '-'}</span>
+                      <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">ID {course.id.slice(0,8)}…</span>
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end md:self-auto">
                   <button
                     onClick={() => router.push(`/trainer/content-management/${course.id}/edit`)}
-                    className="text-muted hover:text-accent hover:bg-accent/10 rounded-xl p-2 transition-all duration-200"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
+                    className="text-accent hover:text-accent/90 rounded-xl border border-accent/30 px-4 py-2 text-sm font-medium transition-all duration-200 hover:bg-accent/10"
+                  >Bearbeiten</button>
                   <button
                     onClick={async () => {
                       if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
@@ -347,37 +320,34 @@ export function ContentManagement() {
                       }
                     }}
                     className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
+                    aria-label="Kurs löschen"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
-              </div>
+              </div>  
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <div className="bg-muted/30 border-accent/30 rounded-xl border p-4 h-28 flex flex-col overflow-hidden">
-                  <div className="flex-1">
-                    <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
-                      <FolderOpen className="text-muted h-4 w-4 mt-0.5" />
-                      <span className="truncate">Lessons: {course.enablersCount}</span>
-                    </h4>
+              {/* Stats Row */}
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+                <div className="glass-effect bg-muted/30 flex items-center justify-between rounded-xl p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FolderOpen className="text-muted h-5 w-5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">Lessons</p>
+                      <p className="text-xs text-muted truncate">Themen im Kurs</p>
+                    </div>
                   </div>
+                  <span className="text-foreground text-lg font-bold">{course.enablersCount}</span>
                 </div>
-
-                <div className="bg-muted/30 border-accent/30 rounded-xl border p-4 h-28 flex flex-col overflow-hidden">
-                  <div className="flex-1">
-                    <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
-                      <FileText className="h-4 w-4" />
-                      <span className="truncate">Geschäftsprozesse: {course.gpCount}</span>
-                    </h4>
+                <div className="glass-effect bg-muted/30 flex items-center justify-between rounded-xl p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="text-muted h-5 w-5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">Use Cases</p>
+                      <p className="text-xs text-muted truncate">Aufgaben im Kurs</p>
+                    </div>
                   </div>
-                </div>
-                <div className="bg-muted/30 border-accent/30 rounded-xl border p-4 h-28 flex flex-col overflow-hidden">
-                  <div className="flex-1">
-                    <h4 className="text-foreground flex items-start gap-2 font-semibold min-w-0">
-                      <FileText className="h-4 w-4" />
-                      <span className="truncate">Use Cases: {course.useCasesCount}</span>
-                    </h4>
-                  </div>
+                  <span className="text-foreground text-lg font-bold">{course.useCasesCount}</span>
                 </div>
               </div>
             </div>

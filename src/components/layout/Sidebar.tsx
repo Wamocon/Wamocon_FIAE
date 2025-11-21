@@ -33,7 +33,7 @@ export function Sidebar({
   onToggle: _onToggle,
   userRole,
 }: SidebarProps) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, loading } = useAuth();
   const { language } = useLanguage();
   const router = useRouter();
   const pathname = usePathname();
@@ -95,15 +95,13 @@ export function Sidebar({
   );
 
   const handleSignOut = useCallback(async () => {
+    if (loading) return;
     try {
       await signOut();
-      router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if there's an error, redirect to login
-      router.push('/login');
     }
-  }, [signOut, router]);
+  }, [signOut, loading]);
 
   // Role-based navigation items - optimized with useMemo
   const navigationItems = useMemo(
@@ -293,11 +291,12 @@ export function Sidebar({
 
           <button
             onClick={handleSignOut}
-            className="text-muted-foreground hover:text-foreground hover:bg-accent/10 mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200"
+            disabled={loading}
+            className={`mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${loading ? 'opacity-60 cursor-not-allowed' : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'}`}
           >
-            <LogOut className="h-5 w-5" />
+            <LogOut className={`h-5 w-5 ${loading ? 'animate-pulse' : ''}`} />
             <span className="font-medium">
-              {language === 'de' ? 'Abmelden' : 'Logout'}
+              {loading ? (language === 'de' ? 'Abmelden…' : 'Logging out…') : (language === 'de' ? 'Abmelden' : 'Logout')}
             </span>
           </button>
         </div>

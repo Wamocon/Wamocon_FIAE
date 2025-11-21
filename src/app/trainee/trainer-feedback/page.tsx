@@ -146,37 +146,7 @@ export default function TraineeFeedbackPage() {
         )}
       </div>
 
-      {/* Use case submissions */}
-      {/* geschäftsprozesse submissions */}
-      <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
-        <h2 className="text-foreground mb-4 text-xl font-semibold">ÜGeschäftsprozesse-Einreichungen</h2>
-        {gesetzes.length === 0 ? (
-          <div className="text-muted-foreground">Keine Einreichungen.</div>
-        ) : (
-          <ul className="space-y-4">
-            {gesetzes.map((g) => (
-              <li key={g.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold">
-                    {g.geschäftsprozesseTitle}
-                    {g.attemptNumber ? <span className="ml-2 text-xs rounded-full border border-accent/30 px-2 py-0.5">Versuch {g.attemptNumber}</span> : null}
-                  </div>
-                  {statusPill(g.status)}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">Eingereicht am {new Date(g.submittedAt).toLocaleString()}</div>
-                <div className="mt-2 rounded-xl border border-accent/20 bg-background/30 p-3">
-                  <div className="text-xs font-medium text-muted-foreground">Feedback</div>
-                  {g.trainerFeedback ? (
-                    <div className="text-sm whitespace-pre-wrap">{g.trainerFeedback}</div>
-                  ) : (
-                    <div className="text-xs italic text-muted-foreground">{g.status === 'PENDING' ? 'Noch in Prüfung…' : 'Kein individuelles Feedback vorhanden.'}</div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+     
 
       {/* Use case submissions */}
       <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">

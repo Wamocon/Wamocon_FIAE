@@ -37,20 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cou
       .where(eq(enablers.courseId, courseId as any))
       .orderBy(enablers.orderIndex);
 
-  const { useCases, Geschäftsprozesse } = await import('@/db/migrations/schemas/schema');
-    const gps = await db
-      .select({
-        id: Geschäftsprozesse.id,
-        title: Geschäftsprozesse.title,
-        orderIndex: Geschäftsprozesse.orderIndex,
-        isActive: Geschäftsprozesse.isActive,
-        durationValue: Geschäftsprozesse.durationValue,
-        durationUnit: Geschäftsprozesse.durationUnit,
-        descriptionText: Geschäftsprozesse.descriptionText,
-      })
-      .from(Geschäftsprozesse)
-      .where(eq(Geschäftsprozesse.courseId, courseId as any))
-      .orderBy(Geschäftsprozesse.orderIndex);
+    const { useCases } = await import('@/db/migrations/schemas/schema'); // Geschäftsprozesse removed
 
     const ucs = await db
       .select({
@@ -65,7 +52,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cou
       .from(useCases)
       .where(eq(useCases.courseId, courseId as any))
       .orderBy(useCases.orderIndex);
-  return NextResponse.json({ course, skills: attachedSkills.map((s) => s.name), enablers: ens, Geschäftsprozesse: gps, useCases: ucs });
+    return NextResponse.json({ course, skills: attachedSkills.map((s) => s.name), enablers: ens, useCases: ucs });
   } catch (e) {
     console.error('Get course error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
