@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
@@ -57,12 +57,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isPublicPath = useMemo(() => {
     const publicPaths = new Set<string>([
       '/',
+      '/login', // ensure login route is treated as public so we don't auto load profile after signOut
       '/register',
       '/forgot-password',
       '/reset-password',
     ]);
     return publicPaths.has(pathname || '');
   }, [pathname]);
+
+  // Auto logout after 4 hours
+  const SESSION_MAX_MS = 4 * 60 * 60 * 1000; // 4h
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearLogoutTimer = () => {
+    if (logoutTimerRef.current) {
+      clearTimeout(logoutTimerRef.current);
+      logoutTimerRef.current = null;
+    }
+  };
+  const scheduleAutoLogout = () => {
+    if (typeof window === 'undefined') return;
+    clearLogoutTimer();
+    const loginAtRaw = window.localStorage.getItem('auth_login_at');
+    const loginAt = loginAtRaw ? Number(loginAtRaw) : Date.now();
+    const now = Date.now();
+    const remaining = SESSION_MAX_MS - (now - loginAt);
+    if (remaining <= 0) {
+      void signOut(true);
+      return;
+    }
+    logoutTimerRef.current = setTimeout(() => { void signOut(true); }, remaining);
+  };
 
   useEffect(() => {
     // Realtime subscription handle for current user's profile
@@ -369,34 +393,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (userId) {
       setUser({ id: userId, email: userEmail || '' });
-      if (!isPublicPath) {
-        // Ensure profile exists/updated on server
-        try {
-          const { data: sessionRes } = await supabase.auth.getSession();
-          const token = sessionRes.session?.access_token;
-          if (token) {
-            await fetch('/api/auth/sync-profile', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
-        } catch (e) {
-          // ignore
+      try {
+        if (typeof window !== 'undefined') window.localStorage.setItem('auth_login_at', Date.now().toString());
+      } catch (_) { /* ignore */ }
+      // Always sync & load profile (even on public path) so UI has data immediately
+      try {
+        const { data: sessionRes } = await supabase.auth.getSession();
+        const token = sessionRes.session?.access_token;
+        if (token) {
+          await fetch('/api/auth/sync-profile', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
         }
-        // Handle eventual consistency after email confirmation or first-time login
-        await waitForProfile(userId);
-        const loaded = await loadProfile(userId);
-        // Prevent inactive trainees from logging in
-        if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
-          // sign out immediately and inform caller
-          await supabase.auth.signOut();
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-          throw new Error('Account ist noch nicht aktiviert. Bitte Ihren Trainer kontaktieren.');
-        }
+      } catch (e) { /* ignore */ }
+      await waitForProfile(userId);
+      const loaded = await loadProfile(userId);
+      if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        throw new Error('Account ist noch nicht aktiviert. Bitte Ihren Trainer kontaktieren.');
       }
       setLoading(false);
+      scheduleAutoLogout();
+      // Redirect based on role if currently on a public path (likely /login)
+      try {
+        if (isPublicPath) {
+          const target = loaded?.role === 'trainer' ? '/trainer/dashboard' : '/trainee/dashboard';
+          router.replace(target);
+        }
+      } catch (_) { /* ignore */ }
       return;
     }
 
@@ -430,26 +458,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setUser({ id: data.user.id, email });
+    try { if (typeof window !== 'undefined') window.localStorage.setItem('auth_login_at', Date.now().toString()); } catch (_) { /* ignore */ }
 
     // Wait for DB trigger to create profile, then load it
     await waitForProfile(data.user.id);
-    await loadProfile(data.user.id);
+    const loaded = await loadProfile(data.user.id);
     setLoading(false);
-  };
-
-  const signOut = async () => {
-    setLoading(true);
+    scheduleAutoLogout();
+    // After sign up redirect to dashboard appropriate for role
     try {
-      await supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
+      const target = loaded?.role === 'trainer' ? '/trainer/dashboard' : '/trainee/dashboard';
+      router.replace(target);
+    } catch (_) { /* ignore */ }
+  };
+  const signOut = async (silent?: boolean) => {
+    setLoading(true);
+    clearLogoutTimer();
+    // Fallback: ensure tokens cleared even if SDK errors
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((resolve) => setTimeout(resolve, 3000)), // timeout safeguard
+      ]);
     } catch (error) {
-      // Gracefully handle sign-out failures without crashing the app
       console.error('Auth signOut failed:', error);
-    } finally {
-      setLoading(false);
+    }
+    try {
+      if (typeof window !== 'undefined') {
+        // Remove stored login timestamp & any supabase keys
+        window.localStorage.removeItem('auth_login_at');
+        for (const k of Object.keys(window.localStorage)) {
+          if (k.startsWith('sb-')) {
+            try { window.localStorage.removeItem(k); } catch (_) { /* ignore */ }
+          }
+        }
+      }
+    } catch (_) { /* ignore */ }
+    setUser(null);
+    setProfile(null);
+    setLoading(false);
+    if (!silent) {
+      try { router.replace('/login'); } catch (_) { /* ignore */ }
     }
   };
+
+  useEffect(() => {
+    // On mount or when user changes, schedule auto logout if logged in
+    if (user?.id) {
+      scheduleAutoLogout();
+    } else {
+      try { if (typeof window !== 'undefined') window.localStorage.removeItem('auth_login_at'); } catch (_) { /* ignore */ }
+      clearLogoutTimer();
+    }
+    return () => { clearLogoutTimer(); };
+  }, [user?.id]);
 
   const value: AuthContextType = {
     user,

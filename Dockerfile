@@ -3,7 +3,7 @@ FROM ubuntu:22.04 AS base
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000 \
+    PORT=3002 \
     HOSTNAME=0.0.0.0
 
 WORKDIR /app
@@ -25,10 +25,7 @@ RUN npm ci --include=dev
 COPY . .
 RUN npm run build
 
-# Ensure entrypoint has LF endings and is executable
-RUN sed -i 's/\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh
 
-EXPOSE 3000
+EXPOSE 3002
 ENV NODE_ENV=production
-ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["npm", "run", "start"]

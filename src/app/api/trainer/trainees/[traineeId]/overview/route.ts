@@ -9,15 +9,12 @@ import {
   enablerCompletions,
   useCases,
   useCaseSubmissions,
-  geschäftsprozesseSubmissions,
-  Geschäftsprozesse,
   quizzes,
   quizAssignments,
   quizSubmissions,
   enablerQuizLinks,
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
-  traineeGeschaeftsprozesseOverrides,
 } from '@/db/migrations/schemas/schema';
 
 export async function GET(_req: NextRequest, { params }: { params: { traineeId: string } }) {
@@ -92,32 +89,7 @@ export async function GET(_req: NextRequest, { params }: { params: { traineeId: 
       if (!latestUseCaseById.has(key)) latestUseCaseById.set(key, sub);
     }
 
-    // Geschäftsprozesse and latest submission
-    const gpRows = courseIds.length
-      ? await db
-          .select({ id: Geschäftsprozesse.id, title: Geschäftsprozesse.title, isActive: Geschäftsprozesse.isActive, courseId: Geschäftsprozesse.courseId, orderIndex: Geschäftsprozesse.orderIndex })
-          .from(Geschäftsprozesse)
-          .where(inArray(Geschäftsprozesse.courseId, courseIds as any))
-      : [];
-    const gpIds = gpRows.map((g) => g.id);
-    const latestGpSubmissions = gpIds.length
-      ? await db
-          .select({
-            id: geschäftsprozesseSubmissions.id,
-            gpId: geschäftsprozesseSubmissions.geschäftsprozesseId,
-            status: geschäftsprozesseSubmissions.status,
-            attemptNumber: geschäftsprozesseSubmissions.attemptNumber,
-            submittedAt: geschäftsprozesseSubmissions.submittedAt,
-          })
-          .from(geschäftsprozesseSubmissions)
-          .where(and(eq(geschäftsprozesseSubmissions.traineeId, traineeId as any), inArray(geschäftsprozesseSubmissions.geschäftsprozesseId, gpIds as any)))
-          .orderBy(desc(geschäftsprozesseSubmissions.submittedAt))
-      : [];
-    const latestGpById = new Map<string, typeof latestGpSubmissions[number]>();
-    for (const sub of latestGpSubmissions) {
-      const key = String(sub.gpId);
-      if (!latestGpById.has(key)) latestGpById.set(key, sub);
-    }
+    // Geschäftsprozesse removed
 
     // Enabler-level quizzes: by difficulty per enabler
     const enablerQuizRows = enablerIds.length
@@ -181,7 +153,7 @@ export async function GET(_req: NextRequest, { params }: { params: { traineeId: 
 
     // Pending counts
     const pendingUseCases = Array.from(latestUseCaseById.values()).filter((s) => s.status === 'PENDING').length;
-    const pendingGeschProz = Array.from(latestGpById.values()).filter((s) => s.status === 'PENDING').length;
+    const pendingGeschProz = 0; // removed
     const pendingQuizReviews = Array.from(latestQuizSubByQuizId.values()).concat(Array.from(latestGlobalQuizById.values())).filter((s) => s && !s.isReviewed).length;
 
     return NextResponse.json({
@@ -198,7 +170,7 @@ export async function GET(_req: NextRequest, { params }: { params: { traineeId: 
         pending: {
           quizzes: pendingQuizReviews,
           useCases: pendingUseCases,
-          geschaeftsprozesse: pendingGeschProz,
+          // geschaeftsprozesse removed
         },
       },
       enablers: await (async () => {
@@ -249,30 +221,7 @@ export async function GET(_req: NextRequest, { params }: { params: { traineeId: 
           };
         });
       })(),
-      geschaeftsprozesse: await (async () => {
-        const oRows = gpIds.length
-          ? await db
-              .select({ gpId: traineeGeschaeftsprozesseOverrides.geschaeftsprozesseId, isActive: traineeGeschaeftsprozesseOverrides.isActive })
-              .from(traineeGeschaeftsprozesseOverrides)
-              .where(and(eq(traineeGeschaeftsprozesseOverrides.traineeId, traineeId as any), inArray(traineeGeschaeftsprozesseOverrides.geschaeftsprozesseId, gpIds as any)))
-          : [];
-        const oMap = new Map<string, boolean | null>();
-        oRows.forEach((r) => oMap.set(String(r.gpId), r.isActive === null ? null : Boolean(r.isActive)));
-        return gpRows.map((g) => {
-        const latest = latestGpById.get(String(g.id));
-          const override = oMap.get(String(g.id));
-          const effectiveActive = typeof override === 'boolean' ? override : Boolean(g.isActive);
-          return {
-            id: g.id,
-            title: g.title,
-            isActive: effectiveActive,
-            status: latest?.status || null,
-            attemptNumber: latest?.attemptNumber || null,
-            submittedAt: latest?.submittedAt || null,
-            link: `/trainee/gesetzesprozesse/${g.id}`,
-          };
-        });
-      })(),
+      // geschaeftsprozesse removed from overview response
       enablerQuizzes: enablerQuizRows.map((r) => {
         const latest = latestQuizSubByQuizId.get(String(r.quizId));
         return {

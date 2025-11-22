@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 
 type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
 type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
-type GesetzReviewItem = { id: string; geschäftsprozesseId: string; geschäftsprozesseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
+// Geschäftsprozesse review removed
 type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
 type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string; attemptNumber?: number|null; difficulty?: 'LOW'|'MEDIUM'|'HIGH'|null; enablerTitle?: string|null };
 
@@ -18,12 +18,12 @@ export default function TrainerReviewsPage() {
   const onlyPendingParam = searchParams.get('onlyPending'); // 'true' | 'false'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'enablers' | 'Geschäftsprozesse' | 'usecases' | 'quizzes' | 'reflections'>('enablers');
+  const [activeTab, setActiveTab] = useState<'enablers' | 'usecases' | 'quizzes' | 'reflections'>('enablers');
 
   // Enabler/UseCase state
   const [enablerSubs, setEnablerSubs] = useState<EnablerReviewItem[]>([]);
   const [useCaseSubs, setUseCaseSubs] = useState<UseCaseReviewItem[]>([]);
-  const [gesetzSubs, setGesetzSubs] = useState<GesetzReviewItem[]>([]);
+  // removed gesetzSubs
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
 
@@ -44,7 +44,7 @@ export default function TrainerReviewsPage() {
 
   // Sync state from URL params (deep-linking from dashboard)
   useEffect(() => {
-  const allowed = ['enablers', 'Geschäftsprozesse', 'usecases', 'quizzes', 'reflections'] as const;
+  const allowed = ['enablers', 'usecases', 'quizzes', 'reflections'] as const;
     if (viewParam && (allowed as readonly string[]).includes(viewParam)) {
       setActiveTab(viewParam as any);
     }
@@ -58,7 +58,7 @@ export default function TrainerReviewsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewParam, onlyPendingParam]);
 
-  // load Enablers/UseCases/Geschäftsprozesse
+  // load Enablers/UseCases
   useEffect(() => {
     const loadEU = async () => {
       if (!profile?.id) return;
@@ -71,14 +71,14 @@ export default function TrainerReviewsPage() {
         const data = await r.json();
   setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
   setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-        setGesetzSubs((data.geschäftsprozesseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+            // geschäftsprozesseSubmissions removed
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
       } finally {
         setLoading(false);
       }
     };
-    if (activeTab === 'enablers' || activeTab === 'usecases' || activeTab === 'Geschäftsprozesse') loadEU();
+    if (activeTab === 'enablers' || activeTab === 'usecases') loadEU();
   }, [profile?.id, statusFilter, activeTab]);
 
   // load Quizzes/Reflections
@@ -108,14 +108,12 @@ export default function TrainerReviewsPage() {
     if (activeTab === 'reflections' || activeTab === 'quizzes') loadQR();
   }, [profile?.id, activeTab, pendingFilter]);
 
-  const reviewItem = async (kind: 'enabler' | 'geschäftsprozesse' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
+  const reviewItem = async (kind: 'enabler' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
     if (!profile?.id) return;
     const feedback = feedbackMap[id] || '';
     const url = kind === 'enabler'
       ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
-      : kind === 'usecase'
-        ? `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`
-  : `/api/trainer/reviews/gesetzesprozesse/${id}?trainerId=${profile.id}`;
+      : `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`;
     const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, trainerFeedback: feedback }) });
     if (!r.ok) {
       alert('Konnte Review nicht speichern');
@@ -127,7 +125,7 @@ export default function TrainerReviewsPage() {
     const data = await rr.json();
   setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
   setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-    setGesetzSubs((data.geschäftsprozesseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+      // geschäftsprozesseSubmissions removed
     setFeedbackMap(prev => ({ ...prev, [id]: '' }));
   };
 
@@ -155,7 +153,7 @@ export default function TrainerReviewsPage() {
     setQuizzes(data.submissions || []);
   };
 
-  const forcedView = viewParam === 'enablers' || viewParam === 'Geschäftsprozesse' || viewParam === 'usecases' || viewParam === 'quizzes' || viewParam === 'reflections';
+  const forcedView = viewParam === 'enablers' || viewParam === 'usecases' || viewParam === 'quizzes' || viewParam === 'reflections';
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -167,18 +165,18 @@ export default function TrainerReviewsPage() {
         {!forcedView ? (
           <>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='enablers'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Lesson</button>
-            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='Geschäftsprozesse'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('Geschäftsprozesse')}>Geschäftsprozesse</button>
+            {/* Geschäftsprozesse tab removed */}
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='usecases'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='quizzes'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
             <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='reflections'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
           </>
         ) : (
           <div className="rounded-xl border border-accent/30 bg-black/30 px-3 py-1.5 text-sm">
-            {activeTab === 'enablers' ? 'Enabler' : activeTab === 'Geschäftsprozesse' ? 'Geschäftsprozesse' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
+            {activeTab === 'enablers' ? 'Enabler' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
           </div>
         )}
         <div className="ml-auto flex items-center gap-2 text-sm">
-          {activeTab === 'enablers' || activeTab === 'Geschäftsprozesse' || activeTab === 'usecases' ? (
+          {activeTab === 'enablers' || activeTab === 'usecases' ? (
             <>
               <span>Filter:</span>
               <select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
@@ -250,41 +248,7 @@ export default function TrainerReviewsPage() {
         </div>
       )}
 
-      {!loading && activeTab==='Geschäftsprozesse' && (
-        <div className="space-y-4">
-          {gesetzSubs.length === 0 && <div className="text-sm text-muted-foreground">Keine Einreichungen</div>}
-          {gesetzSubs.map(it => (
-            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
-                    <Scale className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-semibold">{it.geschäftsprozesseTitle}</div>
-                    <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()} {it.attemptNumber ? `• Versuch ${it.attemptNumber}` : ''}</div>
-                  </div>
-                </div>
-                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
-              </div>
-              {it.submissionText && (
-                <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-3">
-                  <div className="text-sm font-medium">Lösung</div>
-                  <p className="whitespace-pre-line text-sm text-foreground/90">{it.submissionText}</p>
-                </div>
-              )}
-              <div className="mt-3">
-                <label className="mb-1 block text-sm font-medium">Feedback</label>
-                <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
-              </div>
-              <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('geschäftsprozesse', it.id, 'REJECTED')}>Ablehnen</button>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('geschäftsprozesse', it.id, 'APPROVED')}>Genehmigen</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Geschäftsprozesse section removed */}
 
       {!loading && activeTab==='usecases' && (
         <div className="space-y-4">
