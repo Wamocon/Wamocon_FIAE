@@ -3,7 +3,7 @@ FROM ubuntu:22.04 AS base
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000 \
+    PORT=3002 \
     HOSTNAME=0.0.0.0
 
 WORKDIR /app
@@ -26,6 +26,6 @@ COPY . .
 RUN npm run build
 
 
-EXPOSE 3000
+EXPOSE 3002
 ENV NODE_ENV=production
 CMD ["npm", "run", "start"]
