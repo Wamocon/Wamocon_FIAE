@@ -6,8 +6,6 @@ import {
   enablers,
   useCaseSubmissions,
   useCases,
-  geschäftsprozesseSubmissions,
-  Geschäftsprozesse,
   quizSubmissions,
   quizzes,
   enablerQuizzes,
@@ -56,23 +54,7 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(useCaseSubmissions.submittedAt))
       .limit(200);
 
-    // geschäftsprozesse submissions with titles
-    const gesetzRows = await db
-      .select({
-        id: geschäftsprozesseSubmissions.id,
-        geschäftsprozesseId: geschäftsprozesseSubmissions.geschäftsprozesseId,
-        status: geschäftsprozesseSubmissions.status,
-        trainerFeedback: geschäftsprozesseSubmissions.trainerFeedback,
-        submittedAt: geschäftsprozesseSubmissions.submittedAt,
-        reviewedAt: geschäftsprozesseSubmissions.reviewedAt,
-        attemptNumber: geschäftsprozesseSubmissions.attemptNumber,
-        geschäftsprozesseTitle: Geschäftsprozesse.title,
-      })
-      .from(geschäftsprozesseSubmissions)
-      .innerJoin(Geschäftsprozesse, eq(geschäftsprozesseSubmissions.geschäftsprozesseId, Geschäftsprozesse.id))
-      .where(eq(geschäftsprozesseSubmissions.traineeId, traineeId as any))
-      .orderBy(desc(geschäftsprozesseSubmissions.submittedAt))
-      .limit(200);
+    // Geschäftsprozesse feature removed; skipping related submissions
 
     // Enabler quiz submissions: join quizSubmissions -> quizzes (quizType ENABLER) -> enablerQuizzes -> enablers for title
     const quizRows = await db
@@ -118,7 +100,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       enablerResults: enablerRows,
       useCaseResults: useCaseRows,
-      geschäftsprozesseResults: gesetzRows,
       enablerQuizResults,
       globalQuizResults,
     });

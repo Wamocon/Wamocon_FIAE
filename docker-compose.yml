@@ -2,20 +2,29 @@ services:
   web:
     build: .
     container_name: fiae-web
-    restart: unless-stopped
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_PORT:-3002}:3002"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     environment:
       # Use Supabase CLI on host (or hosted Supabase). Inside containers use host.docker.internal for the DB.
-      # We force the container to use host.docker.internal regardless of .env to avoid 127.0.0.1 issues.
-      DB_CONNECTION_STRING: postgresql://postgres:postgres@host.docker.internal:54322/postgres
-      # Client/browser will use NEXT_PUBLIC_SUPABASE_URL from .env (likely http://127.0.0.1:54321).
-      # For server-side calls inside the container, we expose SUPABASE_URL_INTERNAL to point to the host.
-      SUPABASE_URL_INTERNAL: http://host.docker.internal:54321
-      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      NODE_ENV: production
-      NEXT_TELEMETRY_DISABLED: "1"
+      - "NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS=${NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS}"
+      - "NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}"
+      - "DB_CONNECTION_STRING=${DB_CONNECTION_STRING}"
+      - "NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+      - "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}"
+      - "NODE_ENV=production"
+      - "NEXT_TELEMETRY_DISABLED=1"
+      - "NODE_OPTIONS=--dns-result-order=ipv4first"
     env_file:
       - .env
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+    name: app-network
+    external: true
 
