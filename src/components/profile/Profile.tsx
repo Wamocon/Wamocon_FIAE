@@ -68,14 +68,6 @@ export function Profile() {
 
   
 
-  const handleSave = async () => {
-    try {
-      await updateProfile({ full_name: editedProfile.full_name });
-    } finally {
-      setIsEditing(false);
-    }
-  };
-
   const handleCancel = () => {
     setEditedProfile({
       full_name: profile.full_name || '',
@@ -86,7 +78,22 @@ export function Profile() {
     setIsEditing(false);
   };
 
+  const handleEditToggle = () => {
+    if (!isEditing) {
+      // Entering edit mode - sync with current profile (including any uploaded avatar)
+      setEditedProfile({
+        full_name: profile.full_name || '',
+        email: profile.email || '',
+        role: profile.role || 'trainee',
+        training_start_date: profile.training_start_date || '',
+      });
+    }
+    // Just toggle edit mode (don't auto-save when closing)
+    setIsEditing(!isEditing);
+  };
+
   const handlePasswordChange = async () => {
+    console.log('[handlePasswordChange] START - pwBusy before:', pwBusy);
     setPwMsg(null);
     if (!pw1 || pw1.length < 8) {
       setPwMsg('Das Passwort muss mindestens 8 Zeichen lang sein.');
@@ -96,20 +103,28 @@ export function Profile() {
       setPwMsg('Die Passwörter stimmen nicht überein.');
       return;
     }
+    console.log('[handlePasswordChange] Setting pwBusy to TRUE');
+    setPwBusy(true);
     try {
-      setPwBusy(true);
+      console.log('[handlePasswordChange] Calling changePassword...');
       await changePassword(pw1);
+      console.log('[handlePasswordChange] Password changed successfully');
       setPwMsg('Passwort erfolgreich geändert.');
       setPw1('');
       setPw2('');
+      console.log('[handlePasswordChange] Setting pwBusy to FALSE (success)');
+      setPwBusy(false);
+      console.log('[handlePasswordChange] After setPwBusy(false)');
     } catch (e: unknown) {
+      console.log('[handlePasswordChange] Error caught:', e);
       const message = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string'
         ? (e as any).message
         : 'Passwort konnte nicht geändert werden';
       setPwMsg(message);
-    } finally {
+      console.log('[handlePasswordChange] Setting pwBusy to FALSE (error)');
       setPwBusy(false);
     }
+    console.log('[handlePasswordChange] END');
   };
 
   const handleChooseFile = () => fileInputRef.current?.click();
@@ -225,7 +240,7 @@ export function Profile() {
               <span className="text-muted-foreground text-sm">Lade hoch…</span>
             )}
             <button
-              onClick={() => setIsEditing(!isEditing)}
+              onClick={handleEditToggle}
               className="bg-accent/10 hover:bg-accent/20 rounded-xl p-3 transition-colors"
             >
               <Edit3 className="text-accent h-5 w-5" />
@@ -366,7 +381,7 @@ export function Profile() {
         {isEditing && (
           <div className="mt-6 flex space-x-4">
             <button
-              onClick={handleSave}
+              onClick={handleEditToggle}
               className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-6 py-3 transition-colors duration-200"
             >
               Speichern
