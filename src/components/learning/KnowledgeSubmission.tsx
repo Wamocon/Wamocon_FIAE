@@ -219,23 +219,32 @@ export function KnowledgeSubmission() {
           ) : (
             <div className="space-y-3">
               {notes.map((n) => (
-                <Link key={n.id} href={`/trainee/knowledge-submission/${n.id}`}>
+                
                   <div className="bg-background/50 border-accent/30 hover:border-accent/60 rounded-xl border p-4 transition-colors">
                     <div className="flex items-start justify-between gap-3">
                       <div>
+                        <Link key={n.id} href={`/trainee/knowledge-submission/${n.id}`}>
                         <div className="text-foreground font-semibold">{n.title}</div>
                         <div className="text-muted text-xs">{new Date(n.createdAt).toLocaleString()}</div>
+                        </Link>
                       </div>
                     </div>
                     <p className="text-muted mt-2 line-clamp-3 whitespace-pre-wrap">{n.content}</p>
                     {n.oneDriveLink && (
                       <div className="mt-2 text-xs">
                         <span className="text-muted">Link: </span>
-                        <span className="text-accent underline">{n.oneDriveLink}</span>
+                        <a
+                          href={n.oneDriveLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-accent underline break-all"
+                        >
+                          {n.oneDriveLink}
+                        </a>
                       </div>
                     )}
                   </div>
-                </Link>
+               
               ))}
             </div>
           )}
