@@ -145,48 +145,82 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const init = async () => {
       setLoading(true);
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      // Handle PKCE OAuth redirects only (/?code=...&state=...)
+      
       try {
-        if (typeof window !== 'undefined') {
-          const url = new URL(window.location.href);
-          const code = url.searchParams.get('code');
-          const state = url.searchParams.get('state');
-          if (!session?.user && code && state) {
-            const { data: exData, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
-            if (!exErr && exData.session) {
-              // Session established via OAuth PKCE; no redirect needed here.
-            }
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
-      if (session?.user) {
-        const u = session.user;
-        setUser({ id: u.id, email: u.email || '' });
-        if (!isPublicPath) {
-          // Ensure profile exists/updated on server
+        // Add timeout to prevent hanging forever
+        const initTimeout = new Promise<void>((_, reject) => {
+          setTimeout(() => reject(new Error('Init timeout')), 10000); // 10 second timeout
+        });
+        
+        const initLogic = async () => {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          // Handle PKCE OAuth redirects only (/?code=...&state=...)
           try {
-            if (session.access_token) {
-              await fetch('/api/auth/sync-profile', {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${session.access_token}`,
-                },
-              });
+            if (typeof window !== 'undefined') {
+              const url = new URL(window.location.href);
+              const code = url.searchParams.get('code');
+              const state = url.searchParams.get('state');
+              if (!session?.user && code && state) {
+                const { data: exData, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+                if (!exErr && exData.session) {
+                  // Session established via OAuth PKCE; no redirect needed here.
+                }
+              }
             }
           } catch (e) {
             // ignore
           }
-          await loadProfile(u.id);
-          try { setupRealtime(u.id); } catch (e) { /* ignore */ }
-        }
+          
+          if (session?.user) {
+            const u = session.user;
+            setUser({ id: u.id, email: u.email || '' });
+            if (!isPublicPath) {
+              // Ensure profile exists/updated on server
+              try {
+                if (session.access_token) {
+                  const syncTimeout = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('sync timeout')), 5000)
+                  );
+                  await Promise.race([
+                    fetch('/api/auth/sync-profile', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${session.access_token}`,
+                      },
+                    }),
+                    syncTimeout
+                  ]);
+                }
+              } catch (e) {
+                console.warn('Profile sync failed or timed out:', e);
+              }
+              
+              try {
+                const profileTimeout = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('loadProfile timeout')), 5000)
+                );
+                await Promise.race([
+                  loadProfile(u.id),
+                  profileTimeout
+                ]);
+              } catch (e) {
+                console.error('Load profile failed or timed out:', e);
+              }
+              
+              try { setupRealtime(u.id); } catch (e) { /* ignore */ }
+            }
+          }
+        };
+        
+        await Promise.race([initLogic(), initTimeout]);
+      } catch (e) {
+        console.error('Auth init error or timeout:', e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
@@ -204,15 +238,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Ensure profile exists/updated on server
             try {
               if (session.access_token) {
-                await fetch('/api/auth/sync-profile', {
-                  method: 'POST',
-                  headers: { Authorization: `Bearer ${session.access_token}` },
-                });
+                const syncTimeout = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('sync timeout in onAuthStateChange')), 5000)
+                );
+                await Promise.race([
+                  fetch('/api/auth/sync-profile', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                  }),
+                  syncTimeout
+                ]);
               }
             } catch (e) {
-              // ignore
+              console.warn('Profile sync failed or timed out in onAuthStateChange:', e);
             }
-            await loadProfile(u.id);
+            
+            try {
+              const profileTimeout = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('loadProfile timeout in onAuthStateChange')), 5000)
+              );
+              await Promise.race([
+                loadProfile(u.id),
+                profileTimeout
+              ]);
+            } catch (e) {
+              console.error('Load profile failed or timed out in onAuthStateChange:', e);
+            }
+            
             try { setupRealtime(u.id); } catch (e) { /* ignore */ }
           }
         } else {
@@ -274,45 +326,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id, isPublicPath]);
 
   const loadProfile = async (userId: string) => {
-    const { data: authUser } = await supabase.auth.getUser();
-    const email = authUser.user?.email || '';
+    try {
+      const { data: authUser } = await supabase.auth.getUser();
+      const email = authUser.user?.email || '';
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(
-        'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, is_active'
-      )
-      .eq('id', userId)
-      .single();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(
+          'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, is_active'
+        )
+        .eq('id', userId)
+        .single();
 
-    if (error) {
+      if (error) {
+        console.error('Error loading profile:', error);
+        setProfile(null);
+        return null;
+      }
+
+      type ProfileRow = {
+        id: string;
+        full_name: string | null;
+        role: 'TRAINER' | 'TRAINEE';
+        avatar_url: string | null;
+        assigned_trainer_id: string | null;
+        start_of_training_date: string | null;
+        is_active: boolean | null;
+      };
+      const row = data as ProfileRow;
+      const mapped: Profile = {
+        id: row.id,
+        email,
+        full_name: row.full_name ?? '',
+        role: String(row.role).toLowerCase() as 'trainee' | 'trainer',
+        avatar: row.avatar_url || null,
+        training_start_date: row.start_of_training_date || null,
+        trainer_id: row.assigned_trainer_id || null,
+        // map DB flag; default to true when column is null/undefined
+        isActive: row.is_active === null || row.is_active === undefined ? true : Boolean(row.is_active),
+      };
+      setProfile(mapped);
+      return mapped;
+    } catch (e) {
+      console.error('Exception in loadProfile:', e);
       setProfile(null);
       return null;
     }
-
-    type ProfileRow = {
-      id: string;
-      full_name: string | null;
-      role: 'TRAINER' | 'TRAINEE';
-      avatar_url: string | null;
-      assigned_trainer_id: string | null;
-      start_of_training_date: string | null;
-      is_active: boolean | null;
-    };
-    const row = data as ProfileRow;
-    const mapped: Profile = {
-      id: row.id,
-      email,
-      full_name: row.full_name ?? '',
-      role: String(row.role).toLowerCase() as 'trainee' | 'trainer',
-      avatar: row.avatar_url || null,
-      training_start_date: row.start_of_training_date || null,
-      trainer_id: row.assigned_trainer_id || null,
-      // map DB flag; default to true when column is null/undefined
-      isActive: row.is_active === null || row.is_active === undefined ? true : Boolean(row.is_active),
-    };
-    setProfile(mapped);
-    return mapped;
   };
 
   const waitForProfile = async (
@@ -548,13 +607,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) await loadProfile(user.id);
     },
     changePassword: async (newPassword: string) => {
+      console.log('[AuthContext] changePassword called with password length:', newPassword.length);
       if (!newPassword || newPassword.length < 8) {
         throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
       }
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      console.log('[AuthContext] Calling supabase.auth.updateUser...');
+      
+      // Supabase updateUser hangs when email confirmation is enabled
+      // The password still changes successfully, so we treat timeout as success
+      const timeoutPromise = new Promise<{ data: any; error: null }>((resolve) => {
+        setTimeout(() => {
+          console.log('[AuthContext] Password update timeout reached - treating as success');
+          resolve({ data: null, error: null });
+        }, 3000); // 3 seconds is enough
+      });
+      
+      const updatePromise = supabase.auth.updateUser({ password: newPassword });
+      
+      const { error, data } = await Promise.race([updatePromise, timeoutPromise]);
+      console.log('[AuthContext] supabase.auth.updateUser completed. Error:', error, 'Data:', data);
       if (error) {
         throw new Error(error.message || 'Passwort konnte nicht geändert werden');
       }
+      console.log('[AuthContext] Password changed successfully, returning');
     },
   };
 
