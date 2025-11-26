@@ -133,22 +133,22 @@ export function Profile() {
       setIsUploading(true);
       const path = `${profile.id}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
+        .from('avatar')
         .upload(path, file, {
           cacheControl: '3600',
-          upsert: true,
+          upsert: false,
           contentType: file.type,
         });
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+      const { data } = supabase.storage.from('avatar').getPublicUrl(path);
       const publicUrl = data.publicUrl;
       await updateProfile({ avatar_url: publicUrl });
     } catch (e: unknown) {
       console.error('Avatar upload error:', e);
       const msg = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string' ? (e as any).message : String(e);
       const hint = msg.toLowerCase().includes('not found')
-        ? '\nHinweis: Existiert der Storage-Bucket "avatars" und ist er öffentlich?'
+        ? '\nHinweis: Existiert der Storage-Bucket "avatar" und ist er öffentlich?'
         : '';
       alert(`Upload fehlgeschlagen. Bitte erneut versuchen.\n\nFehler: ${msg}${hint}`);
     } finally {
