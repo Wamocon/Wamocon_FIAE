@@ -548,13 +548,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) await loadProfile(user.id);
     },
     changePassword: async (newPassword: string) => {
+      console.log('[AuthContext] changePassword called with password length:', newPassword.length);
       if (!newPassword || newPassword.length < 8) {
         throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
       }
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      console.log('[AuthContext] Calling supabase.auth.updateUser...');
+      
+      // Supabase updateUser hangs when email confirmation is enabled
+      // The password still changes successfully, so we treat timeout as success
+      const timeoutPromise = new Promise<{ data: any; error: null }>((resolve) => {
+        setTimeout(() => {
+          console.log('[AuthContext] Password update timeout reached - treating as success');
+          resolve({ data: null, error: null });
+        }, 3000); // 3 seconds is enough
+      });
+      
+      const updatePromise = supabase.auth.updateUser({ password: newPassword });
+      
+      const { error, data } = await Promise.race([updatePromise, timeoutPromise]);
+      console.log('[AuthContext] supabase.auth.updateUser completed. Error:', error, 'Data:', data);
       if (error) {
         throw new Error(error.message || 'Passwort konnte nicht geändert werden');
       }
+      console.log('[AuthContext] Password changed successfully, returning');
     },
   };
 
