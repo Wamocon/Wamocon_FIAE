@@ -31,8 +31,15 @@ export function LinkifyText({ text, className, preserveLineBreaks = true }: Prop
       const raw = match[0];
       const href = normalizeUrl(raw);
       parts.push(
-        <a key={`${href}-${lastIndex}`} href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-          {raw}
+        <a 
+          key={`${href}-${lastIndex}`} 
+          href={href} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-400 underline underline-offset-2 hover:text-blue-300"
+          title={href}
+        >
+          Hier klicken für mehr...
         </a>
       );
       lastIndex = match.index + raw.length;
