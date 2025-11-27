@@ -14,6 +14,7 @@ import {
   HelpCircle,
   BarChart3,
   FileCheck2,
+  Upload,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback } from 'react';
@@ -85,6 +86,9 @@ export function Sidebar({
         case 'quizzes':
           router.push('/trainee/quizzes');
           break;
+        case 'bulkImport':
+          router.push('/trainer/bulk-import');
+          break;
         default:
           router.push(
             userRole === 'trainee' ? '/trainee/dashboard' : '/trainer/dashboard'
@@ -127,6 +131,12 @@ export function Sidebar({
               label: language === 'de' ? 'Quiz-Verwaltung' : 'Quiz Management',
               icon: HelpCircle,
               href: '/trainer/quiz-management',
+            },
+            {
+              id: 'bulkImport',
+              label: language === 'de' ? 'Bulk Import' : 'Bulk Import',
+              icon: Upload,
+              href: '/trainer/bulk-import',
             },
             {
               id: 'trainees',
