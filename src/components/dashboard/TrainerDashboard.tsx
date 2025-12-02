@@ -74,6 +74,15 @@ export default function TrainerDashboard() {
 
   // Chart data now comes from API: progressTrend and moduleProgress
 
+  // Ensure chart data is safe and numeric to avoid runtime errors
+  const moduleProgressSafe = (moduleProgress || []).map((m) => ({
+    name: m?.name ?? '',
+    completed: Number(m?.completed ?? 0),
+    inProgress: Number(m?.inProgress ?? 0),
+    notStarted: Number(m?.notStarted ?? 0),
+  }));
+  const hasModuleProgress = moduleProgressSafe.length > 0;
+
   const avgProgress = trainees.length
     ? Math.round(
         trainees.reduce(
@@ -253,51 +262,45 @@ export default function TrainerDashboard() {
                   Anzeigen
                 </button>
               </div>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={moduleProgress}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#6b7280"
-                    strokeOpacity={0.3}
-                  />
-                  <XAxis
-                    dataKey="name"
-                    stroke="#ffffff"
-                    fontSize={10}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                    tick={{ fill: '#ffffff' }}
-                  />
-                  <YAxis
-                    stroke="#ffffff"
-                    fontSize={12}
-                    tick={{ fill: '#ffffff' }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e1423',
-                      border: '1px solid #ef4444',
-                      borderRadius: '8px',
-                      color: '#ffffff',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                    }}
-                  />
-                  <Bar
-                    dataKey="completed"
-                    stackId="a"
-                    fill="#ef4444"
-                    radius={[4, 0, 0, 4]}
-                  />
-                  <Bar dataKey="inProgress" stackId="a" fill="#dc2626" />
-                  <Bar
-                    dataKey="notStarted"
-                    stackId="a"
-                    fill="#3c2846"
-                    radius={[0, 4, 4, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {hasModuleProgress ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={moduleProgressSafe}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#6b7280"
+                      strokeOpacity={0.3}
+                    />
+                    <XAxis
+                      dataKey="name"
+                      stroke="#ffffff"
+                      fontSize={10}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                      tick={{ fill: '#ffffff' }}
+                    />
+                    <YAxis
+                      stroke="#ffffff"
+                      fontSize={12}
+                      tick={{ fill: '#ffffff' }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1e1423',
+                        border: '1px solid #ef4444',
+                        borderRadius: '8px',
+                        color: '#ffffff',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                      }}
+                    />
+                    <Bar dataKey="completed" stackId="a" fill="#ef4444" />
+                    <Bar dataKey="inProgress" stackId="a" fill="#dc2626" />
+                    <Bar dataKey="notStarted" stackId="a" fill="#3c2846" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-muted-foreground text-sm">Keine Daten vorhanden</div>
+              )}
             </div>
           </div>
         </div>

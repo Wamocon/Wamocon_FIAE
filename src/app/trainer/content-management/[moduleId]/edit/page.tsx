@@ -149,7 +149,7 @@ export default function EditCoursePage() {
 
   return (
     <div className="from-background relative min-h-screen space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
-      <div className="glass-effect mx-auto max-w-6xl rounded-3xl border border-accent/30 p-6 shadow-lg">
+      <div className="glass-effect mx-auto max-w-7xl rounded-3xl border border-accent/30 p-8 shadow-lg">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="from-accent to-primary flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br">
@@ -631,7 +631,7 @@ export default function EditCoursePage() {
       {showEditEnabler && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowEditEnabler(false)} />
-          <div className="glass-effect relative z-10 w-full max-w-2xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
+          <div className="glass-effect relative z-10 w-full max-w-6xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">Lesson bearbeiten</h2>
               <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditEnabler(false)}>Schließen</button>
