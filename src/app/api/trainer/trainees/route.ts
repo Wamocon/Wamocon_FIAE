@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, count, eq, inArray } from 'drizzle-orm';
-import { profiles, enablers, courses, enablerCompletions } from '@/db/migrations/schemas/schema';
+import { profiles, enablers, courses, enablerCompletions, courseMembers } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,36 +11,57 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing trainer id' }, { status: 400 });
     }
 
-    // Trainees assigned to this trainer
+    // List ALL trainees regardless of assigned trainer
     const traineeRows = await db
       .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl, isActive: profiles.isActive })
       .from(profiles)
-  .where(and(eq(profiles.role, 'TRAINEE'), eq(profiles.assignedTrainerId, trainerId)));
+      .where(eq(profiles.role, 'TRAINEE'));
 
-    const traineeIds = traineeRows.map(t => t.id);
-    // Enablers under this trainer's courses
-    const trainerEnablers = await db
-      .select({ id: enablers.id })
+    const traineeIds = traineeRows.map(t => String(t.id));
+    // For each trainee, find courses they are enrolled in
+    const memberships = traineeIds.length ? await db
+      .select({ userId: courseMembers.userId, courseId: courseMembers.courseId })
+      .from(courseMembers)
+      .where(and(inArray(courseMembers.userId, traineeIds as any), eq(courseMembers.role, 'TRAINEE'))) : [];
+    const traineeCourses = new Map<string, string[]>();
+    memberships.forEach(m => {
+      const uid = String(m.userId);
+      const arr = traineeCourses.get(uid) || [];
+      arr.push(String(m.courseId));
+      traineeCourses.set(uid, arr);
+    });
+    const allCourseIds = Array.from(new Set(memberships.map(m => String(m.courseId))));
+    const enablerRows = allCourseIds.length ? await db
+      .select({ courseId: enablers.courseId, id: enablers.id })
       .from(enablers)
-      .innerJoin(courses, eq(enablers.courseId, courses.id))
-  .where(eq(courses.createdById, trainerId));
-    const enablerIds = trainerEnablers.map(e => e.id);
+      .where(inArray(enablers.courseId, allCourseIds as any)) : [];
+    const courseEnablers = new Map<string, string[]>();
+    enablerRows.forEach(e => {
+      const cid = String(e.courseId);
+      const arr = courseEnablers.get(cid) || [];
+      arr.push(String(e.id));
+      courseEnablers.set(cid, arr);
+    });
 
-    // Progress = completed enablers / total enablers
-    let totalEnablers = enablerIds.length;
+    // Completed counts per trainee across their enablers
+    const allEnablerIds = Array.from(new Set(enablerRows.map(e => String(e.id))));
     const completedMap = new Map<string, number>();
-    if (totalEnablers > 0 && traineeIds.length > 0) {
+    if (allEnablerIds.length > 0 && traineeIds.length > 0) {
       const rows = await db
         .select({ traineeId: enablerCompletions.traineeId, c: count() })
         .from(enablerCompletions)
-  .where(and(inArray(enablerCompletions.enablerId, enablerIds), inArray(enablerCompletions.traineeId, traineeIds)))
+        .where(and(inArray(enablerCompletions.enablerId, allEnablerIds as any), inArray(enablerCompletions.traineeId, traineeIds as any)))
         .groupBy(enablerCompletions.traineeId);
       rows.forEach(r => completedMap.set(String(r.traineeId), Number(r.c)));
     }
     const trainees = traineeRows.map(t => {
-      const completed = completedMap.get(String(t.id)) || 0;
-      const pct = totalEnablers > 0 ? Math.round((completed / totalEnablers) * 100) : 0;
-  return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct, isActive: Boolean(t.isActive) };
+      const uid = String(t.id);
+      const courseIdsForTrainee = traineeCourses.get(uid) || [];
+      const enablerIdsForTrainee = courseIdsForTrainee.flatMap(cid => courseEnablers.get(cid) || []);
+      const total = enablerIdsForTrainee.length;
+      const completed = completedMap.get(uid) || 0;
+      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+      return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct, isActive: Boolean(t.isActive) };
     });
 
     return NextResponse.json({ trainees });
