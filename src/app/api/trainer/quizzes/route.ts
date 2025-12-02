@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, ilike, sql, count } from 'drizzle-orm';
-import { quizzes, enablerQuizzes, enablers, courses, questions, options, quizAssignments } from '@/db/migrations/schemas/schema';
+import { quizzes, enablerQuizzes, enablers, courses, questions, options, quizAssignments, quizMembers } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,18 +26,24 @@ export async function GET(req: NextRequest) {
         courseYear: courses.year,
         updatedAt: quizzes.updatedAt,
         createdAt: quizzes.createdAt,
-        assignedCount: count(quizAssignments.id).as('assigned_count'),
+        assignedCount: sql<number>`count(distinct ${quizAssignments.id})`.as('assigned_count'),
       })
       .from(quizzes)
       .leftJoin(enablerQuizzes, eq(enablerQuizzes.quizId, quizzes.id))
       .leftJoin(enablers, eq(enablerQuizzes.enablerId, enablers.id))
       .leftJoin(courses, eq(enablers.courseId, courses.id))
       .leftJoin(quizAssignments, eq(quizAssignments.quizId, quizzes.id))
+      .leftJoin(quizMembers, eq(quizMembers.quizId, quizzes.id))
       .where(() => {
-        const conds = [eq(quizzes.createdById, trainerId)];
-        if (q) conds.push(ilike(quizzes.title, `%${q}%`));
-        if (year && year !== 'all') conds.push(eq(courses.year, Number(year)));
-        return and(...conds);
+        // Visibility: quizzes created by trainer OR where trainer has assigned it to any trainee (collab by assignment)
+        const created = eq(quizzes.createdById, trainerId);
+        const collaboratedByAssignment = eq(quizAssignments.assignedById, trainerId as any);
+        // Also include explicit quiz membership
+        const collaboratedByMembership = eq(quizMembers.trainerId, trainerId as any);
+        // Apply text/year filters against course when present (for mini quizzes)
+        const textFilter = q ? ilike(quizzes.title, `%${q}%`) : (sql`true` as any);
+        const yearFilter = year && year !== 'all' ? eq(courses.year, Number(year)) : (sql`true` as any);
+        return and(textFilter, yearFilter, (sql`${created} OR ${collaboratedByAssignment} OR ${collaboratedByMembership}` as any));
       })
       .groupBy(
         quizzes.id,

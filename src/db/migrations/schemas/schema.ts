@@ -294,6 +294,27 @@ export const quizSubmissions = pgTable('quiz_submissions', {
   attemptNumber: integer('attempt_number'),
 });
 
+// Trainers explicitly added as collaborators on GLOBAL quizzes
+export const quizMembers = pgTable(
+  'quiz_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    quizId: uuid('quiz_id')
+      .notNull()
+      .references(() => quizzes.id, { onDelete: 'cascade' }),
+    trainerId: uuid('trainer_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    addedById: uuid('added_by_id')
+      .notNull()
+      .references(() => profiles.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    unq: unique().on(table.quizId, table.trainerId),
+  }),
+);
+
 // Trainee's answer for each question in that submission
 export const quizSubmissionAnswers = pgTable('quiz_submission_answers', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -587,6 +608,7 @@ export type Question = typeof questions.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type QuizAssignment = typeof quizAssignments.$inferSelect;
 export type QuizSubmission = typeof quizSubmissions.$inferSelect;
+export type QuizMember = typeof quizMembers.$inferSelect;
 export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
 export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
