@@ -149,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // Add timeout to prevent hanging forever
         const initTimeout = new Promise<void>((_, reject) => {
-          setTimeout(() => reject(new Error('Init timeout')), 10000); // 10 second timeout
+          setTimeout(() => reject(new Error('Init timeout')), 3000); // 10 second timeout
         });
         
         const initLogic = async () => {
