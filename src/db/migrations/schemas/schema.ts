@@ -144,6 +144,8 @@ export const enablers = pgTable('enablers', {
   scenarioText: text('scenario_text'),
   hintText: text('hint_text'),
   scenarioImageUrl: text('scenario_image_url'),
+  // Multiple scenarios with hints (new)
+  scenarios: jsonb('scenarios').$type<Array<{ text: string; hint?: string }>>(),
 
   // Settings
   durationValue: integer('duration_value'),
