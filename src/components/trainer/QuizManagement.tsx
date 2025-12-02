@@ -117,7 +117,8 @@ function MultiSelect({
                 className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm hover:bg-accent/20 ${active ? 'text-foreground' : 'text-foreground'}`}
               >
                 <span>{opt.label}</span>
-                {active && <Check className="h-4 w-4" />}
+                {active && <Check className="h-4 w-4" /> }
+                
               </button>
             );
           })}
@@ -381,7 +382,7 @@ export function QuizManagement() {
 
       {/* Create Dialog */}
       <Dialog open={open} onClose={() => setOpen(false)}>
-        <div className="flex items-start justify-between rounded-t-3xl border-b border-accent/30 bg-background px-6 py-4">
+        <div className="flex items-start justify-between  rounded-t-3xl border-b border-accent/30 bg-background px-6 py-4">
           <div>
             <h3 className="text-foreground text-lg font-semibold">{editMode ? 'Edit Global Quiz' : 'Create New Global Quiz'}</h3>
             <p className="text-muted text-sm">Follow the steps to {editMode ? 'update' : 'set up'} your quiz.</p>
@@ -400,7 +401,7 @@ export function QuizManagement() {
 
         {/* Step content */}
         {step === 0 && (
-          <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          <div className="h-[12vh] overflow-y-auto px-6 py-4">
             <div className="space-y-4">
             <div>
                 <label className="text-foreground mb-1 block text-sm font-medium">Quiz Title</label>
@@ -465,7 +466,7 @@ export function QuizManagement() {
         )}
 
         {step === 2 && (
-          <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          <div className="h-[20vh] overflow-y-auto px-6 py-4">
             <div className="space-y-3">
               <label className="text-foreground mb-1 block text-sm font-medium">Assign Trainees</label>
               <MultiSelect options={traineeOptions} selected={assigned} onChange={setAssigned} />

@@ -190,7 +190,7 @@ export default function TraineeEnablerPage() {
   if (!enabler) return <div className="p-6">Nicht gefunden</div>;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Enabler header */}
       <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
         <h1 className="text-foreground text-2xl font-bold">{enabler.title}</h1>
