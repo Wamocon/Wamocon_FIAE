@@ -550,7 +550,8 @@ export const enablerSubmissions = pgTable('enabler_submissions', {
   enablerId: uuid('enabler_id')
     .notNull()
     .references(() => enablers.id, { onDelete: 'cascade' }),
-  solutionText: text('solution_text'),
+  solutionText: text('solution_text'), // Legacy: single solution
+  solutions: jsonb('solutions').$type<Array<{ scenarioIndex: number; text: string }>>(), // New: multiple scenario solutions
   status: reviewStatus('status').default('PENDING'),
   trainerFeedback: text('trainer_feedback'),
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),

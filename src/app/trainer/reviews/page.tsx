@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, MessageSquare, Scale } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
-type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
+type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; solutions?: Array<{ scenarioIndex: number; text: string }> | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
 type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
 // Geschäftsprozesse review removed
 type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
@@ -26,6 +26,7 @@ export default function TrainerReviewsPage() {
   // removed gesetzSubs
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
+  const [solutionIndexMap, setSolutionIndexMap] = useState<Record<string, number>>({});
 
   // Quiz/Reflection state
   const [reflections, setReflections] = useState<ReflectionItem[]>([]);
@@ -229,10 +230,79 @@ export default function TrainerReviewsPage() {
                 </div>
                 <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
               </div>
-              {it.solutionText && (
-                <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-3">
-                  <div className="text-sm font-medium">Lösung</div>
-                  <p className="whitespace-pre-line text-sm text-foreground/90">{it.solutionText}</p>
+              {(it.solutions || it.solutionText) && (
+                <div className="mt-3">
+                  {it.solutions && it.solutions.length > 0 ? (
+                    <div className="space-y-3">
+                      {/* Counter */}
+                      {it.solutions.length > 1 && (
+                        <div className="text-center">
+                          <span className="text-sm font-medium text-foreground">
+                            Lösung {(solutionIndexMap[it.id] || 0) + 1} von {it.solutions.length}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Solution Slider */}
+                      <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-black/20 p-4">
+                        <div 
+                          className="flex transition-transform duration-300 ease-in-out"
+                          style={{ transform: `translateX(-${(solutionIndexMap[it.id] || 0) * 100}%)` }}
+                        >
+                          {it.solutions.map((sol, idx) => (
+                            <div key={idx} className="w-full flex-shrink-0 px-2">
+                              <div className="text-sm font-medium mb-2">Lösung für Szenario {sol.scenarioIndex + 1}</div>
+                              <p className="whitespace-pre-line text-sm text-foreground/90">{sol.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Navigation */}
+                      {it.solutions.length > 1 && (
+                        <div className="flex items-center justify-between">
+                          <button
+                            type="button"
+                            disabled={(solutionIndexMap[it.id] || 0) === 0}
+                            onClick={() => setSolutionIndexMap(prev => ({ ...prev, [it.id]: Math.max(0, (prev[it.id] || 0) - 1) }))}
+                            className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            ← Zurück
+                          </button>
+                          
+                          <div className="flex items-center gap-2">
+                            {it.solutions.map((_, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setSolutionIndexMap(prev => ({ ...prev, [it.id]: idx }))}
+                                className={`h-2 rounded-full transition-all ${
+                                  idx === (solutionIndexMap[it.id] || 0)
+                                    ? 'w-6 bg-primary' 
+                                    : 'w-2 bg-accent/30 hover:bg-accent/50'
+                                }`}
+                                aria-label={`Go to solution ${idx + 1}`}
+                              />
+                            ))}
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={(solutionIndexMap[it.id] || 0) === it.solutions.length - 1}
+                            onClick={() => setSolutionIndexMap(prev => ({ ...prev, [it.id]: Math.min(it.solutions!.length - 1, (prev[it.id] || 0) + 1) }))}
+                            className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Weiter →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : it.solutionText ? (
+                    <div className="rounded-xl border border-accent/20 bg-black/20 p-3">
+                      <div className="text-sm font-medium">Lösung</div>
+                      <p className="whitespace-pre-line text-sm text-foreground/90">{it.solutionText}</p>
+                    </div>
+                  ) : null}
                 </div>
               )}
               <div className="mt-3">

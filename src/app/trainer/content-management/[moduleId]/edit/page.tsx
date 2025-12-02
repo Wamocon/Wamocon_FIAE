@@ -68,20 +68,7 @@ export default function EditCoursePage() {
   const [useCaseEditDuration, setUseCaseEditDuration] = useState<string>('');
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
 
-  // UI: Add geschäftsprozesse Modal state
-  const [showAddgeschäftsprozesse, setShowAddgeschäftsprozesse] = useState(false);
-  const [gpTitle, setGpTitle] = useState('');
-  const [gpDesc, setGpDesc] = useState('');
-  const [gpDuration, setGpDuration] = useState<string>('');
-  const [gpActive, setGpActive] = useState<boolean>(false);
-  const [gpSubmitting, setGpSubmitting] = useState(false);
-  // Edit geschäftsprozesse state
-  const [showEditgeschäftsprozesse, setShowEditgeschäftsprozesse] = useState(false);
-  const [editinggeschäftsprozesseId, setEditinggeschäftsprozesseId] = useState<string | null>(null);
-  const [gpEditTitle, setGpEditTitle] = useState('');
-  const [gpEditDesc, setGpEditDesc] = useState('');
-  const [gpEditDuration, setGpEditDuration] = useState<string>('');
-  const [gpEditActive, setGpEditActive] = useState<boolean>(false);
+  
 
   useEffect(() => {
     const load = async () => {
