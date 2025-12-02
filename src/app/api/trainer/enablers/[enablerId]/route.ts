@@ -45,8 +45,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
       'scenarioText',
       'scenarioImageUrl',
       'isActive',
+      'scenarios',
     ]) {
       if (typeof body?.[key] !== 'undefined') updates[key] = body[key];
+    }
+    // Auto-migrate legacy scenarioText/hintText to scenarios array if scenarios provided
+    if (Array.isArray(body?.scenarios) && body.scenarios.length > 0) {
+      updates.scenarios = body.scenarios;
+      // Clear legacy fields when using new structure
+      updates.scenarioText = null;
+      updates.hintText = null;
     }
     if (typeof body?.isActive === 'boolean' && body.isActive && !row0.isActive && !row0.activatedAt) {
       updates.activatedAt = new Date();

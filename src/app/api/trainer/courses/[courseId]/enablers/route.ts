@@ -46,6 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
     const hintText: string | undefined = body?.hintText;
     const scenarioText: string | undefined = body?.scenarioText;
     const scenarioImageUrl: string | undefined = body?.scenarioImageUrl;
+    const scenarios: Array<{ text: string; hint?: string }> | undefined = Array.isArray(body?.scenarios) ? body.scenarios : undefined;
     const isActive: boolean | undefined = typeof body?.isActive === 'boolean' ? body.isActive : undefined;
 
     // Determine next order index if not provided
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
         scenarioText: scenarioText as any,
     hintText: hintText as any,
         scenarioImageUrl: scenarioImageUrl as any,
+        scenarios: scenarios as any,
         isActive: isActive as any,
         activatedAt: activatedAt as any,
       })

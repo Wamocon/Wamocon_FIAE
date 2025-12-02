@@ -57,6 +57,13 @@
       "when": 1764682157534,
       "tag": "0007_messy_komodo",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1764689171407,
+      "tag": "0008_safe_wolfsbane",
+      "breakpoints": true
     }
   ]
 }
