@@ -32,10 +32,12 @@ export async function GET(req: NextRequest) {
       .select({ courseId: courseMembers.courseId })
       .from(courseMembers)
       .where(and(eq(courseMembers.userId, trainerId), eq(courseMembers.role, 'TRAINER')));
-    const courseIds = Array.from(new Set([...
-      createdCourses.map(c => String(c.id)),
-      ...memberCourses.map(m => String(m.courseId)),
-    ]));
+    const courseIds = Array.from(
+      new Set([
+        ...createdCourses.map((c) => String(c.id)),
+        ...memberCourses.map((m) => String(m.courseId)),
+      ])
+    );
 
     // Trainees either directly assigned to this trainer OR enrolled in their courses
     const directlyAssigned = await db
@@ -73,11 +75,11 @@ export async function GET(req: NextRequest) {
     // Enablers under trainer's courses (owned or co-taught)
     const trainerEnablers = courseIds.length
       ? await db
-          .select({ id: enablers.id, title: enablers.title })
+          .select({ id: enablers.id })
           .from(enablers)
           .where(inArray(enablers.courseId, courseIds as any))
       : [];
-    const enablerIds = trainerEnablers.map(e => e.id);
+    const enablerIds = trainerEnablers.map((e) => e.id);
 
     // Progress per trainee = completed enablers / total enablers
     let totalEnablers = enablerIds.length;
@@ -97,7 +99,11 @@ export async function GET(req: NextRequest) {
     });
 
     // Pending reviews: unreviewed quiz submissions + reflections + pending use case submissions + pending enabler submissions
-  let pendingQuiz = 0, pendingRefl = 0, pendingUseCases = 0, pendingEnablers = 0, pendingLessonQuiz = 0;
+    let pendingQuiz = 0,
+      pendingRefl = 0,
+      pendingUseCases = 0,
+      pendingEnablers = 0,
+      pendingLessonQuiz = 0;
     if (traineeIds.length > 0) {
       const [{ c: pq } = { c: 0 }] = await db
         .select({ c: count() })
@@ -131,16 +137,16 @@ export async function GET(req: NextRequest) {
         .where(and(eq(enablerSubmissions.status, 'PENDING'), inArray(enablerSubmissions.traineeId, traineeIds)));
       pendingEnablers = Number(pe) || 0;
     }
-  const pendingReviews = pendingQuiz + pendingRefl + pendingUseCases + pendingEnablers;
+    const pendingReviews = pendingQuiz + pendingRefl + pendingUseCases + pendingEnablers;
 
     // Recent reflections (last 7 days)
     const lastWeek = new Date();
     lastWeek.setDate(lastWeek.getDate() - 7);
     const [{ c: recentReflections = 0 } = { c: 0 }] = traineeIds.length
-    ? await db
+      ? await db
           .select({ c: count() })
           .from(reflections)
-      .where(and(inArray(reflections.traineeId, traineeIds), gt(reflections.createdAt, lastWeek)))
+          .where(and(inArray(reflections.traineeId, traineeIds), gt(reflections.createdAt, lastWeek)))
       : [{ c: 0 }];
 
     // Progress trend: count enabler completions and quiz submissions per week bucket for last 6 weeks
@@ -168,27 +174,80 @@ export async function GET(req: NextRequest) {
           trendBuckets[idx].progress += 1;
         }
       };
-  compRows.forEach(r => addToBuckets(r.at ?? null));
-  subRows.forEach(r => addToBuckets(r.at ?? null));
+      compRows.forEach((r) => addToBuckets(r.at ?? null));
+      subRows.forEach((r) => addToBuckets(r.at ?? null));
     }
     const maxVal = trendBuckets.reduce((m, b) => Math.max(m, b.progress), 0) || 1;
-    const progressTrend = trendBuckets.map(b => ({ week: b.week, progress: Math.round((b.progress / maxVal) * 100) }));
+    const progressTrend = trendBuckets.map((b) => ({ week: b.week, progress: Math.round((b.progress / maxVal) * 100) }));
 
-    // Module progress chart -> use Enablers as units across trainees
-    const moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[] = [];
-    for (const en of trainerEnablers) {
-      if (traineeIds.length === 0) {
-        moduleProgress.push({ name: en.title, completed: 0, inProgress: 0, notStarted: 0 });
-        continue;
-      }
-      const [{ c: completedCnt = 0 } = { c: 0 }] = await db
-        .select({ c: count() })
+    // Module progress chart -> use Courses (modules) as units across trainees
+    // For each course: count trainees that completed all enablers, in progress, not started
+    const trainerCourses = courseIds.length
+      ? await db
+          .select({ id: courses.id, title: courses.title })
+          .from(courses)
+          .where(inArray(courses.id, courseIds as any))
+      : [];
+
+    // How many enablers per course
+    const enablerCounts = courseIds.length
+      ? await db
+          .select({ courseId: enablers.courseId, c: count() })
+          .from(enablers)
+          .where(inArray(enablers.courseId, courseIds as any))
+          .groupBy(enablers.courseId)
+      : [];
+    const courseEnablerTotal = new Map<string, number>();
+    enablerCounts.forEach((row: any) => {
+      courseEnablerTotal.set(String(row.courseId), Number(row.c) || 0);
+    });
+
+    // Completions by trainee and course
+    let compByCourseAndTrainee = new Map<string, Map<string, number>>();
+    if (courseIds.length && traineeIds.length) {
+      const compRows = await db
+        .select({
+          traineeId: enablerCompletions.traineeId,
+          courseId: enablers.courseId,
+          c: count(),
+        })
         .from(enablerCompletions)
-        .where(and(eq(enablerCompletions.enablerId, en.id), inArray(enablerCompletions.traineeId, traineeIds)));
-      const completed = Number(completedCnt) || 0;
-      const notStarted = Math.max(traineeIds.length - completed, 0);
-      // inProgress concept doesn't apply to enabler completion; keep as 0
-      moduleProgress.push({ name: en.title, completed, inProgress: 0, notStarted });
+        .innerJoin(enablers, eq(enablerCompletions.enablerId, enablers.id))
+        .where(and(inArray(enablers.courseId, courseIds as any), inArray(enablerCompletions.traineeId, traineeIds)))
+        .groupBy(enablerCompletions.traineeId, enablers.courseId);
+
+      compRows.forEach((r: any) => {
+        const courseId = String(r.courseId);
+        const traineeId = String(r.traineeId);
+        if (!compByCourseAndTrainee.has(courseId)) compByCourseAndTrainee.set(courseId, new Map());
+        compByCourseAndTrainee.get(courseId)!.set(traineeId, Number(r.c) || 0);
+      });
+    }
+
+    const moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[] = [];
+    for (const course of trainerCourses) {
+      const totalEnabs = courseEnablerTotal.get(String(course.id)) || 0;
+      let completed = 0;
+      let inProgress = 0;
+      let notStarted = 0;
+
+      if (traineeIds.length === 0) {
+        // No trainees -> nothing started
+        notStarted = 0;
+      } else if (totalEnabs === 0) {
+        // No enablers in course -> treat as not started for all trainees
+        notStarted = traineeIds.length;
+      } else {
+        const map = compByCourseAndTrainee.get(String(course.id)) || new Map<string, number>();
+        for (const tId of traineeIds) {
+          const done = map.get(String(tId)) || 0;
+          if (done === 0) notStarted += 1;
+          else if (done >= totalEnabs) completed += 1;
+          else inProgress += 1;
+        }
+      }
+
+      moduleProgress.push({ name: String(course.title ?? ''), completed, inProgress, notStarted });
     }
 
     return NextResponse.json({
@@ -196,8 +255,8 @@ export async function GET(req: NextRequest) {
       counts: {
         activeTrainees: trainees.length,
         pendingReviews,
-  pendingQuiz,
-  pendingLessonQuiz,
+        pendingQuiz,
+        pendingLessonQuiz,
         pendingReflections: pendingRefl,
         pendingEnablers,
         pendingUseCases,
