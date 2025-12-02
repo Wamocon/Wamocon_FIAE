@@ -88,6 +88,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logoutTimerRef.current = setTimeout(() => { void signOut(true); }, remaining);
   };
 
+  // Utility: sleep helper
+  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+  // Load profile with soft timeout and small retries; returns null on timeout instead of throwing
+  const loadProfileWithTimeout = async (userId: string, timeoutMs = 8000, retries = 2) => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+        const result = (await Promise.race([loadProfile(userId), timeout])) as Profile | null;
+        if (result) return result;
+      } catch (_) {
+        // ignore and retry
+      }
+      // backoff before next attempt
+      if (attempt < retries) await sleep(300 * (attempt + 1));
+    }
+    return null;
+  };
+
   useEffect(() => {
     // Realtime subscription handle for current user's profile
     let profileChannel: RealtimeChannel | null = null;
@@ -198,16 +217,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.warn('Profile sync failed or timed out:', e);
               }
               
-              try {
-                const profileTimeout = new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('loadProfile timeout')), 5000)
-                );
-                await Promise.race([
-                  loadProfile(u.id),
-                  profileTimeout
-                ]);
-              } catch (e) {
-                console.error('Load profile failed or timed out:', e);
+              // Load profile with soft timeout and background resilience
+              const loaded = await loadProfileWithTimeout(u.id, 8000, 2);
+              if (!loaded) {
+                // Soft warn and continue; schedule a quiet background refresh
+                console.warn('Load profile soft-timeout during init; will retry in background');
+                // fire-and-forget retry (no await)
+                loadProfileWithTimeout(u.id, 8000, 2).catch(() => void 0);
               }
               
               try { setupRealtime(u.id); } catch (e) { /* ignore */ }
@@ -253,16 +269,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.warn('Profile sync failed or timed out in onAuthStateChange:', e);
             }
             
-            try {
-              const profileTimeout = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('loadProfile timeout in onAuthStateChange')), 5000)
-              );
-              await Promise.race([
-                loadProfile(u.id),
-                profileTimeout
-              ]);
-            } catch (e) {
-              console.error('Load profile failed or timed out in onAuthStateChange:', e);
+            const loaded = await loadProfileWithTimeout(u.id, 8000, 2);
+            if (!loaded) {
+              console.warn('Load profile soft-timeout in onAuthStateChange; will retry in background');
+              loadProfileWithTimeout(u.id, 8000, 2).catch(() => void 0);
             }
             
             try { setupRealtime(u.id); } catch (e) { /* ignore */ }
