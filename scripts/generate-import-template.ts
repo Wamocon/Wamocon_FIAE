@@ -49,20 +49,29 @@ function generateImportTemplate() {
     ['title', 'YES', 'Text', 'Enabler/Module title', 'Netzwerktopologien verstehen'],
     ['order_index', 'YES', 'Number', 'Display order (1, 2, 3...)', '1'],
     ['description_text', 'NO', 'Text', 'Module description/content', 'In diesem Modul lernen Sie verschiedene Netzwerktopologien kennen'],
-    ['scenario_text', 'NO', 'Text', 'Scenario/task description', 'Sie arbeiten in einem Unternehmen und sollen ein Netzwerk aufbauen...'],
-    ['hint_text', 'NO', 'Text', 'Hints for trainees', 'Denken Sie an das OSI-Modell'],
-    ['ppt_url', 'NO', 'URL', 'Link to PowerPoint/PDF in Supabase Storage', 'https://storage.supabase.co/...'],
-    ['video_url', 'NO', 'URL', 'Link to video (YouTube, Vimeo, etc.)', 'https://youtube.com/watch?v=...'],
-    ['scenario_image_url', 'NO', 'URL', 'Link to scenario image', 'https://storage.supabase.co/...'],
-    ['duration_value', 'NO', 'Number', 'Duration amount', '120'],
-    ['duration_unit', 'NO', 'Text', 'DAYS or WEEKS', 'DAYS'],
-    ['is_active', 'NO', 'Boolean', 'Active status: TRUE or FALSE', 'TRUE'],
+    ['scenario_text', 'NO', 'Text', 'ONE scenario per row - add multiple rows for multiple scenarios', 'Sie arbeiten in einem Unternehmen und sollen ein Netzwerk aufbauen...'],
+    ['hint_text', 'NO', 'Text', 'Hint for THIS scenario', 'Denken Sie an das OSI-Modell'],
+    ['ppt_url', 'NO', 'URL', 'Link to PowerPoint/PDF (only first row used)', 'https://storage.supabase.co/...'],
+    ['video_url', 'NO', 'URL', 'Link to video (only first row used)', 'https://youtube.com/watch?v=...'],
+    ['scenario_image_url', 'NO', 'URL', 'Link to scenario image (only first row used)', 'https://storage.supabase.co/...'],
+    ['duration_value', 'NO', 'Number', 'Duration amount (only first row used)', '120'],
+    ['duration_unit', 'NO', 'Text', 'DAYS or WEEKS (only first row used)', 'DAYS'],
+    ['is_active', 'NO', 'Boolean', 'Active status (only first row used)', 'TRUE'],
+    [],
+    ['⚠️ IMPORTANT: Multiple Scenarios'],
+    ['For an enabler with multiple scenarios, add multiple rows with the SAME course_title and title'],
+    ['Each row represents ONE scenario. The system will group them automatically.'],
+    ["Only the first row's metadata (ppt_url, video_url, duration, etc.) will be used."],
     [],
     ['=== DATA STARTS HERE - DELETE ROWS ABOVE ==='],
     [],
     ['course_title', 'title', 'order_index', 'description_text', 'scenario_text', 'hint_text', 'ppt_url', 'video_url', 'scenario_image_url', 'duration_value', 'duration_unit', 'is_active'],
-    ['Kapitel 1: IT-Grundlagen', 'Netzwerktopologien', 1, 'Lernen Sie verschiedene Netzwerktopologien kennen', 'Sie sollen ein Büro-Netzwerk planen', 'Beachten Sie Stern-, Bus- und Ring-Topologie', '', '', '', 5, 'DAYS', 'TRUE'],
-    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, 'Verstehen Sie die 7 Schichten des OSI-Modells', 'Analysieren Sie einen Datentransfer', 'Denken Sie an Application bis Physical Layer', '', '', '', 3, 'DAYS', 'TRUE'],
+    // Example 1: Single scenario enabler
+    ['Kapitel 1: IT-Grundlagen', 'Netzwerktopologien', 1, 'Lernen Sie verschiedene Netzwerktopologien kennen', 'Sie sollen ein Büro-Netzwerk mit Stern-Topologie planen', 'Beachten Sie Stern-, Bus- und Ring-Topologie', '', '', '', 5, 'DAYS', 'TRUE'],
+    // Example 2: Multi-scenario enabler (3 scenarios for same enabler)
+    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, 'Verstehen Sie die 7 Schichten des OSI-Modells', 'Szenario 1: Analysieren Sie einen HTTP-Request durch alle Schichten', 'Denken Sie an Application bis Physical Layer', '', '', '', 7, 'DAYS', 'TRUE'],
+    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, '', 'Szenario 2: Ein Paket wird nicht zugestellt - identifizieren Sie die fehlerhafte Schicht', 'Prüfen Sie Physical, Data Link und Network Layer', '', '', '', '', '', ''],
+    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, '', 'Szenario 3: Konfigurieren Sie einen Switch auf Layer 2', 'Fokus auf Data Link Layer (MAC-Adressen)', '', '', '', '', '', ''],
   ];
 
   const enablersSheet = XLSX.utils.aoa_to_sheet(enablersData);
@@ -71,8 +80,8 @@ function generateImportTemplate() {
     { wch: 30 }, // title
     { wch: 12 }, // order_index
     { wch: 40 }, // description_text
-    { wch: 40 }, // scenario_text
-    { wch: 30 }, // hint_text
+    { wch: 50 }, // scenario_text
+    { wch: 40 }, // hint_text
     { wch: 30 }, // ppt_url
     { wch: 30 }, // video_url
     { wch: 30 }, // scenario_image_url
@@ -154,6 +163,14 @@ function generateImportTemplate() {
     ['✅ Course Title Matching:'],
     ['   - Enablers and Use Cases must reference existing course titles EXACTLY'],
     ['   - Example: "Kapitel 1: IT-Grundlagen" (case-sensitive, spaces matter)'],
+    [],
+    ['✅ Multiple Scenarios per Enabler:'],
+    ['   - To add multiple scenarios to one enabler, use MULTIPLE ROWS'],
+    ['   - Keep the same course_title and title for all rows'],
+    ['   - Each row = one scenario (with its own scenario_text and hint_text)'],
+    ["   - Only the FIRST row's metadata is used (order_index, ppt_url, video_url, duration, etc.)"],
+    ['   - Leave metadata columns empty in additional scenario rows'],
+    ['   - Example: 3 rows with title "OSI-Modell" = 1 enabler with 3 scenarios'],
     [],
     ['✅ Boolean Values:'],
     ['   - Use TRUE or FALSE (not true/false or 1/0)'],
