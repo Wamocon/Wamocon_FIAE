@@ -553,7 +553,8 @@ export const enablerSubmissions = pgTable('enabler_submissions', {
   solutionText: text('solution_text'), // Legacy: single solution
   solutions: jsonb('solutions').$type<Array<{ scenarioIndex: number; text: string }>>(), // New: multiple scenario solutions
   status: reviewStatus('status').default('PENDING'),
-  trainerFeedback: text('trainer_feedback'),
+  trainerFeedback: text('trainer_feedback'), // Legacy: single feedback
+  feedbacks: jsonb('feedbacks').$type<Array<{ scenarioIndex: number; feedback: string }>>(), // New: multiple scenario feedbacks
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
   reviewedAt: timestamp('reviewed_at'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),

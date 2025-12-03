@@ -1,0 +1,1 @@
+ALTER TABLE "enabler_submissions" ADD COLUMN "feedbacks" jsonb;

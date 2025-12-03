@@ -39,7 +39,12 @@ export async function POST(
           solutionText: solutions ? undefined : solutionText, 
           solutions: solutions || undefined,
           status: 'PENDING', 
-          submittedAt: new Date() 
+          submittedAt: new Date(),
+          // bump attempt number on each submission
+          attemptNumber: (latest.attemptNumber ?? 0) + 1,
+          // clear previous review metadata on resubmission
+          reviewedById: null,
+          reviewedAt: null
         })
         .where(eq(enablerSubmissions.id, latest.id))
         .returning();
@@ -53,6 +58,7 @@ export async function POST(
           solutionText: solutions ? undefined : solutionText, 
           solutions: solutions || undefined,
           status: 'PENDING' 
+          ,attemptNumber: 1
         })
         .returning();
       saved = row;

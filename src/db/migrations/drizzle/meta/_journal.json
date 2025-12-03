@@ -71,6 +71,13 @@
       "when": 1764689841914,
       "tag": "0009_adorable_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1764691235052,
+      "tag": "0010_mixed_archangel",
+      "breakpoints": true
     }
   ]
 }
