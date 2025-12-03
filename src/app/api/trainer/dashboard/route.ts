@@ -269,8 +269,14 @@ export async function GET(req: NextRequest) {
       moduleProgress.push({ name: String(course.title ?? ''), completed, inProgress, notStarted });
     }
 
+    // Normalize outputs to prevent client-side chart errors
+    const charts = {
+      progressTrend: Array.isArray(progressTrend) ? progressTrend : [],
+      moduleProgress: Array.isArray(moduleProgress) ? moduleProgress : [],
+    };
+
     return NextResponse.json({
-      trainees,
+      trainees: Array.isArray(trainees) ? trainees : [],
       counts: {
         activeTrainees: trainees.length,
         pendingReviews,
@@ -281,7 +287,7 @@ export async function GET(req: NextRequest) {
         pendingUseCases,
         recentReflections: Number(recentReflections) || 0,
       },
-      charts: { progressTrend, moduleProgress },
+      charts,
     });
   } catch (e) {
     console.error('Trainer dashboard API error', e);
