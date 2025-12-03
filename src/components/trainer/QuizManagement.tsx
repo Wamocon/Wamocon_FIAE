@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, Pencil, X, Check, Search } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Check, Search, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Minimal shadcn-like primitives for this self-contained demo
@@ -67,6 +67,16 @@ function MultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const containerRef = useState<HTMLDivElement | null>(null)[0] as any;
+  const setContainerRef = (el: HTMLDivElement | null) => {
+    (MultiSelect as any)._ref = el;
+  };
+  const ref: React.MutableRefObject<HTMLDivElement | null> = useMemo(() => ({ current: (MultiSelect as any)._ref || null }), []);
+  // Attach actual ref on render
+  const assignRef = (el: HTMLDivElement | null) => {
+    setContainerRef(el);
+    ref.current = el;
+  };
   const filtered = useMemo(
     () => options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase())),
     [options, query],
@@ -77,8 +87,27 @@ function MultiSelect({
     else onChange([...selected, id]);
   };
 
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      const node = ref.current;
+      if (!node) return;
+      if (e.target instanceof Node && !node.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [ref]);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+    }
+  };
+
   return (
-    <div className="relative">
+    <div className="relative" ref={assignRef}>
       <div className="mb-2 flex flex-wrap gap-2">
         {selected.map((id) => {
           const opt = options.find(o => o.id === id);
@@ -99,8 +128,17 @@ function MultiSelect({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setOpen(true)}
+          onKeyDown={onKeyDown}
           className="pl-9"
         />
+        <button
+          type="button"
+          aria-label={open ? 'Close' : 'Open'}
+          onClick={() => setOpen((o) => !o)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
       </div>
       {open && (
         <div className="absolute z-30 mt-2 max-h-60 w-full overflow-auto rounded-md border border-accent/30 bg-background p-1 shadow-lg">
@@ -117,10 +155,14 @@ function MultiSelect({
                 className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm hover:bg-accent/20 ${active ? 'text-foreground' : 'text-foreground'}`}
               >
                 <span>{opt.label}</span>
-                {active && <Check className="h-4 w-4" />}
+                {active && <Check className="h-4 w-4" /> }
+                
               </button>
             );
           })}
+          <div className="sticky bottom-0 flex justify-end border-t border-accent/30 bg-background/80 p-1">
+            <Button variant="secondary" className="h-7 px-2 text-xs" onClick={() => setOpen(false)}>Done</Button>
+          </div>
         </div>
       )}
     </div>
@@ -166,6 +208,9 @@ export function QuizManagement() {
   // Step 3: Trainees assignment
   const [traineeOptions, setTraineeOptions] = useState<ComboOption[]>([]);
   const [assigned, setAssigned] = useState<string[]>([]); // selected trainee IDs
+  // Collaborators (trainers) management
+  const [trainerOptions, setTrainerOptions] = useState<ComboOption[]>([]);
+  const [collaborators, setCollaborators] = useState<string[]>([]);
 
   const resetForm = () => {
     setStep(0);
@@ -173,6 +218,7 @@ export function QuizManagement() {
     setIsActive(false);
     setQuestions([blankQuestion()]);
     setAssigned([]);
+    setCollaborators([]);
     setEditMode(false);
     setEditId(null);
   };
@@ -203,6 +249,15 @@ export function QuizManagement() {
         : [blankQuestion()];
       setQuestions(mappedQs.length ? mappedQs : [blankQuestion()]);
       setAssigned(Array.isArray(data.assigned_trainee_ids) ? data.assigned_trainee_ids : []);
+      // Load current quiz collaborators
+      try {
+        const memRes = await fetch(`/api/trainer/quiz-members?quizId=${id}`);
+        if (memRes.ok) {
+          const mem = await memRes.json();
+          const ids: string[] = Array.isArray(mem.members) ? mem.members.map((m: any) => String(m.trainerId)) : [];
+          setCollaborators(ids);
+        }
+      } catch {}
       setOpen(true);
     } catch (e) {
       console.error(e);
@@ -255,6 +310,8 @@ export function QuizManagement() {
           body: JSON.stringify({ ...payload, trainerId: profile.id }),
         });
         if (!res.ok) throw new Error('Failed to save changes');
+        // Sync collaborators: diff current vs selected
+        await syncQuizMembers(editId, collaborators, profile.id);
       } else {
         const res = await fetch(`/api/trainer/quizzes`, {
           method: 'POST',
@@ -262,6 +319,11 @@ export function QuizManagement() {
           body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error('Failed to create quiz');
+        const created = await res.json();
+        const newId = String(created.id);
+        if (newId) {
+          await syncQuizMembers(newId, collaborators, profile.id);
+        }
       }
       setOpen(false);
       resetForm();
@@ -312,10 +374,56 @@ export function QuizManagement() {
       console.error(e);
     }
   };
+  const loadTrainers = async () => {
+    if (!profile) return;
+    try {
+      const res = await fetch(`/api/trainer/trainers?excludeId=${profile.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const opts: ComboOption[] = (data.trainers || []).map((t: any) => ({ id: t.id, label: t.full_name }));
+      setTrainerOptions(opts);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  async function syncQuizMembers(quizId: string, desired: string[], addedById: string) {
+    try {
+      const curRes = await fetch(`/api/trainer/quiz-members?quizId=${quizId}`);
+      const cur = curRes.ok ? await curRes.json() : { members: [] };
+      const currentIds: string[] = Array.isArray(cur.members) ? cur.members.map((m: any) => String(m.trainerId)) : [];
+      const want = new Set(desired);
+      const have = new Set(currentIds);
+      const toAdd = Array.from(want).filter((id) => !have.has(id));
+      const toRemove = Array.from(have).filter((id) => !want.has(id));
+
+      await Promise.all(
+        toAdd.map((trainerId) =>
+          fetch(`/api/trainer/quiz-members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quiz_id: quizId, trainer_id: trainerId, added_by_id: addedById }),
+          }),
+        ),
+      );
+      await Promise.all(
+        toRemove.map((trainerId) =>
+          fetch(`/api/trainer/quiz-members`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quiz_id: quizId, trainer_id: trainerId }),
+          }),
+        ),
+      );
+    } catch (e) {
+      console.error('syncQuizMembers error', e);
+    }
+  }
 
   useEffect(() => {
     if (profile?.id) {
       loadTrainees();
+      loadTrainers();
       loadQuizzes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -381,7 +489,7 @@ export function QuizManagement() {
 
       {/* Create Dialog */}
       <Dialog open={open} onClose={() => setOpen(false)}>
-        <div className="flex items-start justify-between rounded-t-3xl border-b border-accent/30 bg-background px-6 py-4">
+        <div className="flex items-start justify-between  rounded-t-3xl border-b border-accent/30 bg-background px-6 py-4">
           <div>
             <h3 className="text-foreground text-lg font-semibold">{editMode ? 'Edit Global Quiz' : 'Create New Global Quiz'}</h3>
             <p className="text-muted text-sm">Follow the steps to {editMode ? 'update' : 'set up'} your quiz.</p>
@@ -400,7 +508,7 @@ export function QuizManagement() {
 
         {/* Step content */}
         {step === 0 && (
-          <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          <div className="h-[12vh] overflow-y-auto px-6 py-4">
             <div className="space-y-4">
             <div>
                 <label className="text-foreground mb-1 block text-sm font-medium">Quiz Title</label>
@@ -465,10 +573,16 @@ export function QuizManagement() {
         )}
 
         {step === 2 && (
-          <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
-            <div className="space-y-3">
-              <label className="text-foreground mb-1 block text-sm font-medium">Assign Trainees</label>
-              <MultiSelect options={traineeOptions} selected={assigned} onChange={setAssigned} />
+          <div className="h-[20vh] overflow-y-auto px-6 py-4">
+            <div className="space-y-6">
+              <div>
+                <label className="text-foreground mb-1 block text-sm font-medium">Assign Trainees</label>
+                <MultiSelect options={traineeOptions} selected={assigned} onChange={setAssigned} />
+              </div>
+              <div>
+                <label className="text-foreground mb-1 block text-sm font-medium">Collaborating Trainers</label>
+                <MultiSelect options={trainerOptions} selected={collaborators} onChange={setCollaborators} placeholder="Search trainers..." />
+              </div>
             </div>
           </div>
         )}

@@ -23,6 +23,8 @@ export default function TraineeEnablerPage() {
   const [error, setError] = useState<string | null>(null);
   const [enabler, setEnabler] = useState<any | null>(null);
   const [solutionText, setSolutionText] = useState('');
+  const [solutions, setSolutions] = useState<Array<{ scenarioIndex: number; text: string }>>([]);
+  const [currentScenarioIndex, setCurrentScenarioIndex] = useState(0);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
   const [gated, setGated] = useState<GatedQuizInfo[]>([]);
@@ -46,7 +48,15 @@ export default function TraineeEnablerPage() {
         const er = await fetch(`/api/trainer/enablers/${enablerId}`, { cache: 'no-store' });
         if (er.ok) {
           const ej = await er.json();
-          setEnabler(ej.enabler || null);
+          const enablerData = ej.enabler || null;
+          setEnabler(enablerData);
+          // Initialize solutions array based on scenarios count
+          if (enablerData && Array.isArray(enablerData.scenarios) && enablerData.scenarios.length > 0) {
+            setSolutions(enablerData.scenarios.map((_: any, idx: number) => ({ scenarioIndex: idx, text: '' })));
+          } else if (enablerData?.scenarioText) {
+            // Legacy: single scenario
+            setSolutions([{ scenarioIndex: 0, text: '' }]);
+          }
         }
         // Gated quiz list
         const qr = await fetch(`/api/trainee/enablers/${enablerId}/quizzes?traineeId=${profile.id}`, { cache: 'no-store' });
@@ -170,10 +180,16 @@ export default function TraineeEnablerPage() {
     if (!profile?.id || !enablerId) return setError('Profil fehlt');
     setSaveSuccess(null);
     try {
+      // Filter out empty solutions and send only filled ones
+      const filledSolutions = solutions.filter(s => s.text.trim().length > 0);
       const r = await fetch(`/api/trainee/enablers/${enablerId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ traineeId: profile.id, solutionText }),
+        body: JSON.stringify({ 
+          traineeId: profile.id, 
+          solutions: filledSolutions.length > 0 ? filledSolutions : undefined,
+          solutionText: filledSolutions.length === 1 ? filledSolutions[0].text : undefined // Backward compat
+        }),
       });
       if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
       setSaveSuccess('Lösung gespeichert. Status: Ausstehend');
@@ -190,7 +206,7 @@ export default function TraineeEnablerPage() {
   if (!enabler) return <div className="p-6">Nicht gefunden</div>;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Enabler header */}
       <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
         <h1 className="text-foreground text-2xl font-bold">{enabler.title}</h1>
@@ -221,35 +237,184 @@ export default function TraineeEnablerPage() {
             <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.pptUrl} target="_blank" rel="noreferrer">PPT öffnen</a>
           )}
         </div>
-        {enabler.scenarioText && (
-          <div className="mt-4 rounded-xl border border-accent/20 bg-black/20 p-4">
-            <div className="mb-1 text-sm font-semibold">Szenario</div>
-            <LinkifyText className="text-foreground/90" text={String(enabler.scenarioText)} preserveLineBreaks />
-          </div>
-        )}
-        {enabler.hintText && (
-          <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-4">
-            <div className="mb-1 text-sm font-semibold">Hinweis</div>
-            <LinkifyText className="text-muted-foreground" text={String(enabler.hintText)} preserveLineBreaks />
+
+        {/* Scenarios Slider */}
+        {((Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0) || enabler.scenarioText) && (
+          <div className="mt-4">
+            {/* Counter */}
+            {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 1 && (
+              <div className="mb-3 text-center">
+                <span className="text-sm font-medium text-foreground">
+                  Szenario {currentScenarioIndex + 1} von {enabler.scenarios.length}
+                </span>
+              </div>
+            )}
+
+            {/* Slider Container */}
+            <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-black/20 p-4">
+              <div 
+                className="flex transition-transform duration-300 ease-in-out"
+                style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
+              >
+                {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0 ? (
+                  enabler.scenarios.map((sc: any, idx: number) => (
+                    <div key={idx} className="w-full flex-shrink-0 space-y-3 px-2">
+                      <div>
+                        <div className="mb-1 text-sm font-semibold">Szenario {idx + 1}</div>
+                        <LinkifyText className="text-foreground/90" text={String(sc.text || '')} preserveLineBreaks />
+                      </div>
+                      {sc.hint && (
+                        <div className="rounded-lg border border-accent/20 bg-black/10 p-3">
+                          <div className="mb-1 text-xs font-semibold text-muted-foreground">Hinweis</div>
+                          <LinkifyText className="text-muted-foreground text-sm" text={String(sc.hint)} preserveLineBreaks />
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="w-full flex-shrink-0 space-y-3 px-2">
+                    <div>
+                      <div className="mb-1 text-sm font-semibold">Szenario</div>
+                      <LinkifyText className="text-foreground/90" text={String(enabler.scenarioText || '')} preserveLineBreaks />
+                    </div>
+                    {enabler.hintText && (
+                      <div className="rounded-lg border border-accent/20 bg-black/10 p-3">
+                        <div className="mb-1 text-xs font-semibold text-muted-foreground">Hinweis</div>
+                        <LinkifyText className="text-muted-foreground text-sm" text={String(enabler.hintText)} preserveLineBreaks />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Navigation for multiple scenarios */}
+            {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 1 && (
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  disabled={currentScenarioIndex === 0}
+                  onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
+                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ← Zurück
+                </button>
+                
+                <div className="flex items-center gap-2">
+                  {enabler.scenarios.map((_: any, idx: number) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setCurrentScenarioIndex(idx)}
+                      className={`h-2 rounded-full transition-all ${
+                        idx === currentScenarioIndex 
+                          ? 'w-6 bg-primary' 
+                          : 'w-2 bg-accent/30 hover:bg-accent/50'
+                      }`}
+                      aria-label={`Go to scenario ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={currentScenarioIndex === enabler.scenarios.length - 1}
+                  onClick={() => setCurrentScenarioIndex(i => Math.min(enabler.scenarios.length - 1, i + 1))}
+                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Weiter →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Scenario solution */}
+      {/* Solution Slider */}
       <div className="space-y-4 rounded-3xl border border-accent/30 bg-black/30 p-5">
         {saveSuccess && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-300">{saveSuccess}</div>}
-        <div>
-          <label className="mb-1 block text-sm font-medium">Deine Lösung zum Szenario</label>
-          <textarea
-            value={solutionText}
-            onChange={e => setSolutionText(e.target.value)}
-            className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2"
-            rows={6}
-            placeholder="Beschreibe deine Lösung..."
-          />
-        </div>
+        
+        <div className="mb-2 text-lg font-semibold">Deine Lösungen</div>
+
+        {solutions.length > 0 && (
+          <>
+            {/* Counter */}
+            {solutions.length > 1 && (
+              <div className="mb-3 text-center">
+                <span className="text-sm font-medium text-foreground">
+                  Lösung für Szenario {currentScenarioIndex + 1} von {solutions.length}
+                </span>
+              </div>
+            )}
+
+            {/* Solution Slider */}
+            <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-black/20 p-4">
+              <div 
+                className="flex transition-transform duration-300 ease-in-out"
+                style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
+              >
+                {solutions.map((sol, idx) => (
+                  <div key={idx} className="w-full flex-shrink-0 px-2">
+                    <label className="mb-1 block text-sm font-medium">Deine Lösung für Szenario {idx + 1}</label>
+                    <textarea
+                      value={sol.text}
+                      onChange={e => {
+                        const newSolutions = [...solutions];
+                        newSolutions[idx] = { ...newSolutions[idx], text: e.target.value };
+                        setSolutions(newSolutions);
+                      }}
+                      className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2"
+                      rows={6}
+                      placeholder="Beschreibe deine Lösung..."
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Navigation for multiple solutions */}
+            {solutions.length > 1 && (
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  disabled={currentScenarioIndex === 0}
+                  onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
+                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ← Zurück
+                </button>
+                
+                <div className="flex items-center gap-2">
+                  {solutions.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setCurrentScenarioIndex(idx)}
+                      className={`h-2 rounded-full transition-all ${
+                        idx === currentScenarioIndex 
+                          ? 'w-6 bg-primary' 
+                          : 'w-2 bg-accent/30 hover:bg-accent/50'
+                      }`}
+                      aria-label={`Go to solution ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={currentScenarioIndex === solutions.length - 1}
+                  onClick={() => setCurrentScenarioIndex(i => Math.min(solutions.length - 1, i + 1))}
+                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Weiter →
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
         <div className="flex justify-end">
-          <button onClick={submitSolution} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">Lösung abgeben</button>
+          <button onClick={submitSolution} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">Alle Lösungen abgeben</button>
         </div>
       </div>
 

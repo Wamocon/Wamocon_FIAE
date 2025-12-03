@@ -22,16 +22,42 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing trainerProfileId' }, { status: 400 });
     }
 
-  const where: any[] = [eq(courses.createdById, trainerProfileId)];
-  if (q) where.push(ilike(courses.title, `%${q}%`));
-    if (year && year !== 'all') where.push(eq(courses.year, Number(year)));
-    const whereExpr = where.filter(Boolean);
+    // Courses created by this trainer OR where trainer is a course member with role TRAINER
+    const createdByWhere: any[] = [eq(courses.createdById, trainerProfileId)];
+    if (q) createdByWhere.push(ilike(courses.title, `%${q}%`));
+    if (year && year !== 'all') createdByWhere.push(eq(courses.year, Number(year)));
+    const createdByExpr = createdByWhere.filter(Boolean);
 
-    const list = await db
+    const createdList = await db
       .select({ id: courses.id, title: courses.title, year: courses.year, chapter: courses.chapter })
       .from(courses)
-      .where(whereExpr.length ? (whereExpr.length === 1 ? whereExpr[0] : and(...whereExpr as any)) : undefined as any)
+      .where(createdByExpr.length ? (createdByExpr.length === 1 ? createdByExpr[0] : and(...createdByExpr as any)) : undefined as any)
       .orderBy(courses.createdAt);
+
+    // Get courseIds where trainer is a member
+    const memberCourseRows = await db
+      .select({ courseId: courseMembers.courseId })
+      .from(courseMembers)
+      .where(and(eq(courseMembers.userId, trainerProfileId as any), eq(courseMembers.role, 'TRAINER' as any)));
+    const memberCourseIds = Array.from(new Set(memberCourseRows.map(r => String(r.courseId))));
+
+    let memberList: { id: string; title: string; year: number | null; chapter: number | null }[] = [];
+    if (memberCourseIds.length) {
+      const memberWhere: any[] = [inArray(courses.id, memberCourseIds as any)];
+      if (q) memberWhere.push(ilike(courses.title, `%${q}%`));
+      if (year && year !== 'all') memberWhere.push(eq(courses.year, Number(year)));
+      const memberExpr = memberWhere.filter(Boolean);
+      memberList = await db
+        .select({ id: courses.id, title: courses.title, year: courses.year, chapter: courses.chapter })
+        .from(courses)
+        .where(memberExpr.length ? (memberExpr.length === 1 ? memberExpr[0] : and(...memberExpr as any)) : undefined as any)
+        .orderBy(courses.createdAt);
+    }
+
+    // Merge and de-duplicate
+    const mapById = new Map<string, { id: string; title: string; year: number | null; chapter: number | null }>();
+    [...createdList, ...memberList].forEach(c => mapById.set(String(c.id), c));
+    const list = Array.from(mapById.values());
 
     if (list.length === 0) return NextResponse.json({ courses: [] });
     const courseIds = list.map((c) => c.id);

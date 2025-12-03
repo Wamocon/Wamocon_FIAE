@@ -2,16 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import {
   Users,
   TrendingUp,
   Clock,
   AlertTriangle,
-  Target,
   BarChart3,
 } from 'lucide-react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
+
+// Dynamically import chart components with SSR disabled
+const ProgressTrendChart = dynamic(
+  () => import('./DashboardCharts').then(mod => mod.ProgressTrendChart),
+  { ssr: false, loading: () => <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">Lade...</div> }
+);
+
+const ModuleProgressChart = dynamic(
+  () => import('./DashboardCharts').then(mod => mod.ModuleProgressChart),
+  { ssr: false, loading: () => <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">Lade...</div> }
+);
 
 interface Trainee {
   id: string;
@@ -75,13 +85,17 @@ export default function TrainerDashboard() {
   // Chart data now comes from API: progressTrend and moduleProgress
 
   // Ensure chart data is safe and numeric to avoid runtime errors
-  const moduleProgressSafe = (moduleProgress || []).map((m) => ({
-    name: m?.name ?? '',
+  const progressTrendSafe = (progressTrend || []).filter(p => p && typeof p === 'object').map((p) => ({
+    week: String(p?.week ?? ''),
+    progress: Number(p?.progress ?? 0),
+  }));
+
+  const moduleProgressSafe = (moduleProgress || []).filter(m => m && typeof m === 'object').map((m) => ({
+    name: String(m?.name ?? ''),
     completed: Number(m?.completed ?? 0),
     inProgress: Number(m?.inProgress ?? 0),
     notStarted: Number(m?.notStarted ?? 0),
   }));
-  const hasModuleProgress = moduleProgressSafe.length > 0;
 
   const avgProgress = trainees.length
     ? Math.round(
@@ -209,43 +223,7 @@ export default function TrainerDashboard() {
                   Anzeigen
                 </button>
               </div>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={progressTrend}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#6b7280"
-                    strokeOpacity={0.3}
-                  />
-                  <XAxis
-                    dataKey="week"
-                    stroke="#ffffff"
-                    fontSize={12}
-                    tick={{ fill: '#ffffff' }}
-                  />
-                  <YAxis
-                    stroke="#ffffff"
-                    fontSize={12}
-                    tick={{ fill: '#ffffff' }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e1423',
-                      border: '1px solid #ef4444',
-                      borderRadius: '8px',
-                      color: '#ffffff',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="progress"
-                    stroke="#ef4444"
-                    fill="#ef4444"
-                    fillOpacity={0.4}
-                    strokeWidth={3}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <ProgressTrendChart data={progressTrendSafe} />
             </div>
 
             {/* Module Progress Chart */}
@@ -262,45 +240,7 @@ export default function TrainerDashboard() {
                   Anzeigen
                 </button>
               </div>
-              {hasModuleProgress ? (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={moduleProgressSafe}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#6b7280"
-                      strokeOpacity={0.3}
-                    />
-                    <XAxis
-                      dataKey="name"
-                      stroke="#ffffff"
-                      fontSize={10}
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
-                      tick={{ fill: '#ffffff' }}
-                    />
-                    <YAxis
-                      stroke="#ffffff"
-                      fontSize={12}
-                      tick={{ fill: '#ffffff' }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1e1423',
-                        border: '1px solid #ef4444',
-                        borderRadius: '8px',
-                        color: '#ffffff',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                      }}
-                    />
-                    <Bar dataKey="completed" stackId="a" fill="#ef4444" />
-                    <Bar dataKey="inProgress" stackId="a" fill="#dc2626" />
-                    <Bar dataKey="notStarted" stackId="a" fill="#3c2846" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-muted-foreground text-sm">Keine Daten vorhanden</div>
-              )}
+              <ModuleProgressChart data={moduleProgressSafe} />
             </div>
           </div>
         </div>
