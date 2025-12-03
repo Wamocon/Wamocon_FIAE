@@ -12,6 +12,8 @@ import {
   reflections,
   useCaseSubmissions,
   enablerQuizLinks,
+  quizzes,
+  quizMembers,
 } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
@@ -104,11 +106,24 @@ export async function GET(req: NextRequest) {
       pendingUseCases = 0,
       pendingEnablers = 0,
       pendingLessonQuiz = 0;
+    // Restrict quiz-related pending counts to quizzes visible to this trainer (creator or member)
+    let visibleQuizIds: string[] = [];
+    const createdQuizRows = await db.select({ id: quizzes.id }).from(quizzes).where(eq(quizzes.createdById, trainerId));
+    const memberQuizRows = await db.select({ quizId: quizMembers.quizId }).from(quizMembers).where(eq(quizMembers.trainerId, trainerId as any));
+    visibleQuizIds = Array.from(new Set([
+      ...createdQuizRows.map(r => String(r.id)),
+      ...memberQuizRows.map(r => String(r.quizId)),
+    ]));
+
     if (traineeIds.length > 0) {
       const [{ c: pq } = { c: 0 }] = await db
         .select({ c: count() })
         .from(quizSubmissions)
-        .where(and(eq(quizSubmissions.isReviewed, false), inArray(quizSubmissions.traineeId, traineeIds)));
+        .where(and(
+          eq(quizSubmissions.isReviewed, false),
+          inArray(quizSubmissions.traineeId, traineeIds),
+          visibleQuizIds.length ? inArray(quizSubmissions.quizId, visibleQuizIds as any) : (eq(quizSubmissions.quizId, quizSubmissions.quizId) as any)
+        ));
       pendingQuiz = Number(pq) || 0;
 
       // Lesson quiz (multi-difficulty) pending subset where quiz has lesson link
@@ -116,7 +131,11 @@ export async function GET(req: NextRequest) {
         .select({ c: count() })
         .from(quizSubmissions)
         .innerJoin(enablerQuizLinks, eq(quizSubmissions.quizId, enablerQuizLinks.quizId))
-        .where(and(eq(quizSubmissions.isReviewed, false), inArray(quizSubmissions.traineeId, traineeIds)));
+        .where(and(
+          eq(quizSubmissions.isReviewed, false),
+          inArray(quizSubmissions.traineeId, traineeIds),
+          visibleQuizIds.length ? inArray(quizSubmissions.quizId, visibleQuizIds as any) : (eq(quizSubmissions.quizId, quizSubmissions.quizId) as any)
+        ));
       pendingLessonQuiz = Number(plq) || 0;
 
       const [{ c: pr } = { c: 0 }] = await db
@@ -250,8 +269,14 @@ export async function GET(req: NextRequest) {
       moduleProgress.push({ name: String(course.title ?? ''), completed, inProgress, notStarted });
     }
 
+    // Normalize outputs to prevent client-side chart errors
+    const charts = {
+      progressTrend: Array.isArray(progressTrend) ? progressTrend : [],
+      moduleProgress: Array.isArray(moduleProgress) ? moduleProgress : [],
+    };
+
     return NextResponse.json({
-      trainees,
+      trainees: Array.isArray(trainees) ? trainees : [],
       counts: {
         activeTrainees: trainees.length,
         pendingReviews,
@@ -262,7 +287,7 @@ export async function GET(req: NextRequest) {
         pendingUseCases,
         recentReflections: Number(recentReflections) || 0,
       },
-      charts: { progressTrend, moduleProgress },
+      charts,
     });
   } catch (e) {
     console.error('Trainer dashboard API error', e);

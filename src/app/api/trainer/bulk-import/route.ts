@@ -30,8 +30,8 @@ interface EnablerRow {
   title: string;
   order_index: number;
   description_text?: string;
-  scenario_text?: string;
-  hint_text?: string;
+  scenario_text?: string; // Individual scenario text (one row per scenario)
+  hint_text?: string; // Hint for this specific scenario
   ppt_url?: string;
   video_url?: string;
   scenario_image_url?: string;
@@ -221,56 +221,110 @@ export async function POST(request: NextRequest) {
       const enablersSheet = workbook.Sheets['Enablers'];
       const enablersData: EnablerRow[] = XLSX.utils.sheet_to_json(enablersSheet);
 
+      // Group rows by enabler (course_title + title)
+      const enablerGroups = new Map<string, EnablerRow[]>();
+      
       for (let i = 0; i < enablersData.length; i++) {
         const row = enablersData[i];
+        if (!row.course_title?.trim() || !row.title?.trim()) {
+          result.stats.errors.push(`Enablers row ${i + 2}: course_title and title are required`);
+          continue;
+        }
+        
+        const key = `${row.course_title.trim()}|||${row.title.trim()}`;
+        if (!enablerGroups.has(key)) {
+          enablerGroups.set(key, []);
+        }
+        enablerGroups.get(key)!.push(row);
+      }
+
+      // Process each enabler group
+      for (const [key, rows] of enablerGroups.entries()) {
         try {
-          if (!row.course_title?.trim()) {
-            result.stats.errors.push(`Enablers row ${i + 2}: course_title is required`);
-            continue;
-          }
-          if (!row.title?.trim()) {
-            result.stats.errors.push(`Enablers row ${i + 2}: title is required`);
-            continue;
-          }
-          if (row.order_index === undefined || row.order_index === null) {
-            result.stats.errors.push(`Enablers row ${i + 2}: order_index is required`);
+          const firstRow = rows[0];
+          
+          if (firstRow.order_index === undefined || firstRow.order_index === null) {
+            result.stats.errors.push(`Enabler "${firstRow.title}": order_index is required`);
             continue;
           }
 
-          const courseId = courseIdMap.get(row.course_title.trim());
+          const courseId = courseIdMap.get(firstRow.course_title.trim());
           if (!courseId) {
             result.stats.errors.push(
-              `Enablers row ${i + 2}: Course "${row.course_title}" not found. Make sure it exists in Courses sheet.`
+              `Enabler "${firstRow.title}": Course "${firstRow.course_title}" not found. Make sure it exists in Courses sheet.`
             );
             continue;
           }
 
-          const durationUnit = validateDurationUnit(row.duration_unit);
-          if (row.duration_unit && !durationUnit) {
+          const durationUnit = validateDurationUnit(firstRow.duration_unit);
+          if (firstRow.duration_unit && !durationUnit) {
             result.stats.errors.push(
-              `Enablers row ${i + 2}: Invalid duration_unit "${row.duration_unit}". Must be DAYS or WEEKS.`
+              `Enabler "${firstRow.title}": Invalid duration_unit "${firstRow.duration_unit}". Must be DAYS or WEEKS.`
             );
             continue;
           }
 
-          await db.insert(enablers).values({
-            courseId: courseId,
-            title: row.title.trim(),
-            orderIndex: row.order_index,
-            descriptionText: row.description_text?.trim() || null,
-            scenarioText: row.scenario_text?.trim() || null,
-            hintText: row.hint_text?.trim() || null,
-            pptUrl: row.ppt_url?.trim() || null,
-            videoUrl: row.video_url?.trim() || null,
-            scenarioImageUrl: row.scenario_image_url?.trim() || null,
-            durationValue: row.duration_value || null,
-            durationUnit: durationUnit,
-            isActive: parseBoolean(row.is_active),
-          });
+          // Build scenarios array from multiple rows
+          const scenarios: Array<{ text: string; hint?: string }> = [];
+          for (const row of rows) {
+            if (row.scenario_text?.trim()) {
+              scenarios.push({
+                text: row.scenario_text.trim(),
+                hint: row.hint_text?.trim() || undefined,
+              });
+            }
+          }
+
+          // Check if enabler already exists
+          const existing = await db
+            .select()
+            .from(enablers)
+            .where(
+              and(
+                eq(enablers.courseId, courseId),
+                eq(enablers.title, firstRow.title.trim())
+              )
+            )
+            .limit(1);
+
+          if (existing.length > 0) {
+            // Update existing enabler with new scenarios
+            await db
+              .update(enablers)
+              .set({
+                orderIndex: firstRow.order_index,
+                descriptionText: firstRow.description_text?.trim() || null,
+                scenarios: scenarios.length > 0 ? scenarios : null,
+                scenarioText: null, // Clear legacy field
+                hintText: null, // Clear legacy field
+                pptUrl: firstRow.ppt_url?.trim() || null,
+                videoUrl: firstRow.video_url?.trim() || null,
+                scenarioImageUrl: firstRow.scenario_image_url?.trim() || null,
+                durationValue: firstRow.duration_value || null,
+                durationUnit: durationUnit,
+                isActive: parseBoolean(firstRow.is_active),
+              })
+              .where(eq(enablers.id, existing[0].id));
+          } else {
+            // Create new enabler
+            await db.insert(enablers).values({
+              courseId: courseId,
+              title: firstRow.title.trim(),
+              orderIndex: firstRow.order_index,
+              descriptionText: firstRow.description_text?.trim() || null,
+              scenarios: scenarios.length > 0 ? scenarios : null,
+              pptUrl: firstRow.ppt_url?.trim() || null,
+              videoUrl: firstRow.video_url?.trim() || null,
+              scenarioImageUrl: firstRow.scenario_image_url?.trim() || null,
+              durationValue: firstRow.duration_value || null,
+              durationUnit: durationUnit,
+              isActive: parseBoolean(firstRow.is_active),
+            });
+          }
 
           result.stats.enablersCreated++;
         } catch (error: any) {
-          result.stats.errors.push(`Enablers row ${i + 2}: ${error.message}`);
+          result.stats.errors.push(`Enabler "${rows[0].title}": ${error.message}`);
         }
       }
     }

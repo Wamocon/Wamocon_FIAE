@@ -219,11 +219,10 @@ export function KnowledgeSubmission() {
           ) : (
             <div className="space-y-3">
               {notes.map((n) => (
-                
-                  <div className="bg-background/50 border-accent/30 hover:border-accent/60 rounded-xl border p-4 transition-colors">
+                  <div key={n.id} className="bg-background/50 border-accent/30 hover:border-accent/60 rounded-xl border p-4 transition-colors">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <Link key={n.id} href={`/trainee/knowledge-submission/${n.id}`}>
+                        <Link href={`/trainee/knowledge-submission/${n.id}`}>
                         <div className="text-foreground font-semibold">{n.title}</div>
                         <div className="text-muted text-xs">{new Date(n.createdAt).toLocaleString()}</div>
                         </Link>

@@ -144,6 +144,8 @@ export const enablers = pgTable('enablers', {
   scenarioText: text('scenario_text'),
   hintText: text('hint_text'),
   scenarioImageUrl: text('scenario_image_url'),
+  // Multiple scenarios with hints (new)
+  scenarios: jsonb('scenarios').$type<Array<{ text: string; hint?: string }>>(),
 
   // Settings
   durationValue: integer('duration_value'),
@@ -293,6 +295,27 @@ export const quizSubmissions = pgTable('quiz_submissions', {
   reviewedAt: timestamp('reviewed_at'),
   attemptNumber: integer('attempt_number'),
 });
+
+// Trainers explicitly added as collaborators on GLOBAL quizzes
+export const quizMembers = pgTable(
+  'quiz_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    quizId: uuid('quiz_id')
+      .notNull()
+      .references(() => quizzes.id, { onDelete: 'cascade' }),
+    trainerId: uuid('trainer_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    addedById: uuid('added_by_id')
+      .notNull()
+      .references(() => profiles.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    unq: unique().on(table.quizId, table.trainerId),
+  }),
+);
 
 // Trainee's answer for each question in that submission
 export const quizSubmissionAnswers = pgTable('quiz_submission_answers', {
@@ -527,9 +550,11 @@ export const enablerSubmissions = pgTable('enabler_submissions', {
   enablerId: uuid('enabler_id')
     .notNull()
     .references(() => enablers.id, { onDelete: 'cascade' }),
-  solutionText: text('solution_text'),
+  solutionText: text('solution_text'), // Legacy: single solution
+  solutions: jsonb('solutions').$type<Array<{ scenarioIndex: number; text: string }>>(), // New: multiple scenario solutions
   status: reviewStatus('status').default('PENDING'),
-  trainerFeedback: text('trainer_feedback'),
+  trainerFeedback: text('trainer_feedback'), // Legacy: single feedback
+  feedbacks: jsonb('feedbacks').$type<Array<{ scenarioIndex: number; feedback: string }>>(), // New: multiple scenario feedbacks
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
   reviewedAt: timestamp('reviewed_at'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
@@ -587,6 +612,7 @@ export type Question = typeof questions.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type QuizAssignment = typeof quizAssignments.$inferSelect;
 export type QuizSubmission = typeof quizSubmissions.$inferSelect;
+export type QuizMember = typeof quizMembers.$inferSelect;
 export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
 export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;

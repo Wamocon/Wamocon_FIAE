@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MessageSquare, Award } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
+type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }>|null; solutionText?: string|null; solutions?: Array<{ scenarioIndex: number; text: string }>|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type UseCaseResult = { id: string; useCaseId: string; useCaseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type EnablerQuizResult = { id: string; enablerId: string; enablerTitle: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
 type GesetzResult = { id: string; geschäftsprozesseId: string; geschäftsprozesseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
@@ -17,6 +17,7 @@ export default function TraineeFeedbackPage() {
   const [gesetzes, setGesetzes] = useState<GesetzResult[]>([]);
   const [quizzes, setQuizzes] = useState<EnablerQuizResult[]>([]);
   const [globalQuizzes, setGlobalQuizzes] = useState<GlobalQuizResult[]>([]);
+  const [solutionIndexMap, setSolutionIndexMap] = useState<Record<string, number>>({});
 
   // Hooks must be declared before any conditional return
   useEffect(() => {
@@ -132,14 +133,106 @@ export default function TraineeFeedbackPage() {
                   {statusPill(e.status)}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">Eingereicht am {new Date(e.submittedAt).toLocaleString()}</div>
-                <div className="mt-2 rounded-xl border border-accent/20 bg-background/30 p-3">
-                  <div className="text-xs font-medium text-muted-foreground">Feedback</div>
-                  {e.trainerFeedback ? (
-                    <div className="text-sm whitespace-pre-wrap">{e.trainerFeedback}</div>
-                  ) : (
-                    <div className="text-xs italic text-muted-foreground">{e.status === 'PENDING' ? 'Noch in Prüfung…' : 'Kein individuelles Feedback vorhanden.'}</div>
-                  )}
-                </div>
+                
+                {/* Show submitted solutions */}
+                {(e.solutions || e.solutionText) && (
+                  <div className="mt-3">
+                    <div className="text-xs font-medium text-muted-foreground mb-2">Deine eingereichte Lösung{e.solutions && e.solutions.length > 1 ? 'en' : ''}</div>
+                    {e.solutions && e.solutions.length > 0 ? (
+                      <div className="space-y-3">
+                        {/* Counter */}
+                        {e.solutions.length > 1 && (
+                          <div className="text-center">
+                            <span className="text-sm font-medium text-foreground">
+                              Szenario {(solutionIndexMap[e.id] || 0) + 1} von {e.solutions.length}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Solution and Feedback Slider */}
+                        <div className="relative overflow-hidden">
+                          <div 
+                            className="flex transition-transform duration-300 ease-in-out"
+                            style={{ transform: `translateX(-${(solutionIndexMap[e.id] || 0) * 100}%)` }}
+                          >
+                            {e.solutions.map((sol, idx) => (
+                              <div key={idx} className="w-full flex-shrink-0 px-2 space-y-3">
+                                {/* Solution Box */}
+                                <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
+                                  <div className="text-xs font-medium mb-1">Deine Lösung für Szenario {sol.scenarioIndex + 1}</div>
+                                  <p className="text-sm whitespace-pre-wrap">{sol.text}</p>
+                                </div>
+                                
+                                {/* Feedback Box for this scenario */}
+                                <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
+                                  <div className="text-xs font-medium text-muted-foreground">Trainer Feedback für Szenario {sol.scenarioIndex + 1}</div>
+                                  {e.feedbacks && e.feedbacks.find(f => f.scenarioIndex === sol.scenarioIndex)?.feedback ? (
+                                    <div className="text-sm whitespace-pre-wrap">{e.feedbacks.find(f => f.scenarioIndex === sol.scenarioIndex)!.feedback}</div>
+                                  ) : (
+                                    <div className="text-xs italic text-muted-foreground">{e.status === 'PENDING' ? 'Noch in Prüfung…' : 'Kein individuelles Feedback vorhanden.'}</div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Navigation */}
+                        {e.solutions.length > 1 && (
+                          <div className="flex items-center justify-between">
+                            <button
+                              type="button"
+                              disabled={(solutionIndexMap[e.id] || 0) === 0}
+                              onClick={() => setSolutionIndexMap(prev => ({ ...prev, [e.id]: Math.max(0, (prev[e.id] || 0) - 1) }))}
+                              className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ← Zurück
+                            </button>
+                            
+                            <div className="flex items-center gap-2">
+                              {e.solutions.map((_, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => setSolutionIndexMap(prev => ({ ...prev, [e.id]: idx }))}
+                                  className={`h-2 rounded-full transition-all ${
+                                    idx === (solutionIndexMap[e.id] || 0)
+                                      ? 'w-6 bg-primary' 
+                                      : 'w-2 bg-accent/30 hover:bg-accent/50'
+                                  }`}
+                                  aria-label={`Go to solution ${idx + 1}`}
+                                />
+                              ))}
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={(solutionIndexMap[e.id] || 0) === e.solutions.length - 1}
+                              onClick={() => setSolutionIndexMap(prev => ({ ...prev, [e.id]: Math.min(e.solutions!.length - 1, (prev[e.id] || 0) + 1) }))}
+                              className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Weiter →
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : e.solutionText ? (
+                      <>
+                        <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
+                          <p className="text-sm whitespace-pre-wrap">{e.solutionText}</p>
+                        </div>
+                        <div className="mt-3 rounded-xl border border-accent/20 bg-background/30 p-3">
+                          <div className="text-xs font-medium text-muted-foreground">Trainer Feedback</div>
+                          {e.trainerFeedback ? (
+                            <div className="text-sm whitespace-pre-wrap">{e.trainerFeedback}</div>
+                          ) : (
+                            <div className="text-xs italic text-muted-foreground">{e.status === 'PENDING' ? 'Noch in Prüfung…' : 'Kein individuelles Feedback vorhanden.'}</div>
+                          )}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

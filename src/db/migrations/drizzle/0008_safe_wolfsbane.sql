@@ -1,0 +1,1 @@
+ALTER TABLE "enablers" ADD COLUMN "scenarios" jsonb;

@@ -36,6 +36,10 @@ export default function EditCoursePage() {
   const [enablerDescription, setEnablerDescription] = useState('');
   const [enablerScenario, setEnablerScenario] = useState('');
   const [enablerHint, setEnablerHint] = useState('');
+  // New: multiple scenarios with hints
+  type ScenarioDraft = { id: string; text: string; hint: string };
+  const [scenarios, setScenarios] = useState<ScenarioDraft[]>([{ id: crypto.randomUUID(), text: '', hint: '' }]);
+  const [currentScenarioIndex, setCurrentScenarioIndex] = useState(0);
   const [enablerPpt, setEnablerPpt] = useState('');
   const [enablerVideo, setEnablerVideo] = useState('');
   const [enablerDuration, setEnablerDuration] = useState<string>('');
@@ -64,20 +68,7 @@ export default function EditCoursePage() {
   const [useCaseEditDuration, setUseCaseEditDuration] = useState<string>('');
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
 
-  // UI: Add geschäftsprozesse Modal state
-  const [showAddgeschäftsprozesse, setShowAddgeschäftsprozesse] = useState(false);
-  const [gpTitle, setGpTitle] = useState('');
-  const [gpDesc, setGpDesc] = useState('');
-  const [gpDuration, setGpDuration] = useState<string>('');
-  const [gpActive, setGpActive] = useState<boolean>(false);
-  const [gpSubmitting, setGpSubmitting] = useState(false);
-  // Edit geschäftsprozesse state
-  const [showEditgeschäftsprozesse, setShowEditgeschäftsprozesse] = useState(false);
-  const [editinggeschäftsprozesseId, setEditinggeschäftsprozesseId] = useState<string | null>(null);
-  const [gpEditTitle, setGpEditTitle] = useState('');
-  const [gpEditDesc, setGpEditDesc] = useState('');
-  const [gpEditDuration, setGpEditDuration] = useState<string>('');
-  const [gpEditActive, setGpEditActive] = useState<boolean>(false);
+  
 
   useEffect(() => {
     const load = async () => {
@@ -304,9 +295,9 @@ export default function EditCoursePage() {
                     onClick={async () => {
                       // Prefill enabler details and quiz into add/edit fields and open edit modal
                       try {
-                        setEditingEnablerId(e.id);
-                        // Load enabler fields
-                        const er = await fetch(`/api/trainer/enablers/${e.id}`);
+                      setEditingEnablerId(e.id);
+                      // Load enabler fields
+                      const er = await fetch(`/api/trainer/enablers/${e.id}`);
                         if (er.ok) {
                           const ej = await er.json();
                           const en = ej.enabler || {};
@@ -318,8 +309,17 @@ export default function EditCoursePage() {
                           setEnablerHint(en.hintText || '');
                           setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
                           setEnablerActive(!!en.isActive);
+                          // Load scenarios array or migrate legacy
+                          if (Array.isArray(en.scenarios) && en.scenarios.length > 0) {
+                            setScenarios(en.scenarios.map((s: any) => ({ id: crypto.randomUUID(), text: s.text || '', hint: s.hint || '' })));
+                          } else if (en.scenarioText || en.hintText) {
+                            setScenarios([{ id: crypto.randomUUID(), text: en.scenarioText || '', hint: en.hintText || '' }]);
+                          } else {
+                            setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]);
+                          }
+                          setCurrentScenarioIndex(0);
                         }
-                        // Load multi-difficulty quiz list
+                      // Load multi-difficulty quiz list
                         const ql = await fetch(`/api/trainer/enablers/${e.id}/quizzes`);
                         if (ql.ok) {
                           const qlj = await ql.json();
@@ -497,13 +497,115 @@ export default function EditCoursePage() {
                   </div>
                 </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Szenario</label>
-                  <textarea value={enablerScenario} onChange={e => setEnablerScenario(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={4} placeholder="Beschreibe hier das Szenario, das der Azubi lösen soll..." />
-              </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Hinweis (für Trainees sichtbar)</label>
-                  <textarea value={enablerHint} onChange={e => setEnablerHint(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Tipp zur Lösung des Szenarios" />
+                <div className="mb-3 flex items-center justify-between">
+                  <label className="text-sm font-medium">Szenarien (mit Hinweisen)</label>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
+                    onClick={() => {
+                      setScenarios(s => [...s, { id: crypto.randomUUID(), text: '', hint: '' }]);
+                      setCurrentScenarioIndex(scenarios.length);
+                    }}
+                  >
+                    <Plus className="h-3 w-3" /> Szenario hinzufügen
+                  </button>
                 </div>
+                
+                {/* Scenario Counter */}
+                <div className="mb-3 text-center">
+                  <span className="text-sm font-medium text-foreground">
+                    Szenario {currentScenarioIndex + 1} von {scenarios.length}
+                  </span>
+                </div>
+
+                {/* Scenario Slider */}
+                <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-background/30 p-4">
+                  <div 
+                    className="flex transition-transform duration-300 ease-in-out"
+                    style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
+                  >
+                    {scenarios.map((sc, idx) => (
+                      <div key={sc.id} className="w-full flex-shrink-0 space-y-3 px-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium">Beschreibung</label>
+                          <textarea
+                            value={sc.text}
+                            onChange={e => setScenarios(s => s.map(x => x.id === sc.id ? { ...x, text: e.target.value } : x))}
+                            className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                            rows={4}
+                            placeholder="Beschreibe hier das Szenario, das der Azubi lösen soll..."
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium">Hinweis (für Trainees sichtbar)</label>
+                          <textarea
+                            value={sc.hint}
+                            onChange={e => setScenarios(s => s.map(x => x.id === sc.id ? { ...x, hint: e.target.value } : x))}
+                            className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                            rows={3}
+                            placeholder="Tipp zur Lösung des Szenarios"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Navigation Dots and Controls */}
+                <div className="mt-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    disabled={currentScenarioIndex === 0}
+                    onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
+                    className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ← Zurück
+                  </button>
+                  
+                  <div className="flex items-center gap-2">
+                    {scenarios.map((sc, idx) => (
+                      <button
+                        key={sc.id}
+                        type="button"
+                        onClick={() => setCurrentScenarioIndex(idx)}
+                        className={`h-2 rounded-full transition-all ${
+                          idx === currentScenarioIndex 
+                            ? 'w-6 bg-primary' 
+                            : 'w-2 bg-accent/30 hover:bg-accent/50'
+                        }`}
+                        aria-label={`Go to scenario ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={currentScenarioIndex === scenarios.length - 1}
+                    onClick={() => setCurrentScenarioIndex(i => Math.min(scenarios.length - 1, i + 1))}
+                    className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Weiter →
+                  </button>
+                </div>
+
+                {/* Delete Current Scenario */}
+                {scenarios.length > 1 && (
+                  <div className="mt-3 text-center">
+                    <button
+                      type="button"
+                      className="rounded-md border border-red-300 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+                      onClick={() => {
+                        const newScenarios = scenarios.filter(s => s.id !== scenarios[currentScenarioIndex].id);
+                        setScenarios(newScenarios);
+                        setCurrentScenarioIndex(prev => Math.min(prev, newScenarios.length - 1));
+                      }}
+                    >
+                      <X className="inline h-3 w-3 mr-1" />
+                      Dieses Szenario löschen
+                    </button>
+                  </div>
+                )}
+              </div>
               {/* Legacy inline Quiz-Fragen removed from Add Lesson modal. Create the lesson first, then add quizzes in the edit modal using the multi-difficulty section. */}
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => !enablerSubmitting && setShowAddEnabler(false)}>Abbrechen</button>
@@ -513,7 +615,8 @@ export default function EditCoursePage() {
                   setEnablerSubmitting(true);
                   try {
                     // 1) Create Enabler
-                    const res = await fetch(`/api/trainer/courses/${courseId}/enablers?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: enablerTitle.trim(), descriptionText: enablerDescription.trim() || undefined, scenarioText: enablerScenario.trim() || undefined, hintText: enablerHint.trim() || undefined, pptUrl: enablerPpt.trim() || undefined, videoUrl: enablerVideo.trim() || undefined, durationValue: enablerDuration ? Number(enablerDuration) : undefined, durationUnit: enablerDuration ? 'DAYS' : undefined, isActive: enablerActive }) });
+                    const scenariosPayload = scenarios.filter(s => s.text.trim()).map(s => ({ text: s.text.trim(), hint: s.hint.trim() || undefined }));
+                    const res = await fetch(`/api/trainer/courses/${courseId}/enablers?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: enablerTitle.trim(), descriptionText: enablerDescription.trim() || undefined, scenarios: scenariosPayload.length > 0 ? scenariosPayload : undefined, pptUrl: enablerPpt.trim() || undefined, videoUrl: enablerVideo.trim() || undefined, durationValue: enablerDuration ? Number(enablerDuration) : undefined, durationUnit: enablerDuration ? 'DAYS' : undefined, isActive: enablerActive }) });
                     if (!res.ok) throw new Error('Lesson konnte nicht erstellt werden');
                     const data = await res.json();
                     const newEnablerId = data.enabler?.id as string | undefined;
@@ -539,6 +642,15 @@ export default function EditCoursePage() {
                           setEnablerHint(en.hintText || '');
                           setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
                           setEnablerActive(!!en.isActive);
+                          // Load scenarios array or migrate legacy
+                          if (Array.isArray(en.scenarios) && en.scenarios.length > 0) {
+                            setScenarios(en.scenarios.map((s: any) => ({ id: crypto.randomUUID(), text: s.text || '', hint: s.hint || '' })));
+                          } else if (en.scenarioText || en.hintText) {
+                            setScenarios([{ id: crypto.randomUUID(), text: en.scenarioText || '', hint: en.hintText || '' }]);
+                          } else {
+                            setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]);
+                          }
+                          setCurrentScenarioIndex(0);
                         }
                         const ql = await fetch(`/api/trainer/enablers/${newEnablerId}/quizzes`);
                         if (ql.ok) {
@@ -554,7 +666,7 @@ export default function EditCoursePage() {
                       setShowAddEnabler(false);
                     }
                     // Reset add form fields
-                    setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false);
+                    setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false); setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]); setCurrentScenarioIndex(0);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   } finally {
@@ -720,13 +832,115 @@ export default function EditCoursePage() {
                   </div>
                 </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Szenario</label>
-                  <textarea value={enablerScenario} onChange={e => setEnablerScenario(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={4} placeholder="Beschreibe hier das Szenario, das der Azubi lösen soll..." />
-              </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Hinweis (für Trainees sichtbar)</label>
-                  <textarea value={enablerHint} onChange={e => setEnablerHint(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Tipp zur Lösung des Szenarios" />
+                <div className="mb-3 flex items-center justify-between">
+                  <label className="text-sm font-medium">Szenarien (mit Hinweisen)</label>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
+                    onClick={() => {
+                      setScenarios(s => [...s, { id: crypto.randomUUID(), text: '', hint: '' }]);
+                      setCurrentScenarioIndex(scenarios.length);
+                    }}
+                  >
+                    <Plus className="h-3 w-3" /> Szenario hinzufügen
+                  </button>
                 </div>
+                
+                {/* Scenario Counter */}
+                <div className="mb-3 text-center">
+                  <span className="text-sm font-medium text-foreground">
+                    Szenario {currentScenarioIndex + 1} von {scenarios.length}
+                  </span>
+                </div>
+
+                {/* Scenario Slider */}
+                <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-background/30 p-4">
+                  <div 
+                    className="flex transition-transform duration-300 ease-in-out"
+                    style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
+                  >
+                    {scenarios.map((sc, idx) => (
+                      <div key={sc.id} className="w-full flex-shrink-0 space-y-3 px-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium">Beschreibung</label>
+                          <textarea
+                            value={sc.text}
+                            onChange={e => setScenarios(s => s.map(x => x.id === sc.id ? { ...x, text: e.target.value } : x))}
+                            className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                            rows={4}
+                            placeholder="Beschreibe hier das Szenario, das der Azubi lösen soll..."
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium">Hinweis (für Trainees sichtbar)</label>
+                          <textarea
+                            value={sc.hint}
+                            onChange={e => setScenarios(s => s.map(x => x.id === sc.id ? { ...x, hint: e.target.value } : x))}
+                            className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                            rows={3}
+                            placeholder="Tipp zur Lösung des Szenarios"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Navigation Dots and Controls */}
+                <div className="mt-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    disabled={currentScenarioIndex === 0}
+                    onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
+                    className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ← Zurück
+                  </button>
+                  
+                  <div className="flex items-center gap-2">
+                    {scenarios.map((sc, idx) => (
+                      <button
+                        key={sc.id}
+                        type="button"
+                        onClick={() => setCurrentScenarioIndex(idx)}
+                        className={`h-2 rounded-full transition-all ${
+                          idx === currentScenarioIndex 
+                            ? 'w-6 bg-primary' 
+                            : 'w-2 bg-accent/30 hover:bg-accent/50'
+                        }`}
+                        aria-label={`Go to scenario ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={currentScenarioIndex === scenarios.length - 1}
+                    onClick={() => setCurrentScenarioIndex(i => Math.min(scenarios.length - 1, i + 1))}
+                    className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Weiter →
+                  </button>
+                </div>
+
+                {/* Delete Current Scenario */}
+                {scenarios.length > 1 && (
+                  <div className="mt-3 text-center">
+                    <button
+                      type="button"
+                      className="rounded-md border border-red-300 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+                      onClick={() => {
+                        const newScenarios = scenarios.filter(s => s.id !== scenarios[currentScenarioIndex].id);
+                        setScenarios(newScenarios);
+                        setCurrentScenarioIndex(prev => Math.min(prev, newScenarios.length - 1));
+                      }}
+                    >
+                      <X className="inline h-3 w-3 mr-1" />
+                      Dieses Szenario löschen
+                    </button>
+                  </div>
+                )}
+              </div>
               {/* Legacy inline Quiz-Fragen removed. Use the multi-difficulty section above to manage quizzes. */}
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditEnabler(false)}>Abbrechen</button>
@@ -736,14 +950,14 @@ export default function EditCoursePage() {
                   if (!enablerTitle.trim()) { alert('Bitte Titel eingeben'); return; }
                   try {
                     // PATCH enabler details
+                    const scenariosPayload = scenarios.filter(s => s.text.trim()).map(s => ({ text: s.text.trim(), hint: s.hint.trim() || undefined }));
                     const pr = await fetch(`/api/trainer/enablers/${editingEnablerId}?trainerId=${trainerId}`, {
                       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
                         title: enablerTitle.trim(),
                         descriptionText: enablerDescription.trim() || null,
-                        scenarioText: enablerScenario.trim() || null,
+                        scenarios: scenariosPayload.length > 0 ? scenariosPayload : null,
                         pptUrl: enablerPpt.trim() || null,
                         videoUrl: enablerVideo.trim() || null,
-                        hintText: enablerHint.trim() || null,
                         durationValue: enablerDuration ? Number(enablerDuration) : null,
                         durationUnit: enablerDuration ? 'DAYS' : null,
                         isActive: enablerActive,

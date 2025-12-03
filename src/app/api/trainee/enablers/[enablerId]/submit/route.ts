@@ -11,7 +11,8 @@ export async function POST(
     const { enablerId } = await params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
-    const solutionText: string | null = (body?.solutionText ?? null);
+    const solutionText: string | null = (body?.solutionText ?? null); // Legacy single solution
+    const solutions: Array<{ scenarioIndex: number; text: string }> | undefined = body?.solutions; // New: multiple solutions
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const [e] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
@@ -34,14 +35,31 @@ export async function POST(
       const latest = existing.sort((a, b) => (new Date(b.submittedAt || '').getTime() - new Date(a.submittedAt || '').getTime()))[0];
       const [row] = await db
         .update(enablerSubmissions)
-        .set({ solutionText, status: 'PENDING', submittedAt: new Date() })
+        .set({ 
+          solutionText: solutions ? undefined : solutionText, 
+          solutions: solutions || undefined,
+          status: 'PENDING', 
+          submittedAt: new Date(),
+          // bump attempt number on each submission
+          attemptNumber: (latest.attemptNumber ?? 0) + 1,
+          // clear previous review metadata on resubmission
+          reviewedById: null,
+          reviewedAt: null
+        })
         .where(eq(enablerSubmissions.id, latest.id))
         .returning();
       saved = row;
     } else {
       const [row] = await db
         .insert(enablerSubmissions)
-        .values({ enablerId, traineeId, solutionText, status: 'PENDING' })
+        .values({ 
+          enablerId, 
+          traineeId, 
+          solutionText: solutions ? undefined : solutionText, 
+          solutions: solutions || undefined,
+          status: 'PENDING' 
+          ,attemptNumber: 1
+        })
         .returning();
       saved = row;
     }
