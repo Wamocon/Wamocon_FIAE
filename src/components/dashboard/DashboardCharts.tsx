@@ -15,9 +15,10 @@ import {
 
 interface ProgressTrendChartProps {
   data: { week: string; progress: number }[];
+  loading?: boolean;
 }
 
-export function ProgressTrendChart({ data }: ProgressTrendChartProps) {
+export function ProgressTrendChart({ data, loading = false }: ProgressTrendChartProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -27,7 +28,8 @@ export function ProgressTrendChart({ data }: ProgressTrendChartProps) {
   // Check data validity
   const hasValidData = Array.isArray(data) && data.length > 0;
 
-  if (!mounted) {
+  // Show loading state if not mounted OR if data is still being fetched
+  if (!mounted || loading) {
     return (
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
         Lade...
@@ -72,9 +74,10 @@ export function ProgressTrendChart({ data }: ProgressTrendChartProps) {
 
 interface ModuleProgressChartProps {
   data: { name: string; completed: number; inProgress: number; notStarted: number }[];
+  loading?: boolean;
 }
 
-export function ModuleProgressChart({ data }: ModuleProgressChartProps) {
+export function ModuleProgressChart({ data, loading = false }: ModuleProgressChartProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -84,7 +87,8 @@ export function ModuleProgressChart({ data }: ModuleProgressChartProps) {
   // Check data validity
   const hasValidData = Array.isArray(data) && data.length > 0;
 
-  if (!mounted) {
+  // Show loading state if not mounted OR if data is still being fetched
+  if (!mounted || loading) {
     return (
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
         Lade...
