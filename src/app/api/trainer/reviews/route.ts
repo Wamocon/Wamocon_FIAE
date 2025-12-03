@@ -24,6 +24,9 @@ export async function GET(req: NextRequest) {
       enablerId: string;
       traineeId: string;
       solutionText: string | null;
+      solutions: any;
+      trainerFeedback: string | null;
+      feedbacks: any;
       status: string | null;
       submittedAt: Date;
       enablerTitle?: string;
@@ -51,6 +54,9 @@ export async function GET(req: NextRequest) {
           enablerId: enablerSubmissions.enablerId,
           traineeId: enablerSubmissions.traineeId,
           solutionText: enablerSubmissions.solutionText,
+          solutions: enablerSubmissions.solutions,
+          trainerFeedback: enablerSubmissions.trainerFeedback,
+          feedbacks: enablerSubmissions.feedbacks,
           status: enablerSubmissions.status,
           submittedAt: enablerSubmissions.submittedAt,
           attemptNumber: enablerSubmissions.attemptNumber,

@@ -12,6 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { submission
     const body = await req.json();
     const status: 'PENDING' | 'APPROVED' | 'REJECTED' | undefined = body?.status;
     const trainerFeedback: string | null | undefined = body?.trainerFeedback ?? undefined;
+    const feedbacks: Array<{ scenarioIndex: number; feedback: string }> | undefined = body?.feedbacks;
     if (!status) return NextResponse.json({ error: 'Missing status' }, { status: 400 });
 
     const [sub] = await db.select().from(enablerSubmissions).where(eq(enablerSubmissions.id, submissionId));
@@ -28,7 +29,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { submission
 
     const [row] = await db
       .update(enablerSubmissions)
-      .set({ status, trainerFeedback: trainerFeedback ?? null, reviewedById: trainerId, reviewedAt: new Date() })
+      .set({ 
+        status, 
+        trainerFeedback: feedbacks ? undefined : (trainerFeedback ?? null), 
+        feedbacks: feedbacks || undefined,
+        reviewedById: trainerId, 
+        reviewedAt: new Date() 
+      })
       .where(eq(enablerSubmissions.id, submissionId))
       .returning();
 

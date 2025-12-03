@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, MessageSquare, Scale } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
-type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; solutions?: Array<{ scenarioIndex: number; text: string }> | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
+type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; solutions?: Array<{ scenarioIndex: number; text: string }> | null; trainerFeedback?: string | null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }> | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
 type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
 // Geschäftsprozesse review removed
 type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
@@ -26,6 +26,7 @@ export default function TrainerReviewsPage() {
   // removed gesetzSubs
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
+  const [feedbacksMap, setFeedbacksMap] = useState<Record<string, Array<{ scenarioIndex: number; feedback: string }>>>({});
   const [solutionIndexMap, setSolutionIndexMap] = useState<Record<string, number>>({});
 
   // Quiz/Reflection state
@@ -112,10 +113,14 @@ export default function TrainerReviewsPage() {
   const reviewItem = async (kind: 'enabler' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
     if (!profile?.id) return;
     const feedback = feedbackMap[id] || '';
+    const feedbacks = feedbacksMap[id] || [];
     const url = kind === 'enabler'
       ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
       : `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`;
-    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, trainerFeedback: feedback }) });
+    const body = kind === 'enabler' && feedbacks.length > 0
+      ? { status, feedbacks: feedbacks.filter(f => f.feedback.trim().length > 0) }
+      : { status, trainerFeedback: feedback };
+    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok) {
       alert('Konnte Review nicht speichern');
       return;
@@ -128,6 +133,7 @@ export default function TrainerReviewsPage() {
   setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
       // geschäftsprozesseSubmissions removed
     setFeedbackMap(prev => ({ ...prev, [id]: '' }));
+    setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
   };
 
   const toggleReflectionReviewed = async (id: string, current: boolean) => {
@@ -238,21 +244,45 @@ export default function TrainerReviewsPage() {
                       {it.solutions.length > 1 && (
                         <div className="text-center">
                           <span className="text-sm font-medium text-foreground">
-                            Lösung {(solutionIndexMap[it.id] || 0) + 1} von {it.solutions.length}
+                            Szenario {(solutionIndexMap[it.id] || 0) + 1} von {it.solutions.length}
                           </span>
                         </div>
                       )}
 
-                      {/* Solution Slider */}
-                      <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-black/20 p-4">
+                      {/* Solution and Feedback Slider */}
+                      <div className="relative overflow-hidden">
                         <div 
                           className="flex transition-transform duration-300 ease-in-out"
                           style={{ transform: `translateX(-${(solutionIndexMap[it.id] || 0) * 100}%)` }}
                         >
                           {it.solutions.map((sol, idx) => (
-                            <div key={idx} className="w-full flex-shrink-0 px-2">
-                              <div className="text-sm font-medium mb-2">Lösung für Szenario {sol.scenarioIndex + 1}</div>
-                              <p className="whitespace-pre-line text-sm text-foreground/90">{sol.text}</p>
+                            <div key={idx} className="w-full flex-shrink-0 px-2 space-y-3">
+                              {/* Solution Box */}
+                              <div className="rounded-xl border border-accent/20 bg-black/20 p-4">
+                                <div className="text-sm font-medium mb-2">Lösung für Szenario {sol.scenarioIndex + 1}</div>
+                                <p className="whitespace-pre-line text-sm text-foreground/90">{sol.text}</p>
+                              </div>
+
+                              {/* Feedback Box for this scenario */}
+                              <div>
+                                <label className="mb-1 block text-sm font-medium">Feedback für Szenario {sol.scenarioIndex + 1}</label>
+                                <textarea 
+                                  className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" 
+                                  rows={3} 
+                                  value={feedbacksMap[it.id]?.find(f => f.scenarioIndex === sol.scenarioIndex)?.feedback || ''} 
+                                  onChange={e => {
+                                    const newFeedbacks = [...(feedbacksMap[it.id] || [])];
+                                    const existingIdx = newFeedbacks.findIndex(f => f.scenarioIndex === sol.scenarioIndex);
+                                    if (existingIdx >= 0) {
+                                      newFeedbacks[existingIdx] = { scenarioIndex: sol.scenarioIndex, feedback: e.target.value };
+                                    } else {
+                                      newFeedbacks.push({ scenarioIndex: sol.scenarioIndex, feedback: e.target.value });
+                                    }
+                                    setFeedbacksMap(prev => ({ ...prev, [it.id]: newFeedbacks }));
+                                  }}
+                                  placeholder={`Feedback für Szenario ${sol.scenarioIndex + 1}`}
+                                />
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -298,17 +328,19 @@ export default function TrainerReviewsPage() {
                       )}
                     </div>
                   ) : it.solutionText ? (
-                    <div className="rounded-xl border border-accent/20 bg-black/20 p-3">
-                      <div className="text-sm font-medium">Lösung</div>
-                      <p className="whitespace-pre-line text-sm text-foreground/90">{it.solutionText}</p>
-                    </div>
+                    <>
+                      <div className="rounded-xl border border-accent/20 bg-black/20 p-3">
+                        <div className="text-sm font-medium">Lösung</div>
+                        <p className="whitespace-pre-line text-sm text-foreground/90">{it.solutionText}</p>
+                      </div>
+                      <div className="mt-3">
+                        <label className="mb-1 block text-sm font-medium">Feedback</label>
+                        <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+                      </div>
+                    </>
                   ) : null}
                 </div>
               )}
-              <div className="mt-3">
-                <label className="mb-1 block text-sm font-medium">Feedback</label>
-                <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
-              </div>
               <div className="mt-3 flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'REJECTED')}>Ablehnen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'APPROVED')}>Genehmigen</button>
