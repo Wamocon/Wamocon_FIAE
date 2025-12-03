@@ -43,6 +43,7 @@ export default function TrainerDashboard() {
   const router = useRouter();
   const { user, profile } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [pendingReviews, setPendingReviews] = useState<number>(0);
   const [pendingQuiz, setPendingQuiz] = useState<number>(0);
@@ -58,27 +59,30 @@ export default function TrainerDashboard() {
   useEffect(() => {
     const load = async () => {
       try {
-  if (!user?.id && !profile?.id) return; // wait for auth
-  const params = new URLSearchParams();
-  if (user?.id) params.set('trainerAuthId', user.id);
-  if (profile?.id) params.set('trainerProfileId', profile.id);
-  const url = `/api/trainer/dashboard?${params.toString()}`;
+        if (!user?.id && !profile?.id) return; // wait for auth
+        setDataLoading(true);
+        const params = new URLSearchParams();
+        if (user?.id) params.set('trainerAuthId', user.id);
+        if (profile?.id) params.set('trainerProfileId', profile.id);
+        const url = `/api/trainer/dashboard?${params.toString()}`;
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to load dashboard');
         const data: DashboardResponse = await res.json();
-  setTrainees(data.trainees || []);
-  setPendingReviews(data.counts?.pendingReviews || 0);
-  setPendingQuiz(data.counts?.pendingQuiz || 0);
-  setPendingReflections(data.counts?.pendingReflections || 0);
-  setRecentReflections(data.counts?.recentReflections || 0);
-  setProgressTrend(data.charts?.progressTrend || []);
-  setModuleProgress(data.charts?.moduleProgress || []);
+        setTrainees(data.trainees || []);
+        setPendingReviews(data.counts?.pendingReviews || 0);
+        setPendingQuiz(data.counts?.pendingQuiz || 0);
+        setPendingReflections(data.counts?.pendingReflections || 0);
+        setRecentReflections(data.counts?.recentReflections || 0);
+        setProgressTrend(data.charts?.progressTrend || []);
+        setModuleProgress(data.charts?.moduleProgress || []);
       } catch (e) {
         console.error(e);
+      } finally {
+        setDataLoading(false);
       }
     };
     load();
-  }, [user?.id]);
+  }, [user?.id, profile?.id]);
 
   if (!mounted) return null;
 
@@ -223,7 +227,7 @@ export default function TrainerDashboard() {
                   Anzeigen
                 </button>
               </div>
-              <ProgressTrendChart data={progressTrendSafe} />
+              <ProgressTrendChart data={progressTrendSafe} loading={dataLoading} />
             </div>
 
             {/* Module Progress Chart */}
@@ -240,7 +244,7 @@ export default function TrainerDashboard() {
                   Anzeigen
                 </button>
               </div>
-              <ModuleProgressChart data={moduleProgressSafe} />
+              <ModuleProgressChart data={moduleProgressSafe} loading={dataLoading} />
             </div>
           </div>
         </div>
