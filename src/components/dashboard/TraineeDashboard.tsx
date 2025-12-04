@@ -38,10 +38,42 @@ import {
   Radar,
 } from 'recharts';
 
+// Types for dashboard data
+type DashboardData = {
+  modules: any[];
+  nextItem: { lessonId: string; lessonTitle: string; moduleTitle: string; estimatedTime: string } | null;
+  weeklyProgress: any[];
+  skillRadar: any[];
+  achievements: any[];
+  deadlines: any[];
+};
+
+// Cache helpers for instant dashboard loading
+const TRAINEE_DASHBOARD_CACHE_KEY = 'wmc_trainee_dashboard_cache';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const getCachedDashboard = (): DashboardData | null => {
+  try {
+    const cached = localStorage.getItem(TRAINEE_DASHBOARD_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_TTL) return data;
+    }
+  } catch (_) {}
+  return null;
+};
+
+const setCachedDashboard = (data: DashboardData) => {
+  try {
+    localStorage.setItem(TRAINEE_DASHBOARD_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch (_) {}
+};
+
 export default function TraineeDashboard() {
   const router = useRouter();
   const { profile } = useAuth();
 
+  const [mounted, setMounted] = useState(false);
   const [nextLesson, setNextLesson] = useState<{
     id: string;
     title: string;
@@ -54,33 +86,53 @@ export default function TraineeDashboard() {
   const [achievements, setAchievements] = useState<any[]>([]);
   const [deadlines, setDeadlines] = useState<any[]>([]);
 
+  // Apply cached or fresh dashboard data to state
+  const applyDashboardData = (data: DashboardData) => {
+    setModules(Array.isArray(data.modules) ? data.modules : []);
+    setWeeklyProgress(Array.isArray(data.weeklyProgress) ? data.weeklyProgress : []);
+    setSkillRadar(Array.isArray(data.skillRadar) ? data.skillRadar : []);
+    setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
+    setDeadlines(Array.isArray(data.deadlines) ? data.deadlines : []);
+    if (data.nextItem) {
+      setNextLesson({
+        id: data.nextItem.lessonId,
+        title: data.nextItem.lessonTitle,
+        module: data.nextItem.moduleTitle,
+        estimatedTime: data.nextItem.estimatedTime,
+      });
+    } else {
+      setNextLesson(null);
+    }
+  };
+
+  useEffect(() => {
+    setMounted(true);
+    // Load cached data immediately on mount
+    const cached = getCachedDashboard();
+    if (cached) {
+      applyDashboardData(cached);
+    }
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       if (!profile?.id) return;
       try {
         const res = await fetch(`/api/trainee/dashboard?userId=${profile.id}`);
         const data = await res.json();
-  setModules(Array.isArray(data.modules) ? data.modules : []);
-  setWeeklyProgress(Array.isArray(data.weeklyProgress) ? data.weeklyProgress : []);
-  setSkillRadar(Array.isArray(data.skillRadar) ? data.skillRadar : []);
-  setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
-  setDeadlines(Array.isArray(data.deadlines) ? data.deadlines : []);
-        if (data.nextItem) {
-          setNextLesson({
-            id: data.nextItem.lessonId,
-            title: data.nextItem.lessonTitle,
-            module: data.nextItem.moduleTitle,
-            estimatedTime: data.nextItem.estimatedTime,
-          });
-        } else {
-          setNextLesson(null);
-        }
+        
+        // Update state and cache
+        applyDashboardData(data);
+        setCachedDashboard(data);
       } catch (e) {
         console.error(e);
       }
     };
     load();
   }, [profile?.id]);
+
+  // Don't render until mounted (SSR fix)
+  if (!mounted) return null;
 
   // Derived module progress for charts
 

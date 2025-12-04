@@ -39,6 +39,27 @@ type DashboardResponse = {
   };
 };
 
+// Cache helpers for instant dashboard loading
+const TRAINER_DASHBOARD_CACHE_KEY = 'wmc_trainer_dashboard_cache';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const getCachedDashboard = (): DashboardResponse | null => {
+  try {
+    const cached = localStorage.getItem(TRAINER_DASHBOARD_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_TTL) return data;
+    }
+  } catch (_) {}
+  return null;
+};
+
+const setCachedDashboard = (data: DashboardResponse) => {
+  try {
+    localStorage.setItem(TRAINER_DASHBOARD_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch (_) {}
+};
+
 export default function TrainerDashboard() {
   const router = useRouter();
   const { user, profile } = useAuth();
@@ -52,29 +73,46 @@ export default function TrainerDashboard() {
   const [progressTrend, setProgressTrend] = useState<{ week: string; progress: number }[]>([]);
   const [moduleProgress, setModuleProgress] = useState<{ name: string; completed: number; inProgress: number; notStarted: number }[]>([]);
 
+  // Apply cached or fresh dashboard data to state
+  const applyDashboardData = (data: DashboardResponse) => {
+    setTrainees(data.trainees || []);
+    setPendingReviews(data.counts?.pendingReviews || 0);
+    setPendingQuiz(data.counts?.pendingQuiz || 0);
+    setPendingReflections(data.counts?.pendingReflections || 0);
+    setRecentReflections(data.counts?.recentReflections || 0);
+    setProgressTrend(data.charts?.progressTrend || []);
+    setModuleProgress(data.charts?.moduleProgress || []);
+  };
+
   useEffect(() => {
     setMounted(true);
+    // Load cached data immediately on mount
+    const cached = getCachedDashboard();
+    if (cached) {
+      applyDashboardData(cached);
+      setDataLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     const load = async () => {
       try {
-        if (!user?.id && !profile?.id) return; // wait for auth
-        setDataLoading(true);
+        if (!user?.id && !profile?.id) return;
+        // Only show loading if no cached data
+        const hasCached = getCachedDashboard() !== null;
+        if (!hasCached) setDataLoading(true);
+        
         const params = new URLSearchParams();
         if (user?.id) params.set('trainerAuthId', user.id);
         if (profile?.id) params.set('trainerProfileId', profile.id);
         const url = `/api/trainer/dashboard?${params.toString()}`;
-        const res = await fetch(url, { cache: 'no-store' });
+        const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to load dashboard');
         const data: DashboardResponse = await res.json();
-        setTrainees(data.trainees || []);
-        setPendingReviews(data.counts?.pendingReviews || 0);
-        setPendingQuiz(data.counts?.pendingQuiz || 0);
-        setPendingReflections(data.counts?.pendingReflections || 0);
-        setRecentReflections(data.counts?.recentReflections || 0);
-        setProgressTrend(data.charts?.progressTrend || []);
-        setModuleProgress(data.charts?.moduleProgress || []);
+        
+        // Update state and cache
+        applyDashboardData(data);
+        setCachedDashboard(data);
       } catch (e) {
         console.error(e);
       } finally {
@@ -109,13 +147,6 @@ export default function TrainerDashboard() {
         ) / trainees.length
       )
     : 0;
-
-  console.log('Trainees:', trainees.length);
-  console.log('Pending Reviews:', pendingReviews);
-  console.log('Recent Reflections:', recentReflections);
-  console.log('Progress Trend:', progressTrend);
-  console.log('Module Progress:', moduleProgress);
-  console.log('Avg Progress:', avgProgress);
 
   return (
     <div className="from-background relative min-h-screen space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
