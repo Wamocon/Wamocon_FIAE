@@ -3,9 +3,9 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { courses, courseMembers, enablers, enablerSubmissions, notifications } from '@/db/migrations/schemas/schema';
 
-export async function PATCH(req: NextRequest, { params }: { params: { submissionId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
   try {
-    const { submissionId } = params;
+    const { submissionId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -29,12 +29,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { submission
 
     const [row] = await db
       .update(enablerSubmissions)
-      .set({ 
-        status, 
-        trainerFeedback: feedbacks ? undefined : (trainerFeedback ?? null), 
+      .set({
+        status,
+        trainerFeedback: feedbacks ? undefined : (trainerFeedback ?? null),
         feedbacks: feedbacks || undefined,
-        reviewedById: trainerId, 
-        reviewedAt: new Date() 
+        reviewedById: trainerId,
+        reviewedAt: new Date()
       })
       .where(eq(enablerSubmissions.id, submissionId))
       .returning();

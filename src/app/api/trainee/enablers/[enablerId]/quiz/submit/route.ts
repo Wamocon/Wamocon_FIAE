@@ -7,30 +7,30 @@ import { enablers, enablerQuizzes, options, questions, quizzes, courseMembers, q
 // Body: { traineeId: string, answers: Array<{ questionId: string, selectedOptionId: string }> }
 export async function POST(
   req: NextRequest,
-  { params }: { params: { enablerId: string } }
+  { params }: { params: Promise<{ enablerId: string }> }
 ) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
     const answers: Array<{ questionId: string; selectedOptionId: string }> = Array.isArray(body?.answers) ? body.answers : [];
     if (!traineeId || answers.length === 0) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
-  const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
+    const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
     if (!enabler || !enabler.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const [member] = await db
       .select()
       .from(courseMembers)
-  .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.userId, traineeId)));
+      .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.userId, traineeId)));
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const [link] = await db.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId));
+    const [link] = await db.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId));
     if (!link) return NextResponse.json({ error: 'No quiz' }, { status: 400 });
     const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, link.quizId));
     if (!quiz) return NextResponse.json({ error: 'No quiz' }, { status: 400 });
 
     // Validate answers and compute score
-  const qs = await db.select().from(questions).where(eq(questions.quizId, quiz.id));
+    const qs = await db.select().from(questions).where(eq(questions.quizId, quiz.id));
     const optRows = await db.select().from(options).where(inArray(options.questionId, qs.map((q) => q.id)));
     const optMap = new Map(optRows.map((o) => [String(o.id), o]));
 

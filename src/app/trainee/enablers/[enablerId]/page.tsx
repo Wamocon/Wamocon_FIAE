@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import LinkifyText from '@/components/ui/LinkifyText';
+import { FlipbookViewer, useFlipbookViewer } from '@/components/ui/FlipbookViewer';
+import { BookOpen } from 'lucide-react';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
 type QuizOption = { id: string; optionText: string; explanation?: string | null };
-type QuizQuestion = { id: string; questionText: string; questionType?: 'MCQ'|'TEXT'; options: QuizOption[] };
+type QuizQuestion = { id: string; questionText: string; questionType?: 'MCQ' | 'TEXT'; options: QuizOption[] };
 type QuizContent = { quizId: string; title: string; questions: QuizQuestion[] };
-type QuizFeedback = { questionId: string; correct: boolean; correctOptionId?: string|null; selectedOptionId?: string|null; selectedText?: string|null; correctAnswerText?: string|null; explanation?: string | null };
+type QuizFeedback = { questionId: string; correct: boolean; correctOptionId?: string | null; selectedOptionId?: string | null; selectedText?: string | null; correctAnswerText?: string | null; explanation?: string | null };
 type GatedQuizInfo = { difficulty: Difficulty; quizId?: string; title?: string; unlocked: boolean; isActive?: boolean; completed?: boolean };
 
 export default function TraineeEnablerPage() {
@@ -26,6 +28,12 @@ export default function TraineeEnablerPage() {
   const [solutions, setSolutions] = useState<Array<{ scenarioIndex: number; text: string }>>([]);
   const [currentScenarioIndex, setCurrentScenarioIndex] = useState(0);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
+  // PDF flipbook viewer
+  const flipbook = useFlipbookViewer();
+
+  // Content documents (PDFs)
+  const [documents, setDocuments] = useState<Array<{ id: string; title: string; storageUrl: string; documentType: string }>>([]);
 
   const [gated, setGated] = useState<GatedQuizInfo[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
@@ -68,6 +76,15 @@ export default function TraineeEnablerPage() {
         } else {
           setGated([]);
         }
+
+        // Fetch content documents (PDFs)
+        try {
+          const dr = await fetch(`/api/trainer/enablers/${enablerId}/documents`, { cache: 'no-store' });
+          if (dr.ok) {
+            const dj = await dr.json();
+            setDocuments(dj.documents || []);
+          }
+        } catch { /* ignore document errors */ }
       } catch (e: any) {
         setError(e?.message || 'Fehler beim Laden');
       } finally {
@@ -118,15 +135,15 @@ export default function TraineeEnablerPage() {
         const vr = await fetch(`/api/trainee/quizzes/${g.quizId}/submit?traineeId=${profile.id}`, { cache: 'no-store' });
         if (vr.ok) {
           const vj = await vr.json();
-            // Map selected answers for showing "Deine Antwort"
-            if (Array.isArray(vj.feedback)) {
-              const ans: Record<string, string> = {};
-              vj.feedback.forEach((f: any) => {
+          // Map selected answers for showing "Deine Antwort"
+          if (Array.isArray(vj.feedback)) {
+            const ans: Record<string, string> = {};
+            vj.feedback.forEach((f: any) => {
               if (f.selectedOptionId) ans[String(f.questionId)] = String(f.selectedOptionId);
               if (!f.selectedOptionId && f.selectedText) ans[String(f.questionId)] = String(f.selectedText);
-              });
-              setAnswers(ans);
-            }
+            });
+            setAnswers(ans);
+          }
           setResult({ score: Number(vj.score || 0), feedback: (vj.feedback || []) as QuizFeedback[] });
         }
       } catch {
@@ -185,8 +202,8 @@ export default function TraineeEnablerPage() {
       const r = await fetch(`/api/trainee/enablers/${enablerId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          traineeId: profile.id, 
+        body: JSON.stringify({
+          traineeId: profile.id,
           solutions: filledSolutions.length > 0 ? filledSolutions : undefined,
           solutionText: filledSolutions.length === 1 ? filledSolutions[0].text : undefined // Backward compat
         }),
@@ -221,15 +238,26 @@ export default function TraineeEnablerPage() {
               const dueDate = new Date(started + total * 24 * 60 * 60 * 1000);
               return <span>Restzeit: {left} Tage • Fällig am {dueDate.toLocaleDateString()}</span>;
             })()}
-           
+
           </div>
         )}
         <div className="mt-3">
           {enabler.descriptionText && (
-          <LinkifyText className="text-muted-foreground mt-2" text={String(enabler.descriptionText)} preserveLineBreaks />
-        )}
+            <LinkifyText className="text-muted-foreground mt-2" text={String(enabler.descriptionText)} preserveLineBreaks />
+          )}
         </div>
         <div className="mt-3 flex flex-wrap gap-3">
+          {/* PDF Documents from content_documents table */}
+          {documents.map((doc) => (
+            <button
+              key={doc.id}
+              onClick={() => flipbook.openPdf(doc.title, doc.storageUrl)}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-red-700 px-4 py-2 text-sm font-medium text-white hover:from-red-500 hover:to-red-600 transition-all shadow-lg"
+            >
+              <BookOpen className="h-4 w-4" />
+              📖 {doc.title}
+            </button>
+          ))}
           {enabler.videoUrl && (
             <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.videoUrl} target="_blank" rel="noreferrer">Video ansehen</a>
           )}
@@ -237,6 +265,14 @@ export default function TraineeEnablerPage() {
             <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.pptUrl} target="_blank" rel="noreferrer">PPT öffnen</a>
           )}
         </div>
+
+        {/* PDF Flipbook Viewer Modal */}
+        <FlipbookViewer
+          title={flipbook.title}
+          pdfUrl={flipbook.pdfUrl}
+          isOpen={flipbook.isOpen}
+          onClose={flipbook.closePdf}
+        />
 
         {/* Scenarios Slider */}
         {((Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0) || enabler.scenarioText) && (
@@ -252,7 +288,7 @@ export default function TraineeEnablerPage() {
 
             {/* Slider Container */}
             <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-black/20 p-4">
-              <div 
+              <div
                 className="flex transition-transform duration-300 ease-in-out"
                 style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
               >
@@ -299,18 +335,17 @@ export default function TraineeEnablerPage() {
                 >
                   ← Zurück
                 </button>
-                
+
                 <div className="flex items-center gap-2">
                   {enabler.scenarios.map((_: any, idx: number) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setCurrentScenarioIndex(idx)}
-                      className={`h-2 rounded-full transition-all ${
-                        idx === currentScenarioIndex 
-                          ? 'w-6 bg-primary' 
-                          : 'w-2 bg-accent/30 hover:bg-accent/50'
-                      }`}
+                      className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
+                        ? 'w-6 bg-primary'
+                        : 'w-2 bg-accent/30 hover:bg-accent/50'
+                        }`}
                       aria-label={`Go to scenario ${idx + 1}`}
                     />
                   ))}
@@ -333,7 +368,7 @@ export default function TraineeEnablerPage() {
       {/* Solution Slider */}
       <div className="space-y-4 rounded-3xl border border-accent/30 bg-black/30 p-5">
         {saveSuccess && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-300">{saveSuccess}</div>}
-        
+
         <div className="mb-2 text-lg font-semibold">Deine Lösungen</div>
 
         {solutions.length > 0 && (
@@ -349,7 +384,7 @@ export default function TraineeEnablerPage() {
 
             {/* Solution Slider */}
             <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-black/20 p-4">
-              <div 
+              <div
                 className="flex transition-transform duration-300 ease-in-out"
                 style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
               >
@@ -383,18 +418,17 @@ export default function TraineeEnablerPage() {
                 >
                   ← Zurück
                 </button>
-                
+
                 <div className="flex items-center gap-2">
                   {solutions.map((_, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setCurrentScenarioIndex(idx)}
-                      className={`h-2 rounded-full transition-all ${
-                        idx === currentScenarioIndex 
-                          ? 'w-6 bg-primary' 
-                          : 'w-2 bg-accent/30 hover:bg-accent/50'
-                      }`}
+                      className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
+                        ? 'w-6 bg-primary'
+                        : 'w-2 bg-accent/30 hover:bg-accent/50'
+                        }`}
                       aria-label={`Go to solution ${idx + 1}`}
                     />
                   ))}
@@ -477,17 +511,17 @@ export default function TraineeEnablerPage() {
                         </div>
                       ) : (
                         currentQuestion.options.map(o => (
-                        <label key={o.id} className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            name={`q-${currentQuestion.id}`}
-                            checked={answers[currentQuestion.id] === String(o.id)}
-                            onChange={() => setAnswers(prev => ({ ...prev, [currentQuestion.id]: String(o.id) }))}
-                          />
-                          <span>{o.optionText}</span>
-                        </label>
-                      ))
-                    )}
+                          <label key={o.id} className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name={`q-${currentQuestion.id}`}
+                              checked={answers[currentQuestion.id] === String(o.id)}
+                              onChange={() => setAnswers(prev => ({ ...prev, [currentQuestion.id]: String(o.id) }))}
+                            />
+                            <span>{o.optionText}</span>
+                          </label>
+                        ))
+                      )}
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">

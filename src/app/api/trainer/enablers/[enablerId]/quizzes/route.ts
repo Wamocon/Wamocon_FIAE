@@ -13,7 +13,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 
 // GET: List quizzes for an enabler grouped by difficulty
-export async function GET(_req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
     const { enablerId } = await params;
     const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
@@ -60,13 +60,13 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
 //     | { questionText: string, questionType: 'TEXT', expectedAnswer?: string }
 //   >
 // }
-export async function POST(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const body = await req.json();
     const title: string | undefined = body?.title;
     const createdById: string | undefined = body?.createdById;
-    const difficulty: 'LOW'|'MEDIUM'|'HIGH' | undefined = body?.difficulty;
+    const difficulty: 'LOW' | 'MEDIUM' | 'HIGH' | undefined = body?.difficulty;
     const isActive: boolean = !!body?.isActive;
     const items: Array<any> = Array.isArray(body?.questions) ? body.questions : [];
     if (!title || !createdById || !difficulty || items.length === 0) {

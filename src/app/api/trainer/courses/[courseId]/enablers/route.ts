@@ -37,12 +37,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
     const body = await req.json();
     const title: string | undefined = body?.title;
     if (!title) return NextResponse.json({ error: 'Missing title' }, { status: 400 });
-  const orderIndex: number | undefined = body?.orderIndex ? Number(body.orderIndex) : undefined;
-  const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
-  const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit || (typeof durationValue === 'number' ? 'DAYS' : undefined);
-  const pptUrl: string | undefined = body?.pptUrl;
-  const videoUrl: string | undefined = body?.videoUrl;
-  const descriptionText: string | undefined = body?.descriptionText;
+    const orderIndex: number | undefined = body?.orderIndex ? Number(body.orderIndex) : undefined;
+    const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
+    const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit || (typeof durationValue === 'number' ? 'DAYS' : undefined);
+    const pptUrl: string | undefined = body?.pptUrl;
+    const videoUrl: string | undefined = body?.videoUrl;
+    const descriptionText: string | undefined = body?.descriptionText;
     const hintText: string | undefined = body?.hintText;
     const scenarioText: string | undefined = body?.scenarioText;
     const scenarioImageUrl: string | undefined = body?.scenarioImageUrl;
@@ -68,11 +68,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
         orderIndex: finalOrderIndex as any,
         durationValue: durationValue as any,
         durationUnit: durationUnitVal as any,
-  descriptionText: descriptionText as any,
-  pptUrl: pptUrl as any,
-  videoUrl: videoUrl as any,
+        descriptionText: descriptionText as any,
+        pptUrl: pptUrl as any,
+        videoUrl: videoUrl as any,
         scenarioText: scenarioText as any,
-    hintText: hintText as any,
+        hintText: hintText as any,
         scenarioImageUrl: scenarioImageUrl as any,
         scenarios: scenarios as any,
         isActive: isActive as any,

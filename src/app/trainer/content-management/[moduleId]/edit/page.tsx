@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen, Users, Plus, Save, X, FolderEdit } from 'lucide-react';
+import { BookOpen, Users, Plus, Save, X, FolderEdit, FileText, Trash2 } from 'lucide-react';
+import { PdfUploader } from '@/components/trainer/PdfUploader';
 
 export default function EditCoursePage() {
   const router = useRouter();
@@ -50,7 +51,9 @@ export default function EditCoursePage() {
   // Edit Enabler state
   const [showEditEnabler, setShowEditEnabler] = useState(false);
   const [editingEnablerId, setEditingEnablerId] = useState<string | null>(null);
-  const [enablerQuizList, setEnablerQuizList] = useState<Array<{ difficulty: 'LOW'|'MEDIUM'|'HIGH'; quizId: string; title: string; isActive?: boolean; questionCount?: number }>>([]);
+  const [enablerQuizList, setEnablerQuizList] = useState<Array<{ difficulty: 'LOW' | 'MEDIUM' | 'HIGH'; quizId: string; title: string; isActive?: boolean; questionCount?: number }>>([]);
+  // PDF documents for enabler
+  const [enablerDocuments, setEnablerDocuments] = useState<Array<{ id: string; title: string; storageUrl: string; fileName: string }>>([]);
 
 
   // UI: Add Use Case Modal state
@@ -68,13 +71,13 @@ export default function EditCoursePage() {
   const [useCaseEditDuration, setUseCaseEditDuration] = useState<string>('');
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
 
-  
+
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-  const res = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`, { cache: 'no-store' });
+        const res = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Konnte Kurs nicht laden');
         const data = await res.json();
         setTitle(data.course.title);
@@ -83,9 +86,9 @@ export default function EditCoursePage() {
         setSkills((data.skills || []).join(', '));
         setEnablers((data.enablers || []).map((e: any) => ({ id: e.id, title: e.title, isActive: !!e.isActive })));
         setUseCases((data.useCases || []).map((u: any) => ({ id: u.id, title: u.title, isActive: !!u.isActive })));
-  setGeschäftsprozesse((data.Geschäftsprozesse || []).map((g: any) => ({ id: g.id, title: g.title, isActive: !!g.isActive })));
+        setGeschäftsprozesse((data.Geschäftsprozesse || []).map((g: any) => ({ id: g.id, title: g.title, isActive: !!g.isActive })));
         // load members
-          const memRes = await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { cache: 'no-store' });
+        const memRes = await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { cache: 'no-store' });
         if (memRes.ok) {
           const mem = await memRes.json();
           const trainers = (mem.members || []).filter((m: any) => m.role === 'TRAINER').map((m: any) => ({ id: m.userId, fullName: m.fullName, email: m.email }));
@@ -105,8 +108,8 @@ export default function EditCoursePage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-  if (!title.trim()) return setError('Bitte einen Kurstitel eingeben.');
-  if (!year) return setError('Bitte ein Trainingsjahr wählen.');
+    if (!title.trim()) return setError('Bitte einen Kurstitel eingeben.');
+    if (!year) return setError('Bitte ein Trainingsjahr wählen.');
 
     try {
       setSaving(true);
@@ -160,7 +163,7 @@ export default function EditCoursePage() {
               <X className="h-4 w-4" /> Abbrechen
             </button>
             <button
-              onClick={(e)=>handleSave(e as any)}
+              onClick={(e) => handleSave(e as any)}
               className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
               disabled={saving}
             >
@@ -170,289 +173,299 @@ export default function EditCoursePage() {
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
-        {error && <div className="text-red-500">{error}</div>}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
-            <div className="mb-3 text-sm font-semibold">Kursdetails</div>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium">Kurstitel</label>
-                <input value={title} onChange={e => setTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Trainingsjahr</label>
-                <select value={year} onChange={e => setYear(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
-                  <option value="1">Jahr 1</option>
-                  <option value="2">Jahr 2</option>
-                  <option value="3">Jahr 3</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Kapitel/Abschnitt</label>
-                <input value={chapter} onChange={(e) => setChapter(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 1" inputMode="numeric" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Skills (Kommagetrennt)</label>
-                <input value={skills} onChange={(e) => setSkills(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. Git, HTML, CSS, JavaScript" />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Users className="h-4 w-4"/>Mitglieder</div>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <div className="mb-2 font-medium">Trainer</div>
-                <ul className="mb-2 space-y-1">
-                  {membersTrainers.map((m) => (
-                    <li key={m.id} className="flex items-center justify-between text-sm">
-                      <span>{m.fullName} ({m.email})</span>
-                      <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={async () => {
-                        await fetch(`/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`, { method: 'DELETE' });
-                        setMembersTrainers(prev => prev.filter(x => x.id !== m.id));
-                      }}>Entfernen</button>
-                    </li>
-                  ))}
-                </ul>
-                <input value={searchTrainer} onChange={(e) => setSearchTrainer(e.target.value)} placeholder="Trainer suchen" className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
-                <button type="button" className="mt-2 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm" onClick={async () => {
-                  const r = await fetch(`/api/trainer/profiles?role=TRAINER&q=${encodeURIComponent(searchTrainer)}`);
-                  const data = await r.json();
-                  setSearchResultsTrainers(data.profiles || []);
-                }}>Suchen</button>
-                <ul className="mt-2 space-y-1">
-                  {searchResultsTrainers.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between text-sm">
-                      <span>{p.fullName} ({p.email})</span>
-                      <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={async () => {
-                        await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: p.id, role: 'TRAINER' }) });
-                        setMembersTrainers(prev => [...prev, p]);
-                      }}>Hinzufügen</button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <div className="mb-2 font-medium">Azubis</div>
-                <ul className="mb-2 space-y-1">
-                  {membersTrainees.map((m) => (
-                    <li key={m.id} className="flex items-center justify-between text-sm">
-                      <span>{m.fullName} ({m.email})</span>
-                      <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={async () => {
-                        await fetch(`/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`, { method: 'DELETE' });
-                        setMembersTrainees(prev => prev.filter(x => x.id !== m.id));
-                      }}>Entfernen</button>
-                    </li>
-                  ))}
-                </ul>
-                <input value={searchTrainee} onChange={(e) => setSearchTrainee(e.target.value)} placeholder="Azubi suchen" className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
-                <button type="button" className="mt-2 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm" onClick={async () => {
-                  const r = await fetch(`/api/trainer/profiles?role=TRAINEE&q=${encodeURIComponent(searchTrainee)}`);
-                  const data = await r.json();
-                  setSearchResultsTrainees(data.profiles || []);
-                }}>Suchen</button>
-                <ul className="mt-2 space-y-1">
-                  {searchResultsTrainees.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between text-sm">
-                      <span>{p.fullName} ({p.email})</span>
-                      <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={async () => {
-                        await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: p.id, role: 'TRAINEE' }) });
-                        setMembersTrainees(prev => [...prev, p]);
-                      }}>Hinzufügen</button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><BookOpen className="h-4 w-4"/>Lessons</div>
-          <ul className="space-y-2">
-            {enablers.map((e) => (
-              <li key={e.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="truncate font-medium">{e.title}</span>
-                  <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${e.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{e.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+          {error && <div className="text-red-500">{error}</div>}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
+              <div className="mb-3 text-sm font-semibold">Kursdetails</div>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Kurstitel</label>
+                  <input value={title} onChange={e => setTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
-                    onClick={async () => {
-                      await fetch(`/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !e.isActive }) });
-                      const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
-                      const data = await r.json();
-                      setEnablers((data.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                    }}
-                  >
-                    {e.isActive ? 'Deaktivieren' : 'Aktivieren'}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
-                    onClick={async () => {
-                      // Prefill enabler details and quiz into add/edit fields and open edit modal
-                      try {
-                      setEditingEnablerId(e.id);
-                      // Load enabler fields
-                      const er = await fetch(`/api/trainer/enablers/${e.id}`);
-                        if (er.ok) {
-                          const ej = await er.json();
-                          const en = ej.enabler || {};
-                          setEnablerTitle(en.title || '');
-                          setEnablerDescription(en.descriptionText || '');
-                          setEnablerScenario(en.scenarioText || '');
-                          setEnablerPpt(en.pptUrl || '');
-                          setEnablerVideo(en.videoUrl || '');
-                          setEnablerHint(en.hintText || '');
-                          setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
-                          setEnablerActive(!!en.isActive);
-                          // Load scenarios array or migrate legacy
-                          if (Array.isArray(en.scenarios) && en.scenarios.length > 0) {
-                            setScenarios(en.scenarios.map((s: any) => ({ id: crypto.randomUUID(), text: s.text || '', hint: s.hint || '' })));
-                          } else if (en.scenarioText || en.hintText) {
-                            setScenarios([{ id: crypto.randomUUID(), text: en.scenarioText || '', hint: en.hintText || '' }]);
-                          } else {
-                            setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]);
-                          }
-                          setCurrentScenarioIndex(0);
-                        }
-                      // Load multi-difficulty quiz list
-                        const ql = await fetch(`/api/trainer/enablers/${e.id}/quizzes`);
-                        if (ql.ok) {
-                          const qlj = await ql.json();
-                          setEnablerQuizList(qlj.quizzes || []);
-                        } else {
-                          setEnablerQuizList([]);
-                        }
-                        // Quizzes are managed via multi-difficulty section below; legacy single-quiz flow removed
-                        setShowEditEnabler(true);
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }}
-                  >
-                    Bearbeiten
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
-                    onClick={async () => {
-                      if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                      const ok = window.confirm('Diesen Enabler wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
-                      if (!ok) return;
-                      try {
-                        const del = await fetch(`/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
-                        if (!del.ok) throw new Error('Löschen fehlgeschlagen');
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Trainingsjahr</label>
+                  <select value={year} onChange={e => setYear(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
+                    <option value="1">Jahr 1</option>
+                    <option value="2">Jahr 2</option>
+                    <option value="3">Jahr 3</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Kapitel/Abschnitt</label>
+                  <input value={chapter} onChange={(e) => setChapter(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 1" inputMode="numeric" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Skills (Kommagetrennt)</label>
+                  <input value={skills} onChange={(e) => setSkills(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. Git, HTML, CSS, JavaScript" />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Users className="h-4 w-4" />Mitglieder</div>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <div className="mb-2 font-medium">Trainer</div>
+                  <ul className="mb-2 space-y-1">
+                    {membersTrainers.map((m) => (
+                      <li key={m.id} className="flex items-center justify-between text-sm">
+                        <span>{m.fullName} ({m.email})</span>
+                        <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={async () => {
+                          await fetch(`/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                          setMembersTrainers(prev => prev.filter(x => x.id !== m.id));
+                        }}>Entfernen</button>
+                      </li>
+                    ))}
+                  </ul>
+                  <input value={searchTrainer} onChange={(e) => setSearchTrainer(e.target.value)} placeholder="Trainer suchen" className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
+                  <button type="button" className="mt-2 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm" onClick={async () => {
+                    const r = await fetch(`/api/trainer/profiles?role=TRAINER&q=${encodeURIComponent(searchTrainer)}`);
+                    const data = await r.json();
+                    setSearchResultsTrainers(data.profiles || []);
+                  }}>Suchen</button>
+                  <ul className="mt-2 space-y-1">
+                    {searchResultsTrainers.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between text-sm">
+                        <span>{p.fullName} ({p.email})</span>
+                        <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={async () => {
+                          await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: p.id, role: 'TRAINER' }) });
+                          setMembersTrainers(prev => [...prev, p]);
+                        }}>Hinzufügen</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <div className="mb-2 font-medium">Azubis</div>
+                  <ul className="mb-2 space-y-1">
+                    {membersTrainees.map((m) => (
+                      <li key={m.id} className="flex items-center justify-between text-sm">
+                        <span>{m.fullName} ({m.email})</span>
+                        <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={async () => {
+                          await fetch(`/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                          setMembersTrainees(prev => prev.filter(x => x.id !== m.id));
+                        }}>Entfernen</button>
+                      </li>
+                    ))}
+                  </ul>
+                  <input value={searchTrainee} onChange={(e) => setSearchTrainee(e.target.value)} placeholder="Azubi suchen" className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
+                  <button type="button" className="mt-2 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm" onClick={async () => {
+                    const r = await fetch(`/api/trainer/profiles?role=TRAINEE&q=${encodeURIComponent(searchTrainee)}`);
+                    const data = await r.json();
+                    setSearchResultsTrainees(data.profiles || []);
+                  }}>Suchen</button>
+                  <ul className="mt-2 space-y-1">
+                    {searchResultsTrainees.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between text-sm">
+                        <span>{p.fullName} ({p.email})</span>
+                        <button type="button" className="text-xs rounded-md border border-accent/30 px-2 py-1" onClick={async () => {
+                          await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: p.id, role: 'TRAINEE' }) });
+                          setMembersTrainees(prev => [...prev, p]);
+                        }}>Hinzufügen</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><BookOpen className="h-4 w-4" />Lessons</div>
+            <ul className="space-y-2">
+              {enablers.map((e) => (
+                <li key={e.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="truncate font-medium">{e.title}</span>
+                    <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${e.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{e.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                      onClick={async () => {
+                        await fetch(`/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !e.isActive }) });
                         const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
                         const data = await r.json();
                         setEnablers((data.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                      } catch (err: any) {
-                        alert(err?.message || 'Unbekannter Fehler');
-                      }
-                    }}
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
-            onClick={() => setShowAddEnabler(true)}
-          >
-            <Plus className="h-4 w-4"/> Lesson hinzufügen
-          </button>
-        </div>
-
-        {/* Geschäftsprozesse Section removed */}
-
-        <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
-          <div className="mb-3 text-sm font-semibold">Use Cases</div>
-          <ul className="space-y-2">
-            {useCases.map((u) => (
-              <li key={u.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="truncate font-medium">{u.title}</span>
-                  <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${u.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{u.isActive ? 'Aktiv' : 'Inaktiv'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
-                    onClick={async () => {
-                      await fetch(`/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !u.isActive }) });
-                      const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
-                      const data = await r.json();
-                      setUseCases((data.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                    }}
-                  >
-                    {u.isActive ? 'Deaktivieren' : 'Aktivieren'}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs rounded-md border border-accent/30 px-2 py-1"
-                    onClick={async () => {
-                      try {
-                        setEditingUseCaseId(u.id);
-                        const ur = await fetch(`/api/trainer/use-cases/${u.id}`);
-                        if (ur.ok) {
-                          const uj = await ur.json();
-                          const uc = uj.useCase || {};
-                          setUseCaseEditTitle(uc.title || '');
-                          setUseCaseEditDesc(uc.descriptionText || '');
-                          setUseCaseEditDuration(uc.durationValue ? String(uc.durationValue) : '');
-                          setUseCaseEditActive(!!uc.isActive);
-                        } else {
-                          setUseCaseEditTitle(u.title);
-                          setUseCaseEditDesc('');
-                          setUseCaseEditDuration('');
-                          setUseCaseEditActive(false);
+                      }}
+                    >
+                      {e.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                      onClick={async () => {
+                        // Prefill enabler details and quiz into add/edit fields and open edit modal
+                        try {
+                          setEditingEnablerId(e.id);
+                          // Load enabler fields
+                          const er = await fetch(`/api/trainer/enablers/${e.id}`);
+                          if (er.ok) {
+                            const ej = await er.json();
+                            const en = ej.enabler || {};
+                            setEnablerTitle(en.title || '');
+                            setEnablerDescription(en.descriptionText || '');
+                            setEnablerScenario(en.scenarioText || '');
+                            setEnablerPpt(en.pptUrl || '');
+                            setEnablerVideo(en.videoUrl || '');
+                            setEnablerHint(en.hintText || '');
+                            setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
+                            setEnablerActive(!!en.isActive);
+                            // Load scenarios array or migrate legacy
+                            if (Array.isArray(en.scenarios) && en.scenarios.length > 0) {
+                              setScenarios(en.scenarios.map((s: any) => ({ id: crypto.randomUUID(), text: s.text || '', hint: s.hint || '' })));
+                            } else if (en.scenarioText || en.hintText) {
+                              setScenarios([{ id: crypto.randomUUID(), text: en.scenarioText || '', hint: en.hintText || '' }]);
+                            } else {
+                              setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]);
+                            }
+                            setCurrentScenarioIndex(0);
+                          }
+                          // Load multi-difficulty quiz list
+                          const ql = await fetch(`/api/trainer/enablers/${e.id}/quizzes`);
+                          if (ql.ok) {
+                            const qlj = await ql.json();
+                            setEnablerQuizList(qlj.quizzes || []);
+                          } else {
+                            setEnablerQuizList([]);
+                          }
+                          // Load documents
+                          try {
+                            const dr = await fetch(`/api/trainer/enablers/${e.id}/documents`);
+                            if (dr.ok) {
+                              const dj = await dr.json();
+                              setEnablerDocuments(dj.documents || []);
+                            } else {
+                              setEnablerDocuments([]);
+                            }
+                          } catch { setEnablerDocuments([]); }
+                          // Quizzes are managed via multi-difficulty section below; legacy single-quiz flow removed
+                          setShowEditEnabler(true);
+                        } catch (e) {
+                          console.error(e);
                         }
-                        setShowEditUseCase(true);
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }}
-                  >
-                    Bearbeiten
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
-                    onClick={async () => {
-                      if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                      const ok = window.confirm('Diesen Use Case wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
-                      if (!ok) return;
-                      try {
-                        const del = await fetch(`/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
-                        if (!del.ok) throw new Error('Löschen fehlgeschlagen');
+                      }}
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
+                      onClick={async () => {
+                        if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                        const ok = window.confirm('Diesen Enabler wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
+                        if (!ok) return;
+                        try {
+                          const del = await fetch(`/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                          if (!del.ok) throw new Error('Löschen fehlgeschlagen');
+                          const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
+                          const data = await r.json();
+                          setEnablers((data.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                        } catch (err: any) {
+                          alert(err?.message || 'Unbekannter Fehler');
+                        }
+                      }}
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
+              onClick={() => setShowAddEnabler(true)}
+            >
+              <Plus className="h-4 w-4" /> Lesson hinzufügen
+            </button>
+          </div>
+
+          {/* Geschäftsprozesse Section removed */}
+
+          <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
+            <div className="mb-3 text-sm font-semibold">Use Cases</div>
+            <ul className="space-y-2">
+              {useCases.map((u) => (
+                <li key={u.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="truncate font-medium">{u.title}</span>
+                    <span className={`ml-2 text-xs rounded-full px-2 py-0.5 border ${u.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{u.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                      onClick={async () => {
+                        await fetch(`/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !u.isActive }) });
                         const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
                         const data = await r.json();
                         setUseCases((data.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                      } catch (err: any) {
-                        alert(err?.message || 'Unbekannter Fehler');
-                      }
-                    }}
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
-            onClick={() => setShowAddUseCase(true)}
-          >
-            <Plus className="h-4 w-4"/> Use Case hinzufügen
-          </button>
-        </div>
+                      }}
+                    >
+                      {u.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs rounded-md border border-accent/30 px-2 py-1"
+                      onClick={async () => {
+                        try {
+                          setEditingUseCaseId(u.id);
+                          const ur = await fetch(`/api/trainer/use-cases/${u.id}`);
+                          if (ur.ok) {
+                            const uj = await ur.json();
+                            const uc = uj.useCase || {};
+                            setUseCaseEditTitle(uc.title || '');
+                            setUseCaseEditDesc(uc.descriptionText || '');
+                            setUseCaseEditDuration(uc.durationValue ? String(uc.durationValue) : '');
+                            setUseCaseEditActive(!!uc.isActive);
+                          } else {
+                            setUseCaseEditTitle(u.title);
+                            setUseCaseEditDesc('');
+                            setUseCaseEditDuration('');
+                            setUseCaseEditActive(false);
+                          }
+                          setShowEditUseCase(true);
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
+                      onClick={async () => {
+                        if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                        const ok = window.confirm('Diesen Use Case wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
+                        if (!ok) return;
+                        try {
+                          const del = await fetch(`/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`, { method: 'DELETE' });
+                          if (!del.ok) throw new Error('Löschen fehlgeschlagen');
+                          const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`);
+                          const data = await r.json();
+                          setUseCases((data.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
+                        } catch (err: any) {
+                          alert(err?.message || 'Unbekannter Fehler');
+                        }
+                      }}
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="mt-3 inline-flex items-center gap-2 rounded-xl border border-accent/30 px-3 py-2 text-sm"
+              onClick={() => setShowAddUseCase(true)}
+            >
+              <Plus className="h-4 w-4" /> Use Case hinzufügen
+            </button>
+          </div>
         </form>
       </div>
 
@@ -465,16 +478,16 @@ export default function EditCoursePage() {
               <h2 className="text-xl font-semibold">Neue Lesson erstellen</h2>
               <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => !enablerSubmitting && setShowAddEnabler(false)}>Schließen</button>
             </div>
-              <div className="space-y-4">
+            <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium">Titel</label>
                 <input value={enablerTitle} onChange={e => setEnablerTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
               </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Beschreibung</label>
-                  <textarea value={enablerDescription} onChange={e => setEnablerDescription(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Lessons" />
-                </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Beschreibung</label>
+                <textarea value={enablerDescription} onChange={e => setEnablerDescription(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Lessons" />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium">PPT-Link</label>
                   <input value={enablerPpt} onChange={e => setEnablerPpt(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="https://..." />
@@ -484,18 +497,18 @@ export default function EditCoursePage() {
                   <input value={enablerVideo} onChange={e => setEnablerVideo(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="https://..." />
                 </div>
               </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
-                    <input type="number" min={0} value={enablerDuration} onChange={e => setEnablerDuration(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 7" />
-                  </div>
-                  <div className="flex items-end">
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" checked={enablerActive} onChange={e => setEnablerActive(e.target.checked)} />
-                      <span>Aktiv</span>
-                    </label>
-                  </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
+                  <input type="number" min={0} value={enablerDuration} onChange={e => setEnablerDuration(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 7" />
                 </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={enablerActive} onChange={e => setEnablerActive(e.target.checked)} />
+                    <span>Aktiv</span>
+                  </label>
+                </div>
+              </div>
               <div>
                 <div className="mb-3 flex items-center justify-between">
                   <label className="text-sm font-medium">Szenarien (mit Hinweisen)</label>
@@ -510,7 +523,7 @@ export default function EditCoursePage() {
                     <Plus className="h-3 w-3" /> Szenario hinzufügen
                   </button>
                 </div>
-                
+
                 {/* Scenario Counter */}
                 <div className="mb-3 text-center">
                   <span className="text-sm font-medium text-foreground">
@@ -520,7 +533,7 @@ export default function EditCoursePage() {
 
                 {/* Scenario Slider */}
                 <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-background/30 p-4">
-                  <div 
+                  <div
                     className="flex transition-transform duration-300 ease-in-out"
                     style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
                   >
@@ -561,18 +574,17 @@ export default function EditCoursePage() {
                   >
                     ← Zurück
                   </button>
-                  
+
                   <div className="flex items-center gap-2">
                     {scenarios.map((sc, idx) => (
                       <button
                         key={sc.id}
                         type="button"
                         onClick={() => setCurrentScenarioIndex(idx)}
-                        className={`h-2 rounded-full transition-all ${
-                          idx === currentScenarioIndex 
-                            ? 'w-6 bg-primary' 
+                        className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
+                            ? 'w-6 bg-primary'
                             : 'w-2 bg-accent/30 hover:bg-accent/50'
-                        }`}
+                          }`}
                         aria-label={`Go to scenario ${idx + 1}`}
                       />
                     ))}
@@ -659,7 +671,7 @@ export default function EditCoursePage() {
                         } else {
                           setEnablerQuizList([]);
                         }
-                      } catch {}
+                      } catch { }
                       setShowAddEnabler(false);
                       setShowEditEnabler(true);
                     } else {
@@ -748,12 +760,12 @@ export default function EditCoursePage() {
               <h2 className="text-xl font-semibold">Lesson bearbeiten</h2>
               <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditEnabler(false)}>Schließen</button>
             </div>
-              <div className="space-y-4">
+            <div className="space-y-4">
               {/* Multi-difficulty quizzes management */}
               <div className="rounded-xl border border-accent/20 bg-background/50 p-3">
                 <div className="mb-2 text-sm font-semibold">Lesson-Quizzes (Low / Medium / High)</div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  {(['LOW','MEDIUM','HIGH'] as const).map((level) => {
+                  {(['LOW', 'MEDIUM', 'HIGH'] as const).map((level) => {
                     const item = enablerQuizList.find(q => q.difficulty === level);
                     return (
                       <div key={level} className="rounded-lg border border-accent/20 bg-background/40 p-3">
@@ -805,11 +817,11 @@ export default function EditCoursePage() {
                 <label className="mb-1 block text-sm font-medium">Titel</label>
                 <input value={enablerTitle} onChange={e => setEnablerTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
               </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Beschreibung</label>
-                  <textarea value={enablerDescription} onChange={e => setEnablerDescription(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Lessons" />
-                </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Beschreibung</label>
+                <textarea value={enablerDescription} onChange={e => setEnablerDescription(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Lessons" />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium">PPT-Link</label>
                   <input value={enablerPpt} onChange={e => setEnablerPpt(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="https://..." />
@@ -819,18 +831,88 @@ export default function EditCoursePage() {
                   <input value={enablerVideo} onChange={e => setEnablerVideo(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="https://..." />
                 </div>
               </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
-                    <input type="number" min={0} value={enablerDuration} onChange={e => setEnablerDuration(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 7" />
-                  </div>
-                  <div className="flex items-end">
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" checked={enablerActive} onChange={e => setEnablerActive(e.target.checked)} />
-                      <span>Aktiv</span>
-                    </label>
-                  </div>
+
+              {/* PDF Documents Section */}
+              <div className="rounded-xl border border-accent/20 bg-background/30 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-red-500" />
+                  <label className="text-sm font-medium">📖 Theorie-Dokumente (PDFs)</label>
                 </div>
+
+                {/* Uploaded documents list */}
+                {enablerDocuments.length > 0 && (
+                  <div className="mb-4 space-y-2">
+                    {enablerDocuments.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between gap-3 rounded-lg border border-green-500/30 bg-green-500/10 p-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="h-4 w-4 text-green-500 flex-shrink-0" />
+                          <span className="text-sm font-medium truncate">{doc.title}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!trainerId || !editingEnablerId) return;
+                            const ok = window.confirm('Dieses Dokument löschen?');
+                            if (!ok) return;
+                            try {
+                              await fetch(`/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`, { method: 'DELETE' });
+                              setEnablerDocuments(prev => prev.filter(d => d.id !== doc.id));
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-red-500/20 text-muted hover:text-red-400 transition-colors flex-shrink-0"
+                          title="Entfernen"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload new PDF */}
+                <PdfUploader
+                  userId={trainerId || ''}
+                  onUpload={async (url) => {
+                    if (!trainerId || !editingEnablerId) return;
+                    // Create document record
+                    const fileName = url.split('/').pop() || 'document.pdf';
+                    const title = fileName.replace(/^\d+_/, '').replace(/\.pdf$/i, '');
+                    try {
+                      const res = await fetch(`/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          title,
+                          fileName,
+                          storageUrl: url,
+                          documentType: 'THEORY',
+                        }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setEnablerDocuments(prev => [...prev, data.document]);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                  disabled={!editingEnablerId}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
+                  <input type="number" min={0} value={enablerDuration} onChange={e => setEnablerDuration(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 7" />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={enablerActive} onChange={e => setEnablerActive(e.target.checked)} />
+                    <span>Aktiv</span>
+                  </label>
+                </div>
+              </div>
               <div>
                 <div className="mb-3 flex items-center justify-between">
                   <label className="text-sm font-medium">Szenarien (mit Hinweisen)</label>
@@ -845,7 +927,7 @@ export default function EditCoursePage() {
                     <Plus className="h-3 w-3" /> Szenario hinzufügen
                   </button>
                 </div>
-                
+
                 {/* Scenario Counter */}
                 <div className="mb-3 text-center">
                   <span className="text-sm font-medium text-foreground">
@@ -855,7 +937,7 @@ export default function EditCoursePage() {
 
                 {/* Scenario Slider */}
                 <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-background/30 p-4">
-                  <div 
+                  <div
                     className="flex transition-transform duration-300 ease-in-out"
                     style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
                   >
@@ -896,18 +978,17 @@ export default function EditCoursePage() {
                   >
                     ← Zurück
                   </button>
-                  
+
                   <div className="flex items-center gap-2">
                     {scenarios.map((sc, idx) => (
                       <button
                         key={sc.id}
                         type="button"
                         onClick={() => setCurrentScenarioIndex(idx)}
-                        className={`h-2 rounded-full transition-all ${
-                          idx === currentScenarioIndex 
-                            ? 'w-6 bg-primary' 
+                        className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
+                            ? 'w-6 bg-primary'
                             : 'w-2 bg-accent/30 hover:bg-accent/50'
-                        }`}
+                          }`}
                         aria-label={`Go to scenario ${idx + 1}`}
                       />
                     ))}
@@ -969,8 +1050,8 @@ export default function EditCoursePage() {
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();
                     setEnablers((fresh.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-          setShowEditEnabler(false);
-          setEditingEnablerId(null);
+                    setShowEditEnabler(false);
+                    setEditingEnablerId(null);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   }
