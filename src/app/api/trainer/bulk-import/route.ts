@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import db  from '@/db';
+import db from '@/db';
 import { courses, enablers, useCases, skills, courseSkills } from '@/db/migrations/schemas/schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -223,14 +223,14 @@ export async function POST(request: NextRequest) {
 
       // Group rows by enabler (course_title + title)
       const enablerGroups = new Map<string, EnablerRow[]>();
-      
+
       for (let i = 0; i < enablersData.length; i++) {
         const row = enablersData[i];
         if (!row.course_title?.trim() || !row.title?.trim()) {
           result.stats.errors.push(`Enablers row ${i + 2}: course_title and title are required`);
           continue;
         }
-        
+
         const key = `${row.course_title.trim()}|||${row.title.trim()}`;
         if (!enablerGroups.has(key)) {
           enablerGroups.set(key, []);
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
       for (const [key, rows] of enablerGroups.entries()) {
         try {
           const firstRow = rows[0];
-          
+
           if (firstRow.order_index === undefined || firstRow.order_index === null) {
             result.stats.errors.push(`Enabler "${firstRow.title}": order_index is required`);
             continue;

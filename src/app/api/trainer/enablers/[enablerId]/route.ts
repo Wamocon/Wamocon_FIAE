@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
     const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
     if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const body = await req.json();
-  const updates: any = {};
+    const updates: any = {};
     for (const key of [
       'title',
       'orderIndex',
@@ -97,7 +97,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ e
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-  const [row0] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));
+    const [row0] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));
     if (!row0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const member = await db
       .select()

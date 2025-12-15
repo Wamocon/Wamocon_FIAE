@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
     // Temporarily ignore ESLint errors during schema migration
     ignoreDuringBuilds: true,
   },
+  // Webpack configuration for react-pdf
+  webpack: (config) => {
+    config.resolve.alias.canvas = false;
+    return config;
+  },
 };
 
 export default nextConfig;

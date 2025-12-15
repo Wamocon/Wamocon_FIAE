@@ -12,14 +12,14 @@ import {
 } from '@/db/migrations/schemas/schema';
 
 // GET: quiz detail for editing/view
-export async function GET(_req: NextRequest, { params }: { params: { enablerId: string; quizId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string; quizId: string }> }) {
   try {
-    const {  quizId } = await params;
+    const { quizId } = await params;
     const [link] = await db.select().from(enablerQuizLinks).where(eq(enablerQuizLinks.quizId, quizId));
     if (!link) return NextResponse.json({ quiz: null });
     const [qz] = await db.select().from(quizzes).where(eq(quizzes.id, quizId));
     if (!qz) return NextResponse.json({ quiz: null });
-  const qs = await db.select().from(questions).where(eq(questions.quizId, quizId)).orderBy(questions.orderIndex);
+    const qs = await db.select().from(questions).where(eq(questions.quizId, quizId)).orderBy(questions.orderIndex);
     const qIds = qs.map((q) => q.id);
     const opts = qIds.length ? await db.select().from(options).where(inArray(options.questionId, qIds)) : [];
     return NextResponse.json({
@@ -48,9 +48,9 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
 
 // PATCH: update title/isActive/difficulty and questions
 // Body may include: { title?, isActive?, difficulty?, questions?: [{ id? (for update), questionText, options: [{ id? optionId, optionText, isCorrect, explanation }] }] }
-export async function PATCH(req: NextRequest, { params }: { params: { enablerId: string; quizId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ enablerId: string; quizId: string }> }) {
   try {
-    const { enablerId, quizId } = params;
+    const { enablerId, quizId } = await params;
     const body = await req.json();
     const trainerId: string | undefined = body?.trainerId;
     if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
@@ -85,10 +85,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { enablerId:
 
         for (let i = 0; i < body.questions.length; i++) {
           const q = body.questions[i];
-          const qType = (q.questionType || 'MCQ') as 'MCQ'|'TEXT';
+          const qType = (q.questionType || 'MCQ') as 'MCQ' | 'TEXT';
           const [qRow] = await tx
             .insert(questions)
-            .values({ quizId, questionText: q.questionText, orderIndex: i + 1, questionType: qType as any, expectedAnswer: qType==='TEXT' ? (q.expectedAnswer ?? null) : null } as any)
+            .values({ quizId, questionText: q.questionText, orderIndex: i + 1, questionType: qType as any, expectedAnswer: qType === 'TEXT' ? (q.expectedAnswer ?? null) : null } as any)
             .returning();
           if (qType === 'MCQ') {
             const opts = Array.isArray(q.options) ? q.options : [];
@@ -114,9 +114,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { enablerId:
 }
 
 // DELETE: delete quiz
-export async function DELETE(_req: NextRequest, { params }: { params: { enablerId: string; quizId: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ enablerId: string; quizId: string }> }) {
   try {
-    const { enablerId, quizId } = params;
+    const { enablerId, quizId } = await params;
     // Basic auth is enforced in PATCH; here we trust upstream caller; could add check if needed
     await db.transaction(async (tx) => {
       await tx.delete(enablerQuizLinks).where(and(eq(enablerQuizLinks.enablerId, enablerId), eq(enablerQuizLinks.quizId, quizId)));
