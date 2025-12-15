@@ -433,6 +433,16 @@ export default function EditCoursePage() {
                             setUseCaseEditDuration('');
                             setUseCaseEditActive(false);
                           }
+                          // Fetch documents for this use case
+                          try {
+                            const docRes = await fetch(`/api/trainer/use-cases/${u.id}/documents`);
+                            if (docRes.ok) {
+                              const docData = await docRes.json();
+                              setUseCaseDocuments(docData.documents || []);
+                            } else {
+                              setUseCaseDocuments([]);
+                            }
+                          } catch { setUseCaseDocuments([]); }
                           setShowEditUseCase(true);
                         } catch (e) {
                           console.error(e);
@@ -1183,6 +1193,80 @@ export default function EditCoursePage() {
                   </label>
                 </div>
               </div>
+
+              {/* PDF Documents Section - Compact */}
+              <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-red-500" />
+                    <span className="text-sm font-medium">📖 PDFs</span>
+                    {useCaseDocuments.length > 0 && (
+                      <span className="text-xs text-muted">({useCaseDocuments.length})</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Uploaded documents - inline pills */}
+                {useCaseDocuments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {useCaseDocuments.map((doc) => (
+                      <div key={doc.id} className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1">
+                        <FileText className="h-3 w-3 text-green-500 flex-shrink-0" />
+                        <span className="text-xs font-medium truncate max-w-[150px]">{doc.title}</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!trainerId || !editingUseCaseId) return;
+                            const ok = window.confirm('Dieses Dokument löschen?');
+                            if (!ok) return;
+                            try {
+                              await fetch(`/api/trainer/use-cases/${editingUseCaseId}/documents?trainerId=${trainerId}&documentId=${doc.id}`, { method: 'DELETE' });
+                              setUseCaseDocuments(prev => prev.filter(d => d.id !== doc.id));
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className="p-0.5 rounded hover:bg-red-500/20 text-muted hover:text-red-400 transition-colors"
+                          title="Entfernen"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Compact PDF Upload */}
+                <PdfUploader
+                  compact
+                  userId={trainerId || ''}
+                  onUpload={async (url) => {
+                    if (!trainerId || !editingUseCaseId) return;
+                    const fileName = url.split('/').pop() || 'document.pdf';
+                    const title = fileName.replace(/^\d+_/, '').replace(/\.pdf$/i, '');
+                    try {
+                      const res = await fetch(`/api/trainer/use-cases/${editingUseCaseId}/documents?trainerId=${trainerId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          title,
+                          fileName,
+                          storageUrl: url,
+                          documentType: 'THEORY',
+                        }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setUseCaseDocuments(prev => [...prev, data.document]);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                  disabled={!editingUseCaseId}
+                />
+              </div>
+
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditUseCase(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2" onClick={async () => {
