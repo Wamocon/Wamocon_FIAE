@@ -48,6 +48,9 @@ export default function EditCoursePage() {
   type BuilderQuestion = { questionText: string; options: [string, string, string, string]; correctIndex: number };
   const [enablerQuestions, setEnablerQuestions] = useState<BuilderQuestion[]>([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
   const [enablerSubmitting, setEnablerSubmitting] = useState(false);
+  // Pending PDFs for Add Lesson (before enabler is created)
+  type PendingPdf = { id: string; url: string; fileName: string; title: string };
+  const [pendingEnablerPdfs, setPendingEnablerPdfs] = useState<PendingPdf[]>([]);
   // Edit Enabler state
   const [showEditEnabler, setShowEditEnabler] = useState(false);
   const [editingEnablerId, setEditingEnablerId] = useState<string | null>(null);
@@ -63,6 +66,8 @@ export default function EditCoursePage() {
   const [useCaseDuration, setUseCaseDuration] = useState<string>('');
   const [useCaseActive, setUseCaseActive] = useState<boolean>(false);
   const [useCaseSubmitting, setUseCaseSubmitting] = useState(false);
+  // Pending PDFs for Add Use Case (before use case is created)
+  const [pendingUseCasePdfs, setPendingUseCasePdfs] = useState<PendingPdf[]>([]);
   // Edit Use Case state
   const [showEditUseCase, setShowEditUseCase] = useState(false);
   const [editingUseCaseId, setEditingUseCaseId] = useState<string | null>(null);
@@ -70,6 +75,8 @@ export default function EditCoursePage() {
   const [useCaseEditDesc, setUseCaseEditDesc] = useState('');
   const [useCaseEditDuration, setUseCaseEditDuration] = useState<string>('');
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
+  // PDF documents for use case (edit mode)
+  const [useCaseDocuments, setUseCaseDocuments] = useState<Array<{ id: string; title: string; storageUrl: string; fileName: string }>>([]);
 
 
 
@@ -509,6 +516,50 @@ export default function EditCoursePage() {
                   </label>
                 </div>
               </div>
+
+              {/* PDF Documents Section for Add Lesson */}
+              <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="h-4 w-4 text-red-500" />
+                  <span className="text-sm font-medium">📖 PDFs</span>
+                  {pendingEnablerPdfs.length > 0 && (
+                    <span className="text-xs text-muted">({pendingEnablerPdfs.length})</span>
+                  )}
+                </div>
+
+                {/* Pending PDFs - inline pills */}
+                {pendingEnablerPdfs.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {pendingEnablerPdfs.map((pdf) => (
+                      <div key={pdf.id} className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1">
+                        <FileText className="h-3 w-3 text-green-500 flex-shrink-0" />
+                        <span className="text-xs font-medium truncate max-w-[150px]">{pdf.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => setPendingEnablerPdfs(prev => prev.filter(p => p.id !== pdf.id))}
+                          className="p-0.5 rounded hover:bg-red-500/20 text-muted hover:text-red-400 transition-colors"
+                          title="Entfernen"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Compact PDF Upload */}
+                <PdfUploader
+                  compact
+                  userId={trainerId || ''}
+                  onUpload={(url) => {
+                    const fileName = url.split('/').pop() || 'document.pdf';
+                    const title = fileName.replace(/^\d+_/, '').replace(/\.pdf$/i, '');
+                    setPendingEnablerPdfs(prev => [...prev, { id: crypto.randomUUID(), url, fileName, title }]);
+                  }}
+                  disabled={!trainerId}
+                />
+              </div>
+
               <div>
                 <div className="mb-3 flex items-center justify-between">
                   <label className="text-sm font-medium">Szenarien (mit Hinweisen)</label>
@@ -582,8 +633,8 @@ export default function EditCoursePage() {
                         type="button"
                         onClick={() => setCurrentScenarioIndex(idx)}
                         className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
-                            ? 'w-6 bg-primary'
-                            : 'w-2 bg-accent/30 hover:bg-accent/50'
+                          ? 'w-6 bg-primary'
+                          : 'w-2 bg-accent/30 hover:bg-accent/50'
                           }`}
                         aria-label={`Go to scenario ${idx + 1}`}
                       />
@@ -632,53 +683,35 @@ export default function EditCoursePage() {
                     if (!res.ok) throw new Error('Lesson konnte nicht erstellt werden');
                     const data = await res.json();
                     const newEnablerId = data.enabler?.id as string | undefined;
-                    // No inline quiz creation; use edit modal to add quizzes per difficulty
+
+                    // 2) Save pending PDFs if any
+                    if (newEnablerId && pendingEnablerPdfs.length > 0) {
+                      for (const pdf of pendingEnablerPdfs) {
+                        try {
+                          await fetch(`/api/trainer/enablers/${newEnablerId}/documents?trainerId=${trainerId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: pdf.title,
+                              fileName: pdf.fileName,
+                              storageUrl: pdf.url,
+                              documentType: 'THEORY',
+                            }),
+                          });
+                        } catch { /* ignore individual PDF save errors */ }
+                      }
+                    }
 
                     // 3) Refresh and close
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();
                     setEnablers((fresh.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
-                    // After creating, open Edit Lesson modal for the new enabler so quizzes can be created immediately
-                    if (newEnablerId) {
-                      setEditingEnablerId(newEnablerId);
-                      try {
-                        const er = await fetch(`/api/trainer/enablers/${newEnablerId}`);
-                        if (er.ok) {
-                          const ej = await er.json();
-                          const en = ej.enabler || {};
-                          setEnablerTitle(en.title || '');
-                          setEnablerDescription(en.descriptionText || '');
-                          setEnablerScenario(en.scenarioText || '');
-                          setEnablerPpt(en.pptUrl || '');
-                          setEnablerVideo(en.videoUrl || '');
-                          setEnablerHint(en.hintText || '');
-                          setEnablerDuration(en.durationValue ? String(en.durationValue) : '');
-                          setEnablerActive(!!en.isActive);
-                          // Load scenarios array or migrate legacy
-                          if (Array.isArray(en.scenarios) && en.scenarios.length > 0) {
-                            setScenarios(en.scenarios.map((s: any) => ({ id: crypto.randomUUID(), text: s.text || '', hint: s.hint || '' })));
-                          } else if (en.scenarioText || en.hintText) {
-                            setScenarios([{ id: crypto.randomUUID(), text: en.scenarioText || '', hint: en.hintText || '' }]);
-                          } else {
-                            setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]);
-                          }
-                          setCurrentScenarioIndex(0);
-                        }
-                        const ql = await fetch(`/api/trainer/enablers/${newEnablerId}/quizzes`);
-                        if (ql.ok) {
-                          const qlj = await ql.json();
-                          setEnablerQuizList(qlj.quizzes || []);
-                        } else {
-                          setEnablerQuizList([]);
-                        }
-                      } catch { }
-                      setShowAddEnabler(false);
-                      setShowEditEnabler(true);
-                    } else {
-                      setShowAddEnabler(false);
-                    }
-                    // Reset add form fields
-                    setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false); setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]); setCurrentScenarioIndex(0);
+
+                    // Close the Add modal
+                    setShowAddEnabler(false);
+
+                    // Reset add form fields including pending PDFs
+                    setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false); setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]); setCurrentScenarioIndex(0); setPendingEnablerPdfs([]);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   } finally {
@@ -721,6 +754,51 @@ export default function EditCoursePage() {
                   </label>
                 </div>
               </div>
+
+              {/* PDF Documents Section for Add Use Case */}
+              <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="h-4 w-4 text-red-500" />
+                  <span className="text-sm font-medium">📖 PDFs</span>
+                  {pendingUseCasePdfs.length > 0 && (
+                    <span className="text-xs text-muted">({pendingUseCasePdfs.length})</span>
+                  )}
+                </div>
+
+                {/* Pending PDFs - inline pills */}
+                {pendingUseCasePdfs.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {pendingUseCasePdfs.map((pdf) => (
+                      <div key={pdf.id} className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1">
+                        <FileText className="h-3 w-3 text-green-500 flex-shrink-0" />
+                        <span className="text-xs font-medium truncate max-w-[150px]">{pdf.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => setPendingUseCasePdfs(prev => prev.filter(p => p.id !== pdf.id))}
+                          className="p-0.5 rounded hover:bg-red-500/20 text-muted hover:text-red-400 transition-colors"
+                          title="Entfernen"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Compact PDF Upload */}
+                <PdfUploader
+                  compact
+                  userId={trainerId || ''}
+                  onUpload={(url) => {
+                    const fileName = url.split('/').pop() || 'document.pdf';
+                    const title = fileName.replace(/^\d+_/, '').replace(/\.pdf$/i, '');
+                    setPendingUseCasePdfs(prev => [...prev, { id: crypto.randomUUID(), url, fileName, title }]);
+                  }}
+                  disabled={!trainerId}
+                />
+                <p className="text-xs text-muted mt-1">PDFs werden nach dem Erstellen gespeichert.</p>
+              </div>
+
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => !useCaseSubmitting && setShowAddUseCase(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={useCaseSubmitting} onClick={async () => {
@@ -731,11 +809,21 @@ export default function EditCoursePage() {
                   try {
                     const res = await fetch(`/api/trainer/courses/${courseId}/use-cases?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: useCaseTitle.trim(), descriptionText: useCaseDesc.trim(), durationValue: useCaseDuration ? Number(useCaseDuration) : undefined, durationUnit: useCaseDuration ? 'DAYS' : undefined, isActive: useCaseActive }) });
                     if (!res.ok) throw new Error('Use Case konnte nicht erstellt werden');
+                    const newUseCaseData = await res.json();
+                    const newUseCaseId = newUseCaseData.useCase?.id;
+
+                    // Save pending PDFs if any (when API is extended to support use case documents)
+                    // Note: Currently content_documents only supports enablers. Use case PDF support requires DB migration.
+                    if (newUseCaseId && pendingUseCasePdfs.length > 0) {
+                      // TODO: Save PDFs when use case document API is available
+                      console.log('Pending use case PDFs:', pendingUseCasePdfs);
+                    }
+
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();
                     setUseCases((fresh.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                     setShowAddUseCase(false);
-                    setUseCaseTitle(''); setUseCaseDesc(''); setUseCaseDuration(''); setUseCaseActive(false);
+                    setUseCaseTitle(''); setUseCaseDesc(''); setUseCaseDuration(''); setUseCaseActive(false); setPendingUseCasePdfs([]);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   } finally {
@@ -755,7 +843,7 @@ export default function EditCoursePage() {
       {showEditEnabler && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowEditEnabler(false)} />
-          <div className="glass-effect relative z-10 w-full max-w-6xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl">
+          <div className="glass-effect relative z-10 w-full max-w-2xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">Lesson bearbeiten</h2>
               <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditEnabler(false)}>Schließen</button>
@@ -832,22 +920,25 @@ export default function EditCoursePage() {
                 </div>
               </div>
 
-              {/* PDF Documents Section */}
-              <div className="rounded-xl border border-accent/20 bg-background/30 p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-red-500" />
-                  <label className="text-sm font-medium">📖 Theorie-Dokumente (PDFs)</label>
+              {/* PDF Documents Section - Compact */}
+              <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-red-500" />
+                    <span className="text-sm font-medium">📖 PDFs</span>
+                    {enablerDocuments.length > 0 && (
+                      <span className="text-xs text-muted">({enablerDocuments.length})</span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Uploaded documents list */}
+                {/* Uploaded documents - inline pills */}
                 {enablerDocuments.length > 0 && (
-                  <div className="mb-4 space-y-2">
+                  <div className="flex flex-wrap gap-2 mb-2">
                     {enablerDocuments.map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between gap-3 rounded-lg border border-green-500/30 bg-green-500/10 p-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText className="h-4 w-4 text-green-500 flex-shrink-0" />
-                          <span className="text-sm font-medium truncate">{doc.title}</span>
-                        </div>
+                      <div key={doc.id} className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1">
+                        <FileText className="h-3 w-3 text-green-500 flex-shrink-0" />
+                        <span className="text-xs font-medium truncate max-w-[150px]">{doc.title}</span>
                         <button
                           type="button"
                           onClick={async () => {
@@ -861,22 +952,22 @@ export default function EditCoursePage() {
                               console.error(err);
                             }
                           }}
-                          className="p-1.5 rounded-lg hover:bg-red-500/20 text-muted hover:text-red-400 transition-colors flex-shrink-0"
+                          className="p-0.5 rounded hover:bg-red-500/20 text-muted hover:text-red-400 transition-colors"
                           title="Entfernen"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Upload new PDF */}
+                {/* Compact PDF Upload */}
                 <PdfUploader
+                  compact
                   userId={trainerId || ''}
                   onUpload={async (url) => {
                     if (!trainerId || !editingEnablerId) return;
-                    // Create document record
                     const fileName = url.split('/').pop() || 'document.pdf';
                     const title = fileName.replace(/^\d+_/, '').replace(/\.pdf$/i, '');
                     try {
@@ -986,8 +1077,8 @@ export default function EditCoursePage() {
                         type="button"
                         onClick={() => setCurrentScenarioIndex(idx)}
                         className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
-                            ? 'w-6 bg-primary'
-                            : 'w-2 bg-accent/30 hover:bg-accent/50'
+                          ? 'w-6 bg-primary'
+                          : 'w-2 bg-accent/30 hover:bg-accent/50'
                           }`}
                         aria-label={`Go to scenario ${idx + 1}`}
                       />

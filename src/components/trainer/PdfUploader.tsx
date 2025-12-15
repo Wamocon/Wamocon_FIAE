@@ -16,6 +16,8 @@ interface PdfUploaderProps {
     userId: string;
     /** Disabled state */
     disabled?: boolean;
+    /** Compact mode for inline usage */
+    compact?: boolean;
 }
 
 const BUCKET_NAME = 'content';
@@ -27,6 +29,7 @@ export function PdfUploader({
     onRemove,
     userId,
     disabled = false,
+    compact = false,
 }: PdfUploaderProps) {
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -151,16 +154,17 @@ export function PdfUploader({
     }
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
             <div
                 onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 className={`
-          relative flex flex-col items-center justify-center gap-2 p-6
-          rounded-xl border-2 border-dashed cursor-pointer
+          relative flex items-center justify-center gap-2 cursor-pointer
+          rounded-xl border-2 border-dashed
           transition-all duration-200
+          ${compact ? 'p-3 flex-row' : 'p-6 flex-col'}
           ${dragOver ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}
           ${disabled || isUploading ? 'opacity-50 cursor-not-allowed' : ''}
         `}
@@ -176,27 +180,29 @@ export function PdfUploader({
 
                 {isUploading ? (
                     <>
-                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                        <span className="text-sm text-muted">Wird hochgeladen...</span>
+                        <Loader2 className={`${compact ? 'w-4 h-4' : 'w-8 h-8'} text-primary animate-spin`} />
+                        <span className="text-xs text-muted">Hochladen...</span>
                     </>
                 ) : (
                     <>
-                        <Upload className="w-8 h-8 text-muted" />
-                        <div className="text-center">
-                            <p className="text-sm font-medium text-foreground">
-                                PDF hochladen
+                        <Upload className={`${compact ? 'w-4 h-4' : 'w-8 h-8'} text-muted`} />
+                        <div className={compact ? '' : 'text-center'}>
+                            <p className={`${compact ? 'text-xs' : 'text-sm'} font-medium text-foreground`}>
+                                {compact ? 'PDF hinzufügen' : 'PDF hochladen'}
                             </p>
-                            <p className="text-xs text-muted">
-                                Klicken oder hierher ziehen (max. 10MB)
-                            </p>
+                            {!compact && (
+                                <p className="text-xs text-muted">
+                                    Klicken oder hierher ziehen (max. 10MB)
+                                </p>
+                            )}
                         </div>
                     </>
                 )}
             </div>
 
             {error && (
-                <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/30">
-                    <span className="text-sm text-red-400">{error}</span>
+                <div className="flex items-center gap-2 p-1.5 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <span className="text-xs text-red-400">{error}</span>
                 </div>
             )}
         </div>
