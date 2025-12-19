@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, eq, inArray, max } from 'drizzle-orm';
-import { enablers, durationUnit, courses, courseMembers } from '@/db/migrations/schemas/schema';
+import { eq, max } from 'drizzle-orm';
+import { enablers, courses, profiles } from '@/db/migrations/schemas/schema';
+
+async function verifyTrainer(trainerId: string): Promise<boolean> {
+  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
+  return trainer?.role === 'TRAINER';
+}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
@@ -23,20 +28,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
-    if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
 
-    // Trainer permission check: member or creator
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+
+    // Verify course exists
     const [courseRow] = await db.select().from(courses).where(eq(courses.id, courseId as any));
-    if (!courseRow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const member = await db
-      .select()
-      .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, courseId as any), eq(courseMembers.userId, trainerId as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const isCreator = String(courseRow.createdById) === String(trainerId);
-    if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!courseRow) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    // Shared curriculum: any valid trainer can create enablers
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
+
     const body = await req.json();
     const title: string | undefined = body?.title;
-    if (!title) return NextResponse.json({ error: 'Missing title' }, { status: 400 });
+    if (!title) {
+      return NextResponse.json({ error: 'Missing title' }, { status: 400 });
+    }
+
     const orderIndex: number | undefined = body?.orderIndex ? Number(body.orderIndex) : undefined;
     const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
     const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit || (typeof durationValue === 'number' ? 'DAYS' : undefined);
@@ -86,3 +99,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+

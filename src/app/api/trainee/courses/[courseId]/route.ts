@@ -3,7 +3,7 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { courses, courseMembers, enablers, useCases, enablerSubmissions, useCaseSubmissions } from '@/db/migrations/schemas/schema';
 
-// GET course details for a trainee: includes active enablers and use-cases
+// GET course details for a trainee: includes active enablers and use-cases with progress status
 // query: traineeId
 export async function GET(
   req: NextRequest,
@@ -34,51 +34,77 @@ export async function GET(
       .from(useCases)
       .where(and(eq(useCases.courseId, courseId), eq(useCases.isActive, true)))
       .orderBy(useCases.orderIndex);
-    // Geschäftsprozesse removed
 
-    // Latest attempts for this trainee per enabler/use-case
-    const enIds = ens.map((e) => String(e.id));
-    const ucIds = ucs.map((u) => String(u.id));
+    // Latest attempts for this trainee per enabler/use-case including status
+    const enAttempts = await db
+      .select({
+        id: enablerSubmissions.id,
+        enablerId: enablerSubmissions.enablerId,
+        attemptNumber: enablerSubmissions.attemptNumber,
+        submittedAt: enablerSubmissions.submittedAt,
+        status: enablerSubmissions.status
+      })
+      .from(enablerSubmissions)
+      .where(eq(enablerSubmissions.traineeId, traineeId as any));
 
-    const enAttempts = enIds.length
-      ? await db
-          .select({ id: enablerSubmissions.id, enablerId: enablerSubmissions.enablerId, attemptNumber: enablerSubmissions.attemptNumber, submittedAt: enablerSubmissions.submittedAt })
-          .from(enablerSubmissions)
-          .where(and(eq(enablerSubmissions.traineeId, traineeId as any)))
-      : [];
-    const ucAttempts = ucIds.length
-      ? await db
-          .select({ id: useCaseSubmissions.id, useCaseId: useCaseSubmissions.useCaseId, attemptNumber: useCaseSubmissions.attemptNumber, submittedAt: useCaseSubmissions.submittedAt })
-          .from(useCaseSubmissions)
-          .where(and(eq(useCaseSubmissions.traineeId, traineeId as any)))
-      : [];
-    // Removed geschäftsprozesse attempts
+    const ucAttempts = await db
+      .select({
+        id: useCaseSubmissions.id,
+        useCaseId: useCaseSubmissions.useCaseId,
+        attemptNumber: useCaseSubmissions.attemptNumber,
+        submittedAt: useCaseSubmissions.submittedAt,
+        status: useCaseSubmissions.status
+      })
+      .from(useCaseSubmissions)
+      .where(eq(useCaseSubmissions.traineeId, traineeId as any));
 
-    // Reduce to latest by submittedAt
-    const latestEn: Record<string, { attemptNumber: number | null }> = {};
+    // Reduce to latest by submittedAt, including status
+    const latestEn: Record<string, { attemptNumber: number | null; status: string | null; submittedAt: Date | null }> = {};
     for (const row of enAttempts) {
       const key = String(row.enablerId);
-      if (!latestEn[key] || new Date(latestEn[key] as any).getTime() < new Date(row.submittedAt as any).getTime()) {
-        latestEn[key] = { attemptNumber: row.attemptNumber ?? null };
+      const rowTime = row.submittedAt ? new Date(row.submittedAt as any).getTime() : 0;
+      const existingTime = latestEn[key]?.submittedAt ? new Date(latestEn[key].submittedAt as any).getTime() : 0;
+      if (!latestEn[key] || rowTime > existingTime) {
+        latestEn[key] = {
+          attemptNumber: row.attemptNumber ?? null,
+          status: row.status ?? null,
+          submittedAt: row.submittedAt as Date | null
+        };
       }
     }
-    const latestUc: Record<string, { attemptNumber: number | null }> = {};
+
+    const latestUc: Record<string, { attemptNumber: number | null; status: string | null; submittedAt: Date | null }> = {};
     for (const row of ucAttempts) {
       const key = String(row.useCaseId);
-      if (!latestUc[key] || new Date(latestUc[key] as any).getTime() < new Date(row.submittedAt as any).getTime()) {
-        latestUc[key] = { attemptNumber: row.attemptNumber ?? null };
+      const rowTime = row.submittedAt ? new Date(row.submittedAt as any).getTime() : 0;
+      const existingTime = latestUc[key]?.submittedAt ? new Date(latestUc[key].submittedAt as any).getTime() : 0;
+      if (!latestUc[key] || rowTime > existingTime) {
+        latestUc[key] = {
+          attemptNumber: row.attemptNumber ?? null,
+          status: row.status ?? null,
+          submittedAt: row.submittedAt as Date | null
+        };
       }
     }
-    // Removed geschäftsprozesse latest attempts aggregation
 
     return NextResponse.json({
       course: { id: c.id, title: c.title, year: c.year, chapter: c.chapter },
-      enablers: ens.map((e) => ({ id: e.id, title: e.title, attemptNumber: latestEn[String(e.id)]?.attemptNumber ?? null })),
-      useCases: ucs.map((u) => ({ id: u.id, title: u.title, attemptNumber: latestUc[String(u.id)]?.attemptNumber ?? null })),
-      // Geschäftsprozesse removed from response
+      enablers: ens.map((e) => ({
+        id: e.id,
+        title: e.title,
+        attemptNumber: latestEn[String(e.id)]?.attemptNumber ?? null,
+        status: latestEn[String(e.id)]?.status ?? null // PENDING, APPROVED, REJECTED
+      })),
+      useCases: ucs.map((u) => ({
+        id: u.id,
+        title: u.title,
+        attemptNumber: latestUc[String(u.id)]?.attemptNumber ?? null,
+        status: latestUc[String(u.id)]?.status ?? null // PENDING, APPROVED, REJECTED
+      })),
     });
   } catch (e) {
     console.error('Trainee course detail GET error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+

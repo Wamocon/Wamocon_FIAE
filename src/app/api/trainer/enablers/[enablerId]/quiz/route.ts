@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   enablers,
   enablerQuizzes,
   options,
   profiles,
   questions,
-  quizType,
   quizzes,
-  courseMembers,
-  courses,
 } from '@/db/migrations/schemas/schema';
+
+async function verifyTrainer(trainerId: string): Promise<boolean> {
+  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
+  return trainer?.role === 'TRAINER';
+}
 
 // GET quiz for an enabler (trainer editing)
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
@@ -50,18 +52,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ena
     const title: string | undefined = body?.title;
     const createdById: string | undefined = body?.createdById;
     const items: Array<{ questionText: string; options: string[]; correctIndex: number }> = Array.isArray(body?.questions) ? body.questions : [];
-    if (!title || !createdById || items.length === 0) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
-    // Permission: creator must be TRAINER member of the enabler's course
+    if (!title || !createdById || items.length === 0) {
+      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+    }
+
+    // Verify enabler exists
     const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));
-    if (!enabler) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const member = await db
-      .select()
-      .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, enabler.courseId as any), eq(courseMembers.userId, createdById as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const [courseRow] = await db.select().from(courses).where(eq(courses.id, enabler.courseId as any));
-    const isCreator = courseRow ? String(courseRow.createdById) === String(createdById) : false;
-    if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!enabler) {
+      return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
+    }
+
+    // Shared curriculum: any valid trainer can create quizzes
+    if (!(await verifyTrainer(createdById))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
 
     const out = await db.transaction(async (tx) => {
       // Remove existing quiz if any
@@ -102,3 +107,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ena
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+

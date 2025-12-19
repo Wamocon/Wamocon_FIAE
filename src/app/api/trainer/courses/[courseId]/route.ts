@@ -10,6 +10,18 @@ import {
   skills,
 } from '@/db/migrations/schemas/schema';
 
+/**
+ * Helper to verify the requesting user is a valid trainer in the system.
+ * For shared curriculum model, any TRAINER can manage any course.
+ */
+async function verifyTrainer(trainerId: string): Promise<boolean> {
+  const [trainer] = await db
+    .select({ role: profiles.role })
+    .from(profiles)
+    .where(eq(profiles.id, trainerId as any));
+  return trainer?.role === 'TRAINER';
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
   try {
     const { courseId } = await params;
@@ -37,7 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cou
       .where(eq(enablers.courseId, courseId as any))
       .orderBy(enablers.orderIndex);
 
-    const { useCases } = await import('@/db/migrations/schemas/schema'); // Geschäftsprozesse removed
+    const { useCases } = await import('@/db/migrations/schemas/schema');
 
     const ucs = await db
       .select({
@@ -52,6 +64,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cou
       .from(useCases)
       .where(eq(useCases.courseId, courseId as any))
       .orderBy(useCases.orderIndex);
+
     return NextResponse.json({ course, skills: attachedSkills.map((s) => s.name), enablers: ens, useCases: ucs });
   } catch (e) {
     console.error('Get course error', e);
@@ -64,17 +77,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
-    if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
 
-    // Permission: trainer must be TRAINER member or the course creator
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+
+    // Verify course exists
     const [courseRow] = await db.select().from(courses).where(eq(courses.id, courseId as any));
-    if (!courseRow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const member = await db
-      .select()
-      .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, courseId as any), eq(courseMembers.userId, trainerId as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const isCreator = String(courseRow.createdById) === String(trainerId);
-    if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!courseRow) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    // Shared curriculum model: any valid trainer can edit any course
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
+
     const body = await req.json();
     const updates: any = {};
     if (typeof body?.title === 'string') updates.title = body.title;
@@ -119,16 +137,21 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
-    if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
 
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+
+    // Verify course exists
     const [courseRow] = await db.select().from(courses).where(eq(courses.id, courseId as any));
-    if (!courseRow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const member = await db
-      .select()
-      .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, courseId as any), eq(courseMembers.userId, trainerId as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const isCreator = String(courseRow.createdById) === String(trainerId);
-    if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!courseRow) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    // Shared curriculum model: any valid trainer can delete any course
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
 
     await db.delete(courses).where(eq(courses.id, courseId as any));
     return NextResponse.json({ ok: true });
@@ -137,3 +160,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+

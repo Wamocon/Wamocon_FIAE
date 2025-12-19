@@ -2,8 +2,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, and } from 'drizzle-orm';
-import { contentDocuments, useCases, courseMembers, courses } from '@/db/migrations/schemas/schema';
+import { eq } from 'drizzle-orm';
+import { contentDocuments, useCases, profiles } from '@/db/migrations/schemas/schema';
+
+async function verifyTrainer(trainerId: string): Promise<boolean> {
+    const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
+    return trainer?.role === 'TRAINER';
+}
 
 // GET documents for a use case
 export async function GET(
@@ -47,27 +52,15 @@ export async function POST(
             return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
         }
 
-        // Verify use case exists and trainer has access
+        // Verify use case exists
         const [useCase] = await db.select().from(useCases).where(eq(useCases.id, useCaseId as any));
         if (!useCase) {
             return NextResponse.json({ error: 'Use case not found' }, { status: 404 });
         }
 
-        // Check trainer permission
-        const [courseRow] = await db.select().from(courses).where(eq(courses.id, useCase.courseId as any));
-        const member = await db
-            .select()
-            .from(courseMembers)
-            .where(
-                and(
-                    eq(courseMembers.courseId, useCase.courseId as any),
-                    eq(courseMembers.userId, trainerId as any),
-                    eq(courseMembers.role, 'TRAINER' as any)
-                )
-            );
-        const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
-        if (!member.length && !isCreator) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        // Shared curriculum: any valid trainer can upload documents
+        if (!(await verifyTrainer(trainerId))) {
+            return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
         }
 
         const body = await req.json();
@@ -125,21 +118,9 @@ export async function DELETE(
             return NextResponse.json({ error: 'Use case not found' }, { status: 404 });
         }
 
-        // Check trainer permission  
-        const [courseRow] = await db.select().from(courses).where(eq(courses.id, useCase.courseId as any));
-        const member = await db
-            .select()
-            .from(courseMembers)
-            .where(
-                and(
-                    eq(courseMembers.courseId, useCase.courseId as any),
-                    eq(courseMembers.userId, trainerId as any),
-                    eq(courseMembers.role, 'TRAINER' as any)
-                )
-            );
-        const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
-        if (!member.length && !isCreator) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        // Shared curriculum: any valid trainer can delete documents
+        if (!(await verifyTrainer(trainerId))) {
+            return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
         }
 
         // Get document first to extract storage path for cleanup
@@ -176,3 +157,4 @@ export async function DELETE(
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
+

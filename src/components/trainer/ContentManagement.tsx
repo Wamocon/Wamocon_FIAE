@@ -152,8 +152,8 @@ export function ContentManagement() {
             <button
               onClick={() => setViewMode('grid')}
               className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${viewMode === 'grid'
-                  ? 'bg-accent text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
+                ? 'bg-accent text-white shadow-sm'
+                : 'text-muted hover:text-foreground'
                 }`}
             >
               Grid
@@ -161,8 +161,8 @@ export function ContentManagement() {
             <button
               onClick={() => setViewMode('list')}
               className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${viewMode === 'list'
-                  ? 'bg-accent text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
+                ? 'bg-accent text-white shadow-sm'
+                : 'text-muted hover:text-foreground'
                 }`}
             >
               Liste
@@ -183,8 +183,9 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[360px] flex flex-col"
+              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[420px] flex flex-col"
             >
+
               <div className="mb-4 flex items-start justify-between">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
                   <BookOpen className="h-6 w-6 text-white" />
@@ -192,9 +193,10 @@ export function ContentManagement() {
                 <img src="/WMC_Logo_1.png" alt={course.title} className="h-12 w-40 rounded-2xl object-cover" />
               </div>
 
-              <h3 className="text-foreground mb-2 text-xl font-bold truncate">
+              <h3 className="text-foreground mb-2 text-xl font-bold line-clamp-3 min-h-[3.5rem]">
                 {course.title}
               </h3>
+
               <div className="text-muted mb-4 flex items-center gap-2 text-sm">
                 <span className="bg-accent rounded-full px-3 py-1 font-medium text-white">
                   Jahr {course.year ?? '-'}
@@ -204,7 +206,8 @@ export function ContentManagement() {
                 </span>
               </div>
 
-              <div className="mb-4 space-y-3 flex-1 overflow-y-auto pr-1">
+              <div className="mb-4 space-y-3 flex-1">
+
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
                     <h4 className="text-foreground text-sm font-medium">Lessons</h4>

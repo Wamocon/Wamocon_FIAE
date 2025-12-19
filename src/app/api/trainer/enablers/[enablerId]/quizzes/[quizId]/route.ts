@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
-  courses,
-  courseMembers,
   enablers,
   enablerQuizLinks,
   options,
+  profiles,
   questions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
+
+async function verifyTrainer(trainerId: string): Promise<boolean> {
+  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
+  return trainer?.role === 'TRAINER';
+}
 
 // GET: quiz detail for editing/view
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string; quizId: string }> }) {
@@ -47,23 +51,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ena
 }
 
 // PATCH: update title/isActive/difficulty and questions
-// Body may include: { title?, isActive?, difficulty?, questions?: [{ id? (for update), questionText, options: [{ id? optionId, optionText, isCorrect, explanation }] }] }
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ enablerId: string; quizId: string }> }) {
   try {
     const { enablerId, quizId } = await params;
     const body = await req.json();
     const trainerId: string | undefined = body?.trainerId;
-    if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
 
     const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
-    if (!enabler) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const member = await db
-      .select()
-      .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.userId, trainerId), eq(courseMembers.role, 'TRAINER' as any)));
-    const [courseRow] = await db.select().from(courses).where(eq(courses.id, enabler.courseId));
-    const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
-    if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!enabler) {
+      return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
+    }
+
+    // Shared curriculum: any valid trainer can edit quizzes
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
 
     await db.transaction(async (tx) => {
       if (typeof body.title === 'string') {
@@ -114,10 +120,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
 }
 
 // DELETE: delete quiz
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ enablerId: string; quizId: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ enablerId: string; quizId: string }> }) {
   try {
     const { enablerId, quizId } = await params;
-    // Basic auth is enforced in PATCH; here we trust upstream caller; could add check if needed
+    const { searchParams } = new URL(req.url);
+    const trainerId = searchParams.get('trainerId');
+
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+
+    // Shared curriculum: any valid trainer can delete quizzes
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
+
     await db.transaction(async (tx) => {
       await tx.delete(enablerQuizLinks).where(and(eq(enablerQuizLinks.enablerId, enablerId), eq(enablerQuizLinks.quizId, quizId)));
       const qs = await tx.select().from(questions).where(eq(questions.quizId, quizId));
@@ -132,3 +149,4 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+

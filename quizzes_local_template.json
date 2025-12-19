@@ -1,0 +1,3147 @@
+[
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "01_Der Betrieb",
+    "quizTitle": "Quiz: 01_Der Betrieb",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Der Betrieb",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "02_Rechtsformen",
+    "quizTitle": "Quiz: 02_Rechtsformen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Rechtsformen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "03_Unternehmensstruktur und Organisationsform",
+    "quizTitle": "Quiz: 03_Unternehmensstruktur und Organisationsform",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Unternehmensstruktur und Organisationsform",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "04_Wirtschaftliche Verflechtungen",
+    "quizTitle": "Quiz: 04_Wirtschaftliche Verflechtungen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Wirtschaftliche Verflechtungen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "05_Ziele von Betrieben und Unternehmen",
+    "quizTitle": "Quiz: 05_Ziele von Betrieben und Unternehmen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Ziele von Betrieben und Unternehmen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "06_Betriebliche und gesamtwirtschaftliche Arbeitsteilung",
+    "quizTitle": "Quiz: 06_Betriebliche und gesamtwirtschaftliche Arbeitsteilung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Betriebliche und gesamtwirtschaftliche Arbeitsteilung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "07_Ziele und Aufgaben von Arbeitgeber und Arbeitnehmerverbänden",
+    "quizTitle": "Quiz: 07_Ziele und Aufgaben von Arbeitgeber und Arbeitnehmerverbänden",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Ziele und Aufgaben von Arbeitgeber und Arbeitnehmerverbänden",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "08_Ziele und Aufgaben von Behörden und Verwaltungen",
+    "quizTitle": "Quiz: 08_Ziele und Aufgaben von Behörden und Verwaltungen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Ziele und Aufgaben von Behörden und Verwaltungen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Aufbau und Organisation des Ausbildungsbetriebes (§ 4 Abs. 7 Nr. 2)",
+    "enablerName": "09_Grundsatz der vertrauensvollen Zusammenarbeit zwischen Arbeitgeber und Arbeitnehmervertretern",
+    "quizTitle": "Quiz: 09_Grundsatz der vertrauensvollen Zusammenarbeit zwischen Arbeitgeber und Arbeitnehmervertretern",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 09_Grundsatz der vertrauensvollen Zusammenarbeit zwischen Arbeitgeber und Arbeitnehmervertretern",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "01_Rechte und Pflichten des Auszubildenden und des Ausbildenden",
+    "quizTitle": "Quiz: 01_Rechte und Pflichten des Auszubildenden und des Ausbildenden",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Rechte und Pflichten des Auszubildenden und des Ausbildenden",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "02_Vorteile der Ausbildung im dualen System der Berufsausbildung",
+    "quizTitle": "Quiz: 02_Vorteile der Ausbildung im dualen System der Berufsausbildung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Vorteile der Ausbildung im dualen System der Berufsausbildung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "03_Aufgaben von Ausbildungsbetrieb, Berufsschule und Kammern im Rahmen der Berufsausbildung",
+    "quizTitle": "Quiz: 03_Aufgaben von Ausbildungsbetrieb, Berufsschule und Kammern im Rahmen der Berufsausbildung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Aufgaben von Ausbildungsbetrieb, Berufsschule und Kammern im Rahmen der Berufsausbildung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "04_Ausbildungsrahmenplan, sachliche und zeitliche Gliederung",
+    "quizTitle": "Quiz: 04_Ausbildungsrahmenplan, sachliche und zeitliche Gliederung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Ausbildungsrahmenplan, sachliche und zeitliche Gliederung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "05_Grundsätze des Individual - und Kollektivarbeitsrechtes",
+    "quizTitle": "Quiz: 05_Grundsätze des Individual - und Kollektivarbeitsrechtes",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Grundsätze des Individual - und Kollektivarbeitsrechtes",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "06_Arbeitgeberorganisationen",
+    "quizTitle": "Quiz: 06_Arbeitgeberorganisationen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Arbeitgeberorganisationen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "07_Arbeitnehmerorganisationen",
+    "quizTitle": "Quiz: 07_Arbeitnehmerorganisationen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Arbeitnehmerorganisationen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "08_Tarifrecht",
+    "quizTitle": "Quiz: 08_Tarifrecht",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Tarifrecht",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "09_Lohn- und Gehaltsformen",
+    "quizTitle": "Quiz: 09_Lohn- und Gehaltsformen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 09_Lohn- und Gehaltsformen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "10_Lebensbegleitendes lernen",
+    "quizTitle": "Quiz: 10_Lebensbegleitendes lernen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 10_Lebensbegleitendes lernen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "11_Lerntechniken",
+    "quizTitle": "Quiz: 11_Lerntechniken",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 11_Lerntechniken",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "12_Arbeitstechniken",
+    "quizTitle": "Quiz: 12_Arbeitstechniken",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 12_Arbeitstechniken",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "13_Berufliche Fortbildung und Umschulung",
+    "quizTitle": "Quiz: 13_Berufliche Fortbildung und Umschulung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 13_Berufliche Fortbildung und Umschulung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
+    "enablerName": "14_Lebensplanung",
+    "quizTitle": "Quiz: 14_Lebensplanung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 14_Lebensplanung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "01_Schichtenmodelle, z. B. OSI, TCP_IP benennen und zuordnen können",
+    "quizTitle": "Quiz: 01_Schichtenmodelle, z. B. OSI, TCP_IP benennen und zuordnen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Schichtenmodelle, z. B. OSI, TCP_IP benennen und zuordnen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "02_Netzwerkkomponenten vergleichen und beschreiben können",
+    "quizTitle": "Quiz: 02_Netzwerkkomponenten vergleichen und beschreiben können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Netzwerkkomponenten vergleichen und beschreiben können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "03_Netzwerkkonzepte (-topologien, -infrastrukturen) benennen und charakterisieren",
+    "quizTitle": "Quiz: 03_Netzwerkkonzepte (-topologien, -infrastrukturen) benennen und charakterisieren",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Netzwerkkonzepte (-topologien, -infrastrukturen) benennen und charakterisieren",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "04_Situationsgerechte Auswahl einer passenden Programmiersprache begriinden konnen",
+    "quizTitle": "Quiz: 04_Situationsgerechte Auswahl einer passenden Programmiersprache begriinden konnen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Situationsgerechte Auswahl einer passenden Programmiersprache begriinden konnen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "05_Übertragungsprotokolle und ihre Eigenschaften erlautern und zielgerichtet einsetzen konnen  z. B",
+    "quizTitle": "Quiz: 05_Übertragungsprotokolle und ihre Eigenschaften erlautern und zielgerichtet einsetzen konnen  z. B",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Übertragungsprotokolle und ihre Eigenschaften erlautern und zielgerichtet einsetzen konnen  z. B",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "06_Standortübergreifende und -unabhängige Kommunikation situationsgerecht",
+    "quizTitle": "Quiz: 06_Standortübergreifende und -unabhängige Kommunikation situationsgerecht",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Standortübergreifende und -unabhängige Kommunikation situationsgerecht",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "07_Netzwerkrelevante Dienste beschreiben können",
+    "quizTitle": "Quiz: 07_Netzwerkrelevante Dienste beschreiben können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Netzwerkrelevante Dienste beschreiben können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+    "quizTitle": "Quiz: 08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "09_Risiken identifizieren, MaBnahmen planen und Ausfallwahrscheinlichkeiten berücksichtigen",
+    "quizTitle": "Quiz: 09_Risiken identifizieren, MaBnahmen planen und Ausfallwahrscheinlichkeiten berücksichtigen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 09_Risiken identifizieren, MaBnahmen planen und Ausfallwahrscheinlichkeiten berücksichtigen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "10_Maßnahmen zur Sicherstellung des Betriebes beurteilen können",
+    "quizTitle": "Quiz: 10_Maßnahmen zur Sicherstellung des Betriebes beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 10_Maßnahmen zur Sicherstellung des Betriebes beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "11_Monitoringsysteme anwenden und Ergebnisse interpretieren können",
+    "quizTitle": "Quiz: 11_Monitoringsysteme anwenden und Ergebnisse interpretieren können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 11_Monitoringsysteme anwenden und Ergebnisse interpretieren können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "12_Monitoringergebnisse analysieren und korrektive Maßnahmen bestimmen können",
+    "quizTitle": "Quiz: 12_Monitoringergebnisse analysieren und korrektive Maßnahmen bestimmen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 12_Monitoringergebnisse analysieren und korrektive Maßnahmen bestimmen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
+    "enablerName": "13_Berufliche Fortbildung und Umschulung",
+    "quizTitle": "Quiz: 13_Berufliche Fortbildung und Umschulung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 13_Berufliche Fortbildung und Umschulung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "01_Schichtenmodelle, z. B. OSI, TCP_IP benennen und zuordnen können",
+    "quizTitle": "Quiz: 01_Schichtenmodelle, z. B. OSI, TCP_IP benennen und zuordnen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Schichtenmodelle, z. B. OSI, TCP_IP benennen und zuordnen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "02_Netzwerkkomponenten vergleichen und beschreiben können",
+    "quizTitle": "Quiz: 02_Netzwerkkomponenten vergleichen und beschreiben können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Netzwerkkomponenten vergleichen und beschreiben können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "03_Netzwerkkonzepte (-topologien, -infrastrukturen) benennen und charakterisieren",
+    "quizTitle": "Quiz: 03_Netzwerkkonzepte (-topologien, -infrastrukturen) benennen und charakterisieren",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Netzwerkkonzepte (-topologien, -infrastrukturen) benennen und charakterisieren",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "04_Situationsgerechte Auswahl einer passenden Programmiersprache begriinden konnen",
+    "quizTitle": "Quiz: 04_Situationsgerechte Auswahl einer passenden Programmiersprache begriinden konnen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Situationsgerechte Auswahl einer passenden Programmiersprache begriinden konnen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "05_Übertragungsprotokolle und ihre Eigenschaften erlautern und zielgerichtet einsetzen konnen  z. B",
+    "quizTitle": "Quiz: 05_Übertragungsprotokolle und ihre Eigenschaften erlautern und zielgerichtet einsetzen konnen  z. B",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Übertragungsprotokolle und ihre Eigenschaften erlautern und zielgerichtet einsetzen konnen  z. B",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "06_Standortübergreifende und -unabhängige Kommunikation situationsgerecht",
+    "quizTitle": "Quiz: 06_Standortübergreifende und -unabhängige Kommunikation situationsgerecht",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Standortübergreifende und -unabhängige Kommunikation situationsgerecht",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "07_Netzwerkrelevante Dienste beschreiben können",
+    "quizTitle": "Quiz: 07_Netzwerkrelevante Dienste beschreiben können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Netzwerkrelevante Dienste beschreiben können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+    "quizTitle": "Quiz: 08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "09_Risiken identifizieren, MaBnahmen planen und Ausfallwahrscheinlichkeiten berücksichtigen",
+    "quizTitle": "Quiz: 09_Risiken identifizieren, MaBnahmen planen und Ausfallwahrscheinlichkeiten berücksichtigen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 09_Risiken identifizieren, MaBnahmen planen und Ausfallwahrscheinlichkeiten berücksichtigen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "10_Maßnahmen zur Sicherstellung des Betriebes beurteilen können",
+    "quizTitle": "Quiz: 10_Maßnahmen zur Sicherstellung des Betriebes beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 10_Maßnahmen zur Sicherstellung des Betriebes beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "11_Monitoringsysteme anwenden und Ergebnisse interpretieren können",
+    "quizTitle": "Quiz: 11_Monitoringsysteme anwenden und Ergebnisse interpretieren können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 11_Monitoringsysteme anwenden und Ergebnisse interpretieren können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "12_Monitoringergebnisse analysieren und korrektive Maßnahmen bestimmen können",
+    "quizTitle": "Quiz: 12_Monitoringergebnisse analysieren und korrektive Maßnahmen bestimmen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 12_Monitoringergebnisse analysieren und korrektive Maßnahmen bestimmen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
+    "enablerName": "13_Berufliche Fortbildung und Umschulung",
+    "quizTitle": "Quiz: 13_Berufliche Fortbildung und Umschulung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 13_Berufliche Fortbildung und Umschulung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Beurteilen marktgängiger IT-Systeme (Vertiefung) (§ 4 Abs. 2 Nr. 3  J2)",
+    "enablerName": "01_Marktgängige IT-Syteme kennen, unterscheiden und beurteilen können",
+    "quizTitle": "Quiz: 01_Marktgängige IT-Syteme kennen, unterscheiden und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Marktgängige IT-Syteme kennen, unterscheiden und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Beurteilen marktgängiger IT-Systeme (Vertiefung) (§ 4 Abs. 2 Nr. 3  J2)",
+    "enablerName": "02_Typische IT-Systeme und deren Einsatzbereiche identifizieren und zuordnen können",
+    "quizTitle": "Quiz: 02_Typische IT-Systeme und deren Einsatzbereiche identifizieren und zuordnen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Typische IT-Systeme und deren Einsatzbereiche identifizieren und zuordnen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Beurteilen marktgängiger IT-Systeme (Vertiefung) (§ 4 Abs. 2 Nr. 3  J2)",
+    "enablerName": "03_Leistungsfähigkeit und Energieeffizienz von IT-Systemen bestimmen, analysieren und beurteilen können",
+    "quizTitle": "Quiz: 03_Leistungsfähigkeit und Energieeffizienz von IT-Systemen bestimmen, analysieren und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Leistungsfähigkeit und Energieeffizienz von IT-Systemen bestimmen, analysieren und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Beurteilen marktgängiger IT-Systeme (Vertiefung) (§ 4 Abs. 2 Nr. 3  J2)",
+    "enablerName": "04_Wirtschaftlichkeit von IT-Systemen bestimmen und beurteilen können",
+    "quizTitle": "Quiz: 04_Wirtschaftlichkeit von IT-Systemen bestimmen und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Wirtschaftlichkeit von IT-Systemen bestimmen und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Beurteilen marktgängiger IT-Systeme (§ 4 Abs. 2 Nr. 3)",
+    "enablerName": "01_Marktgängige IT-Syteme kennen, unterscheiden und beurteilen können",
+    "quizTitle": "Quiz: 01_Marktgängige IT-Syteme kennen, unterscheiden und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Marktgängige IT-Syteme kennen, unterscheiden und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Beurteilen marktgängiger IT-Systeme (§ 4 Abs. 2 Nr. 3)",
+    "enablerName": "02_Typische IT-Systeme und deren Einsatzbereiche identifizieren und zuordnen können",
+    "quizTitle": "Quiz: 02_Typische IT-Systeme und deren Einsatzbereiche identifizieren und zuordnen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Typische IT-Systeme und deren Einsatzbereiche identifizieren und zuordnen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Beurteilen marktgängiger IT-Systeme (§ 4 Abs. 2 Nr. 3)",
+    "enablerName": "03_Leistungsfähigkeit und Energieeffizienz von IT-Systemen bestimmen, analysieren und beurteilen können",
+    "quizTitle": "Quiz: 03_Leistungsfähigkeit und Energieeffizienz von IT-Systemen bestimmen, analysieren und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Leistungsfähigkeit und Energieeffizienz von IT-Systemen bestimmen, analysieren und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Beurteilen marktgängiger IT-Systeme (§ 4 Abs. 2 Nr. 3)",
+    "enablerName": "04_Wirtschaftlichkeit von IT-Systemen bestimmen und beurteilen können",
+    "quizTitle": "Quiz: 04_Wirtschaftlichkeit von IT-Systemen bestimmen und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Wirtschaftlichkeit von IT-Systemen bestimmen und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Durchführen von QS-Maßnahmen (Vertiefung) (§ 4 Abs. 2 Nr. 5  J2)",
+    "enablerName": "01_Methoden der Qualitätslenkung anwenden",
+    "quizTitle": "Quiz: 01_Methoden der Qualitätslenkung anwenden",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Methoden der Qualitätslenkung anwenden",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Durchführen von QS-Maßnahmen (Vertiefung) (§ 4 Abs. 2 Nr. 5  J2)",
+    "enablerName": "02_Methoden zur Messung der Zielerreichung im QM-Prozess kennen und anwenden",
+    "quizTitle": "Quiz: 02_Methoden zur Messung der Zielerreichung im QM-Prozess kennen und anwenden",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Methoden zur Messung der Zielerreichung im QM-Prozess kennen und anwenden",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Durchführen von qualitätssichernden Maßnahmen (§ 4 Abs. 2 Nr. 5)",
+    "enablerName": "01_Grundverständnis zu folgenden Fachbegriffen nachweisen",
+    "quizTitle": "Quiz: 01_Grundverständnis zu folgenden Fachbegriffen nachweisen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Grundverständnis zu folgenden Fachbegriffen nachweisen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Durchführen von qualitätssichernden Maßnahmen (§ 4 Abs. 2 Nr. 5)",
+    "enablerName": "02_Maßnahmen des Qualitätsmanagements für den eigenen Arbeitsbereich kennen, planen und anwenden",
+    "quizTitle": "Quiz: 02_Maßnahmen des Qualitätsmanagements für den eigenen Arbeitsbereich kennen, planen und anwenden",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Maßnahmen des Qualitätsmanagements für den eigenen Arbeitsbereich kennen, planen und anwenden",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln von IT-Lösungen (Vertiefung) (§ 4 Abs. 2 Nr. 4  J2)",
+    "enablerName": "01_Fehler erkennen, analysieren und beheben",
+    "quizTitle": "Quiz: 01_Fehler erkennen, analysieren und beheben",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Fehler erkennen, analysieren und beheben",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln von IT-Lösungen (Vertiefung) (§ 4 Abs. 2 Nr. 4  J2)",
+    "enablerName": "02_Algorithmen formulieren und Programme entwickeln",
+    "quizTitle": "Quiz: 02_Algorithmen formulieren und Programme entwickeln",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Algorithmen formulieren und Programme entwickeln",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln von IT-Lösungen (Vertiefung) (§ 4 Abs. 2 Nr. 4  J2)",
+    "enablerName": "03_Datenbanken modellieren und erstellen",
+    "quizTitle": "Quiz: 03_Datenbanken modellieren und erstellen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Datenbanken modellieren und erstellen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
+    "enablerName": "01_IT-Systeme unter Berücksichtigung des IT- Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
+    "quizTitle": "Quiz: 01_IT-Systeme unter Berücksichtigung des IT- Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_IT-Systeme unter Berücksichtigung des IT- Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
+    "enablerName": "02_Bedarfsgerechte Auswahl von Hardware vor- nehmen und begründen können",
+    "quizTitle": "Quiz: 02_Bedarfsgerechte Auswahl von Hardware vor- nehmen und begründen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Bedarfsgerechte Auswahl von Hardware vor- nehmen und begründen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
+    "enablerName": "03_Bedarfsgerechte Auswahl von Software vorneh- men und begründen können",
+    "quizTitle": "Quiz: 03_Bedarfsgerechte Auswahl von Software vorneh- men und begründen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Bedarfsgerechte Auswahl von Software vorneh- men und begründen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
+    "enablerName": "04_Urheberrechtsgesetz kennen und Lizenzmodelle unterscheiden können",
+    "quizTitle": "Quiz: 04_Urheberrechtsgesetz kennen und Lizenzmodelle unterscheiden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Urheberrechtsgesetz kennen und Lizenzmodelle unterscheiden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
+    "enablerName": "05_Aktivitäten bei Installationen und Konfigurati- onen kennen und beurteilen",
+    "quizTitle": "Quiz: 05_Aktivitäten bei Installationen und Konfigurati- onen kennen und beurteilen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Aktivitäten bei Installationen und Konfigurati- onen kennen und beurteilen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
+    "enablerName": "06_ Programmiersprachen mit folgenden Merkmalen kennen, einordnen und unterscheiden können",
+    "quizTitle": "Quiz: 06_ Programmiersprachen mit folgenden Merkmalen kennen, einordnen und unterscheiden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_ Programmiersprachen mit folgenden Merkmalen kennen, einordnen und unterscheiden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
+    "enablerName": "07_Programmierwerkzeuge kennen und anwenden können",
+    "quizTitle": "Quiz: 07_Programmierwerkzeuge kennen und anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Programmierwerkzeuge kennen und anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
+    "enablerName": "08_Grundlagen von relationalen Datenbanken kennen und anwenden können",
+    "quizTitle": "Quiz: 08_Grundlagen von relationalen Datenbanken kennen und anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Grundlagen von relationalen Datenbanken kennen und anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Erbringen der Leistungen und Auftragsabschluss (§ 4 Abs. 2 Nr. 7)",
+    "enablerName": "01_Vertragsarten, Vertragsbestandteile und Vertragsstörungen kennen und unterscheiden",
+    "quizTitle": "Quiz: 01_Vertragsarten, Vertragsbestandteile und Vertragsstörungen kennen und unterscheiden",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Vertragsarten, Vertragsbestandteile und Vertragsstörungen kennen und unterscheiden",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Erbringen der Leistungen und Auftragsabschluss (§ 4 Abs. 2 Nr. 7)",
+    "enablerName": "02_Zielsetzungen des Unternehmens dem Leitbild entnehmen können",
+    "quizTitle": "Quiz: 02_Zielsetzungen des Unternehmens dem Leitbild entnehmen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Zielsetzungen des Unternehmens dem Leitbild entnehmen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Erbringen der Leistungen und Auftragsabschluss (§ 4 Abs. 2 Nr. 7)",
+    "enablerName": "03_Umsetzungsvarianten der Leistungserbringung kennen",
+    "quizTitle": "Quiz: 03_Umsetzungsvarianten der Leistungserbringung kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Umsetzungsvarianten der Leistungserbringung kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Erbringen der Leistungen und Auftragsabschluss (§ 4 Abs. 2 Nr. 7)",
+    "enablerName": "04_Leistungserbringung gemäß der Aufbauorganisation des eigenen Unternehmens abstimmen,",
+    "quizTitle": "Quiz: 04_Leistungserbringung gemäß der Aufbauorganisation des eigenen Unternehmens abstimmen,",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Leistungserbringung gemäß der Aufbauorganisation des eigenen Unternehmens abstimmen,",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Erbringen der Leistungen und Auftragsabschluss (§ 4 Abs. 2 Nr. 7)",
+    "enablerName": "05_Veränderungsprozesse begleiten und unterstützen",
+    "quizTitle": "Quiz: 05_Veränderungsprozesse begleiten und unterstützen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Veränderungsprozesse begleiten und unterstützen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Erbringen der Leistungen und Auftragsabschluss (§ 4 Abs. 2 Nr. 7)",
+    "enablerName": "06_Leistungsübergabe und Einweisungen planen und dokumentieren",
+    "quizTitle": "Quiz: 06_Leistungsübergabe und Einweisungen planen und dokumentieren",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Leistungsübergabe und Einweisungen planen und dokumentieren",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Erbringen der Leistungen und Auftragsabschluss (§ 4 Abs. 2 Nr. 7)",
+    "enablerName": "07_Leistungserbringung bewerten und dokumentieren können",
+    "quizTitle": "Quiz: 07_Leistungserbringung bewerten und dokumentieren können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Leistungserbringung bewerten und dokumentieren können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Inbetriebnehmen von Speicherlösungen (§ 4 Abs. 2 Nr. 9)",
+    "enablerName": "01_Technische und organisatorische Maßnahmen (TOM)",
+    "quizTitle": "Quiz: 01_Technische und organisatorische Maßnahmen (TOM)",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Technische und organisatorische Maßnahmen (TOM)",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Inbetriebnehmen von Speicherlösungen (§ 4 Abs. 2 Nr. 9)",
+    "enablerName": "02_Möglichkeiten der physischen und hardwaretechnischen Absicherungen bennen",
+    "quizTitle": "Quiz: 02_Möglichkeiten der physischen und hardwaretechnischen Absicherungen bennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Möglichkeiten der physischen und hardwaretechnischen Absicherungen bennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Inbetriebnehmen von Speicherlösungen (§ 4 Abs. 2 Nr. 9)",
+    "enablerName": "03_Möglichkeiten der softwaretechnischen Absicherung implementieren können",
+    "quizTitle": "Quiz: 03_Möglichkeiten der softwaretechnischen Absicherung implementieren können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Möglichkeiten der softwaretechnischen Absicherung implementieren können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Inbetriebnehmen von Speicherlösungen (§ 4 Abs. 2 Nr. 9)",
+    "enablerName": "04_Verschiedene Service- und Liefermodelle benennen und bedarfsorientiert auswählen können",
+    "quizTitle": "Quiz: 04_Verschiedene Service- und Liefermodelle benennen und bedarfsorientiert auswählen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Verschiedene Service- und Liefermodelle benennen und bedarfsorientiert auswählen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Inbetriebnehmen von Speicherlösungen (§ 4 Abs. 2 Nr. 9)",
+    "enablerName": "05_Daten heterogener Quellen zusammenführen können",
+    "quizTitle": "Quiz: 05_Daten heterogener Quellen zusammenführen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Daten heterogener Quellen zusammenführen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Inbetriebnehmen von Speicherlösungen (§ 4 Abs. 2 Nr. 9)",
+    "enablerName": "06_Netzwerkkomponenten und -protokolle beschreiben können",
+    "quizTitle": "Quiz: 06_Netzwerkkomponenten und -protokolle beschreiben können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Netzwerkkomponenten und -protokolle beschreiben können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)",
+    "enablerName": "01_Marktsituationen bewerten können",
+    "quizTitle": "Quiz: 01_Marktsituationen bewerten können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Marktsituationen bewerten können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)",
+    "enablerName": "02_Zielgruppengerechte Bedarfsanalyse durch- führen können",
+    "quizTitle": "Quiz: 02_Zielgruppengerechte Bedarfsanalyse durch- führen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Zielgruppengerechte Bedarfsanalyse durch- führen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)",
+    "enablerName": "03_ZielgerichteteMethoden zur Kundenberatung kennen und beurteilen können",
+    "quizTitle": "Quiz: 03_ZielgerichteteMethoden zur Kundenberatung kennen und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_ZielgerichteteMethoden zur Kundenberatung kennen und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)",
+    "enablerName": "04_Informationen aufbereiten und präsentieren sowie Quellen auswerten können",
+    "quizTitle": "Quiz: 04_Informationen aufbereiten und präsentieren sowie Quellen auswerten können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Informationen aufbereiten und präsentieren sowie Quellen auswerten können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)",
+    "enablerName": "05_Marketingaktivitäten unterstützen können",
+    "quizTitle": "Quiz: 05_Marketingaktivitäten unterstützen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Marketingaktivitäten unterstützen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "IT-Sicherheit & Datenschutz (Vertiefung) (§ 4 Abs. 2 Nr. 6  J2)",
+    "enablerName": "01_Schadenspotenziale von IT-Sicherheitsvorfällen einschätzen und Schäden verhindern können",
+    "quizTitle": "Quiz: 01_Schadenspotenziale von IT-Sicherheitsvorfällen einschätzen und Schäden verhindern können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Schadenspotenziale von IT-Sicherheitsvorfällen einschätzen und Schäden verhindern können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "IT-Sicherheit & Datenschutz (Vertiefung) (§ 4 Abs. 2 Nr. 6  J2)",
+    "enablerName": "02_Präventive IT-Sicherheitsmaßnahmen für verschiedene Bedrohungsszenarien planen und umsetzen",
+    "quizTitle": "Quiz: 02_Präventive IT-Sicherheitsmaßnahmen für verschiedene Bedrohungsszenarien planen und umsetzen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Präventive IT-Sicherheitsmaßnahmen für verschiedene Bedrohungsszenarien planen und umsetzen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "IT-Sicherheit & Datenschutz (Vertiefung) (§ 4 Abs. 2 Nr. 6  J2)",
+    "enablerName": "03_Ziele zur Entwicklung von IT-Sicherheitskriterien definieren",
+    "quizTitle": "Quiz: 03_Ziele zur Entwicklung von IT-Sicherheitskriterien definieren",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Ziele zur Entwicklung von IT-Sicherheitskriterien definieren",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "IT-Sicherheit & Datenschutz (Vertiefung) (§ 4 Abs. 2 Nr. 6  J2)",
+    "enablerName": "04_Kunden zur IT-Sicherheit beraten",
+    "quizTitle": "Quiz: 04_Kunden zur IT-Sicherheit beraten",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Kunden zur IT-Sicherheit beraten",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "IT-Sicherheit & Datenschutz (Vertiefung) (§ 4 Abs. 2 Nr. 6  J2)",
+    "enablerName": "05_Verschiedene Tools zur Überprüfung von IT- Sicherheitsmaßnahmen erläutern",
+    "quizTitle": "Quiz: 05_Verschiedene Tools zur Überprüfung von IT- Sicherheitsmaßnahmen erläutern",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Verschiedene Tools zur Überprüfung von IT- Sicherheitsmaßnahmen erläutern",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "IT-Sicherheit & Datenschutz (Vertiefung) (§ 4 Abs. 2 Nr. 6  J2)",
+    "enablerName": "06_Wirksamkeit und Effizienz der umgesetzten Technisch Organisatorischen Maßnahmen (TOM) zur IT-Sicherheit und zum Datenschutz prüfen",
+    "quizTitle": "Quiz: 06_Wirksamkeit und Effizienz der umgesetzten Technisch Organisatorischen Maßnahmen (TOM) zur IT-Sicherheit und zum Datenschutz prüfen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Wirksamkeit und Effizienz der umgesetzten Technisch Organisatorischen Maßnahmen (TOM) zur IT-Sicherheit und zum Datenschutz prüfen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "01_Lasten-Pflichtenheft erstellen können",
+    "quizTitle": "Quiz: 01_Lasten-Pflichtenheft erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Lasten-Pflichtenheft erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "02_Vorgehensmodelle unterscheiden können",
+    "quizTitle": "Quiz: 02_Vorgehensmodelle unterscheiden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Vorgehensmodelle unterscheiden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "03_Strukturierte Analyse- und Designverfahren anwenden können",
+    "quizTitle": "Quiz: 03_Strukturierte Analyse- und Designverfahren anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Strukturierte Analyse- und Designverfahren anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "04_Objektorientierte Analyse- und Designverfahren anwenden können",
+    "quizTitle": "Quiz: 04_Objektorientierte Analyse- und Designverfahren anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Objektorientierte Analyse- und Designverfahren anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "05_Programmspezifikationen_festlegen,_Datenmodelle",
+    "quizTitle": "Quiz: 05_Programmspezifikationen_festlegen,_Datenmodelle",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Programmspezifikationen_festlegen,_Datenmodelle",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "06_Konzepte von Programmiersprachen",
+    "quizTitle": "Quiz: 06_Konzepte von Programmiersprachen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Konzepte von Programmiersprachen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "07_Software-Entwicklungswerkzeuge aufgabenbezogen auswählen und anwenden können",
+    "quizTitle": "Quiz: 07_Software-Entwicklungswerkzeuge aufgabenbezogen auswählen und anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Software-Entwicklungswerkzeuge aufgabenbezogen auswählen und anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "08_Einsatzmöglichkeiten von Programmiersprachen kennen",
+    "quizTitle": "Quiz: 08_Einsatzmöglichkeiten von Programmiersprachen kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Einsatzmöglichkeiten von Programmiersprachen kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "09_UML-Diagramme erstellen können",
+    "quizTitle": "Quiz: 09_UML-Diagramme erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 09_UML-Diagramme erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "10_Datenmodelle erstellen können",
+    "quizTitle": "Quiz: 10_Datenmodelle erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 10_Datenmodelle erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "11_Normalisierung anwenden können (1. bis 3. Normalform)",
+    "quizTitle": "Quiz: 11_Normalisierung anwenden können (1. bis 3. Normalform)",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 11_Normalisierung anwenden können (1. bis 3. Normalform)",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "12_Architektur und Design Pattern anwenden können",
+    "quizTitle": "Quiz: 12_Architektur und Design Pattern anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 12_Architektur und Design Pattern anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "13_Anforderungen an die Softwareergonomie benennen und beurteilen können",
+    "quizTitle": "Quiz: 13_Anforderungen an die Softwareergonomie benennen und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 13_Anforderungen an die Softwareergonomie benennen und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "14_Benutzeroberfläche gestalten können",
+    "quizTitle": "Quiz: 14_Benutzeroberfläche gestalten können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 14_Benutzeroberfläche gestalten können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "15_Prototypen (Mockups) erstellen können",
+    "quizTitle": "Quiz: 15_Prototypen (Mockups) erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 15_Prototypen (Mockups) erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "16_Algorithmen erstellen können",
+    "quizTitle": "Quiz: 16_Algorithmen erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 16_Algorithmen erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "17_Objektorientierte Programmiermethodenkonzepte anwenden können",
+    "quizTitle": "Quiz: 17_Objektorientierte Programmiermethodenkonzepte anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 17_Objektorientierte Programmiermethodenkonzepte anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "18_Einfache Such- und Sortier-Algorithmen kennen",
+    "quizTitle": "Quiz: 18_Einfache Such- und Sortier-Algorithmen kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 18_Einfache Such- und Sortier-Algorithmen kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "19_Bestehende Funktionen, Klassen erweitern",
+    "quizTitle": "Quiz: 19_Bestehende Funktionen, Klassen erweitern",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 19_Bestehende Funktionen, Klassen erweitern",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "20_Dateiformate zum Datenaustausch anwenden können und deren Einsatzbereiche kennen",
+    "quizTitle": "Quiz: 20_Dateiformate zum Datenaustausch anwenden können und deren Einsatzbereiche kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 20_Dateiformate zum Datenaustausch anwenden können und deren Einsatzbereiche kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "21_Möglichkeiten zur Nutzung von Services und Ressourcen eines Servers kennen",
+    "quizTitle": "Quiz: 21_Möglichkeiten zur Nutzung von Services und Ressourcen eines Servers kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 21_Möglichkeiten zur Nutzung von Services und Ressourcen eines Servers kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
+    "enablerName": "22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+    "quizTitle": "Quiz: 22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "01_Lasten-Pflichtenheft erstellen können",
+    "quizTitle": "Quiz: 01_Lasten-Pflichtenheft erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Lasten-Pflichtenheft erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "02_Vorgehensmodelle unterscheiden können",
+    "quizTitle": "Quiz: 02_Vorgehensmodelle unterscheiden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Vorgehensmodelle unterscheiden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "03_Strukturierte Analyse- und Designverfahren anwenden können",
+    "quizTitle": "Quiz: 03_Strukturierte Analyse- und Designverfahren anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Strukturierte Analyse- und Designverfahren anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "04_Objektorientierte Analyse- und Designverfahren anwenden können",
+    "quizTitle": "Quiz: 04_Objektorientierte Analyse- und Designverfahren anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Objektorientierte Analyse- und Designverfahren anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "05_Programmspezifikationen_festlegen,_Datenmodelle",
+    "quizTitle": "Quiz: 05_Programmspezifikationen_festlegen,_Datenmodelle",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Programmspezifikationen_festlegen,_Datenmodelle",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "06_Konzepte von Programmiersprachen",
+    "quizTitle": "Quiz: 06_Konzepte von Programmiersprachen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Konzepte von Programmiersprachen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "07_Software-Entwicklungswerkzeuge aufgabenbezogen auswählen und anwenden können",
+    "quizTitle": "Quiz: 07_Software-Entwicklungswerkzeuge aufgabenbezogen auswählen und anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Software-Entwicklungswerkzeuge aufgabenbezogen auswählen und anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "08_Einsatzmöglichkeiten von Programmiersprachen kennen",
+    "quizTitle": "Quiz: 08_Einsatzmöglichkeiten von Programmiersprachen kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Einsatzmöglichkeiten von Programmiersprachen kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "09_UML-Diagramme erstellen können",
+    "quizTitle": "Quiz: 09_UML-Diagramme erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 09_UML-Diagramme erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "10_Datenmodelle erstellen können",
+    "quizTitle": "Quiz: 10_Datenmodelle erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 10_Datenmodelle erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "11_Normalisierung anwenden können (1. bis 3. Normalform)",
+    "quizTitle": "Quiz: 11_Normalisierung anwenden können (1. bis 3. Normalform)",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 11_Normalisierung anwenden können (1. bis 3. Normalform)",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "12_Architektur und Design Pattern anwenden können",
+    "quizTitle": "Quiz: 12_Architektur und Design Pattern anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 12_Architektur und Design Pattern anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "13_Anforderungen an die Softwareergonomie benennen und beurteilen können",
+    "quizTitle": "Quiz: 13_Anforderungen an die Softwareergonomie benennen und beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 13_Anforderungen an die Softwareergonomie benennen und beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "14_Benutzeroberfläche gestalten können",
+    "quizTitle": "Quiz: 14_Benutzeroberfläche gestalten können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 14_Benutzeroberfläche gestalten können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "15_Prototypen (Mockups) erstellen können",
+    "quizTitle": "Quiz: 15_Prototypen (Mockups) erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 15_Prototypen (Mockups) erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "16_Algorithmen erstellen können",
+    "quizTitle": "Quiz: 16_Algorithmen erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 16_Algorithmen erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "17_Objektorientierte Programmiermethodenkonzepte anwenden können",
+    "quizTitle": "Quiz: 17_Objektorientierte Programmiermethodenkonzepte anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 17_Objektorientierte Programmiermethodenkonzepte anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "18_Einfache Such- und Sortier-Algorithmen kennen",
+    "quizTitle": "Quiz: 18_Einfache Such- und Sortier-Algorithmen kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 18_Einfache Such- und Sortier-Algorithmen kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "19_Bestehende Funktionen, Klassen erweitern",
+    "quizTitle": "Quiz: 19_Bestehende Funktionen, Klassen erweitern",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 19_Bestehende Funktionen, Klassen erweitern",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "20_Dateiformate zum Datenaustausch anwenden können und deren Einsatzbereiche kennen",
+    "quizTitle": "Quiz: 20_Dateiformate zum Datenaustausch anwenden können und deren Einsatzbereiche kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 20_Dateiformate zum Datenaustausch anwenden können und deren Einsatzbereiche kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "21_Möglichkeiten zur Nutzung von Services und Ressourcen eines Servers kennen",
+    "quizTitle": "Quiz: 21_Möglichkeiten zur Nutzung von Services und Ressourcen eines Servers kennen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 21_Möglichkeiten zur Nutzung von Services und Ressourcen eines Servers kennen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
+    "enablerName": "22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+    "quizTitle": "Quiz: 22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Maßnahmen zur IT-Sicherheit und zum Datenschutz (§ 4 Abs. 2 Nr. 6)",
+    "enablerName": "01_Regelungen zur IT-Sicherheit auf Grundschutz",
+    "quizTitle": "Quiz: 01_Regelungen zur IT-Sicherheit auf Grundschutz",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Regelungen zur IT-Sicherheit auf Grundschutz",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Maßnahmen zur IT-Sicherheit und zum Datenschutz (§ 4 Abs. 2 Nr. 6)",
+    "enablerName": "02_Schutzbedarfsanalyse im eigenen Arbeitsbereich aufgrund betrieblicher Vorgaben durchführen",
+    "quizTitle": "Quiz: 02_Schutzbedarfsanalyse im eigenen Arbeitsbereich aufgrund betrieblicher Vorgaben durchführen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Schutzbedarfsanalyse im eigenen Arbeitsbereich aufgrund betrieblicher Vorgaben durchführen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Maßnahmen zur IT-Sicherheit und zum Datenschutz (§ 4 Abs. 2 Nr. 6)",
+    "enablerName": "03_Modellierung eines arbeitsplatzbezogenen Sicherheitskonzept nach BSI IT Grundschutz",
+    "quizTitle": "Quiz: 03_Modellierung eines arbeitsplatzbezogenen Sicherheitskonzept nach BSI IT Grundschutz",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Modellierung eines arbeitsplatzbezogenen Sicherheitskonzept nach BSI IT Grundschutz",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Maßnahmen zur IT-Sicherheit und zum Datenschutz (§ 4 Abs. 2 Nr. 6)",
+    "enablerName": "04_Umsetzung des arbeitsplatzbezogenen Sicherheitskonzeptes unterstützen können",
+    "quizTitle": "Quiz: 04_Umsetzung des arbeitsplatzbezogenen Sicherheitskonzeptes unterstützen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Umsetzung des arbeitsplatzbezogenen Sicherheitskonzeptes unterstützen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Planen, Vorbereiten und Durchführen von Arbeitsaufgaben (§ 4 Abs. 2 Nr. 1)",
+    "enablerName": "01_Merkmale und Methoden des Projektmanagements",
+    "quizTitle": "Quiz: 01_Merkmale und Methoden des Projektmanagements",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Merkmale und Methoden des Projektmanagements",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Planen, Vorbereiten und Durchführen von Arbeitsaufgaben (§ 4 Abs. 2 Nr. 1)",
+    "enablerName": "02_Machbarkeit und Wirtschaftlichkeit von Pro- jekten beurteilen können",
+    "quizTitle": "Quiz: 02_Machbarkeit und Wirtschaftlichkeit von Pro- jekten beurteilen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Machbarkeit und Wirtschaftlichkeit von Pro- jekten beurteilen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Planen, Vorbereiten und Durchführen von Arbeitsaufgaben (§ 4 Abs. 2 Nr. 1)",
+    "enablerName": "03_Arbeitsaufgaben im Rahmen von Geschäfts- und Leistungsprozessen",
+    "quizTitle": "Quiz: 03_Arbeitsaufgaben im Rahmen von Geschäfts- und Leistungsprozessen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Arbeitsaufgaben im Rahmen von Geschäfts- und Leistungsprozessen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (Vertiefung) (§ 4 Abs. 2 Nr. 10  J2)",
+    "enablerName": "01_Softwareanforderungen erfassen können",
+    "quizTitle": "Quiz: 01_Softwareanforderungen erfassen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Softwareanforderungen erfassen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (Vertiefung) (§ 4 Abs. 2 Nr. 10  J2)",
+    "enablerName": "02_Planen mit geeigneten Modellen",
+    "quizTitle": "Quiz: 02_Planen mit geeigneten Modellen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Planen mit geeigneten Modellen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (Vertiefung) (§ 4 Abs. 2 Nr. 10  J2)",
+    "enablerName": "03_Festlegen von Schnittstellen und vorhandene Schnittstellen nutzen",
+    "quizTitle": "Quiz: 03_Festlegen von Schnittstellen und vorhandene Schnittstellen nutzen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Festlegen von Schnittstellen und vorhandene Schnittstellen nutzen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (Vertiefung) (§ 4 Abs. 2 Nr. 10  J2)",
+    "enablerName": "04_Situationsgerechte Auswahl einer passenden Programmiersprache begründen können",
+    "quizTitle": "Quiz: 04_Situationsgerechte Auswahl einer passenden Programmiersprache begründen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Situationsgerechte Auswahl einer passenden Programmiersprache begründen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (Vertiefung) (§ 4 Abs. 2 Nr. 10  J2)",
+    "enablerName": "05_Algorithmen in einer Programmiersprache darstellen",
+    "quizTitle": "Quiz: 05_Algorithmen in einer Programmiersprache darstellen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Algorithmen in einer Programmiersprache darstellen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (Vertiefung) (§ 4 Abs. 2 Nr. 10  J2)",
+    "enablerName": "06_Cyber-physische Systeme beschreiben und erweitern können",
+    "quizTitle": "Quiz: 06_Cyber-physische Systeme beschreiben und erweitern können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Cyber-physische Systeme beschreiben und erweitern können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (Vertiefung) (§ 4 Abs. 2 Nr. 10  J2)",
+    "enablerName": "07_Wiederkehrende Systemabläufe mithilfe von Skripten automatisieren und überwachen können",
+    "quizTitle": "Quiz: 07_Wiederkehrende Systemabläufe mithilfe von Skripten automatisieren und überwachen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Wiederkehrende Systemabläufe mithilfe von Skripten automatisieren und überwachen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (Vertiefung) (§ 4 Abs. 2 Nr. 10  J2)",
+    "enablerName": "08_Qualitätssicherung und Tests",
+    "quizTitle": "Quiz: 08_Qualitätssicherung und Tests",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Qualitätssicherung und Tests",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (§ 4 Abs. 2 Nr. 10)",
+    "enablerName": "01_Softwareanforderungen erfassen können",
+    "quizTitle": "Quiz: 01_Softwareanforderungen erfassen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Softwareanforderungen erfassen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (§ 4 Abs. 2 Nr. 10)",
+    "enablerName": "02_Planen mit geeigneten Modellen",
+    "quizTitle": "Quiz: 02_Planen mit geeigneten Modellen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Planen mit geeigneten Modellen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (§ 4 Abs. 2 Nr. 10)",
+    "enablerName": "03_Festlegen von Schnittstellen und vorhandene Schnittstellen nutzen",
+    "quizTitle": "Quiz: 03_Festlegen von Schnittstellen und vorhandene Schnittstellen nutzen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Festlegen von Schnittstellen und vorhandene Schnittstellen nutzen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (§ 4 Abs. 2 Nr. 10)",
+    "enablerName": "04_Situationsgerechte Auswahl einer passenden Programmiersprache begründen können",
+    "quizTitle": "Quiz: 04_Situationsgerechte Auswahl einer passenden Programmiersprache begründen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Situationsgerechte Auswahl einer passenden Programmiersprache begründen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (§ 4 Abs. 2 Nr. 10)",
+    "enablerName": "05_Algorithmen in einer Programmiersprache darstellen",
+    "quizTitle": "Quiz: 05_Algorithmen in einer Programmiersprache darstellen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Algorithmen in einer Programmiersprache darstellen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (§ 4 Abs. 2 Nr. 10)",
+    "enablerName": "06_Cyber-physische Systeme beschreiben und erweitern können",
+    "quizTitle": "Quiz: 06_Cyber-physische Systeme beschreiben und erweitern können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Cyber-physische Systeme beschreiben und erweitern können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (§ 4 Abs. 2 Nr. 10)",
+    "enablerName": "07_Wiederkehrende Systemabläufe mithilfe von Skripten automatisieren und überwachen können",
+    "quizTitle": "Quiz: 07_Wiederkehrende Systemabläufe mithilfe von Skripten automatisieren und überwachen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Wiederkehrende Systemabläufe mithilfe von Skripten automatisieren und überwachen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Programmieren von Softwarelösungen (§ 4 Abs. 2 Nr. 10)",
+    "enablerName": "08_Qualitätssicherung und Tests",
+    "quizTitle": "Quiz: 08_Qualitätssicherung und Tests",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Qualitätssicherung und Tests",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherheit und Gesundheitsschutz bei der Arbeit (§ 4 Abs. 7 Nr. 3)",
+    "enablerName": "01_Gesundheits- und Arbeitsschutzvorschriften",
+    "quizTitle": "Quiz: 01_Gesundheits- und Arbeitsschutzvorschriften",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Gesundheits- und Arbeitsschutzvorschriften",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherheit und Gesundheitsschutz bei der Arbeit (§ 4 Abs. 7 Nr. 3)",
+    "enablerName": "02_Gefährdungen und Beanspruchungen wahrnehmen und einschätzen",
+    "quizTitle": "Quiz: 02_Gefährdungen und Beanspruchungen wahrnehmen und einschätzen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Gefährdungen und Beanspruchungen wahrnehmen und einschätzen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherheit und Gesundheitsschutz bei der Arbeit (§ 4 Abs. 7 Nr. 3)",
+    "enablerName": "03_Vorsorgeuntersuchungen",
+    "quizTitle": "Quiz: 03_Vorsorgeuntersuchungen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Vorsorgeuntersuchungen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherheit und Gesundheitsschutz bei der Arbeit (§ 4 Abs. 7 Nr. 3)",
+    "enablerName": "04_Aufgaben der Sicherheitsbeauftragten",
+    "quizTitle": "Quiz: 04_Aufgaben der Sicherheitsbeauftragten",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Aufgaben der Sicherheitsbeauftragten",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherheit und Gesundheitsschutz bei der Arbeit (§ 4 Abs. 7 Nr. 3)",
+    "enablerName": "05_Vorschriften im betrieblichen und persönlichen Arbeitsablauf",
+    "quizTitle": "Quiz: 05_Vorschriften im betrieblichen und persönlichen Arbeitsablauf",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Vorschriften im betrieblichen und persönlichen Arbeitsablauf",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherheit und Gesundheitsschutz bei der Arbeit (§ 4 Abs. 7 Nr. 3)",
+    "enablerName": "06_Verhaltensweisen bei Unfällen",
+    "quizTitle": "Quiz: 06_Verhaltensweisen bei Unfällen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Verhaltensweisen bei Unfällen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherheit und Gesundheitsschutz bei der Arbeit (§ 4 Abs. 7 Nr. 3)",
+    "enablerName": "07_Verhaltensweisen im Brandfall sowie vorbeugender Brandschutz",
+    "quizTitle": "Quiz: 07_Verhaltensweisen im Brandfall sowie vorbeugender Brandschutz",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Verhaltensweisen im Brandfall sowie vorbeugender Brandschutz",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherheit und Gesundheitsschutz bei der Arbeit (§ 4 Abs. 7 Nr. 3)",
+    "enablerName": "08_Grundlagen der IT-Sicherheit kennen und umsetzen",
+    "quizTitle": "Quiz: 08_Grundlagen der IT-Sicherheit kennen und umsetzen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 08_Grundlagen der IT-Sicherheit kennen und umsetzen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherstellen der Qualität von Softwareanwendungen (§ 4 Abs. 3 Nr. 2)",
+    "enablerName": "01_Anwendungen unter Berücksichtigung von Datenschutz und Datensicherheit erstellen können",
+    "quizTitle": "Quiz: 01_Anwendungen unter Berücksichtigung von Datenschutz und Datensicherheit erstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Anwendungen unter Berücksichtigung von Datenschutz und Datensicherheit erstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherstellen der Qualität von Softwareanwendungen (§ 4 Abs. 3 Nr. 2)",
+    "enablerName": "02_Datenintegrität mithilfe von technischen Maßnahmen beurteilen und sicherstellen können",
+    "quizTitle": "Quiz: 02_Datenintegrität mithilfe von technischen Maßnahmen beurteilen und sicherstellen können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Datenintegrität mithilfe von technischen Maßnahmen beurteilen und sicherstellen können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherstellen der Qualität von Softwareanwendungen (§ 4 Abs. 3 Nr. 2)",
+    "enablerName": "03_Softwaretests erstellen, durchführen und die Ergebnisse analysieren können",
+    "quizTitle": "Quiz: 03_Softwaretests erstellen, durchführen und die Ergebnisse analysieren können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Softwaretests erstellen, durchführen und die Ergebnisse analysieren können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Sicherstellen der Qualität von Softwareanwendungen (§ 4 Abs. 3 Nr. 2)",
+    "enablerName": "04_Grundfunktionalitäten einer Versionsverwaltung in ihrem Einsatz beschreiben und anwenden können",
+    "quizTitle": "Quiz: 04_Grundfunktionalitäten einer Versionsverwaltung in ihrem Einsatz beschreiben und anwenden können",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_Grundfunktionalitäten einer Versionsverwaltung in ihrem Einsatz beschreiben und anwenden können",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Umweltschutz (§ 4 Abs. 7 Nr. 4)",
+    "enablerName": "01_Umweltbelastungen wahrnehmen und vermeiden helfen",
+    "quizTitle": "Quiz: 01_Umweltbelastungen wahrnehmen und vermeiden helfen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Umweltbelastungen wahrnehmen und vermeiden helfen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Umweltschutz (§ 4 Abs. 7 Nr. 4)",
+    "enablerName": "02_Umgang mit Abfällen",
+    "quizTitle": "Quiz: 02_Umgang mit Abfällen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Umgang mit Abfällen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Umweltschutz (§ 4 Abs. 7 Nr. 4)",
+    "enablerName": "03_Öffentliche Systeme und Verordnungen, Gesetze",
+    "quizTitle": "Quiz: 03_Öffentliche Systeme und Verordnungen, Gesetze",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Öffentliche Systeme und Verordnungen, Gesetze",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Umweltschutz (§ 4 Abs. 7 Nr. 4)",
+    "enablerName": "04_ Externe Auswirkungen",
+    "quizTitle": "Quiz: 04_ Externe Auswirkungen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 04_ Externe Auswirkungen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Umweltschutz (§ 4 Abs. 7 Nr. 4)",
+    "enablerName": "05_Umweltschonende Ressourcennutzung",
+    "quizTitle": "Quiz: 05_Umweltschonende Ressourcennutzung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 05_Umweltschonende Ressourcennutzung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Umweltschutz (§ 4 Abs. 7 Nr. 4)",
+    "enablerName": "06_Abfallvermeidung und -reduzierung",
+    "quizTitle": "Quiz: 06_Abfallvermeidung und -reduzierung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 06_Abfallvermeidung und -reduzierung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Umweltschutz (§ 4 Abs. 7 Nr. 4)",
+    "enablerName": "07_Rechtsfolgen bei Nichteinhaltung",
+    "quizTitle": "Quiz: 07_Rechtsfolgen bei Nichteinhaltung",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 07_Rechtsfolgen bei Nichteinhaltung",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Vernetztes Zusammenarbeiten (§ 4 Abs. 7 Nr. 5)",
+    "enablerName": "01_Wertschätzende Zusammenarbeit",
+    "quizTitle": "Quiz: 01_Wertschätzende Zusammenarbeit",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 01_Wertschätzende Zusammenarbeit",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Vernetztes Zusammenarbeiten (§ 4 Abs. 7 Nr. 5)",
+    "enablerName": "02_Informationstechnische Schutzziele bei der Kommunikation kennen und umsetzen",
+    "quizTitle": "Quiz: 02_Informationstechnische Schutzziele bei der Kommunikation kennen und umsetzen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 02_Informationstechnische Schutzziele bei der Kommunikation kennen und umsetzen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  {
+    "componentName": "Vernetztes Zusammenarbeiten (§ 4 Abs. 7 Nr. 5)",
+    "enablerName": "03_Ethische Aspekte und Compliance-Regelungen",
+    "quizTitle": "Quiz: 03_Ethische Aspekte und Compliance-Regelungen",
+    "questions": [
+      {
+        "questionText": "Beispielfrage für 03_Ethische Aspekte und Compliance-Regelungen",
+        "options": [
+          "Option A",
+          "Option B",
+          "Option C",
+          "Option D"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  }
+]

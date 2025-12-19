@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { Check, Clock, X as XIcon } from 'lucide-react';
 
 export default function TraineeModuleDetailPage() {
   const params = useParams<{ moduleId: string }>();
@@ -12,9 +13,8 @@ export default function TraineeModuleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [course, setCourse] = useState<{ id: string; title: string; year: number | null; chapter: number | null } | null>(null);
-  const [enablers, setEnablers] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
-  // Geschäftsprozesse removed
-  const [useCases, setUseCases] = useState<Array<{ id: string; title: string; attemptNumber?: number|null }>>([]);
+  const [enablers, setEnablers] = useState<Array<{ id: string; title: string; attemptNumber?: number | null; status?: string | null }>>([]);
+  const [useCases, setUseCases] = useState<Array<{ id: string; title: string; attemptNumber?: number | null; status?: string | null }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -26,8 +26,7 @@ export default function TraineeModuleDetailPage() {
         if (!r.ok) throw new Error('Kurs konnte nicht geladen werden');
         const data = await r.json();
         setCourse(data.course);
-  setEnablers(data.enablers || []);
-      // Geschäftsprozesse removed
+        setEnablers(data.enablers || []);
         setUseCases(data.useCases || []);
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
@@ -37,6 +36,35 @@ export default function TraineeModuleDetailPage() {
     };
     load();
   }, [profile?.id, courseId]);
+
+  // Helper to render status indicator
+  const StatusIndicator = ({ status }: { status?: string | null }) => {
+    if (status === 'APPROVED') {
+      return (
+        <div className="flex items-center gap-1 text-green-400">
+          <Check className="h-4 w-4" />
+          <span className="text-xs">Bestanden</span>
+        </div>
+      );
+    }
+    if (status === 'PENDING') {
+      return (
+        <div className="flex items-center gap-1 text-yellow-400">
+          <Clock className="h-4 w-4" />
+          <span className="text-xs">Wird geprüft</span>
+        </div>
+      );
+    }
+    if (status === 'REJECTED') {
+      return (
+        <div className="flex items-center gap-1 text-red-400">
+          <XIcon className="h-4 w-4" />
+          <span className="text-xs">Überarbeiten</span>
+        </div>
+      );
+    }
+    return null;
+  };
 
   if (!profile) return <div className="p-6">Bitte anmelden…</div>;
   if (loading) return <div className="p-6">Lade…</div>;
@@ -60,16 +88,28 @@ export default function TraineeModuleDetailPage() {
           ) : (
             <ul className="space-y-2">
               {enablers.map((e) => (
-                <li key={e.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
-                  <span className="truncate">{e.title} {e.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {e.attemptNumber}</span> : null}</span>
-                  <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
+                <li key={e.id} className={`flex items-center justify-between rounded-xl border p-3 ${e.status === 'APPROVED' ? 'border-green-500/40 bg-green-500/10' :
+                    e.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
+                      e.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
+                        'border-accent/20 bg-black/20'
+                  }`}>
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <StatusIndicator status={e.status} />
+                    <span className="truncate">{e.title}</span>
+                    {e.attemptNumber && !e.status ? (
+                      <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs shrink-0">
+                        Versuch {e.attemptNumber}
+                      </span>
+                    ) : null}
+                  </div>
+                  <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60 shrink-0 ml-2">
+                    Öffnen
+                  </Link>
                 </li>
               ))}
             </ul>
           )}
         </div>
-
-        {/* Geschäftsprozesse section removed */}
 
         <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
           <div className="mb-3 text-sm font-semibold">Use Cases</div>
@@ -78,9 +118,23 @@ export default function TraineeModuleDetailPage() {
           ) : (
             <ul className="space-y-2">
               {useCases.map((u) => (
-                <li key={u.id} className="flex items-center justify-between rounded-xl border border-accent/20 bg-black/20 p-3">
-                  <span className="truncate">{u.title} {u.attemptNumber ? <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs">Versuch {u.attemptNumber}</span> : null}</span>
-                  <Link href={`/trainee/use-cases/${u.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60">Öffnen</Link>
+                <li key={u.id} className={`flex items-center justify-between rounded-xl border p-3 ${u.status === 'APPROVED' ? 'border-green-500/40 bg-green-500/10' :
+                    u.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
+                      u.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
+                        'border-accent/20 bg-black/20'
+                  }`}>
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <StatusIndicator status={u.status} />
+                    <span className="truncate">{u.title}</span>
+                    {u.attemptNumber && !u.status ? (
+                      <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs shrink-0">
+                        Versuch {u.attemptNumber}
+                      </span>
+                    ) : null}
+                  </div>
+                  <Link href={`/trainee/use-cases/${u.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60 shrink-0 ml-2">
+                    Öffnen
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -90,3 +144,4 @@ export default function TraineeModuleDetailPage() {
     </div>
   );
 }
+
