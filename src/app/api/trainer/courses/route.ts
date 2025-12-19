@@ -11,7 +11,8 @@ import {
 } from '@/db/migrations/schemas/schema';
 
 // GET /api/trainer/courses?trainerProfileId=...
-// Returns courses created by this trainer with counts of enablers and use-cases
+// Returns ALL courses for any authenticated trainer (shared curriculum model)
+// The trainerProfileId is verified for authentication but not used for filtering
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -22,42 +23,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing trainerProfileId' }, { status: 400 });
     }
 
-    // Courses created by this trainer OR where trainer is a course member with role TRAINER
-    const createdByWhere: any[] = [eq(courses.createdById, trainerProfileId)];
-    if (q) createdByWhere.push(ilike(courses.title, `%${q}%`));
-    if (year && year !== 'all') createdByWhere.push(eq(courses.year, Number(year)));
-    const createdByExpr = createdByWhere.filter(Boolean);
+    // Build where conditions for search and year filters only
+    // All trainers can see ALL courses (shared curriculum model for training platforms)
+    const whereConditions: any[] = [];
+    if (q) whereConditions.push(ilike(courses.title, `%${q}%`));
+    if (year && year !== 'all') whereConditions.push(eq(courses.year, Number(year)));
 
-    const createdList = await db
+    // Fetch all courses with optional search/year filters
+    const list = await db
       .select({ id: courses.id, title: courses.title, year: courses.year, chapter: courses.chapter })
       .from(courses)
-      .where(createdByExpr.length ? (createdByExpr.length === 1 ? createdByExpr[0] : and(...createdByExpr as any)) : undefined as any)
-      .orderBy(courses.createdAt);
-
-    // Get courseIds where trainer is a member
-    const memberCourseRows = await db
-      .select({ courseId: courseMembers.courseId })
-      .from(courseMembers)
-      .where(and(eq(courseMembers.userId, trainerProfileId as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const memberCourseIds = Array.from(new Set(memberCourseRows.map(r => String(r.courseId))));
-
-    let memberList: { id: string; title: string; year: number | null; chapter: number | null }[] = [];
-    if (memberCourseIds.length) {
-      const memberWhere: any[] = [inArray(courses.id, memberCourseIds as any)];
-      if (q) memberWhere.push(ilike(courses.title, `%${q}%`));
-      if (year && year !== 'all') memberWhere.push(eq(courses.year, Number(year)));
-      const memberExpr = memberWhere.filter(Boolean);
-      memberList = await db
-        .select({ id: courses.id, title: courses.title, year: courses.year, chapter: courses.chapter })
-        .from(courses)
-        .where(memberExpr.length ? (memberExpr.length === 1 ? memberExpr[0] : and(...memberExpr as any)) : undefined as any)
-        .orderBy(courses.createdAt);
-    }
-
-    // Merge and de-duplicate
-    const mapById = new Map<string, { id: string; title: string; year: number | null; chapter: number | null }>();
-    [...createdList, ...memberList].forEach(c => mapById.set(String(c.id), c));
-    const list = Array.from(mapById.values());
+      .where(whereConditions.length ? (whereConditions.length === 1 ? whereConditions[0] : and(...whereConditions as any)) : undefined as any)
+      .orderBy(courses.year, courses.chapter, courses.createdAt);
 
     if (list.length === 0) return NextResponse.json({ courses: [] });
     const courseIds = list.map((c) => c.id);

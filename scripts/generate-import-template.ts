@@ -29,7 +29,7 @@ function generateImportTemplate() {
   ];
 
   const coursesSheet = XLSX.utils.aoa_to_sheet(coursesData);
-  
+
   // Set column widths
   coursesSheet['!cols'] = [
     { wch: 30 }, // title
@@ -51,7 +51,8 @@ function generateImportTemplate() {
     ['description_text', 'NO', 'Text', 'Module description/content', 'In diesem Modul lernen Sie verschiedene Netzwerktopologien kennen'],
     ['scenario_text', 'NO', 'Text', 'ONE scenario per row - add multiple rows for multiple scenarios', 'Sie arbeiten in einem Unternehmen und sollen ein Netzwerk aufbauen...'],
     ['hint_text', 'NO', 'Text', 'Hint for THIS scenario', 'Denken Sie an das OSI-Modell'],
-    ['ppt_url', 'NO', 'URL', 'Link to PowerPoint/PDF (only first row used)', 'https://storage.supabase.co/...'],
+    ['ppt_url', 'NO', 'URL', 'Link to PowerPoint (only first row used)', 'https://storage.supabase.co/...'],
+    ['pdf_url', 'NO', 'URL', 'Link to PDF document for flipbook viewer (only first row used)', 'https://storage.supabase.co/...'],
     ['video_url', 'NO', 'URL', 'Link to video (only first row used)', 'https://youtube.com/watch?v=...'],
     ['scenario_image_url', 'NO', 'URL', 'Link to scenario image (only first row used)', 'https://storage.supabase.co/...'],
     ['duration_value', 'NO', 'Number', 'Duration amount (only first row used)', '120'],
@@ -65,13 +66,13 @@ function generateImportTemplate() {
     [],
     ['=== DATA STARTS HERE - DELETE ROWS ABOVE ==='],
     [],
-    ['course_title', 'title', 'order_index', 'description_text', 'scenario_text', 'hint_text', 'ppt_url', 'video_url', 'scenario_image_url', 'duration_value', 'duration_unit', 'is_active'],
+    ['course_title', 'title', 'order_index', 'description_text', 'scenario_text', 'hint_text', 'ppt_url', 'pdf_url', 'video_url', 'scenario_image_url', 'duration_value', 'duration_unit', 'is_active'],
     // Example 1: Single scenario enabler
-    ['Kapitel 1: IT-Grundlagen', 'Netzwerktopologien', 1, 'Lernen Sie verschiedene Netzwerktopologien kennen', 'Sie sollen ein Büro-Netzwerk mit Stern-Topologie planen', 'Beachten Sie Stern-, Bus- und Ring-Topologie', '', '', '', 5, 'DAYS', 'TRUE'],
+    ['Kapitel 1: IT-Grundlagen', 'Netzwerktopologien', 1, 'Lernen Sie verschiedene Netzwerktopologien kennen', 'Sie sollen ein Büro-Netzwerk mit Stern-Topologie planen', 'Beachten Sie Stern-, Bus- und Ring-Topologie', '', 'https://storage.supabase.co/content/enablers/netzwerk.pdf', '', '', 5, 'DAYS', 'TRUE'],
     // Example 2: Multi-scenario enabler (3 scenarios for same enabler)
-    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, 'Verstehen Sie die 7 Schichten des OSI-Modells', 'Szenario 1: Analysieren Sie einen HTTP-Request durch alle Schichten', 'Denken Sie an Application bis Physical Layer', '', '', '', 7, 'DAYS', 'TRUE'],
-    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, '', 'Szenario 2: Ein Paket wird nicht zugestellt - identifizieren Sie die fehlerhafte Schicht', 'Prüfen Sie Physical, Data Link und Network Layer', '', '', '', '', '', ''],
-    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, '', 'Szenario 3: Konfigurieren Sie einen Switch auf Layer 2', 'Fokus auf Data Link Layer (MAC-Adressen)', '', '', '', '', '', ''],
+    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, 'Verstehen Sie die 7 Schichten des OSI-Modells', 'Szenario 1: Analysieren Sie einen HTTP-Request durch alle Schichten', 'Denken Sie an Application bis Physical Layer', '', 'https://storage.supabase.co/content/enablers/osi.pdf', '', '', 7, 'DAYS', 'TRUE'],
+    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, '', 'Szenario 2: Ein Paket wird nicht zugestellt - identifizieren Sie die fehlerhafte Schicht', 'Prüfen Sie Physical, Data Link und Network Layer', '', '', '', '', '', '', ''],
+    ['Kapitel 1: IT-Grundlagen', 'OSI-Modell', 2, '', 'Szenario 3: Konfigurieren Sie einen Switch auf Layer 2', 'Fokus auf Data Link Layer (MAC-Adressen)', '', '', '', '', '', '', ''],
   ];
 
   const enablersSheet = XLSX.utils.aoa_to_sheet(enablersData);

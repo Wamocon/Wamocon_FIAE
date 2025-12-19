@@ -64,9 +64,10 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                     bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900
                     rounded-3xl shadow-2xl overflow-hidden transition-all duration-500
                     border border-white/10
-                    ${isFullscreen ? 'fixed inset-2' : 'w-[95vw] max-w-6xl h-[92vh]'}
+                    ${isFullscreen ? 'w-[99vw] h-[98vh] max-w-none' : 'w-[95vw] max-w-6xl h-[85vh]'}
                 `}
             >
+
                 {/* Premium Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-gradient-to-r from-red-900/30 to-transparent">
                     <div className="flex items-center gap-3">
