@@ -168,11 +168,46 @@ export const useCases = pgTable('use_cases', {
   descriptionText: text('description_text').notNull(),
   orderIndex: integer('order_index').notNull(),
 
-  // Settings
   durationValue: integer('duration_value'),
   durationUnit: durationUnit('duration_unit'),
   isActive: boolean('is_active').default(false),
   activatedAt: timestamp('activated_at'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// --- Content Documents (PDFs for Flipbook Viewer) ---
+
+export const contentDocumentType = pgEnum('content_document_type', ['THEORY', 'EXERCISE', 'REFERENCE', 'OTHER']);
+
+export const contentDocuments = pgTable('content_documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+
+  // Flexible linking - one of these will be set
+  enablerId: uuid('enabler_id').references(() => enablers.id, { onDelete: 'cascade' }),
+  useCaseId: uuid('use_case_id').references(() => useCases.id, { onDelete: 'cascade' }),
+  courseId: uuid('course_id').references(() => courses.id, { onDelete: 'cascade' }),
+
+  // Document metadata
+  title: text('title').notNull(),
+  description: text('description'),
+  documentType: contentDocumentType('document_type').default('THEORY'),
+
+  // Storage info
+  fileName: text('file_name').notNull(),
+  fileSize: integer('file_size'), // bytes
+  mimeType: text('mime_type').default('application/pdf'),
+  storageUrl: text('storage_url').notNull(), // Supabase Storage URL
+  storagePath: text('storage_path'), // Path in bucket for deletion
+
+  // Ordering for multiple docs
+  orderIndex: integer('order_index').default(0),
+
+  // Uploaded by
+  uploadedById: uuid('uploaded_by_id').references(() => profiles.id),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at')
@@ -436,7 +471,7 @@ export const traineeAchievedSkills = pgTable(
     skillId: uuid('skill_id')
       .notNull()
       .references(() => skills.id, { onDelete: 'cascade' }),
-    
+
     // Store how they earned it
     achievedViaCourseId: uuid('achieved_via_course_id').references(
       () => courses.id,

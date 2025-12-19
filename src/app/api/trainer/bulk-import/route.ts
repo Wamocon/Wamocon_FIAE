@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import db  from '@/db';
-import { courses, enablers, useCases, skills, courseSkills } from '@/db/migrations/schemas/schema';
+import db from '@/db';
+import { courses, enablers, useCases, skills, courseSkills, contentDocuments } from '@/db/migrations/schemas/schema';
 import { eq, and } from 'drizzle-orm';
 
 interface ImportResult {
@@ -33,6 +33,7 @@ interface EnablerRow {
   scenario_text?: string; // Individual scenario text (one row per scenario)
   hint_text?: string; // Hint for this specific scenario
   ppt_url?: string;
+  pdf_url?: string; // PDF for flipbook viewer - stored in content_documents
   video_url?: string;
   scenario_image_url?: string;
   duration_value?: number;
@@ -223,14 +224,14 @@ export async function POST(request: NextRequest) {
 
       // Group rows by enabler (course_title + title)
       const enablerGroups = new Map<string, EnablerRow[]>();
-      
+
       for (let i = 0; i < enablersData.length; i++) {
         const row = enablersData[i];
         if (!row.course_title?.trim() || !row.title?.trim()) {
           result.stats.errors.push(`Enablers row ${i + 2}: course_title and title are required`);
           continue;
         }
-        
+
         const key = `${row.course_title.trim()}|||${row.title.trim()}`;
         if (!enablerGroups.has(key)) {
           enablerGroups.set(key, []);
@@ -242,7 +243,7 @@ export async function POST(request: NextRequest) {
       for (const [key, rows] of enablerGroups.entries()) {
         try {
           const firstRow = rows[0];
-          
+
           if (firstRow.order_index === undefined || firstRow.order_index === null) {
             result.stats.errors.push(`Enabler "${firstRow.title}": order_index is required`);
             continue;
@@ -307,7 +308,7 @@ export async function POST(request: NextRequest) {
               .where(eq(enablers.id, existing[0].id));
           } else {
             // Create new enabler
-            await db.insert(enablers).values({
+            const [newEnabler] = await db.insert(enablers).values({
               courseId: courseId,
               title: firstRow.title.trim(),
               orderIndex: firstRow.order_index,
@@ -319,7 +320,28 @@ export async function POST(request: NextRequest) {
               durationValue: firstRow.duration_value || null,
               durationUnit: durationUnit,
               isActive: parseBoolean(firstRow.is_active),
-            });
+            }).returning({ id: enablers.id });
+
+            // Insert PDF document if provided
+            if (firstRow.pdf_url?.trim()) {
+              const pdfUrl = firstRow.pdf_url.trim();
+              // Extract filename from URL
+              const fileName = pdfUrl.split('/').pop() || 'document.pdf';
+              const title = fileName.replace(/\.pdf$/i, '').replace(/_/g, ' ');
+
+              await db.insert(contentDocuments).values({
+                enablerId: newEnabler.id,
+                title: title,
+                fileName: fileName,
+                storageUrl: pdfUrl,
+                storagePath: pdfUrl.includes('/storage/v1/object/public/content/')
+                  ? pdfUrl.split('/storage/v1/object/public/content/')[1]
+                  : null,
+                documentType: 'THEORY',
+                mimeType: 'application/pdf',
+                uploadedById: trainerId as any,
+              });
+            }
           }
 
           result.stats.enablersCreated++;

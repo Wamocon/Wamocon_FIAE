@@ -16,12 +16,12 @@ import {
 
 // POST: submit answers for a quiz attempt
 // Body: { traineeId: string, answers: [{ questionId, selectedOptionId? , textAnswer? }] }
-export async function POST(req: NextRequest, { params }: { params: { quizId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ quizId: string }> }) {
   try {
-    const { quizId } = params;
+    const { quizId } = await params;
     const body = await req.json();
     const traineeId: string | undefined = body?.traineeId;
-  const answers: Array<any> = Array.isArray(body?.answers) ? body.answers : [];
+    const answers: Array<any> = Array.isArray(body?.answers) ? body.answers : [];
     if (!traineeId || answers.length === 0) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
     const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, quizId));
@@ -39,9 +39,9 @@ export async function POST(req: NextRequest, { params }: { params: { quizId: str
       .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.userId, traineeId)));
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const qs = await db.select().from(questions).where(eq(questions.quizId, quizId));
+    const qs = await db.select().from(questions).where(eq(questions.quizId, quizId));
     const qIds = qs.map((q) => q.id);
-  const optRows = qIds.length ? await db.select().from(options).where(inArray(options.questionId, qIds)) : [];
+    const optRows = qIds.length ? await db.select().from(options).where(inArray(options.questionId, qIds)) : [];
     const optMap = new Map(optRows.map((o) => [String(o.id), o]));
 
     // Check for existing submission (single-attempt enforcement)
@@ -205,9 +205,9 @@ export async function POST(req: NextRequest, { params }: { params: { quizId: str
 }
 
 // GET: fetch latest submission with per-question feedback for review
-export async function GET(req: NextRequest, { params }: { params: { quizId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ quizId: string }> }) {
   try {
-    const { quizId } = params;
+    const { quizId } = await params;
     const traineeId = String(new URL(req.url).searchParams.get('traineeId') || '');
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
@@ -261,7 +261,7 @@ export async function GET(req: NextRequest, { params }: { params: { quizId: stri
       };
     });
 
-  return NextResponse.json({ submissionId: latest.id, score: latest.score, feedback });
+    return NextResponse.json({ submissionId: latest.id, score: latest.score, feedback });
   } catch (e) {
     console.error('Get quiz latest submission error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
