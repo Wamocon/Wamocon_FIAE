@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
+import { profiles } from '@/db/migrations/schemas/schema';
+
+async function verifyTrainer(trainerId: string): Promise<boolean> {
+  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
+  return trainer?.role === 'TRAINER';
+}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
@@ -17,22 +23,27 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
-  const { useCases, courseMembers, courses, notifications } = await import('@/db/migrations/schemas/schema');
+    const { useCases, courseMembers, notifications } = await import('@/db/migrations/schemas/schema');
     const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
-    if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+
     const [row0] = await db.select().from(useCases).where(eq(useCases.id, useCaseId as any));
-    if (!row0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const member = await db
-      .select()
-      .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, row0.courseId as any), eq(courseMembers.userId, trainerId as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const [courseRow] = await db.select().from(courses).where(eq(courses.id, row0.courseId as any));
-    const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
-    if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!row0) {
+      return NextResponse.json({ error: 'Use case not found' }, { status: 404 });
+    }
+
+    // Shared curriculum: any valid trainer can edit use cases
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
+
     const body = await req.json();
-  const updates: any = {};
+    const updates: any = {};
     for (const key of [
       'title',
       'orderIndex',
@@ -43,9 +54,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ us
     ]) {
       if (typeof body?.[key] !== 'undefined') updates[key] = body[key];
     }
+
     if (typeof body?.isActive === 'boolean' && body.isActive && !row0.isActive && !row0.activatedAt) {
       updates.activatedAt = new Date();
     }
+
     const [row] = await db.update(useCases).set(updates).where(eq(useCases.id, useCaseId as any)).returning();
 
     // Notify trainees when activated
@@ -71,6 +84,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ us
     } catch (notifyErr) {
       console.warn('Failed to notify trainees for use-case activation', notifyErr);
     }
+
     return NextResponse.json({ useCase: row });
   } catch (e) {
     console.error('Update use-case error', e);
@@ -80,20 +94,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ us
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
   try {
-  const { useCases, courseMembers, courses } = await import('@/db/migrations/schemas/schema');
+    const { useCases } = await import('@/db/migrations/schemas/schema');
     const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
     const trainerId = searchParams.get('trainerId');
-    if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+
     const [row0] = await db.select().from(useCases).where(eq(useCases.id, useCaseId as any));
-    if (!row0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const member = await db
-      .select()
-      .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, row0.courseId as any), eq(courseMembers.userId, trainerId as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const [courseRow] = await db.select().from(courses).where(eq(courses.id, row0.courseId as any));
-    const isCreator = courseRow ? String(courseRow.createdById) === String(trainerId) : false;
-    if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!row0) {
+      return NextResponse.json({ error: 'Use case not found' }, { status: 404 });
+    }
+
+    // Shared curriculum: any valid trainer can delete use cases
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
+
     await db.delete(useCases).where(eq(useCases.id, useCaseId as any));
     return NextResponse.json({ ok: true });
   } catch (e) {
@@ -101,3 +120,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ u
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+

@@ -66,19 +66,19 @@ export function ContentManagement() {
   const [gpDesc, setGpDesc] = useState('');
   const [gpSubmitting, setGpSubmitting] = useState(false);
   const [gpDuration, setGpDuration] = useState<string>('');
-  const [gpActive, setGpActive] = useState<boolean>(false); 
-  
+  const [gpActive, setGpActive] = useState<boolean>(false);
+
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         const params = new URLSearchParams();
-  if (!profile?.id) return;
-  if (searchTerm.trim()) params.set('q', searchTerm.trim());
-  if (selectedYear) params.set('year', selectedYear);
-  params.set('trainerProfileId', profile.id);
-  const res = await fetch(`/api/trainer/courses?${params.toString()}`, { cache: 'no-store' });
+        if (!profile?.id) return;
+        if (searchTerm.trim()) params.set('q', searchTerm.trim());
+        if (selectedYear) params.set('year', selectedYear);
+        params.set('trainerProfileId', profile.id);
+        const res = await fetch(`/api/trainer/courses?${params.toString()}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to load content');
         const data = await res.json();
         setCourses(data.courses || []);
@@ -151,21 +151,19 @@ export function ContentManagement() {
           <div className="bg-muted/30 flex rounded-2xl p-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                viewMode === 'grid'
-                  ? 'bg-accent text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
-              }`}
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${viewMode === 'grid'
+                ? 'bg-accent text-white shadow-sm'
+                : 'text-muted hover:text-foreground'
+                }`}
             >
               Grid
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                viewMode === 'list'
-                  ? 'bg-accent text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
-              }`}
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${viewMode === 'list'
+                ? 'bg-accent text-white shadow-sm'
+                : 'text-muted hover:text-foreground'
+                }`}
             >
               Liste
             </button>
@@ -185,8 +183,9 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[360px] flex flex-col"
+              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl h-[420px] flex flex-col"
             >
+
               <div className="mb-4 flex items-start justify-between">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
                   <BookOpen className="h-6 w-6 text-white" />
@@ -194,9 +193,10 @@ export function ContentManagement() {
                 <img src="/WMC_Logo_1.png" alt={course.title} className="h-12 w-40 rounded-2xl object-cover" />
               </div>
 
-              <h3 className="text-foreground mb-2 text-xl font-bold truncate">
+              <h3 className="text-foreground mb-2 text-xl font-bold line-clamp-3 min-h-[3.5rem]">
                 {course.title}
               </h3>
+
               <div className="text-muted mb-4 flex items-center gap-2 text-sm">
                 <span className="bg-accent rounded-full px-3 py-1 font-medium text-white">
                   Jahr {course.year ?? '-'}
@@ -206,12 +206,13 @@ export function ContentManagement() {
                 </span>
               </div>
 
-              <div className="mb-4 space-y-3 flex-1 overflow-y-auto pr-1">
+              <div className="mb-4 space-y-3 flex-1">
+
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
                     <h4 className="text-foreground text-sm font-medium">Lessons</h4>
                   </div>
-                    <p className="text-muted text-xs">{course.enablersCount} Themen</p>
+                  <p className="text-muted text-xs">{course.enablersCount} Themen</p>
                   {/* <button
                     onClick={() => {
                       setActiveCourseId(course.id);
@@ -236,7 +237,7 @@ export function ContentManagement() {
                   <div className="min-w-0">
                     <h4 className="text-foreground text-sm font-medium">Use Cases</h4>
                   </div>
-                    <p className="text-muted text-xs">{course.useCasesCount} Aufgaben</p> 
+                  <p className="text-muted text-xs">{course.useCasesCount} Aufgaben</p>
                   {/* <button
                     onClick={() => {
                       setActiveCourseId(course.id);
@@ -263,20 +264,20 @@ export function ContentManagement() {
                   </button>
                 </div>
                 <button
-                    onClick={async () => {
-                      if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
-                      try {
-                        const res = await fetch(`/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`, { method: 'DELETE' });
-                        if (!res.ok) throw new Error('Fehler beim Löschen');
-                        setCourses(prev => prev.filter(c => c.id !== course.id));
-                      } catch (e: any) {
-                        alert(e?.message || 'Unbekannter Fehler');
-                      }
-                    }}
-                    className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  onClick={async () => {
+                    if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
+                    try {
+                      const res = await fetch(`/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`, { method: 'DELETE' });
+                      if (!res.ok) throw new Error('Fehler beim Löschen');
+                      setCourses(prev => prev.filter(c => c.id !== course.id));
+                    } catch (e: any) {
+                      alert(e?.message || 'Unbekannter Fehler');
+                    }
+                  }}
+                  className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
           ))}
@@ -299,7 +300,7 @@ export function ContentManagement() {
                     <div className="flex flex-wrap gap-2">
                       <span className="bg-accent rounded-full px-3 py-1 text-xs font-semibold text-white">Jahr {course.year ?? '-'}</span>
                       <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">Kapitel {course.chapter ?? '-'}</span>
-                      <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">ID {course.id.slice(0,8)}…</span>
+                      <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">ID {course.id.slice(0, 8)}…</span>
                     </div>
                   </div>
                 </div>
@@ -325,7 +326,7 @@ export function ContentManagement() {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
-              </div>  
+              </div>
 
               {/* Stats Row */}
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
@@ -435,12 +436,12 @@ export function ContentManagement() {
                         <div className="font-medium">Frage {qi + 1}</div>
                         <button type="button" className="text-xs rounded-md border border-border px-2 py-1" onClick={() => setEnQuestions(prev => prev.filter((_, i) => i !== qi))}>Entfernen</button>
                       </div>
-                      <input className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2" placeholder="Fragetext" value={q.questionText} onChange={e => setEnQuestions(prev => prev.map((x,i)=> i===qi?{...x, questionText: e.target.value}:x))} />
+                      <input className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2" placeholder="Fragetext" value={q.questionText} onChange={e => setEnQuestions(prev => prev.map((x, i) => i === qi ? { ...x, questionText: e.target.value } : x))} />
                       <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
                         {q.options.map((opt, oi) => (
                           <label key={oi} className="flex items-center gap-2">
-                            <input type="radio" name={`correct-${qi}`} checked={q.correctIndex === oi} onChange={() => setEnQuestions(prev => prev.map((x,i)=> i===qi?{...x, correctIndex: oi}:x))} />
-                            <input className="flex-1 rounded-md border border-border bg-background px-3 py-2" placeholder={`Option ${oi+1}`} value={opt} onChange={e => setEnQuestions(prev => prev.map((x,i)=> i===qi?{...x, options: x.options.map((o,j)=> j===oi? e.target.value: o) as [string,string,string,string]}:x))} />
+                            <input type="radio" name={`correct-${qi}`} checked={q.correctIndex === oi} onChange={() => setEnQuestions(prev => prev.map((x, i) => i === qi ? { ...x, correctIndex: oi } : x))} />
+                            <input className="flex-1 rounded-md border border-border bg-background px-3 py-2" placeholder={`Option ${oi + 1}`} value={opt} onChange={e => setEnQuestions(prev => prev.map((x, i) => i === qi ? { ...x, options: x.options.map((o, j) => j === oi ? e.target.value : o) as [string, string, string, string] } : x))} />
                           </label>
                         ))}
                       </div>
@@ -456,7 +457,7 @@ export function ContentManagement() {
                   if (!activeCourseId) { alert('Kein Kurs ausgewählt'); return; }
                   if (!enTitle.trim()) { alert('Bitte Titel eingeben'); return; }
                   const cleaned = enQuestions
-                    .map(q => ({ questionText: q.questionText.trim(), options: q.options.map(o => o.trim()) as [string,string,string,string], correctIndex: Number(q.correctIndex) }))
+                    .map(q => ({ questionText: q.questionText.trim(), options: q.options.map(o => o.trim()) as [string, string, string, string], correctIndex: Number(q.correctIndex) }))
                     .filter(q => q.questionText && q.options.every(o => o));
                   setEnSubmitting(true);
                   try {

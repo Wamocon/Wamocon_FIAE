@@ -2,18 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
-  courses,
-  courseMembers,
   enablers,
   enablerQuizLinks,
   options,
+  profiles,
   questions,
-  quizDifficulty,
   quizzes,
 } from '@/db/migrations/schemas/schema';
 
+async function verifyTrainer(trainerId: string): Promise<boolean> {
+  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
+  return trainer?.role === 'TRAINER';
+}
+
 // GET: List quizzes for an enabler grouped by difficulty
-export async function GET(_req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
     const { enablerId } = await params;
     const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
@@ -33,8 +36,8 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
     const items = links.map((l) => {
       const q = qRows.find((x) => String(x.id) === String(l.quizId));
       return {
-        id: l.quizId, // keep existing field for any new consumers
-        quizId: l.quizId, // backward compatibility with UI expecting quizId
+        id: l.quizId,
+        quizId: l.quizId,
         difficulty: l.difficulty,
         title: q?.title || '',
         isActive: !!q?.isActive,
@@ -49,40 +52,30 @@ export async function GET(_req: NextRequest, { params }: { params: { enablerId: 
 }
 
 // POST: Create or replace quiz for a difficulty on this enabler
-// Body supports MCQ and TEXT questions mixed:
-// {
-//   title: string,
-//   createdById: string,
-//   difficulty: 'LOW'|'MEDIUM'|'HIGH',
-//   isActive?: boolean,
-//   questions: Array<
-//     | { questionText: string, questionType: 'MCQ', options: [string,string,string,string], correctIndex: number, explanation?: string }
-//     | { questionText: string, questionType: 'TEXT', expectedAnswer?: string }
-//   >
-// }
-export async function POST(req: NextRequest, { params }: { params: { enablerId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
   try {
-    const { enablerId } = params;
+    const { enablerId } = await params;
     const body = await req.json();
     const title: string | undefined = body?.title;
     const createdById: string | undefined = body?.createdById;
-    const difficulty: 'LOW'|'MEDIUM'|'HIGH' | undefined = body?.difficulty;
+    const difficulty: 'LOW' | 'MEDIUM' | 'HIGH' | undefined = body?.difficulty;
     const isActive: boolean = !!body?.isActive;
     const items: Array<any> = Array.isArray(body?.questions) ? body.questions : [];
+
     if (!title || !createdById || !difficulty || items.length === 0) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
-    // Permission: creator must be TRAINER member or course creator
+    // Verify enabler exists
     const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
-    if (!enabler) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const member = await db
-      .select()
-      .from(courseMembers)
-      .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.userId, createdById), eq(courseMembers.role, 'TRAINER' as any)));
-    const [courseRow] = await db.select().from(courses).where(eq(courses.id, enabler.courseId));
-    const isCreator = courseRow ? String(courseRow.createdById) === String(createdById) : false;
-    if (!member.length && !isCreator) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!enabler) {
+      return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
+    }
+
+    // Shared curriculum: any valid trainer can create quizzes
+    if (!(await verifyTrainer(createdById))) {
+      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+    }
 
     const created = await db.transaction(async (tx) => {
       // If a quiz already exists for this difficulty, delete it
@@ -137,3 +130,4 @@ export async function POST(req: NextRequest, { params }: { params: { enablerId: 
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+

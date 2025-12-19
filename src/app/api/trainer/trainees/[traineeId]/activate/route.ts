@@ -10,9 +10,9 @@ import {
 
 type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
 
-export async function PATCH(req: NextRequest, { params }: { params: { traineeId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ traineeId: string }> }) {
   try {
-    const { traineeId } = params;
+    const { traineeId } = await params;
     const body = await req.json();
     const { itemType, itemId, isActive, trainerId } = body as {
       itemType: ItemType;
