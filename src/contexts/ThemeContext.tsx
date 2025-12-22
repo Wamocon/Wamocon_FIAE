@@ -24,11 +24,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [mounted, setMounted] = useState(false);
 
-  // Initialize theme on mount - optimized to run only once
+  // Initialize theme on mount - check localStorage first
   useEffect(() => {
     setMounted(true);
-    // Use dark theme by default to match the application design
-    setThemeState('dark');
+    const savedTheme = localStorage.getItem('theme') as Theme | null;
+    if (savedTheme && (savedTheme === 'dark' || savedTheme === 'light')) {
+      setThemeState(savedTheme);
+    } else {
+      // Check system preference
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setThemeState(prefersDark ? 'dark' : 'dark'); // Default to dark
+    }
   }, []);
 
   // Apply theme to DOM - optimized to run only when theme or mounted changes

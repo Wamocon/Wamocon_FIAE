@@ -70,7 +70,7 @@ export default function TrainerTraineesPage() {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-6">
           <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <Users className="h-8 w-8 text-white" />
+            <Users className="h-8 w-8 text-foreground" />
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
@@ -166,7 +166,7 @@ export default function TrainerTraineesPage() {
                     alert('Fehler beim Aktualisieren des Status');
                   }
                 }}
-                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'bg-green-600 text-foreground hover:bg-green-700'}`}
               >
                 {trainee.isActive ? 'Deaktivieren' : 'Aktivieren'}
               </button>

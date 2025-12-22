@@ -154,7 +154,7 @@ export default function EditCoursePage() {
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="from-accent to-primary flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br">
-              <FolderEdit className="h-5 w-5 text-white" />
+              <FolderEdit className="h-5 w-5 text-foreground" />
             </div>
             <div>
               <h1 className="text-foreground text-xl font-bold">Kurs bearbeiten</h1>
@@ -531,7 +531,7 @@ export default function EditCoursePage() {
               <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <FileText className="h-4 w-4 text-red-500" />
-                  <span className="text-sm font-medium">📖 PDFs</span>
+                  <span className="text-sm font-medium">PDFs</span>
                   {pendingEnablerPdfs.length > 0 && (
                     <span className="text-xs text-muted">({pendingEnablerPdfs.length})</span>
                   )}
@@ -575,7 +575,7 @@ export default function EditCoursePage() {
                   <label className="text-sm font-medium">Szenarien (mit Hinweisen)</label>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs text-foreground hover:bg-primary/90"
                     onClick={() => {
                       setScenarios(s => [...s, { id: crypto.randomUUID(), text: '', hint: '' }]);
                       setCurrentScenarioIndex(scenarios.length);
@@ -769,7 +769,7 @@ export default function EditCoursePage() {
               <div className="rounded-xl border border-accent/20 bg-background/30 p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <FileText className="h-4 w-4 text-red-500" />
-                  <span className="text-sm font-medium">📖 PDFs</span>
+                  <span className="text-sm font-medium">PDFs</span>
                   {pendingUseCasePdfs.length > 0 && (
                     <span className="text-xs text-muted">({pendingUseCasePdfs.length})</span>
                   )}
@@ -935,7 +935,7 @@ export default function EditCoursePage() {
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-red-500" />
-                    <span className="text-sm font-medium">📖 PDFs</span>
+                    <span className="text-sm font-medium">PDFs</span>
                     {enablerDocuments.length > 0 && (
                       <span className="text-xs text-muted">({enablerDocuments.length})</span>
                     )}
@@ -1019,7 +1019,7 @@ export default function EditCoursePage() {
                   <label className="text-sm font-medium">Szenarien (mit Hinweisen)</label>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs text-foreground hover:bg-primary/90"
                     onClick={() => {
                       setScenarios(s => [...s, { id: crypto.randomUUID(), text: '', hint: '' }]);
                       setCurrentScenarioIndex(scenarios.length);
@@ -1199,7 +1199,7 @@ export default function EditCoursePage() {
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-red-500" />
-                    <span className="text-sm font-medium">📖 PDFs</span>
+                    <span className="text-sm font-medium">PDFs</span>
                     {useCaseDocuments.length > 0 && (
                       <span className="text-xs text-muted">({useCaseDocuments.length})</span>
                     )}

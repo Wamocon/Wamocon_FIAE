@@ -226,7 +226,7 @@ export default function TrainerReviewsPage() {
             <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
                     <BookOpen className="h-4 w-4" />
                   </div>
                   <div>
@@ -359,7 +359,7 @@ export default function TrainerReviewsPage() {
             <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
                     <FileText className="h-4 w-4" />
                   </div>
                   <div>
@@ -395,7 +395,7 @@ export default function TrainerReviewsPage() {
             <div key={s.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
                     <HelpCircle className="h-4 w-4" />
                   </div>
                   <div>
@@ -477,7 +477,7 @@ export default function TrainerReviewsPage() {
             <div key={r.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white">
+                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
                     <MessageSquare className="h-4 w-4" />
                   </div>
                   <div>
