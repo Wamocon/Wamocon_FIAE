@@ -328,7 +328,7 @@ export function Profile() {
                 >
                   <div className="flex items-center gap-3">
                     <span className="from-accent to-primary inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
-                      <Lock className="h-5 w-5 text-white" />
+                      <Lock className="h-5 w-5 text-foregroundroundround" />
                     </span>
                     <span className="text-foreground text-xl font-semibold">Passwort ändern</span>
                   </div>

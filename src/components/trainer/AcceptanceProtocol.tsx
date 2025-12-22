@@ -232,7 +232,7 @@ export function AcceptanceProtocol() {
       <div className="mx-auto max-w-2xl p-6">
         <div className="glass-effect border-accent/30 rounded-3xl border p-8 text-center shadow-lg">
           <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500">
-            <CheckCircle className="h-10 w-10 text-white" />
+            <CheckCircle className="h-10 w-10 text-foregroundround" />
           </div>
           <h2 className="text-foreground mb-2 text-2xl font-bold">
             Protokoll erfolgreich generiert!
@@ -246,7 +246,7 @@ export function AcceptanceProtocol() {
             <button
               onClick={handleDownloadPdf}
               disabled={isDownloading}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-foregroundroundround shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
             >
               {isDownloading ? (
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -292,7 +292,7 @@ export function AcceptanceProtocol() {
           </div>
           <div className="flex items-center gap-3">
             <div className="from-accent to-primary flex h-12 items-center rounded-2xl bg-gradient-to-r px-6">
-              <span className="text-sm font-bold text-white">WMC-Siegel</span>
+              <span className="text-sm font-bold text-foreground">WMC-Siegel</span>
             </div>
           </div>
         </div>
@@ -410,7 +410,7 @@ export function AcceptanceProtocol() {
               disabled={
                 isGenerating || !formData.trainee_id || !formData.milestone || !formData.comments
               }
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 focus:ring-accent flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-8 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 focus:ring-accent flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-8 py-3 font-semibold text-foreground shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isGenerating ? (
                 <>

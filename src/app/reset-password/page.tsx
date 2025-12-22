@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Eye, EyeOff, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -87,8 +88,12 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl border-2 border-accent/30 p-8 shadow-xl">
-        <h1 className="mb-2 text-2xl font-bold">Neues Passwort setzen</h1>
+      {/* Theme Toggle in top right */}
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle variant="icon" />
+      </div>
+      <div className="w-full max-w-md rounded-2xl border-2 border-accent/30 p-8 shadow-xl glass-effect-enhanced">
+        <h1 className="mb-2 text-2xl font-bold text-foreground">Neues Passwort setzen</h1>
        
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block text-sm">

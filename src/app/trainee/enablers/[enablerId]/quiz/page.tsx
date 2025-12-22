@@ -108,7 +108,7 @@ export default function TraineeEnablerQuizPage() {
           </li>
         ))}
       </ul>
-      <button onClick={submit} className="rounded-md bg-primary px-4 py-2 text-white">Abgeben</button>
+      <button onClick={submit} className="rounded-md bg-primary px-4 py-2 text-foreground">Abgeben</button>
     </div>
   );
 }

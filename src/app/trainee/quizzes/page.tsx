@@ -76,7 +76,7 @@ export default function TraineeQuizzesPage() {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-6">
           <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <Brain className="h-8 w-8 text-white" />
+            <Brain className="h-8 w-8 text-foreground" />
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
@@ -100,7 +100,7 @@ export default function TraineeQuizzesPage() {
             <div className="mb-4 flex items-start justify-between">
               <div className="flex items-center gap-4">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-                  <Brain className="h-6 w-6 text-white" />
+                  <Brain className="h-6 w-6 text-foreground" />
                 </div>
                 <div>
                   <h3 className="text-foreground text-xl font-bold">

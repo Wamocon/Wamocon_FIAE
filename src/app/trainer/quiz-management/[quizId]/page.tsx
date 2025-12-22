@@ -59,7 +59,7 @@ export default async function TrainerQuizDetailPage({ params }: { params: { quiz
                   className={`rounded-lg border p-3 text-sm ${opt.isCorrect ? 'border-green-500/40 bg-green-500/10' : 'border-accent/20 bg-transparent'}`}
                 >
                   {opt.optionText}
-                  {opt.isCorrect && <span className="ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs text-white">Correct</span>}
+                  {opt.isCorrect && <span className="ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs text-foreground">Correct</span>}
                 </div>
               ))}
             </div>

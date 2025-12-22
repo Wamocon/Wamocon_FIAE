@@ -73,7 +73,7 @@ export default function TraineeModuleDetailPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <div className="rounded-3xl border border-accent/30 bg-black/30 p-6">
+      <div className="rounded-3xl border-5 border-accent/30 bg-foreground/30 p-6">
         <h1 className="text-foreground text-2xl font-bold">{course.title}</h1>
         <div className="text-muted-foreground mt-1 text-sm">
           {course.year ? `Jahr ${course.year}` : '—'} {course.chapter ? `• Kapitel ${course.chapter}` : ''}
@@ -81,17 +81,17 @@ export default function TraineeModuleDetailPage() {
       </div>
 
       <div className="space-y-5">
-        <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+        <div className="rounded-3xl border-5 border-accent/30 bg-foreground/30 p-5">
           <div className="mb-3 text-sm font-semibold">Lessons</div>
           {enablers.length === 0 ? (
             <div className="text-sm text-muted-foreground">Keine aktiven Lessons</div>
           ) : (
             <ul className="space-y-2">
               {enablers.map((e) => (
-                <li key={e.id} className={`flex items-center justify-between rounded-xl border p-3 ${e.status === 'APPROVED' ? 'border-green-500/40 bg-green-500/10' :
+                <li key={e.id} className={`flex items-center justify-between rounded-xl border-3 p-3 ${e.status === 'APPROVED' ? 'border-green-500/40 bg-green-500/10' :
                     e.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
                       e.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
-                        'border-accent/20 bg-black/20'
+                        'border-accent/20 bg-foreground/20'
                   }`}>
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <StatusIndicator status={e.status} />
@@ -102,7 +102,7 @@ export default function TraineeModuleDetailPage() {
                       </span>
                     ) : null}
                   </div>
-                  <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60 shrink-0 ml-2">
+                  <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border-3 border-accent/30 px-2 py-1 text-sm hover:bg-background/60 shrink-0 ml-2">
                     Öffnen
                   </Link>
                 </li>
@@ -111,7 +111,7 @@ export default function TraineeModuleDetailPage() {
           )}
         </div>
 
-        <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+        <div className="rounded-3xl border-5 border-accent/30 bg-foreground/30 p-5">
           <div className="mb-3 text-sm font-semibold">Use Cases</div>
           {useCases.length === 0 ? (
             <div className="text-sm text-muted-foreground">Keine aktiven Use Cases</div>
@@ -132,7 +132,7 @@ export default function TraineeModuleDetailPage() {
                       </span>
                     ) : null}
                   </div>
-                  <Link href={`/trainee/use-cases/${u.id}`} className="rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/60 shrink-0 ml-2">
+                  <Link href={`/trainee/use-cases/${u.id}`} className="rounded-lg border-3 border-accent/30 px-2 py-1 text-sm hover:bg-background/60 shrink-0 ml-2">
                     Öffnen
                   </Link>
                 </li>
