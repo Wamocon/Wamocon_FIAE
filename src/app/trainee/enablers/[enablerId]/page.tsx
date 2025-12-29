@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import LinkifyText from '@/components/ui/LinkifyText';
+import { MarkdownText } from '@/components/ui/MarkdownText';
 import { FlipbookViewer, useFlipbookViewer } from '@/components/ui/FlipbookViewer';
 import { BookOpen } from 'lucide-react';
 
@@ -497,7 +498,7 @@ export default function TraineeEnablerPage() {
               <div>
                 {currentQuestion && (
                   <div className="space-y-3">
-                    <div className="font-medium">{currentQuestion.questionText}</div>
+                    <MarkdownText className="font-medium">{currentQuestion.questionText}</MarkdownText>
                     <div className="space-y-2">
                       {(currentQuestion.questionType === 'TEXT' || currentQuestion.options.length === 0) ? (
                         <div>
@@ -518,7 +519,7 @@ export default function TraineeEnablerPage() {
                               checked={answers[currentQuestion.id] === String(o.id)}
                               onChange={() => setAnswers(prev => ({ ...prev, [currentQuestion.id]: String(o.id) }))}
                             />
-                            <span>{o.optionText}</span>
+                            <MarkdownText inline>{o.optionText}</MarkdownText>
                           </label>
                         ))
                       )}
@@ -566,7 +567,7 @@ export default function TraineeEnablerPage() {
                     const explanation = fb?.explanation || correctOption?.explanation;
                     return (
                       <li key={q.id} className={`rounded-xl border p-3 ${fb?.correct ? 'border-green-600/50 bg-green-500/10' : 'border-red-600/50 bg-red-500/10'}`}>
-                        <div className="font-medium">{q.questionText}</div>
+                        <MarkdownText className="font-medium">{q.questionText}</MarkdownText>
                         <div className="mt-1 text-sm">
                           Deine Antwort: {q.questionType === 'TEXT' || q.options.length === 0
                             ? (fb?.selectedText || chosen || '-')

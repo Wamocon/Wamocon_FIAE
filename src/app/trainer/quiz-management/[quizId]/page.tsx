@@ -3,8 +3,8 @@ import { quizzes, questions, options } from '@/db/migrations/schemas/schema';
 import { asc, eq, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 
-export default async function TrainerQuizDetailPage({ params }: { params: { quizId: string } }) {
-  const { quizId } = params;
+export default async function TrainerQuizDetailPage({ params }: { params: Promise<{ quizId: string }> }) {
+  const { quizId } = await params;
 
   // Load quiz
   const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, quizId as any)).limit(1);

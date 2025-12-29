@@ -35,15 +35,11 @@ export async function GET(req: NextRequest) {
       .leftJoin(quizAssignments, eq(quizAssignments.quizId, quizzes.id))
       .leftJoin(quizMembers, eq(quizMembers.quizId, quizzes.id))
       .where(() => {
-        // Visibility: quizzes created by trainer OR where trainer has assigned it to any trainee (collab by assignment)
-        const created = eq(quizzes.createdById, trainerId);
-        const collaboratedByAssignment = eq(quizAssignments.assignedById, trainerId as any);
-        // Also include explicit quiz membership
-        const collaboratedByMembership = eq(quizMembers.trainerId, trainerId as any);
-        // Apply text/year filters against course when present (for mini quizzes)
+        // All trainers can see all quizzes (admin-like flexibility)
+        // Only apply text/year filters
         const textFilter = q ? ilike(quizzes.title, `%${q}%`) : (sql`true` as any);
         const yearFilter = year && year !== 'all' ? eq(courses.year, Number(year)) : (sql`true` as any);
-        return and(textFilter, yearFilter, (sql`${created} OR ${collaboratedByAssignment} OR ${collaboratedByMembership}` as any));
+        return and(textFilter, yearFilter);
       })
       .groupBy(
         quizzes.id,
