@@ -109,13 +109,30 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ quizId: s
       }
     }
 
-    // Update assignments if provided (GLOBAL quizzes only; safe to delete/insert even if ENABLER - table empty)
+    // Update assignments if provided (GLOBAL quizzes only)
     if (Array.isArray(assignedTraineeIds)) {
-      await db.delete(quizAssignments).where(eq(quizAssignments.quizId, quizId as any));
-      if (assignedTraineeIds.length > 0 && trainerId) {
-        const values = assignedTraineeIds.map((tid) => ({ quizId: quizId as any, traineeId: tid, assignedById: trainerId }));
-        await db.insert(quizAssignments).values(values).onConflictDoNothing();
-      }
+      console.log(`Updating assignments for quiz ${quizId}`, { count: assignedTraineeIds.length, trainerId });
+
+      await db.transaction(async (tx) => {
+        await tx.delete(quizAssignments).where(eq(quizAssignments.quizId, quizId as any));
+
+        if (assignedTraineeIds.length > 0) {
+          if (!trainerId) {
+            console.error('Cannot assign trainees: trainerId missing in request body');
+            // Do not throw here to avoid failing the whole update if only assignments fail? 
+            // Better to throw so user knows.
+            throw new Error('trainerId required to assign trainees');
+          }
+
+          const values = assignedTraineeIds.map((tid) => ({
+            quizId: quizId as any,
+            traineeId: tid,
+            assignedById: trainerId
+          }));
+
+          await tx.insert(quizAssignments).values(values).onConflictDoNothing();
+        }
+      });
     }
 
     return NextResponse.json({ ok: true });
