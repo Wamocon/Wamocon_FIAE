@@ -11,6 +11,9 @@ const config: Config = {
   transform: {
     '^.+\\.(t|j)sx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(lucide-react|react-markdown|rehype-highlight|remark-gfm|d3-|d3)/)',
+  ],
   testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
   extensionsToTreatAsEsm: [],
   collectCoverage: true,

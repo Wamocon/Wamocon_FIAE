@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
+import { MarkdownText } from '@/components/ui/MarkdownText';
 
 type Opt = { id: string; optionText: string; isCorrect: boolean; explanation?: string | null };
 type Q = {
@@ -24,12 +25,12 @@ export default function EditEnablerQuizPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
-  const [difficulty, setDifficulty] = useState<'LOW'|'MEDIUM'|'HIGH'>('LOW');
+  const [difficulty, setDifficulty] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('LOW');
   const [isActive, setIsActive] = useState(true);
   const [questions, setQuestions] = useState<Q[]>([]);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  
+
   const newBlankQuestion = (type: 'MCQ' | 'TEXT' = 'MCQ'): Q => ({
     id: '',
     questionText: '',
@@ -100,7 +101,7 @@ export default function EditEnablerQuizPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Schwierigkeit</label>
             {editing ? (
-              <select value={difficulty} onChange={(e)=>setDifficulty(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
+              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
                 <option value="LOW">Low</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="HIGH">High</option>
@@ -112,14 +113,14 @@ export default function EditEnablerQuizPage() {
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium">Quiz-Titel</label>
             {editing ? (
-              <input value={title} onChange={(e)=>setTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
+              <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" />
             ) : (
               <div className="text-sm">{title}</div>
             )}
           </div>
         </div>
         <label className="inline-flex items-center gap-2">
-          <input type="checkbox" checked={isActive} disabled={!editing} onChange={(e)=>setIsActive(e.target.checked)} />
+          <input type="checkbox" checked={isActive} disabled={!editing} onChange={(e) => setIsActive(e.target.checked)} />
           <span>Aktiv</span>
         </label>
 
@@ -142,9 +143,9 @@ export default function EditEnablerQuizPage() {
                     )}
                   </div>
                   {editing ? (
-                    <input className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" value={q.questionText} onChange={(e)=> setQuestions(prev => prev.map((x,i)=> i===qi?{...x, questionText: e.target.value}:x))} />
+                    <input className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" value={q.questionText} onChange={(e) => setQuestions(prev => prev.map((x, i) => i === qi ? { ...x, questionText: e.target.value } : x))} />
                   ) : (
-                    <div className="text-sm">{q.questionText}</div>
+                    <MarkdownText className="text-sm">{q.questionText}</MarkdownText>
                   )}
                   {editing && (
                     <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
@@ -153,11 +154,11 @@ export default function EditEnablerQuizPage() {
                           type="radio"
                           name={`type-${qi}`}
                           checked={(q.questionType || 'MCQ') === 'MCQ'}
-                          onChange={() => setQuestions(prev => prev.map((x,i)=> i===qi ? {
+                          onChange={() => setQuestions(prev => prev.map((x, i) => i === qi ? {
                             ...x,
                             questionType: 'MCQ',
                             expectedAnswer: null,
-                            options: x.options && x.options.length ? x.options : [0,1,2,3].map((j) => ({ id: '', optionText: '', isCorrect: j===0, explanation: '' }))
+                            options: x.options && x.options.length ? x.options : [0, 1, 2, 3].map((j) => ({ id: '', optionText: '', isCorrect: j === 0, explanation: '' }))
                           } : x))}
                         /> Multiple Choice
                       </label>
@@ -166,7 +167,7 @@ export default function EditEnablerQuizPage() {
                           type="radio"
                           name={`type-${qi}`}
                           checked={q.questionType === 'TEXT'}
-                          onChange={() => setQuestions(prev => prev.map((x,i)=> i===qi ? {
+                          onChange={() => setQuestions(prev => prev.map((x, i) => i === qi ? {
                             ...x,
                             questionType: 'TEXT',
                             expectedAnswer: x.expectedAnswer ?? '',
@@ -186,7 +187,7 @@ export default function EditEnablerQuizPage() {
                             className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2"
                             placeholder="Erwartete korrekte Antwort (optional für automatische Bewertung)"
                             value={q.expectedAnswer || ''}
-                            onChange={(e)=> setQuestions(prev => prev.map((x,i)=> i===qi?{...x, expectedAnswer: e.target.value}:x))}
+                            onChange={(e) => setQuestions(prev => prev.map((x, i) => i === qi ? { ...x, expectedAnswer: e.target.value } : x))}
                           />
                         ) : (
                           <div className="text-sm text-muted-foreground">Erwartete Antwort: {q.expectedAnswer || '–'}</div>
@@ -204,13 +205,13 @@ export default function EditEnablerQuizPage() {
                                   name={`correct-${qi}`}
                                   checked={o.isCorrect}
                                   onChange={() => {
-                                    setQuestions(prev => prev.map((x,i)=> {
+                                    setQuestions(prev => prev.map((x, i) => {
                                       if (i !== qi) return x;
                                       const prevCorrect = x.options.findIndex(oo => oo.isCorrect);
-                                      const prevExpl = prevCorrect >=0 ? (x.options[prevCorrect].explanation || '') : '';
+                                      const prevExpl = prevCorrect >= 0 ? (x.options[prevCorrect].explanation || '') : '';
                                       return {
                                         ...x,
-                                        options: x.options.map((oo,j) => {
+                                        options: x.options.map((oo, j) => {
                                           if (j === oi) {
                                             return { ...oo, isCorrect: true, explanation: oo.explanation || prevExpl };
                                           }
@@ -228,9 +229,9 @@ export default function EditEnablerQuizPage() {
                             )}
                           </div>
                           {editing ? (
-                            <input className="mt-1 w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" value={o.optionText} onChange={(e)=> setQuestions(prev => prev.map((x,i)=> i===qi?{...x, options: x.options.map((oo,j)=> j===oi?{...oo, optionText: e.target.value}:oo)}:x))} />
+                            <input className="mt-1 w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" value={o.optionText} onChange={(e) => setQuestions(prev => prev.map((x, i) => i === qi ? { ...x, options: x.options.map((oo, j) => j === oi ? { ...oo, optionText: e.target.value } : oo) } : x))} />
                           ) : (
-                            <div className="text-sm">{o.optionText}</div>
+                            <MarkdownText inline className="text-sm">{o.optionText}</MarkdownText>
                           )}
                         </div>
                       ))
@@ -244,12 +245,12 @@ export default function EditEnablerQuizPage() {
                           className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2"
                           rows={2}
                           value={correctExplanation}
-                          onChange={(e)=> setQuestions(prev => prev.map((x,i)=> {
+                          onChange={(e) => setQuestions(prev => prev.map((x, i) => {
                             if (i !== qi) return x;
                             const ci = x.options.findIndex(o => o.isCorrect);
                             return {
                               ...x,
-                              options: x.options.map((oo,j)=> j===ci? { ...oo, explanation: e.target.value } : oo)
+                              options: x.options.map((oo, j) => j === ci ? { ...oo, explanation: e.target.value } : oo)
                             };
                           }))}
                         />

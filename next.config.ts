@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   images: {
-    domains: ['localhost'],
+    domains: ['localhost', 'thzssnabxgchzbsnbgoh.supabase.co'],
   },
   typescript: {
     // Temporarily ignore TS errors to allow dashboard integration while migrating legacy files
