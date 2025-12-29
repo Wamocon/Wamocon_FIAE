@@ -114,4 +114,17 @@ jspm_packages/
 # TernJS port file
 .tern-port
 
+# Generated quiz data (now in Supabase DB - can regenerate from DOCX if needed)
+quiz_data/
 
+# Test output files
+test_output.txt
+
+# SQL backups (old data exports)
+data_backup.sql
+
+# PDF mapping files (can be regenerated from upload script)
+pdf_mapping.csv
+
+# Local Quiz folder (source DOCX files - large, not needed in repo)
+Local Quiz/
