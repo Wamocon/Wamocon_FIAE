@@ -463,7 +463,7 @@ export default function TraineeEnablerPage() {
               <button
                 key={g.difficulty}
                 onClick={() => !disabled && handleTileClick(g)}
-                className={`rounded-2xl border p-4 text-left transition ${disabled ? 'cursor-not-allowed border-accent/20 bg-black/20 opacity-60' : 'border-accent/30 bg-black/30 hover:bg-background/50'}`}
+                className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'cursor-not-allowed border-accent/20 bg-black/20 opacity-60' : 'border-accent/30 bg-black/30 hover:bg-accent/15 hover:border-accent/60 hover:scale-[1.02] hover:shadow-lg hover:shadow-accent/20 active:scale-[0.98] cursor-pointer'}`}
                 disabled={disabled}
               >
                 <div className="text-sm text-muted-foreground">Schwierigkeit</div>
@@ -568,7 +568,7 @@ export default function TraineeEnablerPage() {
                     return (
                       <li key={q.id} className={`rounded-xl border p-3 ${fb?.correct ? 'border-green-600/50 bg-green-500/10' : 'border-red-600/50 bg-red-500/10'}`}>
                         <MarkdownText className="font-medium">{q.questionText}</MarkdownText>
-                        <div className="mt-1 text-sm">
+                        <div className={`mt-1 text-sm ${fb?.correct ? 'text-green-400' : 'text-red-400'}`}>
                           Deine Antwort: {q.questionType === 'TEXT' || q.options.length === 0
                             ? (fb?.selectedText || chosen || '-')
                             : (q.options.find(o => String(o.id) === String(chosen))?.optionText || '-')}

@@ -6,13 +6,19 @@ import {
   courses,
   enablers,
   enablerCompletions,
+  enablerQuizLinks,
   traineeAchievedSkills,
   skills,
   courseSkills,
   quizzes,
   quizSubmissions,
-  activityLog,
+  enablerSubmissions,
+  useCases,
+  useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
+
+// Passing score threshold for quizzes (50%)
+const PASS_THRESHOLD = 50;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -30,20 +36,122 @@ export async function GET(req: NextRequest) {
       .where(and(eq(courseMembers.userId, userId as any), eq(courseMembers.role, 'TRAINEE' as any)));
     const courseIds = memberCourses.map((c) => c.id);
 
-    // Enablers per course and completions by this trainee
+    // Calculate module progress with STRICT criteria
     let modules: Array<{ id: string; title: string; progress: number }> = [];
     if (courseIds.length > 0) {
-      for (const c of memberCourses) {
-        const ens = await db.select({ id: enablers.id }).from(enablers).where(eq(enablers.courseId, c.id as any));
-        const enablerIds = ens.map((e) => e.id);
-        let pct = 0;
-        if (enablerIds.length > 0) {
-          const [{ cnt = 0 } = { cnt: 0 }] = await db
-            .select({ cnt: count() })
-            .from(enablerCompletions)
-            .where(and(eq(enablerCompletions.traineeId, userId as any), inArray(enablerCompletions.enablerId, enablerIds as any)));
-          pct = Math.round((Number(cnt) / enablerIds.length) * 100);
+      // Get all enablers for these courses
+      const allEnablers = await db
+        .select({ id: enablers.id, courseId: enablers.courseId, scenarios: enablers.scenarios })
+        .from(enablers)
+        .where(and(inArray(enablers.courseId, courseIds as any), eq(enablers.isActive, true)));
+      const allEnablerIds = allEnablers.map(e => e.id);
+
+      // Get all quiz submissions WITH scores
+      const userQuizSubs = await db
+        .select({ quizId: quizSubmissions.quizId, score: quizSubmissions.score })
+        .from(quizSubmissions)
+        .where(eq(quizSubmissions.traineeId, userId as any));
+
+      // Map quizId -> highest score
+      const quizBestScores = new Map<string, number>();
+      for (const s of userQuizSubs) {
+        const qid = String(s.quizId);
+        const currentBest = quizBestScores.get(qid) || 0;
+        if ((s.score || 0) > currentBest) {
+          quizBestScores.set(qid, s.score || 0);
         }
+      }
+
+      // Get enabler-quiz links
+      const quizLinks = allEnablerIds.length > 0 ? await db
+        .select({ enablerId: enablerQuizLinks.enablerId, quizId: enablerQuizLinks.quizId })
+        .from(enablerQuizLinks)
+        .where(inArray(enablerQuizLinks.enablerId, allEnablerIds as any)) : [];
+
+      // Get APPROVED scenario submissions
+      const enablerSubRows = allEnablerIds.length > 0 ? await db
+        .select({ enablerId: enablerSubmissions.enablerId })
+        .from(enablerSubmissions)
+        .where(and(
+          eq(enablerSubmissions.traineeId, userId as any),
+          inArray(enablerSubmissions.enablerId, allEnablerIds as any),
+          eq(enablerSubmissions.status, 'APPROVED')
+        )) : [];
+      const approvedEnablerSubs = new Set(enablerSubRows.map(r => String(r.enablerId)));
+
+      // Get use cases and their approved submissions
+      const useCaseRows = await db
+        .select({ id: useCases.id, courseId: useCases.courseId })
+        .from(useCases)
+        .where(and(inArray(useCases.courseId, courseIds as any), eq(useCases.isActive, true)));
+
+      const useCaseIds = useCaseRows.map(u => u.id);
+      const useCaseSubRows = useCaseIds.length > 0 ? await db
+        .select({ useCaseId: useCaseSubmissions.useCaseId })
+        .from(useCaseSubmissions)
+        .where(and(
+          eq(useCaseSubmissions.traineeId, userId as any),
+          inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
+          eq(useCaseSubmissions.status, 'APPROVED')
+        )) : [];
+      const approvedUseCases = new Set(useCaseSubRows.map(r => String(r.useCaseId)));
+
+      // Calculate progress per course with STRICT logic
+      for (const c of memberCourses) {
+        const courseEnablers = allEnablers.filter(e => String(e.courseId) === String(c.id));
+        const totalEnablers = courseEnablers.length;
+
+        const courseUseCases = useCaseRows.filter(u => String(u.courseId) === String(c.id));
+        const totalUseCases = courseUseCases.length;
+        const approvedUseCaseCount = courseUseCases.filter(u => approvedUseCases.has(String(u.id))).length;
+
+        // Count completed enablers with STRICT logic
+        let completedCount = 0;
+        for (const enabler of courseEnablers) {
+          const enablerId = String(enabler.id);
+
+          // Check ALL quizzes must be passed
+          const enablerQuizzes = quizLinks.filter(l => String(l.enablerId) === enablerId);
+          let allQuizzesPassed = true;
+
+          if (enablerQuizzes.length > 0) {
+            for (const link of enablerQuizzes) {
+              const score = quizBestScores.get(String(link.quizId)) || 0;
+              if (score < PASS_THRESHOLD) {
+                allQuizzesPassed = false;
+                break;
+              }
+            }
+          }
+
+          // Check scenarios - must be approved
+          const hasScenarios = enabler.scenarios && Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0;
+          let scenariosApproved = true;
+          if (hasScenarios) {
+            scenariosApproved = approvedEnablerSubs.has(enablerId);
+          }
+
+          // Enabler complete ONLY if ALL quizzes passed AND ALL scenarios approved
+          if (allQuizzesPassed && scenariosApproved) {
+            completedCount++;
+          }
+        }
+
+        // Calculate weighted progress
+        const enablerProgress = totalEnablers > 0 ? (completedCount / totalEnablers) : 1;
+        const useCaseProgress = totalUseCases > 0 ? (approvedUseCaseCount / totalUseCases) : 1;
+
+        let pct: number;
+        if (totalEnablers > 0 && totalUseCases > 0) {
+          pct = Math.round((enablerProgress * 0.7 + useCaseProgress * 0.3) * 100);
+        } else if (totalEnablers > 0) {
+          pct = Math.round(enablerProgress * 100);
+        } else if (totalUseCases > 0) {
+          pct = Math.round(useCaseProgress * 100);
+        } else {
+          pct = 0;
+        }
+
         modules.push({ id: String(c.id), title: c.title, progress: pct });
       }
     }
@@ -76,7 +184,7 @@ export async function GET(req: NextRequest) {
         if (done.length === 0) {
           const dur = e.durationValue ? `${e.durationValue} ${e.durationUnit?.toLowerCase()}` : '';
           nextItem = {
-            lessonId: e.id, // reusing field for navigation; maps to an Enabler in new schema
+            lessonId: e.id,
             lessonTitle: e.title,
             moduleTitle: e.courseTitle,
             estimatedTime: dur,
@@ -86,18 +194,26 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Weekly progress: count enabler completions over last 6 weeks -> normalize 0-100
+    // Weekly progress: count quiz submissions + enabler completions over last 6 weeks
     const compRows = await db
       .select({ at: enablerCompletions.completedAt })
       .from(enablerCompletions)
       .where(eq(enablerCompletions.traineeId, userId as any))
       .orderBy(desc(enablerCompletions.completedAt));
+
+    const quizSubRows = await db
+      .select({ at: quizSubmissions.submittedAt })
+      .from(quizSubmissions)
+      .where(eq(quizSubmissions.traineeId, userId as any))
+      .orderBy(desc(quizSubmissions.submittedAt));
+
     const weeks = 6;
     const now = new Date();
     const weeklyBuckets: Array<{ week: string; progress: number }> = [];
     for (let i = weeks - 1; i >= 0; i--) {
       weeklyBuckets.push({ week: `W${weeks - i}`, progress: 0 });
     }
+
     for (const r of compRows) {
       const dt = r.at ? new Date(r.at as any) : null;
       if (!dt) continue;
@@ -108,10 +224,21 @@ export async function GET(req: NextRequest) {
         weeklyBuckets[idx].progress += 1;
       }
     }
-    const maxVal = weeklyBuckets.reduce((m, b) => Math.max(m, b.progress), 0) || 1;
-    const weeklyProgress = weeklyBuckets.map((b) => ({ week: b.week, progress: Math.round((b.progress / maxVal) * 100) }));
 
-    // Skills radar: top skills from trainee courses; mark 100 if achieved else 30
+    for (const r of quizSubRows) {
+      const dt = r.at ? new Date(r.at as any) : null;
+      if (!dt) continue;
+      const diffDays = Math.floor((now.getTime() - dt.getTime()) / (1000 * 60 * 60 * 24));
+      const bucketIndex = Math.floor(diffDays / 7);
+      if (bucketIndex >= 0 && bucketIndex < weeks) {
+        const idx = weeks - 1 - bucketIndex;
+        weeklyBuckets[idx].progress += 1;
+      }
+    }
+
+    const weeklyProgress = weeklyBuckets;
+
+    // Skills radar
     let skillRadar: Array<{ skill: string; value: number }> = [];
     if (courseIds.length > 0) {
       const cs = await db
@@ -131,7 +258,7 @@ export async function GET(req: NextRequest) {
         .map(([id, name]) => ({ skill: name, value: achievedSet.has(id) ? 100 : 30 }));
     }
 
-    // Achievements: recent quiz submission and recent enabler completion; simple streak from completions
+    // Achievements
     const achievements: Array<{ kind: 'quiz' | 'module' | 'streak'; text: string; at?: string | null }> = [];
     const recentSub = await db
       .select({ quizId: quizSubmissions.quizId, score: quizSubmissions.score, submittedAt: quizSubmissions.submittedAt })
@@ -155,6 +282,7 @@ export async function GET(req: NextRequest) {
       const [e] = await db.select({ title: enablers.title }).from(enablers).where(eq(enablers.id, en.enablerId as any)).limit(1);
       achievements.push({ kind: 'module', text: `Enabler "${e?.title || 'Modul'}" abgeschlossen`, at: (en.at as any)?.toISOString?.() || null });
     }
+
     // Streak
     let streak = 0;
     const today = new Date();
@@ -175,10 +303,9 @@ export async function GET(req: NextRequest) {
       achievements.push({ kind: 'streak', text: `${streak} Tage in Folge gelernt`, at: new Date().toISOString() });
     }
 
-    // Deadlines: not available in new schema; return empty to keep UI clean
     const deadlines: any[] = [];
 
-    // Skill radar fallback if empty
+    // Skill radar fallback
     if (skillRadar.length === 0 && modules.length > 0) {
       skillRadar = modules.slice(0, 6).map((m) => ({ skill: m.title, value: m.progress }));
     }

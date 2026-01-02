@@ -3,9 +3,17 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, ArrowRight, Play, CheckCircle2 } from 'lucide-react';
 
-type CourseItem = { id: string; title: string; year: number | null; chapter: number | null; enablers: { id: string; title: string }[] };
+type CourseItem = {
+  id: string;
+  title: string;
+  year: number | null;
+  chapter: number | null;
+  progress: number;
+  enablerCount: number;
+  completedCount: number;
+};
 
 export default function TraineeCoursesPage() {
   const { profile } = useAuth();
@@ -47,7 +55,10 @@ export default function TraineeCoursesPage() {
     return (
       <div className="mx-auto max-w-7xl space-y-8 p-6">
         <div className="glass-effect rounded-3xl border border-accent/30 p-8 shadow-lg">
-          <h1 className="text-foreground text-2xl font-bold">Lade…</h1>
+          <div className="flex items-center gap-4">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-accent border-t-transparent"></div>
+            <h1 className="text-foreground text-2xl font-bold">Lade Kurse…</h1>
+          </div>
         </div>
       </div>
     );
@@ -73,50 +84,88 @@ export default function TraineeCoursesPage() {
           </div>
           <div>
             <h1 className="text-foreground mb-1 text-3xl font-bold">Meine Kurse</h1>
-            <p className="text-muted">Zugewiesene Kurse und Lessons</p>
+            <p className="text-muted">Wähle einen Kurs um fortzufahren</p>
           </div>
         </div>
       </div>
 
-      {/* Courses list */}
-      <div className="glass-effect rounded-3xl border border-accent/30 p-6 shadow-lg">
+      {/* Courses Grid */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {courses.length === 0 ? (
-          <div className="text-muted-foreground">Keine Kurse zugewiesen.</div>
+          <div className="glass-effect col-span-full rounded-3xl border border-accent/30 p-8 shadow-lg">
+            <div className="text-muted-foreground text-center">Keine Kurse zugewiesen.</div>
+          </div>
         ) : (
-          <ul className="space-y-4">
-            {courses.map((c) => (
-              <li key={c.id} className="rounded-2xl border border-accent/20 bg-background/40 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="text-foreground truncate font-semibold">
-                      <Link className="hover:text-accent transition-colors" href={`/trainee/modules/${c.id}`}>{c.title}</Link>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {c.year ? `Jahr ${c.year}` : '—'} {c.chapter ? `• Kapitel ${c.chapter}` : ''}
-                    </div>
-                  </div>
-                  <Link className="shrink-0 rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={`/trainee/modules/${c.id}`}>Öffnen</Link>
+          courses.map((c) => (
+            <Link
+              key={c.id}
+              href={`/trainee/modules/${c.id}`}
+              className="glass-effect group relative cursor-pointer rounded-2xl border-2 border-accent/20 bg-background/40 p-6 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10"
+            >
+              {/* Course Title & Info */}
+              <div className="mb-4">
+                <h3 className="text-foreground group-hover:text-accent mb-2 text-xl font-bold transition-colors">
+                  {c.title}
+                </h3>
+                <div className="text-sm text-muted-foreground">
+                  {c.year ? `Jahr ${c.year}` : '—'} {c.chapter ? `• Kapitel ${c.chapter}` : ''}
                 </div>
-                <div className="mt-4">
-                  <div className="mb-2 text-sm font-medium">Lessons</div>
-                  {c.enablers.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Keine aktiven Lessons</div>
+              </div>
+
+              {/* Progress Bar with Badge */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-muted-foreground">
+                    {c.completedCount} von {c.enablerCount} Enabler abgeschlossen
+                  </span>
+                  <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-bold ${c.progress === 100
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      : c.progress > 0
+                        ? 'bg-accent/20 text-accent border border-accent/30'
+                        : 'bg-muted/20 text-muted-foreground border border-muted/30'
+                    }`}>
+                    {c.progress === 100 && <CheckCircle2 className="h-3.5 w-3.5" />}
+                    {c.progress} %
+                  </div>
+                </div>
+                <div className="bg-muted/30 h-2 w-full overflow-hidden rounded-full">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-700 ${c.progress === 100
+                        ? 'bg-gradient-to-r from-green-500 to-green-400'
+                        : 'bg-gradient-to-r from-accent to-primary'
+                      }`}
+                    style={{ width: `${c.progress}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Continue Button */}
+              <div className="flex items-center justify-between">
+                <div className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${c.progress === 100
+                  ? 'bg-green-500/20 text-green-400 group-hover:bg-green-500/30'
+                  : 'bg-accent/20 text-accent group-hover:bg-accent/30'
+                  }`}>
+                  {c.progress === 100 ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Abgeschlossen
+                    </>
+                  ) : c.progress > 0 ? (
+                    <>
+                      <Play className="h-4 w-4" />
+                      Weiter lernen
+                    </>
                   ) : (
-                    <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                      {c.enablers.map((e) => (
-                        <li key={e.id} className="flex items-center justify-between gap-3 rounded-xl border border-accent/20 bg-background/60 p-3">
-                          <span className="text-foreground truncate">{e.title}</span>
-                          <Link className="shrink-0 rounded-lg border border-accent/30 px-2 py-1 text-sm hover:bg-background/80" href={`/trainee/enablers/${e.id}`}>
-                            Öffnen
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      <Play className="h-4 w-4" />
+                      Starten
+                    </>
                   )}
                 </div>
-              </li>
-            ))}
-          </ul>
+                <ArrowRight className="h-5 w-5 text-accent/60 transition-transform group-hover:translate-x-1 group-hover:text-accent" />
+              </div>
+            </Link>
+          ))
         )}
       </div>
     </div>
