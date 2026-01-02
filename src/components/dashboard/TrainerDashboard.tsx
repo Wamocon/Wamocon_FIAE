@@ -50,14 +50,14 @@ const getCachedDashboard = (): DashboardResponse | null => {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < CACHE_TTL) return data;
     }
-  } catch (_) {}
+  } catch (_) { }
   return null;
 };
 
 const setCachedDashboard = (data: DashboardResponse) => {
   try {
     localStorage.setItem(TRAINER_DASHBOARD_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-  } catch (_) {}
+  } catch (_) { }
 };
 
 export default function TrainerDashboard() {
@@ -65,6 +65,7 @@ export default function TrainerDashboard() {
   const { user, profile } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [pendingReviews, setPendingReviews] = useState<number>(0);
   const [pendingQuiz, setPendingQuiz] = useState<number>(0);
@@ -97,24 +98,35 @@ export default function TrainerDashboard() {
   useEffect(() => {
     const load = async () => {
       try {
-        if (!user?.id && !profile?.id) return;
+        if (!user?.id && !profile?.id) {
+          setDataLoading(false);
+          return;
+        }
         // Only show loading if no cached data
         const hasCached = getCachedDashboard() !== null;
         if (!hasCached) setDataLoading(true);
-        
+        setDataError(null);
+
         const params = new URLSearchParams();
         if (user?.id) params.set('trainerAuthId', user.id);
         if (profile?.id) params.set('trainerProfileId', profile.id);
         const url = `/api/trainer/dashboard?${params.toString()}`;
         const res = await fetch(url);
-        if (!res.ok) throw new Error('Failed to load dashboard');
+        if (!res.ok) {
+          const errText = await res.text().catch(() => 'Unknown error');
+          console.error('Trainer Dashboard API error:', res.status, errText);
+          setDataError(`Fehler beim Laden: ${res.status}`);
+          setDataLoading(false);
+          return;
+        }
         const data: DashboardResponse = await res.json();
-        
+
         // Update state and cache
         applyDashboardData(data);
         setCachedDashboard(data);
       } catch (e) {
         console.error(e);
+        setDataError('Netzwerkfehler beim Laden der Daten');
       } finally {
         setDataLoading(false);
       }
@@ -141,11 +153,11 @@ export default function TrainerDashboard() {
 
   const avgProgress = trainees.length
     ? Math.round(
-        trainees.reduce(
-          (acc: number, t: Trainee) => acc + (t.progress || 0),
-          0
-        ) / trainees.length
-      )
+      trainees.reduce(
+        (acc: number, t: Trainee) => acc + (t.progress || 0),
+        0
+      ) / trainees.length
+    )
     : 0;
 
   return (
@@ -223,7 +235,7 @@ export default function TrainerDashboard() {
                   <TrendingUp className="text-primary mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">Ø Fortschritt</p>
                   <p className="text-foreground text-2xl font-bold">
-                    {avgProgress}%  
+                    {avgProgress}%
                   </p>
                 </div>
 
@@ -248,8 +260,8 @@ export default function TrainerDashboard() {
             <div className="glass-effect rounded-2xl p-6 shadow-lg">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-foreground flex items-center text-lg font-bold">
-                <TrendingUp className="text-accent mr-3 h-6 w-6" />
-                Gesamtfortschritt
+                  <TrendingUp className="text-accent mr-3 h-6 w-6" />
+                  Gesamtfortschritt
                 </h3>
                 <button
                   onClick={() => router.push('/trainer/analytics')}
