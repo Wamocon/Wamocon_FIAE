@@ -62,15 +62,8 @@ export function ProgressTrendChart({ data, loading = false }: ProgressTrendChart
     <ResponsiveContainer width="100%" height={200}>
       <AreaChart data={safeData}>
         <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" strokeOpacity={0.3} />
-        <XAxis dataKey="week" stroke="#ffffff" fontSize={12} tick={{ fill: '#ffffff' }} />
-        <YAxis
-          stroke="#ffffff"
-          fontSize={12}
-          tick={{ fill: '#ffffff' }}
-          domain={[0, maxProgress + 1]}
-          allowDecimals={false}
-          tickFormatter={(value) => Math.round(value).toString()}
-        />
+        <XAxis dataKey="week" stroke="currentColor" fontSize={12} tick={{ fill: 'currentColor' }} />
+        <YAxis stroke="currentColor" fontSize={12} tick={{ fill: 'currentColor' }} />
         <Tooltip
           contentStyle={{
             backgroundColor: '#1e1423',
@@ -137,65 +130,24 @@ export function ModuleProgressChart({ data, loading = false }: ModuleProgressCha
   const maxTotal = Math.max(...safeData.map(d => d.completed + d.inProgress + d.notStarted), 1);
 
   return (
-    <div className="space-y-4">
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={safeData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" strokeOpacity={0.3} />
-          <XAxis
-            dataKey="name"
-            stroke="#ffffff"
-            fontSize={10}
-            angle={-45}
-            textAnchor="end"
-            height={70}
-            tick={{ fill: '#ffffff' }}
-            interval={0}
-          />
-          <YAxis
-            stroke="#ffffff"
-            fontSize={12}
-            tick={{ fill: '#ffffff' }}
-            domain={[0, maxTotal]}
-            allowDecimals={false}
-            tickFormatter={(value) => Math.round(value).toString()}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: '#1e1423',
-              border: '1px solid #ef4444',
-              borderRadius: '8px',
-              color: '#ffffff',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-            }}
-            labelFormatter={(label, payload) => {
-              const item = payload?.[0]?.payload;
-              return item?.fullName || label;
-            }}
-            formatter={(value: number, name: string) => {
-              const labels: Record<string, string> = {
-                completed: 'Abgeschlossen',
-                inProgress: 'In Bearbeitung',
-                notStarted: 'Nicht begonnen',
-              };
-              return [`${value} Azubis`, labels[name] || name];
-            }}
-          />
-          <Legend
-            wrapperStyle={{ paddingTop: '10px' }}
-            formatter={(value: string) => {
-              const labels: Record<string, string> = {
-                completed: 'Abgeschlossen',
-                inProgress: 'In Bearbeitung',
-                notStarted: 'Nicht begonnen',
-              };
-              return <span className="text-xs text-white">{labels[value] || value}</span>;
-            }}
-          />
-          <Bar dataKey="completed" stackId="a" fill="#22c55e" name="completed" radius={[0, 0, 0, 0]} />
-          <Bar dataKey="inProgress" stackId="a" fill="#f59e0b" name="inProgress" />
-          <Bar dataKey="notStarted" stackId="a" fill="#6b7280" name="notStarted" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={safeData}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" strokeOpacity={0.3} />
+        <XAxis dataKey="name" stroke="currentColor" fontSize={10} angle={-45} textAnchor="end" height={60} tick={{ fill: 'currentColor' }} />
+        <YAxis stroke="currentColor" fontSize={12} tick={{ fill: 'currentColor' }} />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#1e1423',
+            border: '1px solid #ef4444',
+            borderRadius: '8px',
+            color: '#ffffff',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+          }}
+        />
+        <Bar dataKey="completed" stackId="a" fill="#ef4444" />
+        <Bar dataKey="inProgress" stackId="a" fill="#dc2626" />
+        <Bar dataKey="notStarted" stackId="a" fill="#3c2846" />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
