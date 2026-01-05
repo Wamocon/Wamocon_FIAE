@@ -128,3 +128,9 @@ pdf_mapping.csv
 
 # Local Quiz folder (source DOCX files - large, not needed in repo)
 Local Quiz/
+
+# Production environment file
+.env.prod
+
+# Supabase backup folder
+supabase_backup/
