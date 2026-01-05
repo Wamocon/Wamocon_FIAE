@@ -51,7 +51,7 @@ export default function ModuleDetail({ data }: ModuleDetailProps) {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 text-center">
           <div className="from-accent to-primary mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <BookOpen className="h-10 w-10 text-white" />
+            <BookOpen className="h-10 w-10 text-foreground" />
           </div>
           <h1 className="text-foreground mb-2 text-3xl font-bold">
             {moduleTitle}
@@ -67,7 +67,7 @@ export default function ModuleDetail({ data }: ModuleDetailProps) {
         <div className="p-6">
           <div className="mb-4 flex items-start justify-between">
             <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br">
-              <BookOpen className="h-8 w-8 text-white" />
+              <BookOpen className="h-8 w-8 text-foreground" />
             </div>
             <button
               onClick={() => handleModuleSelect(data.module.id)}

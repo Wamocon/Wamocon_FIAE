@@ -97,7 +97,7 @@ export default function Lesson({ data }: LessonProps) {
           <div key={s.id} className="glass-effect border-accent/30 rounded-2xl border p-6 shadow-lg">
             <div className="mb-2 flex items-center gap-3">
               <div className="from-accent to-primary flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
-                <BookOpen className="h-5 w-5 text-white" />
+                <BookOpen className="h-5 w-5 text-foregroundround" />
               </div>
               <h3 className="text-foreground text-lg font-semibold flex-1">{s.title}</h3>
               <label className="flex items-center gap-2 text-sm">

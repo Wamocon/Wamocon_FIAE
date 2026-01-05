@@ -169,7 +169,7 @@ export default function NewQuizPage() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-md bg-primary px-4 py-2 text-foregroundround hover:bg-primary/90 disabled:opacity-60"
           >
             {saving ? 'Erstellen…' : 'Erstellen'}
           </button>

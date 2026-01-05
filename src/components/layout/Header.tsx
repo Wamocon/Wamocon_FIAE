@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useBreadcrumbs } from '@/contexts/BreadcrumbContext';
 import { Menu, ChevronLeft } from 'lucide-react';
 import NotificationsBell from '@/components/ui/NotificationsBell';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 interface HeaderProps {
   onGoBack: () => void;
@@ -64,6 +65,7 @@ export function Header({
       </div>    
       {/* Right side - Actions */}
       <div className="flex items-center gap-3">
+        <ThemeToggle variant="icon" />
         <NotificationsBell />
       </div>
     </header>

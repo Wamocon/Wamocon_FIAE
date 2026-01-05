@@ -104,9 +104,9 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
                   {q.expectedAnswer && q.textAnswer && (
                     <div className="text-xs mt-1">
                       {q.textAnswer.trim().toLowerCase() === q.expectedAnswer.trim().toLowerCase() ? (
-                        <span className="rounded bg-green-600 px-2 py-0.5 text-white">Automatisch als korrekt bewertet</span>
+                        <span className="rounded bg-green-600 px-2 py-0.5 text-foregroundround">Automatisch als korrekt bewertet</span>
                       ) : (
-                        <span className="rounded bg-red-600 px-2 py-0.5 text-white">Nicht exakt übereinstimmend</span>
+                        <span className="rounded bg-red-600 px-2 py-0.5 text-foreground">Nicht exakt übereinstimmend</span>
                       )}
                     </div>
                   )}
@@ -126,9 +126,9 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
                     return (
                       <div key={opt.id} className={`rounded-lg border p-3 text-sm ${className}`}>
                         {opt.optionText}
-                        {isCorrect && <span className="ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs text-white">Correct</span>}
-                        {isSelected && !isCorrect && <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs text-white">Selected</span>}
-                        {isSelected && isCorrect && <span className="ml-2 rounded bg-green-700 px-1.5 py-0.5 text-xs text-white">Selected</span>}
+                        {isCorrect && <span className="ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs text-foreground">Correct</span>}
+                        {isSelected && !isCorrect && <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs text-foreground">Selected</span>}
+                        {isSelected && isCorrect && <span className="ml-2 rounded bg-green-700 px-1.5 py-0.5 text-xs text-foreground">Selected</span>}
                       </div>
                     );
                   })}

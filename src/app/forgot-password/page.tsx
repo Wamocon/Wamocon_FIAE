@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import toast from 'react-hot-toast';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -28,11 +29,15 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl border-2 border-accent/30 p-8 shadow-xl">
-        <h1 className="mb-2 text-2xl font-bold">Passwort zurücksetzen</h1>
-        <p className="mb-6 text-sm text-muted">Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen Link zum Zurücksetzen des Passworts.</p>
+      {/* Theme Toggle in top right */}
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle variant="icon" />
+      </div>
+      <div className="w-full max-w-md rounded-2xl border-2 border-accent/30 p-8 shadow-xl glass-effect-enhanced">
+        <h1 className="mb-2 text-2xl font-bold text-foreground">Passwort zurücksetzen</h1>
+        <p className="mb-6 text-sm text-muted-foreground">Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen Link zum Zurücksetzen des Passworts.</p>
         <form onSubmit={onSubmit} className="space-y-4">
-          <label className="block text-sm">
+          <label className="block text-sm text-foreground">
             E-Mail-Adresse
             <input
               type="email"
