@@ -80,7 +80,7 @@ export default function TraineeCoursesPage() {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-2 flex items-center gap-6">
           <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <BookOpen className="h-8 w-8 text-white" />
+            <BookOpen className="h-8 w-8 text-foreground" />
           </div>
           <div>
             <h1 className="text-foreground mb-1 text-3xl font-bold">Meine Kurse</h1>

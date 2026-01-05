@@ -281,7 +281,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
             </button>
             <button
               onClick={handleAcceptanceProtocol}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
             >
               <FileCheck2 className="h-5 w-5" />
               Abnahmeprotokoll
@@ -295,7 +295,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-              <TrendingUp className="h-6 w-6 text-white" />
+              <TrendingUp className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-muted text-sm">Gesamtfortschritt</p>
@@ -307,7 +307,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500">
-              <BookOpen className="h-6 w-6 text-white" />
+              <BookOpen className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-muted text-sm">Enabler abgeschlossen</p>
@@ -319,7 +319,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-violet-500">
-              <Award className="h-6 w-6 text-white" />
+              <Award className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-muted text-sm">Durchschnitt</p>
@@ -341,7 +341,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500">
-              <Calendar className="h-6 w-6 text-white" />
+              <Calendar className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-muted text-sm">Letzte Aktivität</p>
@@ -365,29 +365,29 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           {/* Edit form for trainers */}
           {profile?.role === 'trainer' && trainee && showEdit && (
             <div className="mb-8 rounded-2xl border border-accent/30 bg-background p-6">
-              <h3 className="mb-4 text-lg font-semibold text-white">Stammdaten bearbeiten</h3>
+              <h3 className="mb-4 text-lg font-semibold text-foreground">Stammdaten bearbeiten</h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-1 block text-sm text-white">Vollständiger Name</label>
+                  <label className="mb-1 block text-sm text-foreground">Vollständiger Name</label>
                   <input
-                    className="w-full rounded-xl border bg-background px-3 py-2 text-white"
+                    className="w-full rounded-xl border bg-background px-3 py-2 text-foreground"
                     value={edit.full_name}
                     onChange={(e) => setEdit((p) => ({ ...p, full_name: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-white">Avatar URL</label>
+                  <label className="mb-1 block text-foreground">Avatar URL</label>
                   <input
-                    className="w-full rounded-xl border bg-background px-3 py-2 text-white"
+                    className="w-full rounded-xl border bg-background px-3 py-2 text-foreground"
                     value={edit.avatar_url}
                     onChange={(e) => setEdit((p) => ({ ...p, avatar_url: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm text-white">Start der Ausbildung</label>
+                  <label className="mb-1 block text-sm text-foreground">Start der Ausbildung</label>
                   <input
                     type="date"
-                    className="w-full rounded-xl border bg-background px-3 py-2 text-white"
+                    className="w-full rounded-xl border bg-background px-3 py-2 text-foreground"
                     value={edit.start_of_training_date}
                     onChange={(e) => setEdit((p) => ({ ...p, start_of_training_date: e.target.value }))}
                   />
@@ -397,7 +397,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-foreground hover:bg-red-700 disabled:opacity-60"
                 >
                   {saving ? 'Speichern…' : 'Speichern'}
                 </button>
@@ -410,19 +410,19 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           <div className="space-y-8">
             {/* Enablers (Modules) */}
             <section>
-              <div className="mb-3 flex bg-background text-white items-center justify-between">
-                <h3 className="text-xl font-bold text-white">Module (Lesson)</h3>
-                <div className="text-sm text-white">Abgeschlossen: {overview?.stats.completedEnablers ?? 0} / {overview?.stats.totalEnablers ?? 0}</div>
+              <div className="mb-3 flex bg-background text-foreground items-center justify-between">
+                <h3 className="text-xl font-bold text-foreground">Module (Lesson)</h3>
+                <div className="text-sm text-foreground">Abgeschlossen: {overview?.stats.completedEnablers ?? 0} / {overview?.stats.totalEnablers ?? 0}</div>
               </div>
               {overview?.enablers?.length ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {overview.enablers.map((e) => (
                     <div key={e.id} className="rounded-2xl border border-accent/30 p-4">
                       <div className="mb-2 flex items-center justify-between">
-                        <div className="font-semibold text-white">{e.title}</div>
+                        <div className="font-semibold text-foreground">{e.title}</div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.completed ? 'border-green-500 text-green-500' : 'border-slate-300 text-white'}`}>{e.completed ? 'Teilgenommen' : 'Nicht teilgenommen'}</span>
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-white'}`}>{e.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.completed ? 'border-green-500 text-green-500' : 'border-slate-300 text-foreground'}`}>{e.completed ? 'Teilgenommen' : 'Nicht teilgenommen'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-foreground'}`}>{e.isActive ? 'Aktiv' : 'Inaktiv'}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -434,40 +434,40 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-white">Keine Enabler gefunden.</div>
+                <div className="text-sm text-foreground">Keine Enabler gefunden.</div>
               )}
             </section>
 
             {/* Enabler Quizzes by difficulty */}
             <section>
-              <h3 className="mb-3 text-xl font-bold text-white">Lesson-Quizzes</h3>
+              <h3 className="mb-3 text-xl font-bold text-foreground">Lesson-Quizzes</h3>
               {overview?.enablerQuizzes?.length ? (
                 <div className="space-y-2">
                   {overview.enablerQuizzes.map((q) => (
                     <div key={`${q.enablerId}-${q.quizId}`} className="flex items-center justify-between rounded-2xl border border-accent/30 p-4">
                       <div>
-                        <div className="text-white font-medium">Schwierigkeit: {q.difficulty}</div>
-                        <div className="text-white text-sm">Versuche: {q.attemptNumber ?? 0} · Ergebnis: {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? '· Zur Überprüfung' : ''}</div>
+                        <div className="text-foreground font-medium">Schwierigkeit: {q.difficulty}</div>
+                        <div className="text-foreground text-sm">Versuche: {q.attemptNumber ?? 0} · Ergebnis: {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? '· Zur Überprüfung' : ''}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-white">Keine Enabler-Quizzes vorhanden.</div>
+                <div className="text-sm text-foreground">Keine Enabler-Quizzes vorhanden.</div>
               )}
             </section>   
             {/* Use Cases */}
             <section>
-              <h3 className="mb-3 text-xl font-bold text-white">Use Cases</h3>
+              <h3 className="mb-3 text-xl font-bold text-foreground">Use Cases</h3>
               {overview?.useCases?.length ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {overview.useCases.map((u) => (
                     <div key={u.id} className="rounded-2xl border border-accent/30 p-4">
                       <div className="mb-2 flex items-center justify-between">
-                        <div className="font-semibold text-white">{u.title}</div>
+                        <div className="font-semibold text-foreground">{u.title}</div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : u.status ? 'border-green-500 text-green-500' : 'border-slate-300 text-white'}`}>{u.status ?? 'Nicht eingereicht'}</span>
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-white'}`}>{u.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : u.status ? 'border-green-500 text-green-500' : 'border-slate-300 text-foreground'}`}>{u.status ?? 'Nicht eingereicht'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-foreground'}`}>{u.isActive ? 'Aktiv' : 'Inaktiv'}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -479,7 +479,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-white">Keine Use Cases gefunden.</div>
+                <div className="text-sm text-foreground">Keine Use Cases gefunden.</div>
               )}
             </section>
 
@@ -487,14 +487,14 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
 
             {/* Global (Big) Quizzes */}
             <section>
-              <h3 className="mb-3 text-xl font-bold text-white">Global-Quizzes</h3>
+              <h3 className="mb-3 text-xl font-bold text-foreground">Global-Quizzes</h3>
               {overview?.globalQuizzes?.length ? (
                 <div className="space-y-2">
                   {overview.globalQuizzes.map((q) => (
                     <div key={q.quizId} className="flex items-center justify-between rounded-2xl border border-accent/30 p-4">
                       <div>
-                        <div className="text-white font-medium">{q.title}</div>
-                        <div className="text-white text-sm">Versuche: {q.attemptNumber ?? 0} · Ergebnis: {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? '· Zur Überprüfung' : ''}</div>
+                        <div className="text-foreground font-medium">{q.title}</div>
+                        <div className="text-foreground text-sm">Versuche: {q.attemptNumber ?? 0} · Ergebnis: {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? '· Zur Überprüfung' : ''}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         {profile?.role === 'trainer' && (
@@ -505,7 +505,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-white">Keine Global-Quizzes zugewiesen.</div>
+                <div className="text-sm text-foreground">Keine Global-Quizzes zugewiesen.</div>
               )}
             </section>
           </div>

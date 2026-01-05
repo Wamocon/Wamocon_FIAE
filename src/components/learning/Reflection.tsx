@@ -93,7 +93,7 @@ export function Reflection() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="glass-effect max-w-md rounded-3xl p-8 text-center shadow-lg">
           <div className="from-accent to-primary mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br">
-            <CheckCircle className="h-10 w-10 text-white" />
+            <CheckCircle className="h-10 w-10 text-foregroundround" />
           </div>
           <h2 className="text-foreground mb-2 text-2xl font-bold">
             Reflektion erfolgreich gespeichert! 🎉
@@ -113,7 +113,7 @@ export function Reflection() {
       <div className="glass-effect mb-8 rounded-3xl p-8 shadow-lg">
         <div className="mb-6 text-center">
           <div className="from-accent to-primary mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <Target className="h-10 w-10 text-white" />
+            <Target className="h-10 w-10 text-foreground" />
           </div>
           <h1 className="text-foreground mb-2 text-3xl font-bold">
             Reflektionstermin Q3/2025
@@ -173,7 +173,7 @@ export function Reflection() {
 
           {/* MES Feedback - Right Column */}
           <div className="space-y-6">
-            <h2 className="mb-4 text-2xl font-semibold text-white">
+            <h2 className="mb-4 text-2xl font-semibold text-foreground">
               MES-Feedback
             </h2>
 
@@ -216,7 +216,7 @@ export function Reflection() {
           <button
             type="submit"
             disabled={isSubmitting || loading}
-            className="bg-accent hover:bg-accent/90 disabled:bg-accent/50 focus:ring-accent focus:ring-offset-background flex items-center gap-2 rounded-2xl px-8 py-3 font-semibold text-white transition-colors duration-300 focus:ring-2 focus:ring-offset-2 focus:outline-none"
+            className="bg-accent hover:bg-accent/90 disabled:bg-accent/50 focus:ring-accent focus:ring-offset-background flex items-center gap-2 rounded-2xl px-8 py-3 font-semibold text-foreground transition-colors duration-300 focus:ring-2 focus:ring-offset-2 focus:outline-none"
           >
             {isSubmitting ? (
               <>
