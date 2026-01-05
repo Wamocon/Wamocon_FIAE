@@ -27,7 +27,7 @@ export default function ModulesList({ modules }: { modules: ModuleSummary[] }) {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-6">
           <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <BookOpen className="h-8 w-8 text-white" />
+            <BookOpen className="h-8 w-8 text-foreground" />
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">Lernmodule</h1>
@@ -46,7 +46,7 @@ export default function ModulesList({ modules }: { modules: ModuleSummary[] }) {
             <div className="mb-4 flex items-start justify-between">
               <div className="flex items-center gap-4 min-w-0">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-                  <BookOpen className="h-6 w-6 text-white" />
+                  <BookOpen className="h-6 w-6 text-foregroundround" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-foreground text-xl font-bold line-clamp-2 break-words min-h-[56px]">{module.title}</h3>

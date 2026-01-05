@@ -65,7 +65,7 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 text-center">
           <div className="from-accent to-primary mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <BookOpen className="h-10 w-10 text-white" />
+            <BookOpen className="h-10 w-10 text-foregroundround" />
           </div>
           <h1 className="text-foreground mb-2 text-3xl font-bold">
             {mockChapter.title}
@@ -119,7 +119,7 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
             </h4>
             <p className="text-muted">Teste dein Wissen aus diesem Kapitel.</p>
           </div>
-          <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-8 py-4 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
+          <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-8 py-4 font-semibold text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
             Quiz starten
           </button>
         </div>

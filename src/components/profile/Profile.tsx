@@ -324,7 +324,6 @@ export function Profile() {
             )}
           </div>
           {/* Change Password */}
-          {/* Change Password */}
           <div className="bg-card border-border mt-6 rounded-3xl border p-0 shadow-lg overflow-hidden">
             <button
               onClick={() => setShowPwSection(s => !s)}

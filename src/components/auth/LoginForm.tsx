@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -38,7 +39,11 @@ export default function LoginForm() {
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25 dark:from-red-900/20 dark:via-red-800/15 dark:to-red-900/25"></div>
+      {/* Theme Toggle in top right */}
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle variant="icon" />
+      </div>
       <div className="relative z-10 w-full max-w-md space-y-8">
         <div className="text-center">
           <div className="from-accent to-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br shadow-2xl">
