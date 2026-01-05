@@ -115,11 +115,11 @@ export default function Quiz({ quiz }: QuizProps) {
           <div className="mb-8">
             {passed ? (
               <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500 shadow-2xl">
-                <Award className="h-12 w-12 text-white" />
+                <Award className="h-12 w-12 text-foreground" />
               </div>
             ) : (
               <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-pink-500 shadow-2xl">
-                <Target className="h-12 w-12 text-white" />
+                <Target className="h-12 w-12 text-foreground" />
               </div>
             )}
 
@@ -156,7 +156,7 @@ export default function Quiz({ quiz }: QuizProps) {
           <div className="flex flex-col justify-center gap-4 sm:flex-row">
             <button
               onClick={() => router.push('/trainee/dashboard')}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
             >
               Zum Dashboard
             </button>
@@ -226,7 +226,7 @@ export default function Quiz({ quiz }: QuizProps) {
       <div className="glass-effect border-accent/30 rounded-3xl border p-6">
         <div className="flex items-center justify-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-pink-500">
-            <Clock className="h-6 w-6 text-white" />
+            <Clock className="h-6 w-6 text-foreground" />
           </div>
           <div className="text-center">
             <p className="text-sm font-medium text-red-600">
@@ -295,7 +295,7 @@ export default function Quiz({ quiz }: QuizProps) {
           <button
             onClick={handleNextQuestion}
             disabled={!isAnswerSelected}
-            className="min-w-[160px] flex items-center justify-center rounded-2xl bg-red-600 px-6 py-3 font-semibold text-white shadow-lg transition duration-200 hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-w-[160px] flex items-center justify-center rounded-2xl bg-red-600 px-6 py-3 font-semibold text-foreground shadow-lg transition duration-200 hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {currentQuestion === quizData.totalQuestions - 1 ? 'Abschließen' : 'Nächste Frage'}
           </button>

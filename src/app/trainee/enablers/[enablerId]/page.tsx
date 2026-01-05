@@ -226,7 +226,7 @@ export default function TraineeEnablerPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Enabler header */}
-      <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+      <div className="rounded-3xl border border-accent/30 bg-background p-5">
         <h1 className="text-foreground text-2xl font-bold">{enabler.title}</h1>
         {enabler.isActive && enabler.durationValue && enabler.activatedAt && (
           <div className="mt-3 text-sm">
@@ -253,10 +253,10 @@ export default function TraineeEnablerPage() {
             <button
               key={doc.id}
               onClick={() => flipbook.openPdf(doc.title, doc.storageUrl)}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-red-700 px-4 py-2 text-sm font-medium text-white hover:from-red-500 hover:to-red-600 transition-all shadow-lg"
+              className="max-w rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
             >
               <BookOpen className="h-4 w-4" />
-              📖 {doc.title}
+              {doc.title}
             </button>
           ))}
           {enabler.videoUrl && (
@@ -288,7 +288,7 @@ export default function TraineeEnablerPage() {
             )}
 
             {/* Slider Container */}
-            <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-black/20 p-4">
+            <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-background/20 p-4">
               <div
                 className="flex transition-transform duration-300 ease-in-out"
                 style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
@@ -301,7 +301,7 @@ export default function TraineeEnablerPage() {
                         <LinkifyText className="text-foreground/90" text={String(sc.text || '')} preserveLineBreaks />
                       </div>
                       {sc.hint && (
-                        <div className="rounded-lg border border-accent/20 bg-black/10 p-3">
+                        <div className="rounded-lg border border-accent/20 bg-background/10 p-3">
                           <div className="mb-1 text-xs font-semibold text-muted-foreground">Hinweis</div>
                           <LinkifyText className="text-muted-foreground text-sm" text={String(sc.hint)} preserveLineBreaks />
                         </div>
@@ -315,7 +315,7 @@ export default function TraineeEnablerPage() {
                       <LinkifyText className="text-foreground/90" text={String(enabler.scenarioText || '')} preserveLineBreaks />
                     </div>
                     {enabler.hintText && (
-                      <div className="rounded-lg border border-accent/20 bg-black/10 p-3">
+                      <div className="rounded-lg border border-accent/20 bg-background/10 p-3">
                         <div className="mb-1 text-xs font-semibold text-muted-foreground">Hinweis</div>
                         <LinkifyText className="text-muted-foreground text-sm" text={String(enabler.hintText)} preserveLineBreaks />
                       </div>
@@ -367,7 +367,7 @@ export default function TraineeEnablerPage() {
       </div>
 
       {/* Solution Slider */}
-      <div className="space-y-4 rounded-3xl border border-accent/30 bg-black/30 p-5">
+      <div className="space-y-4 rounded-3xl border border-accent/30 bg-background p-5">
         {saveSuccess && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-300">{saveSuccess}</div>}
 
         <div className="mb-2 text-lg font-semibold">Deine Lösungen</div>
@@ -454,7 +454,7 @@ export default function TraineeEnablerPage() {
       </div>
 
       {/* Gated difficulties */}
-      <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+      <div className="rounded-3xl border border-accent/30 bg-background p-5">
         <div className="mb-4 text-lg font-semibold">Enabler-Quiz (gestuft)</div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {gated.map(g => {
@@ -463,7 +463,7 @@ export default function TraineeEnablerPage() {
               <button
                 key={g.difficulty}
                 onClick={() => !disabled && handleTileClick(g)}
-                className={`rounded-2xl border p-4 text-left transition ${disabled ? 'cursor-not-allowed border-accent/20 bg-black/20 opacity-60' : 'border-accent/30 bg-black/30 hover:bg-background/50'}`}
+                className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'cursor-not-allowed border-accent/20 bg-black/20 opacity-60' : 'border-accent/30 bg-black/30 hover:bg-accent/15 hover:border-accent/60 hover:scale-[1.02] hover:shadow-lg hover:shadow-accent/20 active:scale-[0.98] cursor-pointer'}`}
                 disabled={disabled}
               >
                 <div className="text-sm text-muted-foreground">Schwierigkeit</div>
@@ -568,7 +568,7 @@ export default function TraineeEnablerPage() {
                     return (
                       <li key={q.id} className={`rounded-xl border p-3 ${fb?.correct ? 'border-green-600/50 bg-green-500/10' : 'border-red-600/50 bg-red-500/10'}`}>
                         <MarkdownText className="font-medium">{q.questionText}</MarkdownText>
-                        <div className="mt-1 text-sm">
+                        <div className={`mt-1 text-sm ${fb?.correct ? 'text-green-400' : 'text-red-400'}`}>
                           Deine Antwort: {q.questionType === 'TEXT' || q.options.length === 0
                             ? (fb?.selectedText || chosen || '-')
                             : (q.options.find(o => String(o.id) === String(chosen))?.optionText || '-')}

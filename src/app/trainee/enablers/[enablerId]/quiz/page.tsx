@@ -70,7 +70,7 @@ export default function TraineeEnablerQuizPage() {
             return (
               <li key={q.id} className={`rounded-md border p-3 ${fb?.correct ? 'border-green-600/50' : 'border-red-600/50'}`}>
                 <div className="font-medium">{q.questionText}</div>
-                <div className="text-sm mt-1">
+                <div className={`text-sm mt-1 ${fb?.correct ? 'text-green-400' : 'text-red-400'}`}>
                   Deine Antwort: {q.options.find((o) => String(o.id) === String(chosen))?.optionText || '-'}
                 </div>
                 {!fb?.correct && (
@@ -108,7 +108,7 @@ export default function TraineeEnablerQuizPage() {
           </li>
         ))}
       </ul>
-      <button onClick={submit} className="rounded-md bg-primary px-4 py-2 text-white">Abgeben</button>
+      <button onClick={submit} className="rounded-md bg-primary px-4 py-2 text-foreground">Abgeben</button>
     </div>
   );
 }

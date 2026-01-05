@@ -74,6 +74,8 @@ export default function TraineeDashboard() {
   const { profile } = useAuth();
 
   const [mounted, setMounted] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [nextLesson, setNextLesson] = useState<{
     id: string;
     title: string;
@@ -116,9 +118,21 @@ export default function TraineeDashboard() {
 
   useEffect(() => {
     const load = async () => {
-      if (!profile?.id) return;
+      if (!profile?.id) {
+        setFetching(false);
+        return;
+      }
+      setFetching(true);
+      setDataError(null);
       try {
         const res = await fetch(`/api/trainee/dashboard?userId=${profile.id}`);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => 'Unknown error');
+          console.error('Dashboard API error:', res.status, errText);
+          setDataError(`Fehler beim Laden: ${res.status}`);
+          setFetching(false);
+          return;
+        }
         const data = await res.json();
         
         // Update state and cache
@@ -126,6 +140,9 @@ export default function TraineeDashboard() {
         setCachedDashboard(data);
       } catch (e) {
         console.error(e);
+        setDataError('Netzwerkfehler beim Laden der Daten');
+      } finally {
+        setFetching(false);
       }
     };
     load();
@@ -213,7 +230,7 @@ export default function TraineeDashboard() {
                   </p>
                 </div>
                 <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg">
-                  <Play className="h-8 w-8 text-white" />
+                  <Play className="h-8 w-8 text-foreground" />
                 </div>
               </div>
               <div className="text-accent mt-4 flex items-center">
@@ -228,7 +245,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
               <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
                 <div className="from-accent to-primary mr-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
-                  <BookOpen className="h-5 w-5 text-white" />
+                  <BookOpen className="h-5 w-5 text-foreground" />
                 </div>
                 Mein Lernpfad
               </h3>
@@ -271,7 +288,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect border-accent/20 rounded-2xl border p-6 shadow-lg">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-500 to-orange-500">
-                  <Award className="h-4 w-4 text-white" />
+                  <Award className="h-4 w-4 text-foreground" />
                 </div>
                 Letzte Erfolge
               </h3>
@@ -296,7 +313,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect border-accent/20 rounded-2xl border p-6 shadow-lg">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-500">
-                  <Calendar className="h-4 w-4 text-white" />
+                  <Calendar className="h-4 w-4 text-foreground" />
                 </div>
                 Anstehende Termine
               </h3>
@@ -324,7 +341,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="from-accent to-primary mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br">
-                  <BarChart3 className="h-4 w-4 text-white" />
+                  <BarChart3 className="h-4 w-4 text-foreground" />
                 </div>
                 Wöchentlicher Fortschritt
               </h3>
@@ -341,21 +358,21 @@ export default function TraineeDashboard() {
                   />
                   <XAxis
                     dataKey="week"
-                    stroke="#ffffff"
+                    stroke="currentColor"
                     fontSize={12}
-                    tick={{ fill: '#ffffff' }}
+                    tick={{ fill: 'currentColor' }}
                   />
                   <YAxis
-                    stroke="#ffffff"
+                    stroke="currentColor"
                     fontSize={12}
-                    tick={{ fill: '#ffffff' }}
+                    tick={{ fill: 'currentColor' }}
                   />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: '#1e1423',
                       border: '2px solid #ff1a1a',
                       borderRadius: '12px',
-                      color: '#ffffff',
+                      color: 'currentColor',
                       boxShadow: '0 8px 24px rgba(255, 26, 26, 0.3)',
                     }}
                   />
@@ -368,9 +385,9 @@ export default function TraineeDashboard() {
                       fill: '#ff1a1a',
                       strokeWidth: 3,
                       r: 6,
-                      stroke: '#ffffff',
+                      stroke: 'currentColor',
                     }}
-                    activeDot={{ r: 8, stroke: '#ffffff', strokeWidth: 2 }}
+                    activeDot={{ r: 8, stroke: 'currentColor', strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -396,7 +413,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
-                  <Target className="h-4 w-4 text-white" />
+                  <Target className="h-4 w-4 text-foreground" />
                 </div>
                 Fähigkeiten
               </h3>
@@ -409,14 +426,14 @@ export default function TraineeDashboard() {
                   <PolarGrid stroke="#6b7280" strokeOpacity={0.2} />
                   <PolarAngleAxis
                     dataKey="skill"
-                    stroke="#ffffff"
+                    stroke="currentColor"
                     fontSize={11}
-                    tick={{ fill: '#ffffff' }}
+                    tick={{ fill: 'currentColor' }}
                   />
                   <PolarRadiusAxis
-                    stroke="#ffffff"
+                    stroke="currentColor"
                     fontSize={10}
-                    tick={{ fill: '#ffffff' }}
+                    tick={{ fill: 'currentColor' }}
                     axisLine={false}
                   />
                   <Radar
@@ -451,7 +468,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-500">
-                  <PieChart className="h-4 w-4 text-white" />
+                  <PieChart className="h-4 w-4 text-foreground" />
                 </div>
                 Modul-Fortschritt
               </h3>
@@ -468,24 +485,24 @@ export default function TraineeDashboard() {
                   />
                   <XAxis
                     dataKey="name"
-                    stroke="#ffffff"
+                    stroke="currentColor"
                     fontSize={10}
                     angle={-45}
                     textAnchor="end"
                     height={60}
-                    tick={{ fill: '#ffffff' }}
+                    tick={{ fill: 'currentColor' }}
                   />
                   <YAxis
-                    stroke="#ffffff"
+                    stroke="currentColor"
                     fontSize={10}
-                    tick={{ fill: '#ffffff' }}
+                    tick={{ fill: 'currentColor' }}
                   />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: '#1e1423',
                       border: '2px solid #ff1a1a',
                       borderRadius: '12px',
-                      color: '#ffffff',
+                      color: 'currentColor',
                       boxShadow: '0 8px 24px rgba(255, 26, 26, 0.3)',
                     }}
                   />
@@ -493,7 +510,7 @@ export default function TraineeDashboard() {
                     dataKey="progress"
                     fill="#ff1a1a"
                     radius={[4, 4, 0, 0]}
-                    stroke="#ffffff"
+                    stroke="currentColor"
                     strokeWidth={1}
                   />
                 </BarChart>
