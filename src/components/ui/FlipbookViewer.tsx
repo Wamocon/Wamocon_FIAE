@@ -72,10 +72,10 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-gradient-to-r from-red-900/30 to-transparent">
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-xl bg-gradient-to-br from-red-500 to-red-700 shadow-lg">
-                            <BookOpen className="w-5 h-5 text-white" />
+                            <BookOpen className="w-5 h-5 text-foreground" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-white tracking-tight">
+                            <h2 className="text-lg font-bold text-foreground tracking-tight">
                                 {title}
                             </h2>
                             <p className="text-xs text-gray-400">Theorie-Dokument</p>
@@ -87,7 +87,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                         <div className="flex items-center gap-1 px-2 py-1 rounded-xl bg-white/5 border border-white/10">
                             <button
                                 onClick={() => setScale(s => Math.max(50, s - 10))}
-                                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground"
                                 title="Verkleinern (-)"
                             >
                                 <ZoomOut className="w-4 h-4" />
@@ -97,7 +97,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                             </span>
                             <button
                                 onClick={() => setScale(s => Math.min(200, s + 10))}
-                                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground"
                                 title="Vergrößern (+)"
                             >
                                 <ZoomIn className="w-4 h-4" />
@@ -111,7 +111,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                             href={pdfUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-white border border-transparent hover:border-white/10"
+                            className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground border border-transparent hover:border-white/10"
                             title="In neuem Tab öffnen"
                         >
                             <ExternalLink className="w-4 h-4" />
@@ -119,7 +119,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                         <a
                             href={pdfUrl}
                             download
-                            className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-white border border-transparent hover:border-white/10"
+                            className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground border border-transparent hover:border-white/10"
                             title="Herunterladen"
                         >
                             <Download className="w-4 h-4" />
@@ -129,7 +129,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
 
                         <button
                             onClick={() => setIsFullscreen(!isFullscreen)}
-                            className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-white border border-transparent hover:border-white/10"
+                            className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground border border-transparent hover:border-white/10"
                             title={isFullscreen ? 'Vollbild beenden (Esc)' : 'Vollbild'}
                         >
                             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
