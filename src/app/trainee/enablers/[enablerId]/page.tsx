@@ -253,10 +253,11 @@ export default function TraineeEnablerPage() {
             <button
               key={doc.id}
               onClick={() => flipbook.openPdf(doc.title, doc.storageUrl)}
-              className="max-w rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+              className="flex max-w rounded-md bg-primary px-2 py-2 text-primary-foreground hover:bg-primary/90"
             >
-              <BookOpen className="h-4 w-4" />
-              {doc.title}
+              <div className='flex max-w py-1 px-2'><BookOpen className="h-4 w-4" /></div>
+              <div> {doc.title}</div>
+              
             </button>
           ))}
           {enabler.videoUrl && (
