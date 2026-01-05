@@ -74,6 +74,8 @@ export default function TraineeDashboard() {
   const { profile } = useAuth();
 
   const [mounted, setMounted] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [nextLesson, setNextLesson] = useState<{
     id: string;
     title: string;
@@ -116,9 +118,21 @@ export default function TraineeDashboard() {
 
   useEffect(() => {
     const load = async () => {
-      if (!profile?.id) return;
+      if (!profile?.id) {
+        setFetching(false);
+        return;
+      }
+      setFetching(true);
+      setDataError(null);
       try {
         const res = await fetch(`/api/trainee/dashboard?userId=${profile.id}`);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => 'Unknown error');
+          console.error('Dashboard API error:', res.status, errText);
+          setDataError(`Fehler beim Laden: ${res.status}`);
+          setFetching(false);
+          return;
+        }
         const data = await res.json();
         
         // Update state and cache
@@ -126,6 +140,9 @@ export default function TraineeDashboard() {
         setCachedDashboard(data);
       } catch (e) {
         console.error(e);
+        setDataError('Netzwerkfehler beim Laden der Daten');
+      } finally {
+        setFetching(false);
       }
     };
     load();
