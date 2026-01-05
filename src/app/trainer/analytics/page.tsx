@@ -102,7 +102,7 @@ export default function TrainerAnalyticsPage() {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-6">
           <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <BarChart3 className="h-8 w-8 text-white" />
+            <BarChart3 className="h-8 w-8 text-foreground" />
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
@@ -121,7 +121,7 @@ export default function TrainerAnalyticsPage() {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-              <Users className="h-6 w-6 text-white" />
+              <Users className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-muted text-sm">Aktive Azubis</p>
@@ -133,7 +133,7 @@ export default function TrainerAnalyticsPage() {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500">
-              <TrendingUp className="h-6 w-6 text-white" />
+              <TrendingUp className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-muted text-sm">Ø Fortschritt</p>
@@ -145,7 +145,7 @@ export default function TrainerAnalyticsPage() {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-violet-500">
-              <Award className="h-6 w-6 text-white" />
+              <Award className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-muted text-sm">Ausstehende Reviews</p>
@@ -157,7 +157,7 @@ export default function TrainerAnalyticsPage() {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500">
-              <Clock className="h-6 w-6 text-white" />
+              <Clock className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-muted text-sm">Reflektionen (7 Tage)</p>

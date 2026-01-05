@@ -11,6 +11,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from 'recharts';
 
 interface ProgressTrendChartProps {
@@ -32,7 +33,10 @@ export function ProgressTrendChart({ data, loading = false }: ProgressTrendChart
   if (!mounted || loading) {
     return (
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
-        Lade...
+        <div className="flex items-center gap-2">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
+          Lade...
+        </div>
       </div>
     );
   }
@@ -40,23 +44,33 @@ export function ProgressTrendChart({ data, loading = false }: ProgressTrendChart
   if (!hasValidData) {
     return (
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
-        Keine Trenddaten vorhanden
+        Keine Aktivitätsdaten vorhanden
       </div>
     );
   }
 
   // Create safe data copy
-  const safeData = data.map(item => ({ 
-    week: String(item?.week || ''), 
-    progress: Number(item?.progress || 0) 
+  const safeData = data.map(item => ({
+    week: String(item?.week || ''),
+    progress: Number(item?.progress || 0)
   }));
+
+  // Calculate max for Y-axis domain
+  const maxProgress = Math.max(...safeData.map(d => d.progress), 1);
 
   return (
     <ResponsiveContainer width="100%" height={200}>
       <AreaChart data={safeData}>
         <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" strokeOpacity={0.3} />
         <XAxis dataKey="week" stroke="#ffffff" fontSize={12} tick={{ fill: '#ffffff' }} />
-        <YAxis stroke="#ffffff" fontSize={12} tick={{ fill: '#ffffff' }} />
+        <YAxis
+          stroke="#ffffff"
+          fontSize={12}
+          tick={{ fill: '#ffffff' }}
+          domain={[0, maxProgress + 1]}
+          allowDecimals={false}
+          tickFormatter={(value) => Math.round(value).toString()}
+        />
         <Tooltip
           contentStyle={{
             backgroundColor: '#1e1423',
@@ -65,6 +79,7 @@ export function ProgressTrendChart({ data, loading = false }: ProgressTrendChart
             color: '#ffffff',
             boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
           }}
+          formatter={(value: number) => [`${value} Aktivitäten`, 'Fortschritt']}
         />
         <Area type="monotone" dataKey="progress" stroke="#ef4444" fill="#ef4444" fillOpacity={0.4} strokeWidth={3} />
       </AreaChart>
@@ -91,7 +106,10 @@ export function ModuleProgressChart({ data, loading = false }: ModuleProgressCha
   if (!mounted || loading) {
     return (
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
-        Lade...
+        <div className="flex items-center gap-2">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
+          Lade...
+        </div>
       </div>
     );
   }
@@ -99,38 +117,85 @@ export function ModuleProgressChart({ data, loading = false }: ModuleProgressCha
   if (!hasValidData) {
     return (
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
-        Keine Daten vorhanden
+        Keine Kursdaten vorhanden
       </div>
     );
   }
 
-  // Create safe data copy
+  // Create safe data copy with abbreviated names
   const safeData = data.map(item => ({
-    name: String(item?.name || ''),
+    name: String(item?.name || '').length > 15
+      ? String(item?.name || '').substring(0, 15) + '...'
+      : String(item?.name || ''),
+    fullName: String(item?.name || ''),
     completed: Number(item?.completed || 0),
     inProgress: Number(item?.inProgress || 0),
     notStarted: Number(item?.notStarted || 0),
   }));
 
+  // Calculate max for Y-axis domain
+  const maxTotal = Math.max(...safeData.map(d => d.completed + d.inProgress + d.notStarted), 1);
+
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={safeData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" strokeOpacity={0.3} />
-        <XAxis dataKey="name" stroke="#ffffff" fontSize={10} angle={-45} textAnchor="end" height={60} tick={{ fill: '#ffffff' }} />
-        <YAxis stroke="#ffffff" fontSize={12} tick={{ fill: '#ffffff' }} />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: '#1e1423',
-            border: '1px solid #ef4444',
-            borderRadius: '8px',
-            color: '#ffffff',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-          }}
-        />
-        <Bar dataKey="completed" stackId="a" fill="#ef4444" />
-        <Bar dataKey="inProgress" stackId="a" fill="#dc2626" />
-        <Bar dataKey="notStarted" stackId="a" fill="#3c2846" />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="space-y-4">
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={safeData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" strokeOpacity={0.3} />
+          <XAxis
+            dataKey="name"
+            stroke="#ffffff"
+            fontSize={10}
+            angle={-45}
+            textAnchor="end"
+            height={70}
+            tick={{ fill: '#ffffff' }}
+            interval={0}
+          />
+          <YAxis
+            stroke="#ffffff"
+            fontSize={12}
+            tick={{ fill: '#ffffff' }}
+            domain={[0, maxTotal]}
+            allowDecimals={false}
+            tickFormatter={(value) => Math.round(value).toString()}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: '#1e1423',
+              border: '1px solid #ef4444',
+              borderRadius: '8px',
+              color: '#ffffff',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            }}
+            labelFormatter={(label, payload) => {
+              const item = payload?.[0]?.payload;
+              return item?.fullName || label;
+            }}
+            formatter={(value: number, name: string) => {
+              const labels: Record<string, string> = {
+                completed: 'Abgeschlossen',
+                inProgress: 'In Bearbeitung',
+                notStarted: 'Nicht begonnen',
+              };
+              return [`${value} Azubis`, labels[name] || name];
+            }}
+          />
+          <Legend
+            wrapperStyle={{ paddingTop: '10px' }}
+            formatter={(value: string) => {
+              const labels: Record<string, string> = {
+                completed: 'Abgeschlossen',
+                inProgress: 'In Bearbeitung',
+                notStarted: 'Nicht begonnen',
+              };
+              return <span className="text-xs text-white">{labels[value] || value}</span>;
+            }}
+          />
+          <Bar dataKey="completed" stackId="a" fill="#22c55e" name="completed" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="inProgress" stackId="a" fill="#f59e0b" name="inProgress" />
+          <Bar dataKey="notStarted" stackId="a" fill="#6b7280" name="notStarted" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

@@ -435,7 +435,7 @@ export function QuizManagement() {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="flex items-center justify-between">
           <h2 className="text-foreground text-2xl font-bold">Quiz Management</h2>
-          <Button onClick={openCreate} className="gap-2 bg-gradient-to-r from-accent to-primary text-white hover:from-accent/90 hover:to-primary/90">
+          <Button onClick={openCreate} className="gap-2 bg-gradient-to-r from-accent to-primary text-foreground hover:from-accent/90 hover:to-primary/90">
             <Plus className="h-4 w-4" /> Create New Quiz
           </Button>
         </div>
