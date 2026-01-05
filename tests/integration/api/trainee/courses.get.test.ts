@@ -44,11 +44,13 @@ describe('API: Trainee Courses', () => {
         { id: 'c2', title: 'Course 2', year: 2025, chapter: 'B' },
       ],
       // enablers rows (with orderBy)
-      { withOrderBy: true, data: [
-        { id: 'e1', courseId: 'c1', title: 'E1', orderIndex: 1, isActive: true },
-        { id: 'e2', courseId: 'c2', title: 'E2', orderIndex: 1, isActive: true },
-        { id: 'e3', courseId: 'c1', title: 'E3', orderIndex: 2, isActive: true },
-      ]},
+      {
+        withOrderBy: true, data: [
+          { id: 'e1', courseId: 'c1', title: 'E1', orderIndex: 1, isActive: true },
+          { id: 'e2', courseId: 'c2', title: 'E2', orderIndex: 1, isActive: true },
+          { id: 'e3', courseId: 'c1', title: 'E3', orderIndex: 2, isActive: true },
+        ]
+      },
     ];
     let idx = 0;
     const mockDb = {
@@ -71,13 +73,17 @@ describe('API: Trainee Courses', () => {
     expect((res as any).status).toBe(200);
     expect(body).toEqual({
       courses: [
-        { id: 'c1', title: 'Course 1', year: 2024, chapter: 'A', enablers: [
-          { id: 'e1', title: 'E1' },
-          { id: 'e3', title: 'E3' },
-        ] },
-        { id: 'c2', title: 'Course 2', year: 2025, chapter: 'B', enablers: [
-          { id: 'e2', title: 'E2' },
-        ] },
+        {
+          id: 'c1', title: 'Course 1', year: 2024, chapter: 'A', enablers: [
+            { id: 'e1', title: 'E1' },
+            { id: 'e3', title: 'E3' },
+          ]
+        },
+        {
+          id: 'c2', title: 'Course 2', year: 2025, chapter: 'B', enablers: [
+            { id: 'e2', title: 'E2' },
+          ]
+        },
       ],
     });
   });
@@ -89,14 +95,22 @@ describe('API: Trainee Courses', () => {
       // course by id
       [{ id: 'c1', title: 'Course 1', year: 2024, chapter: 'A' }],
       // enablers with orderBy
-      { withOrderBy: true, data: [
-        { id: 'e1', title: 'E1', courseId: 'c1', isActive: true, orderIndex: 1 },
-        { id: 'e2', title: 'E2', courseId: 'c1', isActive: true, orderIndex: 2 },
-      ]},
+      {
+        withOrderBy: true, data: [
+          { id: 'e1', title: 'E1', courseId: 'c1', isActive: true, orderIndex: 1 },
+          { id: 'e2', title: 'E2', courseId: 'c1', isActive: true, orderIndex: 2 },
+        ]
+      },
       // useCases with orderBy
-      { withOrderBy: true, data: [
-        { id: 'u1', title: 'UC1', courseId: 'c1', isActive: true, orderIndex: 1 },
-      ]},
+      {
+        withOrderBy: true, data: [
+          { id: 'u1', title: 'UC1', courseId: 'c1', isActive: true, orderIndex: 1 },
+        ]
+      },
+      // enAttempts
+      [],
+      // ucAttempts
+      [],
     ];
     let idx = 0;
     const mockDb = {
@@ -122,8 +136,13 @@ describe('API: Trainee Courses', () => {
     expect((res as any).status).toBe(200);
     expect(body).toEqual({
       course: { id: 'c1', title: 'Course 1', year: 2024, chapter: 'A' },
-      enablers: [ { id: 'e1', title: 'E1' }, { id: 'e2', title: 'E2' } ],
-      useCases: [ { id: 'u1', title: 'UC1' } ],
+      enablers: [
+        { id: 'e1', title: 'E1', attemptNumber: null, status: null },
+        { id: 'e2', title: 'E2', attemptNumber: null, status: null }
+      ],
+      useCases: [
+        { id: 'u1', title: 'UC1', attemptNumber: null, status: null }
+      ],
     });
   });
 

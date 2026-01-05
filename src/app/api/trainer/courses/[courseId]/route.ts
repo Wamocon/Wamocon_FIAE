@@ -153,11 +153,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
       return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
     }
 
-    await db.delete(courses).where(eq(courses.id, courseId as any));
+    // Import trainee_achieved_skills for cascade delete
+    const { traineeAchievedSkills } = await import('@/db/migrations/schemas/schema');
+
+    // Delete in a transaction to ensure consistency
+    await db.transaction(async (tx) => {
+      // First, delete related trainee_achieved_skills that reference this course
+      await tx.delete(traineeAchievedSkills).where(eq(traineeAchievedSkills.achievedViaCourseId, courseId as any));
+
+      // Now delete the course (other FKs like courseMembers, courseSkills, enablers have ON DELETE CASCADE)
+      await tx.delete(courses).where(eq(courses.id, courseId as any));
+    });
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('Delete course error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+
 
