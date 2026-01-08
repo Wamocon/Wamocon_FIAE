@@ -11,6 +11,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import HaiAdminWidget from '@/components/hai/HaiAdminWidget';
 
 // Dynamically import chart components with SSR disabled
 const ProgressTrendChart = dynamic(
@@ -252,6 +253,9 @@ export default function TrainerDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* HAI Admin Section */}
+            <HaiAdminWidget />
           </div>
 
           {/* Right Sidebar - Charts */}
