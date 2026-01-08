@@ -632,6 +632,65 @@ export const progress = pgTable('progress', {
   created_at: timestamp('created_at').defaultNow().notNull(),
 });
 
+// --- 8. HAI.AI TABLES ---
+// AI Coach tables for embeddings, chat sessions, and messages
+
+// Enum for embedding source types
+export const haiSourceType = pgEnum('hai_source_type', ['enabler', 'course', 'document', 'quiz']);
+
+// Enum for chat context types
+export const haiContextType = pgEnum('hai_context_type', ['enabler', 'course', 'quiz', 'general']);
+
+// Enum for message roles
+export const haiMessageRole = pgEnum('hai_message_role', ['user', 'assistant', 'system']);
+
+// HAI.ai Embeddings - stores vector embeddings for RAG
+export const haiEmbeddings = pgTable('hai_embeddings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sourceType: text('source_type').notNull(), // 'enabler', 'course', 'document', 'quiz'
+  sourceId: uuid('source_id').notNull(),
+  chunkIndex: integer('chunk_index').notNull().default(0),
+  content: text('content').notNull(),
+  contentHash: text('content_hash').notNull(),
+  // Note: 'embedding' column is vector(768) - handled at DB level, not in Drizzle
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// HAI.ai Chat Sessions - stores conversation sessions
+export const haiChatSessions = pgTable('hai_chat_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  contextType: text('context_type'), // 'enabler', 'course', 'quiz', 'general'
+  contextId: uuid('context_id'),
+
+  // Chat history features
+  title: text('title'), // Auto-generated from first user message
+  quizState: jsonb('quiz_state'), // For resuming quizzes: {quiz_id, current_question, answers, score}
+  lastMessageAt: timestamp('last_message_at').defaultNow(), // For sorting by recency
+
+  isActive: boolean('is_active').default(true), // false = archived (still visible, just not auto-loaded)
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// HAI.ai Chat Messages - stores individual messages
+export const haiChatMessages = pgTable('hai_chat_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sessionId: uuid('session_id')
+    .notNull()
+    .references(() => haiChatSessions.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user', 'assistant', 'system'
+  content: text('content').notNull(),
+  citations: jsonb('citations').default([]),
+  metadata: jsonb('metadata').default({}),
+  tokensUsed: integer('tokens_used'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // --- TYPE EXPORTS ---
 export type Profile = typeof profiles.$inferSelect;
 export type Course = typeof courses.$inferSelect;
@@ -664,3 +723,8 @@ export type EnablerSubmission = typeof enablerSubmissions.$inferSelect;
 export type LegacyModule = typeof modules.$inferSelect;
 export type LegacyLesson = typeof lessons.$inferSelect;
 export type LegacySubLesson = typeof subLessons.$inferSelect;
+
+// HAI.ai types
+export type HaiEmbedding = typeof haiEmbeddings.$inferSelect;
+export type HaiChatSession = typeof haiChatSessions.$inferSelect;
+export type HaiChatMessage = typeof haiChatMessages.$inferSelect;
