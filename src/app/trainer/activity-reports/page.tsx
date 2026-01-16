@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import JSZip from 'jszip';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import {
@@ -257,6 +258,12 @@ export default function TrainerActivityReportsPage() {
     const handleMassExport = async () => {
         try {
             setError(null);
+            const zip = new JSZip();
+            const folderName = `Nachweise_Export_${new Date().toLocaleDateString('de-DE').replace(/\./g, '-')}`;
+            const folder = zip.folder(folderName);
+
+            let count = 0;
+
             // Export all filtered reports one by one
             for (const report of filteredReports) {
                 // Fetch entries for this report
@@ -282,9 +289,25 @@ export default function TrainerActivityReportsPage() {
                     entries: entriesData.entries || [],
                 };
 
-                await generateActivityReportPDF(reportData, useCases, components);
-                // Small delay between downloads to prevent browser blocking
-                await new Promise(resolve => setTimeout(resolve, 300));
+                const blob = await generateActivityReportPDF(reportData, useCases, components, true);
+                if (blob instanceof Blob) {
+                    const filename = `Tätigkeitsnachweis_KW${report.weekNumber}_${report.year}_${reportData.traineeName.replace(/\s+/g, '_')}.pdf`;
+                    folder?.file(filename, blob);
+                    count++;
+                }
+            }
+
+            if (count > 0) {
+                // Generate ZIP and download
+                const zipContent = await zip.generateAsync({ type: 'blob' });
+                const url = window.URL.createObjectURL(zipContent);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${folderName}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
             }
         } catch (err: any) {
             setError('Fehler beim Massenexport: ' + err.message);
