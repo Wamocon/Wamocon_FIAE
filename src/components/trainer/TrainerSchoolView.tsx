@@ -129,7 +129,7 @@ export function TrainerSchoolView() {
                     </div>
                 </button>
                 <button
-                    onClick={() => handleTabChange('calendar')}
+                    onClick={() => router.push('/trainer/trainees')}
                     className={`p-4 rounded-xl glass-effect border border-border text-left hover:scale-[1.02] transition-transform cursor-pointer ${activeTab === 'calendar' ? 'ring-2 ring-accent' : ''}`}
                 >
                     <div className="flex items-center gap-3">

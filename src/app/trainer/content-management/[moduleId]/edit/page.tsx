@@ -822,11 +822,24 @@ export default function EditCoursePage() {
                     const newUseCaseData = await res.json();
                     const newUseCaseId = newUseCaseData.useCase?.id;
 
-                    // Save pending PDFs if any (when API is extended to support use case documents)
-                    // Note: Currently content_documents only supports enablers. Use case PDF support requires DB migration.
+                    // Save pending PDFs if any
                     if (newUseCaseId && pendingUseCasePdfs.length > 0) {
-                      // TODO: Save PDFs when use case document API is available
-                      console.log('Pending use case PDFs:', pendingUseCasePdfs);
+                      for (const pdf of pendingUseCasePdfs) {
+                        try {
+                          await fetch(`/api/trainer/use-cases/${newUseCaseId}/documents?trainerId=${trainerId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: pdf.title,
+                              fileName: pdf.fileName,
+                              storageUrl: pdf.url,
+                              documentType: 'THEORY',
+                            }),
+                          });
+                        } catch (err) {
+                          console.error('Failed to save use case PDF', err);
+                        }
+                      }
                     }
 
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
