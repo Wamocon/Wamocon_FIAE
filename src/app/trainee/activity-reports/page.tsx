@@ -82,6 +82,7 @@ export default function TraineeActivityReportsPage() {
     const [useCases, setUseCases] = useState<TrainingUseCase[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [filterStatus, setFilterStatus] = useState<'ALL' | 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED'>('ALL');
 
     // Modal states
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -286,7 +287,11 @@ export default function TraineeActivityReportsPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="glass-effect rounded-xl p-4">
+                <button
+                    onClick={() => setFilterStatus('ALL')}
+                    className={`glass-effect rounded-xl p-4 transition-all text-left hover:scale-[1.02] ${filterStatus === 'ALL' ? 'ring-2 ring-primary bg-primary/5' : ''
+                        }`}
+                >
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-blue-500/20">
                             <FileText className="h-5 w-5 text-blue-400" />
@@ -296,9 +301,13 @@ export default function TraineeActivityReportsPage() {
                             <p className="text-sm text-muted-foreground">Gesamt</p>
                         </div>
                     </div>
-                </div>
+                </button>
 
-                <div className="glass-effect rounded-xl p-4">
+                <button
+                    onClick={() => setFilterStatus('DRAFT')}
+                    className={`glass-effect rounded-xl p-4 transition-all text-left hover:scale-[1.02] ${filterStatus === 'DRAFT' ? 'ring-2 ring-yellow-400 bg-yellow-400/5' : ''
+                        }`}
+                >
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-yellow-500/20">
                             <Clock className="h-5 w-5 text-yellow-400" />
@@ -310,9 +319,13 @@ export default function TraineeActivityReportsPage() {
                             <p className="text-sm text-muted-foreground">Entwürfe</p>
                         </div>
                     </div>
-                </div>
+                </button>
 
-                <div className="glass-effect rounded-xl p-4">
+                <button
+                    onClick={() => setFilterStatus('SUBMITTED')}
+                    className={`glass-effect rounded-xl p-4 transition-all text-left hover:scale-[1.02] ${filterStatus === 'SUBMITTED' ? 'ring-2 ring-blue-400 bg-blue-400/5' : ''
+                        }`}
+                >
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-blue-500/20">
                             <Send className="h-5 w-5 text-blue-400" />
@@ -324,9 +337,13 @@ export default function TraineeActivityReportsPage() {
                             <p className="text-sm text-muted-foreground">Eingereicht</p>
                         </div>
                     </div>
-                </div>
+                </button>
 
-                <div className="glass-effect rounded-xl p-4">
+                <button
+                    onClick={() => setFilterStatus('APPROVED')}
+                    className={`glass-effect rounded-xl p-4 transition-all text-left hover:scale-[1.02] ${filterStatus === 'APPROVED' ? 'ring-2 ring-green-400 bg-green-400/5' : ''
+                        }`}
+                >
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-green-500/20">
                             <Check className="h-5 w-5 text-green-400" />
@@ -338,13 +355,22 @@ export default function TraineeActivityReportsPage() {
                             <p className="text-sm text-muted-foreground">Genehmigt</p>
                         </div>
                     </div>
-                </div>
+                </button>
             </div>
 
             {/* Reports List */}
             <div className="glass-effect rounded-xl overflow-hidden">
-                <div className="p-4 border-b border-border/50">
+                <div className="p-4 border-b border-border/50 flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-foreground">Meine Nachweise</h2>
+                    {filterStatus !== 'ALL' && (
+                        <button
+                            onClick={() => setFilterStatus('ALL')}
+                            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        >
+                            <X className="h-3 w-3" />
+                            Filter zurücksetzen
+                        </button>
+                    )}
                 </div>
 
                 {reports.length === 0 ? (
@@ -364,6 +390,7 @@ export default function TraineeActivityReportsPage() {
                 ) : (
                     <div className="divide-y divide-border/50">
                         {reports
+                            .filter(r => filterStatus === 'ALL' || r.status === filterStatus)
                             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                             .map(report => (
                                 <div
