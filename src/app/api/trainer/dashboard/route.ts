@@ -15,6 +15,7 @@ import {
   quizzes,
   quizMembers,
   useCases,
+  activityReports,
 } from '@/db/migrations/schemas/schema';
 
 // Passing score threshold
@@ -44,38 +45,18 @@ export async function GET(req: NextRequest) {
       ])
     );
 
-    // Trainees either directly assigned to this trainer OR enrolled in their courses
-    const directlyAssigned = await db
-      .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
+    // Fetch ALL trainees to match the /api/trainer/trainees endpoint and user expectations
+    const traineeRows = await db
+      .select({
+        id: profiles.id,
+        fullName: profiles.fullName,
+        avatarUrl: profiles.avatarUrl,
+        isActive: profiles.isActive
+      })
       .from(profiles)
-      .where(and(eq(profiles.role, 'TRAINEE'), eq(profiles.assignedTrainerId, trainerId)));
+      .where(eq(profiles.role, 'TRAINEE'));
 
-    let courseTraineeIds: string[] = [];
-    if (courseIds.length > 0) {
-      const courseTrainees = await db
-        .select({ userId: courseMembers.userId })
-        .from(courseMembers)
-        .where(and(inArray(courseMembers.courseId, courseIds), eq(courseMembers.role, 'TRAINEE')));
-      courseTraineeIds = courseTrainees.map(t => String(t.userId));
-    }
-    const traineeIdSet = new Set<string>([
-      ...directlyAssigned.map(t => String(t.id)),
-      ...courseTraineeIds,
-    ]);
-    const traineeIds = Array.from(traineeIdSet);
-
-    // Build full trainee objects
-    let traineeRows = directlyAssigned;
-    if (traineeIds.length > directlyAssigned.length) {
-      const missingIds = traineeIds.filter(id => !directlyAssigned.some(t => String(t.id) === id));
-      if (missingIds.length) {
-        const extras = await db
-          .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
-          .from(profiles)
-          .where(inArray(profiles.id, missingIds as any));
-        traineeRows = [...directlyAssigned, ...extras];
-      }
-    }
+    const traineeIds = traineeRows.map(t => String(t.id));
 
     // Enablers under trainer's courses
     const trainerEnablers = courseIds.length
@@ -196,15 +177,8 @@ export async function GET(req: NextRequest) {
       pendingRefl = 0,
       pendingUseCases = 0,
       pendingEnablers = 0,
-      pendingLessonQuiz = 0;
-
-    let visibleQuizIds: string[] = [];
-    const createdQuizRows = await db.select({ id: quizzes.id }).from(quizzes).where(eq(quizzes.createdById, trainerId));
-    const memberQuizRows = await db.select({ quizId: quizMembers.quizId }).from(quizMembers).where(eq(quizMembers.trainerId, trainerId as any));
-    visibleQuizIds = Array.from(new Set([
-      ...createdQuizRows.map(r => String(r.id)),
-      ...memberQuizRows.map(r => String(r.quizId)),
-    ]));
+      pendingLessonQuiz = 0,
+      pendingActivityReports = 0;
 
     if (traineeIds.length > 0) {
       const [{ c: pq } = { c: 0 }] = await db
@@ -212,8 +186,7 @@ export async function GET(req: NextRequest) {
         .from(quizSubmissions)
         .where(and(
           eq(quizSubmissions.isReviewed, false),
-          inArray(quizSubmissions.traineeId, traineeIds),
-          visibleQuizIds.length ? inArray(quizSubmissions.quizId, visibleQuizIds as any) : (eq(quizSubmissions.quizId, quizSubmissions.quizId) as any)
+          inArray(quizSubmissions.traineeId, traineeIds)
         ));
       pendingQuiz = Number(pq) || 0;
 
@@ -223,8 +196,7 @@ export async function GET(req: NextRequest) {
         .innerJoin(enablerQuizLinks, eq(quizSubmissions.quizId, enablerQuizLinks.quizId))
         .where(and(
           eq(quizSubmissions.isReviewed, false),
-          inArray(quizSubmissions.traineeId, traineeIds),
-          visibleQuizIds.length ? inArray(quizSubmissions.quizId, visibleQuizIds as any) : (eq(quizSubmissions.quizId, quizSubmissions.quizId) as any)
+          inArray(quizSubmissions.traineeId, traineeIds)
         ));
       pendingLessonQuiz = Number(plq) || 0;
 
@@ -245,7 +217,16 @@ export async function GET(req: NextRequest) {
         .from(enablerSubmissions)
         .where(and(eq(enablerSubmissions.status, 'PENDING'), inArray(enablerSubmissions.traineeId, traineeIds)));
       pendingEnablers = Number(pe) || 0;
+
+      // NEW: Count pending activity reports
+      const [{ c: par } = { c: 0 }] = await db
+        .select({ c: count() })
+        .from(activityReports)
+        .where(and(eq(activityReports.status, 'SUBMITTED'), inArray(activityReports.traineeId, traineeIds)));
+      pendingActivityReports = Number(par) || 0;
     }
+    // "Offene Reviews" should strictly be content reviews (Quiz, Reflection, UseCase, Enabler)
+    // Activity Reports are administrative/formal requirements shown in their own card
     const pendingReviews = pendingQuiz + pendingRefl + pendingUseCases + pendingEnablers;
 
     // Recent reflections (last 7 days)
@@ -256,6 +237,14 @@ export async function GET(req: NextRequest) {
         .select({ c: count() })
         .from(reflections)
         .where(and(inArray(reflections.traineeId, traineeIds), gt(reflections.createdAt, lastWeek)))
+      : [{ c: 0 }];
+
+    // Total reflections (regardless of status/time)
+    const [{ c: totalReflections = 0 } = { c: 0 }] = traineeIds.length
+      ? await db
+        .select({ c: count() })
+        .from(reflections)
+        .where(inArray(reflections.traineeId, traineeIds))
       : [{ c: 0 }];
 
     // Progress trend
@@ -368,7 +357,9 @@ export async function GET(req: NextRequest) {
         pendingReflections: pendingRefl,
         pendingEnablers,
         pendingUseCases,
+        pendingActivityReports, // NEW field
         recentReflections: Number(recentReflections) || 0,
+        totalReflections: Number(totalReflections) || 0, // NEW field
       },
       charts,
     });
