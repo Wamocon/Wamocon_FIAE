@@ -286,7 +286,7 @@ export default function TraineeActivityReportsPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
                     onClick={() => setFilterStatus('ALL')}
                     className={`glass-effect rounded-xl p-4 transition-all text-left hover:scale-[1.02] ${filterStatus === 'ALL' ? 'ring-2 ring-primary bg-primary/5' : ''
@@ -299,24 +299,6 @@ export default function TraineeActivityReportsPage() {
                         <div>
                             <p className="text-2xl font-bold text-foreground">{reports.length}</p>
                             <p className="text-sm text-muted-foreground">Gesamt</p>
-                        </div>
-                    </div>
-                </button>
-
-                <button
-                    onClick={() => setFilterStatus('DRAFT')}
-                    className={`glass-effect rounded-xl p-4 transition-all text-left hover:scale-[1.02] ${filterStatus === 'DRAFT' ? 'ring-2 ring-yellow-400 bg-yellow-400/5' : ''
-                        }`}
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-yellow-500/20">
-                            <Clock className="h-5 w-5 text-yellow-400" />
-                        </div>
-                        <div>
-                            <p className="text-2xl font-bold text-foreground">
-                                {reports.filter(r => r.status === 'DRAFT').length}
-                            </p>
-                            <p className="text-sm text-muted-foreground">Entwürfe</p>
                         </div>
                     </div>
                 </button>
