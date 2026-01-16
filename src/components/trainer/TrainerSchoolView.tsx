@@ -52,10 +52,12 @@ export function TrainerSchoolView() {
     }, [searchParams]);
 
     useEffect(() => {
-        if (!profile?.id) return;
+        const trainerId = profile?.id;
+        if (!trainerId) return;
+
         async function loadStats() {
             try {
-                const res = await fetch(`/api/trainer/school/stats?trainerId=${profile.id}`);
+                const res = await fetch(`/api/trainer/school/stats?trainerId=${trainerId}`);
                 if (res.ok) {
                     const data = await res.json();
                     setStats(data);
@@ -98,7 +100,10 @@ export function TrainerSchoolView() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="p-4 rounded-xl glass-effect border border-border">
+                <button
+                    onClick={() => router.push('/trainer/activity-reports?filter=pending')}
+                    className="p-4 rounded-xl glass-effect border border-border text-left hover:scale-[1.02] transition-transform cursor-pointer"
+                >
                     <div className="flex items-center gap-3">
                         <div className="p-2.5 rounded-lg bg-amber-500/10">
                             <ClipboardCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />
@@ -108,8 +113,11 @@ export function TrainerSchoolView() {
                             <p className="text-xs text-muted-foreground">Ausstehende Nachweise</p>
                         </div>
                     </div>
-                </div>
-                <div className="p-4 rounded-xl glass-effect border border-border">
+                </button>
+                <button
+                    onClick={() => handleTabChange('exams')}
+                    className={`p-4 rounded-xl glass-effect border border-border text-left hover:scale-[1.02] transition-transform cursor-pointer ${activeTab === 'exams' ? 'ring-2 ring-accent' : ''}`}
+                >
                     <div className="flex items-center gap-3">
                         <div className="p-2.5 rounded-lg bg-rose-500/10">
                             <FileText className="h-5 w-5 text-rose-600 dark:text-rose-400" />
@@ -119,8 +127,11 @@ export function TrainerSchoolView() {
                             <p className="text-xs text-muted-foreground">Anstehende Prüfungen</p>
                         </div>
                     </div>
-                </div>
-                <div className="p-4 rounded-xl glass-effect border border-border">
+                </button>
+                <button
+                    onClick={() => handleTabChange('calendar')}
+                    className={`p-4 rounded-xl glass-effect border border-border text-left hover:scale-[1.02] transition-transform cursor-pointer ${activeTab === 'calendar' ? 'ring-2 ring-accent' : ''}`}
+                >
                     <div className="flex items-center gap-3">
                         <div className="p-2.5 rounded-lg bg-accent/10">
                             <Users className="h-5 w-5 text-accent" />
@@ -130,7 +141,7 @@ export function TrainerSchoolView() {
                             <p className="text-xs text-muted-foreground">Aktive Trainees</p>
                         </div>
                     </div>
-                </div>
+                </button>
             </div>
 
             {/* Tabs */}

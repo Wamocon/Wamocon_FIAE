@@ -90,7 +90,7 @@ export function TrainerCalendarTab() {
         if (!profile?.id) return;
         async function loadTrainees() {
             try {
-                const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile.id}`);
+                const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile?.id}`);
                 if (res.ok) {
                     const data = await res.json();
                     setTrainees(data.trainees || []);
@@ -233,7 +233,7 @@ export function TrainerCalendarTab() {
                         <option value="" className="bg-card text-foreground">Trainee auswählen...</option>
                         {trainees.map(trainee => (
                             <option key={trainee.id} value={trainee.id} className="bg-card text-foreground">
-                                {trainee.firstName} {trainee.lastName}
+                                {trainee.email ? trainee.email.split('@')[0].split('.').join(' ') : 'Unbekannt'}
                             </option>
                         ))}
                     </select>
