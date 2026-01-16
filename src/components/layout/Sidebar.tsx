@@ -95,7 +95,9 @@ export function Sidebar({
           router.push('/trainer/bulk-import');
           break;
         case 'school':
-          router.push('/trainee/school');
+          router.push(
+            userRole === 'trainee' ? '/trainee/school' : '/trainer/school'
+          );
           break;
         case 'activityReports':
           router.push(
