@@ -13,7 +13,15 @@ export async function GET(req: NextRequest) {
 
     // List ALL trainees regardless of assigned trainer
     const traineeRows = await db
-      .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl, isActive: profiles.isActive })
+      .select({
+        id: profiles.id,
+        fullName: profiles.fullName,
+        firstName: profiles.firstName,
+        lastName: profiles.lastName,
+        email: profiles.email,
+        avatarUrl: profiles.avatarUrl,
+        isActive: profiles.isActive
+      })
       .from(profiles)
       .where(eq(profiles.role, 'TRAINEE'));
 
@@ -61,7 +69,16 @@ export async function GET(req: NextRequest) {
       const total = enablerIdsForTrainee.length;
       const completed = completedMap.get(uid) || 0;
       const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-      return { id: t.id, full_name: t.fullName, avatar_url: t.avatarUrl, progress: pct, isActive: Boolean(t.isActive) };
+      return {
+        id: t.id,
+        firstName: t.firstName,
+        lastName: t.lastName,
+        email: t.email, // Ensure email is passed
+        full_name: t.fullName,
+        avatar_url: t.avatarUrl,
+        progress: pct,
+        isActive: Boolean(t.isActive)
+      };
     });
 
     return NextResponse.json({ trainees });

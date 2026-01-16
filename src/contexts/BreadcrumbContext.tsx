@@ -86,6 +86,7 @@ export function BreadcrumbProvider({
       else if (segment === 'acceptance-protocol') label = 'Abnahmeprotokoll';
       else if (segment === 'analytics') label = 'Analysen';
       else if (segment === 'login') label = 'Anmeldung';
+      else if (segment === 'school') label = 'Berufsschule';
 
       // Capitalize first letter
       label = label.charAt(0).toUpperCase() + label.slice(1);
