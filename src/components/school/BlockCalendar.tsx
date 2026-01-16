@@ -1002,10 +1002,10 @@ function AddBlockModal({
     initialDate: Date | null;
 }) {
     const [startDate, setStartDate] = useState(
-        initialDate ? initialDate.toISOString().split('T')[0] : ''
+        initialDate ? `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}` : ''
     );
     const [endDate, setEndDate] = useState(
-        initialDate ? initialDate.toISOString().split('T')[0] : ''
+        initialDate ? `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}` : ''
     );
     const [blockType, setBlockType] = useState<Block['blockType']>('SCHOOL');
     const [blockNumber, setBlockNumber] = useState('');
