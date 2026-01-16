@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks } from '@/db/migrations/schemas/schema';
+import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, courses } from '@/db/migrations/schemas/schema';
 
 // GET trainee-facing use-case detail; optionally include latest submission by trainee
 // query: traineeId
@@ -35,8 +35,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ useC
         .where(eq(useCaseSubmissionLinks.submissionId, latest.id as any));
     }
 
+    const [course] = await db.select().from(courses).where(eq(courses.id, u.courseId as any));
+
     return NextResponse.json({
-      useCase: { id: u.id, title: u.title, descriptionText: u.descriptionText, isActive: u.isActive, durationValue: u.durationValue, durationUnit: u.durationUnit, activatedAt: u.activatedAt },
+      useCase: {
+        id: u.id,
+        title: u.title,
+        descriptionText: u.descriptionText,
+        isActive: u.isActive,
+        durationValue: u.durationValue,
+        durationUnit: u.durationUnit,
+        activatedAt: u.activatedAt,
+        courseId: u.courseId,
+        courseTitle: course?.title
+      },
       submission: latest
         ? { id: latest.id, submissionText: latest.submissionText, status: latest.status, links }
         : null,
