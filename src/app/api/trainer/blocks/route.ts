@@ -58,7 +58,10 @@ export async function GET(req: NextRequest) {
         const conditions = [eq(ausbildungBlocks.traineeId, traineeId as any)];
 
         if (year) {
-            conditions.push(eq(ausbildungBlocks.year, parseInt(year, 10)));
+            // OPTIONAL: Filter by year is tricky for spanning blocks.
+            // For now, we return ALL blocks to ensure nothing is missed (e.g. crossing year boundaries).
+            // The dataset for a single trainee is small enough.
+            // conditions.push(eq(ausbildungBlocks.year, parseInt(year, 10)));
         }
 
         const rows = await db

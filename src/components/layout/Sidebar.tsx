@@ -187,6 +187,18 @@ export function Sidebar({
         ]
         : [
           {
+            id: 'activityReports',
+            label: language === 'de' ? 'Tätigkeitsnachweis' : 'Activity Reports',
+            icon: ClipboardList,
+            href: '/trainee/activity-reports',
+          },
+          {
+            id: 'school',
+            label: language === 'de' ? 'Berufsschule' : 'School',
+            icon: School,
+            href: '/trainee/school',
+          },
+          {
             id: 'reflection',
             label: language === 'de' ? 'Reflektion' : 'Reflection',
             icon: Brain,
@@ -210,18 +222,7 @@ export function Sidebar({
             icon: HelpCircle,
             href: '/trainee/quizzes',
           },
-          {
-            id: 'activityReports',
-            label: language === 'de' ? 'Tätigkeitsnachweis' : 'Activity Reports',
-            icon: ClipboardList,
-            href: '/trainee/activity-reports',
-          },
-          {
-            id: 'school',
-            label: language === 'de' ? 'Berufsschule' : 'School',
-            icon: School,
-            href: '/trainee/school',
-          },
+         
         ]),
       {
         id: 'profile',
