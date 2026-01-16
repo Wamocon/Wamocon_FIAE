@@ -89,7 +89,7 @@ export function BulkImportUploader() {
     <div className="bg-card border-border rounded-3xl border p-8 shadow-lg">
       <div className="mb-6">
         <h2 className="text-foreground mb-2 text-2xl font-bold">
-          📊 Bulk Import
+          Bulk Import
         </h2>
         <p className="text-muted-foreground">
           Importieren Sie mehrere Kurse, Enabler und Use Cases gleichzeitig aus einer Excel-Datei
