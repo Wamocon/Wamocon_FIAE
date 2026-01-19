@@ -2,10 +2,32 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { User, Edit3, Award, Clock, Target, TrendingUp, Users, Upload, Lock } from 'lucide-react';
+import { User, Edit3, Award, Clock, Target, TrendingUp, Users, Upload, Lock, BookOpen, FileText, Layers, CheckCircle, GraduationCap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { FILE_UPLOAD } from '@/lib/constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+type TrainerStats = {
+  trainees: number;
+  activeCourses: number;
+  totalCourses: number;
+  totalEnablers: number;
+  totalUseCases: number;
+  totalLernfelder: number;
+  pendingReviews: number;
+  pendingQuizzes: number;
+  pendingReflections: number;
+  pendingUseCases: number;
+  recentActivity7d: number;
+};
+
+type ActivityItem = {
+  id: string;
+  userFullName?: string;
+  activityType: string;
+  createdAt: string | null;
+  details?: string;
+};
 
 export function Profile() {
   const { profile, updateProfile, changePassword } = useAuth();
@@ -18,38 +40,45 @@ export function Profile() {
     role: profile?.role || 'trainee',
     training_start_date: profile?.training_start_date || '',
   });
-  const [stats, setStats] = useState<{ trainees?: number; activeCourses?: number; pendingReviews?: number; recentActivity7d?: number } | null>(null);
-  const [activities, setActivities] = useState<Array<{ id: string; userId: string; activityType: string; createdAt: string }>>([]);
+  const [stats, setStats] = useState<TrainerStats | null>(null);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
   const [pwBusy, setPwBusy] = useState(false);
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [showPwSection, setShowPwSection] = useState(false);
 
-  // Load trainer-specific stats (declare hooks before any conditional return)
+  // Load trainer-specific stats
   useEffect(() => {
     const load = async () => {
       try {
-        if (!profile?.id || profile.role !== 'trainer') return;
+        if (!profile?.id || profile.role !== 'trainer') {
+          setStatsLoading(false);
+          return;
+        }
         const url = `/api/trainer/profile?trainerId=${profile.id}`;
         const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data: {
-          counts?: { trainees?: number; activeCourses?: number; pendingReviews?: number; recentActivity7d?: number };
-          recentActivities?: Array<{ id: string; userId?: string; activityType: string; createdAt?: string | null }>;
-        } = await res.json();
+        if (!res.ok) {
+          setStatsLoading(false);
+          return;
+        }
+        const data = await res.json();
         setStats(data.counts || null);
         const recent = Array.isArray(data.recentActivities)
-          ? (data.recentActivities as Array<{ id: string; userId?: string; activityType: string; createdAt?: string | null }>).map((r) => ({
+          ? data.recentActivities.map((r: any) => ({
             id: r.id,
-            userId: r.userId || '',
+            userFullName: r.userFullName || 'Unbekannt',
             activityType: r.activityType,
-            createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : '',
+            createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
+            details: r.details || r.activityType,
           }))
           : [];
         setActivities(recent);
       } catch (e) {
         console.error(e);
+      } finally {
+        setStatsLoading(false);
       }
     };
     load();
@@ -66,8 +95,6 @@ export function Profile() {
     );
   }
 
-
-
   const handleCancel = () => {
     setEditedProfile({
       full_name: profile.full_name || '',
@@ -80,7 +107,6 @@ export function Profile() {
 
   const handleEditToggle = () => {
     if (!isEditing) {
-      // Entering edit mode - sync with current profile (including any uploaded avatar)
       setEditedProfile({
         full_name: profile.full_name || '',
         email: profile.email || '',
@@ -88,12 +114,10 @@ export function Profile() {
         training_start_date: profile.training_start_date || '',
       });
     }
-    // Just toggle edit mode (don't auto-save when closing)
     setIsEditing(!isEditing);
   };
 
   const handlePasswordChange = async () => {
-    console.log('[handlePasswordChange] START - pwBusy before:', pwBusy);
     setPwMsg(null);
     if (!pw1 || pw1.length < 8) {
       setPwMsg('Das Passwort muss mindestens 8 Zeichen lang sein.');
@@ -103,28 +127,20 @@ export function Profile() {
       setPwMsg('Die Passwörter stimmen nicht überein.');
       return;
     }
-    console.log('[handlePasswordChange] Setting pwBusy to TRUE');
     setPwBusy(true);
     try {
-      console.log('[handlePasswordChange] Calling changePassword...');
       await changePassword(pw1);
-      console.log('[handlePasswordChange] Password changed successfully');
       setPwMsg('Passwort erfolgreich geändert.');
       setPw1('');
       setPw2('');
-      console.log('[handlePasswordChange] Setting pwBusy to FALSE (success)');
-      setPwBusy(false);
-      console.log('[handlePasswordChange] After setPwBusy(false)');
     } catch (e: unknown) {
-      console.log('[handlePasswordChange] Error caught:', e);
       const message = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string'
         ? (e as any).message
         : 'Passwort konnte nicht geändert werden';
       setPwMsg(message);
-      console.log('[handlePasswordChange] Setting pwBusy to FALSE (error)');
+    } finally {
       setPwBusy(false);
     }
-    console.log('[handlePasswordChange] END');
   };
 
   const handleChooseFile = () => fileInputRef.current?.click();
@@ -174,8 +190,31 @@ export function Profile() {
   const onFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const f = e.target.files?.[0];
     if (f) await handleAvatarUpload(f);
-    // reset input so same file can be picked again if needed
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const formatRelativeTime = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Gerade eben';
+    if (diffMins < 60) return `vor ${diffMins} Min.`;
+    if (diffHours < 24) return `vor ${diffHours} Std.`;
+    if (diffDays < 7) return `vor ${diffDays} Tag${diffDays > 1 ? 'en' : ''}`;
+    return date.toLocaleDateString('de-DE');
+  };
+
+  const getActivityIcon = (type: string) => {
+    if (type.includes('QUIZ')) return <CheckCircle className="h-4 w-4 text-green-500" />;
+    if (type.includes('REFLECTION')) return <FileText className="h-4 w-4 text-blue-500" />;
+    if (type.includes('USECASE')) return <Target className="h-4 w-4 text-purple-500" />;
+    if (type.includes('LESSON') || type.includes('COURSE')) return <BookOpen className="h-4 w-4 text-accent" />;
+    return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
 
   return (
@@ -204,7 +243,6 @@ export function Profile() {
                 <Upload className="h-4 w-4" />
               </button>
             )}
-            {/* Hidden file input */}
             <input
               ref={fileInputRef}
               type="file"
@@ -318,13 +356,13 @@ export function Profile() {
                 {profile.training_start_date || 'Nicht angegeben'}
               </div>
             ) : (
-              <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3 select-all">
+              <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3 select-all text-sm">
                 {profile.id}
               </div>
             )}
           </div>
           {/* Change Password */}
-          <div className="bg-card border-border mt-6 rounded-3xl border p-0 shadow-lg overflow-hidden">
+          <div className="bg-card border-border mt-6 rounded-3xl border p-0 shadow-lg overflow-hidden md:col-span-2">
             <button
               onClick={() => setShowPwSection(s => !s)}
               className="flex w-full items-center justify-between px-6 py-5"
@@ -403,27 +441,44 @@ export function Profile() {
       {/* Statistics */}
       <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
         <h2 className="text-foreground mb-6 text-2xl font-bold">Statistiken</h2>
-        {profile.role === 'trainer' ? (
-          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-            <div className="text-center">
-              <Users className="text-accent mx-auto mb-2 h-8 w-8" />
-              <p className="text-muted-foreground text-sm">Azubis</p>
-              <p className="text-foreground text-2xl font-bold">{stats?.trainees ?? 0}</p>
-            </div>
-            <div className="text-center">
-              <Target className="text-primary mx-auto mb-2 h-8 w-8" />
-              <p className="text-muted-foreground text-sm">Aktive Kurse</p>
-              <p className="text-foreground text-2xl font-bold">{stats?.activeCourses ?? 0}</p>
-            </div>
-            <div className="text-center">
-              <Clock className="text-accent mx-auto mb-2 h-8 w-8" />
-              <p className="text-muted-foreground text-sm">Offene Reviews</p>
-              <p className="text-foreground text-2xl font-bold">{stats?.pendingReviews ?? 0}</p>
-            </div>
-            <div className="text-center">
-              <TrendingUp className="text-primary mx-auto mb-2 h-8 w-8" />
-              <p className="text-muted-foreground text-sm">Aktivität (7T)</p>
-              <p className="text-foreground text-2xl font-bold">{stats?.recentActivity7d ?? 0}</p>
+        {statsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-4"></div>
+          </div>
+        ) : profile.role === 'trainer' ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
+                <div className="from-accent to-primary mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br">
+                  <Users className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-foreground text-2xl font-bold">{stats?.trainees ?? 0}</p>
+                <p className="text-muted-foreground text-sm">Azubis</p>
+              </div>
+
+              <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
+                <div className="from-purple-500 to-pink-500 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br">
+                  <FileText className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-foreground text-2xl font-bold">{stats?.totalEnablers ?? 0}</p>
+                <p className="text-muted-foreground text-sm">Lektionen</p>
+              </div>
+
+              <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
+                <div className="from-indigo-500 to-violet-500 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br">
+                  <Target className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-foreground text-2xl font-bold">{stats?.totalUseCases ?? 0}</p>
+                <p className="text-muted-foreground text-sm">Use Cases</p>
+              </div>
+
+              <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
+                <div className="from-teal-500 to-emerald-500 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br">
+                  <GraduationCap className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-foreground text-2xl font-bold">{stats?.totalLernfelder ?? 0}</p>
+                <p className="text-muted-foreground text-sm">Lernfelder</p>
+              </div>
             </div>
           </div>
         ) : (
@@ -456,18 +511,33 @@ export function Profile() {
       <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
         <h2 className="text-foreground mb-6 text-2xl font-bold">Letzte Aktivitäten</h2>
         {profile.role === 'trainer' ? (
-          <div className="space-y-4">
-            {activities.length === 0 && (
-              <div className="text-muted-foreground">Keine Aktivitäten gefunden</div>
-            )}
-            {activities.map((a) => (
-              <div key={a.id} className="bg-muted/50 flex items-center justify-between rounded-xl p-4">
-                <span className="text-muted-foreground">{a.activityType}</span>
-                <span className="text-muted-foreground ml-auto text-sm">
-                  {a.createdAt ? new Date(a.createdAt).toLocaleString() : ''}
-                </span>
+          <div className="space-y-3">
+            {statsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-4"></div>
               </div>
-            ))}
+            ) : activities.length === 0 ? (
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">Keine Aktivitäten gefunden</p>
+                <p className="text-muted-foreground/70 text-sm mt-1">Aktivitäten Ihrer Azubis werden hier angezeigt.</p>
+              </div>
+            ) : (
+              activities.map((a) => (
+                <div key={a.id} className="glass-effect flex items-center gap-4 rounded-xl border border-accent/10 p-4 hover:border-accent/20 transition-colors">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/50">
+                    {getActivityIcon(a.activityType)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-foreground font-medium truncate">{a.userFullName}</p>
+                    <p className="text-muted-foreground text-sm">{a.details || a.activityType}</p>
+                  </div>
+                  <span className="text-muted-foreground text-sm whitespace-nowrap">
+                    {formatRelativeTime(a.createdAt)}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         ) : (
           <div className="space-y-4">
