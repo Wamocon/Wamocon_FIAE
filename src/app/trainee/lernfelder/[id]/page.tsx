@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, BookOpen, Clock, Layers, ArrowRight, FileText, PlayCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, Clock, Layers, ArrowRight, FileText, PlayCircle, Tag } from 'lucide-react';
 
 export default function TraineeLernfeldDetailPage() {
     const router = useRouter();
@@ -10,6 +10,7 @@ export default function TraineeLernfeldDetailPage() {
     const id = params?.id as string;
     const [data, setData] = useState<{ lernfeld: any; useCases: any[] } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [allLernfelder, setAllLernfelder] = useState<any[]>([]);
 
     useEffect(() => {
         if (id) {
@@ -23,8 +24,33 @@ export default function TraineeLernfeldDetailPage() {
                     console.error(err);
                     setLoading(false);
                 });
+
+            // Fetch all lernfelder to create label -> id mapping
+            fetch('/api/trainee/lernfelder')
+                .then(res => res.json())
+                .then(d => {
+                    setAllLernfelder(d.lernfelder || []);
+                })
+                .catch(err => console.error(err));
         }
     }, [id]);
+
+    // Create a lookup map: label -> lernfeld object
+    const lernfeldByLabel = useMemo(() => {
+        const map: Record<string, any> = {};
+        allLernfelder.forEach(lf => {
+            map[lf.label] = lf;
+        });
+        return map;
+    }, [allLernfelder]);
+
+    const handleLernfeldClick = (e: React.MouseEvent, label: string) => {
+        e.stopPropagation();
+        const lf = lernfeldByLabel[label];
+        if (lf) {
+            router.push(`/trainee/lernfelder/${lf.id}`);
+        }
+    };
 
     if (loading) return (
         <div className="flex items-center justify-center min-h-[400px]">
@@ -129,6 +155,26 @@ export default function TraineeLernfeldDetailPage() {
                                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{uc.descriptionText}</p>
                                 ) : (
                                     <p className="text-xs text-muted-foreground/50 italic mb-3">Keine Beschreibung</p>
+                                )}
+
+                                {/* Lernfelder Tags */}
+                                {uc.lernfelder && uc.lernfelder.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mb-3">
+                                        <Tag className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                                        {uc.lernfelder.map((label: string) => (
+                                            <button
+                                                key={label}
+                                                onClick={(e) => handleLernfeldClick(e, label)}
+                                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all hover:scale-105 ${label === lernfeld.label
+                                                        ? 'bg-accent text-white'
+                                                        : 'bg-muted/30 text-muted-foreground hover:bg-accent/20 hover:text-accent'
+                                                    }`}
+                                                title={`Zu ${label} wechseln`}
+                                            >
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
 
                                 <div className="flex items-center justify-between pt-2 border-t border-accent/10">
