@@ -504,7 +504,7 @@ export async function processMessageStream(
  */
 function extractQuizTopic(message: string): string {
     // Remove quiz command
-    let topic = message
+    const topic = message
         .replace(/\/quiz\s*/i, '')
         .replace(/quiz (starten|zum thema)\s*/i, '')
         .replace(/teste mich (zu|über)\s*/i, '')

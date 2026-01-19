@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
         }
 
         // Build conditions - reports from assigned trainees
-        let conditions: any[] = [];
+        const conditions: any[] = [];
 
         // Filter by specific trainee if provided
         if (traineeId && traineeIds.includes(traineeId)) {

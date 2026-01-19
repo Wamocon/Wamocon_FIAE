@@ -370,7 +370,7 @@ export function Profile() {
             >
               <div className="flex items-center gap-3">
                 <span className="from-accent to-primary inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
-                  <Lock className="h-5 w-5 text-white" />
+                  <Lock className="h-5 w-5 text-primary-foreground" />
                 </span>
                 <span className="text-foreground text-xl font-semibold">Passwort ändern</span>
               </div>
@@ -450,7 +450,7 @@ export function Profile() {
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
                 <div className="from-accent to-primary mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br">
-                  <Users className="h-6 w-6 text-white" />
+                  <Users className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <p className="text-foreground text-2xl font-bold">{stats?.trainees ?? 0}</p>
                 <p className="text-muted-foreground text-sm">Azubis</p>
@@ -458,7 +458,7 @@ export function Profile() {
 
               <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
                 <div className="from-purple-500 to-pink-500 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br">
-                  <FileText className="h-6 w-6 text-white" />
+                  <FileText className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <p className="text-foreground text-2xl font-bold">{stats?.totalEnablers ?? 0}</p>
                 <p className="text-muted-foreground text-sm">Lektionen</p>
@@ -466,7 +466,7 @@ export function Profile() {
 
               <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
                 <div className="from-indigo-500 to-violet-500 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br">
-                  <Target className="h-6 w-6 text-white" />
+                  <Target className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <p className="text-foreground text-2xl font-bold">{stats?.totalUseCases ?? 0}</p>
                 <p className="text-muted-foreground text-sm">Use Cases</p>
@@ -474,7 +474,7 @@ export function Profile() {
 
               <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
                 <div className="from-teal-500 to-emerald-500 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br">
-                  <GraduationCap className="h-6 w-6 text-white" />
+                  <GraduationCap className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <p className="text-foreground text-2xl font-bold">{stats?.totalLernfelder ?? 0}</p>
                 <p className="text-muted-foreground text-sm">Lernfelder</p>

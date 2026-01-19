@@ -83,7 +83,7 @@ export function HaiLogoBanner({
                         animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                         exit={{ opacity: 0, scale: 0.5 }}
                         transition={{ type: "spring", stiffness: 300, damping: 20 }} // Pop effect
-                        className={`absolute -top-4 -right-24 bg-white/10 backdrop-blur-md border border-cyan-500/30 text-white px-4 py-2 rounded-xl rounded-bl-none shadow-lg z-20 ${bubbleClass}`}
+                        className={`absolute -top-4 -right-24 bg-white/10 light:bg-slate-800 backdrop-blur-md border border-cyan-500/30 text-white px-4 py-2 rounded-xl rounded-bl-none shadow-lg z-20 ${bubbleClass}`}
                         style={{ minWidth: '180px' }}
                     >
                         <div className="relative">

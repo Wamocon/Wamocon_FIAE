@@ -94,7 +94,7 @@ export default function TraineeUseCaseDetailPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
-      <div className="rounded-3xl border border-accent/30 bg-black/30 p-5">
+      <div className="rounded-3xl border border-accent/30 bg-card p-5">
         <h1 className="text-foreground text-2xl font-bold">{useCase.title}</h1>
         <p className="text-muted-foreground mt-2 whitespace-pre-line">{useCase.descriptionText}</p>
 
@@ -105,7 +105,7 @@ export default function TraineeUseCaseDetailPage() {
               <button
                 key={doc.id}
                 onClick={() => setSelectedPdfUrl(prev => prev === doc.storageUrl ? null : doc.storageUrl)}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${selectedPdfUrl === doc.storageUrl ? 'bg-background text-foreground hover:bg-accent/30' : 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105' }`}
+                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${selectedPdfUrl === doc.storageUrl ? 'bg-background text-foreground hover:bg-accent/30' : 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105'}`}
               >
                 <div className="flex items-center gap-2">
                   {selectedPdfUrl === doc.storageUrl ? <ChevronLeft className="h-4 w-4 rotate-[-90deg]" /> : <ChevronLeft className="h-4 w-4 rotate-90" />}
@@ -119,7 +119,7 @@ export default function TraineeUseCaseDetailPage() {
         {/* Inline PDF Viewer */}
         {selectedPdfUrl && (
           <div className="mt-4 animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="relative w-full h-[80vh] rounded-xl overflow-hidden border border-accent/30 bg-white shadow-2xl">
+            <div className="relative w-full h-[80vh] rounded-xl overflow-hidden border border-accent/30 bg-card shadow-2xl">
               <iframe
                 src={`${selectedPdfUrl}#toolbar=1&navpanes=0&view=FitH`}
                 className="w-full h-full"
@@ -146,18 +146,18 @@ export default function TraineeUseCaseDetailPage() {
 
       {success && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-3 text-green-300">{success}</div>}
 
-      <div className="space-y-4 rounded-3xl border border-accent/30 bg-black/30 p-5">
+      <div className="space-y-4 rounded-3xl border border-accent/30 bg-card p-5">
 
         <div>
           <label className="mb-1 block text-sm font-medium">Deine Lösung / Beschreibung</label>
-          <textarea value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={6} />
+          <textarea value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground" rows={6} />
         </div>
         <div className="space-y-2">
           <div className="text-sm font-medium">Links zu deiner Arbeit</div>
           {links.map((l, i) => (
             <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <input className="rounded-xl border border-accent/30 bg-black/30 px-3 py-2 md:col-span-2" placeholder="https://github.com/... oder https://1drv.ms/..." value={l.url} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))} />
-              <input className="rounded-xl border border-accent/30 bg-black/30 px-3 py-2" placeholder="Beschreibung (optional)" value={l.description || ''} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} />
+              <input className="rounded-xl border border-accent/30 bg-muted px-3 py-2 md:col-span-2 text-foreground" placeholder="https://github.com/... oder https://1drv.ms/..." value={l.url} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))} />
+              <input className="rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground" placeholder="Beschreibung (optional)" value={l.description || ''} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} />
             </div>
           ))}
           <div className="flex gap-2">

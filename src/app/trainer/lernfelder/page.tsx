@@ -137,7 +137,7 @@ export default function TrainerLernfelderPage() {
                     </div>
                     <button
                         onClick={openCreate}
-                        className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex items-center gap-2 rounded-xl bg-gradient-to-r px-5 py-2.5 font-medium text-foreground shadow-lg transition-all duration-200 hover:shadow-xl"
+                        className="bg-primary from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex items-center gap-2 rounded-xl bg-gradient-to-r px-5 py-2.5 font-medium text-primary-foreground shadow-lg transition-all duration-200 hover:shadow-xl"
                     >
                         <Plus className="h-4 w-4" />
                         Neues Lernfeld
@@ -172,10 +172,10 @@ export default function TrainerLernfelderPage() {
 
                         {/* Header: Icon + Label */}
                         <div className="relative flex items-center justify-between mb-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-primary shadow-lg shadow-accent/25">
-                                <Layers className="h-5 w-5 text-white" />
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary bg-gradient-to-br from-accent to-primary shadow-lg shadow-accent/25">
+                                <Layers className="h-5 w-5 text-primary-foreground" />
                             </div>
-                            <span className="rounded-full bg-accent/90 px-3 py-1 text-xs font-bold text-white shadow-sm">
+                            <span className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground shadow-sm">
                                 {lf.label}
                             </span>
                         </div>

@@ -280,75 +280,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           </div>
         </div>
       </div>
-
-      {/* Quick Stats */}
-      {/* <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-              <TrendingUp className="h-6 w-6 text-foreground" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Gesamtfortschritt</p>
-              <p className="text-foreground text-2xl font-bold">{trainee?.progress ?? 0}%</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500">
-              <BookOpen className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Enabler abgeschlossen</p>
-              <p className="text-foreground text-2xl font-bold">{overview ? `${overview.stats.completedEnablers}/${overview.stats.totalEnablers}` : '—'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-violet-500">
-              <Award className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Durchschnitt</p>
-              <p className="text-foreground text-2xl font-bold">{
-                (() => {
-                  if (!overview) return '—';
-                  const scores: number[] = [];
-                  overview.enablerQuizzes.forEach(q => { if (typeof q.lastScore === 'number') scores.push(q.lastScore); });
-                  overview.globalQuizzes.forEach(q => { if (typeof q.lastScore === 'number') scores.push(q.lastScore); });
-                  if (scores.length === 0) return '—';
-                  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-                  return `${avg}%`;
-                })()
-              }</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500">
-              <Calendar className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Letzte Aktivität</p>
-              <p className="text-foreground text-2xl font-bold">{
-                (() => {
-                  if (!overview) return '—';
-                  const dates: Date[] = [];
-                  // We don't store activity feed here; infer from quiz submissions datasets when present
-                  // As the API only returns latest entries per item, we can't derive a precise timestamp easily; show em dash
-                  return '—';
-                })()
-              }</p>
-            </div>
-          </div>
-        </div>
-      </div> */}
+      
 
       {/* Row 3: Assignments & Progress */}
       <div className="glass-effect bg-background border-accent/30 rounded-3xl border p-6 shadow-lg">

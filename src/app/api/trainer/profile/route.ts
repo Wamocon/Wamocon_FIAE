@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
     const userMap = new Map<string, string>();
     traineeRows.forEach(t => userMap.set(t.id, t.fullName || 'Unbekannt'));
 
-    let recentActivities = activityRows.map(a => ({
+    const recentActivities = activityRows.map(a => ({
       id: a.id,
       odaUserId: a.odaUserId,
       userFullName: a.odaUserId ? userMap.get(a.odaUserId) || 'Azubi' : 'Azubi',
