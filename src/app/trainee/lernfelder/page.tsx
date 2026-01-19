@@ -63,7 +63,7 @@ export default function TraineeLernfelderPage() {
                     <div
                         key={lf.id}
                         onClick={() => router.push(`/trainee/lernfelder/${lf.id}`)}
-                        className="group glass-effect relative overflow-hidden rounded-2xl border border-accent/20 bg-gradient-to-br from-card via-card to-accent/5 p-5 shadow-md transition-all duration-300 hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10 cursor-pointer"
+                        className="group glass-effect relative overflow-hidden rounded-2xl border border-accent/20 bg-gradient-to-br from-card via-card to-accent/5 p-5 shadow-md transition-all duration-300 hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10 cursor-pointer h-full flex flex-col"
                     >
                         {/* Decorative gradient orb */}
                         <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-accent/20 to-primary/10 blur-2xl transition-all duration-500 group-hover:scale-150 group-hover:from-accent/30" />
@@ -79,23 +79,25 @@ export default function TraineeLernfelderPage() {
                         </div>
 
                         {/* Title */}
-                        <h3 className="text-foreground font-semibold text-base mb-2 line-clamp-2 group-hover:text-accent transition-colors">
+                        <h3 className="text-foreground font-semibold text-base mb-2 line-clamp-2 group-hover:text-accent transition-colors h-12">
                             {lf.title}
                         </h3>
 
                         {/* Description */}
-                        {lf.description ? (
-                            <p className="text-muted-foreground text-xs line-clamp-2 mb-3">
-                                {lf.description}
-                            </p>
-                        ) : (
-                            <p className="text-muted-foreground/50 text-xs italic mb-3">
-                                Keine Beschreibung
-                            </p>
-                        )}
+                        <div className="mb-3 h-8">
+                            {lf.description ? (
+                                <p className="text-muted-foreground text-xs line-clamp-2">
+                                    {lf.description}
+                                </p>
+                            ) : (
+                                <p className="text-muted-foreground/50 text-xs italic">
+                                    Keine Beschreibung
+                                </p>
+                            )}
+                        </div>
 
                         {/* Stats Row */}
-                        <div className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2 mt-auto">
                             <div className="flex items-center gap-2">
                                 <BookOpen className="h-4 w-4 text-accent" />
                                 <span className="text-foreground text-sm font-medium">Use Cases</span>
