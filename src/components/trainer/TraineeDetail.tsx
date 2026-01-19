@@ -86,9 +86,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     if (traineeId) load();
   }, [traineeId]);
 
-  const handleAcceptanceProtocol = () => {
-    router.push('/trainer/acceptance-protocol');
-  };
+
 
   const generatePdfBlob = async () => {
     // dynamically import to keep bundle small and avoid SSR issues
@@ -257,12 +255,12 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           </div>
 
           <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowEdit((v) => !v)}
-                className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200"
-              >
-                {showEdit ? 'Bearbeiten ausblenden' : 'Bearbeiten'}
-              </button>
+            <button
+              onClick={() => setShowEdit((v) => !v)}
+              className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200"
+            >
+              {showEdit ? 'Bearbeiten ausblenden' : 'Bearbeiten'}
+            </button>
             <button
               onClick={handleSharePdf}
               disabled={exporting}
@@ -278,13 +276,6 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
             >
               <Download className="h-4 w-4" />
               {exporting ? 'Export…' : 'Export'}
-            </button>
-            <button
-              onClick={handleAcceptanceProtocol}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-            >
-              <FileCheck2 className="h-5 w-5" />
-              Abnahmeprotokoll
             </button>
           </div>
         </div>
@@ -455,7 +446,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               ) : (
                 <div className="text-sm text-foreground">Keine Enabler-Quizzes vorhanden.</div>
               )}
-            </section>   
+            </section>
             {/* Use Cases */}
             <section>
               <h3 className="mb-3 text-xl font-bold text-foreground">Use Cases</h3>
