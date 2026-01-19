@@ -298,7 +298,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500">
-              <BookOpen className="h-6 w-6 text-foreground" />
+              <BookOpen className="h-6 w-6 text-white" />
             </div>
             <div>
               <p className="text-muted text-sm">Enabler abgeschlossen</p>
@@ -310,7 +310,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-violet-500">
-              <Award className="h-6 w-6 text-foreground" />
+              <Award className="h-6 w-6 text-white" />
             </div>
             <div>
               <p className="text-muted text-sm">Durchschnitt</p>
@@ -332,7 +332,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500">
-              <Calendar className="h-6 w-6 text-foreground" />
+              <Calendar className="h-6 w-6 text-white" />
             </div>
             <div>
               <p className="text-muted text-sm">Letzte Aktivität</p>

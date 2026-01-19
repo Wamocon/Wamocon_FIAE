@@ -210,9 +210,9 @@ export function Profile() {
   };
 
   const getActivityIcon = (type: string) => {
-    if (type.includes('QUIZ')) return <CheckCircle className="h-4 w-4 text-green-500" />;
-    if (type.includes('REFLECTION')) return <FileText className="h-4 w-4 text-blue-500" />;
-    if (type.includes('USECASE')) return <Target className="h-4 w-4 text-purple-500" />;
+    if (type.includes('QUIZ')) return <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />;
+    if (type.includes('REFLECTION')) return <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
+    if (type.includes('USECASE')) return <Target className="h-4 w-4 text-purple-600 dark:text-purple-400" />;
     if (type.includes('LESSON') || type.includes('COURSE')) return <BookOpen className="h-4 w-4 text-accent" />;
     return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
