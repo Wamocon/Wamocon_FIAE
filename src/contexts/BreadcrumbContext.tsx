@@ -83,7 +83,6 @@ export function BreadcrumbProvider({
       else if (segment === 'content-management') label = 'Inhalts-Management';
       else if (segment === 'quiz-management') label = 'Quiz-Verwaltung';
       else if (segment === 'trainees') label = 'Auszubildende';
-      else if (segment === 'acceptance-protocol') label = 'Abnahmeprotokoll';
       else if (segment === 'analytics') label = 'Analysen';
       else if (segment === 'login') label = 'Anmeldung';
       else if (segment === 'school') label = 'Berufsschule';

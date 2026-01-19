@@ -74,9 +74,6 @@ export function Sidebar({
         case 'trainees':
           router.push('/trainer/trainees');
           break;
-        case 'acceptanceProtocol':
-          router.push('/trainer/acceptance-protocol');
-          break;
         case 'analytics':
           router.push('/trainer/analytics');
           break;
@@ -182,13 +179,6 @@ export function Sidebar({
             label: language === 'de' ? 'Auszubildende' : 'Trainees',
             icon: Users,
             href: '/trainer/trainees',
-          },
-          {
-            id: 'acceptanceProtocol',
-            label:
-              language === 'de' ? 'Abnahmeprotokoll' : 'Acceptance Protocol',
-            icon: FileCheck2,
-            href: '/trainer/acceptance-protocol',
           },
           {
             id: 'analytics',
