@@ -70,10 +70,10 @@ export default function TraineeLernfelderPage() {
 
                         {/* Header: Icon + Label */}
                         <div className="relative flex items-center justify-between mb-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-primary shadow-lg shadow-accent/25">
-                                <Layers className="h-5 w-5 text-white" />
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary bg-gradient-to-br from-accent to-primary shadow-lg shadow-accent/25">
+                                <Layers className="h-5 w-5 text-primary-foreground" />
                             </div>
-                            <span className="rounded-full bg-accent/90 px-3 py-1 text-xs font-bold text-white shadow-sm">
+                            <span className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground shadow-sm">
                                 {lf.label}
                             </span>
                         </div>

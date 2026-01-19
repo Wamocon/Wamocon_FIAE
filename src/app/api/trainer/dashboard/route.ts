@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
         .where(and(inArray(enablers.courseId, courseIds as any), eq(enablers.isActive, true)))
       : [];
     const enablerIds = trainerEnablers.map((e) => e.id);
-    let totalEnablers = enablerIds.length;
+    const totalEnablers = enablerIds.length;
 
     // Get quiz links
     const quizLinks = enablerIds.length ? await db
@@ -297,7 +297,7 @@ export async function GET(req: NextRequest) {
       courseEnablerTotal.set(String(row.courseId), Number(row.c) || 0);
     });
 
-    let compByCourseAndTrainee = new Map<string, Map<string, number>>();
+    const compByCourseAndTrainee = new Map<string, Map<string, number>>();
     if (courseIds.length && traineeIds.length) {
       const compRows = await db
         .select({

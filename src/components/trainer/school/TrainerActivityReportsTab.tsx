@@ -258,13 +258,13 @@ function ReviewModal({ report, onClose, onReview }: {
                     <div className="flex gap-3">
                         <button
                             onClick={() => { setAction('reject'); }}
-                            className={`flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition ${action === 'reject' ? 'bg-rose-500 text-white' : 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20'}`}
+                            className={`flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition ${action === 'reject' ? 'bg-destructive text-destructive-foreground' : 'bg-destructive/10 text-destructive hover:bg-destructive/20'}`}
                         >
                             <X className="h-4 w-4" />Ablehnen
                         </button>
                         <button
                             onClick={() => { setAction('approve'); }}
-                            className={`flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition ${action === 'approve' ? 'bg-green-500 text-white' : 'bg-green-500/10 text-green-600 hover:bg-green-500/20'}`}
+                            className={`flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition ${action === 'approve' ? 'bg-green-600 text-primary-foreground dark:text-white' : 'bg-green-600/10 text-green-600 hover:bg-green-600/20'}`}
                         >
                             <Check className="h-4 w-4" />Genehmigen
                         </button>

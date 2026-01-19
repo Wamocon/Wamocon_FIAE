@@ -790,10 +790,10 @@ function ReportReviewModal({
                                     <button
                                         onClick={handleApprove}
                                         disabled={processing}
-                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-primary-foreground dark:text-white rounded-lg hover:bg-green-700"
                                     >
                                         {processing ? (
-                                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                                            <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
                                         ) : (
                                             <Check className="h-4 w-4" />
                                         )}

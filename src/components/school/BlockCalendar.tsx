@@ -599,7 +599,7 @@ export function BlockCalendar() {
                                     <div className={`
                                         inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-medium mb-1
                                         ${dayData.isToday
-                                            ? 'bg-accent text-white'
+                                            ? 'bg-accent text-accent-foreground'
                                             : isWeekend
                                                 ? 'text-muted-foreground'
                                                 : 'text-foreground'

@@ -329,7 +329,7 @@ export default function TrainerCalendarPage() {
                                         >
                                             <div className={`
                                                 inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-medium
-                                                ${dayData.isToday ? 'bg-accent text-white' : isWeekend ? 'text-muted-foreground' : 'text-foreground'}
+                                                ${dayData.isToday ? 'bg-accent text-accent-foreground' : isWeekend ? 'text-muted-foreground' : 'text-foreground'}
                                             `}>
                                                 {dayData.date.getDate()}
                                             </div>

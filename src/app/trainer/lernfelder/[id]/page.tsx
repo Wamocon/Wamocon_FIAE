@@ -140,7 +140,7 @@ export default function TrainerLernfeldDetailPage() {
                         </button>
                         <div>
                             <div className="flex flex-wrap items-center gap-3 mb-2">
-                                <span className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-white shadow-sm">
+                                <span className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground shadow-sm">
                                     {lernfeld.label}
                                 </span>
                                 <h1 className="text-2xl font-bold text-foreground">{lernfeld.title}</h1>
@@ -176,8 +176,8 @@ export default function TrainerLernfeldDetailPage() {
             <div className="glass-effect border-accent/30 rounded-2xl border p-4 shadow-lg">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-primary shadow-lg shadow-accent/25">
-                            <FileText className="h-5 w-5 text-white" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary bg-gradient-to-br from-accent to-primary shadow-lg shadow-accent/25">
+                            <FileText className="h-5 w-5 text-primary-foreground" />
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-foreground">{useCases.length}</p>
@@ -216,8 +216,8 @@ export default function TrainerLernfeldDetailPage() {
                                 <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-gradient-to-br from-primary/20 to-accent/10 blur-2xl transition-all duration-500 group-hover:scale-150" />
 
                                 <div className="relative mb-3 flex items-center justify-between">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25">
-                                        <BookOpen className="h-5 w-5 text-white" />
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25">
+                                        <BookOpen className="h-5 w-5 text-primary-foreground" />
                                     </div>
                                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${uc.isActive ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
                                         {uc.isActive ? 'Aktiv' : 'Entwurf'}
@@ -243,8 +243,8 @@ export default function TrainerLernfeldDetailPage() {
                                                 key={label}
                                                 onClick={(e) => handleLernfeldClick(e, label)}
                                                 className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all hover:scale-105 ${label === lernfeld.label
-                                                        ? 'bg-accent text-white'
-                                                        : 'bg-muted/30 text-muted-foreground hover:bg-accent/20 hover:text-accent'
+                                                    ? 'bg-accent text-accent-foreground'
+                                                    : 'bg-muted/30 text-muted-foreground hover:bg-accent/20 hover:text-accent'
                                                     }`}
                                                 title={`Zu ${label} wechseln`}
                                             >
