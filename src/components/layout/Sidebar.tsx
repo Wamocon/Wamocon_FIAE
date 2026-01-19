@@ -17,6 +17,7 @@ import {
   School,
   Calendar,
   ClipboardList,
+  FolderEdit,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback } from 'react';
@@ -99,6 +100,11 @@ export function Sidebar({
             userRole === 'trainee' ? '/trainee/school' : '/trainer/school'
           );
           break;
+        case 'lernfelder':
+          router.push(
+            userRole === 'trainee' ? '/trainee/lernfelder' : '/trainer/lernfelder'
+          );
+          break;
         case 'activityReports':
           router.push(
             userRole === 'trainee' ? '/trainee/activity-reports' : '/trainer/activity-reports'
@@ -152,6 +158,12 @@ export function Sidebar({
               language === 'de' ? 'Inhalts-Management' : 'Content Management',
             icon: BookOpen,
             href: '/trainer/content-management',
+          },
+          {
+            id: 'lernfelder',
+            label: 'Lernfelder',
+            icon: FolderEdit,
+            href: '/trainer/lernfelder',
           },
           {
             id: 'quizManagement',
@@ -211,6 +223,12 @@ export function Sidebar({
             href: '/trainee/courses',
           },
           {
+            id: 'lernfelder',
+            label: 'Lernfelder',
+            icon: FolderEdit,
+            href: '/trainee/lernfelder',
+          },
+          {
             id: 'lessons',
             label: language === 'de' ? 'Trainer-Feedback' : 'Trainer Feedback',
             icon: GraduationCap,
@@ -222,7 +240,7 @@ export function Sidebar({
             icon: HelpCircle,
             href: '/trainee/quizzes',
           },
-         
+
         ]),
       {
         id: 'profile',

@@ -7,7 +7,7 @@ import { courses, courseMembers, enablers, useCases, enablerSubmissions, useCase
 // query: traineeId
 export async function GET(
   req: NextRequest,
-  context: { params: { courseId: string } }
+  context: { params: Promise<{ courseId: string }> }
 ) {
   try {
     const { searchParams } = new URL(req.url);
