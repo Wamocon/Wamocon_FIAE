@@ -22,7 +22,7 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
   if (!sub) {
     return (
       <div className="mx-auto max-w-5xl p-6">
-        <div className="rounded-3xl border border-accent/30 bg-black/30 p-6">
+        <div className="rounded-3xl border border-accent/30 bg-card p-6">
           <h1 className="text-foreground text-lg font-semibold">Submission not found</h1>
           <Link href="/trainer/reviews?view=quizzes" className="text-primary underline">Back to Reviews</Link>
         </div>
@@ -63,7 +63,7 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
-      <div className="rounded-3xl border border-accent/30 bg-black/30 p-6">
+      <div className="rounded-3xl border border-accent/30 bg-card p-6">
         <div className="mb-2 text-xs text-muted-foreground">
           <Link href="/trainer/reviews?view=quizzes" className="underline">Reviews</Link>
           <span> / </span>
@@ -74,7 +74,7 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
           Trainee: {trainee?.fullName ?? trainee?.email ?? sub.traineeId} • Score: {sub.score ?? 0}%
           {quiz?.quizType === 'LESSON' && link?.difficulty && (
             <>
-              {' '}• Schwierigkeit: <span className="inline-flex items-center rounded bg-black/40 px-2 py-0.5 text-xs">{link.difficulty}</span>
+              {' '}• Schwierigkeit: <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-xs">{link.difficulty}</span>
             </>
           )}
           {enabler?.title && (
@@ -89,24 +89,24 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
         {grouped.map((q, i) => {
           const isText = q.questionType === 'TEXT';
           return (
-            <div key={q.id} className="rounded-2xl border border-accent/30 bg-black/30 p-5">
+            <div key={q.id} className="rounded-2xl border border-accent/30 bg-card p-5">
               <div className="mb-3 text-foreground font-medium">{i + 1}. {q.text} {isText && <span className="ml-2 rounded bg-blue-600/50 px-2 py-0.5 text-xs">Text</span>}</div>
               {isText ? (
                 <div className="space-y-2 text-sm">
-                  <div className="rounded-lg border border-accent/30 bg-black/20 p-3">
+                  <div className="rounded-lg border border-accent/30 bg-muted/50 p-3">
                     <div className="text-xs uppercase text-muted-foreground mb-1">Antwort des Trainees</div>
                     <div className="whitespace-pre-wrap">{q.textAnswer || <span className="italic text-muted-foreground">(keine Antwort)</span>}</div>
                   </div>
-                  <div className="rounded-lg border border-accent/30 bg-black/10 p-3">
+                  <div className="rounded-lg border border-accent/30 bg-muted/20 p-3">
                     <div className="text-xs uppercase text-muted-foreground mb-1">Erwartete Antwort</div>
                     <div className="whitespace-pre-wrap">{q.expectedAnswer || <span className="italic text-muted-foreground">(nicht festgelegt)</span>}</div>
                   </div>
                   {q.expectedAnswer && q.textAnswer && (
                     <div className="text-xs mt-1">
                       {q.textAnswer.trim().toLowerCase() === q.expectedAnswer.trim().toLowerCase() ? (
-                        <span className="rounded bg-green-600 px-2 py-0.5 text-foregroundround">Automatisch als korrekt bewertet</span>
+                        <span className="rounded bg-green-600 px-2 py-0.5 text-primary-foreground dark:text-white">Automatisch als korrekt bewertet</span>
                       ) : (
-                        <span className="rounded bg-red-600 px-2 py-0.5 text-foreground">Nicht exakt übereinstimmend</span>
+                        <span className="rounded bg-red-600 px-2 py-0.5 text-primary-foreground dark:text-white">Nicht exakt übereinstimmend</span>
                       )}
                     </div>
                   )}
@@ -126,9 +126,9 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
                     return (
                       <div key={opt.id} className={`rounded-lg border p-3 text-sm ${className}`}>
                         {opt.optionText}
-                        {isCorrect && <span className="ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs text-foreground">Correct</span>}
-                        {isSelected && !isCorrect && <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs text-foreground">Selected</span>}
-                        {isSelected && isCorrect && <span className="ml-2 rounded bg-green-700 px-1.5 py-0.5 text-xs text-foreground">Selected</span>}
+                        {isCorrect && <span className="ml-2 rounded bg-green-600 px-1.5 py-0.5 text-xs text-primary-foreground dark:text-white">Correct</span>}
+                        {isSelected && !isCorrect && <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs text-primary-foreground dark:text-white">Selected</span>}
+                        {isSelected && isCorrect && <span className="ml-2 rounded bg-green-700 px-1.5 py-0.5 text-xs text-primary-foreground dark:text-white">Selected</span>}
                       </div>
                     );
                   })}
@@ -138,7 +138,7 @@ export default async function QuizSubmissionReviewPage({ params }: { params: { s
           );
         })}
         {grouped.length === 0 && (
-          <div className="rounded-2xl border border-accent/30 bg-black/20 p-5 text-sm text-muted-foreground">No questions.</div>
+          <div className="rounded-2xl border border-accent/30 bg-muted/50 p-5 text-sm text-muted-foreground">No questions.</div>
         )}
       </div>
     </div>

@@ -21,8 +21,20 @@ RUN apt-get update && apt-get install -y curl ca-certificates gnupg && \
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev
 
-# Copy source and build
+# Copy source files
 COPY . .
+
+# Build arguments for NEXT_PUBLIC_ variables (needed at build time)
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS
+
+# Set them as ENV so next build can use them
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
+    NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS=$NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS
+
+# Build the application
 RUN npm run build
 
 

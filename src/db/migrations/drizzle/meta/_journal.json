@@ -78,6 +78,13 @@
       "when": 1764691235052,
       "tag": "0010_mixed_archangel",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1768230278204,
+      "tag": "0011_add_names_to_profile",
+      "breakpoints": true
     }
   ]
 }

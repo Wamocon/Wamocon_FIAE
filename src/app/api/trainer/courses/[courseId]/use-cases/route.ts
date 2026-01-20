@@ -68,6 +68,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
       finalOrderIndex = (Number(m?.m ?? 0) || 0) + 1;
     }
 
+    const year: number | undefined = body?.year ? Number(body.year) : undefined;
+    const trainingStage: number | undefined = body?.trainingStage ? Number(body.trainingStage) : undefined;
+    const lernfelder: string[] | undefined = Array.isArray(body?.lernfelder) ? body.lernfelder : undefined;
+
     const activatedAt = isActive ? new Date() : null;
     const [inserted] = await db
       .insert(useCases)
@@ -80,6 +84,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
         descriptionText: (descriptionText ?? '') as any,
         isActive: isActive as any,
         activatedAt: activatedAt as any,
+        year: year as any,
+        trainingStage: trainingStage as any,
+        lernfelder: lernfelder as any,
       })
       .returning();
 

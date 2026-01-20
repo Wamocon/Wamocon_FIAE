@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     const courseIds = memberCourses.map((c) => c.id);
 
     // Calculate module progress with STRICT criteria
-    let modules: Array<{ id: string; title: string; progress: number }> = [];
+    const modules: Array<{ id: string; title: string; progress: number }> = [];
     if (courseIds.length > 0) {
       // Get all enablers for these courses
       const allEnablers = await db
