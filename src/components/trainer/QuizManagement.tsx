@@ -26,9 +26,9 @@ function Switch({ checked, onCheckedChange }: { checked: boolean; onCheckedChang
       role="switch"
       aria-checked={checked}
       onClick={() => onCheckedChange(!checked)}
-      className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-slate-300'}`}
+      className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-muted'}`}
     >
-      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
+      <span className={`inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
     </button>
   );
 }
@@ -37,10 +37,10 @@ function RadioGroup({ value, onChange, options }: { value: string; onChange: (v:
   return (
     <div className="flex gap-4">
       {options.map((opt) => (
-        <label key={opt.value} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+        <label key={opt.value} className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
           <input
             type="radio"
-            className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
+            className="h-4 w-4 border-border text-blue-600 focus:ring-blue-500"
             checked={value === opt.value}
             onChange={() => onChange(opt.value)}
           />
@@ -113,13 +113,14 @@ function MultiSelect({
           const opt = options.find(o => o.id === id);
           const label = opt?.label ?? id;
           return (
-          <span key={id} className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2 py-1 text-xs text-foreground">
-            {label}
-            <button onClick={() => toggle(id)} aria-label={`Remove ${label}`} className="text-muted hover:text-foreground">
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        );})}
+            <span key={id} className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2 py-1 text-xs text-foreground">
+              {label}
+              <button onClick={() => toggle(id)} aria-label={`Remove ${label}`} className="text-muted hover:text-foreground">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          );
+        })}
       </div>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -155,8 +156,8 @@ function MultiSelect({
                 className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm hover:bg-accent/20 ${active ? 'text-foreground' : 'text-foreground'}`}
               >
                 <span>{opt.label}</span>
-                {active && <Check className="h-4 w-4" /> }
-                
+                {active && <Check className="h-4 w-4" />}
+
               </button>
             );
           })}
@@ -241,11 +242,11 @@ export function QuizManagement() {
       setIsActive(Boolean(data.is_active));
       const mappedQs: QuestionDraft[] = Array.isArray(data.questions)
         ? data.questions.map((qq: any) => ({
-            id: crypto.randomUUID(),
-            text: String(qq.question_text || ''),
-            options: (qq.options || ['', '', '', '']).slice(0, 4).concat(['', '', '', '']).slice(0, 4) as [string, string, string, string],
-            correctIndex: Number(qq.correct_index ?? 0) as 0 | 1 | 2 | 3,
-          }))
+          id: crypto.randomUUID(),
+          text: String(qq.question_text || ''),
+          options: (qq.options || ['', '', '', '']).slice(0, 4).concat(['', '', '', '']).slice(0, 4) as [string, string, string, string],
+          correctIndex: Number(qq.correct_index ?? 0) as 0 | 1 | 2 | 3,
+        }))
         : [blankQuestion()];
       setQuestions(mappedQs.length ? mappedQs : [blankQuestion()]);
       setAssigned(Array.isArray(data.assigned_trainee_ids) ? data.assigned_trainee_ids : []);
@@ -257,7 +258,7 @@ export function QuizManagement() {
           const ids: string[] = Array.isArray(mem.members) ? mem.members.map((m: any) => String(m.trainerId)) : [];
           setCollaborators(ids);
         }
-      } catch {}
+      } catch { }
       setOpen(true);
     } catch (e) {
       console.error(e);
@@ -444,45 +445,45 @@ export function QuizManagement() {
       {/* Table */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-          <thead className="divide-y divide-slate-200">
-            <tr>
-              <th className="px-4 py-3 text-sm font-medium text-foreground">Quiz Title</th>
-              <th className="px-4 py-3 text-sm font-medium text-foreground">Status</th>
-              <th className="px-4 py-3 text-sm font-medium text-foreground">Trainees Assigned</th>
-              <th className="px-4 py-3 text-sm font-medium text-foreground">Date Created</th>
-              <th className="px-4 py-3 text-sm font-medium text-foreground">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {quizzes.map((q) => (
-              <tr key={q.id} className="transition-colors hover:bg-accent/10">
-                <td className="px-4 py-3 text-sm font-medium text-foreground">
-                  <a href={`/trainer/quiz-management/${q.id}`} className="underline hover:text-primary">{q.title}</a>
-                </td>
-                <td className="px-4 py-3">
-                  {q.is_active ? (
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">Active</span>
-                  ) : (
-                    <span className="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700">Inactive</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm text-foreground">{q.assigned_count} Trainees</td>
-                <td className="px-4 py-3 text-sm text-foreground">{new Date(q.created_at).toLocaleDateString()}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button className="h-8 gap-1 px-3" onClick={() => openEdit(q.id)}>
-                      <Pencil className="h-4 w-4" /> Edit
-                    </Button>
-                    <a href={`/trainer/quiz-management/${q.id}`} className="inline-flex h-8 items-center gap-1 rounded-md border border-accent/30 px-3 text-sm hover:bg-background/60">View</a>
-                    <Button variant="destructive" className="h-8 gap-1 px-3" onClick={() => onDelete(q.id)}>
-                      <Trash2 className="h-4 w-4" /> Delete
-                    </Button>
-                  </div>
-                </td>
+          <table className="min-w-full divide-y divide-border">
+            <thead className="divide-y divide-border">
+              <tr>
+                <th className="px-4 py-3 text-sm font-medium text-foreground">Quiz Title</th>
+                <th className="px-4 py-3 text-sm font-medium text-foreground">Status</th>
+                <th className="px-4 py-3 text-sm font-medium text-foreground">Trainees Assigned</th>
+                <th className="px-4 py-3 text-sm font-medium text-foreground">Date Created</th>
+                <th className="px-4 py-3 text-sm font-medium text-foreground">Actions</th>
               </tr>
-            ))}
-          </tbody>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {quizzes.map((q) => (
+                <tr key={q.id} className="transition-colors hover:bg-accent/10">
+                  <td className="px-4 py-3 text-sm font-medium text-foreground">
+                    <a href={`/trainer/quiz-management/${q.id}`} className="underline hover:text-primary">{q.title}</a>
+                  </td>
+                  <td className="px-4 py-3">
+                    {q.is_active ? (
+                      <span className="inline-flex items-center rounded-full bg-green-500/20 px-2.5 py-1 text-xs font-medium text-green-600 dark:text-green-400">Active</span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Inactive</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-foreground">{q.assigned_count} Trainees</td>
+                  <td className="px-4 py-3 text-sm text-foreground">{new Date(q.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <Button className="h-8 gap-1 px-3" onClick={() => openEdit(q.id)}>
+                        <Pencil className="h-4 w-4" /> Edit
+                      </Button>
+                      <a href={`/trainer/quiz-management/${q.id}`} className="inline-flex h-8 items-center gap-1 rounded-md border border-accent/30 px-3 text-sm hover:bg-background/60">View</a>
+                      <Button variant="destructive" className="h-8 gap-1 px-3" onClick={() => onDelete(q.id)}>
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       </div>
@@ -510,10 +511,10 @@ export function QuizManagement() {
         {step === 0 && (
           <div className="h-[12vh] overflow-y-auto px-6 py-4">
             <div className="space-y-4">
-            <div>
+              <div>
                 <label className="text-foreground mb-1 block text-sm font-medium">Quiz Title</label>
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter quiz title" />
-            </div>
+              </div>
               <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-muted/30 p-3">
                 <div>
                   <div className="text-foreground text-sm font-medium">Set Active</div>
@@ -528,46 +529,46 @@ export function QuizManagement() {
         {step === 1 && (
           <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
             <div className="space-y-4">
-            {questions.map((q, qi) => (
-              <div key={q.id} className="rounded-lg border border-slate-200 p-4">
-                <div className="mb-3 flex items-center justify-between">
+              {questions.map((q, qi) => (
+                <div key={q.id} className="rounded-lg border border-border p-4">
+                  <div className="mb-3 flex items-center justify-between">
                     <div className="text-foreground text-sm font-medium">Question {qi + 1}</div>
                     <button onClick={() => removeQuestion(q.id)} className="text-muted hover:text-red-600">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="mb-3">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mb-3">
                     <label className="text-foreground mb-1 block text-xs font-medium">Question Text</label>
                     <Input value={q.text} onChange={(e) => updateQuestionText(q.id, e.target.value)} placeholder="Type your question..." />
-                </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {q.options.map((opt, idx) => (
-                    <div key={idx}>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {q.options.map((opt, idx) => (
+                      <div key={idx}>
                         <label className="text-foreground mb-1 block text-xs font-medium">Option {idx + 1}</label>
-                      <Input value={opt} onChange={(e) => updateOption(q.id, idx, e.target.value)} placeholder={`Option ${idx + 1}`} />
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3">
+                        <Input value={opt} onChange={(e) => updateOption(q.id, idx, e.target.value)} placeholder={`Option ${idx + 1}`} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3">
                     <label className="text-foreground mb-1 block text-xs font-medium">Correct Answer</label>
-                  <RadioGroup
-                    value={String(q.correctIndex)}
-                    onChange={(v) => setCorrect(q.id, Number(v) as 0 | 1 | 2 | 3)}
-                    options={[
-                      { value: '0', label: 'Option 1' },
-                      { value: '1', label: 'Option 2' },
-                      { value: '2', label: 'Option 3' },
-                      { value: '3', label: 'Option 4' },
-                    ]}
-                  />
+                    <RadioGroup
+                      value={String(q.correctIndex)}
+                      onChange={(v) => setCorrect(q.id, Number(v) as 0 | 1 | 2 | 3)}
+                      options={[
+                        { value: '0', label: 'Option 1' },
+                        { value: '1', label: 'Option 2' },
+                        { value: '2', label: 'Option 3' },
+                        { value: '3', label: 'Option 4' },
+                      ]}
+                    />
+                  </div>
                 </div>
+              ))}
+              <div>
+                <Button variant="secondary" className="gap-2" onClick={addQuestion}>
+                  <Plus className="h-4 w-4" /> Add Question
+                </Button>
               </div>
-            ))}
-            <div>
-              <Button variant="secondary" className="gap-2" onClick={addQuestion}>
-                <Plus className="h-4 w-4" /> Add Question
-              </Button>
-            </div>
             </div>
           </div>
         )}
@@ -605,6 +606,6 @@ export function QuizManagement() {
           </div>
         </div>
       </Dialog>
-    </div>
+    </div >
   );
 }

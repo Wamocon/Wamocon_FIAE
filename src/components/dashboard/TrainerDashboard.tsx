@@ -11,6 +11,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import HaiAdminWidget from '@/components/hai/HaiAdminWidget';
 
 // Dynamically import chart components with SSR disabled
 const ProgressTrendChart = dynamic(
@@ -32,7 +33,7 @@ interface Trainee {
 
 type DashboardResponse = {
   trainees: Trainee[];
-  counts: { activeTrainees: number; pendingReviews: number; recentReflections: number; pendingQuiz: number; pendingReflections: number; pendingUseCases: number; pendingEnablers?: number };
+  counts: { activeTrainees: number; pendingReviews: number; recentReflections: number; totalReflections?: number; pendingQuiz: number; pendingReflections: number; pendingUseCases: number; pendingEnablers?: number; pendingActivityReports?: number };
   charts: {
     progressTrend: { week: string; progress: number }[];
     moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[];
@@ -40,7 +41,7 @@ type DashboardResponse = {
 };
 
 // Cache helpers for instant dashboard loading
-const TRAINER_DASHBOARD_CACHE_KEY = 'wmc_trainer_dashboard_cache';
+const TRAINER_DASHBOARD_CACHE_KEY = 'wmc_trainer_dashboard_cache_v4';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const getCachedDashboard = (): DashboardResponse | null => {
@@ -70,7 +71,9 @@ export default function TrainerDashboard() {
   const [pendingReviews, setPendingReviews] = useState<number>(0);
   const [pendingQuiz, setPendingQuiz] = useState<number>(0);
   const [pendingReflections, setPendingReflections] = useState<number>(0);
+  const [pendingActivityReports, setPendingActivityReports] = useState<number>(0);
   const [recentReflections, setRecentReflections] = useState<number>(0);
+  const [totalReflections, setTotalReflections] = useState<number>(0);
   const [progressTrend, setProgressTrend] = useState<{ week: string; progress: number }[]>([]);
   const [moduleProgress, setModuleProgress] = useState<{ name: string; completed: number; inProgress: number; notStarted: number }[]>([]);
 
@@ -80,7 +83,9 @@ export default function TrainerDashboard() {
     setPendingReviews(data.counts?.pendingReviews || 0);
     setPendingQuiz(data.counts?.pendingQuiz || 0);
     setPendingReflections(data.counts?.pendingReflections || 0);
+    setPendingActivityReports(data.counts?.pendingActivityReports || 0);
     setRecentReflections(data.counts?.recentReflections || 0);
+    setTotalReflections(data.counts?.totalReflections || 0);
     setProgressTrend(data.charts?.progressTrend || []);
     setModuleProgress(data.charts?.moduleProgress || []);
   };
@@ -173,7 +178,25 @@ export default function TrainerDashboard() {
                 <AlertTriangle className="text-primary mr-3 h-6 w-6" />
                 Aktion erforderlich
               </h3>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {/* Pending Reports Card */}
+                <div className="bg-background/50 border-border/50 rounded-xl border p-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h4 className="text-foreground font-semibold">
+                      Ausstehende Nachweise
+                    </h4>
+                    <span className="text-primary text-2xl font-bold">
+                      {pendingActivityReports}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground text-sm">
+                    Warten auf Genehmigung
+                  </p>
+                  <button onClick={() => router.push('/trainer/activity-reports?filter=pending')} className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors w-full">
+                    Prüfen
+                  </button>
+                </div>
+
                 <div className="bg-background/50 border-border/50 rounded-xl border p-6">
                   <div className="mb-4 flex items-center justify-between">
                     <h4 className="text-foreground font-semibold">
@@ -186,7 +209,7 @@ export default function TrainerDashboard() {
                   <p className="text-muted-foreground text-sm">
                     Warten auf Bewertung
                   </p>
-                  <button onClick={() => router.push('/trainer/reviews?view=quizzes&onlyPending=true')} className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors">
+                  <button onClick={() => router.push('/trainer/reviews?view=quizzes&onlyPending=true')} className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors w-full">
                     Jetzt bewerten
                   </button>
                 </div>
@@ -196,12 +219,12 @@ export default function TrainerDashboard() {
                     <h4 className="text-foreground font-semibold">
                       Reflektionen
                     </h4>
-                    <span className="text-accent text-2xl font-bold">{recentReflections}</span>
+                    <span className="text-accent text-2xl font-bold">{totalReflections}</span>
                   </div>
                   <p className="text-muted-foreground text-sm">
-                    Neue Einreichungen
+                    Alle Einreichungen
                   </p>
-                  <button onClick={() => router.push('/trainer/reflections')} className="bg-accent text-accent-foreground hover:bg-accent/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors">
+                  <button onClick={() => router.push('/trainer/reflections')} className="bg-accent text-accent-foreground hover:bg-accent/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors w-full">
                     Anzeigen
                   </button>
                 </div>
@@ -252,6 +275,9 @@ export default function TrainerDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* HAI Admin Section */}
+            <HaiAdminWidget />
           </div>
 
           {/* Right Sidebar - Charts */}
