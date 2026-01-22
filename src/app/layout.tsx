@@ -8,6 +8,8 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import { BreadcrumbProvider } from '@/contexts/BreadcrumbContext';
 import { Analytics } from '@vercel/analytics/react';
 
+import { HaiWrapper } from '@/components/hai';
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -31,7 +33,9 @@ export default function RootLayout({
           <LanguageProvider>
             <ThemeProvider>
               <BreadcrumbProvider>
-                {children}
+                <HaiWrapper>
+                  {children}
+                </HaiWrapper>
               </BreadcrumbProvider>
             </ThemeProvider>
           </LanguageProvider>

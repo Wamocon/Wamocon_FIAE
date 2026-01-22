@@ -51,6 +51,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ us
       'durationUnit',
       'descriptionText',
       'isActive',
+      'year',
+      'trainingStage',
+      'lernfelder',
     ]) {
       if (typeof body?.[key] !== 'undefined') updates[key] = body[key];
     }

@@ -5,7 +5,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import {
   LayoutDashboard,
   BookOpen,
-  FileText,
   Brain,
   Users,
   Settings,
@@ -15,6 +14,10 @@ import {
   BarChart3,
   FileCheck2,
   Upload,
+  School,
+  Calendar,
+  ClipboardList,
+  FolderEdit,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback } from 'react';
@@ -65,11 +68,11 @@ export function Sidebar({
         case 'quizManagement':
           router.push('/trainer/quiz-management');
           break;
+        case 'calendar':
+          router.push('/trainer/calendar');
+          break;
         case 'trainees':
           router.push('/trainer/trainees');
-          break;
-        case 'acceptanceProtocol':
-          router.push('/trainer/acceptance-protocol');
           break;
         case 'analytics':
           router.push('/trainer/analytics');
@@ -88,6 +91,17 @@ export function Sidebar({
           break;
         case 'bulkImport':
           router.push('/trainer/bulk-import');
+          break;
+        case 'school':
+          router.push(
+            userRole === 'trainee' ? '/trainee/school' : '/trainer/school'
+          );
+          break;
+
+        case 'activityReports':
+          router.push(
+            userRole === 'trainee' ? '/trainee/activity-reports' : '/trainer/activity-reports'
+          );
           break;
         default:
           router.push(
@@ -119,78 +133,91 @@ export function Sidebar({
       },
       ...(userRole === 'trainer'
         ? [
-            {
-              id: 'contentManagement',
-              label:
-                language === 'de' ? 'Inhalts-Management' : 'Content Management',
-              icon: BookOpen,
-              href: '/trainer/content-management',
-            },
-            {
-              id: 'quizManagement',
-              label: language === 'de' ? 'Quiz-Verwaltung' : 'Quiz Management',
-              icon: HelpCircle,
-              href: '/trainer/quiz-management',
-            },
-            {
-              id: 'bulkImport',
-              label: language === 'de' ? 'Bulk Import' : 'Bulk Import',
-              icon: Upload,
-              href: '/trainer/bulk-import',
-            },
-            {
-              id: 'trainees',
-              label: language === 'de' ? 'Auszubildende' : 'Trainees',
-              icon: Users,
-              href: '/trainer/trainees',
-            },
-            {
-              id: 'acceptanceProtocol',
-              label:
-                language === 'de' ? 'Abnahmeprotokoll' : 'Acceptance Protocol',
-              icon: FileCheck2,
-              href: '/trainer/acceptance-protocol',
-            },
-            {
-              id: 'analytics',
-              label: language === 'de' ? 'Analysen' : 'Analytics',
-              icon: BarChart3,
-              href: '/trainer/analytics',
-            },
-          ]
+          {
+            id: 'activityReports',
+            label: language === 'de' ? 'Tätigkeitsnachweis' : 'Activity Reports',
+            icon: ClipboardList,
+            href: '/trainer/activity-reports',
+          },
+          {
+            id: 'school',
+            label: language === 'de' ? 'Berufsschule' : 'School Management',
+            icon: School,
+            href: '/trainer/school',
+          },
+          {
+            id: 'contentManagement',
+            label:
+              language === 'de' ? 'Inhalts-Management' : 'Content Management',
+            icon: BookOpen,
+            href: '/trainer/content-management',
+          },
+
+          {
+            id: 'quizManagement',
+            label: language === 'de' ? 'Quiz-Verwaltung' : 'Quiz Management',
+            icon: HelpCircle,
+            href: '/trainer/quiz-management',
+          },
+          {
+            id: 'bulkImport',
+            label: language === 'de' ? 'Bulk Import' : 'Bulk Import',
+            icon: Upload,
+            href: '/trainer/bulk-import',
+          },
+          {
+            id: 'trainees',
+            label: language === 'de' ? 'Auszubildende' : 'Trainees',
+            icon: Users,
+            href: '/trainer/trainees',
+          },
+          {
+            id: 'analytics',
+            label: language === 'de' ? 'Analysen' : 'Analytics',
+            icon: BarChart3,
+            href: '/trainer/analytics',
+          },
+        ]
         : [
-            {
-              id: 'knowledgeSubmission',
-              label:
-                language === 'de' ? 'Wissensabgabe' : 'Knowledge Submission',
-              icon: FileText,
-              href: '/trainee/knowledge-submission',
-            },
-            {
-              id: 'reflection',
-              label: language === 'de' ? 'Reflektion' : 'Reflection',
-              icon: Brain,
-              href: '/trainee/reflection',
-            },
-            {
-              id: 'courses',
-              label: language === 'de' ? 'Kurse' : 'Courses',
-              icon: BookOpen,
-              href: '/trainee/courses',
-            },
-            {
-              id: 'lessons',
-              label: language === 'de' ? 'Trainer-Feedback' : 'Trainer Feedback',
-              icon: GraduationCap,
-              href: '/trainee/trainer-feedback',
-            },
-            {
-              id: 'quizzes',
-              label: language === 'de' ? 'Quizze' : 'Quizzes',
-              icon: HelpCircle,
-              href: '/trainee/quizzes',
-            },
-          ]),
+          {
+            id: 'activityReports',
+            label: language === 'de' ? 'Tätigkeitsnachweis' : 'Activity Reports',
+            icon: ClipboardList,
+            href: '/trainee/activity-reports',
+          },
+          {
+            id: 'school',
+            label: language === 'de' ? 'Berufsschule' : 'School',
+            icon: School,
+            href: '/trainee/school',
+          },
+          {
+            id: 'reflection',
+            label: language === 'de' ? 'Reflektion' : 'Reflection',
+            icon: Brain,
+            href: '/trainee/reflection',
+          },
+          {
+            id: 'courses',
+            label: language === 'de' ? 'Kurse' : 'Courses',
+            icon: BookOpen,
+            href: '/trainee/courses',
+          },
+
+          {
+            id: 'lessons',
+            label: language === 'de' ? 'Trainer-Feedback' : 'Trainer Feedback',
+            icon: GraduationCap,
+            href: '/trainee/trainer-feedback',
+          },
+          {
+            id: 'quizzes',
+            label: language === 'de' ? 'Quizze' : 'Quizzes',
+            icon: HelpCircle,
+            href: '/trainee/quizzes',
+          },
+
+        ]),
       {
         id: 'profile',
         label: language === 'de' ? 'Mein Profil' : 'My Profile',
@@ -246,11 +273,10 @@ export function Sidebar({
               <button
                 key={item.id}
                 onClick={() => handleNavigation(item.id)}
-                className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${
-                  isActive
-                    ? 'bg-accent/20 text-accent border-accent/30 border'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
-                }`}
+                className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${isActive
+                  ? 'bg-accent/20 text-accent border-accent/30 border'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
+                  }`}
               >
                 {item.id === 'profile' ? (
                   <Avatar className="h-5 w-5">

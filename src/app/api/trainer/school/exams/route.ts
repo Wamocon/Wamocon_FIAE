@@ -1,0 +1,101 @@
+import { NextRequest, NextResponse } from 'next/server';
+import db from '@/db';
+import { eq, desc } from 'drizzle-orm';
+import { schoolExams, profiles } from '@/db/migrations/schemas/schema';
+
+// GET /api/trainer/school/exams?trainerId=...&traineeId=...
+export async function GET(req: NextRequest) {
+    try {
+        const url = new URL(req.url);
+        const trainerId = url.searchParams.get('trainerId');
+        const traineeId = url.searchParams.get('traineeId');
+
+        if (!trainerId) {
+            return NextResponse.json({ error: 'trainerId required' }, { status: 400 });
+        }
+
+        const whereClause = traineeId ? eq(schoolExams.traineeId, traineeId as any) : undefined;
+
+        const examsRaw = await db
+            .select({
+                id: schoolExams.id,
+                traineeId: schoolExams.traineeId,
+                examDate: schoolExams.examDate,
+                subject: schoolExams.subject,
+                examTypeValue: schoolExams.examTypeValue,
+                isPersonal: schoolExams.isPersonal,
+                lernfeldCode: schoolExams.lernfeldCode,
+                traineeName: profiles.fullName,
+            })
+            .from(schoolExams)
+            .leftJoin(profiles, eq(profiles.id, schoolExams.traineeId))
+            .where(whereClause)
+            .orderBy(desc(schoolExams.examDate));
+
+        // Transform to include isCompanyExam flag (exams with no lernfeld are company exams)
+        const exams = examsRaw.map(exam => ({
+            ...exam,
+            isCompanyExam: !exam.lernfeldCode,
+            points: null, // Will be populated from results if needed
+            maxPoints: null,
+            passed: null,
+        }));
+
+        return NextResponse.json({ exams });
+    } catch (e) {
+        console.error('Get trainer exams error:', e);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+// POST /api/trainer/school/exams - Create company exam
+export async function POST(req: NextRequest) {
+    try {
+        const body = await req.json();
+        const { trainerId, traineeId, subject, examDate, examTypeValue } = body;
+
+        if (!trainerId || !traineeId || !subject || !examDate) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Get trainee profile to get schuljahr and ausbildungsjahr
+        const [trainee] = await db
+            .select({
+                fullName: profiles.fullName,
+                startOfTrainingDate: profiles.startOfTrainingDate
+            })
+            .from(profiles)
+            .where(eq(profiles.id, traineeId));
+
+        // Calculate ausbildungsjahr based on start date
+        const now = new Date();
+        const startDate = trainee?.startOfTrainingDate || now;
+        const yearDiff = now.getFullYear() - startDate.getFullYear();
+        const ausbildungsjahr = Math.min(Math.max(yearDiff + 1, 1), 3);
+        const schuljahr = `${now.getFullYear()}/${now.getFullYear() + 1}`;
+
+        const [exam] = await db
+            .insert(schoolExams)
+            .values({
+                traineeId: traineeId as any,
+                examDate: new Date(examDate),
+                subject,
+                examTypeValue: examTypeValue || 'KLAUSUR',
+                isPersonal: false,
+                schuljahr,
+                ausbildungsjahr,
+            })
+            .returning();
+
+        return NextResponse.json({
+            exam: {
+                ...exam,
+                traineeName: trainee?.fullName || 'Unknown',
+                isCompanyExam: true,
+            },
+        });
+    } catch (e) {
+        console.error('Create company exam error:', e);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}

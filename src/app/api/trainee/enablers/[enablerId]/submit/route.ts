@@ -5,7 +5,7 @@ import { enablers, courseMembers, enablerSubmissions, EnablerSubmission, notific
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { enablerId: string } }
+  { params }: { params: Promise<{ enablerId: string }> }
 ) {
   try {
     const { enablerId } = await params;
@@ -35,10 +35,10 @@ export async function POST(
       const latest = existing.sort((a, b) => (new Date(b.submittedAt || '').getTime() - new Date(a.submittedAt || '').getTime()))[0];
       const [row] = await db
         .update(enablerSubmissions)
-        .set({ 
-          solutionText: solutions ? undefined : solutionText, 
+        .set({
+          solutionText: solutions ? undefined : solutionText,
           solutions: solutions || undefined,
-          status: 'PENDING', 
+          status: 'PENDING',
           submittedAt: new Date(),
           // bump attempt number on each submission
           attemptNumber: (latest.attemptNumber ?? 0) + 1,
@@ -52,13 +52,13 @@ export async function POST(
     } else {
       const [row] = await db
         .insert(enablerSubmissions)
-        .values({ 
-          enablerId, 
-          traineeId, 
-          solutionText: solutions ? undefined : solutionText, 
+        .values({
+          enablerId,
+          traineeId,
+          solutionText: solutions ? undefined : solutionText,
           solutions: solutions || undefined,
-          status: 'PENDING' 
-          ,attemptNumber: 1
+          status: 'PENDING'
+          , attemptNumber: 1
         })
         .returning();
       saved = row;

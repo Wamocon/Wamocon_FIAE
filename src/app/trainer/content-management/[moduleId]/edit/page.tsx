@@ -64,6 +64,9 @@ export default function EditCoursePage() {
   const [useCaseTitle, setUseCaseTitle] = useState('');
   const [useCaseDesc, setUseCaseDesc] = useState('');
   const [useCaseDuration, setUseCaseDuration] = useState<string>('');
+  const [useCaseYear, setUseCaseYear] = useState<'1' | '2' | '3' | ''>('');
+  const [useCaseStage, setUseCaseStage] = useState<'1' | '2' | ''>('');
+  const [useCaseLernfelder, setUseCaseLernfelder] = useState<string[]>([]);
   const [useCaseActive, setUseCaseActive] = useState<boolean>(false);
   const [useCaseSubmitting, setUseCaseSubmitting] = useState(false);
   // Pending PDFs for Add Use Case (before use case is created)
@@ -74,6 +77,9 @@ export default function EditCoursePage() {
   const [useCaseEditTitle, setUseCaseEditTitle] = useState('');
   const [useCaseEditDesc, setUseCaseEditDesc] = useState('');
   const [useCaseEditDuration, setUseCaseEditDuration] = useState<string>('');
+  const [useCaseEditYear, setUseCaseEditYear] = useState<'1' | '2' | '3' | ''>('');
+  const [useCaseEditStage, setUseCaseEditStage] = useState<'1' | '2' | ''>('');
+  const [useCaseEditLernfelder, setUseCaseEditLernfelder] = useState<string[]>([]);
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
   // PDF documents for use case (edit mode)
   const [useCaseDocuments, setUseCaseDocuments] = useState<Array<{ id: string; title: string; storageUrl: string; fileName: string }>>([]);
@@ -426,11 +432,17 @@ export default function EditCoursePage() {
                             setUseCaseEditTitle(uc.title || '');
                             setUseCaseEditDesc(uc.descriptionText || '');
                             setUseCaseEditDuration(uc.durationValue ? String(uc.durationValue) : '');
+                            setUseCaseEditYear(uc.year ? String(uc.year) : '' as any);
+                            setUseCaseEditStage(uc.trainingStage ? String(uc.trainingStage) : '' as any);
+                            setUseCaseEditLernfelder(uc.lernfelder || []);
                             setUseCaseEditActive(!!uc.isActive);
                           } else {
                             setUseCaseEditTitle(u.title);
                             setUseCaseEditDesc('');
                             setUseCaseEditDuration('');
+                            setUseCaseEditYear('');
+                            setUseCaseEditStage('');
+                            setUseCaseEditLernfelder([]);
                             setUseCaseEditActive(false);
                           }
                           // Fetch documents for this use case
@@ -754,6 +766,46 @@ export default function EditCoursePage() {
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
+                  <label className="mb-1 block text-sm font-medium">Ausbildungsjahr</label>
+                  <select value={useCaseYear} onChange={e => setUseCaseYear(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
+                    <option value="">Bitte wählen</option>
+                    <option value="1">Jahr 1</option>
+                    <option value="2">Jahr 2</option>
+                    <option value="3">Jahr 3</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Ausbildungsabschnitt</label>
+                  <select value={useCaseStage} onChange={e => setUseCaseStage(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
+                    <option value="">Bitte wählen</option>
+                    <option value="1">Ausbildungsabschnitt 1</option>
+                    <option value="2">Ausbildungsabschnitt 2</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium">Lernfelder</label>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`).map((lf) => (
+                    <label key={lf} className="flex cursor-pointer items-center gap-2 rounded-lg border border-accent/20 bg-background/40 p-2 hover:bg-background/60">
+                      <input
+                        type="checkbox"
+                        checked={useCaseLernfelder.includes(lf)}
+                        onChange={(e) => {
+                          if (e.target.checked) setUseCaseLernfelder(prev => [...prev, lf]);
+                          else setUseCaseLernfelder(prev => prev.filter(x => x !== lf));
+                        }}
+                        className="rounded border-accent/30 bg-background/50"
+                      />
+                      <span className="text-xs font-medium">{lf}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
                   <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
                   <input type="number" min={0} value={useCaseDuration} onChange={e => setUseCaseDuration(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 14" />
                 </div>
@@ -817,16 +869,42 @@ export default function EditCoursePage() {
                   if (!useCaseDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
                   setUseCaseSubmitting(true);
                   try {
-                    const res = await fetch(`/api/trainer/courses/${courseId}/use-cases?trainerId=${trainerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: useCaseTitle.trim(), descriptionText: useCaseDesc.trim(), durationValue: useCaseDuration ? Number(useCaseDuration) : undefined, durationUnit: useCaseDuration ? 'DAYS' : undefined, isActive: useCaseActive }) });
+                    const res = await fetch(`/api/trainer/courses/${courseId}/use-cases?trainerId=${trainerId}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        title: useCaseTitle.trim(),
+                        descriptionText: useCaseDesc.trim(),
+                        durationValue: useCaseDuration ? Number(useCaseDuration) : undefined,
+                        durationUnit: useCaseDuration ? 'DAYS' : undefined,
+                        isActive: useCaseActive,
+                        year: useCaseYear || undefined,
+                        trainingStage: useCaseStage || undefined,
+                        lernfelder: useCaseLernfelder.length > 0 ? useCaseLernfelder : undefined,
+                      })
+                    });
                     if (!res.ok) throw new Error('Use Case konnte nicht erstellt werden');
                     const newUseCaseData = await res.json();
                     const newUseCaseId = newUseCaseData.useCase?.id;
 
-                    // Save pending PDFs if any (when API is extended to support use case documents)
-                    // Note: Currently content_documents only supports enablers. Use case PDF support requires DB migration.
+                    // Save pending PDFs if any
                     if (newUseCaseId && pendingUseCasePdfs.length > 0) {
-                      // TODO: Save PDFs when use case document API is available
-                      console.log('Pending use case PDFs:', pendingUseCasePdfs);
+                      for (const pdf of pendingUseCasePdfs) {
+                        try {
+                          await fetch(`/api/trainer/use-cases/${newUseCaseId}/documents?trainerId=${trainerId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: pdf.title,
+                              fileName: pdf.fileName,
+                              storageUrl: pdf.url,
+                              documentType: 'THEORY',
+                            }),
+                          });
+                        } catch (err) {
+                          console.error('Failed to save use case PDF', err);
+                        }
+                      }
                     }
 
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
@@ -834,6 +912,7 @@ export default function EditCoursePage() {
                     setUseCases((fresh.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                     setShowAddUseCase(false);
                     setUseCaseTitle(''); setUseCaseDesc(''); setUseCaseDuration(''); setUseCaseActive(false); setPendingUseCasePdfs([]);
+                    setUseCaseYear(''); setUseCaseStage(''); setUseCaseLernfelder([]);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   } finally {
@@ -1183,6 +1262,46 @@ export default function EditCoursePage() {
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
+                  <label className="mb-1 block text-sm font-medium">Ausbildungsjahr</label>
+                  <select value={useCaseEditYear} onChange={e => setUseCaseEditYear(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
+                    <option value="">Bitte wählen</option>
+                    <option value="1">Jahr 1</option>
+                    <option value="2">Jahr 2</option>
+                    <option value="3">Jahr 3</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Ausbildungsabschnitt</label>
+                  <select value={useCaseEditStage} onChange={e => setUseCaseEditStage(e.target.value as any)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2">
+                    <option value="">Bitte wählen</option>
+                    <option value="1">Ausbildungsabschnitt 1</option>
+                    <option value="2">Ausbildungsabschnitt 2</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium">Lernfelder</label>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`).map((lf) => (
+                    <label key={lf} className="flex cursor-pointer items-center gap-2 rounded-lg border border-accent/20 bg-background/40 p-2 hover:bg-background/60">
+                      <input
+                        type="checkbox"
+                        checked={useCaseEditLernfelder.includes(lf)}
+                        onChange={(e) => {
+                          if (e.target.checked) setUseCaseEditLernfelder(prev => [...prev, lf]);
+                          else setUseCaseEditLernfelder(prev => prev.filter(x => x !== lf));
+                        }}
+                        className="rounded border-accent/30 bg-background/50"
+                      />
+                      <span className="text-xs font-medium">{lf}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
                   <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
                   <input type="number" min={0} value={useCaseEditDuration} onChange={e => setUseCaseEditDuration(e.target.value)} className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2" placeholder="z.B. 14" />
                 </div>
@@ -1275,7 +1394,20 @@ export default function EditCoursePage() {
                   if (!useCaseEditTitle.trim()) { alert('Bitte Titel eingeben'); return; }
                   if (!useCaseEditDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
                   try {
-                    const pr = await fetch(`/api/trainer/use-cases/${editingUseCaseId}?trainerId=${trainerId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: useCaseEditTitle.trim(), descriptionText: useCaseEditDesc.trim(), durationValue: useCaseEditDuration ? Number(useCaseEditDuration) : null, durationUnit: useCaseEditDuration ? 'DAYS' : null, isActive: useCaseEditActive }) });
+                    const pr = await fetch(`/api/trainer/use-cases/${editingUseCaseId}?trainerId=${trainerId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        title: useCaseEditTitle.trim(),
+                        descriptionText: useCaseEditDesc.trim(),
+                        durationValue: useCaseEditDuration ? Number(useCaseEditDuration) : null,
+                        durationUnit: useCaseEditDuration ? 'DAYS' : null,
+                        isActive: useCaseEditActive,
+                        year: useCaseEditYear || null,
+                        trainingStage: useCaseEditStage || null,
+                        lernfelder: useCaseEditLernfelder.length > 0 ? useCaseEditLernfelder : [],
+                      })
+                    });
                     if (!pr.ok) throw new Error('Use Case-Update fehlgeschlagen');
                     const r = await fetch(`/api/trainer/courses/${courseId}?trainerId=${trainerId}`);
                     const fresh = await r.json();

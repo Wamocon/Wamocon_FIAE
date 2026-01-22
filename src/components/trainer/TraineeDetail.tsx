@@ -86,9 +86,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     if (traineeId) load();
   }, [traineeId]);
 
-  const handleAcceptanceProtocol = () => {
-    router.push('/trainer/acceptance-protocol');
-  };
+
 
   const generatePdfBlob = async () => {
     // dynamically import to keep bundle small and avoid SSR issues
@@ -257,12 +255,12 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           </div>
 
           <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowEdit((v) => !v)}
-                className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200"
-              >
-                {showEdit ? 'Bearbeiten ausblenden' : 'Bearbeiten'}
-              </button>
+            <button
+              onClick={() => setShowEdit((v) => !v)}
+              className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200"
+            >
+              {showEdit ? 'Bearbeiten ausblenden' : 'Bearbeiten'}
+            </button>
             <button
               onClick={handleSharePdf}
               disabled={exporting}
@@ -279,85 +277,10 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <Download className="h-4 w-4" />
               {exporting ? 'Export…' : 'Export'}
             </button>
-            <button
-              onClick={handleAcceptanceProtocol}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-            >
-              <FileCheck2 className="h-5 w-5" />
-              Abnahmeprotokoll
-            </button>
           </div>
         </div>
       </div>
-
-      {/* Quick Stats */}
-      {/* <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-              <TrendingUp className="h-6 w-6 text-foreground" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Gesamtfortschritt</p>
-              <p className="text-foreground text-2xl font-bold">{trainee?.progress ?? 0}%</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500">
-              <BookOpen className="h-6 w-6 text-foreground" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Enabler abgeschlossen</p>
-              <p className="text-foreground text-2xl font-bold">{overview ? `${overview.stats.completedEnablers}/${overview.stats.totalEnablers}` : '—'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-violet-500">
-              <Award className="h-6 w-6 text-foreground" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Durchschnitt</p>
-              <p className="text-foreground text-2xl font-bold">{
-                (() => {
-                  if (!overview) return '—';
-                  const scores: number[] = [];
-                  overview.enablerQuizzes.forEach(q => { if (typeof q.lastScore === 'number') scores.push(q.lastScore); });
-                  overview.globalQuizzes.forEach(q => { if (typeof q.lastScore === 'number') scores.push(q.lastScore); });
-                  if (scores.length === 0) return '—';
-                  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-                  return `${avg}%`;
-                })()
-              }</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500">
-              <Calendar className="h-6 w-6 text-foreground" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Letzte Aktivität</p>
-              <p className="text-foreground text-2xl font-bold">{
-                (() => {
-                  if (!overview) return '—';
-                  const dates: Date[] = [];
-                  // We don't store activity feed here; infer from quiz submissions datasets when present
-                  // As the API only returns latest entries per item, we can't derive a precise timestamp easily; show em dash
-                  return '—';
-                })()
-              }</p>
-            </div>
-          </div>
-        </div>
-      </div> */}
+      
 
       {/* Row 3: Assignments & Progress */}
       <div className="glass-effect bg-background border-accent/30 rounded-3xl border p-6 shadow-lg">
@@ -455,7 +378,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               ) : (
                 <div className="text-sm text-foreground">Keine Enabler-Quizzes vorhanden.</div>
               )}
-            </section>   
+            </section>
             {/* Use Cases */}
             <section>
               <h3 className="mb-3 text-xl font-bold text-foreground">Use Cases</h3>

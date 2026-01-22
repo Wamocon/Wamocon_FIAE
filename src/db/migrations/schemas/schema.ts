@@ -11,6 +11,7 @@ import {
   unique,
   jsonb,
   pgSchema,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 // --- SUPABASE AUTH HELPER ---
@@ -44,9 +45,11 @@ export const profiles = pgTable('profiles', {
   // Allow null here because the Supabase auth trigger may create a profile
   // before our application sets the full name. We set it in the app after
   // signUp (see `src/app/register/page.tsx`).
-  fullName: text('full_name'),
+  fullName: varchar('full_name', { length: 256 }),
+  firstName: varchar('first_name', { length: 256 }),
+  lastName: varchar('last_name', { length: 256 }),
   email: text('email').notNull().unique(),
-  avatarUrl: text('avatar_url'),
+  avatarUrl: varchar('avatar_url', { length: 256 }),
   role: userRole('role').notNull(),
   isActive: boolean('is_active').default(false),
   startOfTrainingDate: timestamp('start_of_training_date'),
@@ -172,6 +175,9 @@ export const useCases = pgTable('use_cases', {
   durationUnit: durationUnit('duration_unit'),
   isActive: boolean('is_active').default(false),
   activatedAt: timestamp('activated_at'),
+  year: integer('year'),
+  trainingStage: integer('training_stage'),
+  lernfelder: text('lernfelder').array(),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at')
@@ -632,7 +638,380 @@ export const progress = pgTable('progress', {
   created_at: timestamp('created_at').defaultNow().notNull(),
 });
 
+// --- 8. HAI.AI TABLES ---
+// AI Coach tables for embeddings, chat sessions, and messages
+
+// Enum for embedding source types
+export const haiSourceType = pgEnum('hai_source_type', ['enabler', 'course', 'document', 'quiz']);
+
+// Enum for chat context types
+export const haiContextType = pgEnum('hai_context_type', ['enabler', 'course', 'quiz', 'general']);
+
+// Enum for message roles
+export const haiMessageRole = pgEnum('hai_message_role', ['user', 'assistant', 'system']);
+
+// HAI.ai Embeddings - stores vector embeddings for RAG
+export const haiEmbeddings = pgTable('hai_embeddings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sourceType: text('source_type').notNull(), // 'enabler', 'course', 'document', 'quiz'
+  sourceId: uuid('source_id').notNull(),
+  chunkIndex: integer('chunk_index').notNull().default(0),
+  content: text('content').notNull(),
+  contentHash: text('content_hash').notNull(),
+  // Note: 'embedding' column is vector(768) - handled at DB level, not in Drizzle
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// HAI.ai Chat Sessions - stores conversation sessions
+export const haiChatSessions = pgTable('hai_chat_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  contextType: text('context_type'), // 'enabler', 'course', 'quiz', 'general'
+  contextId: uuid('context_id'),
+
+  // Chat history features
+  title: text('title'), // Auto-generated from first user message
+  quizState: jsonb('quiz_state'), // For resuming quizzes: {quiz_id, current_question, answers, score}
+  lastMessageAt: timestamp('last_message_at').defaultNow(), // For sorting by recency
+
+  isActive: boolean('is_active').default(true), // false = archived (still visible, just not auto-loaded)
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// HAI.ai Chat Messages - stores individual messages
+export const haiChatMessages = pgTable('hai_chat_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sessionId: uuid('session_id')
+    .notNull()
+    .references(() => haiChatSessions.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user', 'assistant', 'system'
+  content: text('content').notNull(),
+  citations: jsonb('citations').default([]),
+  metadata: jsonb('metadata').default({}),
+  tokensUsed: integer('tokens_used'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// --- 9. SCHOOL VIEW TABLES ---
+// Tables for Schul-Ansicht feature: Block Calendar, Exams, Lernfelder, Activity Reports
+
+// Enum for calendar block types
+// Note: Labels in UI - SCHOOL="Berufsschule", COMPANY="WMC", HOLIDAY="Urlaub"
+export const blockType = pgEnum('block_type', [
+  'SCHOOL',          // Berufsschule block
+  'COMPANY',         // WMC (Betriebsphase)
+  'HOLIDAY',         // Urlaub (Ferien)
+  'EXAM',            // Prüfungszeitraum
+  'PERSONAL',        // Personal appointment/reminder
+  'SONSTIGES',       // Custom/Other blocker with description
+  'TRAINER_BLOCKER', // Trainer-created blocker for trainee
+]);
+
+// Enum for exam sub-types (detailed Prüfung categories)
+export const examSubType = pgEnum('exam_sub_type', [
+  'IHK_ABSCHLUSSPRUEFUNG_T1',   // IHK Abschlussprüfung Teil 1
+  'IHK_ABSCHLUSSPRUEFUNG_T2',   // IHK Abschlussprüfung Teil 2
+  'KLAUSUR_WMC',                // Klausur WMC
+  'KLAUSUR_ALLGEMEIN',          // Klausur (Allgemein)
+  'PRAKTISCHE_PRUEFUNG',        // Praktische Prüfung
+  'MUENDLICHE_PRUEFUNG',        // Mündliche Prüfung
+  'PROJEKTARBEIT',              // Projektarbeit
+  'ANDERE',                     // Other exam type
+]);
+
+// Enum for activity report workflow status
+export const activityReportStatus = pgEnum('activity_report_status', [
+  'DRAFT',      // Trainee is editing
+  'SUBMITTED',  // Submitted for trainer review
+  'APPROVED',   // Trainer approved (signed)
+  'REJECTED',   // Trainer rejected (needs revision)
+]);
+
+// Enum for exam types
+export const examType = pgEnum('exam_type', [
+  'KLAUSUR',    // Written exam
+  'TEST',       // Short test
+  'ABGABE',     // Project submission
+  'PRAESENTATION', // Presentation
+  'MUENDLICH',  // Oral exam
+]);
+
+// === AUSBILDUNG BLOCKS (Calendar) ===
+// Stores school blocks, company phases, holidays, and personal appointments
+export const ausbildungBlocks = pgTable('ausbildung_blocks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+
+  // Time scoping - data is year-specific
+  schuljahr: text('schuljahr').notNull(), // e.g., "2026/2027"
+  ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
+
+  // Calendar positioning
+  calendarWeek: integer('calendar_week').notNull(), // KW 1-52
+  year: integer('year').notNull(), // Calendar year (e.g., 2026)
+  startDate: timestamp('start_date').notNull(),
+  endDate: timestamp('end_date').notNull(),
+
+  // Block details
+  blockType: blockType('block_type').notNull(),
+  blockNumber: integer('block_number'), // e.g., Block 5 for school
+  title: text('title'), // Optional title for personal appointments
+  notes: text('notes'), // e.g., "Prüfung Teil 1", "Herbstferien"
+
+  // NEW: Exam sub-type for detailed Prüfung classification
+  examSubType: examSubType('exam_sub_type'), // Only for EXAM blocks
+
+  // NEW: Custom description for SONSTIGES blocks
+  description: text('description'), // Detailed description for custom blockers
+
+  // Source tracking
+  isPersonal: boolean('is_personal').default(false), // true = student-created
+  importedFrom: text('imported_from'), // CSV filename if imported
+
+  // NEW: Trainer blocker fields
+  createdByTrainerId: uuid('created_by_trainer_id').references(() => profiles.id), // If trainer created this block
+  requiresTrainerApproval: boolean('requires_trainer_approval').default(false),
+  approvedByTrainerId: uuid('approved_by_trainer_id').references(() => profiles.id),
+  approvedAt: timestamp('approved_at'),
+
+  // NEW: Invitation tracking
+  inviteeEmails: text('invitee_emails'), // Comma-separated emails
+  invitationSentAt: timestamp('invitation_sent_at'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// === SCHOOL EXAMS ===
+// Tracks exam dates with subject/Lernfeld mapping
+export const schoolExams = pgTable('school_exams', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+
+  // Time scoping
+  schuljahr: text('schuljahr').notNull(),
+  ausbildungsjahr: integer('ausbildungsjahr').notNull(),
+
+  // Exam details
+  examDate: timestamp('exam_date').notNull(),
+  dayOfWeek: text('day_of_week'), // "Mo", "Di", "Mi", "Do", "Fr"
+  period: text('period'), // "1./2.", "3./4.", "7./8."
+  teacher: text('teacher'), // Teacher code: "Gg", "Ma", "Ti"
+  subject: text('subject').notNull(), // "LF5", "Deutsch", "Englisch"
+  examTypeValue: examType('exam_type'), // KLAUSUR, TEST, ABGABE, etc.
+  lernfeldCode: text('lernfeld_code'), // "LF1" through "LF12a" if applicable
+
+  // Additional info
+  notes: text('notes'),
+  isPersonal: boolean('is_personal').default(false), // Student-added exam
+  importedFrom: text('imported_from'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// === SCHOOL EXAM RESULTS ===
+// Records exam outcomes with German grading
+export const schoolExamResults = pgTable('school_exam_results', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  examId: uuid('exam_id')
+    .notNull()
+    .references(() => schoolExams.id, { onDelete: 'cascade' }),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+
+  // German grading (Note 1-6 or Punktzahl 0-15)
+  grade: text('grade'), // "1", "2+", "3-", etc.
+  points: integer('points'), // 0-15 for Oberstufe/IHK
+  percentage: real('percentage'), // Optional percentage score
+  passed: boolean('passed'),
+
+  // Feedback
+  notes: text('notes'),
+
+  recordedAt: timestamp('recorded_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// === LERNFELDER (Master Data) ===
+// Pre-seeded reference data for FIAE Lernfelder LF1-LF12a
+export const lernfelder = pgTable('lernfelder', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: text('code').notNull().unique(), // "LF1", "LF10a", etc.
+  title: text('title').notNull(),
+  description: text('description'),
+
+  // Curriculum info
+  trainingYear: integer('training_year'), // 1, 2, or 3
+  hoursBudget: integer('hours_budget'), // Zeitrichtwert in Stunden
+  isCommon: boolean('is_common').default(true), // true = all IT, false = FIAE-only (LF10a-12a)
+
+  // Ordering
+  orderIndex: integer('order_index'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// === LERNFELD MAPPINGS (Future: Content Linking) ===
+// Links Lernfelder to platform content (Enablers, UseCases)
+export const lernfeldMappings = pgTable(
+  'lernfeld_mappings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    lernfeldId: uuid('lernfeld_id')
+      .notNull()
+      .references(() => lernfelder.id, { onDelete: 'cascade' }),
+    enablerId: uuid('enabler_id').references(() => enablers.id, { onDelete: 'set null' }),
+    useCaseId: uuid('use_case_id').references(() => useCases.id, { onDelete: 'set null' }),
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    // Each enabler/useCase can only be mapped once per Lernfeld
+    unqEnablerLf: unique().on(table.lernfeldId, table.enablerId),
+    unqUseCaseLf: unique().on(table.lernfeldId, table.useCaseId),
+  })
+);
+
+// === ACTIVITY REPORTS (IHK Ausbildungsnachweis) ===
+// Weekly training documentation with approval workflow
+export const activityReports = pgTable('activity_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+
+  // Report period identification
+  ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
+  weekNumber: integer('week_number').notNull(), // ISO week 1-52
+  year: integer('year').notNull(), // Calendar year
+  periodStart: timestamp('period_start').notNull(),
+  periodEnd: timestamp('period_end').notNull(),
+
+  // Department info (from IHK template)
+  abteilung: text('abteilung'), // e.g., "FAE"
+
+  // Workflow status
+  status: activityReportStatus('status').default('DRAFT'),
+  submittedAt: timestamp('submitted_at'),
+
+  // Trainer review
+  reviewerId: uuid('reviewer_id').references(() => profiles.id),
+  reviewedAt: timestamp('reviewed_at'),
+  reviewerFeedback: text('reviewer_feedback'),
+
+  // Digital signatures (timestamp = signed)
+  traineeSignedAt: timestamp('trainee_signed_at'),
+  trainerSignedAt: timestamp('trainer_signed_at'),
+
+  // Generated PDF storage
+  pdfUrl: text('pdf_url'),
+  pdfGeneratedAt: timestamp('pdf_generated_at'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// === ACTIVITY REPORT ENTRIES ===
+// Individual sections within a weekly report (matches IHK template structure)
+export const activityReportEntries = pgTable('activity_report_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  reportId: uuid('report_id')
+    .notNull()
+    .references(() => activityReports.id, { onDelete: 'cascade' }),
+
+  // Section 1: Betriebliche Tätigkeiten (Company Activities)
+  betrieblicheTaetigkeit: text('betriebliche_taetigkeit'),
+  rahmenplanRef: text('rahmenplan_ref'), // "Abschnitt A, Thema 1"
+  betrieblicheStunden: real('betriebliche_stunden'),
+
+  // Section 2: Unterweisungen (Instructions/Training)
+  unterweisungenThemen: text('unterweisungen_themen'),
+  unterweisungenStunden: real('unterweisungen_stunden'),
+
+  // Section 3: Berufsschulunterricht (Vocational School Topics)
+  berufsschulThemen: text('berufsschul_themen'),
+  berufsschulStunden: real('berufsschul_stunden'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// === TRAINING COMPONENTS (FIAE Curriculum) ===
+// Master data for Ausbildungsrahmenplan components (§4 Absatz 2, 3, 7)
+export const trainingComponents = pgTable('training_components', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: text('code').notNull().unique(), // e.g., "§4.2.1", "§4.3.1"
+  title: text('title').notNull(),
+  description: text('description'),
+  totalWeeks: real('total_weeks').notNull(), // Zeitrichtwert in Wochen
+  totalHours: real('total_hours').notNull(), // totalWeeks * 40
+  trainingYear: integer('training_year'), // 1, 2, or 3 (null = all years)
+  orderIndex: integer('order_index').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// === TRAINING USE CASES ===
+// Individual skills/tasks within each component
+export const trainingUseCases = pgTable('training_use_cases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  componentId: uuid('component_id')
+    .notNull()
+    .references(() => trainingComponents.id, { onDelete: 'cascade' }),
+  letter: text('letter').notNull(), // a), b), c), etc.
+  description: text('description').notNull(),
+  plannedHours: real('planned_hours').notNull(), // Sollzeit in Stunden
+  orderIndex: integer('order_index').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// === ACTIVITY REPORT USE CASE ENTRIES ===
+// Links activity reports to specific use cases with Plan vs Act tracking
+export const activityReportUseCaseEntries = pgTable('activity_report_use_case_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  reportId: uuid('report_id')
+    .notNull()
+    .references(() => activityReports.id, { onDelete: 'cascade' }),
+  useCaseId: uuid('use_case_id')
+    .notNull()
+    .references(() => trainingUseCases.id, { onDelete: 'cascade' }),
+
+  // Time tracking
+  plannedHours: real('planned_hours').notNull(), // Sollzeit (copied from use case)
+  actualHours: real('actual_hours').notNull(), // IST-Stunden (trainee input)
+  isOverbooked: boolean('is_overbooked').default(false), // actual > planned
+
+  // Optional notes
+  notes: text('notes'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
 // --- TYPE EXPORTS ---
+
 export type Profile = typeof profiles.$inferSelect;
 export type Course = typeof courses.$inferSelect;
 export type CourseMember = typeof courseMembers.$inferSelect;
@@ -664,3 +1043,31 @@ export type EnablerSubmission = typeof enablerSubmissions.$inferSelect;
 export type LegacyModule = typeof modules.$inferSelect;
 export type LegacyLesson = typeof lessons.$inferSelect;
 export type LegacySubLesson = typeof subLessons.$inferSelect;
+
+// HAI.ai types
+export type HaiEmbedding = typeof haiEmbeddings.$inferSelect;
+export type HaiChatSession = typeof haiChatSessions.$inferSelect;
+export type HaiChatMessage = typeof haiChatMessages.$inferSelect;
+
+// School View types
+export type AusbildungBlock = typeof ausbildungBlocks.$inferSelect;
+export type SchoolExam = typeof schoolExams.$inferSelect;
+export type SchoolExamResult = typeof schoolExamResults.$inferSelect;
+export type Lernfeld = typeof lernfelder.$inferSelect;
+export type LernfeldMapping = typeof lernfeldMappings.$inferSelect;
+export type ActivityReport = typeof activityReports.$inferSelect;
+export type ActivityReportEntry = typeof activityReportEntries.$inferSelect;
+
+// Training/Tätigkeitsnachweis types
+export type TrainingComponent = typeof trainingComponents.$inferSelect;
+export type TrainingUseCase = typeof trainingUseCases.$inferSelect;
+export type ActivityReportUseCaseEntry = typeof activityReportUseCaseEntries.$inferSelect;
+
+export const lernfelderSchema = pgTable('lernfelder', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  description: text('description'),
+  label: text('label').notNull(), // LF-1 to LF-12
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at'),
+});
