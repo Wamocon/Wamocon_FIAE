@@ -252,11 +252,10 @@ export default function Quiz({ quiz }: QuizProps) {
           {currentQ.options.map((option, oIndex) => (
             <label
               key={oIndex}
-              className={`flex cursor-pointer items-center rounded-2xl glass-effect border-accent/30 border-2 p-4 transition-all duration-200 ${
-                selectedAnswers[currentQ.id] === oIndex
-                  ? 'border-red-300 bg-gradient-to-r from-red-50 to-indigo-50 shadow-md'
-                  : 'border-red-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
-              }`}
+              className={`flex cursor-pointer items-center rounded-2xl glass-effect border-accent/30 border-2 p-4 transition-all duration-200 ${selectedAnswers[currentQ.id] === oIndex
+                  ? 'border-red-300 bg-gradient-to-r from-red-50 to-indigo-50 shadow-md dark:border-red-500/50 dark:from-red-950/40 dark:to-indigo-950/40'
+                  : 'border-red-200/50 bg-card hover:border-red-200 hover:bg-accent/5 dark:border-border dark:hover:bg-accent/10'
+                }`}
             >
               <input
                 type="radio"
@@ -267,11 +266,10 @@ export default function Quiz({ quiz }: QuizProps) {
                 className="sr-only"
               />
               <div
-                className={`mr-4 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                  selectedAnswers[currentQ.id] === oIndex
+                className={`mr-4 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selectedAnswers[currentQ.id] === oIndex
                     ? 'border-red-500 bg-red-500'
-                    : 'border-slate-400'
-                }`}
+                    : 'border-muted-foreground/30'
+                  }`}
               >
                 {selectedAnswers[currentQ.id] === oIndex && (
                   <CheckCircle className="h-3 w-3 text-foreground" />

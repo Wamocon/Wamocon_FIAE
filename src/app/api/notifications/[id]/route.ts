@@ -5,7 +5,7 @@ import { notifications } from '@/db/migrations/schemas/schema';
 
 // PATCH /api/notifications/{id}
 // Body: { isRead?: boolean }
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });

@@ -39,7 +39,7 @@ export function Header({
   }
 
   return (
-    <header className="bg-card/80 border-border/60 relative z-50 flex h-20 items-center justify-between border-b px-6 shadow-lg backdrop-blur-md">
+    <header className="bg-card/80 border-border/60 relative z-50 flex h-16 items-center justify-between border-b px-6 shadow-lg backdrop-blur-md">
       {/* Left side - Breadcrumbs and Sidebar Toggle */}
       <div className="flex items-center gap-4">
         {/* Sidebar Toggle */}
@@ -51,18 +51,18 @@ export function Header({
         >
           <Menu className="h-5 w-5" />
         </button>
-          {canGoBack && !hideBackButton && (
-            <button
-              onClick={onGoBack}
-              className="text-muted hover:text-foreground hover:bg-muted rounded-lg p-2 transition-all duration-200"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
-          <h2 className="text-foreground text-xl font-semibold">
-            {currentBreadcrumb?.label || 'Dashboard'}
-          </h2>
-      </div>    
+        {canGoBack && !hideBackButton && (
+          <button
+            onClick={onGoBack}
+            className="text-muted hover:text-foreground hover:bg-muted rounded-lg p-2 transition-all duration-200"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        )}
+        <h2 className="text-foreground text-xl font-semibold">
+          {currentBreadcrumb?.label || 'Dashboard'}
+        </h2>
+      </div>
       {/* Right side - Actions */}
       <div className="flex items-center gap-3">
         <ThemeToggle variant="icon" />

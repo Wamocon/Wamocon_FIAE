@@ -41,7 +41,7 @@ export default function TraineeModuleDetailPage() {
   const StatusIndicator = ({ status }: { status?: string | null }) => {
     if (status === 'APPROVED') {
       return (
-        <div className="flex items-center gap-1 text-green-400">
+        <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
           <Check className="h-4 w-4" />
           <span className="text-xs">Bestanden</span>
         </div>
@@ -49,7 +49,7 @@ export default function TraineeModuleDetailPage() {
     }
     if (status === 'PENDING') {
       return (
-        <div className="flex items-center gap-1 text-yellow-400">
+        <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
           <Clock className="h-4 w-4" />
           <span className="text-xs">Wird geprüft</span>
         </div>
@@ -57,7 +57,7 @@ export default function TraineeModuleDetailPage() {
     }
     if (status === 'REJECTED') {
       return (
-        <div className="flex items-center gap-1 text-red-400">
+        <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
           <XIcon className="h-4 w-4" />
           <span className="text-xs">Überarbeiten</span>
         </div>
@@ -73,7 +73,7 @@ export default function TraineeModuleDetailPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <div className="rounded-3xl border-5 border-accent/30 bg-foreground/30 p-6">
+      <div className="rounded-3xl border-5 border-accent/30 bg-card/50 p-6">
         <h1 className="text-foreground text-2xl font-bold">{course.title}</h1>
         <div className="text-muted-foreground mt-1 text-sm">
           {course.year ? `Jahr ${course.year}` : '—'} {course.chapter ? `• Kapitel ${course.chapter}` : ''}
@@ -81,7 +81,7 @@ export default function TraineeModuleDetailPage() {
       </div>
 
       <div className="space-y-5">
-        <div className="rounded-3xl border-5 border-accent/30 bg-foreground/30 p-5">
+        <div className="rounded-3xl border-5 border-accent/30 bg-card/50 p-5">
           <div className="mb-3 text-sm font-semibold">Lessons</div>
           {enablers.length === 0 ? (
             <div className="text-sm text-muted-foreground">Keine aktiven Lessons</div>
@@ -89,9 +89,9 @@ export default function TraineeModuleDetailPage() {
             <ul className="space-y-2">
               {enablers.map((e) => (
                 <li key={e.id} className={`flex items-center justify-between rounded-xl border-3 p-3 ${e.status === 'APPROVED' ? 'border-green-500/40 bg-green-500/10' :
-                    e.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
-                      e.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
-                        'border-accent/20 bg-foreground/20'
+                  e.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
+                    e.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
+                      'border-accent/20 bg-card'
                   }`}>
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <StatusIndicator status={e.status} />
@@ -111,7 +111,7 @@ export default function TraineeModuleDetailPage() {
           )}
         </div>
 
-        <div className="rounded-3xl border-5 border-accent/30 bg-foreground/30 p-5">
+        <div className="rounded-3xl border-5 border-accent/30 bg-card/50 p-5">
           <div className="mb-3 text-sm font-semibold">Use Cases</div>
           {useCases.length === 0 ? (
             <div className="text-sm text-muted-foreground">Keine aktiven Use Cases</div>
@@ -119,9 +119,9 @@ export default function TraineeModuleDetailPage() {
             <ul className="space-y-2">
               {useCases.map((u) => (
                 <li key={u.id} className={`flex items-center justify-between rounded-xl border p-3 ${u.status === 'APPROVED' ? 'border-green-500/40 bg-green-500/10' :
-                    u.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
-                      u.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
-                        'border-accent/20 bg-black/20'
+                  u.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
+                    u.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
+                      'border-accent/20 bg-card'
                   }`}>
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <StatusIndicator status={u.status} />
