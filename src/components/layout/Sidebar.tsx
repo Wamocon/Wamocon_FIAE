@@ -97,11 +97,7 @@ export function Sidebar({
             userRole === 'trainee' ? '/trainee/school' : '/trainer/school'
           );
           break;
-        case 'lernfelder':
-          router.push(
-            userRole === 'trainee' ? '/trainee/lernfelder' : '/trainer/lernfelder'
-          );
-          break;
+
         case 'activityReports':
           router.push(
             userRole === 'trainee' ? '/trainee/activity-reports' : '/trainer/activity-reports'
@@ -156,12 +152,7 @@ export function Sidebar({
             icon: BookOpen,
             href: '/trainer/content-management',
           },
-          {
-            id: 'lernfelder',
-            label: 'Lernfelder',
-            icon: FolderEdit,
-            href: '/trainer/lernfelder',
-          },
+
           {
             id: 'quizManagement',
             label: language === 'de' ? 'Quiz-Verwaltung' : 'Quiz Management',
@@ -212,12 +203,7 @@ export function Sidebar({
             icon: BookOpen,
             href: '/trainee/courses',
           },
-          {
-            id: 'lernfelder',
-            label: 'Lernfelder',
-            icon: FolderEdit,
-            href: '/trainee/lernfelder',
-          },
+
           {
             id: 'lessons',
             label: language === 'de' ? 'Trainer-Feedback' : 'Trainer Feedback',
