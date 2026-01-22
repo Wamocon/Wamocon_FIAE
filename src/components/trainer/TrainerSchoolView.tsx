@@ -12,8 +12,9 @@ import {
 } from 'lucide-react';
 import { TrainerCalendarTab } from './school/TrainerCalendarTab';
 import { TrainerExamsTab } from './school/TrainerExamsTab';
+import { TrainerLernfelderTab } from './school/TrainerLernfelderTab';
 
-type TabId = 'calendar' | 'exams';
+type TabId = 'lernfelder' | 'calendar' | 'exams';
 
 interface TabConfig {
     id: TabId;
@@ -23,6 +24,12 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
+    {
+        id: 'lernfelder',
+        label: 'Lernfelder',
+        icon: School,
+        description: 'Lernfelder und Use Cases verwalten',
+    },
     {
         id: 'calendar',
         label: 'Trainee-Kalender',
@@ -41,7 +48,7 @@ export function TrainerSchoolView() {
     const { profile } = useAuth();
     const searchParams = useSearchParams();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<TabId>('calendar');
+    const [activeTab, setActiveTab] = useState<TabId>('lernfelder');
     const [stats, setStats] = useState({ pendingReports: 0, upcomingExams: 0, trainees: 0 });
 
     useEffect(() => {
@@ -76,6 +83,8 @@ export function TrainerSchoolView() {
 
     const renderTabContent = () => {
         switch (activeTab) {
+            case 'lernfelder':
+                return <TrainerLernfelderTab />;
             case 'calendar':
                 return <TrainerCalendarTab />;
             case 'exams':

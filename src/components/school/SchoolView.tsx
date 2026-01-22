@@ -13,13 +13,15 @@ import {
     CheckCircle2,
     Clock,
     FileSpreadsheet,
+    Layers,
 } from 'lucide-react';
 import { BlockCalendar } from './BlockCalendar';
 import { ExamManager } from './ExamManager';
 import { ActivityReportsList } from './ActivityReportsList';
 import { LernfeldNotes } from './LernfeldNotes';
+import { LernfelderTab } from './LernfelderTab';
 
-type TabId = 'calendar' | 'exams' | 'notes' | 'reports';
+type TabId = 'lernfelder' | 'calendar' | 'exams' | 'notes' | 'reports';
 
 interface TabConfig {
     id: TabId;
@@ -30,6 +32,13 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
+    {
+        id: 'lernfelder',
+        label: 'Lernfelder',
+        labelDe: 'Lernfelder',
+        icon: Layers,
+        description: 'Deine Lernfelder und Aufgaben',
+    },
     {
         id: 'calendar',
         label: 'Block Calendar',
@@ -51,7 +60,6 @@ const TABS: TabConfig[] = [
         icon: BookOpen,
         description: 'Notizen nach Lernfeldern organisiert',
     },
-
 ];
 
 export function SchoolView() {
@@ -62,7 +70,7 @@ export function SchoolView() {
     // Get tab from URL or default to calendar
     const tabParam = searchParams.get('tab') as TabId | null;
     const [activeTab, setActiveTab] = useState<TabId>(
-        tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'calendar'
+        tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'lernfelder'
     );
 
     // Stats for quick overview
@@ -118,6 +126,8 @@ export function SchoolView() {
 
     const renderTabContent = () => {
         switch (activeTab) {
+            case 'lernfelder':
+                return <LernfelderTab />;
             case 'calendar':
                 return <BlockCalendar />;
             case 'exams':
@@ -126,7 +136,7 @@ export function SchoolView() {
                 return <LernfeldNotes />;
 
             default:
-                return <BlockCalendar />;
+                return <LernfelderTab />;
         }
     };
 
