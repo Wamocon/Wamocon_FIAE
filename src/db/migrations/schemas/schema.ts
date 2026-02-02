@@ -661,6 +661,19 @@ export const haiEmbeddings = pgTable('hai_embeddings', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// HAI.ai Reindex Jobs - tracks background reindexing with progress
+export const haiReindexJobs = pgTable('hai_reindex_jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  status: text('status').notNull().default('pending'), // 'pending', 'running', 'completed', 'failed', 'cancelled'
+  forceReindex: boolean('force_reindex').notNull().default(false),
+  progress: jsonb('progress').notNull().default({}),
+  error: text('error'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // HAI.ai Chat Sessions - stores conversation sessions
 export const haiChatSessions = pgTable('hai_chat_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -1043,6 +1056,7 @@ export type LegacySubLesson = typeof subLessons.$inferSelect;
 
 // HAI.ai types
 export type HaiEmbedding = typeof haiEmbeddings.$inferSelect;
+export type HaiReindexJob = typeof haiReindexJobs.$inferSelect;
 export type HaiChatSession = typeof haiChatSessions.$inferSelect;
 export type HaiChatMessage = typeof haiChatMessages.$inferSelect;
 

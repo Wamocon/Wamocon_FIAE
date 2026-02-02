@@ -30,6 +30,7 @@ import {
     courses
 } from '@/db/migrations/schemas/schema';
 import { processMessage, processMessageStream, PipelineContext, ChatMessage } from '@/lib/hai';
+import { getProviderStatus } from '@/lib/hai/providers';
 
 // ============================================================================
 // TYPES
@@ -268,6 +269,7 @@ export async function POST(req: NextRequest) {
         );
 
         // Build pipeline context
+        // Note: user[0].role available for future role-aware responses (Phase 1+)
         const pipelineContext: PipelineContext = {
             userId,
             sessionId,
@@ -392,9 +394,18 @@ export async function GET(req: NextRequest) {
             .orderBy(desc(haiChatSessions.lastMessageAt))
             .limit(20);
 
+        // Include provider status for diagnostics
+        let providerInfo;
+        try {
+            providerInfo = getProviderStatus();
+        } catch {
+            providerInfo = null;
+        }
+
         return NextResponse.json({
             success: true,
             sessions,
+            providers: providerInfo,
         });
     } catch (error) {
         console.error('HAI.ai sessions error:', error);
