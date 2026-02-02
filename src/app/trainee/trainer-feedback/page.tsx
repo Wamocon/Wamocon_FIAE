@@ -7,14 +7,12 @@ import { useEffect, useState } from 'react';
 type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }>|null; solutionText?: string|null; solutions?: Array<{ scenarioIndex: number; text: string }>|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type UseCaseResult = { id: string; useCaseId: string; useCaseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type EnablerQuizResult = { id: string; enablerId: string; enablerTitle: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
-type GesetzResult = { id: string; geschäftsprozesseId: string; geschäftsprozesseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type GlobalQuizResult = { id: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
 
 export default function TraineeFeedbackPage() {
   const { profile, loading } = useAuth();
   const [enablers, setEnablers] = useState<EnablerResult[]>([]);
   const [useCases, setUseCases] = useState<UseCaseResult[]>([]);
-  const [gesetzes, setGesetzes] = useState<GesetzResult[]>([]);
   const [quizzes, setQuizzes] = useState<EnablerQuizResult[]>([]);
   const [globalQuizzes, setGlobalQuizzes] = useState<GlobalQuizResult[]>([]);
   const [solutionIndexMap, setSolutionIndexMap] = useState<Record<string, number>>({});
@@ -28,7 +26,6 @@ export default function TraineeFeedbackPage() {
         const data = await res.json();
   setEnablers(data.enablerResults || []);
   setUseCases(data.useCaseResults || []);
-  setGesetzes(data.geschäftsprozesseResults || []);
         const quizResults = (data.enablerQuizResults || []) as EnablerQuizResult[];
         setQuizzes(
           quizResults.map((q) => ({
@@ -64,7 +61,7 @@ export default function TraineeFeedbackPage() {
   }, [profile?.id]);
   if (loading) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
           <p className="text-muted-foreground">Lade Trainer-Feedback...</p>
@@ -75,7 +72,7 @@ export default function TraineeFeedbackPage() {
 
   if (!profile) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
           <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
@@ -86,7 +83,7 @@ export default function TraineeFeedbackPage() {
 
   if (profile.role !== 'trainee') {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
           <p className="text-muted-foreground">Zugriff verweigert...</p>

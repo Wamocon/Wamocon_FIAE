@@ -11,7 +11,7 @@ function encodeLernfeldInTitle(title: string, lernfeldCode: string | null): stri
 
 // Helper to decode lernfeld code from title
 function decodeLernfeldFromTitle(encodedTitle: string): { title: string; lernfeldCode: string | null } {
-  const match = encodedTitle.match(/^\[([A-Za-z0-9]+)\]\s*(.*)$/);
+  const match = encodedTitle.match(/^\[([A-Za-z0-9-]+)\]\s*(.*)$/);
   if (match) {
     return { lernfeldCode: match[1], title: match[2] };
   }

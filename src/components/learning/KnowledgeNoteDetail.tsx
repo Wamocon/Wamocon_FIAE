@@ -100,7 +100,7 @@ export default function KnowledgeNoteDetail({ noteId }: Props) {
   };
 
   return (
-    <div className="bg-background min-h-screen p-6">
+    <div className="bg-background min-h-full p-6">
       <div className="mx-auto max-w-3xl space-y-6">
         <div className="flex items-center gap-3">
           <button

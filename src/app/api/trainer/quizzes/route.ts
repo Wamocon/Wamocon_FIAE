@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, ilike, sql, count } from 'drizzle-orm';
-import { quizzes, enablerQuizzes, enablers, courses, questions, options, quizAssignments, quizMembers } from '@/db/migrations/schemas/schema';
+import { quizzes, enablerQuizzes, enablers, courses, questions, options, quizAssignments, quizMembers, notifications } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
   try {
@@ -129,6 +129,22 @@ export async function POST(req: NextRequest) {
     if (qt === 'GLOBAL' && Array.isArray(assignedTraineeIds) && assignedTraineeIds.length > 0) {
       const values = assignedTraineeIds.map((tid) => ({ quizId: qz.id, traineeId: tid, assignedById: trainer_id }));
       await db.insert(quizAssignments).values(values).onConflictDoNothing();
+
+      // Notify assigned trainees
+      try {
+        const notifValues = assignedTraineeIds.map((tid) => ({
+          userId: tid,
+          actorId: trainer_id,
+          type: 'GLOBAL_QUIZ_ASSIGNED',
+          title: 'Neues Quiz zugewiesen',
+          message: `Dir wurde ein neues Quiz zugewiesen: "${title}"`,
+          linkUrl: `/trainee/quizzes/${qz.id}`,
+          context: { quizId: qz.id },
+        }));
+        await db.insert(notifications).values(notifValues);
+      } catch (notifyErr) {
+        console.warn('Failed to notify trainees for quiz assignment', notifyErr);
+      }
     }
 
     return NextResponse.json({ id: qz.id }, { status: 201 });

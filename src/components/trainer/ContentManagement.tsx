@@ -60,15 +60,6 @@ export function ContentManagement() {
   const [ucSubmitting, setUcSubmitting] = useState(false);
   const [ucDuration, setUcDuration] = useState<string>('');
   const [ucActive, setUcActive] = useState<boolean>(false);
-  // Quick-add geschäftsprozesse modal state
-  const [showAddgeschäftsprozesse, setShowAddgeschäftsprozesse] = useState(false);
-  const [gpTitle, setGpTitle] = useState('');
-  const [gpDesc, setGpDesc] = useState('');
-  const [gpSubmitting, setGpSubmitting] = useState(false);
-  const [gpDuration, setGpDuration] = useState<string>('');
-  const [gpActive, setGpActive] = useState<boolean>(false);
-
-
   useEffect(() => {
     const load = async () => {
       try {

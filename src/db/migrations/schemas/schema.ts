@@ -404,8 +404,6 @@ export const useCaseSubmissionLinks = pgTable('use_case_submission_links', {
   description: text('description'), // e.g., "GitHub Repo", "OneDrive"
 });
 
-// Geschäftsprozesse tables removed
-
 // --- 4. TRAINEE-SPECIFIC TABLES ---
 
 // Reflections table removed
@@ -561,8 +559,6 @@ export const traineeUseCaseOverrides = pgTable(
     pk: primaryKey({ columns: [table.traineeId, table.useCaseId] }),
   }),
 );
-
-// traineeGeschaeftsprozesseOverrides removed
 
 // Trainee submissions for Enabler scenarios
 export const enablerSubmissions = pgTable('enabler_submissions', {
@@ -1013,7 +1009,6 @@ export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
 export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
 
-// Removed geschäftsprozesse related types
 export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;
 export type ActivityLog = typeof activityLog.$inferSelect;

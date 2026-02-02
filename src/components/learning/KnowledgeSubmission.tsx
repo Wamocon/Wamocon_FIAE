@@ -72,7 +72,7 @@ export function KnowledgeSubmission() {
 
   if (!user) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-accent mx-auto h-12 w-12 animate-spin rounded-full border-b-2"></div>
           <p className="text-muted mt-4">Lade...</p>
@@ -82,7 +82,7 @@ export function KnowledgeSubmission() {
   }
 
   return (
-    <div className="bg-background min-h-screen p-6">
+    <div className="bg-background min-h-full p-6">
       <div className="mx-auto max-w-4xl space-y-8">
         {/* Header */}
         <div className="glass-effect border-accent/30 rounded-3xl border p-8 text-center shadow-lg">
