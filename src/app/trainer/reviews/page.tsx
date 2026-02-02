@@ -2,23 +2,22 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, MessageSquare, Scale } from 'lucide-react';
+import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; solutions?: Array<{ scenarioIndex: number; text: string }> | null; trainerFeedback?: string | null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }> | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number | null };
 type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number | null };
 // Geschäftsprozesse review removed
-type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
 type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string; attemptNumber?: number | null; difficulty?: 'LOW' | 'MEDIUM' | 'HIGH' | null; enablerTitle?: string | null };
 
 export default function TrainerReviewsPage() {
   const { profile } = useAuth();
   const searchParams = useSearchParams();
-  const viewParam = searchParams.get('view'); // 'enablers' | 'usecases' | 'quizzes' | 'reflections'
+  const viewParam = searchParams.get('view'); // 'enablers' | 'usecases' | 'quizzes'
   const onlyPendingParam = searchParams.get('onlyPending'); // 'true' | 'false'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'enablers' | 'usecases' | 'quizzes' | 'reflections'>('enablers');
+  const [activeTab, setActiveTab] = useState<'enablers' | 'usecases' | 'quizzes'>('enablers');
 
   // Enabler/UseCase state
   const [enablerSubs, setEnablerSubs] = useState<EnablerReviewItem[]>([]);
@@ -29,15 +28,13 @@ export default function TrainerReviewsPage() {
   const [feedbacksMap, setFeedbacksMap] = useState<Record<string, Array<{ scenarioIndex: number; feedback: string }>>>({});
   const [solutionIndexMap, setSolutionIndexMap] = useState<Record<string, number>>({});
 
-  // Quiz/Reflection state
-  const [reflections, setReflections] = useState<ReflectionItem[]>([]);
+  // Quiz state
   const [quizzes, setQuizzes] = useState<QuizSubmissionItem[]>([]);
   const [pendingFilter, setPendingFilter] = useState<'pending' | 'all'>('pending');
   const [quizTypeFilter, setQuizTypeFilter] = useState<'all' | 'LESSON' | 'GLOBAL'>('all');
 
   const filteredEnablers = useMemo(() => enablerSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [enablerSubs, statusFilter]);
   const filteredUseCases = useMemo(() => useCaseSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [useCaseSubs, statusFilter]);
-  const reflectionsFiltered = useMemo(() => reflections.filter(r => pendingFilter === 'pending' ? !r.isReviewed : true), [reflections, pendingFilter]);
   const quizzesFiltered = useMemo(() => quizzes.filter(q => {
     const pendingOk = pendingFilter === 'pending' ? !q.isReviewed : true;
     const typeOk = quizTypeFilter === 'all' ? true : q.quizType === quizTypeFilter;
@@ -46,7 +43,7 @@ export default function TrainerReviewsPage() {
 
   // Sync state from URL params (deep-linking from dashboard)
   useEffect(() => {
-    const allowed = ['enablers', 'usecases', 'quizzes', 'reflections'] as const;
+    const allowed = ['enablers', 'usecases', 'quizzes'] as const;
     if (viewParam && (allowed as readonly string[]).includes(viewParam)) {
       setActiveTab(viewParam as any);
     }
@@ -83,19 +80,14 @@ export default function TrainerReviewsPage() {
     if (activeTab === 'enablers' || activeTab === 'usecases') loadEU();
   }, [profile?.id, statusFilter, activeTab]);
 
-  // load Quizzes/Reflections
+  // load Quizzes
   useEffect(() => {
     const loadQR = async () => {
       if (!profile?.id) return;
       setLoading(true);
       setError(null);
       try {
-        if (activeTab === 'reflections') {
-          const res = await fetch(`/api/trainer/reflections?trainerProfileId=${profile.id}`, { cache: 'no-store' });
-          if (!res.ok) throw new Error('Fehler beim Laden der Reflektionen');
-          const data = await res.json();
-          setReflections(data.reflections || []);
-        } else if (activeTab === 'quizzes') {
+        if (activeTab === 'quizzes') {
           const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${pendingFilter === 'pending'}`);
           if (!res.ok) throw new Error('Fehler beim Laden der Einreichungen');
           const data = await res.json();
@@ -107,7 +99,7 @@ export default function TrainerReviewsPage() {
         setLoading(false);
       }
     };
-    if (activeTab === 'reflections' || activeTab === 'quizzes') loadQR();
+    if (activeTab === 'quizzes') loadQR();
   }, [profile?.id, activeTab, pendingFilter]);
 
   const reviewItem = async (kind: 'enabler' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
@@ -136,18 +128,6 @@ export default function TrainerReviewsPage() {
     setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
   };
 
-  const toggleReflectionReviewed = async (id: string, current: boolean) => {
-    await fetch(`/api/trainer/reflections/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_reviewed: !current, reviewer_id: profile?.id }),
-    });
-    // reload
-    const res = await fetch(`/api/trainer/reflections?trainerProfileId=${profile?.id}`, { cache: 'no-store' });
-    const data = await res.json();
-    setReflections(data.reflections || []);
-  };
-
   const toggleSubmissionReviewed = async (id: string, current: boolean) => {
     await fetch(`/api/trainer/quiz-submissions/${id}`, {
       method: 'PATCH',
@@ -160,7 +140,7 @@ export default function TrainerReviewsPage() {
     setQuizzes(data.submissions || []);
   };
 
-  const forcedView = viewParam === 'enablers' || viewParam === 'usecases' || viewParam === 'quizzes' || viewParam === 'reflections';
+  const forcedView = viewParam === 'enablers' || viewParam === 'usecases' || viewParam === 'quizzes';
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -175,11 +155,10 @@ export default function TrainerReviewsPage() {
               {/* Geschäftsprozesse tab removed */}
               <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'usecases' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
               <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'quizzes' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
-              <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'reflections' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
             </>
           ) : (
             <div className="rounded-xl border border-accent/30 bg-muted px-3 py-1.5 text-sm">
-              {activeTab === 'enablers' ? 'Enabler' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
+              {activeTab === 'enablers' ? 'Enabler' : activeTab === 'usecases' ? 'Use Cases' : 'Quizzes'}
             </div>
           )}
           <div className="ml-auto flex items-center gap-2 text-sm">
@@ -469,47 +448,6 @@ export default function TrainerReviewsPage() {
         </div>
       )}
 
-      {!loading && activeTab === 'reflections' && (
-        <div className="space-y-4">
-          {reflectionsFiltered.length === 0 && <div className="text-sm text-muted-foreground">Keine Reflektionen.</div>}
-          {reflectionsFiltered.map(r => (
-            <div key={r.id} className="group rounded-3xl border border-accent/30 bg-card p-5 transition-all hover:border-accent/40 hover:shadow-md">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
-                    <MessageSquare className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-semibold">Reflexion von {r.traineeName}</div>
-                    <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</div>
-                  </div>
-                </div>
-                <button onClick={() => toggleReflectionReviewed(r.id, r.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${r.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
-                  {r.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Gelesen</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4" /> Als gelesen markieren</span>)}
-                </button>
-              </div>
-              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <div className="text-xs text-muted-foreground">Stärken</div>
-                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-muted/30 p-3">{r.strengths || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Schwächen</div>
-                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-muted/30 p-3">{r.weaknesses || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Mehr davon</div>
-                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-muted/30 p-3">{r.mesMore || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Gleich lassen</div>
-                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-muted/30 p-3">{r.mesEqual || '-'}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

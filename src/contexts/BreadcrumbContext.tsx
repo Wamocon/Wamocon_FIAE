@@ -75,7 +75,6 @@ export function BreadcrumbProvider({
       }
       if (segment === 'dashboard') label = 'Dashboard';
       else if (segment === 'profile') label = 'Profil';
-      else if (segment === 'reflection') label = 'Reflektion';
       else if (segment === 'knowledge-submission') label = 'Wissensabgabe';
       else if (segment === 'modules') label = 'Module';
       else if (segment === 'lessons') label = 'Trainer-Feedback';

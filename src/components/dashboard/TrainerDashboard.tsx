@@ -33,7 +33,7 @@ interface Trainee {
 
 type DashboardResponse = {
   trainees: Trainee[];
-  counts: { activeTrainees: number; pendingReviews: number; recentReflections: number; totalReflections?: number; pendingQuiz: number; pendingReflections: number; pendingUseCases: number; pendingEnablers?: number; pendingActivityReports?: number };
+  counts: { activeTrainees: number; pendingReviews: number; pendingQuiz: number; pendingUseCases: number; pendingEnablers?: number; pendingActivityReports?: number };
   charts: {
     progressTrend: { week: string; progress: number }[];
     moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[];
@@ -70,10 +70,7 @@ export default function TrainerDashboard() {
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [pendingReviews, setPendingReviews] = useState<number>(0);
   const [pendingQuiz, setPendingQuiz] = useState<number>(0);
-  const [pendingReflections, setPendingReflections] = useState<number>(0);
   const [pendingActivityReports, setPendingActivityReports] = useState<number>(0);
-  const [recentReflections, setRecentReflections] = useState<number>(0);
-  const [totalReflections, setTotalReflections] = useState<number>(0);
   const [progressTrend, setProgressTrend] = useState<{ week: string; progress: number }[]>([]);
   const [moduleProgress, setModuleProgress] = useState<{ name: string; completed: number; inProgress: number; notStarted: number }[]>([]);
 
@@ -82,10 +79,7 @@ export default function TrainerDashboard() {
     setTrainees(data.trainees || []);
     setPendingReviews(data.counts?.pendingReviews || 0);
     setPendingQuiz(data.counts?.pendingQuiz || 0);
-    setPendingReflections(data.counts?.pendingReflections || 0);
     setPendingActivityReports(data.counts?.pendingActivityReports || 0);
-    setRecentReflections(data.counts?.recentReflections || 0);
-    setTotalReflections(data.counts?.totalReflections || 0);
     setProgressTrend(data.charts?.progressTrend || []);
     setModuleProgress(data.charts?.moduleProgress || []);
   };
@@ -178,7 +172,7 @@ export default function TrainerDashboard() {
                 <AlertTriangle className="text-primary mr-3 h-6 w-6" />
                 Aktion erforderlich
               </h3>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* Pending Reports Card */}
                 <div className="bg-background/50 border-border/50 rounded-xl border p-6">
                   <div className="mb-4 flex items-center justify-between">
@@ -214,20 +208,6 @@ export default function TrainerDashboard() {
                   </button>
                 </div>
 
-                <div className="bg-background/50 border-border/50 rounded-xl border p-6">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h4 className="text-foreground font-semibold">
-                      Reflektionen
-                    </h4>
-                    <span className="text-accent text-2xl font-bold">{totalReflections}</span>
-                  </div>
-                  <p className="text-muted-foreground text-sm">
-                    Alle Einreichungen
-                  </p>
-                  <button onClick={() => router.push('/trainer/reflections')} className="bg-accent text-accent-foreground hover:bg-accent/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors w-full">
-                    Anzeigen
-                  </button>
-                </div>
               </div>
             </div>
 
