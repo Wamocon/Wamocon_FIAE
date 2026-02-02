@@ -6,7 +6,6 @@ import {
   TrendingUp,
   Users,
   Award,
-  Clock,
   Target,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -26,7 +25,7 @@ export default function TrainerAnalyticsPage() {
   const { profile, user, loading } = useAuth();
 
   const [trainees, setTrainees] = useState<Array<{ id: string; full_name: string; progress: number }>>([]);
-  const [counts, setCounts] = useState<{ activeTrainees: number; pendingReviews: number; recentReflections: number }>({ activeTrainees: 0, pendingReviews: 0, recentReflections: 0 });
+  const [counts, setCounts] = useState<{ activeTrainees: number; pendingReviews: number }>({ activeTrainees: 0, pendingReviews: 0 });
   const [progressTrend, setProgressTrend] = useState<Array<{ week: string; progress: number }>>([]);
   const [moduleProgress, setModuleProgress] = useState<Array<{ name: string; completed: number; inProgress: number; notStarted: number }>>([]);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +41,7 @@ export default function TrainerAnalyticsPage() {
         if (!res.ok) throw new Error('Konnte Analytics nicht laden');
         const data = await res.json();
         setTrainees(data.trainees || []);
-        setCounts(data.counts || { activeTrainees: 0, pendingReviews: 0, recentReflections: 0 });
+        setCounts(data.counts || { activeTrainees: 0, pendingReviews: 0 });
         setProgressTrend(data.charts?.progressTrend || []);
         setModuleProgress(data.charts?.moduleProgress || []);
       } catch (e: unknown) {
@@ -117,7 +116,7 @@ export default function TrainerAnalyticsPage() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
@@ -154,17 +153,6 @@ export default function TrainerAnalyticsPage() {
           </div>
         </div>
 
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500">
-              <Clock className="h-6 w-6 text-foreground" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Reflektionen (7 Tage)</p>
-              <p className="text-foreground text-2xl font-bold">{counts.recentReflections}</p>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Charts */}

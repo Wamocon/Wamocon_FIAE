@@ -408,25 +408,7 @@ export const useCaseSubmissionLinks = pgTable('use_case_submission_links', {
 
 // --- 4. TRAINEE-SPECIFIC TABLES ---
 
-export const reflections = pgTable('reflections', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  traineeId: uuid('trainee_id')
-    .notNull()
-    .references(() => profiles.id, { onDelete: 'cascade' }),
-
-  // SWOT
-  strengths: text('strengths'),
-  weaknesses: text('weaknesses'),
-  // MES
-  mesMore: text('mes_more'),
-  mesEqual: text('mes_equal'),
-
-  // For the trainer's "Action Required" dashboard
-  isReviewed: boolean('is_reviewed').default(false),
-  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
-
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+// Reflections table removed
 
 // For the "Knowledge Transfer" feature
 export const knowledgeNotes = pgTable('knowledge_notes', {
@@ -517,7 +499,7 @@ export const notifications = pgTable('notifications', {
   // who triggered the notification (optional)
   actorId: uuid('actor_id').references(() => profiles.id, { onDelete: 'set null' }),
   // categorization and content
-  type: text('type').notNull(), // e.g., 'REFLECTION_SUBMITTED'
+  type: text('type').notNull(), // e.g., 'QUIZ_SUBMITTED'
   title: text('title').notNull(),
   message: text('message'),
   linkUrl: text('link_url'),
@@ -1032,7 +1014,6 @@ export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
 
 // Removed geschäftsprozesse related types
-export type Reflection = typeof reflections.$inferSelect;
 export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;
 export type ActivityLog = typeof activityLog.$inferSelect;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, desc, eq, inArray, gt } from 'drizzle-orm';
+import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import {
   profiles,
   courses,
@@ -9,7 +9,6 @@ import {
   enablerCompletions,
   enablerSubmissions,
   quizSubmissions,
-  reflections,
   useCaseSubmissions,
   enablerQuizLinks,
   quizzes,
@@ -174,7 +173,6 @@ export async function GET(req: NextRequest) {
 
     // Pending reviews
     let pendingQuiz = 0,
-      pendingRefl = 0,
       pendingUseCases = 0,
       pendingEnablers = 0,
       pendingLessonQuiz = 0,
@@ -200,12 +198,6 @@ export async function GET(req: NextRequest) {
         ));
       pendingLessonQuiz = Number(plq) || 0;
 
-      const [{ c: pr } = { c: 0 }] = await db
-        .select({ c: count() })
-        .from(reflections)
-        .where(and(eq(reflections.isReviewed, false), inArray(reflections.traineeId, traineeIds)));
-      pendingRefl = Number(pr) || 0;
-
       const [{ c: pu } = { c: 0 }] = await db
         .select({ c: count() })
         .from(useCaseSubmissions)
@@ -225,27 +217,9 @@ export async function GET(req: NextRequest) {
         .where(and(eq(activityReports.status, 'SUBMITTED'), inArray(activityReports.traineeId, traineeIds)));
       pendingActivityReports = Number(par) || 0;
     }
-    // "Offene Reviews" should strictly be content reviews (Quiz, Reflection, UseCase, Enabler)
+    // "Offene Reviews" should strictly be content reviews (Quiz, UseCase, Enabler)
     // Activity Reports are administrative/formal requirements shown in their own card
-    const pendingReviews = pendingQuiz + pendingRefl + pendingUseCases + pendingEnablers;
-
-    // Recent reflections (last 7 days)
-    const lastWeek = new Date();
-    lastWeek.setDate(lastWeek.getDate() - 7);
-    const [{ c: recentReflections = 0 } = { c: 0 }] = traineeIds.length
-      ? await db
-        .select({ c: count() })
-        .from(reflections)
-        .where(and(inArray(reflections.traineeId, traineeIds), gt(reflections.createdAt, lastWeek)))
-      : [{ c: 0 }];
-
-    // Total reflections (regardless of status/time)
-    const [{ c: totalReflections = 0 } = { c: 0 }] = traineeIds.length
-      ? await db
-        .select({ c: count() })
-        .from(reflections)
-        .where(inArray(reflections.traineeId, traineeIds))
-      : [{ c: 0 }];
+    const pendingReviews = pendingQuiz + pendingUseCases + pendingEnablers;
 
     // Progress trend
     const weeks = 6;
@@ -354,12 +328,9 @@ export async function GET(req: NextRequest) {
         pendingReviews,
         pendingQuiz,
         pendingLessonQuiz,
-        pendingReflections: pendingRefl,
         pendingEnablers,
         pendingUseCases,
-        pendingActivityReports, // NEW field
-        recentReflections: Number(recentReflections) || 0,
-        totalReflections: Number(totalReflections) || 0, // NEW field
+        pendingActivityReports,
       },
       charts,
     });

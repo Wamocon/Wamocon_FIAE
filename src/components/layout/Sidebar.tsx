@@ -5,7 +5,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import {
   LayoutDashboard,
   BookOpen,
-  Brain,
   Users,
   Settings,
   LogOut,
@@ -58,9 +57,6 @@ export function Sidebar({
           break;
         case 'knowledgeSubmission':
           router.push('/trainee/knowledge-submission');
-          break;
-        case 'reflection':
-          router.push('/trainee/reflection');
           break;
         case 'contentManagement':
           router.push('/trainer/content-management');
@@ -190,12 +186,6 @@ export function Sidebar({
             label: language === 'de' ? 'Berufsschule' : 'School',
             icon: School,
             href: '/trainee/school',
-          },
-          {
-            id: 'reflection',
-            label: language === 'de' ? 'Reflektion' : 'Reflection',
-            icon: Brain,
-            href: '/trainee/reflection',
           },
           {
             id: 'courses',
