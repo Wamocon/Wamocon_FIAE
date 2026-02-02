@@ -49,11 +49,10 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       progressPct: number;
       completedEnablers: number;
       totalEnablers: number;
-      pending: { quizzes: number; useCases: number }; // geschaeftsprozesse removed
+      pending: { quizzes: number; useCases: number };
     };
     enablers: Array<{ id: string; title: string; completed: boolean; isActive: boolean; link: string }>;
     useCases: Array<{ id: string; title: string; status: string | null; isActive: boolean; attemptNumber?: number | null; link: string }>;
-    // geschaeftsprozesse removed
     enablerQuizzes: Array<{ enablerId: string; quizId: string; difficulty: string; lastScore: number | null; attemptNumber: number | null; isReviewed: boolean | null; link: string }>;
     globalQuizzes: Array<{ quizId: string; title: string; lastScore: number | null; attemptNumber: number | null; isReviewed: boolean | null; link: string }>;
   }>(null);
@@ -405,8 +404,6 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                 <div className="text-sm text-foreground">Keine Use Cases gefunden.</div>
               )}
             </section>
-
-            {/* Geschäftsprozesse section removed */}
 
             {/* Global (Big) Quizzes */}
             <section>

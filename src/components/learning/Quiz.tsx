@@ -110,7 +110,7 @@ export default function Quiz({ quiz }: QuizProps) {
 
   if (isCompleted) {
     return (
-      <div className="from-background flex min-h-screen items-center justify-center bg-gradient-to-br via-red-900/20 to-red-800/30 p-6">
+      <div className="from-background flex min-h-full items-center justify-center bg-gradient-to-br via-red-900/20 to-red-800/30 p-6">
         <div className="glass-effect-enhanced border-accent/40 w-full max-w-2xl rounded-3xl border-2 p-8 text-center shadow-2xl">
           <div className="mb-8">
             {passed ? (

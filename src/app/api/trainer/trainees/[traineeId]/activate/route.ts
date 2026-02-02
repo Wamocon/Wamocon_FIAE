@@ -6,6 +6,7 @@ import {
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
   quizAssignments,
+  notifications,
 } from '@/db/migrations/schemas/schema';
 
 type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
@@ -53,7 +54,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
           });
         break;
       }
-      // Geschäftsprozesse removed
       case 'GLOBAL_QUIZ': {
         // For global quizzes, assignment table represents active state: insert/delete
         if (isActive) {
@@ -68,6 +68,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
       }
       default:
         return NextResponse.json({ error: 'Unknown itemType' }, { status: 400 });
+    }
+
+    // Notify the trainee about the activation change
+    try {
+      const typeLabel = itemType === 'ENABLER' ? 'Lesson' : itemType === 'USE_CASE' ? 'Use Case' : 'Quiz';
+      const statusLabel = isActive ? 'aktiviert' : 'deaktiviert';
+      await db.insert(notifications).values({
+        userId: traineeId,
+        actorId: trainerId || undefined,
+        type: 'TRAINEE_ITEM_TOGGLED',
+        title: `${typeLabel} ${statusLabel}`,
+        message: `Ein ${typeLabel} wurde für dich ${statusLabel}.`,
+        linkUrl: '/trainee/modules',
+        context: { itemType, itemId, isActive },
+      });
+    } catch (notifyErr) {
+      console.warn('Failed to notify trainee for activation toggle', notifyErr);
     }
 
     return NextResponse.json({ ok: true });

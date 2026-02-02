@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, max } from 'drizzle-orm';
-import { enablers, courses, profiles } from '@/db/migrations/schemas/schema';
+import { and, eq, max } from 'drizzle-orm';
+import { enablers, courses, profiles, courseMembers, notifications } from '@/db/migrations/schemas/schema';
 
 async function verifyTrainer(trainerId: string): Promise<boolean> {
   const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
@@ -92,6 +92,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
         activatedAt: activatedAt as any,
       })
       .returning();
+
+    // Notify course trainees if the enabler is created as active
+    if (isActive) {
+      try {
+        const traineeMembers = await db
+          .select({ userId: courseMembers.userId })
+          .from(courseMembers)
+          .where(and(eq(courseMembers.courseId, courseId as any), eq(courseMembers.role, 'TRAINEE')));
+        if (traineeMembers.length > 0) {
+          const notifValues = traineeMembers.map((m) => ({
+            userId: String(m.userId),
+            actorId: trainerId,
+            type: 'ENABLER_CREATED',
+            title: 'Neue Lesson verfügbar',
+            message: `Eine neue Lesson "${title}" wurde aktiviert.`,
+            linkUrl: '/trainee/modules',
+            context: { enablerId: inserted.id, courseId },
+          }));
+          await db.insert(notifications).values(notifValues);
+        }
+      } catch (notifyErr) {
+        console.warn('Failed to notify trainees for enabler creation', notifyErr);
+      }
+    }
 
     return NextResponse.json({ enabler: inserted });
   } catch (e) {

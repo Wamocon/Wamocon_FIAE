@@ -160,7 +160,7 @@ export default function TrainerDashboard() {
     : 0;
 
   return (
-    <div className="from-background relative min-h-screen space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
+    <div className="from-background relative min-h-full space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
       {/* Enhanced red background overlay */}
       <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25"></div>
       <div className="relative z-10">

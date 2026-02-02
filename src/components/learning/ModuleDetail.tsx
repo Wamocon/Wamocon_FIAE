@@ -24,7 +24,7 @@ export default function ModuleDetail({ data }: ModuleDetailProps) {
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   if (!data) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
           <p className="text-muted-foreground">Modul nicht gefunden...</p>

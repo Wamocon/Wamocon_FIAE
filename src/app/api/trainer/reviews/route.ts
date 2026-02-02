@@ -44,8 +44,6 @@ export async function GET(req: NextRequest) {
       traineeName?: string;
       attemptNumber?: number | null;
     }> = [];
-    // gesetzesprozesse feature removed; no rows collected
-
     if (!type || type === 'enabler') {
       // Get enabler submissions for trainer's courses
       const es = await db

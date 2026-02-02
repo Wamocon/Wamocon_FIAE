@@ -57,8 +57,6 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(useCaseSubmissions.submittedAt))
       .limit(200);
 
-    // Geschäftsprozesse feature removed; skipping related submissions
-
     // Enabler quiz submissions: join quizSubmissions -> quizzes (quizType ENABLER) -> enablerQuizzes -> enablers for title
     const quizRows = await db
       .select({

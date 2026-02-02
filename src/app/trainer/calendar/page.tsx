@@ -195,7 +195,7 @@ export default function TrainerCalendarPage() {
     const selectedTrainee = trainees.find(t => t.id === selectedTraineeId);
 
     return (
-        <div className="min-h-screen p-4 md:p-6 lg:p-8">
+        <div className="min-h-full p-4 md:p-6 lg:p-8">
             {/* Header */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-foreground md:text-3xl flex items-center gap-3">

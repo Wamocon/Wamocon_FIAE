@@ -7,7 +7,6 @@ import { useSearchParams } from 'next/navigation';
 
 type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; solutions?: Array<{ scenarioIndex: number; text: string }> | null; trainerFeedback?: string | null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }> | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number | null };
 type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number | null };
-// Geschäftsprozesse review removed
 type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string; attemptNumber?: number | null; difficulty?: 'LOW' | 'MEDIUM' | 'HIGH' | null; enablerTitle?: string | null };
 
 export default function TrainerReviewsPage() {
@@ -22,7 +21,6 @@ export default function TrainerReviewsPage() {
   // Enabler/UseCase state
   const [enablerSubs, setEnablerSubs] = useState<EnablerReviewItem[]>([]);
   const [useCaseSubs, setUseCaseSubs] = useState<UseCaseReviewItem[]>([]);
-  // removed gesetzSubs
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
   const [feedbacksMap, setFeedbacksMap] = useState<Record<string, Array<{ scenarioIndex: number; feedback: string }>>>({});
@@ -70,7 +68,6 @@ export default function TrainerReviewsPage() {
         const data = await r.json();
         setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
         setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-        // geschäftsprozesseSubmissions removed
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
       } finally {
@@ -123,7 +120,6 @@ export default function TrainerReviewsPage() {
     const data = await rr.json();
     setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
     setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-    // geschäftsprozesseSubmissions removed
     setFeedbackMap(prev => ({ ...prev, [id]: '' }));
     setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
   };
@@ -152,7 +148,6 @@ export default function TrainerReviewsPage() {
           {!forcedView ? (
             <>
               <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'enablers' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Lesson</button>
-              {/* Geschäftsprozesse tab removed */}
               <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'usecases' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
               <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'quizzes' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
             </>
@@ -327,8 +322,6 @@ export default function TrainerReviewsPage() {
           ))}
         </div>
       )}
-
-      {/* Geschäftsprozesse section removed */}
 
       {!loading && activeTab === 'usecases' && (
         <div className="space-y-4">

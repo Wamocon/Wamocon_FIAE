@@ -19,8 +19,6 @@ export default function EditCoursePage() {
   const [skills, setSkills] = useState<string>('');
   const [enablers, setEnablers] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
   const [useCases, setUseCases] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
-  // Geschäftsprozesse (gesetz processes) list
-  const [Geschäftsprozesse, setGeschäftsprozesse] = useState<Array<{ id: string; title: string; isActive: boolean }>>([]);
   const [membersTrainers, setMembersTrainers] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
   const [membersTrainees, setMembersTrainees] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
   const [searchTrainer, setSearchTrainer] = useState('');
@@ -99,7 +97,6 @@ export default function EditCoursePage() {
         setSkills((data.skills || []).join(', '));
         setEnablers((data.enablers || []).map((e: any) => ({ id: e.id, title: e.title, isActive: !!e.isActive })));
         setUseCases((data.useCases || []).map((u: any) => ({ id: u.id, title: u.title, isActive: !!u.isActive })));
-        setGeschäftsprozesse((data.Geschäftsprozesse || []).map((g: any) => ({ id: g.id, title: g.title, isActive: !!g.isActive })));
         // load members
         const memRes = await fetch(`/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`, { cache: 'no-store' });
         if (memRes.ok) {
@@ -155,7 +152,7 @@ export default function EditCoursePage() {
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
-    <div className="from-background relative min-h-screen space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
+    <div className="from-background relative min-h-full space-y-6 bg-gradient-to-br via-red-900/30 to-red-800/40 p-6">
       <div className="glass-effect mx-auto max-w-7xl rounded-3xl border border-accent/30 p-8 shadow-lg">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -394,8 +391,6 @@ export default function EditCoursePage() {
               <Plus className="h-4 w-4" /> Lesson hinzufügen
             </button>
           </div>
-
-          {/* Geschäftsprozesse Section removed */}
 
           <div className="rounded-2xl border border-accent/20 bg-background/40 p-5">
             <div className="mb-3 text-sm font-semibold">Use Cases</div>
@@ -925,9 +920,6 @@ export default function EditCoursePage() {
         </div>
       )}
 
-      {/* Add geschäftsprozesse Modal */}
-      {/* Add Geschäftsprozesse modal removed */}
-
       {/* Edit Lesson Modal */}
       {showEditEnabler && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -1424,7 +1416,6 @@ export default function EditCoursePage() {
         </div>
       )}
 
-      {/* Edit Geschäftsprozesse modal removed */}
     </div>
   );
 }

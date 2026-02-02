@@ -85,7 +85,7 @@ export function Profile() {
 
   if (!profile) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
           <p className="text-muted-foreground mt-4">Lade Profil...</p>
@@ -216,7 +216,7 @@ export function Profile() {
   };
 
   return (
-    <div className="bg-background min-h-screen p-6">
+    <div className="bg-background min-h-full p-6">
       {/* Profile Header */}
       <div className="bg-card border-border rounded-3xl border p-8 shadow-lg">
         <div className="flex items-center space-x-6">
