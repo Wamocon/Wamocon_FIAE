@@ -1,43 +1,61 @@
 /**
  * HAI.ai Embed API Route
- * 
+ *
  * Endpoint for indexing content for RAG search.
  * Trainer-only access for content management.
- * 
- * POST /api/hai/embed - Index content
- * GET /api/hai/embed - Get indexing status
+ *
+ * CHANGES (Phase 0C — Bulletproof Reindex):
+ *   - index_all now runs as a background job (non-blocking)
+ *   - GET supports job status polling via ?jobId=xxx
+ *   - Progress is tracked in hai_reindex_jobs table
+ *   - Cancellation support via POST { action: 'cancel_job' }
+ *
+ * POST /api/hai/embed - Index content or start background job
+ * GET /api/hai/embed  - Get indexing status or poll job progress
  * DELETE /api/hai/embed - Remove embeddings
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import {
     profiles,
     enablers,
     courses,
     contentDocuments,
-    haiEmbeddings
 } from '@/db/migrations/schemas/schema';
 import {
     indexContent,
-    indexContentBatch,
     removeEmbeddings,
     getEmbeddingCount,
     getIndexedSources,
     SourceType
 } from '@/lib/hai';
 import { extractTextFromPDF } from '@/lib/hai/pdfExtractor';
+import {
+    createReindexJob,
+    getJobStatus,
+    getLatestJob,
+    markJobRunning,
+    markJobCompleted,
+    markJobFailed,
+    markJobCancelled,
+    updateJobProgress,
+    isCancellationRequested,
+    requestCancellation,
+    type ReindexProgress,
+} from '@/lib/hai/reindexJob';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 interface IndexRequestBody {
-    action: 'index_enabler' | 'index_course' | 'index_document' | 'index_all' | 'reindex';
+    action: 'index_enabler' | 'index_all' | 'reindex' | 'cancel_job';
     sourceType?: SourceType;
     sourceId?: string;
     forceReindex?: boolean;
+    jobId?: string;
 }
 
 // ============================================================================
@@ -58,7 +76,7 @@ async function verifyTrainer(userId: string): Promise<boolean> {
 }
 
 /**
- * Index a single enabler
+ * Index a single enabler (synchronous — used for individual enabler indexing).
  */
 async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
     // Get enabler details
@@ -76,7 +94,7 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
         .limit(1);
 
     if (enabler.length === 0) {
-        return { success: false, error: 'Enabler not found', chunksIndexed: 0, chunksSkipped: 0 };
+        return { success: false, error: 'Enabler not found', chunksIndexed: 0, chunksSkipped: 0, chunksFailed: 0 };
     }
 
     const e = enabler[0];
@@ -90,7 +108,7 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
     const content = contentParts.join('\n\n');
 
     if (!content.trim()) {
-        return { success: true, message: 'No text content to index', chunksIndexed: 0, chunksSkipped: 0 };
+        return { success: true, message: 'No text content to index', chunksIndexed: 0, chunksSkipped: 0, chunksFailed: 0 };
     }
 
     // Get course title for metadata
@@ -104,7 +122,7 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
         courseTitle = course[0]?.title || undefined;
     }
 
-    // Index the content
+    // Index the enabler text
     const result = await indexContent({
         sourceType: 'enabler',
         sourceId: e.id,
@@ -125,9 +143,9 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
         .from(contentDocuments)
         .where(eq(contentDocuments.enablerId, enablerId));
 
-    // Aggregate stats from multiple PDF indexings + Enabler Text
     let totalIndexed = result.chunksIndexed;
     let totalSkipped = result.chunksSkipped;
+    let totalFailed = result.chunksFailed;
 
     for (const doc of documents) {
         if (doc.storageUrl) {
@@ -152,92 +170,174 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
                     });
                     totalIndexed += docResult.chunksIndexed;
                     totalSkipped += docResult.chunksSkipped;
+                    totalFailed += docResult.chunksFailed;
                 }
             } catch (error) {
                 console.error(`HAI.ai: Error indexing PDF ${doc.id}:`, error);
+                totalFailed++;
             }
         }
     }
 
-
-    return { ...result, chunksIndexed: totalIndexed, chunksSkipped: totalSkipped };
+    return {
+        ...result,
+        chunksIndexed: totalIndexed,
+        chunksSkipped: totalSkipped,
+        chunksFailed: totalFailed,
+    };
 }
 
+// ============================================================================
+// BACKGROUND JOB: Index All Content
+// ============================================================================
+
 /**
- * Index all content in the system
+ * Run the full reindex as a background job.
+ * Called via setTimeout(0) so the HTTP response returns immediately.
+ *
+ * Progress is written to hai_reindex_jobs table and polled by the UI.
  */
-async function indexAllContent(forceReindex: boolean = false) {
-    const results = {
-        enablersProcessed: 0,
-        documentsProcessed: 0,
+async function runBackgroundReindex(jobId: string, forceReindex: boolean): Promise<void> {
+    const progress: ReindexProgress = {
+        totalSources: 0,
+        processedSources: 0,
         totalChunksIndexed: 0,
         totalChunksSkipped: 0,
-        errors: [] as string[],
+        failedSources: 0,
+        errors: [],
+        currentSource: null,
+        enablersProcessed: 0,
+        documentsProcessed: 0,
     };
 
-    // Get all active enablers
-    const allEnablers = await db
-        .select({ id: enablers.id })
-        .from(enablers)
-        .where(eq(enablers.isActive, true));
+    try {
+        await markJobRunning(jobId);
 
-    for (const e of allEnablers) {
-        try {
-            const result = await indexEnabler(e.id, forceReindex);
-            if (result.success) {
-                results.enablersProcessed++;
-                results.totalChunksIndexed += result.chunksIndexed;
-                results.totalChunksSkipped += result.chunksSkipped;
-            } else {
-                // Check if error property exists
-                const errorMsg = 'error' in result ? result.error : (result as any).message || 'Unknown error';
-                results.errors.push(`Enabler ${e.id}: ${errorMsg}`);
+        // --- Count total sources ---
+        const allEnablers = await db
+            .select({ id: enablers.id, title: enablers.title })
+            .from(enablers)
+            .where(eq(enablers.isActive, true));
+
+        const standaloneDocuments = await db
+            .select({
+                id: contentDocuments.id,
+                title: contentDocuments.title,
+                storageUrl: contentDocuments.storageUrl,
+                fileName: contentDocuments.fileName
+            })
+            .from(contentDocuments)
+            .where(sql`enabler_id IS NULL AND use_case_id IS NULL`);
+
+        progress.totalSources = allEnablers.length + standaloneDocuments.length;
+        await updateJobProgress(jobId, { totalSources: progress.totalSources });
+
+        // --- Process Enablers ---
+        for (const e of allEnablers) {
+            if (isCancellationRequested()) {
+                await markJobCancelled(jobId, progress);
+                return;
             }
-        } catch (error) {
-            results.errors.push(`Enabler ${e.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    }
 
-    // Get all standalone documents
-    const standaloneDocuments = await db
-        .select({
-            id: contentDocuments.id,
-            title: contentDocuments.title,
-            storageUrl: contentDocuments.storageUrl,
-            fileName: contentDocuments.fileName
-        })
-        .from(contentDocuments)
-        .where(sql`enabler_id IS NULL AND use_case_id IS NULL`);
+            progress.currentSource = `Enabler: ${e.title}`;
+            await updateJobProgress(jobId, { currentSource: progress.currentSource });
 
-    for (const doc of standaloneDocuments) {
-        if (doc.storageUrl) {
             try {
-                const pdfResult = await extractTextFromPDF(doc.storageUrl);
-                if (pdfResult.success && pdfResult.text) {
-                    const result = await indexContent({
-                        sourceType: 'document',
-                        sourceId: doc.id,
-                        title: doc.title || doc.fileName || 'PDF Document',
-                        content: pdfResult.text,
-                        forceReindex,
-                        metadata: {
-                            ...pdfResult.metadata,
-                            fileName: doc.fileName,
-                            storageUrl: doc.storageUrl,
-                            mimeType: 'application/pdf'
-                        }
-                    });
-                    results.documentsProcessed++;
-                    results.totalChunksIndexed += result.chunksIndexed;
-                    results.totalChunksSkipped += result.chunksSkipped;
+                const result = await indexEnabler(e.id, forceReindex);
+                if (result.success) {
+                    progress.enablersProcessed++;
+                    progress.totalChunksIndexed += result.chunksIndexed;
+                    progress.totalChunksSkipped += result.chunksSkipped;
+                } else {
+                    progress.failedSources++;
+                    const errorMsg = 'error' in result ? result.error : (result as any).message || 'Unknown error';
+                    progress.errors.push(`Enabler "${e.title}": ${errorMsg}`);
                 }
             } catch (error) {
-                results.errors.push(`Document ${doc.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                progress.failedSources++;
+                progress.errors.push(
+                    `Enabler "${e.title}": ${error instanceof Error ? error.message : 'Unknown error'}`
+                );
             }
-        }
-    }
 
-    return results;
+            progress.processedSources++;
+            await updateJobProgress(jobId, {
+                processedSources: progress.processedSources,
+                enablersProcessed: progress.enablersProcessed,
+                totalChunksIndexed: progress.totalChunksIndexed,
+                totalChunksSkipped: progress.totalChunksSkipped,
+                failedSources: progress.failedSources,
+                errors: progress.errors,
+            });
+        }
+
+        // --- Process Standalone Documents ---
+        for (const doc of standaloneDocuments) {
+            if (isCancellationRequested()) {
+                await markJobCancelled(jobId, progress);
+                return;
+            }
+
+            const docName = doc.title || doc.fileName || doc.id;
+            progress.currentSource = `Dokument: ${docName}`;
+            await updateJobProgress(jobId, { currentSource: progress.currentSource });
+
+            if (doc.storageUrl) {
+                try {
+                    const pdfResult = await extractTextFromPDF(doc.storageUrl);
+                    if (pdfResult.success && pdfResult.text) {
+                        const result = await indexContent({
+                            sourceType: 'document',
+                            sourceId: doc.id,
+                            title: doc.title || doc.fileName || 'PDF Document',
+                            content: pdfResult.text,
+                            forceReindex,
+                            metadata: {
+                                ...pdfResult.metadata,
+                                fileName: doc.fileName,
+                                storageUrl: doc.storageUrl,
+                                mimeType: 'application/pdf'
+                            }
+                        });
+                        progress.documentsProcessed++;
+                        progress.totalChunksIndexed += result.chunksIndexed;
+                        progress.totalChunksSkipped += result.chunksSkipped;
+                    }
+                } catch (error) {
+                    progress.failedSources++;
+                    progress.errors.push(
+                        `Dokument "${docName}": ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
+                }
+            }
+
+            progress.processedSources++;
+            await updateJobProgress(jobId, {
+                processedSources: progress.processedSources,
+                documentsProcessed: progress.documentsProcessed,
+                totalChunksIndexed: progress.totalChunksIndexed,
+                totalChunksSkipped: progress.totalChunksSkipped,
+                failedSources: progress.failedSources,
+                errors: progress.errors,
+            });
+        }
+
+        // --- Done ---
+        progress.currentSource = null;
+        await markJobCompleted(jobId, progress);
+
+        console.log(
+            `HAI.ai: Reindex job ${jobId} completed. ` +
+            `${progress.enablersProcessed} enablers, ${progress.documentsProcessed} docs, ` +
+            `${progress.totalChunksIndexed} chunks indexed, ${progress.totalChunksSkipped} skipped, ` +
+            `${progress.failedSources} failures.`
+        );
+    } catch (error) {
+        progress.currentSource = null;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown fatal error';
+        await markJobFailed(jobId, errorMsg, progress);
+        console.error(`HAI.ai: Reindex job ${jobId} FAILED:`, error);
+    }
 }
 
 // ============================================================================
@@ -245,7 +345,7 @@ async function indexAllContent(forceReindex: boolean = false) {
 // ============================================================================
 
 /**
- * POST - Index content
+ * POST - Index content or manage jobs
  */
 export async function POST(req: NextRequest) {
     try {
@@ -281,8 +381,37 @@ export async function POST(req: NextRequest) {
             }
 
             case 'index_all': {
-                const result = await indexAllContent(forceReindex);
-                return NextResponse.json({ success: true, result });
+                // Create background job and return immediately
+                const { jobId, error } = await createReindexJob(forceReindex);
+                if (error) {
+                    return NextResponse.json({ error }, { status: 409 });
+                }
+
+                // Start background processing (non-blocking)
+                // Using setTimeout(0) to return the HTTP response immediately
+                // The job runs in the Node.js event loop after the response is sent.
+                setTimeout(() => {
+                    runBackgroundReindex(jobId, forceReindex).catch(err => {
+                        console.error(`HAI.ai: Background reindex fatal error:`, err);
+                        markJobFailed(jobId, err.message || 'Fatal background error', {
+                            totalSources: 0,
+                            processedSources: 0,
+                            totalChunksIndexed: 0,
+                            totalChunksSkipped: 0,
+                            failedSources: 0,
+                            errors: [err.message || 'Fatal error'],
+                            currentSource: null,
+                            enablersProcessed: 0,
+                            documentsProcessed: 0,
+                        });
+                    });
+                }, 0);
+
+                return NextResponse.json({
+                    success: true,
+                    jobId,
+                    message: 'Reindex-Job gestartet. Überprüfen Sie den Fortschritt über GET /api/hai/embed?jobId=xxx',
+                });
             }
 
             case 'reindex': {
@@ -290,16 +419,25 @@ export async function POST(req: NextRequest) {
                     return NextResponse.json({ error: 'sourceType and sourceId required' }, { status: 400 });
                 }
 
-                // Remove existing embeddings
-                await removeEmbeddings(sourceType, sourceId);
-
-                // Re-index based on type
+                // For single-source reindex, use UPSERT (no pre-delete needed)
                 if (sourceType === 'enabler') {
                     const result = await indexEnabler(sourceId, true);
                     return NextResponse.json({ success: true, result });
                 }
 
+                // For explicit removal (non-enabler)
+                await removeEmbeddings(sourceType, sourceId);
                 return NextResponse.json({ success: true, message: 'Embeddings removed' });
+            }
+
+            case 'cancel_job': {
+                const cancelled = requestCancellation();
+                return NextResponse.json({
+                    success: cancelled,
+                    message: cancelled
+                        ? 'Abbruch angefordert. Der Job wird beim nächsten Quellenwechsel gestoppt.'
+                        : 'Kein aktiver Job zum Abbrechen.',
+                });
             }
 
             default:
@@ -315,12 +453,13 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET - Get indexing status
+ * GET - Get indexing status or poll job progress
  */
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const userId = searchParams.get('userId');
+        const jobId = searchParams.get('jobId');
 
         if (!userId) {
             return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
@@ -335,14 +474,24 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        // Get embedding statistics
+        // If jobId provided, return that job's status
+        if (jobId) {
+            const job = await getJobStatus(jobId);
+            if (!job) {
+                return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+            }
+            return NextResponse.json({ success: true, job });
+        }
+
+        // Otherwise, return general stats + latest job
         const totalCount = await getEmbeddingCount();
         const indexedSources = await getIndexedSources();
 
-        // Get counts by type
         const enablerCount = await getEmbeddingCount('enabler');
         const documentCount = await getEmbeddingCount('document');
         const courseCount = await getEmbeddingCount('course');
+
+        const latestJob = await getLatestJob();
 
         return NextResponse.json({
             success: true,
@@ -353,8 +502,9 @@ export async function GET(req: NextRequest) {
                     document: documentCount,
                     course: courseCount,
                 },
-                indexedSources: indexedSources.slice(0, 50), // Limit to 50 for response size
+                indexedSources: indexedSources.slice(0, 50),
             },
+            latestJob,
         });
     } catch (error) {
         console.error('HAI.ai embed status error:', error);

@@ -1,17 +1,25 @@
 /**
  * HAI.ai RAG Pipeline
- * 
+ *
  * Orchestrates the full Retrieval-Augmented Generation flow:
  * 1. Classify intent
  * 2. Retrieve relevant context
  * 3. Build prompt
- * 4. Generate response
- * 5. Add citations
- * 
+ * 4. Generate response (via provider abstraction)
+ * 5. Add citations (local RAG + web grounding)
+ *
+ * CHANGES (Phase 0E — Provider Migration):
+ *   - Uses chatWithFallback() directly instead of haiClient legacy layer
+ *   - Native ChatCitation support (no more groundingMetadata workaround)
+ *   - Uses getEmbeddingProvider() for health checks
+ *   - Preserves ChatMessage type from client.ts for backward compat with chat route
+ *
  * @module lib/hai/ragPipeline
  */
 
-import { haiClient, ChatMessage } from './client';
+import { ChatMessage } from './client';
+import { chatWithFallback, getChatProvider, getEmbeddingProvider } from './providers';
+import type { ChatMessage as ProviderChatMessage, ChatGenerateOptions } from './providers';
 import { searchWithContext, SearchResult } from './vectorSearch';
 import { buildSystemPrompt, buildRetrievedContext, PromptMode, getGreetingPrompt, getOffTopicResponse } from './prompts';
 
@@ -151,12 +159,27 @@ function determineMode(intent: IntentType, context: PipelineContext): PromptMode
 }
 
 // ============================================================================
+// HELPER: Convert legacy messages to provider format
+// ============================================================================
+
+/**
+ * Convert legacy ChatMessage format (role: 'user'|'model', parts: [{text}])
+ * to provider format (role: 'user'|'assistant', content: string).
+ */
+function convertToProviderMessages(messages: ChatMessage[]): ProviderChatMessage[] {
+    return messages.map(msg => ({
+        role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+        content: msg.parts.map(p => p.text).join(''),
+    }));
+}
+
+// ============================================================================
 // MAIN PIPELINE
 // ============================================================================
 
 /**
  * Process a user message through the full RAG pipeline
- * 
+ *
  * @param userMessage - The user's message
  * @param context - Current context (enabler, course, previous messages)
  * @returns Generated response with citations
@@ -174,13 +197,18 @@ export async function processMessage(
         };
     }
 
-    // Check if client is initialized
-    if (!haiClient.isInitialized()) {
+    // Check if providers are ready
+    try {
+        const chatProvider = getChatProvider();
+        if (!chatProvider.isInitialized()) {
+            throw new Error('Chat provider not initialized');
+        }
+    } catch {
         return {
             response: 'HAI.ai ist momentan nicht verfügbar. Bitte kontaktiere deinen Trainer.',
             intent: 'question',
             citations: [],
-            error: 'Client not initialized',
+            error: 'Provider not initialized',
         };
     }
 
@@ -257,25 +285,25 @@ export async function processMessage(
             quizTopic: intent === 'quiz_request' ? extractQuizTopic(userMessage) : undefined,
         });
 
-        // Step 5: Convert previous messages to chat format
-        const chatHistory: ChatMessage[] = (context.previousMessages || []).map(msg => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: msg.parts,
-        }));
+        // Step 5: Convert previous messages to provider format
+        const providerMessages = convertToProviderMessages(context.previousMessages || []);
 
-        // Step 6: Generate response
-        const responseData = await haiClient.generateChatResponse(
+        // Step 6: Generate response via provider factory (with automatic fallback)
+        const options: ChatGenerateOptions = {
+            maxOutputTokens: 1024,
+            temperature: intent === 'quiz_request' ? 0.8 : 0.7,
+            enableWebSearch,
+        };
+
+        const responseData = await chatWithFallback(
             systemPrompt,
-            chatHistory,
+            providerMessages,
             userMessage,
-            {
-                maxOutputTokens: 1024,
-                temperature: intent === 'quiz_request' ? 0.8 : 0.7,
-                enableWebSearch,
-            }
+            undefined, // no streaming
+            options
         );
 
-        // Step 7: Build citations from search results
+        // Step 7: Build citations from search results (local RAG)
         const citations: Citation[] = searchResults
             .filter(r => r.similarity >= 0.5) // Only cite high-relevance sources
             .map(r => {
@@ -295,19 +323,19 @@ export async function processMessage(
                 };
             });
 
-        // Merge Web Citations (from Grounding Metadata)
-        if (responseData.groundingMetadata?.groundingChunks) {
-            responseData.groundingMetadata.groundingChunks.forEach((chunk: any) => {
-                if (chunk.web?.uri && chunk.web?.title) {
+        // Merge web citations (from provider's native citation support)
+        if (responseData.citations && responseData.citations.length > 0) {
+            for (const webCitation of responseData.citations) {
+                if (webCitation.sourceType === 'web' && webCitation.url) {
                     citations.push({
                         sourceType: 'web',
                         sourceId: 'google-search',
-                        title: chunk.web.title,
+                        title: webCitation.title,
                         similarity: 1.0, // Trusted source
-                        url: chunk.web.uri
+                        url: webCitation.url,
                     });
                 }
-            });
+            }
         }
 
         // Step 8: Update quiz state if applicable
@@ -322,7 +350,6 @@ export async function processMessage(
                 answers: [],
             };
         } else if (intent === 'quiz_answer' && context.quizState?.active) {
-            // Quiz answer handling would be more complex in production
             newQuizState = {
                 ...context.quizState,
                 currentQuestion: (context.quizState.currentQuestion || 0) + 1,
@@ -347,14 +374,24 @@ export async function processMessage(
 }
 
 /**
- * Process a message with streaming response
+ * Process a message with streaming response.
+ * Uses chatWithFallback() with onChunk callback for real-time streaming.
  */
 export async function processMessageStream(
     userMessage: string,
     context: PipelineContext,
     onChunk: (text: string) => void
 ): Promise<PipelineResult> {
-    if (!userMessage.trim() || !haiClient.isInitialized()) {
+    // Quick validation — fall back to non-streaming for empty/uninitialized
+    if (!userMessage.trim()) {
+        const result = await processMessage(userMessage, context);
+        onChunk(result.response);
+        return result;
+    }
+
+    try {
+        getChatProvider(); // Throws if not initialized
+    } catch {
         const result = await processMessage(userMessage, context);
         onChunk(result.response);
         return result;
@@ -410,7 +447,6 @@ export async function processMessageStream(
         }
 
         let mode = determineMode(intent, context);
-        // If web search is enabled, switch to general mode to allow external knowledge
         if (enableWebSearch) {
             mode = 'general';
         }
@@ -424,25 +460,25 @@ export async function processMessageStream(
             retrievedContext: retrievedContext || undefined,
         });
 
-        const chatHistory: ChatMessage[] = (context.previousMessages || []).map(msg => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: msg.parts,
-        }));
+        // Convert messages to provider format
+        const providerMessages = convertToProviderMessages(context.previousMessages || []);
 
-        // Stream response with Web Search option
-        const response = await haiClient.generateChatResponseStream(
+        // Stream response via provider factory (with automatic fallback + web search routing)
+        const options: ChatGenerateOptions = {
+            maxOutputTokens: 1024,
+            temperature: 0.7,
+            enableWebSearch,
+        };
+
+        const response = await chatWithFallback(
             systemPrompt,
-            chatHistory,
+            providerMessages,
             userMessage,
-            onChunk,
-            {
-                maxOutputTokens: 1024,
-                temperature: 0.7,
-                enableWebSearch
-            }
+            onChunk, // streaming callback
+            options
         );
 
-        // Process Local Citations
+        // Process local RAG citations
         const citations: Citation[] = searchResults
             .filter(r => r.similarity >= 0.5)
             .map(r => {
@@ -462,19 +498,19 @@ export async function processMessageStream(
                 };
             });
 
-        // Merge Web Citations (from Grounding Metadata)
-        if (response.groundingMetadata?.groundingChunks) {
-            response.groundingMetadata.groundingChunks.forEach((chunk: any) => {
-                if (chunk.web?.uri && chunk.web?.title) {
+        // Merge web citations from provider
+        if (response.citations && response.citations.length > 0) {
+            for (const webCitation of response.citations) {
+                if (webCitation.sourceType === 'web' && webCitation.url) {
                     citations.push({
                         sourceType: 'web',
                         sourceId: 'google-search',
-                        title: chunk.web.title,
-                        similarity: 1.0, // Trusted source
-                        url: chunk.web.uri
+                        title: webCitation.title,
+                        similarity: 1.0,
+                        url: webCitation.url,
                     });
                 }
-            });
+            }
         }
 
         return {
@@ -503,40 +539,42 @@ export async function processMessageStream(
  * Extract quiz topic from user message
  */
 function extractQuizTopic(message: string): string {
-    // Remove quiz command
     let topic = message
         .replace(/\/quiz\s*/i, '')
         .replace(/quiz (starten|zum thema)\s*/i, '')
         .replace(/teste mich (zu|über)\s*/i, '')
         .trim();
 
-    // If empty, default to general
     return topic || 'Allgemeine IT-Kenntnisse';
 }
 
 /**
- * Quick health check for the pipeline
+ * Quick health check for the pipeline.
+ * Now checks providers directly instead of legacy client.
  */
 export async function checkPipelineHealth(): Promise<{
     clientReady: boolean;
     canGenerateEmbeddings: boolean;
 }> {
     try {
-        const clientReady = haiClient.isInitialized();
+        const chatProvider = getChatProvider();
+        const clientReady = chatProvider.isInitialized();
         let canGenerateEmbeddings = false;
 
         if (clientReady) {
             try {
-                // Test embedding with a small string
-                await haiClient.generateEmbedding('test');
-                canGenerateEmbeddings = true;
+                const embeddingProvider = getEmbeddingProvider();
+                if (embeddingProvider.isInitialized()) {
+                    await embeddingProvider.generateEmbedding('test');
+                    canGenerateEmbeddings = true;
+                }
             } catch (e) {
                 console.warn('Health check embedding failed:', e);
             }
         }
 
         return { clientReady, canGenerateEmbeddings };
-    } catch (error) {
+    } catch {
         return { clientReady: false, canGenerateEmbeddings: false };
     }
 }

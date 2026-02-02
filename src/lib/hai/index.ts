@@ -1,13 +1,36 @@
 /**
  * HAI.ai - AI Learning Coach
- * 
+ *
  * Barrel export for all HAI.ai modules.
  * Import from '@/lib/hai' for all AI coach functionality.
- * 
+ *
+ * ARCHITECTURE (2026):
+ *   Chat:       Claude Haiku 4.5 (primary) → Gemini 2.5 Flash (fallback)
+ *   Embeddings: Gemini gemini-embedding-001 (768-dim, MRL)
+ *   Vector DB:  pgvector with IVFFlat index
+ *
  * @module lib/hai
  */
 
-// Core Gemini client
+// --- NEW: Provider abstraction layer ---
+export {
+    getChatProvider,
+    getFallbackChatProvider,
+    getEmbeddingProvider,
+    chatWithFallback,
+    getProviderStatus,
+} from './providers';
+export type {
+    ChatProvider,
+    EmbeddingProvider,
+    ChatMessage as ProviderChatMessage,
+    ChatGenerateOptions,
+    ChatResponse as ProviderChatResponse,
+    EmbeddingResult as ProviderEmbeddingResult,
+    ChatCitation,
+} from './providers';
+
+// --- Legacy client (backward compatibility) ---
 export { haiClient } from './client';
 export type { ChatMessage, GenerateOptions, EmbeddingResult, ChatResponse } from './client';
 
