@@ -20,6 +20,12 @@ export interface PromptContext {
     scenarioText?: string;
     retrievedContext?: string;
     quizTopic?: string;
+    /** Live platform data (progress, calendar, reports, etc.) */
+    liveDataContext?: string;
+    /** User role for role-aware prompt sections */
+    userRole?: 'TRAINER' | 'TRAINEE';
+    /** Summary of older messages in long sessions (Phase 2B) */
+    conversationSummary?: string;
 }
 
 // ============================================================================
@@ -137,6 +143,16 @@ export function buildSystemPrompt(context: PromptContext): string {
     // Add mode-specific prompt
     parts.push(MODE_PROMPTS[context.mode]);
 
+    // Add conversation summary for long sessions (Phase 2B)
+    if (context.conversationSummary) {
+        parts.push(`
+## Bisheriger Gespraechsverlauf
+Die folgende Zusammenfassung fasst den bisherigen Gespraechsverlauf zusammen.
+Nutze sie um den Kontext frueherer Nachrichten zu behalten.
+
+${context.conversationSummary}`);
+    }
+
     // Add enabler context if available
     if (context.enablerTitle) {
         parts.push(`
@@ -174,6 +190,41 @@ Antworte bestmöglich basierend auf deinem allgemeinen IT-Wissen, aber weise dar
         parts.push(`
 ## Quiz-Thema
 Erstelle Fragen zum Thema: **${context.quizTopic}**`);
+    }
+
+    // Add live platform data context (Phase 1)
+    if (context.liveDataContext) {
+        parts.push(`
+## Aktuelle Plattform-Daten
+Die folgenden Daten stammen direkt aus der Lernplattform und sind aktuell.
+Nutze sie um praezise und personalisierte Antworten zu geben.
+Nenne konkrete Zahlen wenn der Nutzer danach fragt.
+
+${context.liveDataContext}`);
+
+        // Add role-specific instructions
+        if (context.userRole === 'TRAINEE') {
+            parts.push(`
+### Hinweise fuer Azubi-Antworten
+- Sei motivierend und ermutigend bei Fortschrittsfragen
+- Weise auf offene Aufgaben oder fehlende Nachweise hin
+- Gib konkrete Tipps zum naechsten Schritt
+- Wenn der Fortschritt gut ist: Lobe!
+- Wenn Nachweise fehlen: Freundlich erinnern`);
+        } else if (context.userRole === 'TRAINER') {
+            parts.push(`
+### Hinweise fuer Trainer-Antworten
+- Zeige aggregierte Daten uebersichtlich an
+- Hebe Azubis hervor die besondere Aufmerksamkeit brauchen (niedriger Fortschritt)
+- Fasse ausstehende Bewertungen klar zusammen
+- Biete an, bei einzelnen Azubis tiefer einzusteigen`);
+        }
+    } else if (context.userRole) {
+        // No live data available but we know the role
+        parts.push(`
+## Hinweis zu Plattform-Daten
+Aktuell konnten keine Live-Daten aus der Plattform geladen werden.
+Falls der Nutzer nach Fortschritt, Kalender oder Nachweisen fragt, verweise darauf dass die Daten momentan nicht abrufbar sind und er die entsprechende Seite in der Plattform direkt besuchen kann.`);
     }
 
     return parts.join('\n\n');

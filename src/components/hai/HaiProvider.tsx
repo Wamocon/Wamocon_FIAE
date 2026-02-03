@@ -77,6 +77,7 @@ interface HaiProviderState {
     renameSession: (sessionId: string, newTitle: string) => Promise<void>;
 
     refreshSessions: () => Promise<void>;
+    searchSessions: (query: string) => Promise<HaiSession[]>;
 }
 
 const HaiContext = createContext<HaiProviderState | null>(null);
@@ -157,6 +158,22 @@ export function HaiProvider({ children, userId, initialContext }: HaiProviderPro
         } catch (error) {
             console.error('Failed to fetch sessions:', error);
         }
+    }, [userId]);
+
+    const searchSessions = useCallback(async (query: string): Promise<HaiSession[]> => {
+        if (!query || query.trim().length < 2) return [];
+        try {
+            const response = await fetch(
+                `/api/hai/session?userId=${userId}&search=${encodeURIComponent(query.trim())}&limit=20`
+            );
+            if (response.ok) {
+                const data = await response.json();
+                return data.sessions || [];
+            }
+        } catch (error) {
+            console.error('Failed to search sessions:', error);
+        }
+        return [];
     }, [userId]);
 
     const loadSession = useCallback(async (sessionId: string) => {
@@ -345,6 +362,7 @@ export function HaiProvider({ children, userId, initialContext }: HaiProviderPro
         deleteSession,
         renameSession,
         refreshSessions,
+        searchSessions,
     };
 
     return (
