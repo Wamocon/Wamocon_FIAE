@@ -689,6 +689,7 @@ export const haiChatSessions = pgTable('hai_chat_sessions', {
   lastMessageAt: timestamp('last_message_at').defaultNow(), // For sorting by recency
 
   isActive: boolean('is_active').default(true), // false = archived (still visible, just not auto-loaded)
+  metadata: jsonb('metadata').default({}), // Phase 2: conversation summary cache, etc.
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

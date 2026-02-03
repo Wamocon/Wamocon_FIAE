@@ -22,6 +22,8 @@ import { chatWithFallback, getChatProvider, getEmbeddingProvider } from './provi
 import type { ChatMessage as ProviderChatMessage, ChatGenerateOptions } from './providers';
 import { searchWithContext, SearchResult } from './vectorSearch';
 import { buildSystemPrompt, buildRetrievedContext, PromptMode, getGreetingPrompt, getOffTopicResponse } from './prompts';
+import { fetchDataContext } from './dataContext';
+import type { UserRole } from './dataContext';
 
 // ============================================================================
 // TYPES
@@ -48,6 +50,10 @@ export interface PipelineContext {
     scenarioText?: string;
     previousMessages?: ChatMessage[];
     quizState?: QuizState;
+    /** User role for data context and role-aware prompts */
+    userRole?: 'TRAINER' | 'TRAINEE';
+    /** Summary of older messages for long sessions (Phase 2B) */
+    conversationSummary?: string;
 }
 
 export interface QuizState {
@@ -275,6 +281,23 @@ export async function processMessage(
             mode = 'general';
         }
 
+        // Step 3b: Fetch live data context (non-fatal)
+        let liveDataContext: string | undefined;
+        if (context.userRole) {
+            try {
+                const dataCtx = await fetchDataContext(
+                    context.userId,
+                    context.userRole as UserRole,
+                    userMessage
+                );
+                if (dataCtx) {
+                    liveDataContext = dataCtx.summary;
+                }
+            } catch (dataError) {
+                console.warn('HAI.ai: DataContext fetch failed (non-fatal):', dataError);
+            }
+        }
+
         // Step 4: Build system prompt
         const systemPrompt = buildSystemPrompt({
             mode,
@@ -283,6 +306,9 @@ export async function processMessage(
             scenarioText: context.scenarioText,
             retrievedContext: retrievedContext || undefined,
             quizTopic: intent === 'quiz_request' ? extractQuizTopic(userMessage) : undefined,
+            liveDataContext,
+            userRole: context.userRole,
+            conversationSummary: context.conversationSummary,
         });
 
         // Step 5: Convert previous messages to provider format
@@ -451,6 +477,23 @@ export async function processMessageStream(
             mode = 'general';
         }
 
+        // Fetch live data context (non-fatal)
+        let liveDataContext: string | undefined;
+        if (context.userRole) {
+            try {
+                const dataCtx = await fetchDataContext(
+                    context.userId,
+                    context.userRole as UserRole,
+                    userMessage
+                );
+                if (dataCtx) {
+                    liveDataContext = dataCtx.summary;
+                }
+            } catch (dataError) {
+                console.warn('HAI.ai: DataContext fetch failed (non-fatal):', dataError);
+            }
+        }
+
         // Build prompt
         const systemPrompt = buildSystemPrompt({
             mode,
@@ -458,6 +501,9 @@ export async function processMessageStream(
             courseTitle: context.courseTitle,
             scenarioText: context.scenarioText,
             retrievedContext: retrievedContext || undefined,
+            liveDataContext,
+            userRole: context.userRole,
+            conversationSummary: context.conversationSummary,
         });
 
         // Convert messages to provider format

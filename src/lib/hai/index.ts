@@ -78,6 +78,19 @@ export {
 } from './prompts';
 export type { PromptMode, PromptContext } from './prompts';
 
+// Live Data Context (Phase 1)
+export {
+    classifyDataIntent,
+    fetchDataContext,
+    fetchUserSnapshot,
+} from './dataContext';
+export type {
+    UserRole,
+    DataIntent,
+    LiveDataContext,
+    UserSnapshot,
+} from './dataContext';
+
 // RAG Pipeline (main orchestration)
 export {
     processMessage,

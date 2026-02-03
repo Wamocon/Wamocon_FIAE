@@ -7,9 +7,9 @@
  * Styled for transparency and integration into the glass UI.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useHai, HaiSession } from './HaiProvider';
-import { MessageSquare, Trash2, Brain, Book, HelpCircle, GraduationCap, Pencil } from 'lucide-react';
+import { MessageSquare, Trash2, Brain, Book, HelpCircle, GraduationCap, Pencil, Search, X } from 'lucide-react';
 
 interface HaiSessionListProps {
     className?: string;
@@ -22,11 +22,45 @@ export function HaiSessionList({ className = '' }: HaiSessionListProps) {
         loadSession,
         deleteSession,
         renameSession,
+        searchSessions,
         isLoading
     } = useHai();
 
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<HaiSession[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Debounced search
+    const handleSearchChange = useCallback((value: string) => {
+        setSearchQuery(value);
+
+        if (searchTimerRef.current) {
+            clearTimeout(searchTimerRef.current);
+        }
+
+        if (!value.trim() || value.trim().length < 2) {
+            setSearchResults([]);
+            setIsSearching(false);
+            return;
+        }
+
+        setIsSearching(true);
+        searchTimerRef.current = setTimeout(async () => {
+            const results = await searchSessions(value);
+            setSearchResults(results);
+            setIsSearching(false);
+        }, 300);
+    }, [searchSessions]);
+
+    // Cleanup timer on unmount
+    useEffect(() => {
+        return () => {
+            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        };
+    }, []);
 
     const startEditing = (session: HaiSession) => {
         setEditingId(session.id);
@@ -102,11 +136,86 @@ export function HaiSessionList({ className = '' }: HaiSessionListProps) {
         }
     };
 
+    const isSearchActive = searchQuery.trim().length >= 2;
+    const displaySessions = isSearchActive ? searchResults : null;
+
     return (
         <div className={`flex flex-col h-full overflow-hidden ${className}`}>
+            {/* Search Bar */}
+            <div className="px-2 pt-2 pb-1">
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                    <input
+                        type="text"
+                        placeholder="Suchen..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-8 py-1.5 text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => { setSearchQuery(''); setSearchResults([]); }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-gray-300"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+            </div>
+
             {/* Scrollable Area */}
             <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                {groupedSessions.length === 0 ? (
+                {/* Search Results */}
+                {isSearchActive ? (
+                    isSearching ? (
+                        <div className="text-center py-4 text-gray-500 text-xs">
+                            <p>Suche...</p>
+                        </div>
+                    ) : searchResults.length === 0 ? (
+                        <div className="text-center py-4 text-gray-500 text-xs">
+                            <p>Keine Ergebnisse</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-0.5">
+                            <p className="px-3 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                {searchResults.length} Ergebnis{searchResults.length !== 1 ? 'se' : ''}
+                            </p>
+                            {searchResults.map(session => (
+                                <div
+                                    key={session.id}
+                                    className={`
+                                        group relative rounded-lg cursor-pointer
+                                        flex items-center gap-3 px-3 py-2.5
+                                        transition-all duration-200
+                                        ${session.id === currentSessionId
+                                            ? 'bg-cyan-500/10 text-cyan-400'
+                                            : 'text-gray-400 hover:bg-white/5 hover:text-gray-100'
+                                        }
+                                    `}
+                                    onClick={() => {
+                                        loadSession(session.id);
+                                        setSearchQuery('');
+                                        setSearchResults([]);
+                                    }}
+                                >
+                                    <span className="opacity-70 [&_svg]:w-5 [&_svg]:h-5">
+                                        {getContextIcon(session.contextType)}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-base truncate font-medium">
+                                            {getSessionTitle(session)}
+                                        </p>
+                                        {(session as any).snippet && (
+                                            <p className="text-xs text-gray-500 truncate mt-0.5">
+                                                {(session as any).snippet}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )
+                ) : groupedSessions.length === 0 ? (
                     <div className="text-center py-8 text-gray-500 text-xs">
                         <p>Keine Historie vorhanden</p>
                     </div>
