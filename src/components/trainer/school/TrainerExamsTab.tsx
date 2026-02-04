@@ -32,6 +32,8 @@ interface Trainee {
     id: string;
     firstName: string | null;
     lastName: string | null;
+    full_name?: string | null;
+    email?: string | null;
 }
 
 const EXAM_TYPES = {
@@ -41,6 +43,20 @@ const EXAM_TYPES = {
     PRAESENTATION: { label: 'Präsentation', bg: 'bg-violet-500/20', text: 'text-violet-600 dark:text-violet-400' },
     COMPANY: { label: 'Betrieblich', bg: 'bg-green-500/20', text: 'text-green-600 dark:text-green-400' },
 };
+
+// Helper function to get trainee display name
+function getTraineeDisplayName(trainee: Trainee): string {
+    if (trainee.firstName && trainee.lastName) {
+        return `${trainee.firstName} ${trainee.lastName}`;
+    }
+    if (trainee.full_name) {
+        return trainee.full_name;
+    }
+    if (trainee.email) {
+        return trainee.email;
+    }
+    return `Trainee ${trainee.id.substring(0, 8)}`;
+}
 
 export function TrainerExamsTab() {
     const { profile } = useAuth();
@@ -132,7 +148,7 @@ export function TrainerExamsTab() {
                     >
                         <option value="">Alle Trainees</option>
                         {trainees.map(t => (
-                            <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+                            <option key={t.id} value={t.id}>{getTraineeDisplayName(t)}</option>
                         ))}
                     </select>
                 </div>
@@ -301,7 +317,7 @@ function AddCompanyExamModal({ trainees, onClose, onAdd }: {
                         <label className="block text-sm font-medium mb-2">Trainee</label>
                         <select value={traineeId} onChange={e => setTraineeId(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" required>
                             <option value="">Auswählen...</option>
-                            {trainees.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
+                            {trainees.map(t => <option key={t.id} value={t.id}>{getTraineeDisplayName(t)}</option>)}
                         </select>
                     </div>
                     <div>
