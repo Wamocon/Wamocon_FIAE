@@ -55,9 +55,6 @@ export function Sidebar({
             userRole === 'trainee' ? '/trainee/profile' : '/trainer/profile'
           );
           break;
-        case 'knowledgeSubmission':
-          router.push('/trainee/knowledge-submission');
-          break;
         case 'contentManagement':
           router.push('/trainer/content-management');
           break;
