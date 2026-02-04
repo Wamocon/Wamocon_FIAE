@@ -191,9 +191,6 @@ export default function TraineeDashboard() {
           router.push('/trainee/quizzes');
         }
         break;
-      case 'knowledgeSubmission':
-        router.push('/trainee/knowledge-submission');
-        break;
       case 'dashboard':
         router.push('/trainee/dashboard');
         break;
