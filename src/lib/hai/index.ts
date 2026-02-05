@@ -104,3 +104,37 @@ export type {
     QuizState,
     Citation
 } from './ragPipeline';
+
+// Action Execution System (Phase 3 — Write Operations)
+export {
+    detectActionIntent,
+    executeAction
+} from './actions';
+export type {
+    ActionType,
+    ActionIntent,
+    ActionResult,
+    ActionDetectionContext
+} from './actions';
+
+// Action Streaming & Progress (Phase 3B — Enhanced UX)
+export {
+    executeActionWithProgress,
+    formatActionResult,
+    createActionProgressStream
+} from './actionStreaming';
+export type {
+    ActionProgress,
+    ProgressCallback
+} from './actionStreaming';
+
+// Proactive Reminder System (Phase 4 — Proactive Features)
+export {
+    runProactiveChecks,
+    createNotificationFromInsight,
+    sendProactiveNotifications
+} from './proactive';
+export type {
+    ProactiveInsight,
+    ProactiveCheck
+} from './proactive';
