@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   FileCheck2,
   TrendingUp,
@@ -23,6 +24,7 @@ interface TraineeDetailProps {
 export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
   const router = useRouter();
   const { profile } = useAuth() as any;
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<
     'overview' | 'progress' | 'submissions' | 'notes'
   >('overview');
@@ -62,7 +64,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       try {
         setLoading(true);
         const res = await fetch(`/api/trainer/trainees/${traineeId}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Konnte Auszubildenden nicht laden');
+        if (!res.ok) throw new Error(t('trainee.detail.loadError'));
         const data = await res.json();
         setTrainee(data.trainee);
         setEdit({
@@ -77,13 +79,13 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           setOverview(oData);
         }
       } catch (e: any) {
-        setError(e?.message || 'Unbekannter Fehler');
+        setError(e?.message || t('error.unknown'));
       } finally {
         setLoading(false);
       }
     };
     if (traineeId) load();
-  }, [traineeId]);
+  }, [traineeId, t]);
 
 
 
@@ -98,22 +100,22 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     const left = 50;
     let y = 800;
 
-    page.drawText(`Auszubildender: ${trainee?.full_name || ''}`, { x: left, y, size: fontSizeHeading, font });
+    page.drawText(`${t('trainee.detail.pdfTrainee')} ${trainee?.full_name || ''}`, { x: left, y, size: fontSizeHeading, font });
     y -= 26;
     page.drawText(`ID: ${trainee?.id || ''}`, { x: left, y, size: fontSize, font });
     y -= 18;
-    page.drawText(`Start der Ausbildung: ${trainee?.training_start_date || '—'}`, { x: left, y, size: fontSize, font });
+    page.drawText(`${t('trainee.detail.trainingStart')}: ${trainee?.training_start_date || '—'}`, { x: left, y, size: fontSize, font });
     y -= 18;
-    page.drawText(`Fortschritt: ${trainee?.progress ?? 0}%`, { x: left, y, size: fontSize, font });
+    page.drawText(`${t('trainee.detail.pdfProgress')} ${trainee?.progress ?? 0}%`, { x: left, y, size: fontSize, font });
     y -= 26;
 
-    page.drawText('Kurzstatistiken', { x: left, y, size: fontSizeHeading, font });
+    page.drawText(t('trainee.detail.pdfQuickStats'), { x: left, y, size: fontSizeHeading, font });
     y -= 22;
-    page.drawText(`Gesamtfortschritt: ${trainee?.progress ?? 0}%`, { x: left, y, size: fontSize, font });
+    page.drawText(`${t('trainee.detail.pdfOverallProgress')} ${trainee?.progress ?? 0}%`, { x: left, y, size: fontSize, font });
     y -= 16;
-    page.drawText('Module abgeschlossen: —', { x: left, y, size: fontSize, font });
+    page.drawText(`${t('trainee.detail.pdfModulesCompleted')} —`, { x: left, y, size: fontSize, font });
     y -= 16;
-    page.drawText('Durchschnitt: 82%', { x: left, y, size: fontSize, font });
+    page.drawText(`${t('trainee.detail.pdfAverage')} 82%`, { x: left, y, size: fontSize, font });
 
     const pdfBytes = await pdfDoc.save();
     // pdfBytes is a Uint8Array - convert to a plain ArrayBuffer slice to satisfy strict BlobPart typing
@@ -138,7 +140,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       URL.revokeObjectURL(url);
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || 'Fehler beim Exportieren als PDF');
+      alert(e?.message || t('trainee.detail.exportError'));
     } finally {
       setExporting(false);
     }
@@ -152,14 +154,14 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       // Use Web Share API if available
       const nav: any = navigator as any;
       if (nav?.canShare && nav.canShare({ files: [file] })) {
-        await nav.share({ files: [file], title: `Auszubildender: ${trainee?.full_name || ''}`, text: 'Auszubildenden-Report' });
+        await nav.share({ files: [file], title: `${t('trainee.detail.shareTitle')} ${trainee?.full_name || ''}`, text: t('trainee.detail.shareText') });
       } else {
         // Fallback to download
         handleDownloadPdf();
       }
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || 'Fehler beim Teilen');
+      alert(e?.message || t('trainee.detail.shareError'));
     } finally {
       setExporting(false);
     }
@@ -181,7 +183,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Änderungen konnten nicht gespeichert werden');
+      if (!res.ok) throw new Error(t('trainee.detail.saveError'));
       const data = await res.json();
       setTrainee((prev) => ({
         ...prev!,
@@ -190,7 +192,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         training_start_date: data.trainee.training_start_date,
       }));
     } catch (e: any) {
-      setError(e?.message || 'Unbekannter Fehler');
+      setError(e?.message || t('error.unknown'));
     } finally {
       setSaving(false);
     }
@@ -242,11 +244,11 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
             </div>
             <div>
               <h1 className="text-foreground mb-2 text-3xl font-bold">
-                {trainee?.full_name || 'Auszubildender'}
+                {trainee?.full_name || t('trainee.detail.trainee')}
               </h1>
               <div className="flex items-center gap-4">
                 <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">
-                  Auszubildender
+                  {t('trainee.detail.trainee')}
                 </span>
                 <span className="text-muted">ID: {trainee?.id}</span>
               </div>
@@ -258,7 +260,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               onClick={() => setShowEdit((v) => !v)}
               className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200"
             >
-              {showEdit ? 'Bearbeiten ausblenden' : 'Bearbeiten'}
+              {showEdit ? t('trainee.detail.hideEdit') : t('trainee.detail.edit')}
             </button>
             <button
               onClick={handleSharePdf}
@@ -266,7 +268,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200 disabled:opacity-60"
             >
               <Share2 className="h-4 w-4" />
-              {exporting ? 'Teilen…' : 'Teilen'}
+              {exporting ? t('trainee.detail.sharing') : t('trainee.detail.share')}
             </button>
             <button
               onClick={handleDownloadPdf}
@@ -274,7 +276,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               className="text-muted bg-muted/30 hover:bg-muted/50 flex items-center gap-2 rounded-2xl px-4 py-2 transition-all duration-200 disabled:opacity-60"
             >
               <Download className="h-4 w-4" />
-              {exporting ? 'Export…' : 'Export'}
+              {exporting ? t('trainee.detail.exporting') : t('trainee.detail.export')}
             </button>
           </div>
         </div>
@@ -287,10 +289,10 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           {/* Edit form for trainers */}
           {profile?.role === 'trainer' && trainee && showEdit && (
             <div className="mb-8 rounded-2xl border border-accent/30 bg-background p-6">
-              <h3 className="mb-4 text-lg font-semibold text-foreground">Stammdaten bearbeiten</h3>
+              <h3 className="mb-4 text-lg font-semibold text-foreground">{t('trainee.detail.editDetails')}</h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-1 block text-sm text-foreground">Vollständiger Name</label>
+                  <label className="mb-1 block text-sm text-foreground">{t('trainee.detail.fullName')}</label>
                   <input
                     className="w-full rounded-xl border bg-background px-3 py-2 text-foreground"
                     value={edit.full_name}
@@ -298,7 +300,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-foreground">Avatar URL</label>
+                  <label className="mb-1 block text-foreground">{t('trainee.detail.avatarUrl')}</label>
                   <input
                     className="w-full rounded-xl border bg-background px-3 py-2 text-foreground"
                     value={edit.avatar_url}
@@ -306,7 +308,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm text-foreground">Start der Ausbildung</label>
+                  <label className="mb-1 block text-sm text-foreground">{t('trainee.detail.trainingStart')}</label>
                   <input
                     type="date"
                     className="w-full rounded-xl border bg-background px-3 py-2 text-foreground"
@@ -321,7 +323,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   disabled={saving}
                   className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-foreground hover:bg-red-700 disabled:opacity-60"
                 >
-                  {saving ? 'Speichern…' : 'Speichern'}
+                  {saving ? t('trainee.detail.saving') : t('trainee.detail.save')}
                 </button>
                 {error && <div className="text-sm text-red-600">{error}</div>}
               </div>
@@ -333,8 +335,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
             {/* Enablers (Modules) */}
             <section>
               <div className="mb-3 flex bg-background text-foreground items-center justify-between">
-                <h3 className="text-xl font-bold text-foreground">Module (Lesson)</h3>
-                <div className="text-sm text-foreground">Abgeschlossen: {overview?.stats.completedEnablers ?? 0} / {overview?.stats.totalEnablers ?? 0}</div>
+                <h3 className="text-xl font-bold text-foreground">{t('trainee.detail.modules')}</h3>
+                <div className="text-sm text-foreground">{t('trainee.detail.completed')} {overview?.stats.completedEnablers ?? 0} / {overview?.stats.totalEnablers ?? 0}</div>
               </div>
               {overview?.enablers?.length ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -343,44 +345,44 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       <div className="mb-2 flex items-center justify-between">
                         <div className="font-semibold text-foreground">{e.title}</div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.completed ? 'border-green-500 text-green-500' : 'border-slate-300 text-foreground'}`}>{e.completed ? 'Teilgenommen' : 'Nicht teilgenommen'}</span>
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-foreground'}`}>{e.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.completed ? 'border-green-500 text-green-500' : 'border-slate-300 text-foreground'}`}>{e.completed ? t('trainee.detail.participated') : t('trainee.detail.notParticipated')}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${e.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-foreground'}`}>{e.isActive ? t('trainee.detail.active') : t('trainee.detail.inactive')}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {profile?.role === 'trainer' && (
-                          <button onClick={() => toggleItem('ENABLER', e.id, !e.isActive)} className={`text-sm rounded-md px-2 py-1 border ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}>{e.isActive ? 'Deaktivieren' : 'Aktivieren'}</button>
+                          <button onClick={() => toggleItem('ENABLER', e.id, !e.isActive)} className={`text-sm rounded-md px-2 py-1 border ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}>{e.isActive ? t('trainee.detail.deactivate') : t('trainee.detail.activate')}</button>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-foreground">Keine Enabler gefunden.</div>
+                <div className="text-sm text-foreground">{t('trainee.detail.noEnablers')}</div>
               )}
             </section>
 
             {/* Enabler Quizzes by difficulty */}
             <section>
-              <h3 className="mb-3 text-xl font-bold text-foreground">Lesson-Quizzes</h3>
+              <h3 className="mb-3 text-xl font-bold text-foreground">{t('trainee.detail.lessonQuizzes')}</h3>
               {overview?.enablerQuizzes?.length ? (
                 <div className="space-y-2">
                   {overview.enablerQuizzes.map((q) => (
                     <div key={`${q.enablerId}-${q.quizId}`} className="flex items-center justify-between rounded-2xl border border-accent/30 p-4">
                       <div>
-                        <div className="text-foreground font-medium">Schwierigkeit: {q.difficulty}</div>
-                        <div className="text-foreground text-sm">Versuche: {q.attemptNumber ?? 0} · Ergebnis: {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? '· Zur Überprüfung' : ''}</div>
+                        <div className="text-foreground font-medium">{t('trainee.detail.difficulty')} {q.difficulty}</div>
+                        <div className="text-foreground text-sm">{t('trainee.detail.attempts')} {q.attemptNumber ?? 0} · {t('trainee.detail.result')} {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? `· ${t('trainee.detail.forReview')}` : ''}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-foreground">Keine Enabler-Quizzes vorhanden.</div>
+                <div className="text-sm text-foreground">{t('trainee.detail.noEnablerQuizzes')}</div>
               )}
             </section>
             {/* Use Cases */}
             <section>
-              <h3 className="mb-3 text-xl font-bold text-foreground">Use Cases</h3>
+              <h3 className="mb-3 text-xl font-bold text-foreground">{t('trainee.detail.useCases')}</h3>
               {overview?.useCases?.length ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {overview.useCases.map((u) => (
@@ -388,44 +390,44 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       <div className="mb-2 flex items-center justify-between">
                         <div className="font-semibold text-foreground">{u.title}</div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : u.status ? 'border-green-500 text-green-500' : 'border-slate-300 text-foreground'}`}>{u.status ?? 'Nicht eingereicht'}</span>
-                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-foreground'}`}>{u.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : u.status ? 'border-green-500 text-green-500' : 'border-slate-300 text-foreground'}`}>{u.status ?? t('trainee.detail.notSubmitted')}</span>
+                          <span className={`text-xs rounded-full px-2 py-0.5 border ${u.isActive ? 'border-blue-500 text-blue-500' : 'border-slate-300 text-foreground'}`}>{u.isActive ? t('trainee.detail.active') : t('trainee.detail.inactive')}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {profile?.role === 'trainer' && (
-                          <button onClick={() => toggleItem('USE_CASE', u.id, !u.isActive)} className={`text-sm rounded-md px-2 py-1 border ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}>{u.isActive ? 'Deaktivieren' : 'Aktivieren'}</button>
+                          <button onClick={() => toggleItem('USE_CASE', u.id, !u.isActive)} className={`text-sm rounded-md px-2 py-1 border ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}>{u.isActive ? t('trainee.detail.deactivate') : t('trainee.detail.activate')}</button>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-foreground">Keine Use Cases gefunden.</div>
+                <div className="text-sm text-foreground">{t('trainee.detail.noUseCases')}</div>
               )}
             </section>
 
             {/* Global (Big) Quizzes */}
             <section>
-              <h3 className="mb-3 text-xl font-bold text-foreground">Global-Quizzes</h3>
+              <h3 className="mb-3 text-xl font-bold text-foreground">{t('trainee.detail.globalQuizzes')}</h3>
               {overview?.globalQuizzes?.length ? (
                 <div className="space-y-2">
                   {overview.globalQuizzes.map((q) => (
                     <div key={q.quizId} className="flex items-center justify-between rounded-2xl border border-accent/30 p-4">
                       <div>
                         <div className="text-foreground font-medium">{q.title}</div>
-                        <div className="text-foreground text-sm">Versuche: {q.attemptNumber ?? 0} · Ergebnis: {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? '· Zur Überprüfung' : ''}</div>
+                        <div className="text-foreground text-sm">{t('trainee.detail.attempts')} {q.attemptNumber ?? 0} · {t('trainee.detail.result')} {typeof q.lastScore === 'number' ? `${q.lastScore}%` : '—'} {q.isReviewed === false ? `· ${t('trainee.detail.forReview')}` : ''}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         {profile?.role === 'trainer' && (
-                          <button onClick={() => toggleItem('GLOBAL_QUIZ', q.quizId, false)} className="text-sm rounded-md px-2 py-1 border border-yellow-500 text-yellow-500">Entfernen</button>
+                          <button onClick={() => toggleItem('GLOBAL_QUIZ', q.quizId, false)} className="text-sm rounded-md px-2 py-1 border border-yellow-500 text-yellow-500">{t('trainee.detail.remove')}</button>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-foreground">Keine Global-Quizzes zugewiesen.</div>
+                <div className="text-sm text-foreground">{t('trainee.detail.noGlobalQuizzes')}</div>
               )}
             </section>
           </div>

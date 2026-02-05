@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Brain, Play, Award } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -17,6 +18,7 @@ type QuizCard = {
 
 export default function TraineeQuizzesPage() {
   const { profile, loading } = useAuth();
+  const { t } = useLanguage();
   const [quizzes, setQuizzes] = useState<QuizCard[]>([]);
 
   // Always declare hooks before any conditional return
@@ -40,7 +42,7 @@ export default function TraineeQuizzesPage() {
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Lade Quizze...</p>
+          <p className="text-muted-foreground">{t('quiz.loading')}</p>
         </div>
       </div>
     );
@@ -51,7 +53,7 @@ export default function TraineeQuizzesPage() {
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
+          <p className="text-muted-foreground">{t('quiz.userNotFound')}</p>
         </div>
       </div>
     );
@@ -62,7 +64,7 @@ export default function TraineeQuizzesPage() {
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Zugriff verweigert...</p>
+          <p className="text-muted-foreground">{t('quiz.accessDenied')}</p>
         </div>
       </div>
     );
@@ -80,11 +82,10 @@ export default function TraineeQuizzesPage() {
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
-              Quizze & Tests
+              {t('quiz.title')}
             </h1>
             <p className="text-muted">
-              Testen Sie Ihr Wissen mit verschiedenen Quizzen und bewerten Sie
-              Ihren Fortschritt
+              {t('quiz.description')}
             </p>
           </div>
         </div>
@@ -118,7 +119,7 @@ export default function TraineeQuizzesPage() {
             {/* Progress */}
             <div className="mb-4">
               <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="text-muted">Bestes Ergebnis</span>
+                <span className="text-muted">{t('quiz.bestScore')}</span>
                 <span className="text-foreground font-medium">
                   {quiz.bestScore || 0}%
                 </span>
@@ -137,19 +138,19 @@ export default function TraineeQuizzesPage() {
                 <div className="text-accent text-lg font-bold">
                   {quiz.questionsCount || 0}
                 </div>
-                <div className="text-muted">Fragen</div>
+                <div className="text-muted">{t('quiz.questions')}</div>
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
                 <div className="text-primary text-lg font-bold">
                   {quiz.timeLimit}
                 </div>
-                <div className="text-muted">Zeit</div>
+                <div className="text-muted">{t('quiz.time')}</div>
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
                 <div className="text-accent text-lg font-bold">
                   {quiz.attempts || 0}
                 </div>
-                <div className="text-muted">Versuche</div>
+                <div className="text-muted">{t('quiz.attempts')}</div>
               </div>
             </div>
 
@@ -157,7 +158,7 @@ export default function TraineeQuizzesPage() {
             <div className="flex items-center gap-2">
               <a href={`/trainee/quizzes/${quiz.id}`} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-center text-sm font-medium transition-colors">
                 <Play className="mr-2 inline h-4 w-4" />
-                {(quiz.bestScore ?? 0) > 0 ? 'Wiederholen' : 'Starten'}
+                {(quiz.bestScore ?? 0) > 0 ? t('quiz.retry') : t('quiz.start')}
               </a>
               <button className="bg-muted/30 text-muted hover:text-foreground hover:bg-muted/50 rounded-xl px-4 py-2 transition-colors">
                 <Award className="h-4 w-4" />

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { User, Edit3, Award, Clock, Target, TrendingUp, Users, Upload, Lock, BookOpen, FileText, Layers, CheckCircle, GraduationCap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { FILE_UPLOAD } from '@/lib/constants';
@@ -30,6 +31,7 @@ type ActivityItem = {
 
 export function Profile() {
   const { profile, updateProfile, changePassword } = useAuth();
+  const { t } = useLanguage();
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -67,7 +69,7 @@ export function Profile() {
         const recent = Array.isArray(data.recentActivities)
           ? data.recentActivities.map((r: any) => ({
             id: r.id,
-            userFullName: r.userFullName || 'Unbekannt',
+            userFullName: r.userFullName || t('profile.unknown'),
             activityType: r.activityType,
             createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
             details: r.details || r.activityType,
@@ -88,7 +90,7 @@ export function Profile() {
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground mt-4">Lade Profil...</p>
+          <p className="text-muted-foreground mt-4">{t('profile.loading')}</p>
         </div>
       </div>
     );
@@ -119,23 +121,23 @@ export function Profile() {
   const handlePasswordChange = async () => {
     setPwMsg(null);
     if (!pw1 || pw1.length < 8) {
-      setPwMsg('Das Passwort muss mindestens 8 Zeichen lang sein.');
+      setPwMsg(t('profile.passwordMinLength'));
       return;
     }
     if (pw1 !== pw2) {
-      setPwMsg('Die Passwörter stimmen nicht überein.');
+      setPwMsg(t('profile.passwordMismatch'));
       return;
     }
     setPwBusy(true);
     try {
       await changePassword(pw1);
-      setPwMsg('Passwort erfolgreich geändert.');
+      setPwMsg(t('profile.passwordChanged'));
       setPw1('');
       setPw2('');
     } catch (e: unknown) {
       const message = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string'
         ? (e as any).message
-        : 'Passwort konnte nicht geändert werden';
+        : t('profile.passwordChangeFailed');
       setPwMsg(message);
     } finally {
       setPwBusy(false);
@@ -146,16 +148,16 @@ export function Profile() {
 
   const handleAvatarUpload = async (file: File) => {
     if (!profile) {
-      alert('Nicht angemeldet. Bitte melden Sie sich erneut an.');
+      alert(t('profile.notLoggedIn'));
       return;
     }
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (!ext || !FILE_UPLOAD.allowedTypes.includes(ext)) {
-      alert(`Ungültiger Dateityp. Erlaubt: ${FILE_UPLOAD.allowedTypes.join(', ')}`);
+      alert(`${t('profile.invalidFileType')} ${FILE_UPLOAD.allowedTypes.join(', ')}`);
       return;
     }
     if (file.size > FILE_UPLOAD.maxSize) {
-      alert('Datei ist zu groß. Maximal 10MB.');
+      alert(t('profile.fileTooLarge'));
       return;
     }
 
@@ -178,9 +180,9 @@ export function Profile() {
       console.error('Avatar upload error:', e);
       const msg = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string' ? (e as any).message : String(e);
       const hint = msg.toLowerCase().includes('not found')
-        ? '\nHinweis: Existiert der Storage-Bucket "avatar" und ist er öffentlich?'
+        ? t('profile.storageBucketHint')
         : '';
-      alert(`Upload fehlgeschlagen. Bitte erneut versuchen.\n\nFehler: ${msg}${hint}`);
+      alert(`${t('profile.uploadFailed')}\n\n${t('profile.uploadError')} ${msg}${hint}`);
     } finally {
       setIsUploading(false);
     }
@@ -201,10 +203,10 @@ export function Profile() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Gerade eben';
-    if (diffMins < 60) return `vor ${diffMins} Min.`;
-    if (diffHours < 24) return `vor ${diffHours} Std.`;
-    if (diffDays < 7) return `vor ${diffDays} Tag${diffDays > 1 ? 'en' : ''}`;
+    if (diffMins < 1) return t('profile.time.justNow');
+    if (diffMins < 60) return t('profile.time.minutesAgo').replace('{minutes}', String(diffMins));
+    if (diffHours < 24) return t('profile.time.hoursAgo').replace('{hours}', String(diffHours));
+    if (diffDays < 7) return (diffDays > 1 ? t('profile.time.daysAgoPlural') : t('profile.time.daysAgo')).replace('{days}', String(diffDays));
     return date.toLocaleDateString('de-DE');
   };
 
@@ -236,7 +238,7 @@ export function Profile() {
                 onClick={handleChooseFile}
                 disabled={isUploading}
                 className="bg-accent/90 hover:bg-accent text-accent-foreground absolute -bottom-2 -right-2 rounded-full p-2 shadow transition disabled:opacity-70"
-                title="Profilbild ändern"
+                title={t('profile.changeAvatar')}
               >
                 <Upload className="h-4 w-4" />
               </button>
@@ -268,17 +270,17 @@ export function Profile() {
               )}
             </h1>
             <p className="text-muted-foreground text-lg">
-              {profile.role === 'trainee' ? 'Auszubildender' : 'Ausbilder'}
+              {profile.role === 'trainee' ? t('roles.trainee') : t('roles.trainer')}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {isUploading && (
-              <span className="text-muted-foreground text-sm">Lade hoch…</span>
+              <span className="text-muted-foreground text-sm">{t('profile.uploading')}</span>
             )}
             <button
               onClick={handleEditToggle}
               className="bg-accent/10 hover:bg-accent/20 rounded-xl p-3 transition-colors"
-              aria-label="Profil bearbeiten"
+              aria-label={t('profile.editProfile')}
             >
               <Edit3 className="text-accent h-5 w-5" />
             </button>
@@ -289,12 +291,12 @@ export function Profile() {
       {/* Personal Information */}
       <div className="bg-card border-border mt-6 rounded-3xl border p-8 shadow-lg">
         <h2 className="text-foreground mb-6 text-2xl font-bold">
-          Persönliche Informationen
+          {t('profile.personalInfo')}
         </h2>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <label htmlFor="fullName" className="text-muted-foreground mb-2 block text-sm font-medium">
-              Vollständiger Name
+              {t('profile.fullName')}
             </label>
             {isEditing ? (
               <input
@@ -317,7 +319,7 @@ export function Profile() {
           </div>
           <div>
             <label className="text-muted-foreground mb-2 block text-sm font-medium">
-              E-Mail
+              {t('profile.email')}
             </label>
             {isEditing ? (
               <input
@@ -339,19 +341,19 @@ export function Profile() {
           </div>
           <div>
             <label className="text-muted-foreground mb-2 block text-sm font-medium">
-              Rolle
+              {t('profile.role')}
             </label>
             <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3">
-              {profile.role === 'trainee' ? 'Auszubildender' : 'Ausbilder'}
+              {profile.role === 'trainee' ? t('roles.trainee') : t('roles.trainer')}
             </div>
           </div>
           <div>
             <label className="text-muted-foreground mb-2 block text-sm font-medium">
-              {profile.role === 'trainee' ? 'Ausbildungsstart' : 'Benutzer-ID'}
+              {profile.role === 'trainee' ? t('profile.trainingStart') : t('profile.userId')}
             </label>
             {profile.role === 'trainee' ? (
               <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3">
-                {profile.training_start_date || 'Nicht angegeben'}
+                {profile.training_start_date || t('profile.notSpecified')}
               </div>
             ) : (
               <div className="bg-muted border-border text-foreground rounded-2xl border px-4 py-3 select-all text-sm">
@@ -370,26 +372,26 @@ export function Profile() {
                 <span className="from-accent to-primary inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
                   <Lock className="h-5 w-5 text-primary-foreground" />
                 </span>
-                <span className="text-foreground text-xl font-semibold">Passwort ändern</span>
+                <span className="text-foreground text-xl font-semibold">{t('profile.changePassword')}</span>
               </div>
-              <span className="text-muted-foreground text-sm">{showPwSection ? 'Schließen' : 'Öffnen'}</span>
+              <span className="text-muted-foreground text-sm">{showPwSection ? t('profile.close') : t('profile.open')}</span>
             </button>
             {showPwSection && (
               <div className="px-6 pb-6">
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div>
-                    <label className="text-muted-foreground mb-2 block text-sm font-medium">Neues Passwort</label>
+                    <label className="text-muted-foreground mb-2 block text-sm font-medium">{t('profile.newPassword')}</label>
                     <input
                       type="password"
                       value={pw1}
                       onChange={(e) => setPw1(e.target.value)}
-                      placeholder="Mindestens 8 Zeichen"
+                      placeholder={t('profile.passwordPlaceholder')}
                       className="bg-muted border-border text-foreground focus:ring-accent w-full rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
                       autoComplete="new-password"
                     />
                   </div>
                   <div>
-                    <label className="text-muted-foreground mb-2 block text-sm font-medium">Passwort bestätigen</label>
+                    <label className="text-muted-foreground mb-2 block text-sm font-medium">{t('profile.confirmPassword')}</label>
                     <input
                       type="password"
                       value={pw2}
@@ -410,7 +412,7 @@ export function Profile() {
                     disabled={pwBusy}
                     className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-6 py-3 transition-colors disabled:opacity-60"
                   >
-                    {pwBusy ? 'Ändere…' : 'Passwort ändern'}
+                    {pwBusy ? t('profile.changing') : t('profile.changePassword')}
                   </button>
                 </div>
               </div>
@@ -424,13 +426,13 @@ export function Profile() {
               onClick={handleEditToggle}
               className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-6 py-3 transition-colors duration-200"
             >
-              Speichern
+              {t('common.save')}
             </button>
             <button
               onClick={handleCancel}
               className="bg-muted text-muted-foreground hover:bg-muted/80 rounded-xl px-6 py-3 transition-colors duration-200"
             >
-              Abbrechen
+              {t('common.cancel')}
             </button>
           </div>
         )}
@@ -438,7 +440,7 @@ export function Profile() {
 
       {/* Statistics */}
       <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
-        <h2 className="text-foreground mb-6 text-2xl font-bold">Statistiken</h2>
+        <h2 className="text-foreground mb-6 text-2xl font-bold">{t('profile.statistics')}</h2>
         {statsLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-4"></div>
@@ -451,7 +453,7 @@ export function Profile() {
                   <Users className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <p className="text-foreground text-2xl font-bold">{stats?.trainees ?? 0}</p>
-                <p className="text-muted-foreground text-sm">Azubis</p>
+                <p className="text-muted-foreground text-sm">{t('profile.trainees')}</p>
               </div>
 
               <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
@@ -459,7 +461,7 @@ export function Profile() {
                   <FileText className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <p className="text-foreground text-2xl font-bold">{stats?.totalEnablers ?? 0}</p>
-                <p className="text-muted-foreground text-sm">Lektionen</p>
+                <p className="text-muted-foreground text-sm">{t('profile.lessons')}</p>
               </div>
 
               <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
@@ -467,7 +469,7 @@ export function Profile() {
                   <Target className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <p className="text-foreground text-2xl font-bold">{stats?.totalUseCases ?? 0}</p>
-                <p className="text-muted-foreground text-sm">Use Cases</p>
+                <p className="text-muted-foreground text-sm">{t('profile.useCases')}</p>
               </div>
 
               <div className="glass-effect rounded-2xl border border-accent/20 p-4 text-center">
@@ -475,7 +477,7 @@ export function Profile() {
                   <GraduationCap className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <p className="text-foreground text-2xl font-bold">{stats?.totalLernfelder ?? 0}</p>
-                <p className="text-muted-foreground text-sm">Lernfelder</p>
+                <p className="text-muted-foreground text-sm">{t('profile.lernfelder')}</p>
               </div>
             </div>
           </div>
@@ -483,22 +485,22 @@ export function Profile() {
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             <div className="text-center">
               <Award className="text-accent mx-auto mb-2 h-8 w-8" />
-              <p className="text-muted-foreground text-sm">Module abgeschlossen</p>
+              <p className="text-muted-foreground text-sm">{t('profile.modulesCompleted')}</p>
               <p className="text-foreground text-2xl font-bold">12</p>
             </div>
             <div className="text-center">
               <Target className="text-primary mx-auto mb-2 h-8 w-8" />
-              <p className="text-muted-foreground text-sm">Zertifikate</p>
+              <p className="text-muted-foreground text-sm">{t('profile.certificates')}</p>
               <p className="text-foreground text-2xl font-bold">8</p>
             </div>
             <div className="text-center">
               <Clock className="text-accent mx-auto mb-2 h-8 w-8" />
-              <p className="text-muted-foreground text-sm">Lernstunden</p>
+              <p className="text-muted-foreground text-sm">{t('profile.learningHours')}</p>
               <p className="text-foreground text-2xl font-bold">156</p>
             </div>
             <div className="text-center">
               <TrendingUp className="text-primary mx-auto mb-2 h-8 w-8" />
-              <p className="text-muted-foreground text-sm">Ziel erreicht</p>
+              <p className="text-muted-foreground text-sm">{t('profile.goalReached')}</p>
               <p className="text-foreground text-2xl font-bold">85%</p>
             </div>
           </div>
@@ -507,7 +509,7 @@ export function Profile() {
 
       {/* Recent Activities */}
       <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
-        <h2 className="text-foreground mb-6 text-2xl font-bold">Letzte Aktivitäten</h2>
+        <h2 className="text-foreground mb-6 text-2xl font-bold">{t('profile.recentActivities')}</h2>
         {profile.role === 'trainer' ? (
           <div className="space-y-3">
             {statsLoading ? (
@@ -517,8 +519,8 @@ export function Profile() {
             ) : activities.length === 0 ? (
               <div className="text-center py-8">
                 <Clock className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">Keine Aktivitäten gefunden</p>
-                <p className="text-muted-foreground/70 text-sm mt-1">Aktivitäten Ihrer Azubis werden hier angezeigt.</p>
+                <p className="text-muted-foreground">{t('profile.noActivities')}</p>
+                <p className="text-muted-foreground/70 text-sm mt-1">{t('profile.traineeActivities')}</p>
               </div>
             ) : (
               activities.map((a) => (

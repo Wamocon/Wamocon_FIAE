@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import LinkifyText from '@/components/ui/LinkifyText';
 import { MarkdownText } from '@/components/ui/MarkdownText';
 import { FlipbookViewer, useFlipbookViewer } from '@/components/ui/FlipbookViewer';
@@ -19,6 +20,7 @@ type GatedQuizInfo = { difficulty: Difficulty; quizId?: string; title?: string; 
 
 export default function TraineeEnablerPage() {
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const params = useParams();
   const enablerId = params?.enablerId as string | undefined;
 
@@ -87,13 +89,13 @@ export default function TraineeEnablerPage() {
           }
         } catch { /* ignore document errors */ }
       } catch (e: any) {
-        setError(e?.message || 'Fehler beim Laden');
+        setError(e?.message || t('enablerPage.loadError'));
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [profile?.id, enablerId]);
+  }, [profile?.id, enablerId, t]);
 
   const loadQuizContent = async (difficulty: Difficulty) => {
     if (!profile?.id || !enablerId) return;
@@ -103,7 +105,7 @@ export default function TraineeEnablerPage() {
     setCurrentIndex(0);
     try {
       const r = await fetch(`/api/trainee/enablers/${enablerId}/quizzes/${difficulty}?traineeId=${profile.id}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error('Quiz konnte nicht geladen werden');
+      if (!r.ok) throw new Error(t('enablerPage.quizLoadError'));
       const j = await r.json();
       const qc: QuizContent = {
         quizId: String(j.quiz?.id || j.quizId),
@@ -122,7 +124,7 @@ export default function TraineeEnablerPage() {
       setSelectedDifficulty(difficulty);
       setQuizContent(qc);
     } catch (e: any) {
-      setError(e?.message || 'Unbekannter Fehler');
+      setError(e?.message || t('error.unknown'));
     }
   };
 
@@ -154,7 +156,7 @@ export default function TraineeEnablerPage() {
   };
 
   const submitQuiz = async () => {
-    if (!profile?.id || !quizContent?.quizId) return setError('Profil oder Quiz-ID fehlt');
+    if (!profile?.id || !quizContent?.quizId) return setError(t('enablerPage.missingProfile'));
     // Build answers payload including text answers
     const payloadAnswers = quizContent.questions.map(q => {
       const val = answers[q.id];
@@ -174,7 +176,7 @@ export default function TraineeEnablerPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
+      if (!r.ok) throw new Error(t('enablerPage.submissionFailed'));
       const data = await r.json();
       setResult({ score: Number(data.score || 0), feedback: (data.feedback || []) as QuizFeedback[] });
       // Refresh gated list to reflect unlocking next level
@@ -190,12 +192,12 @@ export default function TraineeEnablerPage() {
         // ignore refresh errors
       }
     } catch (e: any) {
-      setError(e?.message || 'Unbekannter Fehler');
+      setError(e?.message || t('error.unknown'));
     }
   };
 
   const submitSolution = async () => {
-    if (!profile?.id || !enablerId) return setError('Profil fehlt');
+    if (!profile?.id || !enablerId) return setError(t('enablerPage.profileMissing'));
     setSaveSuccess(null);
     try {
       // Filter out empty solutions and send only filled ones
@@ -209,19 +211,19 @@ export default function TraineeEnablerPage() {
           solutionText: filledSolutions.length === 1 ? filledSolutions[0].text : undefined // Backward compat
         }),
       });
-      if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
-      setSaveSuccess('Lösung gespeichert. Status: Ausstehend');
+      if (!r.ok) throw new Error(t('enablerPage.submissionFailed'));
+      setSaveSuccess(t('enablerPage.solutionSaved'));
     } catch (e: any) {
-      setError(e?.message || 'Unbekannter Fehler');
+      setError(e?.message || t('error.unknown'));
     }
   };
 
-  const difficultyLabel = (d: Difficulty) => (d === 'LOW' ? 'Niedrig' : d === 'MEDIUM' ? 'Mittel' : 'Hoch');
+  const difficultyLabel = (d: Difficulty) => (d === 'LOW' ? t('enablerPage.difficultyLow') : d === 'MEDIUM' ? t('enablerPage.difficultyMedium') : t('enablerPage.difficultyHigh'));
 
-  if (!profile) return <div className="p-6">Bitte anmelden…</div>;
-  if (loading) return <div className="p-6">Lade…</div>;
+  if (!profile) return <div className="p-6">{t('enablerPage.pleaseLogin')}</div>;
+  if (loading) return <div className="p-6">{t('common.loading')}</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
-  if (!enabler) return <div className="p-6">Nicht gefunden</div>;
+  if (!enabler) return <div className="p-6">{t('enablerPage.notFound')}</div>;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -237,7 +239,7 @@ export default function TraineeEnablerPage() {
               const total = Number(enabler.durationValue || 0);
               const left = Math.max(0, total - daysElapsed);
               const dueDate = new Date(started + total * 24 * 60 * 60 * 1000);
-              return <span>Restzeit: {left} Tage • Fällig am {dueDate.toLocaleDateString()}</span>;
+              return <span>{t('enablerPage.timeRemaining').replace('{days}', String(left)).replace('{date}', dueDate.toLocaleDateString())}</span>;
             })()}
 
           </div>
@@ -261,10 +263,10 @@ export default function TraineeEnablerPage() {
             </button>
           ))}
           {enabler.videoUrl && (
-            <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.videoUrl} target="_blank" rel="noreferrer">Video ansehen</a>
+            <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.videoUrl} target="_blank" rel="noreferrer">{t('enablerPage.watchVideo')}</a>
           )}
           {enabler.pptUrl && (
-            <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.pptUrl} target="_blank" rel="noreferrer">PPT öffnen</a>
+            <a className="rounded-xl border border-accent/30 px-3 py-1.5 text-sm hover:bg-background/60" href={enabler.pptUrl} target="_blank" rel="noreferrer">{t('enablerPage.openPpt')}</a>
           )}
         </div>
 
@@ -283,7 +285,7 @@ export default function TraineeEnablerPage() {
             {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 1 && (
               <div className="mb-3 text-center">
                 <span className="text-sm font-medium text-foreground">
-                  Szenario {currentScenarioIndex + 1} von {enabler.scenarios.length}
+                  {t('enablerPage.scenarioCounter').replace('{current}', String(currentScenarioIndex + 1)).replace('{total}', String(enabler.scenarios.length))}
                 </span>
               </div>
             )}
@@ -298,12 +300,12 @@ export default function TraineeEnablerPage() {
                   enabler.scenarios.map((sc: any, idx: number) => (
                     <div key={idx} className="w-full flex-shrink-0 space-y-3 px-2">
                       <div>
-                        <div className="mb-1 text-sm font-semibold">Szenario {idx + 1}</div>
+                        <div className="mb-1 text-sm font-semibold">{t('enablerPage.scenarioNumber').replace('{number}', String(idx + 1))}</div>
                         <LinkifyText className="text-foreground/90" text={String(sc.text || '')} preserveLineBreaks />
                       </div>
                       {sc.hint && (
                         <div className="rounded-lg border border-accent/20 bg-background/10 p-3">
-                          <div className="mb-1 text-xs font-semibold text-muted-foreground">Hinweis</div>
+                          <div className="mb-1 text-xs font-semibold text-muted-foreground">{t('enablerPage.hint')}</div>
                           <LinkifyText className="text-muted-foreground text-sm" text={String(sc.hint)} preserveLineBreaks />
                         </div>
                       )}
@@ -312,12 +314,12 @@ export default function TraineeEnablerPage() {
                 ) : (
                   <div className="w-full flex-shrink-0 space-y-3 px-2">
                     <div>
-                      <div className="mb-1 text-sm font-semibold">Szenario</div>
+                      <div className="mb-1 text-sm font-semibold">{t('enablerPage.scenario')}</div>
                       <LinkifyText className="text-foreground/90" text={String(enabler.scenarioText || '')} preserveLineBreaks />
                     </div>
                     {enabler.hintText && (
                       <div className="rounded-lg border border-accent/20 bg-background/10 p-3">
-                        <div className="mb-1 text-xs font-semibold text-muted-foreground">Hinweis</div>
+                        <div className="mb-1 text-xs font-semibold text-muted-foreground">{t('enablerPage.hint')}</div>
                         <LinkifyText className="text-muted-foreground text-sm" text={String(enabler.hintText)} preserveLineBreaks />
                       </div>
                     )}
@@ -335,7 +337,7 @@ export default function TraineeEnablerPage() {
                   onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
                   className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ← Zurück
+                  {t('enablerPage.back')}
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -359,7 +361,7 @@ export default function TraineeEnablerPage() {
                   onClick={() => setCurrentScenarioIndex(i => Math.min(enabler.scenarios.length - 1, i + 1))}
                   className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Weiter →
+                  {t('enablerPage.next')}
                 </button>
               </div>
             )}
@@ -371,7 +373,7 @@ export default function TraineeEnablerPage() {
       <div className="space-y-4 rounded-3xl border border-accent/30 bg-background p-5">
         {saveSuccess && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-300">{saveSuccess}</div>}
 
-        <div className="mb-2 text-lg font-semibold">Deine Lösungen</div>
+        <div className="mb-2 text-lg font-semibold">{t('enablerPage.yourSolutions')}</div>
 
         {solutions.length > 0 && (
           <>
@@ -379,7 +381,7 @@ export default function TraineeEnablerPage() {
             {solutions.length > 1 && (
               <div className="mb-3 text-center">
                 <span className="text-sm font-medium text-foreground">
-                  Lösung für Szenario {currentScenarioIndex + 1} von {solutions.length}
+                  {t('enablerPage.solutionCounter').replace('{current}', String(currentScenarioIndex + 1)).replace('{total}', String(solutions.length))}
                 </span>
               </div>
             )}
@@ -392,7 +394,7 @@ export default function TraineeEnablerPage() {
               >
                 {solutions.map((sol, idx) => (
                   <div key={idx} className="w-full flex-shrink-0 px-2">
-                    <label className="mb-1 block text-sm font-medium">Deine Lösung für Szenario {idx + 1}</label>
+                    <label className="mb-1 block text-sm font-medium">{t('enablerPage.yourSolutionFor').replace('{number}', String(idx + 1))}</label>
                     <textarea
                       value={sol.text}
                       onChange={e => {
@@ -402,7 +404,7 @@ export default function TraineeEnablerPage() {
                       }}
                       className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2"
                       rows={6}
-                      placeholder="Beschreibe deine Lösung..."
+                      placeholder={t('enablerPage.describeSolution')}
                     />
                   </div>
                 ))}
@@ -418,7 +420,7 @@ export default function TraineeEnablerPage() {
                   onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
                   className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ← Zurück
+                  {t('enablerPage.back')}
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -442,7 +444,7 @@ export default function TraineeEnablerPage() {
                   onClick={() => setCurrentScenarioIndex(i => Math.min(solutions.length - 1, i + 1))}
                   className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Weiter →
+                  {t('enablerPage.next')}
                 </button>
               </div>
             )}
@@ -450,13 +452,13 @@ export default function TraineeEnablerPage() {
         )}
 
         <div className="flex justify-end">
-          <button onClick={submitSolution} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">Alle Lösungen abgeben</button>
+          <button onClick={submitSolution} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">{t('enablerPage.submitAll')}</button>
         </div>
       </div>
 
       {/* Gated difficulties */}
       <div className="rounded-3xl border border-accent/30 bg-background p-5">
-        <div className="mb-4 text-lg font-semibold">Enabler-Quiz (gestuft)</div>
+        <div className="mb-4 text-lg font-semibold">{t('enablerPage.gatedQuiz')}</div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {gated.map(g => {
             const disabled = !g.unlocked || !g.isActive || !g.quizId;
@@ -467,16 +469,16 @@ export default function TraineeEnablerPage() {
                 className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'cursor-not-allowed border-accent/20 bg-black/20 opacity-60' : 'border-accent/30 bg-black/30 hover:bg-accent/15 hover:border-accent/60 hover:scale-[1.02] hover:shadow-lg hover:shadow-accent/20 active:scale-[0.98] cursor-pointer'}`}
                 disabled={disabled}
               >
-                <div className="text-sm text-muted-foreground">Schwierigkeit</div>
+                <div className="text-sm text-muted-foreground">{t('enablerPage.difficulty')}</div>
                 <div className="text-foreground text-xl font-bold">{difficultyLabel(g.difficulty)}</div>
-                {g.title && <div className="mt-1 text-xs text-muted-foreground truncate">Titel: {g.title}</div>}
+                {g.title && <div className="mt-1 text-xs text-muted-foreground truncate">{t('enablerPage.quizTitle')} {g.title}</div>}
                 <div className="mt-2 text-xs">
                   {g.completed ? (
-                    <span className="rounded bg-green-600/20 px-2 py-0.5 text-green-300">Abgeschlossen</span>
+                    <span className="rounded bg-green-600/20 px-2 py-0.5 text-green-300">{t('enablerPage.completed')}</span>
                   ) : disabled ? (
-                    <span className="rounded bg-muted/30 px-2 py-0.5">Gesperrt</span>
+                    <span className="rounded bg-muted/30 px-2 py-0.5">{t('enablerPage.locked')}</span>
                   ) : (
-                    <span className="rounded bg-blue-600/20 px-2 py-0.5 text-blue-300">Verfügbar</span>
+                    <span className="rounded bg-blue-600/20 px-2 py-0.5 text-blue-300">{t('enablerPage.available')}</span>
                   )}
                 </div>
               </button>
@@ -489,10 +491,10 @@ export default function TraineeEnablerPage() {
           <div className="mt-6 space-y-4 rounded-2xl border border-accent/20 bg-black/20 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-muted-foreground">Schwierigkeit</div>
+                <div className="text-sm text-muted-foreground">{t('enablerPage.difficulty')}</div>
                 <div className="text-foreground text-lg font-semibold">{selectedDifficulty ? difficultyLabel(selectedDifficulty) : ''}</div>
               </div>
-              <div className="text-sm text-muted-foreground">Frage {currentIndex + 1} / {quizContent.questions.length}</div>
+              <div className="text-sm text-muted-foreground">{t('enablerPage.questionCounter').replace('{current}', String(currentIndex + 1)).replace('{total}', String(quizContent.questions.length))}</div>
             </div>
 
             {!result && !reviewMode ? (
@@ -506,7 +508,7 @@ export default function TraineeEnablerPage() {
                           <textarea
                             className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2"
                             rows={3}
-                            placeholder="Antwort eingeben..."
+                            placeholder={t('enablerPage.enterAnswer')}
                             value={answers[currentQuestion.id] || ''}
                             onChange={(e) => setAnswers(prev => ({ ...prev, [currentQuestion.id]: e.target.value }))}
                           />
@@ -532,7 +534,7 @@ export default function TraineeEnablerPage() {
                         onClick={() => setCurrentIndex(i => Math.max(0, i - 1))}
                         disabled={currentIndex === 0}
                       >
-                        Zurück
+                        {t('enablerPage.backShort')}
                       </button>
                       {currentIndex < quizContent.questions.length - 1 ? (
                         <button
@@ -540,7 +542,7 @@ export default function TraineeEnablerPage() {
                           onClick={() => setCurrentIndex(i => Math.min(quizContent.questions.length - 1, i + 1))}
                           disabled={currentQuestion.questionType === 'TEXT' ? !String(answers[currentQuestion.id] || '').trim() : !answers[currentQuestion.id]}
                         >
-                          Weiter
+                          {t('enablerPage.nextShort')}
                         </button>
                       ) : (
                         <button
@@ -548,7 +550,7 @@ export default function TraineeEnablerPage() {
                           onClick={submitQuiz}
                           disabled={quizContent.questions.some(q => q.questionType === 'TEXT' ? !String(answers[q.id] || '').trim() : !answers[q.id])}
                         >
-                          Quiz abgeben
+                          {t('enablerPage.submitQuiz')}
                         </button>
                       )}
                     </div>
@@ -556,10 +558,10 @@ export default function TraineeEnablerPage() {
                 )}
               </div>
             ) : reviewMode && !result ? (
-              <div className="p-4 text-sm text-muted-foreground">Ergebnisse werden geladen…</div>
+              <div className="p-4 text-sm text-muted-foreground">{t('enablerPage.loadingResults')}</div>
             ) : (
               <div className="space-y-3">
-                <div className="font-medium">Score: {result?.score ?? 0}%</div>
+                <div className="font-medium">{t('enablerPage.score')} {result?.score ?? 0}%</div>
                 <ul className="space-y-2">
                   {quizContent.questions.map(q => {
                     const fb = result?.feedback.find(f => String(f.questionId) === String(q.id));
@@ -570,17 +572,17 @@ export default function TraineeEnablerPage() {
                       <li key={q.id} className={`rounded-xl border p-3 ${fb?.correct ? 'border-green-600/50 bg-green-500/10' : 'border-red-600/50 bg-red-500/10'}`}>
                         <MarkdownText className="font-medium">{q.questionText}</MarkdownText>
                         <div className={`mt-1 text-sm ${fb?.correct ? 'text-green-400' : 'text-red-400'}`}>
-                          Deine Antwort: {q.questionType === 'TEXT' || q.options.length === 0
+                          {t('enablerPage.yourAnswer')} {q.questionType === 'TEXT' || q.options.length === 0
                             ? (fb?.selectedText || chosen || '-')
                             : (q.options.find(o => String(o.id) === String(chosen))?.optionText || '-')}
                         </div>
                         {q.questionType !== 'TEXT' && !fb?.correct && (
                           <div className="mt-1 text-sm text-green-400">
-                            Richtig: {correctOption?.optionText || '-'}
+                            {t('enablerPage.correct')} {correctOption?.optionText || '-'}
                           </div>
                         )}
                         {explanation && (
-                          <div className="mt-2 rounded-md border border-accent/20 bg-black/30 p-2 text-xs text-muted-foreground">Erklärung: {explanation}</div>
+                          <div className="mt-2 rounded-md border border-accent/20 bg-black/30 p-2 text-xs text-muted-foreground">{t('enablerPage.explanationLabel')} {explanation}</div>
                         )}
                       </li>
                     );
@@ -602,7 +604,7 @@ export default function TraineeEnablerPage() {
                     }
                   }}
                 >
-                  Nur ansehen (gesperrt)
+                  {t('enablerPage.viewOnly')}
                 </button>
               </div>
             )}
@@ -611,7 +613,7 @@ export default function TraineeEnablerPage() {
       </div>
 
       <div>
-        <Link href="/trainee/modules" className="text-sm underline">Zurück zu meinen Modulen</Link>
+        <Link href="/trainee/modules" className="text-sm underline">{t('enablerPage.backToModules')}</Link>
       </div>
     </div>
   );

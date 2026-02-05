@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     Calendar,
     ChevronLeft,
@@ -43,19 +44,19 @@ interface Trainee {
     email: string | null;
 }
 
-// Block type configs (same as trainee view)
-const BLOCK_CONFIG: Record<string, { label: string; Icon: any; color: string; lightBg: string; border: string; text: string }> = {
-    SCHOOL: { label: 'Schule', Icon: School, color: 'bg-accent', lightBg: 'bg-accent/20', border: 'border-accent/50', text: 'text-accent' },
-    COMPANY: { label: 'WMC', Icon: Building2, color: 'bg-green-500', lightBg: 'bg-green-500/20', border: 'border-green-500/50', text: 'text-green-600 dark:text-green-400' },
-    HOLIDAY: { label: 'Urlaub', Icon: Palmtree, color: 'bg-amber-500', lightBg: 'bg-amber-500/20', border: 'border-amber-500/50', text: 'text-amber-600 dark:text-amber-400' },
-    EXAM: { label: 'Prüfung', Icon: FileText, color: 'bg-rose-500', lightBg: 'bg-rose-500/20', border: 'border-rose-500/50', text: 'text-rose-600 dark:text-rose-400' },
-    PERSONAL: { label: 'Persönlich', Icon: User, color: 'bg-violet-500', lightBg: 'bg-violet-500/20', border: 'border-violet-500/50', text: 'text-violet-600 dark:text-violet-400' },
-    SONSTIGES: { label: 'Sonstiges', Icon: AlertCircle, color: 'bg-slate-500', lightBg: 'bg-slate-500/20', border: 'border-slate-500/50', text: 'text-slate-600 dark:text-slate-400' },
-    TRAINER_BLOCKER: { label: 'Trainer', Icon: User, color: 'bg-indigo-500', lightBg: 'bg-indigo-500/20', border: 'border-indigo-500/50', text: 'text-indigo-600 dark:text-indigo-400' },
+// Block type configs base (labels will be translated in component)
+const BLOCK_CONFIG_BASE: Record<string, { labelKey: string; Icon: any; color: string; lightBg: string; border: string; text: string }> = {
+    SCHOOL: { labelKey: 'trainer.calendar.blockTypes.school', Icon: School, color: 'bg-accent', lightBg: 'bg-accent/20', border: 'border-accent/50', text: 'text-accent' },
+    COMPANY: { labelKey: 'trainer.calendar.blockTypes.company', Icon: Building2, color: 'bg-green-500', lightBg: 'bg-green-500/20', border: 'border-green-500/50', text: 'text-green-600 dark:text-green-400' },
+    HOLIDAY: { labelKey: 'trainer.calendar.blockTypes.holiday', Icon: Palmtree, color: 'bg-amber-500', lightBg: 'bg-amber-500/20', border: 'border-amber-500/50', text: 'text-amber-600 dark:text-amber-400' },
+    EXAM: { labelKey: 'trainer.calendar.blockTypes.exam', Icon: FileText, color: 'bg-rose-500', lightBg: 'bg-rose-500/20', border: 'border-rose-500/50', text: 'text-rose-600 dark:text-rose-400' },
+    PERSONAL: { labelKey: 'trainer.calendar.blockTypes.personal', Icon: User, color: 'bg-violet-500', lightBg: 'bg-violet-500/20', border: 'border-violet-500/50', text: 'text-violet-600 dark:text-violet-400' },
+    SONSTIGES: { labelKey: 'trainer.calendar.blockTypes.other', Icon: AlertCircle, color: 'bg-slate-500', lightBg: 'bg-slate-500/20', border: 'border-slate-500/50', text: 'text-slate-600 dark:text-slate-400' },
+    TRAINER_BLOCKER: { labelKey: 'trainer.calendar.blockTypes.trainer', Icon: User, color: 'bg-indigo-500', lightBg: 'bg-indigo-500/20', border: 'border-indigo-500/50', text: 'text-indigo-600 dark:text-indigo-400' },
 };
 
-const WEEKDAYS_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const WEEKDAY_KEYS = ['trainer.calendar.weekdays.mo', 'trainer.calendar.weekdays.tu', 'trainer.calendar.weekdays.we', 'trainer.calendar.weekdays.th', 'trainer.calendar.weekdays.fr', 'trainer.calendar.weekdays.sa', 'trainer.calendar.weekdays.su'];
+const MONTH_KEYS = ['trainer.calendar.months.january', 'trainer.calendar.months.february', 'trainer.calendar.months.march', 'trainer.calendar.months.april', 'trainer.calendar.months.may', 'trainer.calendar.months.june', 'trainer.calendar.months.july', 'trainer.calendar.months.august', 'trainer.calendar.months.september', 'trainer.calendar.months.october', 'trainer.calendar.months.november', 'trainer.calendar.months.december'];
 
 // Helper functions
 function getDaysInMonth(year: number, month: number) {
@@ -77,7 +78,19 @@ function isDateInBlock(date: Date, block: Block): boolean {
 
 export default function TrainerCalendarPage() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const [trainees, setTrainees] = useState<Trainee[]>([]);
+
+    // Create translated versions
+    const WEEKDAYS = useMemo(() => WEEKDAY_KEYS.map(key => t(key)), [t]);
+    const MONTHS = useMemo(() => MONTH_KEYS.map(key => t(key)), [t]);
+    const BLOCK_CONFIG = useMemo(() => {
+        const config: Record<string, { label: string; Icon: any; color: string; lightBg: string; border: string; text: string }> = {};
+        for (const [key, value] of Object.entries(BLOCK_CONFIG_BASE)) {
+            config[key] = { ...value, label: t(value.labelKey) };
+        }
+        return config;
+    }, [t]);
     const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
     const [blocks, setBlocks] = useState<Block[]>([]);
     const [loading, setLoading] = useState(true);
@@ -127,7 +140,7 @@ export default function TrainerCalendarPage() {
                 }
             } catch (e) {
                 console.error('Failed to load blocks:', e);
-                setError('Fehler beim Laden der Blöcke');
+                setError(t('trainer.calendar.loadError'));
             } finally {
                 setLoading(false);
             }
@@ -183,7 +196,7 @@ export default function TrainerCalendarPage() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Fehler beim Erstellen');
+            if (!res.ok) throw new Error(t('trainer.calendar.createError'));
             const data = await res.json();
             setBlocks(prev => [...prev, data.block]);
             setShowAddModal(false);
@@ -200,10 +213,10 @@ export default function TrainerCalendarPage() {
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-foreground md:text-3xl flex items-center gap-3">
                     <Calendar className="h-7 w-7 text-accent" />
-                    Trainee-Kalender
+                    {t('trainer.calendar.title')}
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                    Verwalte Blockertermine für deine Trainees
+                    {t('trainer.calendar.description')}
                 </p>
             </div>
 
@@ -216,7 +229,7 @@ export default function TrainerCalendarPage() {
                         onChange={(e) => setSelectedTraineeId(e.target.value)}
                         className="px-4 py-2.5 rounded-xl bg-background border border-border text-foreground min-w-[200px] focus:ring-2 focus:ring-accent/50 outline-none transition-all"
                     >
-                        <option value="" className="bg-card text-foreground">Trainee auswählen...</option>
+                        <option value="" className="bg-card text-foreground">{t('trainer.calendar.selectTrainee')}</option>
                         {trainees.map(trainee => (
                             <option key={trainee.id} value={trainee.id} className="bg-card text-foreground">
                                 {trainee.firstName} {trainee.lastName}
@@ -231,7 +244,7 @@ export default function TrainerCalendarPage() {
                         className="btn-accent flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium"
                     >
                         <Plus className="h-4 w-4" />
-                        Blocker erstellen
+                        {t('trainer.calendar.createBlock')}
                     </button>
                 )}
             </div>
@@ -256,7 +269,7 @@ export default function TrainerCalendarPage() {
 
                         <div className="flex items-center gap-4">
                             <h3 className="text-lg font-bold text-foreground min-w-[180px] text-center">
-                                {MONTHS_DE[selectedMonth]} {selectedYear}
+                                {MONTHS[selectedMonth]} {selectedYear}
                             </h3>
                             <button
                                 onClick={() => {
@@ -265,7 +278,7 @@ export default function TrainerCalendarPage() {
                                 }}
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition"
                             >
-                                Heute
+                                {t('trainer.calendar.today')}
                             </button>
                         </div>
 
@@ -304,7 +317,7 @@ export default function TrainerCalendarPage() {
                     ) : (
                         <div className="rounded-2xl glass-effect overflow-hidden">
                             <div className="grid grid-cols-7 border-b border-border">
-                                {WEEKDAYS_DE.map((day, i) => (
+                                {WEEKDAYS.map((day, i) => (
                                     <div key={day} className={`py-3 text-center text-sm font-semibold ${i >= 5 ? 'text-muted-foreground' : 'text-foreground'}`}>
                                         {day}
                                     </div>
@@ -349,7 +362,7 @@ export default function TrainerCalendarPage() {
                                                         );
                                                     })}
                                                     {dayData.blocks.length > 2 && (
-                                                        <div className="text-[10px] text-muted-foreground px-1.5">+{dayData.blocks.length - 2} mehr</div>
+                                                        <div className="text-[10px] text-muted-foreground px-1.5">{t('trainer.calendar.more').replace('{count}', String(dayData.blocks.length - 2))}</div>
                                                     )}
                                                 </div>
                                             )}
@@ -363,8 +376,8 @@ export default function TrainerCalendarPage() {
             ) : (
                 <div className="text-center py-16">
                     <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-bold text-foreground mb-2">Trainee auswählen</h3>
-                    <p className="text-muted-foreground">Wähle einen Trainee aus, um deren Kalender zu sehen.</p>
+                    <h3 className="text-lg font-bold text-foreground mb-2">{t('trainer.calendar.selectTraineePrompt')}</h3>
+                    <p className="text-muted-foreground">{t('trainer.calendar.selectTraineeDesc')}</p>
                 </div>
             )}
 
@@ -407,6 +420,7 @@ function TrainerAddBlockModal({
     trainees: Trainee[];
     initialTraineeId: string;
 }) {
+    const { t } = useLanguage();
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [blockType, setBlockType] = useState('TRAINER_BLOCKER');
@@ -441,7 +455,7 @@ function TrainerAddBlockModal({
         e.preventDefault();
         if (!startDate || !endDate) return;
         if (selectedTraineeIds.length === 0) {
-            alert('Bitte mindestens einen Trainee auswählen');
+            alert(t('trainer.calendar.modal.selectAtLeastOne'));
             return;
         }
 
@@ -463,11 +477,11 @@ function TrainerAddBlockModal({
                 <div className="p-6 border-b border-border bg-indigo-500/10">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-bold text-foreground">Blocker erstellen</h3>
+                            <h3 className="text-lg font-bold text-foreground">{t('trainer.calendar.modal.title')}</h3>
                             <p className="text-sm text-muted-foreground">
-                                {selectionMode === 'single' ? `Für ${traineeName}` :
-                                    selectionMode === 'all' ? 'Für alle Trainees' :
-                                        `Für ${selectedTraineeIds.length} Trainees`}
+                                {selectionMode === 'single' ? t('trainer.calendar.modal.forTrainee').replace('{name}', traineeName) :
+                                    selectionMode === 'all' ? t('trainer.calendar.modal.forAllTrainees') :
+                                        t('trainer.calendar.modal.forMultiple').replace('{count}', String(selectedTraineeIds.length))}
                             </p>
                         </div>
                         <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition text-foreground">
@@ -479,28 +493,28 @@ function TrainerAddBlockModal({
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     {/* Trainee Selection */}
                     <div className="space-y-3 p-4 rounded-xl bg-muted/30 border border-border">
-                        <label className="block text-sm font-medium text-foreground">Empfänger</label>
+                        <label className="block text-sm font-medium text-foreground">{t('trainer.calendar.modal.recipients')}</label>
                         <div className="flex bg-muted rounded-lg p-1">
                             <button
                                 type="button"
                                 onClick={() => handleSelectionModeChange('single')}
                                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${selectionMode === 'single' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                             >
-                                Nur {traineeName.split(' ')[0]}
+                                {t('trainer.calendar.modal.onlySelected').replace('{name}', traineeName.split(' ')[0])}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => handleSelectionModeChange('custom')}
                                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${selectionMode === 'custom' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                             >
-                                Auswählen
+                                {t('trainer.calendar.modal.select')}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => handleSelectionModeChange('all')}
                                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${selectionMode === 'all' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                             >
-                                Alle ({trainees.length})
+                                {t('trainer.calendar.modal.all').replace('{count}', String(trainees.length))}
                             </button>
                         </div>
 
@@ -523,7 +537,7 @@ function TrainerAddBlockModal({
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Startdatum</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('trainer.calendar.modal.startDate')}</label>
                             <input
                                 type="date"
                                 value={startDate}
@@ -533,7 +547,7 @@ function TrainerAddBlockModal({
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Enddatum</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('trainer.calendar.modal.endDate')}</label>
                             <input
                                 type="date"
                                 value={endDate}
@@ -545,34 +559,34 @@ function TrainerAddBlockModal({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Titel</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('trainer.calendar.modal.titleField')}</label>
                         <input
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
-                            placeholder="z.B. Besprechung, Schulung..."
+                            placeholder={t('trainer.calendar.modal.titlePlaceholder')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Beschreibung</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('trainer.calendar.modal.descriptionField')}</label>
                         <textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground min-h-[80px]"
-                            placeholder="Details zum Termin..."
+                            placeholder={t('trainer.calendar.modal.descriptionPlaceholder')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Notizen (optional)</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('trainer.calendar.modal.notesField')}</label>
                         <input
                             type="text"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
-                            placeholder="Interne Notizen..."
+                            placeholder={t('trainer.calendar.modal.notesPlaceholder')}
                         />
                     </div>
 
@@ -586,7 +600,7 @@ function TrainerAddBlockModal({
                         />
                         <label htmlFor="sendInvitation" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                             <Send className="h-4 w-4 text-muted-foreground" />
-                            Kalendereinladung an Trainee(s) senden
+                            {t('trainer.calendar.modal.sendInvitation')}
                         </label>
                     </div>
 
@@ -596,14 +610,14 @@ function TrainerAddBlockModal({
                             onClick={onClose}
                             className="flex-1 px-4 py-3 rounded-xl glass-effect text-foreground font-medium transition"
                         >
-                            Abbrechen
+                            {t('trainer.calendar.modal.cancel')}
                         </button>
                         <button
                             type="submit"
                             className="btn-accent flex-1 px-4 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2"
                         >
                             <Check className="h-4 w-4" />
-                            Erstellen
+                            {t('trainer.calendar.modal.create')}
                         </button>
                     </div>
                 </form>

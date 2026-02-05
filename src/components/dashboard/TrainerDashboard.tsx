@@ -11,17 +11,18 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import HaiAdminWidget from '@/components/hai/HaiAdminWidget';
 
 // Dynamically import chart components with SSR disabled
 const ProgressTrendChart = dynamic(
   () => import('./DashboardCharts').then(mod => mod.ProgressTrendChart),
-  { ssr: false, loading: () => <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">Lade...</div> }
+  { ssr: false, loading: () => <div className="flex h-[200px] items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent/30 border-t-accent" /></div> }
 );
 
 const ModuleProgressChart = dynamic(
   () => import('./DashboardCharts').then(mod => mod.ModuleProgressChart),
-  { ssr: false, loading: () => <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">Lade...</div> }
+  { ssr: false, loading: () => <div className="flex h-[200px] items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent/30 border-t-accent" /></div> }
 );
 
 interface Trainee {
@@ -64,6 +65,7 @@ const setCachedDashboard = (data: DashboardResponse) => {
 export default function TrainerDashboard() {
   const router = useRouter();
   const { user, profile } = useAuth();
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -114,7 +116,7 @@ export default function TrainerDashboard() {
         if (!res.ok) {
           const errText = await res.text().catch(() => 'Unknown error');
           console.error('Trainer Dashboard API error:', res.status, errText);
-          setDataError(`Fehler beim Laden: ${res.status}`);
+          setDataError(`${t('dashboard.error.loading')} ${res.status}`);
           setDataLoading(false);
           return;
         }
@@ -125,7 +127,7 @@ export default function TrainerDashboard() {
         setCachedDashboard(data);
       } catch (e) {
         console.error(e);
-        setDataError('Netzwerkfehler beim Laden der Daten');
+        setDataError(t('dashboard.error.network'));
       } finally {
         setDataLoading(false);
       }
@@ -215,7 +217,7 @@ export default function TrainerDashboard() {
             <div className="glass-effect rounded-2xl p-6 shadow-lg">
               <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
                 <Users className="text-accent mr-3 h-6 w-6" />
-                Auszubildenden-Übersicht
+                {t('dashboard.traineesOverview')}
               </h3>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 <div
@@ -224,7 +226,7 @@ export default function TrainerDashboard() {
                   className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
                 >
                   <Users className="text-accent mx-auto mb-3 h-8 w-8" />
-                  <p className="text-muted-foreground text-sm">Aktive Azubis</p>
+                  <p className="text-muted-foreground text-sm">{t('dashboard.activeTrainees')}</p>
                   <p className="text-foreground text-2xl font-bold">
                     {trainees.length}
                   </p>
@@ -236,7 +238,7 @@ export default function TrainerDashboard() {
                   className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
                 >
                   <TrendingUp className="text-primary mx-auto mb-3 h-8 w-8" />
-                  <p className="text-muted-foreground text-sm">Ø Fortschritt</p>
+                  <p className="text-muted-foreground text-sm">{t('dashboard.averageProgress')}</p>
                   <p className="text-foreground text-2xl font-bold">
                     {avgProgress}%
                   </p>
@@ -249,7 +251,7 @@ export default function TrainerDashboard() {
                 >
                   <Clock className="text-accent mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">
-                    Offene Reviews
+                    {t('dashboard.pendingReviews')}
                   </p>
                   <p className="text-foreground text-2xl font-bold">{pendingReviews}</p>
                 </div>
@@ -267,14 +269,14 @@ export default function TrainerDashboard() {
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-foreground flex items-center text-lg font-bold">
                   <TrendingUp className="text-accent mr-3 h-6 w-6" />
-                  Gesamtfortschritt
+                  {t('dashboard.overallProgress')}
                 </h3>
                 <button
                   onClick={() => router.push('/trainer/analytics')}
                   className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
                 >
-                  Anzeigen
-                </button>
+                  {t('common.view')}
+</button>
               </div>
               <ProgressTrendChart data={progressTrendSafe} loading={dataLoading} />
             </div>
@@ -284,14 +286,14 @@ export default function TrainerDashboard() {
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-foreground flex items-center text-lg font-bold">
                   <BarChart3 className="text-accent mr-3 h-6 w-6" />
-                  Einzelner Fortschritt
+                  {t('dashboard.individualProgress')}
                 </h3>
                 <button
                   onClick={() => router.push('/trainer/analytics')}
                   className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
                 >
-                  Anzeigen
-                </button>
+                  {t('common.view')}
+</button>
               </div>
               <ModuleProgressChart data={moduleProgressSafe} loading={dataLoading} />
             </div>

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   LineChart,
   Line,
@@ -72,6 +73,7 @@ const setCachedDashboard = (data: DashboardData) => {
 export default function TraineeDashboard() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { t } = useLanguage();
 
   const [mounted, setMounted] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -129,18 +131,18 @@ export default function TraineeDashboard() {
         if (!res.ok) {
           const errText = await res.text().catch(() => 'Unknown error');
           console.error('Dashboard API error:', res.status, errText);
-          setDataError(`Fehler beim Laden: ${res.status}`);
+          setDataError(`${t('dashboard.error.loading')} ${res.status}`);
           setFetching(false);
           return;
         }
         const data = await res.json();
-        
+
         // Update state and cache
         applyDashboardData(data);
         setCachedDashboard(data);
       } catch (e) {
         console.error(e);
-        setDataError('Netzwerkfehler beim Laden der Daten');
+        setDataError(t('dashboard.error.network'));
       } finally {
         setFetching(false);
       }
@@ -214,13 +216,13 @@ export default function TraineeDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-accent mb-3 text-sm font-bold tracking-wider uppercase">
-                    WEITERMACHEN
+                    {t('dashboard.continueLearning').toUpperCase()}
                   </h3>
                   <p className="text-foreground text-2xl leading-tight font-bold">
-                    {nextLesson ? nextLesson.title : 'Weiter lernen'}
+                    {nextLesson ? nextLesson.title : t('dashboard.keepLearning')}
                   </p>
                   <p className="text-muted-foreground mt-2">
-                    Modul: {nextLesson ? nextLesson.module : '-'}
+                    {t('dashboard.module')} {nextLesson ? nextLesson.module : '-'}
                   </p>
                 </div>
                 <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg">
@@ -241,7 +243,7 @@ export default function TraineeDashboard() {
                 <div className="from-accent to-primary mr-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
                   <BookOpen className="h-5 w-5 text-foreground" />
                 </div>
-                Mein Lernpfad
+                {t('dashboard.myLearningPath')}
               </h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {modules.map((module: any) => (
@@ -257,7 +259,7 @@ export default function TraineeDashboard() {
                       <ArrowRight className="text-accent/60 group-hover:text-accent h-5 w-5 transition-colors" />
                     </div>
                     <p className="text-muted-foreground mb-3 text-sm">
-                      Fortschritt
+                      {t('dashboard.progress')}
                     </p>
                     <div className="bg-muted/50 h-3 w-full overflow-hidden rounded-full">
                       <div
@@ -284,11 +286,11 @@ export default function TraineeDashboard() {
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-500 to-orange-500">
                   <Award className="h-4 w-4 text-foreground" />
                 </div>
-                Letzte Erfolge
+                {t('dashboard.recentAchievements')}
               </h3>
               <div className="space-y-3">
                 {achievements.length === 0 && (
-                  <div className="text-muted-foreground">Noch keine Aktivitäten</div>
+                  <div className="text-muted-foreground">{t('dashboard.noActivities')}</div>
                 )}
                 {achievements.map((a, idx) => (
                   <div key={idx} className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
@@ -309,11 +311,11 @@ export default function TraineeDashboard() {
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-500">
                   <Calendar className="h-4 w-4 text-foreground" />
                 </div>
-                Anstehende Termine
+                {t('dashboard.upcomingDeadlines')}
               </h3>
               <div className="space-y-3">
                 {deadlines.length === 0 && (
-                  <div className="text-muted-foreground">Keine anstehenden Termine</div>
+                  <div className="text-muted-foreground">{t('dashboard.noDeadlines')}</div>
                 )}
                 {deadlines.map((d, idx) => (
                   <div key={idx} className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
@@ -337,7 +339,7 @@ export default function TraineeDashboard() {
                 <div className="from-accent to-primary mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br">
                   <BarChart3 className="h-4 w-4 text-foreground" />
                 </div>
-                Wöchentlicher Fortschritt
+                {t('dashboard.weeklyProgress')}
               </h3>
               <ResponsiveContainer
                 width="100%"
@@ -409,7 +411,7 @@ export default function TraineeDashboard() {
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
                   <Target className="h-4 w-4 text-foreground" />
                 </div>
-                Fähigkeiten
+                {t('dashboard.skills')}
               </h3>
               <ResponsiveContainer
                 width="100%"
@@ -464,7 +466,7 @@ export default function TraineeDashboard() {
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-500">
                   <PieChart className="h-4 w-4 text-foreground" />
                 </div>
-                Modul-Fortschritt
+                {t('dashboard.moduleProgress')}
               </h3>
               <ResponsiveContainer
                 width="100%"

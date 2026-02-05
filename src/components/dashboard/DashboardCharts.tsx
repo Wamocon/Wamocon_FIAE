@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   AreaChart,
   Area,
@@ -20,6 +21,7 @@ interface ProgressTrendChartProps {
 }
 
 export function ProgressTrendChart({ data, loading = false }: ProgressTrendChartProps) {
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export function ProgressTrendChart({ data, loading = false }: ProgressTrendChart
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
         <div className="flex items-center gap-2">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
-          Lade...
+          {t('common.loading')}
         </div>
       </div>
     );
@@ -44,7 +46,7 @@ export function ProgressTrendChart({ data, loading = false }: ProgressTrendChart
   if (!hasValidData) {
     return (
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
-        Keine Aktivitätsdaten vorhanden
+        {t('charts.noActivityData')}
       </div>
     );
   }
@@ -72,7 +74,7 @@ export function ProgressTrendChart({ data, loading = false }: ProgressTrendChart
             color: '#ffffff',
             boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
           }}
-          formatter={(value: number) => [`${value} Aktivitäten`, 'Fortschritt']}
+          formatter={(value: number) => [`${value} ${t('charts.activities')}`, t('charts.progress')]}
         />
         <Area type="monotone" dataKey="progress" stroke="#ef4444" fill="#ef4444" fillOpacity={0.4} strokeWidth={3} />
       </AreaChart>
@@ -86,6 +88,7 @@ interface ModuleProgressChartProps {
 }
 
 export function ModuleProgressChart({ data, loading = false }: ModuleProgressChartProps) {
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -101,7 +104,7 @@ export function ModuleProgressChart({ data, loading = false }: ModuleProgressCha
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
         <div className="flex items-center gap-2">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
-          Lade...
+          {t('common.loading')}
         </div>
       </div>
     );
@@ -110,7 +113,7 @@ export function ModuleProgressChart({ data, loading = false }: ModuleProgressCha
   if (!hasValidData) {
     return (
       <div className="flex h-[200px] items-center justify-center text-muted-foreground text-sm">
-        Keine Kursdaten vorhanden
+        {t('charts.noCourseData')}
       </div>
     );
   }

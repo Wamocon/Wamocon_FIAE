@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
     Calendar,
@@ -18,34 +19,35 @@ type TabId = 'lernfelder' | 'calendar' | 'exams';
 
 interface TabConfig {
     id: TabId;
-    label: string;
+    labelKey: string;
     icon: React.ComponentType<{ className?: string }>;
-    description: string;
+    descriptionKey: string;
 }
 
 const TABS: TabConfig[] = [
     {
         id: 'lernfelder',
-        label: 'Lernfelder',
+        labelKey: 'trainer.school.tabs.lernfelder',
         icon: School,
-        description: 'Lernfelder und Use Cases verwalten',
+        descriptionKey: 'trainer.school.tabs.lernfelderDesc',
     },
     {
         id: 'calendar',
-        label: 'Trainee-Kalender',
+        labelKey: 'trainer.school.tabs.traineeCalendar',
         icon: Calendar,
-        description: 'Blockertermine für Trainees verwalten',
+        descriptionKey: 'trainer.school.tabs.traineeCalendarDesc',
     },
     {
         id: 'exams',
-        label: 'Prüfungen',
+        labelKey: 'trainer.school.tabs.exams',
         icon: FileText,
-        description: 'Prüfungsergebnisse und Bewertungen',
+        descriptionKey: 'trainer.school.tabs.examsDesc',
     },
 ];
 
 export function TrainerSchoolView() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const searchParams = useSearchParams();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<TabId>('lernfelder');
@@ -100,10 +102,10 @@ export function TrainerSchoolView() {
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-foreground md:text-3xl flex items-center gap-3">
                     <School className="h-7 w-7 text-accent" />
-                    Berufsschul-Verwaltung
+                    {t('trainer.school.management')}
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                    Verwalte Kalender, Tätigkeitsnachweise und Prüfungen deiner Trainees
+                    {t('trainer.school.description')}
                 </p>
             </div>
 
@@ -119,7 +121,7 @@ export function TrainerSchoolView() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-foreground">{stats.pendingReports}</p>
-                            <p className="text-xs text-muted-foreground">Ausstehende Nachweise</p>
+                            <p className="text-xs text-muted-foreground">{t('trainer.school.pendingReports')}</p>
                         </div>
                     </div>
                 </button>
@@ -133,7 +135,7 @@ export function TrainerSchoolView() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-foreground">{stats.upcomingExams}</p>
-                            <p className="text-xs text-muted-foreground">Anstehende Prüfungen</p>
+                            <p className="text-xs text-muted-foreground">{t('trainer.school.upcomingExams')}</p>
                         </div>
                     </div>
                 </button>
@@ -147,7 +149,7 @@ export function TrainerSchoolView() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-foreground">{stats.trainees}</p>
-                            <p className="text-xs text-muted-foreground">Aktive Trainees</p>
+                            <p className="text-xs text-muted-foreground">{t('trainer.school.activeTrainees')}</p>
                         </div>
                     </div>
                 </button>
@@ -169,13 +171,13 @@ export function TrainerSchoolView() {
                                     }`}
                             >
                                 <Icon className={`h-4 w-4 ${isActive ? 'text-accent' : ''}`} />
-                                <span className="hidden sm:inline">{tab.label}</span>
+                                <span className="hidden sm:inline">{t(tab.labelKey)}</span>
                             </button>
                         );
                     })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 px-1">
-                    {TABS.find(t => t.id === activeTab)?.description}
+                    {t(TABS.find(tab => tab.id === activeTab)?.descriptionKey || '')}
                 </p>
             </div>
 

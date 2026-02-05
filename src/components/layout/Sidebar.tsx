@@ -37,7 +37,7 @@ export function Sidebar({
   userRole,
 }: SidebarProps) {
   const { profile, signOut, loading } = useAuth();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -119,7 +119,7 @@ export function Sidebar({
     () => [
       {
         id: 'dashboard',
-        label: language === 'de' ? 'Dashboard' : 'Dashboard',
+        label: t('nav.dashboard'),
         icon: LayoutDashboard,
         href:
           userRole === 'trainee' ? '/trainee/dashboard' : '/trainer/dashboard',
@@ -128,45 +128,44 @@ export function Sidebar({
         ? [
           {
             id: 'activityReports',
-            label: language === 'de' ? 'Tätigkeitsnachweis' : 'Activity Reports',
+            label: t('nav.activityReports'),
             icon: ClipboardList,
             href: '/trainer/activity-reports',
           },
           {
             id: 'school',
-            label: language === 'de' ? 'Berufsschule' : 'School Management',
+            label: t('nav.school'),
             icon: School,
             href: '/trainer/school',
           },
           {
             id: 'contentManagement',
-            label:
-              language === 'de' ? 'Inhalts-Management' : 'Content Management',
+            label: t('nav.contentManagement'),
             icon: BookOpen,
             href: '/trainer/content-management',
           },
 
           {
             id: 'quizManagement',
-            label: language === 'de' ? 'Quiz-Verwaltung' : 'Quiz Management',
+            label: t('nav.quizzes'),
             icon: HelpCircle,
             href: '/trainer/quiz-management',
           },
           {
             id: 'bulkImport',
-            label: language === 'de' ? 'Bulk Import' : 'Bulk Import',
+            label: t('nav.bulkImport'),
             icon: Upload,
             href: '/trainer/bulk-import',
           },
           {
             id: 'trainees',
-            label: language === 'de' ? 'Auszubildende' : 'Trainees',
+            label: t('nav.trainees'),
             icon: Users,
             href: '/trainer/trainees',
           },
           {
             id: 'analytics',
-            label: language === 'de' ? 'Analysen' : 'Analytics',
+            label: t('nav.analytics'),
             icon: BarChart3,
             href: '/trainer/analytics',
           },
@@ -174,32 +173,32 @@ export function Sidebar({
         : [
           {
             id: 'activityReports',
-            label: language === 'de' ? 'Tätigkeitsnachweis' : 'Activity Reports',
+            label: t('nav.activityReports'),
             icon: ClipboardList,
             href: '/trainee/activity-reports',
           },
           {
             id: 'school',
-            label: language === 'de' ? 'Berufsschule' : 'School',
+            label: t('nav.school'),
             icon: School,
             href: '/trainee/school',
           },
           {
             id: 'courses',
-            label: language === 'de' ? 'Kurse' : 'Courses',
+            label: t('nav.courses'),
             icon: BookOpen,
             href: '/trainee/courses',
           },
 
           {
             id: 'lessons',
-            label: language === 'de' ? 'Trainer-Feedback' : 'Trainer Feedback',
+            label: t('nav.trainerFeedback'),
             icon: GraduationCap,
             href: '/trainee/trainer-feedback',
           },
           {
             id: 'quizzes',
-            label: language === 'de' ? 'Quizze' : 'Quizzes',
+            label: t('nav.quizzes'),
             icon: HelpCircle,
             href: '/trainee/quizzes',
           },
@@ -207,12 +206,12 @@ export function Sidebar({
         ]),
       {
         id: 'profile',
-        label: language === 'de' ? 'Mein Profil' : 'My Profile',
+        label: t('nav.profile'),
         icon: Settings,
         href: userRole === 'trainee' ? '/trainee/profile' : '/trainer/profile',
       },
     ],
-    [userRole, language]
+    [userRole, t]
   );
 
   if (!profile) return null;
@@ -307,7 +306,7 @@ export function Sidebar({
                 {profile.full_name}
               </p>
               <p className="text-muted-foreground text-xs capitalize">
-                {profile.role === 'trainee' ? 'Auszubildender' : 'Ausbilder'}
+                {profile.role === 'trainee' ? t('roles.trainee') : t('roles.trainer')}
               </p>
             </div>
           </div>
@@ -319,7 +318,7 @@ export function Sidebar({
           >
             <LogOut className={`h-5 w-5 ${loading ? 'animate-pulse' : ''}`} />
             <span className="font-medium">
-              {loading ? (language === 'de' ? 'Abmelden…' : 'Logging out…') : (language === 'de' ? 'Abmelden' : 'Logout')}
+              {loading ? t('auth.loggingOut') : t('auth.logout')}
             </span>
           </button>
         </div>

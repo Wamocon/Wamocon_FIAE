@@ -6,10 +6,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { SubLessonDetail } from '@/db/queries';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
   const router = useRouter();
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const [completed, setCompleted] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -34,7 +36,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Aufgabe nicht gefunden...</p>
+          <p className="text-muted-foreground">{t('sublesson.notFound')}</p>
         </div>
       </div>
     );
@@ -72,7 +74,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
           </button>
           <div className="flex-1">
             <h1 className="text-foreground text-2xl font-bold">{data.title}</h1>
-            <p className="text-muted mt-1">Lektion: {data.lesson.title}</p>
+            <p className="text-muted mt-1">{t('sublesson.lesson')} {data.lesson.title}</p>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -82,7 +84,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
               onChange={e => toggle(e.target.checked)}
               disabled={saving}
             />
-            <span className="text-muted-foreground">Abgeschlossen</span>
+            <span className="text-muted-foreground">{t('sublesson.completed')}</span>
           </label>
         </div>
       </div>
@@ -93,19 +95,19 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
           <div className="from-accent to-primary flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
             <BookOpen className="h-5 w-5 text-foregroundround" />
           </div>
-          <h3 className="text-foreground text-lg font-semibold">Aufgabe</h3>
+          <h3 className="text-foreground text-lg font-semibold">{t('sublesson.task')}</h3>
         </div>
         {data.content ? (
           <div className="prose prose-invert max-w-none whitespace-pre-wrap text-muted">{data.content}</div>
         ) : (
-          <div className="text-muted-foreground">Kein Inhalt verfügbar.</div>
+          <div className="text-muted-foreground">{t('sublesson.noContent')}</div>
         )}
-        <div className="text-muted mt-4 text-xs">Dauer: {data.duration_minutes ?? 0} Minuten</div>
+        <div className="text-muted mt-4 text-xs">{t('sublesson.duration').replace('{minutes}', String(data.duration_minutes ?? 0))}</div>
       </div>
 
       <div className="flex justify-end">
         <Link href={`/trainee/trainer-feedback/${data.lesson.id}`} className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors">
-          Zurück zur Lektion
+          {t('sublesson.backToLesson')}
         </Link>
       </div>
     </div>
