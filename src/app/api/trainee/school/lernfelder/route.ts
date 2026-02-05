@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
         const year = searchParams.get('year');
         const common = searchParams.get('common');
 
-        let query = db
+        const query = db
             .select()
             .from(lernfelder)
             .orderBy(asc(lernfelder.orderIndex));

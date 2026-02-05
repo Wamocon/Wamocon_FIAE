@@ -7,7 +7,7 @@ import { enablers, enablerQuizzes, options, questions, quizzes, courseMembers } 
 // query: traineeId
 export async function GET(
   req: NextRequest,
-  { params }: { params: { enablerId: string } }
+  { params }: { params: Promise<{ enablerId: string }> }
 ) {
   try {
     const { searchParams } = new URL(req.url);

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import JSZip from 'jszip';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import {
@@ -87,26 +88,13 @@ export default function TrainerActivityReportsPage() {
     const [traineeFilter, setTraineeFilter] = useState<string>('all');
     const [periodFilter, setPeriodFilter] = useState<'all' | '1-18' | '19-36'>('all');
 
-    useEffect(() => {
-        if (!profile || authLoading) return;
-
-        if (profile.role !== 'trainer') {
-            router.push('/trainee/activity-reports');
-            return;
-        }
-
-        loadData();
-    }, [profile, authLoading, router]);
-
-    const loadData = async () => {
-        if (!profile) return;
-
+    const loadData = useCallback(async (userId: string) => {
         try {
             setLoading(true);
 
             const [reportsRes, traineesRes, useCasesRes, componentsRes] = await Promise.all([
-                fetch(`/api/activity-reports?userId=${profile.id}`),
-                fetch(`/api/trainer/trainees?trainerProfileId=${profile.id}`),
+                fetch(`/api/activity-reports?userId=${userId}`),
+                fetch(`/api/trainer/trainees?trainerProfileId=${userId}`),
                 fetch('/api/training-use-cases'),
                 fetch('/api/training-components'),
             ]);
@@ -150,7 +138,18 @@ export default function TrainerActivityReportsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        if (!profile?.id || authLoading) return;
+
+        if (profile.role !== 'trainer') {
+            router.push('/trainee/activity-reports');
+            return;
+        }
+
+        loadData(profile.id);
+    }, [profile?.id, authLoading, loadData]);
 
     const loadReportEntries = async (reportId: string) => {
         try {
@@ -185,7 +184,7 @@ export default function TrainerActivityReportsPage() {
             if (!res.ok) throw new Error('Failed to approve');
 
             setSelectedReport(null);
-            loadData();
+            if (profile?.id) loadData(profile.id);
         } catch (err: any) {
             setError(err.message);
         }
@@ -204,7 +203,7 @@ export default function TrainerActivityReportsPage() {
             if (!res.ok) throw new Error('Failed to reject');
 
             setSelectedReport(null);
-            loadData();
+            if (profile?.id) loadData(profile.id);
         } catch (err: any) {
             setError(err.message);
         }
@@ -221,7 +220,7 @@ export default function TrainerActivityReportsPage() {
             if (!res.ok) throw new Error('Fehler beim Löschen');
 
             setSelectedReport(null);
-            loadData();
+            if (profile?.id) loadData(profile.id);
         } catch (err: any) {
             setError(err.message);
         }
@@ -259,6 +258,12 @@ export default function TrainerActivityReportsPage() {
     const handleMassExport = async () => {
         try {
             setError(null);
+            const zip = new JSZip();
+            const folderName = `Nachweise_Export_${new Date().toLocaleDateString('de-DE').replace(/\./g, '-')}`;
+            const folder = zip.folder(folderName);
+
+            let count = 0;
+
             // Export all filtered reports one by one
             for (const report of filteredReports) {
                 // Fetch entries for this report
@@ -284,9 +289,25 @@ export default function TrainerActivityReportsPage() {
                     entries: entriesData.entries || [],
                 };
 
-                await generateActivityReportPDF(reportData, useCases, components);
-                // Small delay between downloads to prevent browser blocking
-                await new Promise(resolve => setTimeout(resolve, 300));
+                const blob = await generateActivityReportPDF(reportData, useCases, components, true);
+                if (blob instanceof Blob) {
+                    const filename = `Tätigkeitsnachweis_KW${report.weekNumber}_${report.year}_${reportData.traineeName.replace(/\s+/g, '_')}.pdf`;
+                    folder?.file(filename, blob);
+                    count++;
+                }
+            }
+
+            if (count > 0) {
+                // Generate ZIP and download
+                const zipContent = await zip.generateAsync({ type: 'blob' });
+                const url = window.URL.createObjectURL(zipContent);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${folderName}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
             }
         } catch (err: any) {
             setError('Fehler beim Massenexport: ' + err.message);
@@ -389,7 +410,7 @@ export default function TrainerActivityReportsPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
                     onClick={() => setFilter('pending')}
                     className={`glass-effect rounded-xl p-4 text-left transition-colors ${filter === 'pending' ? 'ring-2 ring-accent' : ''}`}
@@ -401,21 +422,6 @@ export default function TrainerActivityReportsPage() {
                         <div>
                             <p className="text-2xl font-bold text-foreground">{pendingCount}</p>
                             <p className="text-sm text-muted-foreground">Zur Prüfung</p>
-                        </div>
-                    </div>
-                </button>
-
-                <button
-                    onClick={() => setFilter('overbooked')}
-                    className={`glass-effect rounded-xl p-4 text-left transition-colors ${filter === 'overbooked' ? 'ring-2 ring-accent' : ''}`}
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-yellow-500/20">
-                            <AlertTriangle className="h-5 w-5 text-yellow-400" />
-                        </div>
-                        <div>
-                            <p className="text-2xl font-bold text-foreground">{overbookedCount}</p>
-                            <p className="text-sm text-muted-foreground">Überbucht</p>
                         </div>
                     </div>
                 </button>
@@ -784,10 +790,10 @@ function ReportReviewModal({
                                     <button
                                         onClick={handleApprove}
                                         disabled={processing}
-                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-primary-foreground dark:text-white rounded-lg hover:bg-green-700"
                                     >
                                         {processing ? (
-                                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                                            <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
                                         ) : (
                                             <Check className="h-4 w-4" />
                                         )}

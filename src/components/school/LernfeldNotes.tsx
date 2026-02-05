@@ -306,7 +306,7 @@ export function LernfeldNotes() {
                     >
                         <div className="flex items-center gap-3">
                             {expandedLernfelder.has(SONSTIGES_CODE) ? (
-                                <ChevronDown className="h-4 w-4 text-slate-500 flex-shrink-0" />
+                                <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                             ) : (
                                 <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                             )}

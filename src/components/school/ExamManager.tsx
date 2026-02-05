@@ -158,7 +158,7 @@ export function ExamManager() {
                         <button
                             onClick={() => setActiveView('upcoming')}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'upcoming'
-                                ? 'bg-accent text-white'
+                                ? 'bg-accent text-accent-foreground'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                 }`}
                         >
@@ -167,7 +167,7 @@ export function ExamManager() {
                         <button
                             onClick={() => setActiveView('past')}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'past'
-                                ? 'bg-accent text-white'
+                                ? 'bg-accent text-accent-foreground'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                 }`}
                         >

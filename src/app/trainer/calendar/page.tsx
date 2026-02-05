@@ -94,7 +94,7 @@ export default function TrainerCalendarPage() {
 
         async function loadTrainees() {
             try {
-                const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile.id}`);
+                const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile?.id}`);
                 if (res.ok) {
                     const data = await res.json();
                     setTrainees(data.trainees || []);
@@ -216,9 +216,9 @@ export default function TrainerCalendarPage() {
                         onChange={(e) => setSelectedTraineeId(e.target.value)}
                         className="px-4 py-2.5 rounded-xl bg-background border border-border text-foreground min-w-[200px] focus:ring-2 focus:ring-accent/50 outline-none transition-all"
                     >
-                        <option value="">Trainee auswählen...</option>
+                        <option value="" className="bg-card text-foreground">Trainee auswählen...</option>
                         {trainees.map(trainee => (
-                            <option key={trainee.id} value={trainee.id}>
+                            <option key={trainee.id} value={trainee.id} className="bg-card text-foreground">
                                 {trainee.firstName} {trainee.lastName}
                             </option>
                         ))}
@@ -329,7 +329,7 @@ export default function TrainerCalendarPage() {
                                         >
                                             <div className={`
                                                 inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-medium
-                                                ${dayData.isToday ? 'bg-accent text-white' : isWeekend ? 'text-muted-foreground' : 'text-foreground'}
+                                                ${dayData.isToday ? 'bg-accent text-accent-foreground' : isWeekend ? 'text-muted-foreground' : 'text-foreground'}
                                             `}>
                                                 {dayData.date.getDate()}
                                             </div>
