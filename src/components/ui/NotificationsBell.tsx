@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
@@ -22,6 +23,7 @@ export type UINotification = {
 
 export default function NotificationsBell() {
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<UINotification[]>([]);
@@ -129,7 +131,7 @@ export default function NotificationsBell() {
       <button
         className="relative rounded-lg p-2 hover:bg-muted text-muted hover:text-foreground"
         onClick={() => setOpen(o => !o)}
-        aria-label="Benachrichtigungen"
+        aria-label={t('notifications.title')}
       >
         <Bell className="h-5 w-5" />
         {unread > 0 && (
@@ -141,13 +143,13 @@ export default function NotificationsBell() {
 
       {open && (
         <div className="bg-card border-border absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border shadow-xl">
-          <div className="border-border bg-muted/40 border-b px-4 py-2 text-sm font-semibold">Benachrichtigungen</div>
+          <div className="border-border bg-muted/40 border-b px-4 py-2 text-sm font-semibold">{t('notifications.title')}</div>
           <div className="max-h-96 overflow-y-auto">
             {loading && (
-              <div className="text-muted-foreground p-4 text-center text-sm">Lade…</div>
+              <div className="text-muted-foreground p-4 text-center text-sm">{t('notifications.loading')}</div>
             )}
             {!loading && items.length === 0 && (
-              <div className="text-muted-foreground p-4 text-center text-sm">Keine Benachrichtigungen</div>
+              <div className="text-muted-foreground p-4 text-center text-sm">{t('notifications.none')}</div>
             )}
             {items.map((n) => (
               <button

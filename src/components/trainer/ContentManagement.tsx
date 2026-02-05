@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Plus,
   Edit,
@@ -29,6 +30,7 @@ type CourseCard = {
 export function ContentManagement() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -91,10 +93,10 @@ export function ContentManagement() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
-              Inhalts-Verwaltung
+              {t('content.management.title')}
             </h1>
             <p className="text-muted">
-              Verwalten Sie Lernmodule, Kapitel und Lektionen
+              {t('content.management.description')}
             </p>
           </div>
           <button
@@ -105,7 +107,7 @@ export function ContentManagement() {
             className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
           >
             <Plus className="h-5 w-5" />
-            Neuer Kurs
+            {t('content.newCourse')}
           </button>
         </div>
       </div>
@@ -119,7 +121,7 @@ export function ContentManagement() {
               <Search className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Nach Modulen suchen..."
+                placeholder={t('content.searchModules')}
                 className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full rounded-2xl border py-3 pr-4 pl-10 focus:border-transparent focus:ring-2 focus:outline-none"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -131,10 +133,10 @@ export function ContentManagement() {
               onChange={e => setSelectedYear(e.target.value)}
               className="bg-background/50 border-accent/30 focus:ring-accent text-foreground rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
             >
-              <option value="all">Alle Jahre</option>
-              <option value="1">Jahr 1</option>
-              <option value="2">Jahr 2</option>
-              <option value="3">Jahr 3</option>
+              <option value="all">{t('content.allYears')}</option>
+              <option value="1">{t('content.yearNumber').replace('{number}', '1')}</option>
+              <option value="2">{t('content.yearNumber').replace('{number}', '2')}</option>
+              <option value="3">{t('content.yearNumber').replace('{number}', '3')}</option>
             </select>
           </div>
 
@@ -147,7 +149,7 @@ export function ContentManagement() {
                 : 'text-muted hover:text-foreground'
                 }`}
             >
-              Grid
+              {t('content.gridView')}
             </button>
             <button
               onClick={() => setViewMode('list')}
@@ -156,7 +158,7 @@ export function ContentManagement() {
                 : 'text-muted hover:text-foreground'
                 }`}
             >
-              Liste
+              {t('content.listView')}
             </button>
           </div>
         </div>
@@ -164,7 +166,7 @@ export function ContentManagement() {
 
       {/* Content Grid/List */}
       {loading && (
-        <div className="text-muted">Lade Inhalte…</div>
+        <div className="text-muted">{t('content.loadingContent')}</div>
       )}
       {error && (
         <div className="text-red-500">{error}</div>
@@ -190,10 +192,10 @@ export function ContentManagement() {
 
               <div className="text-muted mb-4 flex items-center gap-2 text-sm">
                 <span className="bg-accent rounded-full px-3 py-1 font-medium text-foreground">
-                  Jahr {course.year ?? '-'}
+                  {t('content.yearNumber').replace('{number}', String(course.year ?? '-'))}
                 </span>
                 <span className="bg-muted/30 text-muted rounded-full px-3 py-1">
-                  Kapitel {course.chapter ?? '-'}
+                  {t('content.chapterNumber').replace('{number}', String(course.chapter ?? '-'))}
                 </span>
               </div>
 
@@ -201,9 +203,9 @@ export function ContentManagement() {
 
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
-                    <h4 className="text-foreground text-sm font-medium">Lessons</h4>
+                    <h4 className="text-foreground text-sm font-medium">{t('content.lessons')}</h4>
                   </div>
-                  <p className="text-muted text-xs">{course.enablersCount} Themen</p>
+                  <p className="text-muted text-xs">{course.enablersCount} {t('content.topics')}</p>
                   {/* <button
                     onClick={() => {
                       setActiveCourseId(course.id);
@@ -220,15 +222,15 @@ export function ContentManagement() {
                     }}
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >
-                    + Hinzufügen
+                    {t('content.add')}
                   </button> */}
                 </div>
 
                 <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-xl p-3">
                   <div className="min-w-0">
-                    <h4 className="text-foreground text-sm font-medium">Use Cases</h4>
+                    <h4 className="text-foreground text-sm font-medium">{t('content.useCases')}</h4>
                   </div>
-                  <p className="text-muted text-xs">{course.useCasesCount} Aufgaben</p>
+                  <p className="text-muted text-xs">{course.useCasesCount} {t('content.tasks')}</p>
                   {/* <button
                     onClick={() => {
                       setActiveCourseId(course.id);
@@ -240,7 +242,7 @@ export function ContentManagement() {
                     }}
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >
-                    + Hinzufügen
+                    {t('content.add')}
                   </button> */}
                 </div>
               </div>
@@ -251,18 +253,18 @@ export function ContentManagement() {
                     onClick={() => router.push(`/trainer/content-management/${course.id}/edit`)}
                     className="text-accent hover:text-accent/90 text-sm font-medium"
                   >
-                    Bearbeiten
+                    {t('content.edit')}
                   </button>
                 </div>
                 <button
                   onClick={async () => {
-                    if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
+                    if (!window.confirm(t('content.deleteModuleConfirm'))) return;
                     try {
                       const res = await fetch(`/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`, { method: 'DELETE' });
-                      if (!res.ok) throw new Error('Fehler beim Löschen');
+                      if (!res.ok) throw new Error(t('content.error.delete'));
                       setCourses(prev => prev.filter(c => c.id !== course.id));
                     } catch (e: any) {
-                      alert(e?.message || 'Unbekannter Fehler');
+                      alert(e?.message || t('content.unknownError'));
                     }
                   }}
                   className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
@@ -289,8 +291,8 @@ export function ContentManagement() {
                   <div className="min-w-0">
                     <h3 className="text-foreground text-2xl font-bold truncate mb-1">{course.title}</h3>
                     <div className="flex flex-wrap gap-2">
-                      <span className="bg-accent rounded-full px-3 py-1 text-xs font-semibold text-foreground">Jahr {course.year ?? '-'}</span>
-                      <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">Kapitel {course.chapter ?? '-'}</span>
+                      <span className="bg-accent rounded-full px-3 py-1 text-xs font-semibold text-foreground">{t('content.yearNumber').replace('{number}', String(course.year ?? '-'))}</span>
+                      <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">{t('content.chapterNumber').replace('{number}', String(course.chapter ?? '-'))}</span>
                       <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">ID {course.id.slice(0, 8)}…</span>
                     </div>
                   </div>
@@ -299,20 +301,20 @@ export function ContentManagement() {
                   <button
                     onClick={() => router.push(`/trainer/content-management/${course.id}/edit`)}
                     className="text-accent hover:text-accent/90 rounded-xl border border-accent/30 px-4 py-2 text-sm font-medium transition-all duration-200 hover:bg-accent/10"
-                  >Bearbeiten</button>
+                  >{t('content.edit')}</button>
                   <button
                     onClick={async () => {
-                      if (!window.confirm('Modul löschen? Dies löscht auch alle enthaltenen Kapitel.')) return;
+                      if (!window.confirm(t('content.deleteModuleConfirm'))) return;
                       try {
                         const res = await fetch(`/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`, { method: 'DELETE' });
-                        if (!res.ok) throw new Error('Fehler beim Löschen');
+                        if (!res.ok) throw new Error(t('content.error.delete'));
                         setCourses(prev => prev.filter(c => c.id !== course.id));
                       } catch (e: any) {
-                        alert(e?.message || 'Unbekannter Fehler');
+                        alert(e?.message || t('content.unknownError'));
                       }
                     }}
                     className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
-                    aria-label="Kurs löschen"
+                    aria-label={t('content.deleteCourse')}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -325,8 +327,8 @@ export function ContentManagement() {
                   <div className="flex items-center gap-3 min-w-0">
                     <FolderOpen className="text-muted h-5 w-5" />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">Lessons</p>
-                      <p className="text-xs text-muted truncate">Themen im Kurs</p>
+                      <p className="text-sm font-semibold text-foreground truncate">{t('content.lessons')}</p>
+                      <p className="text-xs text-muted truncate">{t('content.topicsInCourse')}</p>
                     </div>
                   </div>
                   <span className="text-foreground text-lg font-bold">{course.enablersCount}</span>
@@ -335,8 +337,8 @@ export function ContentManagement() {
                   <div className="flex items-center gap-3 min-w-0">
                     <FileText className="text-muted h-5 w-5" />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">Use Cases</p>
-                      <p className="text-xs text-muted truncate">Aufgaben im Kurs</p>
+                      <p className="text-sm font-semibold text-foreground truncate">{t('content.useCases')}</p>
+                      <p className="text-xs text-muted truncate">{t('content.tasksInCourse')}</p>
                     </div>
                   </div>
                   <span className="text-foreground text-lg font-bold">{course.useCasesCount}</span>
@@ -354,18 +356,18 @@ export function ContentManagement() {
             <BookOpen className="text-muted h-10 w-10" />
           </div>
           <h3 className="text-foreground mb-2 text-xl font-semibold">
-            Keine Kurse gefunden
+            {t('content.noCoursesFound')}
           </h3>
           <p className="text-muted mb-6">
             {searchTerm || selectedYear !== 'all'
-              ? 'Versuchen Sie andere Suchkriterien oder Filter.'
-              : 'Erstellen Sie Ihren ersten Kurs, um zu beginnen.'}
+              ? t('content.tryOtherCriteria')
+              : t('content.createFirst')}
           </p>
           <button
             onClick={() => router.push('/trainer/content-management/new')}
             className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
           >
-            Neuen Kurs erstellen
+            {t('content.createNewCourse')}
           </button>
         </div>
       )}
@@ -376,77 +378,77 @@ export function ContentManagement() {
           <div className="absolute inset-0 bg-black/50" onClick={() => !enSubmitting && setShowAddEnabler(false)} />
           <div className="relative z-10 w-full max-w-2xl rounded-xl border border-border bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Neuen Lesson erstellen</h2>
-              <button className="rounded-md border border-border px-2 py-1 text-sm" onClick={() => !enSubmitting && setShowAddEnabler(false)}>Schließen</button>
+              <h2 className="text-xl font-semibold">{t('content.newLesson')}</h2>
+              <button className="rounded-md border border-border px-2 py-1 text-sm" onClick={() => !enSubmitting && setShowAddEnabler(false)}>{t('common.close')}</button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium">Titel</label>
+                <label className="mb-1 block text-sm font-medium">{t('content.title')}</label>
                 <input value={enTitle} onChange={e => setEnTitle(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Beschreibung</label>
-                <textarea value={enDescription} onChange={e => setEnDescription(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} placeholder="Kurze Beschreibung des Lessons" />
+                <label className="mb-1 block text-sm font-medium">{t('content.description')}</label>
+                <textarea value={enDescription} onChange={e => setEnDescription(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} placeholder={t('content.descriptionPlaceholder')} />
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">PPT-Link</label>
+                  <label className="mb-1 block text-sm font-medium">{t('content.pptLink')}</label>
                   <input value={enPpt} onChange={e => setEnPpt(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder="https://..." />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Video-Link</label>
+                  <label className="mb-1 block text-sm font-medium">{t('content.videoLink')}</label>
                   <input value={enVideo} onChange={e => setEnVideo(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder="https://..." />
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
-                  <input type="number" min={0} value={enDuration} onChange={e => setEnDuration(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder="z.B. 7" />
+                  <label className="mb-1 block text-sm font-medium">{t('content.duration')}</label>
+                  <input type="number" min={0} value={enDuration} onChange={e => setEnDuration(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder={t('content.durationPlaceholder')} />
                 </div>
                 <div className="flex items-end">
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={enActive} onChange={e => setEnActive(e.target.checked)} />
-                    <span>Aktiv</span>
+                    <span>{t('content.active')}</span>
                   </label>
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Szenario</label>
-                <textarea value={enScenario} onChange={e => setEnScenario(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={4} placeholder="Beschreibe hier das Szenario, das der Azubi lösen soll..." />
+                <label className="mb-1 block text-sm font-medium">{t('content.scenario')}</label>
+                <textarea value={enScenario} onChange={e => setEnScenario(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={4} placeholder={t('content.scenarioPlaceholder')} />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Hinweis (für Trainees sichtbar)</label>
-                <textarea value={enHint} onChange={e => setEnHint(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} placeholder="Tipp zur Lösung des Szenarios" />
+                <label className="mb-1 block text-sm font-medium">{t('content.hint')}</label>
+                <textarea value={enHint} onChange={e => setEnHint(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={3} placeholder={t('content.hintPlaceholder')} />
               </div>
               <div className="mt-2">
-                <div className="mb-2 text-sm font-semibold">Quiz-Fragen</div>
+                <div className="mb-2 text-sm font-semibold">{t('content.quizQuestions')}</div>
                 <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1">
                   {enQuestions.map((q, qi) => (
                     <div key={qi} className="rounded-lg border border-border p-3">
                       <div className="flex items-center justify-between">
-                        <div className="font-medium">Frage {qi + 1}</div>
-                        <button type="button" className="text-xs rounded-md border border-border px-2 py-1" onClick={() => setEnQuestions(prev => prev.filter((_, i) => i !== qi))}>Entfernen</button>
+                        <div className="font-medium">{t('content.questionNumber').replace('{number}', String(qi + 1))}</div>
+                        <button type="button" className="text-xs rounded-md border border-border px-2 py-1" onClick={() => setEnQuestions(prev => prev.filter((_, i) => i !== qi))}>{t('content.remove')}</button>
                       </div>
-                      <input className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2" placeholder="Fragetext" value={q.questionText} onChange={e => setEnQuestions(prev => prev.map((x, i) => i === qi ? { ...x, questionText: e.target.value } : x))} />
+                      <input className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2" placeholder={t('content.questionText')} value={q.questionText} onChange={e => setEnQuestions(prev => prev.map((x, i) => i === qi ? { ...x, questionText: e.target.value } : x))} />
                       <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
                         {q.options.map((opt, oi) => (
                           <label key={oi} className="flex items-center gap-2">
                             <input type="radio" name={`correct-${qi}`} checked={q.correctIndex === oi} onChange={() => setEnQuestions(prev => prev.map((x, i) => i === qi ? { ...x, correctIndex: oi } : x))} />
-                            <input className="flex-1 rounded-md border border-border bg-background px-3 py-2" placeholder={`Option ${oi + 1}`} value={opt} onChange={e => setEnQuestions(prev => prev.map((x, i) => i === qi ? { ...x, options: x.options.map((o, j) => j === oi ? e.target.value : o) as [string, string, string, string] } : x))} />
+                            <input className="flex-1 rounded-md border border-border bg-background px-3 py-2" placeholder={t('content.optionNumber').replace('{number}', String(oi + 1))} value={opt} onChange={e => setEnQuestions(prev => prev.map((x, i) => i === qi ? { ...x, options: x.options.map((o, j) => j === oi ? e.target.value : o) as [string, string, string, string] } : x))} />
                           </label>
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
-                <button type="button" className="mt-3 rounded-md border border-border px-3 py-2 text-sm" onClick={() => setEnQuestions(prev => [...prev, { questionText: '', options: ['', '', '', ''], correctIndex: 0 }])}>+ Frage hinzufügen</button>
+                <button type="button" className="mt-3 rounded-md border border-border px-3 py-2 text-sm" onClick={() => setEnQuestions(prev => [...prev, { questionText: '', options: ['', '', '', ''], correctIndex: 0 }])}>{t('content.addQuestion')}</button>
               </div>
               <div className="flex justify-end gap-2">
-                <button className="rounded-md border border-border px-4 py-2" type="button" onClick={() => !enSubmitting && setShowAddEnabler(false)}>Abbrechen</button>
+                <button className="rounded-md border border-border px-4 py-2" type="button" onClick={() => !enSubmitting && setShowAddEnabler(false)}>{t('common.cancel')}</button>
                 <button className="rounded-md bg-primary px-4 py-2 text-foreground disabled:opacity-60" disabled={enSubmitting} onClick={async () => {
-                  if (!profile?.id) { alert('Kein Trainerprofil'); return; }
-                  if (!activeCourseId) { alert('Kein Kurs ausgewählt'); return; }
-                  if (!enTitle.trim()) { alert('Bitte Titel eingeben'); return; }
+                  if (!profile?.id) { alert(t('content.noTrainerProfile')); return; }
+                  if (!activeCourseId) { alert(t('content.noCourseSelected')); return; }
+                  if (!enTitle.trim()) { alert(t('content.enterTitle')); return; }
                   const cleaned = enQuestions
                     .map(q => ({ questionText: q.questionText.trim(), options: q.options.map(o => o.trim()) as [string, string, string, string], correctIndex: Number(q.correctIndex) }))
                     .filter(q => q.questionText && q.options.every(o => o));
@@ -454,15 +456,15 @@ export function ContentManagement() {
                   try {
                     // Create Lesson (active)
                     const res = await fetch(`/api/trainer/courses/${activeCourseId}/enablers?trainerId=${profile.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: enTitle.trim(), descriptionText: enDescription.trim() || undefined, scenarioText: enScenario.trim() || undefined, hintText: enHint.trim() || undefined, pptUrl: enPpt.trim() || undefined, videoUrl: enVideo.trim() || undefined, durationValue: enDuration ? Number(enDuration) : undefined, durationUnit: enDuration ? 'DAYS' : undefined, isActive: enActive }) });
-                    if (!res.ok) throw new Error('Lesson konnte nicht erstellt werden');
+                    if (!res.ok) throw new Error(t('content.error.createLesson'));
                     const data = await res.json();
                     const enablerId = data.enabler?.id;
-                    if (!enablerId) throw new Error('Fehlende Lesson ID');
+                    if (!enablerId) throw new Error(t('content.error.missingLessonId'));
 
                     // Create quiz if defined
                     if (cleaned.length) {
                       const rq = await fetch(`/api/trainer/enablers/${enablerId}/quiz`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: `Quiz: ${enTitle.trim()}`, createdById: profile.id, questions: cleaned }) });
-                      if (!rq.ok) throw new Error('Quiz konnte nicht gespeichert werden');
+                      if (!rq.ok) throw new Error(t('content.error.saveQuiz'));
                     }
 
                     // Refresh course list
@@ -474,11 +476,11 @@ export function ContentManagement() {
                     setActiveCourseId(null);
                     setEnTitle(''); setEnDescription(''); setEnScenario(''); setEnHint(''); setEnPpt(''); setEnVideo(''); setEnDuration(''); setEnActive(false); setEnQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
                   } catch (e: any) {
-                    alert(e?.message || 'Unbekannter Fehler');
+                    alert(e?.message || t('content.unknownError'));
                   } finally {
                     setEnSubmitting(false);
                   }
-                }}>Erstellen</button>
+                }}>{t('content.create')}</button>
               </div>
             </div>
           </div>
@@ -491,37 +493,37 @@ export function ContentManagement() {
           <div className="absolute inset-0 bg-black/50" onClick={() => !ucSubmitting && setShowAddUseCase(false)} />
           <div className="relative z-10 w-full max-w-xl rounded-xl border border-border bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Neuen Use Case erstellen</h2>
-              <button className="rounded-md border border-border px-2 py-1 text-sm" onClick={() => !ucSubmitting && setShowAddUseCase(false)}>Schließen</button>
+              <h2 className="text-xl font-semibold">{t('content.newUseCase')}</h2>
+              <button className="rounded-md border border-border px-2 py-1 text-sm" onClick={() => !ucSubmitting && setShowAddUseCase(false)}>{t('common.close')}</button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium">Titel</label>
+                <label className="mb-1 block text-sm font-medium">{t('content.title')}</label>
                 <input value={ucTitle} onChange={e => setUcTitle(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Beschreibung (erforderlich)</label>
+                <label className="mb-1 block text-sm font-medium">{t('content.descriptionRequired')}</label>
                 <textarea value={ucDesc} onChange={e => setUcDesc(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" rows={4} />
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Dauer (Tage)</label>
-                  <input type="number" min={0} value={ucDuration} onChange={e => setUcDuration(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder="z.B. 14" />
+                  <label className="mb-1 block text-sm font-medium">{t('content.duration')}</label>
+                  <input type="number" min={0} value={ucDuration} onChange={e => setUcDuration(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2" placeholder={t('content.durationPlaceholder')} />
                 </div>
                 <div className="flex items-end">
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={ucActive} onChange={e => setUcActive(e.target.checked)} />
-                    <span>Aktiv</span>
+                    <span>{t('content.active')}</span>
                   </label>
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <button className="rounded-md border border-border px-4 py-2" type="button" onClick={() => !ucSubmitting && setShowAddUseCase(false)}>Abbrechen</button>
+                <button className="rounded-md border border-border px-4 py-2" type="button" onClick={() => !ucSubmitting && setShowAddUseCase(false)}>{t('common.cancel')}</button>
                 <button className="rounded-md bg-primary px-4 py-2 text-foreground disabled:opacity-60" disabled={ucSubmitting} onClick={async () => {
-                  if (!profile?.id) { alert('Kein Trainerprofil'); return; }
-                  if (!activeCourseId) { alert('Kein Kurs ausgewählt'); return; }
-                  if (!ucTitle.trim()) { alert('Bitte Titel eingeben'); return; }
-                  if (!ucDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
+                  if (!profile?.id) { alert(t('content.noTrainerProfile')); return; }
+                  if (!activeCourseId) { alert(t('content.noCourseSelected')); return; }
+                  if (!ucTitle.trim()) { alert(t('content.enterTitle')); return; }
+                  if (!ucDesc.trim()) { alert(t('content.enterDescription')); return; }
                   setUcSubmitting(true);
                   try {
                     const res = await fetch(`/api/trainer/courses/${activeCourseId}/use-cases?trainerId=${profile.id}`, {
@@ -529,7 +531,7 @@ export function ContentManagement() {
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ title: ucTitle.trim(), descriptionText: ucDesc.trim(), durationValue: ucDuration ? Number(ucDuration) : undefined, durationUnit: ucDuration ? 'DAYS' : undefined, isActive: ucActive }),
                     });
-                    if (!res.ok) throw new Error('Use Case konnte nicht erstellt werden');
+                    if (!res.ok) throw new Error(t('content.error.createUseCase'));
 
                     // Refresh list
                     const r = await fetch(`/api/trainer/courses?trainerProfileId=${profile.id}&year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`);
@@ -543,11 +545,11 @@ export function ContentManagement() {
                     setUcDuration('');
                     setUcActive(false);
                   } catch (e: any) {
-                    alert(e?.message || 'Unbekannter Fehler');
+                    alert(e?.message || t('content.unknownError'));
                   } finally {
                     setUcSubmitting(false);
                   }
-                }}>Erstellen</button>
+                }}>{t('content.create')}</button>
               </div>
             </div>
           </div>

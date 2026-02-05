@@ -11,9 +11,11 @@ import Image from 'next/image';
 import { useHai } from './HaiProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronUp } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export function HaiButton() {
     const { viewMode, toggleChat, messages, setViewMode } = useHai();
+    const { t } = useLanguage();
 
     if (viewMode === 'full') return null;
 
@@ -36,7 +38,7 @@ export function HaiButton() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
                         </span>
-                        <span className="text-sm font-medium">Chat fortsetzen</span>
+                        <span className="text-sm font-medium">{t('hai.button.continueChat')}</span>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -58,7 +60,7 @@ export function HaiButton() {
                         : 'bg-[#020b1c] border-2 border-cyan-500/40' // Dark blue bg to match shark gif
                     }
                 `}
-                aria-label={isActive ? 'Schließen' : 'HAI öffnen'}
+                aria-label={isActive ? t('hai.button.close') : t('hai.button.open')}
             >
                 {/* Glow Ring */}
                 {!isActive && (
@@ -118,7 +120,7 @@ export function HaiButton() {
                         transition-all duration-200 pointer-events-none whitespace-nowrap
                         border border-border/50 shadow-md
                     ">
-                        Frag HAI
+                        {t('hai.button.askHai')}
                     </span>
                 )}
             </motion.button>

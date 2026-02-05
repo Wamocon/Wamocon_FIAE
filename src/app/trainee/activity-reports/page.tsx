@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import {
     ClipboardList,
@@ -74,6 +75,7 @@ interface ReportUseCaseEntry {
 
 export default function TraineeActivityReportsPage() {
     const { profile, loading: authLoading } = useAuth();
+    const { t } = useLanguage();
     const router = useRouter();
 
     // State
@@ -119,7 +121,7 @@ export default function TraineeActivityReportsPage() {
             ]);
 
             if (!componentsRes.ok || !useCasesRes.ok || !reportsRes.ok) {
-                throw new Error('Fehler beim Laden der Daten');
+                throw new Error(t('reports.error.loadData'));
             }
 
             const [componentsData, useCasesData, reportsData] = await Promise.all([
@@ -163,13 +165,13 @@ export default function TraineeActivityReportsPage() {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'DRAFT':
-                return <span className="px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground">Entwurf</span>;
+                return <span className="px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground">{t('reports.status.draft')}</span>;
             case 'SUBMITTED':
-                return <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">Eingereicht</span>;
+                return <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">{t('reports.status.submitted')}</span>;
             case 'APPROVED':
-                return <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">Genehmigt</span>;
+                return <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">{t('reports.status.approved')}</span>;
             case 'REJECTED':
-                return <span className="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">Abgelehnt</span>;
+                return <span className="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">{t('reports.status.rejected')}</span>;
             default:
                 return null;
         }
@@ -177,14 +179,14 @@ export default function TraineeActivityReportsPage() {
 
     const handleDeleteReport = async (e: React.MouseEvent, reportId: string) => {
         e.stopPropagation();
-        if (!confirm('Möchten Sie diesen Entwurf wirklich löschen?')) return;
+        if (!confirm(t('reports.deleteConfirm'))) return;
 
         try {
             const res = await fetch(`/api/activity-reports/${reportId}`, {
                 method: 'DELETE',
             });
 
-            if (!res.ok) throw new Error('Fehler beim Löschen');
+            if (!res.ok) throw new Error(t('reports.error.delete'));
 
             setReports(reports.filter(r => r.id !== reportId));
         } catch (err: any) {
@@ -197,7 +199,7 @@ export default function TraineeActivityReportsPage() {
         try {
             // Fetch entries for this report
             const res = await fetch(`/api/activity-reports/${report.id}/entries`);
-            if (!res.ok) throw new Error('Fehler beim Laden der Einträge');
+            if (!res.ok) throw new Error(t('reports.error.loadEntries'));
 
             const data = await res.json();
             setEditingReport(report);
@@ -213,14 +215,14 @@ export default function TraineeActivityReportsPage() {
         try {
             // Fetch entries for this report
             const entriesRes = await fetch(`/api/activity-reports/${report.id}/entries`);
-            if (!entriesRes.ok) throw new Error('Fehler beim Laden der Einträge');
+            if (!entriesRes.ok) throw new Error(t('reports.error.loadEntries'));
             const entriesData = await entriesRes.json();
 
             // Prepare report data for PDF
             const reportData = {
                 id: report.id,
                 traineeId: report.traineeId,
-                traineeName: profile?.full_name || 'Unbekannt',
+                traineeName: profile?.full_name || t('profile.unknown'),
                 traineeEmail: profile?.email || '',
                 ausbildungsjahr: report.ausbildungsjahr,
                 weekNumber: report.weekNumber,
@@ -238,7 +240,7 @@ export default function TraineeActivityReportsPage() {
 
             await generateActivityReportPDF(reportData, useCases, components);
         } catch (err: any) {
-            alert('Fehler beim Erstellen des PDFs: ' + err.message);
+            alert(t('reports.error.pdfGeneration') + ' ' + err.message);
         }
     };
 
@@ -269,9 +271,9 @@ export default function TraineeActivityReportsPage() {
                         <ClipboardList className="h-6 w-6 text-accent" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-foreground">Tätigkeitsnachweis</h1>
+                        <h1 className="text-2xl font-bold text-foreground">{t('reports.title')}</h1>
                         <p className="text-muted-foreground text-sm">
-                            Wöchentliche Ausbildungsnachweise erstellen und verwalten
+                            {t('reports.description')}
                         </p>
                     </div>
                 </div>
@@ -281,7 +283,7 @@ export default function TraineeActivityReportsPage() {
                     className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-colors"
                 >
                     <Plus className="h-4 w-4" />
-                    Neuer Nachweis
+                    {t('reports.new')}
                 </button>
             </div>
 
@@ -298,7 +300,7 @@ export default function TraineeActivityReportsPage() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-foreground">{reports.length}</p>
-                            <p className="text-sm text-muted-foreground">Gesamt</p>
+                            <p className="text-sm text-muted-foreground">{t('reports.total')}</p>
                         </div>
                     </div>
                 </button>
@@ -316,7 +318,7 @@ export default function TraineeActivityReportsPage() {
                             <p className="text-2xl font-bold text-foreground">
                                 {reports.filter(r => r.status === 'SUBMITTED').length}
                             </p>
-                            <p className="text-sm text-muted-foreground">Eingereicht</p>
+                            <p className="text-sm text-muted-foreground">{t('reports.status.submitted')}</p>
                         </div>
                     </div>
                 </button>
@@ -334,7 +336,7 @@ export default function TraineeActivityReportsPage() {
                             <p className="text-2xl font-bold text-foreground">
                                 {reports.filter(r => r.status === 'APPROVED').length}
                             </p>
-                            <p className="text-sm text-muted-foreground">Genehmigt</p>
+                            <p className="text-sm text-muted-foreground">{t('reports.status.approved')}</p>
                         </div>
                     </div>
                 </button>
@@ -343,14 +345,14 @@ export default function TraineeActivityReportsPage() {
             {/* Reports List */}
             <div className="glass-effect rounded-xl overflow-hidden">
                 <div className="p-4 border-b border-border/50 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-foreground">Meine Nachweise</h2>
+                    <h2 className="text-lg font-semibold text-foreground">{t('reports.myReports')}</h2>
                     {filterStatus !== 'ALL' && (
                         <button
                             onClick={() => setFilterStatus('ALL')}
                             className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
                         >
                             <X className="h-3 w-3" />
-                            Filter zurücksetzen
+                            {t('reports.resetFilter')}
                         </button>
                     )}
                 </div>
@@ -358,15 +360,15 @@ export default function TraineeActivityReportsPage() {
                 {reports.length === 0 ? (
                     <div className="p-8 text-center">
                         <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-foreground mb-2">Noch keine Nachweise</h3>
+                        <h3 className="text-lg font-medium text-foreground mb-2">{t('reports.noReports')}</h3>
                         <p className="text-muted-foreground mb-4">
-                            Erstellen Sie Ihren ersten wöchentlichen Tätigkeitsnachweis
+                            {t('reports.createFirstPrompt')}
                         </p>
                         <button
                             onClick={() => setShowCreateModal(true)}
                             className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90"
                         >
-                            Ersten Nachweis erstellen
+                            {t('reports.createFirstReport')}
                         </button>
                     </div>
                 ) : (
@@ -387,10 +389,10 @@ export default function TraineeActivityReportsPage() {
                                             </div>
                                             <div>
                                                 <h3 className="font-medium text-foreground">
-                                                    KW {report.weekNumber} / {report.year}
+                                                    {t('reports.week')} {report.weekNumber} / {report.year}
                                                 </h3>
                                                 <p className="text-sm text-muted-foreground">
-                                                    {report.ausbildungsjahr}. Ausbildungsjahr
+                                                    {report.ausbildungsjahr}. {t('reports.trainingYear')}
                                                 </p>
                                             </div>
                                         </div>
@@ -408,14 +410,14 @@ export default function TraineeActivityReportsPage() {
                                                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
                                             >
                                                 <Edit3 className="h-3 w-3" />
-                                                Bearbeiten
+                                                {t('common.edit')}
                                             </button>
                                             <button
                                                 onClick={(e) => handleDeleteReport(e, report.id)}
                                                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
                                             >
                                                 <Trash2 className="h-3 w-3" />
-                                                Löschen
+                                                {t('common.delete')}
                                             </button>
                                         </div>
                                     )}
@@ -428,7 +430,7 @@ export default function TraineeActivityReportsPage() {
                                                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors"
                                             >
                                                 <Download className="h-3 w-3" />
-                                                PDF herunterladen
+                                                {t('reports.downloadPdf')}
                                             </button>
                                         </div>
                                     )}
@@ -437,7 +439,7 @@ export default function TraineeActivityReportsPage() {
                                         <div className="mt-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
                                             <div className="flex items-center gap-2 text-destructive text-sm">
                                                 <AlertTriangle className="h-4 w-4" />
-                                                <span className="font-medium">Feedback:</span>
+                                                <span className="font-medium">{t('reports.feedback')}</span>
                                                 {report.reviewerFeedback}
                                             </div>
                                         </div>
@@ -515,6 +517,7 @@ function CreateReportModal({
     onClose: () => void;
     onCreated: () => void;
 }) {
+    const { t } = useLanguage();
     const [weekNumber, setWeekNumber] = useState(currentWeek);
     const [year, setYear] = useState(currentYear);
     const [ausbildungsjahr, setAusbildungsjahr] = useState(initialReport?.ausbildungsjahr || 1);
@@ -678,7 +681,7 @@ function CreateReportModal({
 
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.error || 'Fehler beim Speichern');
+                throw new Error(data.error || t('reports.error.save'));
             }
 
             onCreated();
@@ -696,10 +699,10 @@ function CreateReportModal({
                 <div className="p-6 border-b border-border/50 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-foreground">
-                            {initialReport ? 'Tätigkeitsnachweis bearbeiten' : 'Neuer Tätigkeitsnachweis'}
+                            {initialReport ? t('reports.modal.edit') : t('reports.modal.new')}
                         </h2>
                         <p className="text-sm text-muted-foreground">
-                            Wählen Sie Komponenten und Use Cases aus dem Ausbildungsrahmenplan
+                            {t('reports.modal.instructions')}
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition-colors">
@@ -712,14 +715,14 @@ function CreateReportModal({
                     {duplicateExists && (
                         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-yellow-500 text-sm flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                            Ein Nachweis für KW {weekNumber}/{year} existiert bereits. Bitte wählen Sie eine andere Kalenderwoche.
+                            {t('reports.modal.duplicate').replace('{week}', String(weekNumber)).replace('{year}', String(year))}
                         </div>
                     )}
 
                     {hasOverbooking && (
                         <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-destructive text-sm flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                            Eine oder mehrere Tätigkeiten überschreiten die verfügbaren Stunden. Bitte korrigieren Sie die IST-Stunden.
+                            {t('reports.modal.overbooking')}
                         </div>
                     )}
 
@@ -732,7 +735,7 @@ function CreateReportModal({
                     {/* Period Selection */}
                     <div className="grid grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Kalenderwoche</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('reports.calendarWeek')}</label>
                             <input
                                 type="number"
                                 min={1}
@@ -743,7 +746,7 @@ function CreateReportModal({
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Jahr</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('reports.yearLabel')}</label>
                             <input
                                 type="number"
                                 min={2020}
@@ -760,7 +763,7 @@ function CreateReportModal({
                     {/* Selected Entries */}
                     {entries.length > 0 && (
                         <div className="space-y-3">
-                            <h3 className="text-lg font-semibold text-foreground">Ausgewählte Tätigkeiten</h3>
+                            <h3 className="text-lg font-semibold text-foreground">{t('reports.selectedActivities')}</h3>
                             {entries.map(entry => {
                                 const useCase = getUseCaseById(entry.useCaseId);
                                 const component = useCase ? getComponentById(useCase.componentId) : null;
@@ -790,11 +793,11 @@ function CreateReportModal({
 
                                         <div className="grid grid-cols-3 gap-4">
                                             <div>
-                                                <label className="text-xs text-muted-foreground">Plan (Sollzeit)</label>
-                                                <p className="font-medium text-foreground">{useCase?.plannedHours} Std</p>
+                                                <label className="text-xs text-muted-foreground">{t('reports.plannedHours')}</label>
+                                                <p className="font-medium text-foreground">{useCase?.plannedHours} {t('reports.hours')}</p>
                                             </div>
                                             <div>
-                                                <label className="text-xs text-muted-foreground block mb-1">IST-Stunden</label>
+                                                <label className="text-xs text-muted-foreground block mb-1">{t('reports.actualHours')}</label>
                                                 <input
                                                     type="number"
                                                     min={0}
@@ -806,12 +809,12 @@ function CreateReportModal({
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-xs text-muted-foreground block mb-1">Notizen</label>
+                                                <label className="text-xs text-muted-foreground block mb-1">{t('reports.notesLabel')}</label>
                                                 <input
                                                     type="text"
                                                     value={entry.notes}
                                                     onChange={e => updateEntry(entry.useCaseId, 'notes', e.target.value)}
-                                                    placeholder="Optional"
+                                                    placeholder={t('reports.optional')}
                                                     className="w-full px-3 py-1.5 bg-background border border-border rounded text-foreground"
                                                 />
                                             </div>
@@ -820,7 +823,7 @@ function CreateReportModal({
                                         {isOverbooked && (
                                             <div className="mt-2 flex items-center gap-2 text-yellow-500 text-sm">
                                                 <AlertTriangle className="h-4 w-4" />
-                                                <span>Überbucht: {(entry.actualHours - (useCase?.plannedHours || 0)).toFixed(1)} Std über Sollzeit</span>
+                                                <span>{t('reports.overbookedDetails').replace('{hours}', (entry.actualHours - (useCase?.plannedHours || 0)).toFixed(1))}</span>
                                             </div>
                                         )}
                                     </div>
@@ -831,20 +834,20 @@ function CreateReportModal({
                             <div className="p-4 bg-muted/50 rounded-lg flex items-center justify-between">
                                 <div className="flex items-center gap-6">
                                     <div>
-                                        <p className="text-xs text-muted-foreground">Plan Gesamt</p>
-                                        <p className="text-lg font-bold text-foreground">{totalPlannedHours} Std</p>
+                                        <p className="text-xs text-muted-foreground">{t('reports.totalPlanned')}</p>
+                                        <p className="text-lg font-bold text-foreground">{totalPlannedHours} {t('reports.hours')}</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-muted-foreground">IST Gesamt</p>
+                                        <p className="text-xs text-muted-foreground">{t('reports.totalActual')}</p>
                                         <p className={`text-lg font-bold ${totalActualHours > totalPlannedHours ? 'text-yellow-500' : 'text-foreground'}`}>
-                                            {totalActualHours} Std
+                                            {totalActualHours} {t('reports.hours')}
                                         </p>
                                     </div>
                                 </div>
                                 {totalActualHours > totalPlannedHours && (
                                     <div className="flex items-center gap-2 text-yellow-500">
                                         <AlertTriangle className="h-5 w-5" />
-                                        <span className="font-medium">+{(totalActualHours - totalPlannedHours).toFixed(1)} Std</span>
+                                        <span className="font-medium">+{(totalActualHours - totalPlannedHours).toFixed(1)} {t('reports.hours')}</span>
                                     </div>
                                 )}
                             </div>
@@ -853,12 +856,12 @@ function CreateReportModal({
 
                     {/* Component/Use Case Selector */}
                     <div className="space-y-3">
-                        <h3 className="text-lg font-semibold text-foreground">Tätigkeit hinzufügen</h3>
+                        <h3 className="text-lg font-semibold text-foreground">{t('reports.addActivity')}</h3>
                         <div className="space-y-2 max-h-96 overflow-y-auto border border-border rounded-lg p-2">
 
                             {/* Section 1: 1. - 18. Monat */}
                             <div className="mb-4">
-                                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 px-2">1. bis 18. Ausbildungsmonat</h4>
+                                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 px-2">{t('reports.monthRange1')}</h4>
                                 {components
                                     .filter(c => c.trainingYear === 1)
                                     .sort((a, b) => a.orderIndex - b.orderIndex)
@@ -878,7 +881,7 @@ function CreateReportModal({
 
                             {/* Section 2: 19. - 36. Monat */}
                             <div className="mb-4">
-                                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 px-2">19. bis 36. Ausbildungsmonat</h4>
+                                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 px-2">{t('reports.monthRange2')}</h4>
                                 {components
                                     .filter(c => c.trainingYear === 2)
                                     .sort((a, b) => a.orderIndex - b.orderIndex)
@@ -898,7 +901,7 @@ function CreateReportModal({
 
                             {/* Section 3: Integrative */}
                             <div className="mb-4">
-                                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 px-2">Integrative Fertigkeiten (Gesamte Ausbildung)</h4>
+                                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 px-2">{t('reports.monthRange3')}</h4>
                                 {components
                                     .filter(c => c.trainingYear === 3 || !c.trainingYear) // Fallback for any others
                                     .sort((a, b) => a.orderIndex - b.orderIndex)
@@ -926,7 +929,7 @@ function CreateReportModal({
                         onClick={onClose}
                         className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
                     >
-                        Abbrechen
+                        {t('common.cancel')}
                     </button>
                     <div className="flex items-center gap-3">
                         <button
@@ -935,7 +938,7 @@ function CreateReportModal({
                             className="flex items-center gap-2 px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 disabled:opacity-50 transition-colors"
                         >
                             <Save className="h-4 w-4" />
-                            Als Entwurf speichern
+                            {t('reports.saveAsDraft')}
                         </button>
                         <button
                             onClick={() => handleSave(true)}
@@ -943,7 +946,7 @@ function CreateReportModal({
                             className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 disabled:opacity-50 transition-colors"
                         >
                             <Send className="h-4 w-4" />
-                            Einreichen
+                            {t('common.submit')}
                         </button>
                     </div>
                 </div>
@@ -968,6 +971,7 @@ function ReportDetailModal({
     onClose: () => void;
     onUpdated: () => void;
 }) {
+    const { t } = useLanguage();
     const [entries, setEntries] = useState<ReportUseCaseEntry[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -999,10 +1003,10 @@ function ReportDetailModal({
                 <div className="p-6 border-b border-border/50 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-foreground">
-                            KW {report.weekNumber} / {report.year}
+                            {t('reports.week')} {report.weekNumber} / {report.year}
                         </h2>
                         <p className="text-sm text-muted-foreground">
-                            {report.ausbildungsjahr}. Ausbildungsjahr
+                            {report.ausbildungsjahr}. {t('reports.trainingYear')}
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition-colors">
@@ -1018,7 +1022,7 @@ function ReportDetailModal({
                         </div>
                     ) : entries.length === 0 ? (
                         <p className="text-center text-muted-foreground py-12">
-                            Keine Einträge vorhanden
+                            {t('reports.noEntries')}
                         </p>
                     ) : (
                         <div className="space-y-4">
@@ -1040,27 +1044,27 @@ function ReportDetailModal({
 
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <p className="text-xs text-muted-foreground">Plan (Sollzeit)</p>
-                                                <p className="font-medium text-foreground">{entry.plannedHours} Std</p>
+                                                <p className="text-xs text-muted-foreground">{t('reports.plannedHours')}</p>
+                                                <p className="font-medium text-foreground">{entry.plannedHours} {t('reports.hours')}</p>
                                             </div>
                                             <div>
-                                                <p className="text-xs text-muted-foreground">IST-Stunden</p>
+                                                <p className="text-xs text-muted-foreground">{t('reports.actualHours')}</p>
                                                 <p className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-foreground'}`}>
-                                                    {entry.actualHours} Std
+                                                    {entry.actualHours} {t('reports.hours')}
                                                 </p>
                                             </div>
                                         </div>
 
                                         {entry.notes && (
                                             <p className="mt-2 text-sm text-muted-foreground">
-                                                Notizen: {entry.notes}
+                                                {t('reports.notesLabel')}: {entry.notes}
                                             </p>
                                         )}
 
                                         {entry.isOverbooked && (
                                             <div className="mt-2 flex items-center gap-2 text-yellow-500 text-sm">
                                                 <AlertTriangle className="h-4 w-4" />
-                                                <span>Überbucht</span>
+                                                <span>{t('reports.overbooked')}</span>
                                             </div>
                                         )}
                                     </div>
@@ -1071,7 +1075,7 @@ function ReportDetailModal({
 
                     {report.reviewerFeedback && (
                         <div className="mt-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
-                            <h4 className="font-medium text-destructive mb-2">Feedback vom Ausbilder</h4>
+                            <h4 className="font-medium text-destructive mb-2">{t('reports.trainerFeedback').replace(':', '')}</h4>
                             <p className="text-sm text-destructive/80">{report.reviewerFeedback}</p>
                         </div>
                     )}
@@ -1083,7 +1087,7 @@ function ReportDetailModal({
                         onClick={onClose}
                         className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors"
                     >
-                        Schließen
+                        {t('common.close')}
                     </button>
                 </div>
             </div>
@@ -1102,6 +1106,7 @@ interface ComponentItemProps {
 }
 
 function ComponentItem({ component, isExpanded, onToggle, useCases, entries, onAddEntry, useCaseHours }: ComponentItemProps) {
+    const { t } = useLanguage();
     return (
         <div className="border-b border-border/50 last:border-b-0">
             <button
@@ -1116,7 +1121,7 @@ function ComponentItem({ component, isExpanded, onToggle, useCases, entries, onA
                 <div className="flex-1">
                     <p className="font-medium text-foreground text-sm">{component.title}</p>
                     <p className="text-xs text-muted-foreground">
-                        {component.code} • {component.totalHours} Std gesamt
+                        {component.code} • {component.totalHours} {t('reports.hoursTotal')}
                     </p>
                 </div>
             </button>
@@ -1129,7 +1134,7 @@ function ComponentItem({ component, isExpanded, onToggle, useCases, entries, onA
                             const isSelected = entries.some(e => e.useCaseId === useCase.id);
                             const ucHours = useCaseHours?.[useCase.id];
                             const isExhausted = ucHours && ucHours.remainingHours <= 0;
-                            const remainingText = ucHours ? `${ucHours.remainingHours} Std übrig` : '';
+                            const remainingText = ucHours ? `${ucHours.remainingHours} ${t('reports.hoursRemaining')}` : '';
 
                             return (
                                 <button
@@ -1150,13 +1155,13 @@ function ComponentItem({ component, isExpanded, onToggle, useCases, entries, onA
                                         </span>
                                         <span className="flex items-center gap-2">
                                             {isExhausted ? (
-                                                <span className="text-xs bg-destructive/20 text-destructive px-2 py-0.5 rounded">Erschöpft</span>
+                                                <span className="text-xs bg-destructive/20 text-destructive px-2 py-0.5 rounded">{t('reports.exhausted')}</span>
                                             ) : ucHours ? (
                                                 <span className={`text-xs ${ucHours.remainingHours <= 10 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
                                                     {remainingText}
                                                 </span>
                                             ) : (
-                                                <span className="text-muted-foreground text-xs">({useCase.plannedHours} Std)</span>
+                                                <span className="text-muted-foreground text-xs">({useCase.plannedHours} {t('reports.hours')})</span>
                                             )}
                                         </span>
                                     </div>

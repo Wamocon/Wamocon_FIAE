@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { ChevronLeft } from 'lucide-react';
 
 export default function TraineeUseCaseDetailPage() {
   const params = useParams<{ useCaseId: string }>();
   const useCaseId = params?.useCaseId as string;
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [useCase, setUseCase] = useState<{
@@ -38,7 +40,7 @@ export default function TraineeUseCaseDetailPage() {
       setError(null);
       try {
         const r = await fetch(`/api/trainee/use-cases/${useCaseId}?traineeId=${profile.id}`, { cache: 'no-store' });
-        if (!r.ok) throw new Error('Use Case konnte nicht geladen werden');
+        if (!r.ok) throw new Error(t('useCase.loadError'));
         const data = await r.json();
         setUseCase(data.useCase);
         if (data.submission) {
@@ -59,7 +61,7 @@ export default function TraineeUseCaseDetailPage() {
         }
 
       } catch (e: any) {
-        setError(e?.message || 'Unbekannter Fehler');
+        setError(e?.message || t('error.unknown'));
       } finally {
         setLoading(false);
       }
@@ -68,7 +70,7 @@ export default function TraineeUseCaseDetailPage() {
   }, [profile?.id, useCaseId]);
 
   const submit = async () => {
-    if (!profile?.id) return setError('Profil fehlt');
+    if (!profile?.id) return setError(t('useCase.profileMissing'));
     setSaving(true);
     setSuccess(null);
     try {
@@ -78,19 +80,19 @@ export default function TraineeUseCaseDetailPage() {
         links: links.filter((l) => l.url && l.url.trim()),
       };
       const r = await fetch(`/api/trainee/use-cases/${useCaseId}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
-      setSuccess('Abgabe gespeichert. Status: Ausstehend');
+      if (!r.ok) throw new Error(t('useCase.submitFailed'));
+      setSuccess(t('useCase.submitSuccess'));
     } catch (e: any) {
-      setError(e?.message || 'Unbekannter Fehler');
+      setError(e?.message || t('error.unknown'));
     } finally {
       setSaving(false);
     }
   };
 
-  if (!profile) return <div className="p-6">Bitte anmelden…</div>;
-  if (loading) return <div className="p-6">Lade…</div>;
+  if (!profile) return <div className="p-6">{t('courses.loginPrompt')}</div>;
+  if (loading) return <div className="p-6">{t('common.loading')}</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
-  if (!useCase) return <div className="p-6">Nicht gefunden</div>;
+  if (!useCase) return <div className="p-6">{t('common.notFound')}</div>;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -138,7 +140,7 @@ export default function TraineeUseCaseDetailPage() {
               const total = Number(useCase.durationValue || 0);
               const left = Math.max(0, total - daysElapsed);
               const dueDate = new Date(started + total * 24 * 60 * 60 * 1000);
-              return <span className="text-muted-foreground">Restzeit: <span className={left < 3 ? 'text-red-400 font-bold' : 'text-foreground'}>{left} Tage</span> • Fällig am {dueDate.toLocaleDateString()}</span>;
+              return <span className="text-muted-foreground">{t('useCase.timeRemaining')} <span className={left < 3 ? 'text-red-400 font-bold' : 'text-foreground'}>{left} {t('useCase.days')}</span> • {t('useCase.dueOn')} {dueDate.toLocaleDateString()}</span>;
             })()}
           </div>
         )}
@@ -149,26 +151,26 @@ export default function TraineeUseCaseDetailPage() {
       <div className="space-y-4 rounded-3xl border border-accent/30 bg-card p-5">
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Deine Lösung / Beschreibung</label>
+          <label className="mb-1 block text-sm font-medium">{t('useCase.submission')}</label>
           <textarea value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground" rows={6} />
         </div>
         <div className="space-y-2">
-          <div className="text-sm font-medium">Links zu deiner Arbeit</div>
+          <div className="text-sm font-medium">{t('useCase.links')}</div>
           {links.map((l, i) => (
             <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <input className="rounded-xl border border-accent/30 bg-muted px-3 py-2 md:col-span-2 text-foreground" placeholder="https://github.com/... oder https://1drv.ms/..." value={l.url} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))} />
-              <input className="rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground" placeholder="Beschreibung (optional)" value={l.description || ''} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} />
+              <input className="rounded-xl border border-accent/30 bg-muted px-3 py-2 md:col-span-2 text-foreground" placeholder={t('useCase.linkPlaceholder')} value={l.url} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))} />
+              <input className="rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground" placeholder={t('useCase.descriptionPlaceholder')} value={l.description || ''} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} />
             </div>
           ))}
           <div className="flex gap-2">
-            <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => [...prev, { url: '', description: '' }])}>+ Link hinzufügen</button>
+            <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => [...prev, { url: '', description: '' }])}>+ {t('useCase.addLink')}</button>
             {links.length > 1 && (
-              <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => prev.slice(0, -1))}>Letzten Link entfernen</button>
+              <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => prev.slice(0, -1))}>{t('useCase.removeLastLink')}</button>
             )}
           </div>
         </div>
         <div className="flex justify-end">
-          <button disabled={saving} onClick={submit} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-60">Abgeben</button>
+          <button disabled={saving} onClick={submit} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-60">{t('useCase.submit')}</button>
         </div>
       </div>
 
@@ -177,7 +179,7 @@ export default function TraineeUseCaseDetailPage() {
         <div className="flex justify-center mt-8 pb-8">
           <Link href={`/trainee/modules/${useCase.courseId}`} className="text-muted-foreground hover:text-accent transition-colors flex items-center gap-2 text-sm font-medium">
             <ChevronLeft className="h-4 w-4" />
-            Zurück zu {useCase.courseTitle || 'Modul'}
+            {t('useCase.backToModule')} {useCase.courseTitle || 'Modul'}
           </Link>
         </div>
       )}

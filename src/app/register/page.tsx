@@ -5,8 +5,10 @@ import { GraduationCap, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function RegisterPage() {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -19,11 +21,11 @@ export default function RegisterPage() {
 
     // Basic validation
     if (!formData.email || !formData.password) {
-      setError('Bitte geben Sie eine E-Mail-Adresse und ein Passwort ein.');
+      setError(t('register.emailPasswordRequired'));
       return;
     }
     if (formData.password.length < 6) {
-      setError('Passwort muss mindestens 6 Zeichen lang sein.');
+      setError(t('register.passwordMinLength'));
       return;
     }
 
@@ -44,7 +46,7 @@ export default function RegisterPage() {
       const body = await resp.json();
       if (!resp.ok) {
         console.error('Server registration failed', body);
-        setError(body?.error || 'Registrierung fehlgeschlagen');
+        setError(body?.error || t('register.failed'));
         return;
       }
 
@@ -52,7 +54,7 @@ export default function RegisterPage() {
     } catch (err: unknown) {
       console.error('Registration failed:', err);
       setError(
-        err instanceof Error ? err.message : 'Registrierung fehlgeschlagen'
+        err instanceof Error ? err.message : t('register.failed')
       );
     } finally {
       setIsLoading(false);
@@ -77,16 +79,16 @@ export default function RegisterPage() {
             <GraduationCap className="text-primary-foreground h-8 w-8" />
           </div>
           <h1 className="text-foreground from-accent to-primary mb-2 bg-gradient-to-r bg-clip-text text-4xl font-bold text-transparent">
-            FIAE-Lernplattform
+            {t('landing.platformName')}
           </h1>
           <p className="text-muted text-lg">
-            Registrieren Sie sich für die FIAE-Lernplattform
+            {t('register.title')}
           </p>
           <button
             onClick={() => router.push('/')}
             className="text-accent hover:text-accent/80 mt-2 text-sm underline"
           >
-            ← Zurück zur Startseite
+            {t('register.backToHome')}
           </button>
         </div>
 
@@ -97,7 +99,7 @@ export default function RegisterPage() {
                 htmlFor="email"
                 className="text-foreground mb-2 block text-sm font-medium"
               >
-                E-Mail-Adresse *
+                {t('register.emailLabel')}
               </label>
               <input
                 id="email"
@@ -106,7 +108,7 @@ export default function RegisterPage() {
                 autoComplete="email"
                 required
                 className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border px-4 py-3 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
-                placeholder="ihre.email@beispiel.de"
+                placeholder={t('register.emailPlaceholder')}
                 value={formData.email}
                 onChange={e => handleInputChange('email', e.target.value)}
               />
@@ -117,7 +119,7 @@ export default function RegisterPage() {
                 htmlFor="password"
                 className="text-foreground mb-2 block text-sm font-medium"
               >
-                Passwort *
+                {t('register.passwordLabel')}
               </label>
               <div className="relative">
                 <input
@@ -161,21 +163,21 @@ export default function RegisterPage() {
               {isLoading ? (
                 <div className="flex items-center justify-center">
                   <div className="border-primary-foreground/30 border-t-primary-foreground mr-2 h-5 w-5 animate-spin rounded-full border-2"></div>
-                  Registrieren...
+                  {t('register.registering')}
                 </div>
               ) : (
-                'Konto erstellen'
+                t('register.createAccount')
               )}
             </button>
 
             <div className="text-center">
               <p className="text-muted-foreground">
-                Bereits ein Konto?{' '}
+                {t('register.alreadyHaveAccount')}{' '}
                 <Link
                   href="/login"
                   className="font-medium text-red-400 hover:text-red-300"
                 >
-                  Hier anmelden
+                  {t('register.loginHere')}
                 </Link>
               </p>
             </div>

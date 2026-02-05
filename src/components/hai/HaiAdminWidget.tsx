@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { Database, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function HaiAdminWidget() {
     const { user } = useAuth();
+    const { t } = useLanguage();
     const [isIndexing, setIsIndexing] = useState(false);
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [message, setMessage] = useState('');
@@ -27,14 +29,14 @@ export default function HaiAdminWidget() {
 
             if (response.ok) {
                 setStatus('success');
-                setMessage(`Erfolgreich indexiert: ${data.result.totalChunksIndexed} Chunks. (Verarbeitet: ${data.result.enablersProcessed} Enablers, ${data.result.documentsProcessed} Docs)`);
+                setMessage(t('hai.admin.indexSuccess').replace('{chunks}', data.result.totalChunksIndexed).replace('{enablers}', data.result.enablersProcessed).replace('{docs}', data.result.documentsProcessed));
             } else {
                 setStatus('error');
-                setMessage(data.error || 'Fehler beim Indexieren.');
+                setMessage(data.error || t('hai.admin.indexError'));
             }
         } catch (error) {
             setStatus('error');
-            setMessage('Netzwerkfehler beim Indexieren.');
+            setMessage(t('hai.admin.networkError'));
         } finally {
             setIsIndexing(false);
         }
@@ -44,7 +46,7 @@ export default function HaiAdminWidget() {
         <div className="glass-effect rounded-2xl p-6 shadow-lg bg-gradient-to-br from-[#0f1117]/80 to-[#161b22]/80 border border-white/5">
             <h3 className="text-white mb-6 flex items-center text-xl font-bold gap-3">
                 <span className="text-2xl filter drop-shadow-md">🦈</span>
-                HAI Content Management
+                {t('hai.admin.title')}
             </h3>
 
             <div className="bg-black/20 rounded-xl p-6 border border-white/5">
@@ -52,11 +54,10 @@ export default function HaiAdminWidget() {
                     <div>
                         <h4 className="text-white font-semibold mb-2 flex items-center gap-2">
                             <Database className="w-5 h-5 text-cyan-400" />
-                            Wissensdatenbank
+                            {t('hai.admin.knowledgeBase')}
                         </h4>
                         <p className="text-gray-400 text-sm leading-relaxed max-w-md">
-                            Aktualisiere das Wissen von HAI.ai basierend auf den neuesten Enablers und PDFs.
-                            Dies erstellt neue Embeddings für die Suche.
+                            {t('hai.admin.description')}
                         </p>
                     </div>
 
@@ -74,12 +75,12 @@ export default function HaiAdminWidget() {
                         {isIndexing ? (
                             <>
                                 <RefreshCw className="w-4 h-4 animate-spin" />
-                                Indexiere...
+                                {t('hai.admin.indexing')}
                             </>
                         ) : (
                             <>
                                 <RefreshCw className="w-4 h-4" />
-                                Jetzt Indexieren
+                                {t('hai.admin.indexNow')}
                             </>
                         )}
                     </button>

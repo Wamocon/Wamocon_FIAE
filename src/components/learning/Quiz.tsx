@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Award, Target } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import type { QuizWithQuestions } from '@/db/queries';
 
 interface QuizProps {
@@ -11,6 +12,7 @@ interface QuizProps {
 
 export default function Quiz({ quiz }: QuizProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<
     Record<string, number>
@@ -124,27 +126,27 @@ export default function Quiz({ quiz }: QuizProps) {
             )}
 
             <h1 className="text-foreground mb-4 text-4xl font-bold">
-              {passed ? 'Quiz bestanden! 🎉' : 'Quiz nicht bestanden 😔'}
+              {passed ? t('quiz.passed') : t('quiz.failed')}
             </h1>
 
             <p className="text-muted-foreground mb-6 text-xl">
-              Dein Ergebnis:{' '}
+              {t('quiz.yourResult')}{' '}
               <span className="text-accent font-bold">{score}%</span>
             </p>
 
             <div className="bg-muted/30 mb-8 rounded-2xl p-6">
               <h3 className="text-foreground mb-4 text-lg font-semibold">
-                Zusammenfassung
+                {t('quiz.summary')}
               </h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="bg-background/50 rounded-xl p-3 text-center">
-                  <p className="text-muted">Richtige Antworten</p>
+                  <p className="text-muted">{t('quiz.correctAnswers')}</p>
                   <p className="text-2xl font-bold text-green-600">
                     {Math.round((score / 100) * quizData.totalQuestions)}
                   </p>
                 </div>
                 <div className="bg-background/50 rounded-xl p-3 text-center">
-                  <p className="text-muted">Fragen insgesamt</p>
+                  <p className="text-muted">{t('quiz.totalQuestions')}</p>
                   <p className="text-accent text-2xl font-bold">
                     {quizData.totalQuestions}
                   </p>
@@ -158,14 +160,14 @@ export default function Quiz({ quiz }: QuizProps) {
               onClick={() => router.push('/trainee/dashboard')}
               className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
             >
-              Zum Dashboard
+              {t('quiz.toDashboard')}
             </button>
             {!passed && (
               <button
                 onClick={resetQuiz}
                 className="text-muted bg-muted/30 hover:bg-muted/50 rounded-2xl px-6 py-3 font-medium transition-all duration-200"
               >
-                Erneut versuchen
+                {t('quiz.retryAgain')}
               </button>
             )}
           </div>
@@ -186,7 +188,7 @@ export default function Quiz({ quiz }: QuizProps) {
             onClick={handlePrevQuestion}
             className="text-muted hover:text-foreground hover:bg-accent/20 rounded-xl p-2 transition-all duration-200 disabled:opacity-50"
             disabled={currentQuestion === 0}
-            aria-label="Vorherige Frage"
+            aria-label={t('quiz.previousQuestion')}
           >
             <ArrowLeft className="h-6 w-6" />
           </button>
@@ -200,7 +202,7 @@ export default function Quiz({ quiz }: QuizProps) {
             onClick={handleNextQuestion}
             className="text-muted hover:text-foreground hover:bg-accent/20 rounded-xl p-2 transition-all duration-200 disabled:opacity-50"
             disabled={!isAnswerSelected && currentQuestion !== quizData.totalQuestions - 1}
-            aria-label={currentQuestion === quizData.totalQuestions - 1 ? 'Abschließen' : 'Nächste Frage'}
+            aria-label={currentQuestion === quizData.totalQuestions - 1 ? t('quiz.complete') : t('quiz.nextQuestion')}
           >
             <ArrowRight className="h-6 w-6" />
           </button>
@@ -216,9 +218,13 @@ export default function Quiz({ quiz }: QuizProps) {
 
         <div className="text-muted flex items-center justify-between text-sm">
           <span>
-            Frage {currentQuestion + 1} von {quizData.totalQuestions}
+            {t('quiz.questionOf')
+              .replace('{current}', String(currentQuestion + 1))
+              .replace('{total}', String(quizData.totalQuestions))}
           </span>
-          <span>{Math.round(getProgressPercentage())}% abgeschlossen</span>
+          <span>
+            {t('quiz.completed').replace('{percent}', String(Math.round(getProgressPercentage())))}
+          </span>
         </div>
       </div>
 
@@ -230,7 +236,7 @@ export default function Quiz({ quiz }: QuizProps) {
           </div>
           <div className="text-center">
             <p className="text-sm font-medium text-red-600">
-              Verbleibende Zeit
+              {t('quiz.timeRemaining')}
             </p>
             <p className="text-2xl font-bold text-red-700">
               {formatTime(timeLeft)}
@@ -243,7 +249,7 @@ export default function Quiz({ quiz }: QuizProps) {
       <div className="rounded-3xl border glass-effect border-accent/30 p-8 shadow-lg">
         <div className="mb-6">
           <h3 className="mb-2 text-xl font-bold text-foreground">
-            Frage {currentQuestion + 1}
+            {t('quiz.questionNumber').replace('{number}', String(currentQuestion + 1))}
           </h3>
           <p className="text-lg text-foreground">{currentQ.question}</p>
         </div>
@@ -287,7 +293,7 @@ export default function Quiz({ quiz }: QuizProps) {
             disabled={currentQuestion === 0}
             className="text-foreground rounded-2xl px-6 py-3 font-medium transition-all duration-200 disabled:opacity-50"
           >
-            Vorherige Frage
+            {t('quiz.previousQuestion')}
           </button>
 
           <button
@@ -295,7 +301,7 @@ export default function Quiz({ quiz }: QuizProps) {
             disabled={!isAnswerSelected}
             className="min-w-[160px] flex items-center justify-center rounded-2xl bg-red-600 px-6 py-3 font-semibold text-foreground shadow-lg transition duration-200 hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {currentQuestion === quizData.totalQuestions - 1 ? 'Abschließen' : 'Nächste Frage'}
+            {currentQuestion === quizData.totalQuestions - 1 ? t('quiz.complete') : t('quiz.nextQuestion')}
           </button>
         </div>
       </div>
