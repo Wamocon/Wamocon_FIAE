@@ -27,7 +27,7 @@ export class ClaudeChatProvider implements ChatProvider {
     private client: Anthropic | null = null;
     private modelName: string;
 
-    constructor(apiKey: string | undefined, modelName: string = 'claude-haiku-4-5-20250929') {
+    constructor(apiKey: string | undefined, modelName: string = 'claude-haiku-4-5-20251001') {
         this.modelName = modelName;
 
         if (apiKey) {
@@ -62,7 +62,7 @@ export class ClaudeChatProvider implements ChatProvider {
                 model: this.modelName,
                 max_tokens: options.maxOutputTokens ?? 2048,
                 temperature: options.temperature ?? 0.7,
-                top_p: options.topP ?? 0.9,
+                // Note: Claude 4.5 models don't allow both temperature and top_p
                 system: systemPrompt,
                 messages: claudeMessages,
             });
@@ -108,7 +108,7 @@ export class ClaudeChatProvider implements ChatProvider {
             model: this.modelName,
             max_tokens: options.maxOutputTokens ?? 2048,
             temperature: options.temperature ?? 0.7,
-            top_p: options.topP ?? 0.9,
+            // Note: Claude 4.5 models don't allow both temperature and top_p
             system: systemPrompt,
             messages: claudeMessages,
         });

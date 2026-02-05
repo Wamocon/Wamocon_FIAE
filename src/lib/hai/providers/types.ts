@@ -138,7 +138,7 @@ export function loadProviderConfig(): ProviderConfig {
 
         claude: {
             apiKey: process.env.ANTHROPIC_API_KEY,
-            model: process.env.HAI_CLAUDE_MODEL || 'claude-haiku-4-5-20250929',
+            model: process.env.HAI_CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
         },
 
         gemini: {
