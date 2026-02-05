@@ -24,6 +24,7 @@ import { searchWithContext, SearchResult } from './vectorSearch';
 import { buildSystemPrompt, buildRetrievedContext, PromptMode, getGreetingPrompt, getOffTopicResponse } from './prompts';
 import { fetchDataContext } from './dataContext';
 import type { UserRole } from './dataContext';
+import { detectActionIntent, executeAction, ActionIntent } from './actions';
 
 // ============================================================================
 // TYPES
@@ -38,7 +39,8 @@ export type IntentType =
     | 'scenario_help'
     | 'code_help'
     | 'web_search'
-    | 'off_topic';
+    | 'off_topic'
+    | 'action';
 
 export interface PipelineContext {
     userId: string;
@@ -70,6 +72,11 @@ export interface PipelineResult {
     intent: IntentType;
     citations: Citation[];
     quizState?: QuizState;
+    actionResult?: {
+        success: boolean;
+        actionType: string;
+        data?: unknown;
+    };
     error?: string;
 }
 
@@ -219,6 +226,36 @@ export async function processMessage(
     }
 
     try {
+        // Step 0: Check for action intent first (Phase 3 — Write Operations)
+        let actionIntent: ActionIntent | null = null;
+        if (context.userRole) {
+            actionIntent = detectActionIntent(userMessage, {
+                userRole: context.userRole,
+                currentEnablerId: context.currentEnablerId,
+                currentCourseId: context.currentCourseId,
+            });
+        }
+
+        // If action detected, execute it and return narrated result
+        if (actionIntent && actionIntent.confidence >= 0.7) {
+            const actionResult = await executeAction(
+                actionIntent.type,
+                actionIntent.parameters,
+                context.userId
+            );
+
+            return {
+                response: actionResult.message,
+                intent: 'action',
+                citations: [],
+                actionResult: {
+                    success: actionResult.success,
+                    actionType: actionIntent.type,
+                    data: actionResult.data,
+                },
+            };
+        }
+
         // Step 1: Classify intent
         const intent = classifyIntent(userMessage, context.quizState);
 
@@ -424,6 +461,38 @@ export async function processMessageStream(
     }
 
     try {
+        // Step 0: Check for action intent first (Phase 3 — Write Operations)
+        let actionIntent: ActionIntent | null = null;
+        if (context.userRole) {
+            actionIntent = detectActionIntent(userMessage, {
+                userRole: context.userRole,
+                currentEnablerId: context.currentEnablerId,
+                currentCourseId: context.currentCourseId,
+            });
+        }
+
+        // If action detected, execute it and return narrated result
+        if (actionIntent && actionIntent.confidence >= 0.7) {
+            const actionResult = await executeAction(
+                actionIntent.type,
+                actionIntent.parameters,
+                context.userId
+            );
+
+            onChunk(actionResult.message);
+
+            return {
+                response: actionResult.message,
+                intent: 'action',
+                citations: [],
+                actionResult: {
+                    success: actionResult.success,
+                    actionType: actionIntent.type,
+                    data: actionResult.data,
+                },
+            };
+        }
+
         const intent = classifyIntent(userMessage, context.quizState);
 
         // Handle special intents immediately
