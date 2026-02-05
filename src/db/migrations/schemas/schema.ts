@@ -175,6 +175,9 @@ export const useCases = pgTable('use_cases', {
   durationUnit: durationUnit('duration_unit'),
   isActive: boolean('is_active').default(false),
   activatedAt: timestamp('activated_at'),
+  year: integer('year'),
+  trainingStage: integer('training_stage'),
+  lernfelder: text('lernfelder').array(),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at')
@@ -1074,3 +1077,12 @@ export type ActivityReportEntry = typeof activityReportEntries.$inferSelect;
 export type TrainingComponent = typeof trainingComponents.$inferSelect;
 export type TrainingUseCase = typeof trainingUseCases.$inferSelect;
 export type ActivityReportUseCaseEntry = typeof activityReportUseCaseEntries.$inferSelect;
+
+export const lernfelderSchema = pgTable('lernfelder', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  description: text('description'),
+  label: text('label').notNull(), // LF-1 to LF-12
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at'),
+});

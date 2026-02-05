@@ -169,7 +169,7 @@ export default function RegisterPage() {
             </button>
 
             <div className="text-center">
-              <p className="text-gray-400">
+              <p className="text-muted-foreground">
                 Bereits ein Konto?{' '}
                 <Link
                   href="/login"

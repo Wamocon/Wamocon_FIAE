@@ -153,6 +153,9 @@ function formatDateKey(date: Date): string {
 
 export function BlockCalendar() {
     const { profile } = useAuth();
+    const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
+    const [selectedWeek, setSelectedWeek] = useState<Date>(new Date()); // Start date of the selected week
+
     const [blocks, setBlocks] = useState<Block[]>([]);
     const [exams, setExams] = useState<CalendarExam[]>([]);
     const [meta, setMeta] = useState<BlockMeta | null>(null);
@@ -169,15 +172,23 @@ export function BlockCalendar() {
     const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-    // Initialize date on client side only to avoid hydration mismatch
+    // Initialize date on client side
     useEffect(() => {
         const now = new Date();
         setCurrentDate(now);
         setSelectedMonth(now.getMonth());
         setSelectedYear(now.getFullYear());
+
+        // Set selected week start to current week's Monday
+        const d = new Date(now);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+        d.setDate(diff);
+        d.setHours(0, 0, 0, 0);
+        setSelectedWeek(d);
     }, []);
 
-    // Load blocks for the selected year
+    // Load blocks
     useEffect(() => {
         if (!profile?.id || selectedYear === 0) return;
 
@@ -211,21 +222,21 @@ export function BlockCalendar() {
         loadBlocks();
     }, [profile?.id, selectedYear]);
 
-    // Generate calendar grid for the selected month
+
+    // Generate calendar days for MONTH view
     const calendarDays = useMemo(() => {
-        if (!currentDate) return [];
+        if (!currentDate || viewMode !== 'month') return [];
 
         const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
         const firstDay = getFirstDayOfMonth(selectedYear, selectedMonth);
 
-        // Previous month days
         const prevMonth = selectedMonth === 0 ? 11 : selectedMonth - 1;
         const prevYear = selectedMonth === 0 ? selectedYear - 1 : selectedYear;
         const daysInPrevMonth = getDaysInMonth(prevYear, prevMonth);
 
         const days: { date: Date; isCurrentMonth: boolean; isToday: boolean; blocks: Block[]; exams: CalendarExam[] }[] = [];
 
-        // Add days from previous month
+        // Previous month days
         for (let i = firstDay - 1; i >= 0; i--) {
             const day = daysInPrevMonth - i;
             const date = new Date(prevYear, prevMonth, day);
@@ -243,7 +254,7 @@ export function BlockCalendar() {
             });
         }
 
-        // Add days of current month
+        // Current month days
         const today = new Date();
         for (let day = 1; day <= daysInMonth; day++) {
             const date = new Date(selectedYear, selectedMonth, day);
@@ -266,7 +277,7 @@ export function BlockCalendar() {
             });
         }
 
-        // Add days from next month to fill the grid (6 rows = 42 days)
+        // Next month days to fill grid
         const nextMonth = selectedMonth === 11 ? 0 : selectedMonth + 1;
         const nextYear = selectedMonth === 11 ? selectedYear + 1 : selectedYear;
         const remainingDays = 42 - days.length;
@@ -288,9 +299,38 @@ export function BlockCalendar() {
         }
 
         return days;
-    }, [selectedYear, selectedMonth, blocks, exams, currentDate]);
+    }, [selectedYear, selectedMonth, blocks, exams, currentDate, viewMode]);
 
-    // Navigation
+    // Generate days for WEEK view
+    const weekDays = useMemo(() => {
+        if (viewMode !== 'week' || !selectedWeek) return [];
+        const days = [];
+        const today = new Date();
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(selectedWeek);
+            date.setDate(selectedWeek.getDate() + i);
+            const isToday =
+                date.getDate() === today.getDate() &&
+                date.getMonth() === today.getMonth() &&
+                date.getFullYear() === today.getFullYear();
+
+            days.push({
+                date,
+                isToday,
+                blocks: blocks.filter(b => isDateInBlock(date, b)),
+                exams: exams.filter(e => {
+                    const examDate = new Date(e.examDate);
+                    return examDate.getDate() === date.getDate() &&
+                        examDate.getMonth() === date.getMonth() &&
+                        examDate.getFullYear() === date.getFullYear();
+                }),
+            });
+        }
+        return days;
+    }, [selectedWeek, blocks, exams, viewMode]);
+
+
+    // Navigation Logic
     const goToPrevMonth = useCallback(() => {
         if (selectedMonth === 0) {
             setSelectedMonth(11);
@@ -309,11 +349,55 @@ export function BlockCalendar() {
         }
     }, [selectedMonth]);
 
+    const goToPrevWeek = useCallback(() => {
+        const newDate = new Date(selectedWeek);
+        newDate.setDate(selectedWeek.getDate() - 7);
+        setSelectedWeek(newDate);
+        // Sync month/year if week crosses boundary
+        if (newDate.getMonth() !== selectedMonth) {
+            setSelectedMonth(newDate.getMonth());
+            setSelectedYear(newDate.getFullYear());
+        }
+    }, [selectedWeek, selectedMonth]);
+
+    const goToNextWeek = useCallback(() => {
+        const newDate = new Date(selectedWeek);
+        newDate.setDate(selectedWeek.getDate() + 7);
+        setSelectedWeek(newDate);
+        if (newDate.getMonth() !== selectedMonth) {
+            setSelectedMonth(newDate.getMonth());
+            setSelectedYear(newDate.getFullYear());
+        }
+    }, [selectedWeek, selectedMonth]);
+
     const goToToday = useCallback(() => {
         const now = new Date();
         setSelectedMonth(now.getMonth());
         setSelectedYear(now.getFullYear());
+
+        // Calculate start of current week
+        const d = new Date(now);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        d.setDate(diff);
+        d.setHours(0, 0, 0, 0);
+        setSelectedWeek(d);
     }, []);
+
+    // Explicitly switch to week view and jump to date
+    const handleMoreClick = (date: Date, e: React.MouseEvent) => {
+        e.stopPropagation(); // prevent adding block
+
+        // Set selected week start to the clicked date's week Monday
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        d.setDate(diff);
+        d.setHours(0, 0, 0, 0);
+
+        setSelectedWeek(d);
+        setViewMode('week');
+    };
 
     // Stats
     const stats = useMemo(() => {
@@ -325,7 +409,6 @@ export function BlockCalendar() {
 
     const handleAddBlock = async (blockData: Partial<Block>) => {
         if (!profile?.id) return;
-
         try {
             const res = await fetch('/api/trainee/school/blocks', {
                 method: 'POST',
@@ -362,7 +445,6 @@ export function BlockCalendar() {
         }
     };
 
-    // Loading state
     if (loading || !currentDate) {
         return (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
@@ -383,12 +465,27 @@ export function BlockCalendar() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <div className="flex bg-muted rounded-xl p-1 border border-border">
+                        <button
+                            onClick={() => setViewMode('month')}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === 'month' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Monat
+                        </button>
+                        <button
+                            onClick={() => setViewMode('week')}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === 'week' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Woche
+                        </button>
+                    </div>
+
                     <button
                         onClick={() => setShowImportModal(true)}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl glass-effect text-foreground text-sm font-medium transition-all hover:border-accent/30"
                     >
                         <Upload className="h-4 w-4" />
-                        <span className="hidden sm:inline">CSV Import</span>
+                        <span className="hidden sm:inline">Import</span>
                     </button>
                     <button
                         onClick={() => {
@@ -398,23 +495,34 @@ export function BlockCalendar() {
                         className="btn-accent flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
                     >
                         <Plus className="h-4 w-4" />
-                        <span className="hidden sm:inline">Hinzufügen</span>
+                        <span className="hidden sm:inline">Neu</span>
                     </button>
                 </div>
             </div>
 
-            {/* Month Navigation */}
+            {/* Navigation Bar */}
             <div className="flex items-center justify-between p-4 rounded-xl glass-effect">
                 <button
-                    onClick={goToPrevMonth}
+                    onClick={viewMode === 'month' ? goToPrevMonth : goToPrevWeek}
                     className="p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
                 >
                     <ChevronLeft className="h-5 w-5" />
                 </button>
 
                 <div className="flex items-center gap-4">
-                    <h3 className="text-lg font-bold text-foreground min-w-[180px] text-center">
-                        {MONTHS_DE[selectedMonth]} {selectedYear}
+                    <h3 className="text-lg font-bold text-foreground min-w-[200px] text-center">
+                        {viewMode === 'month'
+                            ? `${MONTHS_DE[selectedMonth]} ${selectedYear}`
+                            : `KW ${selectedWeek ? (
+                                (() => {
+                                    const d = new Date(Date.UTC(selectedWeek.getFullYear(), selectedWeek.getMonth(), selectedWeek.getDate()));
+                                    const dayNum = d.getUTCDay() || 7;
+                                    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+                                    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                                    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+                                })()
+                            ) : ''} • ${selectedWeek?.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}`
+                        }
                     </h3>
                     <button
                         onClick={goToToday}
@@ -425,133 +533,222 @@ export function BlockCalendar() {
                 </div>
 
                 <button
-                    onClick={goToNextMonth}
+                    onClick={viewMode === 'month' ? goToNextMonth : goToNextWeek}
                     className="p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
                 >
                     <ChevronRight className="h-5 w-5" />
                 </button>
             </div>
 
-            {/* Legend */}
-            <div className="flex flex-wrap gap-4 mb-6 p-4 rounded-xl glass-effect">
-                {Object.entries(BLOCK_CONFIG)
-                    .filter(([type]) => !['PERSONAL', 'TRAINER_BLOCKER'].includes(type))
-                    .map(([type, config]) => (
-                        <div key={type} className="flex items-center gap-2">
-                            <div className={`h-3 w-3 rounded-full ${config.color}`} />
-                            <span className="text-sm font-medium text-muted-foreground">{config.label}</span>
-                        </div>
-                    ))}
-            </div>
+            {/* Legend - Only show in Month view to save space in Week view */}
+            {viewMode === 'month' && (
+                <div className="flex flex-wrap gap-4 mb-6 p-4 rounded-xl glass-effect">
+                    {Object.entries(BLOCK_CONFIG)
+                        .filter(([type]) => !['PERSONAL', 'TRAINER_BLOCKER'].includes(type))
+                        .map(([type, config]) => (
+                            <div key={type} className="flex items-center gap-2">
+                                <div className={`h-3 w-3 rounded-full ${config.color}`} />
+                                <span className="text-sm font-medium text-muted-foreground">{config.label}</span>
+                            </div>
+                        ))}
+                </div>
+            )}
 
-            {/* Calendar Grid */}
+            {/* Calendar Grid Container */}
             <div className="rounded-2xl glass-effect overflow-hidden">
                 {/* Weekday Headers */}
-                <div className="grid grid-cols-7 border-b border-border">
+                <div className="grid grid-cols-7 border-b border-border bg-muted/20">
                     {WEEKDAYS_DE.map((day, i) => (
                         <div
                             key={day}
-                            className={`py-3 text-center text-sm font-semibold ${i >= 5 ? 'text-muted-foreground' : 'text-foreground'
-                                }`}
+                            className={`py-3 text-center text-sm font-semibold ${i >= 5 ? 'text-muted-foreground' : 'text-foreground'}`}
                         >
                             {day}
                         </div>
                     ))}
                 </div>
 
-                {/* Days Grid */}
+                {/* Grid Content */}
                 <div className="grid grid-cols-7">
-                    {calendarDays.map((dayData, index) => {
-                        const isWeekend = index % 7 >= 5;
-                        const hasBlocks = dayData.blocks.length > 0;
-                        const primaryBlock = dayData.blocks[0];
-                        const config = primaryBlock ? BLOCK_CONFIG[primaryBlock.blockType] : null;
+                    {viewMode === 'month'
+                        ? calendarDays.map((dayData, index) => {
+                            const isWeekend = index % 7 >= 5;
+                            const hasBlocks = dayData.blocks.length > 0;
+                            const primaryBlock = dayData.blocks[0];
 
-                        return (
-                            <button
-                                key={index}
-                                onClick={() => {
-                                    if (hasBlocks) {
-                                        setSelectedBlock(primaryBlock);
-                                    } else {
-                                        setSelectedDate(dayData.date);
-                                        setShowAddModal(true);
-                                    }
-                                }}
-                                className={`
-                                    relative min-h-[80px] md:min-h-[100px] p-2 border-b border-r border-border
-                                    transition-all hover:bg-muted/50 cursor-pointer text-left
-                                    ${!dayData.isCurrentMonth ? 'opacity-40' : ''}
-                                    ${dayData.isToday ? 'bg-accent/5' : ''}
-                                    ${isWeekend && dayData.isCurrentMonth ? 'bg-muted/30' : ''}
-                                `}
-                            >
-                                {/* Date Number */}
-                                <div className={`
-                                    inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-medium
-                                    ${dayData.isToday
-                                        ? 'bg-accent text-white'
-                                        : isWeekend
-                                            ? 'text-muted-foreground'
-                                            : 'text-foreground'
-                                    }
-                                `}>
-                                    {dayData.date.getDate()}
-                                </div>
+                            return (
+                                <button
+                                    key={index}
+                                    onClick={() => {
+                                        if (hasBlocks) {
+                                            setSelectedBlock(primaryBlock);
+                                        } else {
+                                            setSelectedDate(dayData.date);
+                                            setShowAddModal(true);
+                                        }
+                                    }}
+                                    className={`
+                                        relative min-h-[80px] md:min-h-[100px] p-2 border-b border-r border-border
+                                        transition-all hover:bg-muted/50 cursor-pointer text-left
+                                        ${!dayData.isCurrentMonth ? 'opacity-40' : ''}
+                                        ${dayData.isToday ? 'bg-accent/5' : ''}
+                                        ${isWeekend && dayData.isCurrentMonth ? 'bg-muted/30' : ''}
+                                    `}
+                                >
+                                    {/* Date Number */}
+                                    <div className={`
+                                        inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-medium mb-1
+                                        ${dayData.isToday
+                                            ? 'bg-accent text-accent-foreground'
+                                            : isWeekend
+                                                ? 'text-muted-foreground'
+                                                : 'text-foreground'
+                                        }
+                                    `}>
+                                        {dayData.date.getDate()}
+                                    </div>
 
-                                {/* Block Indicators */}
-                                {hasBlocks && (
-                                    <div className="mt-1 space-y-1">
-                                        {dayData.blocks.slice(0, 2).map((block, bi) => {
-                                            const blockConfig = BLOCK_CONFIG[block.blockType];
-                                            return (
+                                    {/* Block Indicators */}
+                                    {hasBlocks && (
+                                        <div className="space-y-1">
+                                            {dayData.blocks.slice(0, 2).map((block, bi) => {
+                                                const blockConfig = BLOCK_CONFIG[block.blockType];
+                                                return (
+                                                    <div
+                                                        key={block.id + bi}
+                                                        className={`
+                                                            flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium
+                                                            ${blockConfig.lightBg} ${blockConfig.text} ${blockConfig.border} border
+                                                        `}
+                                                    >
+                                                        <blockConfig.Icon className="h-3 w-3 flex-shrink-0" />
+                                                        <span className="truncate hidden md:block">
+                                                            {block.title || block.description || blockConfig.label}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {dayData.blocks.length > 2 && (
                                                 <div
-                                                    key={block.id + bi}
-                                                    className={`
-                                                        flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium
-                                                        ${blockConfig.lightBg} ${blockConfig.text} ${blockConfig.border} border
-                                                    `}
+                                                    role="button"
+                                                    onClick={(e) => handleMoreClick(dayData.date, e)}
+                                                    className="text-[10px] text-muted-foreground px-1.5 hover:text-foreground hover:underline"
                                                 >
-                                                    <blockConfig.Icon className="h-3 w-3 flex-shrink-0" />
+                                                    +{dayData.blocks.length - 2} mehr
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Exam Indicators */}
+                                    {dayData.exams.length > 0 && (
+                                        <div className="mt-1 space-y-1">
+                                            {dayData.exams.slice(0, 2).map((exam) => (
+                                                <div
+                                                    key={exam.id}
+                                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                                                >
+                                                    <FileText className="h-3 w-3 flex-shrink-0" />
                                                     <span className="truncate hidden md:block">
-                                                        {block.title || block.description || blockConfig.label}
-                                                        {block.blockNumber && ` ${block.blockNumber}`}
+                                                        {exam.subject}
                                                     </span>
                                                 </div>
+                                            ))}
+                                            {dayData.exams.length > 2 && (
+                                                <div
+                                                    role="button"
+                                                    onClick={(e) => handleMoreClick(dayData.date, e)}
+                                                    className="text-[10px] text-muted-foreground px-1.5 hover:text-foreground hover:underline"
+                                                >
+                                                    +{dayData.exams.length - 2} Exams
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        })
+                        : weekDays.map((dayData, index) => {
+                            const isWeekend = index >= 5;
+
+                            return (
+                                <div
+                                    key={index}
+                                    className={`
+                                    relative min-h-[400px] p-2 border-r border-border
+                                    ${dayData.isToday ? 'bg-accent/5' : ''}
+                                    ${isWeekend ? 'bg-muted/30' : ''}
+                                `}
+                                >
+                                    <div className={`
+                                    flex flex-col items-center mb-4 pb-2 border-b border-border/50
+                                `}>
+                                        <span className="text-2xl font-bold">{dayData.date.getDate()}</span>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        {/* Full list of blocks for the day */}
+                                        {dayData.blocks.map((block, bi) => {
+                                            const blockConfig = BLOCK_CONFIG[block.blockType];
+                                            return (
+                                                <button
+                                                    key={block.id + bi}
+                                                    onClick={() => setSelectedBlock(block)}
+                                                    className={`
+                                                    w-full text-left p-2 rounded-lg border transition-all hover:scale-[1.02]
+                                                    ${blockConfig.lightBg} ${blockConfig.text} ${blockConfig.border}
+                                                `}
+                                                >
+                                                    <div className="flex items-start gap-2 mb-1">
+                                                        <blockConfig.Icon className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                                        <span className="font-semibold text-xs leading-tight">
+                                                            {block.title || blockConfig.label}
+                                                        </span>
+                                                    </div>
+                                                    {block.description && (
+                                                        <p className="text-[10px] opacity-80 line-clamp-2">
+                                                            {block.description}
+                                                        </p>
+                                                    )}
+                                                    <div className="mt-1.5 flex items-center gap-1 text-[10px] opacity-70">
+                                                        <Clock className="h-3 w-3" />
+                                                        {new Date(block.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        -
+                                                        {new Date(block.endDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
+                                                </button>
                                             );
                                         })}
-                                        {dayData.blocks.length > 2 && (
-                                            <div className="text-[10px] text-muted-foreground px-1.5">
-                                                +{dayData.blocks.length - 2} mehr
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
 
-                                {/* Exam Indicators */}
-                                {dayData.exams.length > 0 && (
-                                    <div className="mt-1 space-y-1">
-                                        {dayData.exams.slice(0, 2).map((exam) => (
+                                        {/* Full list of exams */}
+                                        {dayData.exams.map((exam) => (
                                             <div
                                                 key={exam.id}
-                                                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                                                className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400"
                                             >
-                                                <FileText className="h-3 w-3 flex-shrink-0" />
-                                                <span className="truncate hidden md:block">
-                                                    {exam.subject}
-                                                </span>
+                                                <div className="flex items-start gap-2 mb-1">
+                                                    <FileText className="h-4 w-4 mt-0.5" />
+                                                    <span className="font-semibold text-xs">{exam.subject}</span>
+                                                </div>
+                                                <p className="text-[10px] opacity-80">{exam.examTypeValue || 'Prüfung'}</p>
                                             </div>
                                         ))}
-                                        {dayData.exams.length > 2 && (
-                                            <div className="text-[10px] text-muted-foreground px-1.5">
-                                                +{dayData.exams.length - 2} Prüfungen
-                                            </div>
-                                        )}
+
+                                        {/* Add Button Placeholder */}
+                                        <button
+                                            onClick={() => {
+                                                setSelectedDate(dayData.date);
+                                                setShowAddModal(true);
+                                            }}
+                                            className="w-full py-2 mt-2 rounded-lg border border-dashed border-border text-muted-foreground/50 hover:text-accent hover:border-accent hover:bg-accent/5 text-xs transition-colors flex items-center justify-center gap-1"
+                                        >
+                                            <Plus className="h-3 w-3" />
+                                        </button>
                                     </div>
-                                )}
-                            </button>
-                        );
-                    })}
+                                </div>
+                            );
+                        })
+                    }
                 </div>
             </div>
 
@@ -805,10 +1002,10 @@ function AddBlockModal({
     initialDate: Date | null;
 }) {
     const [startDate, setStartDate] = useState(
-        initialDate ? initialDate.toISOString().split('T')[0] : ''
+        initialDate ? `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}` : ''
     );
     const [endDate, setEndDate] = useState(
-        initialDate ? initialDate.toISOString().split('T')[0] : ''
+        initialDate ? `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}` : ''
     );
     const [blockType, setBlockType] = useState<Block['blockType']>('SCHOOL');
     const [blockNumber, setBlockNumber] = useState('');

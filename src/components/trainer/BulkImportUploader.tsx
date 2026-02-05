@@ -89,7 +89,7 @@ export function BulkImportUploader() {
     <div className="bg-card border-border rounded-3xl border p-8 shadow-lg">
       <div className="mb-6">
         <h2 className="text-foreground mb-2 text-2xl font-bold">
-          📊 Bulk Import
+          Bulk Import
         </h2>
         <p className="text-muted-foreground">
           Importieren Sie mehrere Kurse, Enabler und Use Cases gleichzeitig aus einer Excel-Datei
@@ -218,7 +218,7 @@ export function BulkImportUploader() {
 
       {/* Instructions */}
       <div className="bg-muted/50 mt-6 rounded-xl p-4">
-        <h4 className="text-foreground mb-2 font-semibold">📝 Anweisungen:</h4>
+        <h4 className="text-foreground mb-2 font-semibold">Anweisungen:</h4>
         <ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
           <li>Laden Sie die Excel-Vorlage herunter</li>
           <li>Füllen Sie die Daten in den entsprechenden Sheets aus (Courses, Enablers, Use Cases)</li>

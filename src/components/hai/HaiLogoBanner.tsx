@@ -83,7 +83,7 @@ export function HaiLogoBanner({
                         animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                         exit={{ opacity: 0, scale: 0.5 }}
                         transition={{ type: "spring", stiffness: 300, damping: 20 }} // Pop effect
-                        className={`absolute -top-4 -right-24 bg-white/10 backdrop-blur-md border border-cyan-500/30 text-white px-4 py-2 rounded-xl rounded-bl-none shadow-lg z-20 ${bubbleClass}`}
+                        className={`absolute -top-4 -right-24 bg-white/10 light:bg-slate-800 backdrop-blur-md border border-cyan-500/30 text-white px-4 py-2 rounded-xl rounded-bl-none shadow-lg z-20 ${bubbleClass}`}
                         style={{ minWidth: '180px' }}
                     >
                         <div className="relative">
@@ -103,12 +103,12 @@ export function HaiLogoBanner({
                     transition={{ delay: 0.2, duration: 0.4 }}
                     className="text-center"
                 >
-                    <h1 className={`font-bold text-white ${textClass} tracking-tight`}>
+                    <h1 className={`font-bold text-foreground ${textClass} tracking-tight`}>
                         <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
                             HAI
                         </span>
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1 font-medium">
+                    <p className="text-muted-foreground text-sm mt-1 font-medium">
                         AI Learning Coach
                     </p>
                 </motion.div>

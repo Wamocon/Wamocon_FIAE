@@ -51,8 +51,9 @@ interface ReportData {
 export async function generateActivityReportPDF(
     report: ReportData,
     useCases: TrainingUseCase[],
-    components: TrainingComponent[]
-): Promise<void> {
+    components: TrainingComponent[],
+    returnBlob: boolean = false
+): Promise<Blob | void> {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -230,8 +231,13 @@ export async function generateActivityReportPDF(
     doc.text(`Erstellt am: ${new Date().toLocaleDateString('de-DE')} | Dokument-ID: ${report.id.substring(0, 8)}`, 14, yPos);
     doc.text('Dieser Nachweis wurde digital erstellt und signiert.', 14, yPos + 5);
 
-    // --- SAVE PDF ---
+    // --- SAVE PDF OR RETURN BLOB ---
     const filename = `Tätigkeitsnachweis_KW${report.weekNumber}_${report.year}_${report.traineeName?.replace(/\s+/g, '_') || 'Unbekannt'}.pdf`;
+
+    if (returnBlob) {
+        return doc.output('blob');
+    }
+
     doc.save(filename);
 }
 

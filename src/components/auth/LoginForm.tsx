@@ -138,7 +138,7 @@ export default function LoginForm() {
               )}
             </button>
             <div className="text-center space-y-1">
-              <p className="text-gray-400">
+              <p className="text-muted-foreground">
                 Noch kein Konto?{' '}
                 <Link
                   href="/register"

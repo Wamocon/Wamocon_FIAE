@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
         }
 
         // List all sessions
-        let query = db
+        const query = db
             .select({
                 id: haiChatSessions.id,
                 title: haiChatSessions.title,

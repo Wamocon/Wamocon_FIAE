@@ -5,11 +5,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, MessageSquare, Scale } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
-type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; solutions?: Array<{ scenarioIndex: number; text: string }> | null; trainerFeedback?: string | null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }> | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
-type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number|null };
+type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; solutions?: Array<{ scenarioIndex: number; text: string }> | null; trainerFeedback?: string | null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }> | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number | null };
+type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number | null };
 // Geschäftsprozesse review removed
 type ReflectionItem = { id: string; traineeId: string; traineeName: string; strengths: string | null; weaknesses: string | null; mesMore: string | null; mesEqual: string | null; isReviewed: boolean; createdAt: string };
-type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string; attemptNumber?: number|null; difficulty?: 'LOW'|'MEDIUM'|'HIGH'|null; enablerTitle?: string|null };
+type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string; attemptNumber?: number | null; difficulty?: 'LOW' | 'MEDIUM' | 'HIGH' | null; enablerTitle?: string | null };
 
 export default function TrainerReviewsPage() {
   const { profile } = useAuth();
@@ -46,7 +46,7 @@ export default function TrainerReviewsPage() {
 
   // Sync state from URL params (deep-linking from dashboard)
   useEffect(() => {
-  const allowed = ['enablers', 'usecases', 'quizzes', 'reflections'] as const;
+    const allowed = ['enablers', 'usecases', 'quizzes', 'reflections'] as const;
     if (viewParam && (allowed as readonly string[]).includes(viewParam)) {
       setActiveTab(viewParam as any);
     }
@@ -71,9 +71,9 @@ export default function TrainerReviewsPage() {
         const r = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
         if (!r.ok) throw new Error('Konnte Reviews nicht laden');
         const data = await r.json();
-  setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-  setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-            // geschäftsprozesseSubmissions removed
+        setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+        setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+        // geschäftsprozesseSubmissions removed
       } catch (e: any) {
         setError(e?.message || 'Unbekannter Fehler');
       } finally {
@@ -99,7 +99,7 @@ export default function TrainerReviewsPage() {
           const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${pendingFilter === 'pending'}`);
           if (!res.ok) throw new Error('Fehler beim Laden der Einreichungen');
           const data = await res.json();
-          setQuizzes((data.submissions || []).map((x: any)=> ({ ...x, attemptNumber: x.attemptNumber, difficulty: x.difficulty || null, enablerTitle: x.enablerTitle || null })));
+          setQuizzes((data.submissions || []).map((x: any) => ({ ...x, attemptNumber: x.attemptNumber, difficulty: x.difficulty || null, enablerTitle: x.enablerTitle || null })));
         }
       } catch (e: any) {
         setError(e.message || 'Unbekannter Fehler');
@@ -129,9 +129,9 @@ export default function TrainerReviewsPage() {
     const onlyPending = statusFilter === 'pending';
     const rr = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
     const data = await rr.json();
-  setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-  setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-      // geschäftsprozesseSubmissions removed
+    setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+    setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+    // geschäftsprozesseSubmissions removed
     setFeedbackMap(prev => ({ ...prev, [id]: '' }));
     setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
   };
@@ -164,66 +164,66 @@ export default function TrainerReviewsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div className="glass-effect rounded-3xl border border-accent/30 bg-black/40 p-5 shadow-lg">
+      <div className="glass-effect rounded-3xl border border-accent/30 bg-card/90 p-5 shadow-lg">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h1 className="text-foreground text-xl font-bold">Offen Review</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-        {!forcedView ? (
-          <>
-            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='enablers'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Lesson</button>
-            {/* Geschäftsprozesse tab removed */}
-            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='usecases'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
-            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='quizzes'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
-            <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab==='reflections'?'bg-primary text-primary-foreground':'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
-          </>
-        ) : (
-          <div className="rounded-xl border border-accent/30 bg-black/30 px-3 py-1.5 text-sm">
-            {activeTab === 'enablers' ? 'Enabler' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
-          </div>
-        )}
-        <div className="ml-auto flex items-center gap-2 text-sm">
-          {activeTab === 'enablers' || activeTab === 'usecases' ? (
+          {!forcedView ? (
             <>
-              <span>Filter:</span>
-              <select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
-                <option value="all">Alle</option>
-                <option value="pending">Offen</option>
-                <option value="approved">Genehmigt</option>
-                <option value="rejected">Abgelehnt</option>
-              </select>
+              <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'enablers' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>Lesson</button>
+              {/* Geschäftsprozesse tab removed */}
+              <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'usecases' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>Use Cases</button>
+              <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'quizzes' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>Quizzes</button>
+              <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'reflections' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('reflections')}>Reflections</button>
             </>
           ) : (
-            <>
-              <span>Filter:</span>
-              <select value={pendingFilter} onChange={(e)=>setPendingFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
-                <option value="pending">Offen</option>
-                <option value="all">Alle</option>
-              </select>
-              {activeTab==='quizzes' && (
-                <>
-                  <span>Type:</span>
-                  <select value={quizTypeFilter} onChange={(e)=>setQuizTypeFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-black/30 px-2 py-1">
-                    <option value="all">Alle</option>
-                    <option value="LESSON">Lesson</option>
-                    <option value="GLOBAL">Global</option>
-                  </select>
-                </>
-              )}
-            </>
+            <div className="rounded-xl border border-accent/30 bg-muted px-3 py-1.5 text-sm">
+              {activeTab === 'enablers' ? 'Enabler' : activeTab === 'usecases' ? 'Use Cases' : activeTab === 'quizzes' ? 'Quizzes' : 'Reflections'}
+            </div>
           )}
-        </div>
+          <div className="ml-auto flex items-center gap-2 text-sm">
+            {activeTab === 'enablers' || activeTab === 'usecases' ? (
+              <>
+                <span>Filter:</span>
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-background/50 px-2 py-1">
+                  <option value="all">Alle</option>
+                  <option value="pending">Offen</option>
+                  <option value="approved">Genehmigt</option>
+                  <option value="rejected">Abgelehnt</option>
+                </select>
+              </>
+            ) : (
+              <>
+                <span>Filter:</span>
+                <select value={pendingFilter} onChange={(e) => setPendingFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-background/50 px-2 py-1">
+                  <option value="pending">Offen</option>
+                  <option value="all">Alle</option>
+                </select>
+                {activeTab === 'quizzes' && (
+                  <>
+                    <span>Type:</span>
+                    <select value={quizTypeFilter} onChange={(e) => setQuizTypeFilter(e.target.value as any)} className="rounded-xl border border-accent/30 bg-background/50 px-2 py-1">
+                      <option value="all">Alle</option>
+                      <option value="LESSON">Lesson</option>
+                      <option value="GLOBAL">Global</option>
+                    </select>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {loading && <div>Lade…</div>}
       {error && <div className="text-red-500">{error}</div>}
 
-      {!loading && activeTab==='enablers' && (
+      {!loading && activeTab === 'enablers' && (
         <div className="space-y-4">
           {filteredEnablers.length === 0 && <div className="text-sm text-muted-foreground">Keine Einreichungen</div>}
           {filteredEnablers.map(it => (
-            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-card p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
@@ -234,7 +234,7 @@ export default function TrainerReviewsPage() {
                     <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()} {it.attemptNumber ? `• Versuch ${it.attemptNumber}` : ''}</div>
                   </div>
                 </div>
-                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
+                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' : 'bg-green-500/10 text-green-600 dark:text-green-400'} ${it.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : ''}`}>{it.status}</div>
               </div>
               {(it.solutions || it.solutionText) && (
                 <div className="mt-3">
@@ -251,14 +251,14 @@ export default function TrainerReviewsPage() {
 
                       {/* Solution and Feedback Slider */}
                       <div className="relative overflow-hidden">
-                        <div 
+                        <div
                           className="flex transition-transform duration-300 ease-in-out"
                           style={{ transform: `translateX(-${(solutionIndexMap[it.id] || 0) * 100}%)` }}
                         >
                           {it.solutions.map((sol, idx) => (
                             <div key={idx} className="w-full flex-shrink-0 px-2 space-y-3">
                               {/* Solution Box */}
-                              <div className="rounded-xl border border-accent/20 bg-black/20 p-4">
+                              <div className="rounded-xl border border-accent/20 bg-muted/30 p-4">
                                 <div className="text-sm font-medium mb-2">Lösung für Szenario {sol.scenarioIndex + 1}</div>
                                 <p className="whitespace-pre-line text-sm text-foreground/90">{sol.text}</p>
                               </div>
@@ -266,10 +266,10 @@ export default function TrainerReviewsPage() {
                               {/* Feedback Box for this scenario */}
                               <div>
                                 <label className="mb-1 block text-sm font-medium">Feedback für Szenario {sol.scenarioIndex + 1}</label>
-                                <textarea 
-                                  className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" 
-                                  rows={3} 
-                                  value={feedbacksMap[it.id]?.find(f => f.scenarioIndex === sol.scenarioIndex)?.feedback || ''} 
+                                <textarea
+                                  className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2"
+                                  rows={3}
+                                  value={feedbacksMap[it.id]?.find(f => f.scenarioIndex === sol.scenarioIndex)?.feedback || ''}
                                   onChange={e => {
                                     const newFeedbacks = [...(feedbacksMap[it.id] || [])];
                                     const existingIdx = newFeedbacks.findIndex(f => f.scenarioIndex === sol.scenarioIndex);
@@ -299,18 +299,17 @@ export default function TrainerReviewsPage() {
                           >
                             ← Zurück
                           </button>
-                          
+
                           <div className="flex items-center gap-2">
                             {it.solutions.map((_, idx) => (
                               <button
                                 key={idx}
                                 type="button"
                                 onClick={() => setSolutionIndexMap(prev => ({ ...prev, [it.id]: idx }))}
-                                className={`h-2 rounded-full transition-all ${
-                                  idx === (solutionIndexMap[it.id] || 0)
-                                    ? 'w-6 bg-primary' 
-                                    : 'w-2 bg-accent/30 hover:bg-accent/50'
-                                }`}
+                                className={`h-2 rounded-full transition-all ${idx === (solutionIndexMap[it.id] || 0)
+                                  ? 'w-6 bg-primary'
+                                  : 'w-2 bg-accent/30 hover:bg-accent/50'
+                                  }`}
                                 aria-label={`Go to solution ${idx + 1}`}
                               />
                             ))}
@@ -329,21 +328,21 @@ export default function TrainerReviewsPage() {
                     </div>
                   ) : it.solutionText ? (
                     <>
-                      <div className="rounded-xl border border-accent/20 bg-black/20 p-3">
+                      <div className="rounded-xl border border-accent/20 bg-muted/30 p-3">
                         <div className="text-sm font-medium">Lösung</div>
                         <p className="whitespace-pre-line text-sm text-foreground/90">{it.solutionText}</p>
                       </div>
                       <div className="mt-3">
                         <label className="mb-1 block text-sm font-medium">Feedback</label>
-                        <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+                        <textarea className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
                       </div>
                     </>
                   ) : null}
                 </div>
               )}
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'REJECTED')}>Ablehnen</button>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('enabler', it.id, 'APPROVED')}>Genehmigen</button>
+                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={() => reviewItem('enabler', it.id, 'REJECTED')}>Ablehnen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={() => reviewItem('enabler', it.id, 'APPROVED')}>Genehmigen</button>
               </div>
             </div>
           ))}
@@ -352,11 +351,11 @@ export default function TrainerReviewsPage() {
 
       {/* Geschäftsprozesse section removed */}
 
-      {!loading && activeTab==='usecases' && (
+      {!loading && activeTab === 'usecases' && (
         <div className="space-y-4">
           {filteredUseCases.length === 0 && <div className="text-sm text-muted-foreground">Keine Einreichungen</div>}
           {filteredUseCases.map(it => (
-            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-card p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
@@ -367,32 +366,32 @@ export default function TrainerReviewsPage() {
                     <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()} {it.attemptNumber ? `• Versuch ${it.attemptNumber}` : ''}</div>
                   </div>
                 </div>
-                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status==='PENDING'?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800'} ${it.status==='REJECTED'?'bg-red-100 text-red-800':''}`}>{it.status}</div>
+                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' : 'bg-green-500/10 text-green-600 dark:text-green-400'} ${it.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : ''}`}>{it.status}</div>
               </div>
               {it.submissionText && (
-                <div className="mt-3 rounded-xl border border-accent/20 bg-black/20 p-3">
+                <div className="mt-3 rounded-xl border border-accent/20 bg-muted p-3">
                   <div className="text-sm font-medium">Lösung</div>
                   <p className="whitespace-pre-line text-sm text-foreground/90">{it.submissionText}</p>
                 </div>
               )}
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">Feedback</label>
-                <textarea className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+                <textarea className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={()=>reviewItem('usecase', it.id, 'REJECTED')}>Ablehnen</button>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={()=>reviewItem('usecase', it.id, 'APPROVED')}>Genehmigen</button>
+                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={() => reviewItem('usecase', it.id, 'REJECTED')}>Ablehnen</button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={() => reviewItem('usecase', it.id, 'APPROVED')}>Genehmigen</button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {!loading && activeTab==='quizzes' && (
+      {!loading && activeTab === 'quizzes' && (
         <div className="space-y-4">
           {quizzesFiltered.length === 0 && <div className="text-sm text-muted-foreground">Keine Quiz-Einreichungen.</div>}
           {quizzesFiltered.map(s => (
-            <div key={s.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+            <div key={s.id} className="group rounded-3xl border border-accent/30 bg-card p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
@@ -404,13 +403,13 @@ export default function TrainerReviewsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{s.quizType || '-'}</span>
+                  <span className="text-xs rounded-full bg-muted px-2.5 py-1 text-muted-foreground">{s.quizType || '-'}</span>
                   {s.quizType === 'LESSON' && s.difficulty && (
-                    <span className={`text-xs rounded-full px-2.5 py-1 ${s.difficulty==='LOW'?'bg-green-100 text-green-800': s.difficulty==='MEDIUM'?'bg-yellow-100 text-yellow-800':'bg-red-100 text-red-800'}`}>{s.difficulty}</span>
+                    <span className={`text-xs rounded-full px-2.5 py-1 ${s.difficulty === 'LOW' ? 'bg-green-500/20 text-green-600 dark:text-green-400' : s.difficulty === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400' : 'bg-red-500/20 text-red-600 dark:text-red-400'}`}>{s.difficulty}</span>
                   )}
                   <a href={`/trainer/reviews/quizzes/${s.id}`} className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60">Details</a>
                   <button onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
-                    {s.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4"/> Bewertet</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4"/> Als bewertet markieren</span>)}
+                    {s.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Bewertet</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4" /> Als bewertet markieren</span>)}
                   </button>
                 </div>
               </div>
@@ -423,7 +422,7 @@ export default function TrainerReviewsPage() {
                   <div className="text-xs text-muted-foreground">Score</div>
                   <div className="text-sm">{s.score ?? 0}%</div>
                 </div>
-                {s.quizType==='LESSON' && (
+                {s.quizType === 'LESSON' && (
                   <div>
                     <div className="text-xs text-muted-foreground">Lesson</div>
                     <div className="text-sm">{s.enablerTitle || '-'}</div>
@@ -431,7 +430,7 @@ export default function TrainerReviewsPage() {
                 )}
                 <div className="md:col-span-2">
                   <div className="text-xs text-muted-foreground">Fortschritt</div>
-                  <div className="mt-1 h-1.5 w-full rounded-full bg-black/30">
+                  <div className="mt-1 h-1.5 w-full rounded-full bg-muted">
                     <div className="h-1.5 rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, s.score ?? 0))}%` }} ></div>
                   </div>
                 </div>
@@ -439,7 +438,7 @@ export default function TrainerReviewsPage() {
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">Feedback</label>
                 <textarea
-                  className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2"
+                  className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2"
                   rows={3}
                   value={feedbackMap[s.id] || ''}
                   onChange={(e) => setFeedbackMap(prev => ({ ...prev, [s.id]: e.target.value }))}
@@ -470,11 +469,11 @@ export default function TrainerReviewsPage() {
         </div>
       )}
 
-      {!loading && activeTab==='reflections' && (
+      {!loading && activeTab === 'reflections' && (
         <div className="space-y-4">
           {reflectionsFiltered.length === 0 && <div className="text-sm text-muted-foreground">Keine Reflektionen.</div>}
           {reflectionsFiltered.map(r => (
-            <div key={r.id} className="group rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all hover:border-accent/40 hover:shadow-md">
+            <div key={r.id} className="group rounded-3xl border border-accent/30 bg-card p-5 transition-all hover:border-accent/40 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
@@ -486,25 +485,25 @@ export default function TrainerReviewsPage() {
                   </div>
                 </div>
                 <button onClick={() => toggleReflectionReviewed(r.id, r.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${r.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
-                  {r.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4"/> Gelesen</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4"/> Als gelesen markieren</span>)}
+                  {r.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Gelesen</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4" /> Als gelesen markieren</span>)}
                 </button>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
                   <div className="text-xs text-muted-foreground">Stärken</div>
-                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.strengths || '-'}</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-muted/30 p-3">{r.strengths || '-'}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Schwächen</div>
-                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.weaknesses || '-'}</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-muted/30 p-3">{r.weaknesses || '-'}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Mehr davon</div>
-                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.mesMore || '-'}</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-muted/30 p-3">{r.mesMore || '-'}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Gleich lassen</div>
-                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-black/20 p-3">{r.mesEqual || '-'}</div>
+                  <div className="text-sm whitespace-pre-wrap rounded-lg border border-accent/20 bg-muted/30 p-3">{r.mesEqual || '-'}</div>
                 </div>
               </div>
             </div>
@@ -514,4 +513,4 @@ export default function TrainerReviewsPage() {
     </div>
   );
 }
- 
+

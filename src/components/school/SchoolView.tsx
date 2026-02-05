@@ -207,7 +207,7 @@ export function SchoolView() {
                                     }
                                 `}
                             >
-                                <Icon className={`h-4 w-4 ${isActive ? 'text-white' : ''}`} />
+                                <Icon className={`h-4 w-4 ${isActive ? 'text-primary-foreground' : ''}`} />
                                 <span className="hidden sm:inline">{tab.labelDe}</span>
                                 <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
                             </button>

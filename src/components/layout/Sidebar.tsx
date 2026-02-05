@@ -17,6 +17,7 @@ import {
   School,
   Calendar,
   ClipboardList,
+  FolderEdit,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback } from 'react';
@@ -73,9 +74,6 @@ export function Sidebar({
         case 'trainees':
           router.push('/trainer/trainees');
           break;
-        case 'acceptanceProtocol':
-          router.push('/trainer/acceptance-protocol');
-          break;
         case 'analytics':
           router.push('/trainer/analytics');
           break;
@@ -95,7 +93,14 @@ export function Sidebar({
           router.push('/trainer/bulk-import');
           break;
         case 'school':
-          router.push('/trainee/school');
+          router.push(
+            userRole === 'trainee' ? '/trainee/school' : '/trainer/school'
+          );
+          break;
+        case 'lernfelder':
+          router.push(
+            userRole === 'trainee' ? '/trainee/lernfelder' : '/trainer/lernfelder'
+          );
           break;
         case 'activityReports':
           router.push(
@@ -152,6 +157,12 @@ export function Sidebar({
             href: '/trainer/content-management',
           },
           {
+            id: 'lernfelder',
+            label: 'Lernfelder',
+            icon: FolderEdit,
+            href: '/trainer/lernfelder',
+          },
+          {
             id: 'quizManagement',
             label: language === 'de' ? 'Quiz-Verwaltung' : 'Quiz Management',
             icon: HelpCircle,
@@ -170,13 +181,6 @@ export function Sidebar({
             href: '/trainer/trainees',
           },
           {
-            id: 'acceptanceProtocol',
-            label:
-              language === 'de' ? 'Abnahmeprotokoll' : 'Acceptance Protocol',
-            icon: FileCheck2,
-            href: '/trainer/acceptance-protocol',
-          },
-          {
             id: 'analytics',
             label: language === 'de' ? 'Analysen' : 'Analytics',
             icon: BarChart3,
@@ -184,6 +188,18 @@ export function Sidebar({
           },
         ]
         : [
+          {
+            id: 'activityReports',
+            label: language === 'de' ? 'Tätigkeitsnachweis' : 'Activity Reports',
+            icon: ClipboardList,
+            href: '/trainee/activity-reports',
+          },
+          {
+            id: 'school',
+            label: language === 'de' ? 'Berufsschule' : 'School',
+            icon: School,
+            href: '/trainee/school',
+          },
           {
             id: 'reflection',
             label: language === 'de' ? 'Reflektion' : 'Reflection',
@@ -197,6 +213,12 @@ export function Sidebar({
             href: '/trainee/courses',
           },
           {
+            id: 'lernfelder',
+            label: 'Lernfelder',
+            icon: FolderEdit,
+            href: '/trainee/lernfelder',
+          },
+          {
             id: 'lessons',
             label: language === 'de' ? 'Trainer-Feedback' : 'Trainer Feedback',
             icon: GraduationCap,
@@ -208,18 +230,7 @@ export function Sidebar({
             icon: HelpCircle,
             href: '/trainee/quizzes',
           },
-          {
-            id: 'activityReports',
-            label: language === 'de' ? 'Tätigkeitsnachweis' : 'Activity Reports',
-            icon: ClipboardList,
-            href: '/trainee/activity-reports',
-          },
-          {
-            id: 'school',
-            label: language === 'de' ? 'Berufsschule' : 'School',
-            icon: School,
-            href: '/trainee/school',
-          },
+
         ]),
       {
         id: 'profile',
