@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import LinkifyText from '@/components/ui/LinkifyText';
 import { MarkdownText } from '@/components/ui/MarkdownText';
 import { FlipbookViewer, useFlipbookViewer } from '@/components/ui/FlipbookViewer';
+import { ScenarioViewer } from '@/components/learning/ScenarioViewer';
 import { BookOpen } from 'lucide-react';
 
 // Types
@@ -276,93 +277,16 @@ export default function TraineeEnablerPage() {
           onClose={flipbook.closePdf}
         />
 
-        {/* Scenarios Slider */}
+        {/* Scenarios Section - Redesigned with structured sections */}
         {((Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0) || enabler.scenarioText) && (
           <div className="mt-4">
-            {/* Counter */}
-            {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 1 && (
-              <div className="mb-3 text-center">
-                <span className="text-sm font-medium text-foreground">
-                  Szenario {currentScenarioIndex + 1} von {enabler.scenarios.length}
-                </span>
-              </div>
-            )}
-
-            {/* Slider Container */}
-            <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-background/20 p-4">
-              <div
-                className="flex transition-transform duration-300 ease-in-out"
-                style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
-              >
-                {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0 ? (
-                  enabler.scenarios.map((sc: any, idx: number) => (
-                    <div key={idx} className="w-full flex-shrink-0 space-y-3 px-2">
-                      <div>
-                        <div className="mb-1 text-sm font-semibold">Szenario {idx + 1}</div>
-                        <LinkifyText className="text-foreground/90" text={String(sc.text || '')} preserveLineBreaks />
-                      </div>
-                      {sc.hint && (
-                        <div className="rounded-lg border border-accent/20 bg-background/10 p-3">
-                          <div className="mb-1 text-xs font-semibold text-muted-foreground">Hinweis</div>
-                          <LinkifyText className="text-muted-foreground text-sm" text={String(sc.hint)} preserveLineBreaks />
-                        </div>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="w-full flex-shrink-0 space-y-3 px-2">
-                    <div>
-                      <div className="mb-1 text-sm font-semibold">Szenario</div>
-                      <LinkifyText className="text-foreground/90" text={String(enabler.scenarioText || '')} preserveLineBreaks />
-                    </div>
-                    {enabler.hintText && (
-                      <div className="rounded-lg border border-accent/20 bg-background/10 p-3">
-                        <div className="mb-1 text-xs font-semibold text-muted-foreground">Hinweis</div>
-                        <LinkifyText className="text-muted-foreground text-sm" text={String(enabler.hintText)} preserveLineBreaks />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Navigation for multiple scenarios */}
-            {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 1 && (
-              <div className="mt-3 flex items-center justify-between">
-                <button
-                  type="button"
-                  disabled={currentScenarioIndex === 0}
-                  onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
-                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  ← Zurück
-                </button>
-
-                <div className="flex items-center gap-2">
-                  {enabler.scenarios.map((_: any, idx: number) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setCurrentScenarioIndex(idx)}
-                      className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
-                        ? 'w-6 bg-primary'
-                        : 'w-2 bg-accent/30 hover:bg-accent/50'
-                        }`}
-                      aria-label={`Go to scenario ${idx + 1}`}
-                    />
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={currentScenarioIndex === enabler.scenarios.length - 1}
-                  onClick={() => setCurrentScenarioIndex(i => Math.min(enabler.scenarios.length - 1, i + 1))}
-                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Weiter →
-                </button>
-              </div>
-            )}
+            <ScenarioViewer
+              scenarios={enabler.scenarios || []}
+              currentIndex={currentScenarioIndex}
+              onIndexChange={setCurrentScenarioIndex}
+              scenarioText={enabler.scenarioText}
+              hintText={enabler.hintText}
+            />
           </div>
         )}
       </div>
