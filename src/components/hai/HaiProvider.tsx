@@ -11,6 +11,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // ============================================================================
 // TYPES
@@ -105,6 +106,8 @@ interface HaiProviderProps {
 }
 
 export function HaiProvider({ children, userId, initialContext }: HaiProviderProps) {
+    const { t } = useLanguage();
+
     // UI State
     const [viewMode, setViewModeState] = useState<ViewMode>('hidden');
     const [isLoading, setIsLoading] = useState(false);
@@ -304,7 +307,7 @@ export function HaiProvider({ children, userId, initialContext }: HaiProviderPro
                 const assistantMessage: HaiMessage = {
                     id: `error-${Date.now()}`,
                     role: 'assistant',
-                    content: 'Ups, da ist etwas schiefgelaufen! 🦈💫 Bitte versuche es später erneut.',
+                    content: t('hai.error.somethingWrong'),
                     createdAt: new Date().toISOString(),
                 };
                 setMessages(prev => [...prev, assistantMessage]);
@@ -314,14 +317,14 @@ export function HaiProvider({ children, userId, initialContext }: HaiProviderPro
             const assistantMessage: HaiMessage = {
                 id: `error-${Date.now()}`,
                 role: 'assistant',
-                content: 'Verbindungsfehler. Bitte prüfe deine Internetverbindung.',
+                content: t('hai.error.connectionError'),
                 createdAt: new Date().toISOString(),
             };
             setMessages(prev => [...prev, assistantMessage]);
         } finally {
             setIsLoading(false);
         }
-    }, [userId, currentSessionId, context, refreshSessions]);
+    }, [userId, currentSessionId, context, refreshSessions, t]);
 
     // ========================================================================
     // EFFECTS

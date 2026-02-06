@@ -54,9 +54,7 @@ describe('TrainerDashboard', () => {
             counts: {
                 activeTrainees: 1,
                 pendingReviews: 5,
-                recentReflections: 3,
                 pendingQuiz: 2,
-                pendingRefl: 0,
                 pendingUseCases: 0,
                 pendingEnablers: 0
             },
@@ -79,14 +77,13 @@ describe('TrainerDashboard', () => {
             // Wait, logic: trainees.length. 
             // In mockData above: trainees array has 1 element. So it renders 1.
             expect(screen.getByText('5')).toBeInTheDocument(); // Pending reviews
-            expect(screen.getByText('3')).toBeInTheDocument(); // Recent reflections
         });
     });
 
     it('uses cached data if available', async () => {
         const cachedData = {
             trainees: Array(99).fill({ id: 't', full_name: 'T', progress: 0 }),
-            counts: { activeTrainees: 99, pendingReviews: 0, recentReflections: 0, pendingQuiz: 0, pendingReflections: 0, pendingUseCases: 0 },
+            counts: { activeTrainees: 99, pendingReviews: 0, pendingQuiz: 0, pendingUseCases: 0 },
             charts: { progressTrend: [], moduleProgress: [] }
         };
 

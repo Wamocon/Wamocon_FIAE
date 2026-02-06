@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { quizzes, questions, options, quizAssignments } from '@/db/migrations/schemas/schema';
+import { quizzes, questions, options, quizAssignments, notifications } from '@/db/migrations/schemas/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ quizId: string }> }) {
@@ -50,6 +50,14 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ quizId: st
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ quizId: string }> }) {
   try {
     const { quizId } = await ctx.params;
+
+    // Get quiz info and assigned trainees before deleting
+    const [qzInfo] = await db.select({ title: quizzes.title }).from(quizzes).where(eq(quizzes.id, quizId as any)).limit(1);
+    const assignedRows = await db
+      .select({ traineeId: quizAssignments.traineeId })
+      .from(quizAssignments)
+      .where(eq(quizAssignments.quizId, quizId as any));
+
     // Cascade delete options -> questions -> quiz
     const qRows = await db.select({ id: questions.id }).from(questions).where(eq(questions.quizId, quizId as any));
     const qIds = qRows.map(r => r.id);
@@ -59,6 +67,24 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ quizId:
     }
     await db.delete(quizAssignments).where(eq(quizAssignments.quizId, quizId as any));
     await db.delete(quizzes).where(eq(quizzes.id, quizId as any));
+
+    // Notify previously assigned trainees that quiz was removed
+    if (assignedRows.length > 0 && qzInfo) {
+      try {
+        const notifValues = assignedRows.map((r) => ({
+          userId: String(r.traineeId),
+          type: 'QUIZ_DELETED',
+          title: 'Quiz entfernt',
+          message: `Das Quiz "${qzInfo.title}" wurde entfernt.`,
+          linkUrl: '/trainee/quizzes',
+          context: { quizId },
+        }));
+        await db.insert(notifications).values(notifValues);
+      } catch (notifyErr) {
+        console.warn('Failed to notify trainees for quiz deletion', notifyErr);
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('Delete quiz error', e);
@@ -113,14 +139,19 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ quizId: s
     if (Array.isArray(assignedTraineeIds)) {
       console.log(`Updating assignments for quiz ${quizId}`, { count: assignedTraineeIds.length, trainerId });
 
+      // Get existing assignments to detect newly added trainees
+      const existingAssignments = await db
+        .select({ traineeId: quizAssignments.traineeId })
+        .from(quizAssignments)
+        .where(eq(quizAssignments.quizId, quizId as any));
+      const previousIds = new Set(existingAssignments.map((a) => String(a.traineeId)));
+
       await db.transaction(async (tx) => {
         await tx.delete(quizAssignments).where(eq(quizAssignments.quizId, quizId as any));
 
         if (assignedTraineeIds.length > 0) {
           if (!trainerId) {
             console.error('Cannot assign trainees: trainerId missing in request body');
-            // Do not throw here to avoid failing the whole update if only assignments fail? 
-            // Better to throw so user knows.
             throw new Error('trainerId required to assign trainees');
           }
 
@@ -133,6 +164,26 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ quizId: s
           await tx.insert(quizAssignments).values(values).onConflictDoNothing();
         }
       });
+
+      // Notify newly assigned trainees only
+      const newTraineeIds = assignedTraineeIds.filter((tid) => !previousIds.has(tid));
+      if (newTraineeIds.length > 0 && trainerId) {
+        try {
+          const quizTitle = title || 'Quiz';
+          const notifValues = newTraineeIds.map((tid) => ({
+            userId: tid,
+            actorId: trainerId,
+            type: 'GLOBAL_QUIZ_ASSIGNED',
+            title: 'Neues Quiz zugewiesen',
+            message: `Dir wurde ein Quiz zugewiesen: "${quizTitle}"`,
+            linkUrl: `/trainee/quizzes/${quizId}`,
+            context: { quizId },
+          }));
+          await db.insert(notifications).values(notifValues);
+        } catch (notifyErr) {
+          console.warn('Failed to notify trainees for quiz assignment update', notifyErr);
+        }
+      }
     }
 
     return NextResponse.json({ ok: true });

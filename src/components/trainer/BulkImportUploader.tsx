@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
 interface ImportStats {
@@ -20,6 +21,7 @@ interface ImportResult {
 
 export function BulkImportUploader() {
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -29,7 +31,7 @@ export function BulkImportUploader() {
     if (selectedFile) {
       // Validate file type
       if (!selectedFile.name.endsWith('.xlsx') && !selectedFile.name.endsWith('.xls')) {
-        alert('Bitte wählen Sie eine Excel-Datei (.xlsx oder .xls)');
+        alert(t('bulk.selectExcelFile'));
         return;
       }
       setFile(selectedFile);
@@ -39,7 +41,7 @@ export function BulkImportUploader() {
 
   const handleUpload = async () => {
     if (!file || !profile?.id) {
-      alert('Bitte wählen Sie eine Datei aus');
+      alert(t('bulk.selectFile'));
       return;
     }
 
@@ -66,13 +68,13 @@ export function BulkImportUploader() {
     } catch (error: any) {
       setResult({
         success: false,
-        message: 'Upload fehlgeschlagen',
+        message: t('bulk.uploadFailed'),
         stats: {
           coursesCreated: 0,
           enablersCreated: 0,
           useCasesCreated: 0,
           skillsCreated: 0,
-          errors: [error.message || 'Unbekannter Fehler'],
+          errors: [error.message || t('bulk.unknownError')],
         },
       });
     } finally {
@@ -89,10 +91,10 @@ export function BulkImportUploader() {
     <div className="bg-card border-border rounded-3xl border p-8 shadow-lg">
       <div className="mb-6">
         <h2 className="text-foreground mb-2 text-2xl font-bold">
-          Bulk Import
+          {t('bulk.title')}
         </h2>
         <p className="text-muted-foreground">
-          Importieren Sie mehrere Kurse, Enabler und Use Cases gleichzeitig aus einer Excel-Datei
+          {t('bulk.description')}
         </p>
       </div>
 
@@ -102,9 +104,9 @@ export function BulkImportUploader() {
           <div className="flex items-center gap-3">
             <FileSpreadsheet className="text-accent h-8 w-8" />
             <div>
-              <h3 className="text-foreground font-semibold">Excel-Vorlage herunterladen</h3>
+              <h3 className="text-foreground font-semibold">{t('bulk.downloadTemplate')}</h3>
               <p className="text-muted-foreground text-sm">
-                Laden Sie die Vorlage herunter und füllen Sie sie mit Ihren Daten
+                {t('bulk.downloadTemplateDesc')}
               </p>
             </div>
           </div>
@@ -113,7 +115,7 @@ export function BulkImportUploader() {
             className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-xl px-6 py-3 transition-colors"
           >
             <Download className="h-5 w-5" />
-            <span>Vorlage herunterladen</span>
+            <span>{t('bulk.templateDownload')}</span>
           </button>
         </div>
       </div>
@@ -121,7 +123,7 @@ export function BulkImportUploader() {
       {/* File Upload Section */}
       <div className="mb-6">
         <label className="text-muted-foreground mb-2 block text-sm font-medium">
-          Excel-Datei auswählen
+          {t('bulk.selectFileLabel')}
         </label>
         <div className="flex items-center gap-4">
           <input
@@ -138,19 +140,19 @@ export function BulkImportUploader() {
             {uploading ? (
               <>
                 <div className="border-primary-foreground h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"></div>
-                <span>Wird hochgeladen...</span>
+                <span>{t('bulk.uploading')}</span>
               </>
             ) : (
               <>
                 <Upload className="h-5 w-5" />
-                <span>Hochladen</span>
+                <span>{t('bulk.upload')}</span>
               </>
             )}
           </button>
         </div>
         {file && (
           <p className="text-muted-foreground mt-2 text-sm">
-            Ausgewählte Datei: <span className="text-foreground font-medium">{file.name}</span>
+            {t('bulk.selectedFile')} <span className="text-foreground font-medium">{file.name}</span>
           </p>
         )}
       </div>
@@ -178,19 +180,19 @@ export function BulkImportUploader() {
           {/* Statistics */}
           <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
             <div className="bg-background/50 rounded-lg p-3 text-center">
-              <p className="text-muted-foreground text-sm">Kurse erstellt</p>
+              <p className="text-muted-foreground text-sm">{t('bulk.coursesCreated')}</p>
               <p className="text-foreground text-2xl font-bold">{result.stats.coursesCreated}</p>
             </div>
             <div className="bg-background/50 rounded-lg p-3 text-center">
-              <p className="text-muted-foreground text-sm">Enabler erstellt</p>
+              <p className="text-muted-foreground text-sm">{t('bulk.enablersCreated')}</p>
               <p className="text-foreground text-2xl font-bold">{result.stats.enablersCreated}</p>
             </div>
             <div className="bg-background/50 rounded-lg p-3 text-center">
-              <p className="text-muted-foreground text-sm">Use Cases erstellt</p>
+              <p className="text-muted-foreground text-sm">{t('bulk.useCasesCreated')}</p>
               <p className="text-foreground text-2xl font-bold">{result.stats.useCasesCreated}</p>
             </div>
             <div className="bg-background/50 rounded-lg p-3 text-center">
-              <p className="text-muted-foreground text-sm">Skills erstellt</p>
+              <p className="text-muted-foreground text-sm">{t('bulk.skillsCreated')}</p>
               <p className="text-foreground text-2xl font-bold">{result.stats.skillsCreated}</p>
             </div>
           </div>
@@ -201,7 +203,7 @@ export function BulkImportUploader() {
               <div className="mb-2 flex items-center gap-2">
                 <XCircle className="h-5 w-5 text-red-500" />
                 <h4 className="text-foreground font-semibold">
-                  Fehler ({result.stats.errors.length})
+                  {t('bulk.errors')} ({result.stats.errors.length})
                 </h4>
               </div>
               <div className="max-h-60 space-y-2 overflow-y-auto">
@@ -218,13 +220,13 @@ export function BulkImportUploader() {
 
       {/* Instructions */}
       <div className="bg-muted/50 mt-6 rounded-xl p-4">
-        <h4 className="text-foreground mb-2 font-semibold">Anweisungen:</h4>
+        <h4 className="text-foreground mb-2 font-semibold">{t('bulk.instructions')}</h4>
         <ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
-          <li>Laden Sie die Excel-Vorlage herunter</li>
-          <li>Füllen Sie die Daten in den entsprechenden Sheets aus (Courses, Enablers, Use Cases)</li>
-          <li>Löschen Sie die Instruktionszeilen (Zeilen 1-9) vor dem Import</li>
-          <li>Speichern Sie die Datei und laden Sie sie hier hoch</li>
-          <li>Überprüfen Sie die Ergebnisse und beheben Sie ggf. Fehler</li>
+          <li>{t('bulk.instruction1')}</li>
+          <li>{t('bulk.instruction2')}</li>
+          <li>{t('bulk.instruction3')}</li>
+          <li>{t('bulk.instruction4')}</li>
+          <li>{t('bulk.instruction5')}</li>
         </ol>
       </div>
     </div>

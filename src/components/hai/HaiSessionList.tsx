@@ -9,6 +9,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useHai, HaiSession } from './HaiProvider';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { MessageSquare, Trash2, Brain, Book, HelpCircle, GraduationCap, Pencil, Search, X } from 'lucide-react';
 
 interface HaiSessionListProps {
@@ -16,6 +17,7 @@ interface HaiSessionListProps {
 }
 
 export function HaiSessionList({ className = '' }: HaiSessionListProps) {
+    const { t } = useLanguage();
     const {
         sessions,
         currentSessionId,
@@ -90,10 +92,10 @@ export function HaiSessionList({ className = '' }: HaiSessionListProps) {
         lastWeek.setDate(lastWeek.getDate() - 7);
 
         const groups: { label: string; sessions: HaiSession[] }[] = [
-            { label: 'Heute', sessions: [] },
-            { label: 'Gestern', sessions: [] },
-            { label: 'Letzte 7 Tage', sessions: [] },
-            { label: 'Älter', sessions: [] },
+            { label: t('hai.history.today'), sessions: [] },
+            { label: t('hai.history.yesterday'), sessions: [] },
+            { label: t('hai.history.last7Days'), sessions: [] },
+            { label: t('hai.history.older'), sessions: [] },
         ];
 
         sessions.forEach(session => {
@@ -118,13 +120,13 @@ export function HaiSessionList({ className = '' }: HaiSessionListProps) {
         if (session.title) return session.title;
 
         const contextLabels: Record<string, string> = {
-            'enabler': 'Enabler-Frage',
-            'course': 'Kurs-Frage',
-            'quiz': 'Quiz',
-            'general': 'Allgemein',
+            'enabler': t('hai.context.enabler'),
+            'course': t('hai.context.course'),
+            'quiz': t('hai.context.quiz'),
+            'general': t('hai.context.general'),
         };
 
-        return contextLabels[session.contextType || 'general'] || 'Neue Unterhaltung';
+        return contextLabels[session.contextType || 'general'] || t('hai.newConversation');
     };
 
     const getContextIcon = (contextType: string | null) => {
@@ -217,7 +219,7 @@ export function HaiSessionList({ className = '' }: HaiSessionListProps) {
                     )
                 ) : groupedSessions.length === 0 ? (
                     <div className="text-center py-8 text-gray-500 text-xs">
-                        <p>Keine Historie vorhanden</p>
+                        <p>{t('hai.history.noHistory')}</p>
                     </div>
                 ) : (
                     groupedSessions.map((group, groupIdx) => (
@@ -281,19 +283,19 @@ export function HaiSessionList({ className = '' }: HaiSessionListProps) {
                                                     startEditing(session);
                                                 }}
                                                 className="p-1.5 rounded-md hover:bg-white/10 hover:text-white transition-colors"
-                                                title="Umbenennen"
+                                                title={t('hai.actions.rename')}
                                             >
                                                 <Pencil className="w-3.5 h-3.5" />
                                             </button>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (confirm('Löschen?')) {
+                                                    if (confirm(t('hai.actions.deleteConfirm'))) {
                                                         deleteSession(session.id);
                                                     }
                                                 }}
                                                 className="p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-500 transition-colors"
-                                                title="Löschen"
+                                                title={t('common.delete')}
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>

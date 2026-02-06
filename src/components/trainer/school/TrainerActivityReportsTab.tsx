@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     ClipboardCheck,
     Check,
@@ -39,6 +40,7 @@ const STATUS_CONFIG = {
 
 export function TrainerActivityReportsTab() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,7 @@ export function TrainerActivityReportsTab() {
                     setReports(data.reports || []);
                 }
             } catch (e) {
-                setError('Fehler beim Laden der Berichte');
+                setError(t('reports.error.loadData'));
             } finally {
                 setLoading(false);
             }
@@ -80,7 +82,7 @@ export function TrainerActivityReportsTab() {
                 setSelectedReport(null);
             }
         } catch (e) {
-            setError('Fehler beim Verarbeiten');
+            setError(t('reports.error.processing'));
         }
     };
 
@@ -117,8 +119,8 @@ export function TrainerActivityReportsTab() {
             ) : reports.length === 0 ? (
                 <div className="text-center py-16">
                     <ClipboardCheck className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-bold text-foreground mb-2">Keine Nachweise</h3>
-                    <p className="text-muted-foreground">Keine Tätigkeitsnachweise mit diesem Status gefunden.</p>
+                    <h3 className="text-lg font-bold text-foreground mb-2">{t('reports.noReports')}</h3>
+                    <p className="text-muted-foreground">{t('reports.noReportsWithStatus')}</p>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -260,13 +262,13 @@ function ReviewModal({ report, onClose, onReview }: {
                             onClick={() => { setAction('reject'); }}
                             className={`flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition ${action === 'reject' ? 'bg-destructive text-destructive-foreground' : 'bg-destructive/10 text-destructive hover:bg-destructive/20'}`}
                         >
-                            <X className="h-4 w-4" />Ablehnen
+                            <X className="h-4 w-4" />{t('reports.reject')}
                         </button>
                         <button
                             onClick={() => { setAction('approve'); }}
                             className={`flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition ${action === 'approve' ? 'bg-green-600 text-primary-foreground dark:text-white' : 'bg-green-600/10 text-green-600 hover:bg-green-600/20'}`}
                         >
-                            <Check className="h-4 w-4" />Genehmigen
+                            <Check className="h-4 w-4" />{t('reports.approve')}
                         </button>
                     </div>
 

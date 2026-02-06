@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Upload, X, FileText, Loader2 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/lib/supabase';
 import { FILE_UPLOAD } from '@/lib/constants';
 
@@ -31,6 +32,7 @@ export function PdfUploader({
     disabled = false,
     compact = false,
 }: PdfUploaderProps) {
+    const { t } = useLanguage();
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [dragOver, setDragOver] = useState(false);
@@ -41,13 +43,13 @@ export function PdfUploader({
 
         // Validate file type
         if (!file.name.toLowerCase().endsWith('.pdf')) {
-            setError('Nur PDF-Dateien sind erlaubt');
+            setError(t('pdf.onlyAllowed'));
             return;
         }
 
         // Validate file size
         if (file.size > MAX_SIZE) {
-            setError(`Datei zu groß. Maximum: ${MAX_SIZE / 1024 / 1024}MB`);
+            setError(t('pdf.tooLarge').replace('{size}', String(MAX_SIZE / 1024 / 1024)));
             return;
         }
 
@@ -71,7 +73,7 @@ export function PdfUploader({
             if (uploadError) {
                 // Check if bucket doesn't exist
                 if (uploadError.message.includes('not found') || uploadError.message.includes('Bucket')) {
-                    setError('Storage-Bucket "content" nicht gefunden. Bitte in Supabase erstellen.');
+                    setError(t('pdf.bucketNotFound'));
                     return;
                 }
                 throw uploadError;
@@ -84,7 +86,7 @@ export function PdfUploader({
             onUpload(publicUrl);
         } catch (e: any) {
             console.error('PDF upload error:', e);
-            setError(e?.message || 'Upload fehlgeschlagen');
+            setError(e?.message || t('pdf.uploadFailed'));
         } finally {
             setIsUploading(false);
         }
@@ -128,7 +130,7 @@ export function PdfUploader({
 
     // If we have a value, show the uploaded file
     if (value) {
-        const fileName = value.split('/').pop() || 'PDF-Datei';
+        const fileName = value.split('/').pop() || t('pdf.file');
 
         return (
             <div className="flex items-center gap-3 p-3 rounded-xl border border-green-500/30 bg-green-500/10">
@@ -137,14 +139,14 @@ export function PdfUploader({
                     <p className="text-sm font-medium text-foreground truncate">
                         {fileName}
                     </p>
-                    <p className="text-xs text-muted">PDF erfolgreich hochgeladen</p>
+                    <p className="text-xs text-muted">{t('pdf.uploaded')}</p>
                 </div>
                 {onRemove && !disabled && (
                     <button
                         type="button"
                         onClick={handleRemove}
                         className="p-1.5 rounded-lg hover:bg-red-500/20 text-muted hover:text-red-400 transition-colors"
-                        title="Entfernen"
+                        title={t('pdf.remove')}
                     >
                         <X className="w-4 h-4" />
                     </button>
@@ -181,18 +183,18 @@ export function PdfUploader({
                 {isUploading ? (
                     <>
                         <Loader2 className={`${compact ? 'w-4 h-4' : 'w-8 h-8'} text-primary animate-spin`} />
-                        <span className="text-xs text-muted">Hochladen...</span>
+                        <span className="text-xs text-muted">{t('pdf.uploading')}</span>
                     </>
                 ) : (
                     <>
                         <Upload className={`${compact ? 'w-4 h-4' : 'w-8 h-8'} text-muted`} />
                         <div className={compact ? '' : 'text-center'}>
                             <p className={`${compact ? 'text-xs' : 'text-sm'} font-medium text-foreground`}>
-                                {compact ? 'PDF hinzufügen' : 'PDF hochladen'}
+                                {compact ? t('pdf.add') : t('pdf.upload')}
                             </p>
                             {!compact && (
                                 <p className="text-xs text-muted">
-                                    Klicken oder hierher ziehen (max. 10MB)
+                                    {t('pdf.dragDrop')}
                                 </p>
                             )}
                         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Database, RefreshCw, CheckCircle, AlertCircle, XCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // ============================================================================
 // TYPES
@@ -34,6 +35,7 @@ interface ReindexJob {
 
 export default function HaiAdminWidget() {
     const { user } = useAuth();
+    const { t } = useLanguage();
     const [isStarting, setIsStarting] = useState(false);
     const [activeJob, setActiveJob] = useState<ReindexJob | null>(null);
     const [message, setMessage] = useState('');
@@ -154,10 +156,10 @@ export default function HaiAdminWidget() {
                 });
                 startPolling(data.jobId);
             } else {
-                setMessage(data.error || 'Fehler beim Starten des Jobs.');
+                setMessage(data.error || t('hai.admin.indexError'));
             }
         } catch {
-            setMessage('Netzwerkfehler beim Starten des Jobs.');
+            setMessage(t('hai.admin.networkError'));
         } finally {
             setIsStarting(false);
         }
@@ -185,7 +187,7 @@ export default function HaiAdminWidget() {
         <div className="glass-effect rounded-2xl p-6 shadow-lg bg-gradient-to-br from-[#0f1117]/80 to-[#161b22]/80 border border-white/5">
             <h3 className="text-white mb-6 flex items-center text-xl font-bold gap-3">
                 <span className="text-2xl filter drop-shadow-md">🦈</span>
-                HAI Content Management
+                {t('hai.admin.title')}
             </h3>
 
             <div className="bg-black/20 rounded-xl p-6 border border-white/5">
@@ -194,11 +196,10 @@ export default function HaiAdminWidget() {
                     <div>
                         <h4 className="text-white font-semibold mb-2 flex items-center gap-2">
                             <Database className="w-5 h-5 text-cyan-400" />
-                            Wissensdatenbank
+                            {t('hai.admin.knowledgeBase')}
                         </h4>
                         <p className="text-gray-400 text-sm leading-relaxed max-w-md">
-                            Aktualisiere das Wissen von HAI.ai basierend auf den neuesten Enablers und PDFs.
-                            Dies erstellt neue Embeddings für die Suche.
+                            {t('hai.admin.description')}
                         </p>
                     </div>
 
@@ -210,7 +211,7 @@ export default function HaiAdminWidget() {
                                 className="px-4 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
                             >
                                 <XCircle className="w-4 h-4" />
-                                {isCancelling ? 'Breche ab...' : 'Abbrechen'}
+                                {isCancelling ? t('hai.admin.cancelling') : t('hai.admin.cancel')}
                             </button>
                         ) : (
                             <>
@@ -228,12 +229,12 @@ export default function HaiAdminWidget() {
                                     {isStarting ? (
                                         <>
                                             <Loader2 className="w-4 h-4 animate-spin" />
-                                            Starte...
+                                            {t('hai.admin.starting')}
                                         </>
                                     ) : (
                                         <>
                                             <RefreshCw className="w-4 h-4" />
-                                            Indexieren
+                                            {t('hai.admin.indexNow')}
                                         </>
                                     )}
                                 </button>
@@ -247,10 +248,10 @@ export default function HaiAdminWidget() {
                                             : 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30'
                                         }
                                     `}
-                                    title="Alle Embeddings komplett neu generieren (langsamer)"
+                                    title={t('hai.admin.forceReindexTooltip')}
                                 >
                                     <RefreshCw className="w-4 h-4" />
-                                    Komplett neu
+                                    {t('hai.admin.forceReindex')}
                                 </button>
                             </>
                         )}

@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function NewCoursePage() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { t } = useLanguage();
 
   const [title, setTitle] = useState('');
   const [year, setYear] = useState<'1' | '2' | '3' | ''>('');
@@ -20,8 +22,8 @@ export default function NewCoursePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-  if (!title.trim()) return setError('Bitte einen Kurstitel eingeben.');
-  if (!year) return setError('Bitte ein Trainingsjahr wählen.');
+  if (!title.trim()) return setError(t('course.form.titleRequired'));
+  if (!year) return setError(t('course.form.yearRequired'));
 
     try {
       setSubmitting(true);
@@ -41,12 +43,12 @@ export default function NewCoursePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Speichern fehlgeschlagen');
+      if (!res.ok) throw new Error(t('course.form.saveFailed'));
 
       // Go back to Content Management after creation
       router.replace('/trainer/content-management');
     } catch (e: any) {
-      setError(e?.message || 'Unbekannter Fehler');
+      setError(e?.message || t('error.unknown'));
     } finally {
       setSubmitting(false);
     }
@@ -56,8 +58,8 @@ export default function NewCoursePage() {
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       {/* Header card */}
       <div className="glass-effect rounded-3xl border border-accent/30 bg-black/30 p-6 shadow-lg">
-        <h1 className="text-foreground text-2xl font-bold">Neuen Kurs anlegen</h1>
-        <p className="text-muted mt-1 text-sm">Erstellen Sie einen Kurs und definieren Sie Jahr, Modul und Skills.</p>
+        <h1 className="text-foreground text-2xl font-bold">{t('course.form.newCourse')}</h1>
+        <p className="text-muted mt-1 text-sm">{t('course.form.description')}</p>
       </div>
 
       {/* Form card */}
@@ -66,47 +68,47 @@ export default function NewCoursePage() {
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Kurstitel</label>
+            <label className="mb-1 block text-sm font-medium">{t('course.form.titleLabel')}</label>
             <input
               value={title}
               onChange={e => setTitle(e.target.value)}
               className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
-              placeholder="z.B. Einführung in Webentwicklung"
+              placeholder={t('course.form.titlePlaceholder')}
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Trainingsjahr</label>
+            <label className="mb-1 block text-sm font-medium">{t('course.form.yearLabel')}</label>
             <select
               value={year}
               onChange={e => setYear(e.target.value as any)}
               className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
             >
-              <option value="">Bitte wählen</option>
-              <option value="1">Jahr 1</option>
-              <option value="2">Jahr 2</option>
-              <option value="3">Jahr 3</option>
+              <option value="">{t('course.form.yearSelect')}</option>
+              <option value="1">{t('course.form.yearOption').replace('{year}', '1')}</option>
+              <option value="2">{t('course.form.yearOption').replace('{year}', '2')}</option>
+              <option value="3">{t('course.form.yearOption').replace('{year}', '3')}</option>
             </select>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Modul</label>
+            <label className="mb-1 block text-sm font-medium">{t('course.form.moduleLabel')}</label>
             <input
               value={chapter}
               onChange={(e) => setChapter(e.target.value)}
               className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
-              placeholder="z.B. 1"
+              placeholder={t('course.form.modulePlaceholder')}
               inputMode="numeric"
             />
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Skills (Kommagetrennt)</label>
+            <label className="mb-1 block text-sm font-medium">{t('course.form.skillsLabel')}</label>
             <input
               value={skills}
               onChange={(e) => setSkills(e.target.value)}
               className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
-              placeholder="z.B. Git, HTML, CSS, JavaScript"
+              placeholder={t('course.form.skillsPlaceholder')}
             />
           </div>
         </div>
@@ -117,14 +119,14 @@ export default function NewCoursePage() {
             disabled={submitting}
             className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl px-4 py-2 disabled:opacity-60"
           >
-            {submitting ? 'Speichern…' : 'Speichern'}
+            {submitting ? t('course.form.saving') : t('course.form.save')}
           </button>
           <button
             type="button"
             onClick={() => router.back()}
             className="rounded-xl border border-accent/30 px-4 py-2 hover:bg-background/60"
           >
-            Abbrechen
+            {t('course.form.cancel')}
           </button>
         </div>
       </form>

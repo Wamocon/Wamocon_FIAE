@@ -2,6 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     FileText,
     Plus,
@@ -38,15 +39,16 @@ interface Exam {
 }
 
 const EXAM_TYPES = {
-    KLAUSUR: { label: 'Klausur', bg: 'bg-rose-500/20', text: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/30' },
-    TEST: { label: 'Test', bg: 'bg-amber-500/20', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-500/30' },
-    ABGABE: { label: 'Abgabe', bg: 'bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400', border: 'border-blue-500/30' },
-    PRAESENTATION: { label: 'Präsentation', bg: 'bg-violet-500/20', text: 'text-violet-600 dark:text-violet-400', border: 'border-violet-500/30' },
-    MUENDLICH: { label: 'Mündlich', bg: 'bg-green-500/20', text: 'text-green-600 dark:text-green-400', border: 'border-green-500/30' },
+    KLAUSUR: { labelKey: 'exams.type.klausur', bg: 'bg-rose-500/20', text: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/30' },
+    TEST: { labelKey: 'exams.type.test', bg: 'bg-amber-500/20', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-500/30' },
+    ABGABE: { labelKey: 'exams.type.abgabe', bg: 'bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400', border: 'border-blue-500/30' },
+    PRAESENTATION: { labelKey: 'exams.type.praesentation', bg: 'bg-violet-500/20', text: 'text-violet-600 dark:text-violet-400', border: 'border-violet-500/30' },
+    MUENDLICH: { labelKey: 'exams.type.muendlich', bg: 'bg-green-500/20', text: 'text-green-600 dark:text-green-400', border: 'border-green-500/30' },
 };
 
 export function ExamManager() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const [exams, setExams] = useState<Exam[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export function ExamManager() {
             const res = await fetch(
                 `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=${activeView === 'upcoming'}`
             );
-            if (!res.ok) throw new Error('Fehler beim Laden der Prüfungen');
+            if (!res.ok) throw new Error(t('exams.error.load'));
             const data = await res.json();
             setExams(data.exams || []);
         } catch (e: any) {
@@ -91,7 +93,7 @@ export function ExamManager() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Fehler beim Hinzufügen');
+            if (!res.ok) throw new Error(t('exams.error.add'));
 
             await loadExams();
             setShowAddModal(false);
@@ -101,13 +103,13 @@ export function ExamManager() {
     };
 
     const handleDeleteExam = async (examId: string) => {
-        if (!confirm('Prüfung wirklich löschen?')) return;
+        if (!confirm(t('exams.deleteConfirm'))) return;
 
         try {
             const res = await fetch(`/api/trainee/school/exams/${examId}`, {
                 method: 'DELETE',
             });
-            if (!res.ok) throw new Error('Fehler beim Löschen');
+            if (!res.ok) throw new Error(t('exams.error.delete'));
             await loadExams();
         } catch (e: any) {
             setError(e.message);
@@ -125,12 +127,12 @@ export function ExamManager() {
     };
 
     const getCountdownText = (daysUntil: number) => {
-        if (daysUntil === 0) return 'Heute!';
-        if (daysUntil === 1) return 'Morgen';
-        if (daysUntil < 0) return `Vor ${Math.abs(daysUntil)} Tagen`;
-        if (daysUntil <= 7) return `In ${daysUntil} Tagen`;
-        if (daysUntil <= 14) return `In ${Math.ceil(daysUntil / 7)} Woche(n)`;
-        return `In ${Math.ceil(daysUntil / 7)} Wochen`;
+        if (daysUntil === 0) return t('exams.today');
+        if (daysUntil === 1) return t('exams.tomorrow');
+        if (daysUntil < 0) return t('exams.daysAgo').replace('{days}', String(Math.abs(daysUntil)));
+        if (daysUntil <= 7) return t('exams.inDays').replace('{days}', String(daysUntil));
+        if (daysUntil <= 14) return t('exams.inWeek').replace('{weeks}', String(Math.ceil(daysUntil / 7)));
+        return t('exams.inWeeks').replace('{weeks}', String(Math.ceil(daysUntil / 7)));
     };
 
     if (loading) {
@@ -146,9 +148,9 @@ export function ExamManager() {
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-foreground">Prüfungen</h2>
+                    <h2 className="text-xl font-bold text-foreground">{t('exams.title')}</h2>
                     <p className="text-sm text-muted-foreground">
-                        {exams.length} {activeView === 'upcoming' ? 'anstehende' : 'vergangene'} Prüfungen
+                        {exams.length} {activeView === 'upcoming' ? t('exams.upcomingCount') : t('exams.pastCount')} {t('exams.examsLabel')}
                     </p>
                 </div>
 
@@ -162,7 +164,7 @@ export function ExamManager() {
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                 }`}
                         >
-                            Anstehend
+                            {t('exams.upcoming')}
                         </button>
                         <button
                             onClick={() => setActiveView('past')}
@@ -171,7 +173,7 @@ export function ExamManager() {
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                 }`}
                         >
-                            Vergangen
+                            {t('exams.past')}
                         </button>
                     </div>
 
@@ -180,7 +182,7 @@ export function ExamManager() {
                         className="btn-accent flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
                     >
                         <Plus className="h-4 w-4" />
-                        <span className="hidden sm:inline">Hinzufügen</span>
+                        <span className="hidden sm:inline">{t('exams.add')}</span>
                     </button>
                 </div>
             </div>
@@ -202,14 +204,14 @@ export function ExamManager() {
                     <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">
                         {activeView === 'upcoming'
-                            ? 'Keine anstehenden Prüfungen'
-                            : 'Keine vergangenen Prüfungen'}
+                            ? t('exams.noUpcoming')
+                            : t('exams.noPast')}
                     </p>
                     <button
                         onClick={() => setShowAddModal(true)}
                         className="mt-4 text-accent hover:underline text-sm"
                     >
-                        Prüfung hinzufügen
+                        {t('exams.addExam')}
                     </button>
                 </div>
             ) : (
@@ -232,7 +234,7 @@ export function ExamManager() {
                                             <h3 className="font-semibold text-foreground">{exam.subject}</h3>
                                             {examType && (
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${examType.bg} ${examType.text}`}>
-                                                    {examType.label}
+                                                    {t(examType.labelKey)}
                                                 </span>
                                             )}
                                             {exam.lernfeldCode && (
@@ -251,7 +253,7 @@ export function ExamManager() {
                                             {exam.period && (
                                                 <span className="flex items-center gap-1">
                                                     <Clock className="h-3.5 w-3.5" />
-                                                    {exam.period}. Stunde
+                                                    {exam.period}{t('exams.periodSuffix')}
                                                 </span>
                                             )}
                                             {exam.teacher && (
@@ -319,6 +321,7 @@ function AddExamModal({
     onClose: () => void;
     onAdd: (data: Partial<Exam>) => void;
 }) {
+    const { t } = useLanguage();
     const [examDate, setExamDate] = useState('');
     const [subject, setSubject] = useState('');
     const [examType, setExamType] = useState('');
@@ -346,7 +349,7 @@ function AddExamModal({
             <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl overflow-hidden">
                 <div className="p-6 border-b border-border">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-foreground">Prüfung hinzufügen</h3>
+                        <h3 className="text-lg font-bold text-foreground">{t('exams.addExam')}</h3>
                         <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition text-foreground">
                             <X className="h-5 w-5" />
                         </button>
@@ -355,7 +358,7 @@ function AddExamModal({
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Datum *</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('exams.date')} *</label>
                         <input
                             type="date"
                             value={examDate}
@@ -366,65 +369,65 @@ function AddExamModal({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Fach / Lernfeld *</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('exams.subject')}</label>
                         <input
                             type="text"
                             value={subject}
                             onChange={(e) => setSubject(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl"
-                            placeholder="z.B. LF5, Deutsch, Englisch"
+                            placeholder={t('exams.subjectPlaceholder')}
                             required
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Typ</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('exams.type')}</label>
                             <select
                                 value={examType}
                                 onChange={(e) => setExamType(e.target.value)}
                                 className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
                             >
-                                <option value="">— Auswählen —</option>
-                                <option value="KLAUSUR">Klausur</option>
-                                <option value="TEST">Test</option>
-                                <option value="ABGABE">Abgabe</option>
-                                <option value="PRAESENTATION">Präsentation</option>
-                                <option value="MUENDLICH">Mündlich</option>
+                                <option value="">{t('exams.selectType')}</option>
+                                <option value="KLAUSUR">{t('exams.type.klausur')}</option>
+                                <option value="TEST">{t('exams.type.test')}</option>
+                                <option value="ABGABE">{t('exams.type.abgabe')}</option>
+                                <option value="PRAESENTATION">{t('exams.type.praesentation')}</option>
+                                <option value="MUENDLICH">{t('exams.type.muendlich')}</option>
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Stunde</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('exams.periodLabel')}</label>
                             <input
                                 type="text"
                                 value={period}
                                 onChange={(e) => setPeriod(e.target.value)}
                                 className="w-full px-4 py-3 rounded-xl"
-                                placeholder="z.B. 1./2."
+                                placeholder={t('exams.periodPlaceholder')}
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Lehrkraft</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('exams.teacher')}</label>
                         <input
                             type="text"
                             value={teacher}
                             onChange={(e) => setTeacher(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl"
-                            placeholder="z.B. Herr Müller"
+                            placeholder={t('exams.teacherPlaceholder')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Notizen</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('exams.notes')}</label>
                         <input
                             type="text"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl"
-                            placeholder="Optionale Hinweise..."
+                            placeholder={t('exams.notesPlaceholder')}
                         />
                     </div>
 
@@ -434,14 +437,14 @@ function AddExamModal({
                             onClick={onClose}
                             className="flex-1 px-4 py-3 rounded-xl glass-effect text-foreground font-medium"
                         >
-                            Abbrechen
+                            {t('common.cancel')}
                         </button>
                         <button
                             type="submit"
                             className="btn-accent flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
                         >
                             <Plus className="h-4 w-4" />
-                            Hinzufügen
+                            {t('exams.add')}
                         </button>
                     </div>
                 </form>

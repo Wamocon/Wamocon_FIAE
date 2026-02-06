@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Layers, Search, BookOpen, ArrowRight } from 'lucide-react';
 
-export default function TraineeLernfelderPage() {
+export function LernfelderTab() {
     const router = useRouter();
+    const { t } = useLanguage();
     const [lernfelder, setLernfelder] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -34,12 +36,12 @@ export default function TraineeLernfelderPage() {
     if (loading) return <div className="flex items-center justify-center min-h-[400px]"><div className="border-accent/30 border-t-accent h-8 w-8 animate-spin rounded-full border-4"></div></div>;
 
     return (
-        <div className="mx-auto max-w-7xl space-y-6 p-6">
+        <div className="space-y-6">
             {/* Header */}
             <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
                 <div>
-                    <h1 className="text-foreground text-2xl font-bold">Lernfelder</h1>
-                    <p className="text-muted text-sm">Deine Lernfelder und Aufgaben</p>
+                    <h2 className="text-foreground text-2xl font-bold">{t('lernfelder.title')}</h2>
+                    <p className="text-muted text-sm">{t('lernfelder.description')}</p>
                 </div>
             </div>
 
@@ -49,7 +51,7 @@ export default function TraineeLernfelderPage() {
                     <Search className="text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                     <input
                         type="text"
-                        placeholder="Nach Lernfeldern suchen..."
+                        placeholder={t('lernfelder.search')}
                         className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full rounded-xl border py-2.5 pr-4 pl-10 text-sm focus:border-transparent focus:ring-2 focus:outline-none"
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
@@ -91,7 +93,7 @@ export default function TraineeLernfelderPage() {
                                 </p>
                             ) : (
                                 <p className="text-muted-foreground/50 text-xs italic">
-                                    Keine Beschreibung
+                                    {t('lernfelder.noDescription')}
                                 </p>
                             )}
                         </div>
@@ -100,7 +102,7 @@ export default function TraineeLernfelderPage() {
                         <div className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2 mt-auto">
                             <div className="flex items-center gap-2">
                                 <BookOpen className="h-4 w-4 text-accent" />
-                                <span className="text-foreground text-sm font-medium">Use Cases</span>
+                                <span className="text-foreground text-sm font-medium">{t('lernfelder.useCases')}</span>
                             </div>
                             <span className="text-accent font-bold">{lf.useCaseCount || 0}</span>
                         </div>
@@ -108,7 +110,7 @@ export default function TraineeLernfelderPage() {
                         {/* Hover indicator */}
                         <div className="mt-3 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                             <span className="text-accent text-xs font-medium flex items-center gap-1">
-                                Aufgaben ansehen
+                                {t('lernfelder.viewTasks')}
                                 <ArrowRight className="h-3 w-3" />
                             </span>
                         </div>
@@ -122,9 +124,9 @@ export default function TraineeLernfelderPage() {
                     <div className="from-accent/20 to-primary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br">
                         <Layers className="text-accent h-8 w-8" />
                     </div>
-                    <h3 className="text-foreground mb-2 text-lg font-semibold">Keine Lernfelder gefunden</h3>
+                    <h3 className="text-foreground mb-2 text-lg font-semibold">{t('lernfelder.notFound')}</h3>
                     <p className="text-muted text-sm">
-                        {searchTerm ? 'Versuchen Sie andere Suchbegriffe.' : 'Es wurden noch keine Lernfelder für Sie freigeschaltet.'}
+                        {searchTerm ? t('lernfelder.tryDifferentSearch') : t('lernfelder.noneAssigned')}
                     </p>
                 </div>
             )}
