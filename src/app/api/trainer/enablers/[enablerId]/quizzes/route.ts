@@ -8,6 +8,8 @@ import {
   profiles,
   questions,
   quizzes,
+  courseMembers,
+  notifications,
 } from '@/db/migrations/schemas/schema';
 
 async function verifyTrainer(trainerId: string): Promise<boolean> {
@@ -123,6 +125,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ena
       }
       return qz;
     });
+
+    // Notify course trainees about the new quiz
+    if (isActive) {
+      try {
+        const traineeMembers = await db
+          .select({ userId: courseMembers.userId })
+          .from(courseMembers)
+          .where(and(eq(courseMembers.courseId, enabler.courseId), eq(courseMembers.role, 'TRAINEE')));
+        if (traineeMembers.length > 0) {
+          const diffLabel = difficulty === 'LOW' ? 'Leicht' : difficulty === 'MEDIUM' ? 'Mittel' : 'Schwer';
+          const notifValues = traineeMembers.map((m) => ({
+            userId: String(m.userId),
+            actorId: createdById,
+            type: 'ENABLER_QUIZ_CREATED',
+            title: 'Neues Quiz verfügbar',
+            message: `Ein neues ${diffLabel}-Quiz wurde für "${enabler.title}" erstellt.`,
+            linkUrl: `/trainee/enablers/${enablerId}`,
+            context: { enablerId, quizId: created.id, difficulty },
+          }));
+          await db.insert(notifications).values(notifValues);
+        }
+      } catch (notifyErr) {
+        console.warn('Failed to notify trainees for enabler quiz creation', notifyErr);
+      }
+    }
 
     return NextResponse.json({ ok: true, quizId: created.id });
   } catch (e) {

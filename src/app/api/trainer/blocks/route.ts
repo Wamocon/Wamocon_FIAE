@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
+import { ausbildungBlocks, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { sendBlockerInvite } from '@/lib/email';
 
 // Helper to calculate Ausbildungsjahr from startOfTrainingDate
@@ -203,6 +203,24 @@ export async function POST(req: NextRequest) {
                         createdByTrainer: true,
                         trainerName,
                     });
+                }
+
+                // In-app notification for trainee
+                try {
+                    const startStr = start.toLocaleDateString('de-DE');
+                    const endStr = end.toLocaleDateString('de-DE');
+                    const blockLabel = title || blockType;
+                    await db.insert(notifications).values({
+                        userId: tid,
+                        actorId: trainerId,
+                        type: 'BLOCK_SCHEDULED',
+                        title: 'Neuer Block geplant',
+                        message: `Ein neuer Block "${blockLabel}" wurde für ${startStr} – ${endStr} geplant.`,
+                        linkUrl: '/trainee/school?tab=blocks',
+                        context: { blockId: row.id, blockType, startDate: startDate, endDate: endDate },
+                    });
+                } catch (notifyErr) {
+                    console.warn(`Failed to notify trainee ${tid} for block creation`, notifyErr);
                 }
 
                 results.push(row);

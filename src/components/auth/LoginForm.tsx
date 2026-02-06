@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 export default function LoginForm() {
@@ -15,6 +16,7 @@ export default function LoginForm() {
   const [error, setError] = useState('');
   const router = useRouter();
   const { profile, signIn } = useAuth();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (profile) {
@@ -31,7 +33,7 @@ export default function LoginForm() {
       await signIn(email.trim(), password);
       // redirect happens in the effect when profile is loaded
     } catch (err: any) {
-      setError(err?.message || 'Anmeldung fehlgeschlagen.');
+      setError(err?.message || t('auth.loginFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -50,14 +52,14 @@ export default function LoginForm() {
             <BookOpen className="text-primary-foreground h-8 w-8" />
           </div>
           <h1 className="text-foreground from-accent to-primary mb-2 bg-gradient-to-r bg-clip-text text-4xl font-bold text-transparent">
-            FIAE-Lernplattform
+            {t('auth.title')}
           </h1>
-          <p className="text-muted text-lg">Willkommen zurück!</p>
+          <p className="text-muted text-lg">{t('auth.welcomeBack')}</p>
           <button
             onClick={() => router.push('/')}
             className="text-accent hover:text-accent/80 mt-2 text-sm underline"
           >
-            ← Zurück zur Startseite
+            {t('auth.backToHome')}
           </button>
         </div>
         <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-8 shadow-2xl">
@@ -67,7 +69,7 @@ export default function LoginForm() {
                 htmlFor="email"
                 className="text-foreground mb-2 block text-sm font-medium"
               >
-                E-Mail-Adresse
+                {t('auth.emailAddress')}
               </label>
               <div className="relative">
                 <Mail className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
@@ -78,7 +80,7 @@ export default function LoginForm() {
                   onChange={e => setEmail(e.target.value)}
                   required
                   className="bg-background/50 border-border text-foreground placeholder-muted focus:ring-accent w-full rounded-xl border py-3 pr-4 pl-10 transition-colors focus:border-transparent focus:ring-2 focus:outline-none"
-                  placeholder="ihre.email@beispiel.de"
+                  placeholder={t('auth.emailPlaceholder')}
                 />
               </div>
             </div>
@@ -87,7 +89,7 @@ export default function LoginForm() {
                 htmlFor="password"
                 className="text-foreground mb-2 block text-sm font-medium"
               >
-                Passwort
+                {t('auth.password')}
               </label>
               <div className="relative">
                 <Lock className="text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2" />
@@ -114,7 +116,7 @@ export default function LoginForm() {
               </div>
               <div className="mt-2 text-right">
                 <Link href="/forgot-password" className="text-sm text-accent hover:text-accent/80 underline">
-                  Passwort vergessen?
+                  {t('auth.forgotPassword')}
                 </Link>
               </div>
             </div>
@@ -131,20 +133,20 @@ export default function LoginForm() {
               {isLoading ? (
                 <div className="flex items-center justify-center">
                   <div className="border-primary-foreground/30 border-t-primary-foreground mr-2 h-5 w-5 animate-spin rounded-full border-2"></div>
-                  Anmeldung läuft...
+                  {t('auth.loggingIn')}
                 </div>
               ) : (
-                'Anmelden'
+                t('auth.login')
               )}
             </button>
             <div className="text-center space-y-1">
               <p className="text-muted-foreground">
-                Noch kein Konto?{' '}
+                {t('auth.noAccount')}{' '}
                 <Link
                   href="/register"
                   className="font-medium text-red-400 hover:text-red-300"
                 >
-                  Konto erstellen
+                  {t('auth.createAccount')}
                 </Link>
               </p>
             </div>
@@ -152,7 +154,7 @@ export default function LoginForm() {
         </div>
         <div className="text-center">
           <p className="text-muted text-xs">
-            © 2025 FIAE-Lernplattform. Alle Rechte vorbehalten.
+            {t('auth.copyright')}
           </p>
         </div>
       </div>

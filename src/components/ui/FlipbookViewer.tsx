@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { X, Maximize2, Minimize2, ZoomIn, ZoomOut, Download, ExternalLink, BookOpen } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface FlipbookViewerProps {
     pdfUrl: string;
@@ -11,6 +12,7 @@ interface FlipbookViewerProps {
 }
 
 export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewerProps) {
+    const { t } = useLanguage();
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [scale, setScale] = useState(100);
     const [isLoading, setIsLoading] = useState(true);
@@ -78,7 +80,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                             <h2 className="text-lg font-bold text-foreground tracking-tight">
                                 {title}
                             </h2>
-                            <p className="text-xs text-gray-400">Theorie-Dokument</p>
+                            <p className="text-xs text-gray-400">{t('flipbook.theoryDocument')}</p>
                         </div>
                     </div>
 
@@ -88,7 +90,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                             <button
                                 onClick={() => setScale(s => Math.max(50, s - 10))}
                                 className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground"
-                                title="Verkleinern (-)"
+                                title={t('flipbook.zoomOut')}
                             >
                                 <ZoomOut className="w-4 h-4" />
                             </button>
@@ -98,7 +100,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                             <button
                                 onClick={() => setScale(s => Math.min(200, s + 10))}
                                 className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground"
-                                title="Vergrößern (+)"
+                                title={t('flipbook.zoomIn')}
                             >
                                 <ZoomIn className="w-4 h-4" />
                             </button>
@@ -112,7 +114,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground border border-transparent hover:border-white/10"
-                            title="In neuem Tab öffnen"
+                            title={t('flipbook.openNewTab')}
                         >
                             <ExternalLink className="w-4 h-4" />
                         </a>
@@ -120,7 +122,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                             href={pdfUrl}
                             download
                             className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground border border-transparent hover:border-white/10"
-                            title="Herunterladen"
+                            title={t('flipbook.download')}
                         >
                             <Download className="w-4 h-4" />
                         </a>
@@ -130,14 +132,14 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                         <button
                             onClick={() => setIsFullscreen(!isFullscreen)}
                             className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-foreground border border-transparent hover:border-white/10"
-                            title={isFullscreen ? 'Vollbild beenden (Esc)' : 'Vollbild'}
+                            title={isFullscreen ? t('flipbook.exitFullscreen') : t('flipbook.enterFullscreen')}
                         >
                             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                         </button>
                         <button
                             onClick={onClose}
                             className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-red-400 hover:text-red-300 border border-red-500/20"
-                            title="Schließen (Esc)"
+                            title={t('flipbook.close')}
                         >
                             <X className="w-4 h-4" />
                         </button>
@@ -154,7 +156,7 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                                     <div className="w-16 h-16 border-4 border-red-500/20 rounded-full" />
                                     <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-red-500 rounded-full animate-spin" />
                                 </div>
-                                <span className="text-gray-400 font-medium">PDF wird geladen...</span>
+                                <span className="text-gray-400 font-medium">{t('flipbook.loading')}</span>
                             </div>
                         </div>
                     )}
@@ -180,17 +182,17 @@ export function FlipbookViewer({ pdfUrl, title, isOpen, onClose }: FlipbookViewe
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span className="flex items-center gap-1.5">
                             <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-gray-400">Esc</kbd>
-                            Schließen
+                            {t('flipbook.keyboard.close')}
                         </span>
                         <span className="flex items-center gap-1.5">
                             <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-gray-400">+</kbd>
                             <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-gray-400">-</kbd>
-                            Zoom
+                            {t('flipbook.keyboard.zoom')}
                         </span>
                         <span className="flex items-center gap-1.5">
                             <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-gray-400">↑</kbd>
                             <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-gray-400">↓</kbd>
-                            Scrollen
+                            {t('flipbook.keyboard.scroll')}
                         </span>
                     </div>
                 </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     Calendar,
     ChevronLeft,
@@ -60,10 +61,9 @@ interface CalendarExam {
 }
 
 // Theme-aware block colors
-// Updated labels: Betrieb→WMC, Ferien→Urlaub
 const BLOCK_CONFIG = {
     SCHOOL: {
-        label: 'Schule',
+        labelKey: 'block.type.school',
         Icon: School,
         color: 'bg-accent',
         lightBg: 'bg-accent/20',
@@ -71,7 +71,7 @@ const BLOCK_CONFIG = {
         text: 'text-accent',
     },
     COMPANY: {
-        label: 'WMC',
+        labelKey: 'block.type.company',
         Icon: Building2,
         color: 'bg-green-500',
         lightBg: 'bg-green-500/20',
@@ -79,7 +79,7 @@ const BLOCK_CONFIG = {
         text: 'text-green-600 dark:text-green-400',
     },
     HOLIDAY: {
-        label: 'Urlaub',
+        labelKey: 'block.type.holiday',
         Icon: Palmtree,
         color: 'bg-amber-500',
         lightBg: 'bg-amber-500/20',
@@ -87,7 +87,7 @@ const BLOCK_CONFIG = {
         text: 'text-amber-600 dark:text-amber-400',
     },
     EXAM: {
-        label: 'Prüfung',
+        labelKey: 'block.type.exam',
         Icon: FileText,
         color: 'bg-rose-500',
         lightBg: 'bg-rose-500/20',
@@ -95,7 +95,7 @@ const BLOCK_CONFIG = {
         text: 'text-rose-600 dark:text-rose-400',
     },
     PERSONAL: {
-        label: 'Persönlich',
+        labelKey: 'block.type.personal',
         Icon: User,
         color: 'bg-violet-500',
         lightBg: 'bg-violet-500/20',
@@ -103,7 +103,7 @@ const BLOCK_CONFIG = {
         text: 'text-violet-600 dark:text-violet-400',
     },
     SONSTIGES: {
-        label: 'Sonstiges',
+        labelKey: 'block.type.other',
         Icon: AlertCircle,
         color: 'bg-slate-500',
         lightBg: 'bg-slate-500/20',
@@ -111,7 +111,7 @@ const BLOCK_CONFIG = {
         text: 'text-slate-600 dark:text-slate-400',
     },
     TRAINER_BLOCKER: {
-        label: 'Trainer',
+        labelKey: 'block.type.trainer',
         Icon: User,
         color: 'bg-indigo-500',
         lightBg: 'bg-indigo-500/20',
@@ -120,10 +120,10 @@ const BLOCK_CONFIG = {
     },
 };
 
-const WEEKDAYS_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-const MONTHS_DE = [
-    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+// Weekday keys for translation
+const WEEKDAY_KEYS = [
+    'time.weekdays.mo', 'time.weekdays.tu', 'time.weekdays.we', 'time.weekdays.th',
+    'time.weekdays.fr', 'time.weekdays.sa', 'time.weekdays.su'
 ];
 
 // Helper to get days in a month
@@ -153,6 +153,22 @@ function formatDateKey(date: Date): string {
 
 export function BlockCalendar() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
+
+    // Helper to get translated month names
+    const getMonthName = (monthIndex: number) => {
+        const monthKeys = [
+            'time.months.january', 'time.months.february', 'time.months.march',
+            'time.months.april', 'time.months.may', 'time.months.june',
+            'time.months.july', 'time.months.august', 'time.months.september',
+            'time.months.october', 'time.months.november', 'time.months.december'
+        ];
+        return t(monthKeys[monthIndex]);
+    };
+
+    // Get translated weekdays
+    const weekdays = useMemo(() => WEEKDAY_KEYS.map(key => t(key)), [t]);
+
     const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
     const [selectedWeek, setSelectedWeek] = useState<Date>(new Date()); // Start date of the selected week
 
@@ -202,7 +218,7 @@ export function BlockCalendar() {
                     fetch(`/api/trainee/school/exams?traineeId=${profile.id}`)
                 ]);
 
-                if (!blocksRes.ok) throw new Error('Fehler beim Laden der Blöcke');
+                if (!blocksRes.ok) throw new Error(t('calendar.error.loadBlocks'));
                 const blocksData = await blocksRes.json();
                 setBlocks(blocksData.blocks || []);
                 setMeta(blocksData.meta || null);
@@ -419,7 +435,7 @@ export function BlockCalendar() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Fehler beim Hinzufügen');
+            if (!res.ok) throw new Error(t('calendar.error.addBlock'));
 
             const data = await res.json();
             setBlocks(prev => [...prev, data.block]);
@@ -436,7 +452,7 @@ export function BlockCalendar() {
                 method: 'DELETE',
             });
 
-            if (!res.ok) throw new Error('Fehler beim Löschen');
+            if (!res.ok) throw new Error(t('calendar.error.deleteBlock'));
 
             setBlocks(prev => prev.filter(b => b.id !== blockId));
             setSelectedBlock(null);
@@ -449,7 +465,7 @@ export function BlockCalendar() {
         return (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
                 <div className="h-10 w-10 animate-spin rounded-full border-4 border-accent/30 border-t-accent" />
-                <p className="text-muted-foreground text-sm">Lade Kalender...</p>
+                <p className="text-muted-foreground text-sm">{t('calendar.loading')}</p>
             </div>
         );
     }
@@ -459,9 +475,9 @@ export function BlockCalendar() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-foreground">Kalender</h2>
+                    <h2 className="text-xl font-bold text-foreground">{t('calendar.title')}</h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Schul- und Betriebsblöcke, Ferien, Prüfungen
+                        {t('calendar.description')}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -470,13 +486,13 @@ export function BlockCalendar() {
                             onClick={() => setViewMode('month')}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === 'month' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                         >
-                            Monat
+                            {t('calendar.month')}
                         </button>
                         <button
                             onClick={() => setViewMode('week')}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === 'week' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                         >
-                            Woche
+                            {t('calendar.week')}
                         </button>
                     </div>
 
@@ -485,7 +501,7 @@ export function BlockCalendar() {
                         className="flex items-center gap-2 px-4 py-2 rounded-xl glass-effect text-foreground text-sm font-medium transition-all hover:border-accent/30"
                     >
                         <Upload className="h-4 w-4" />
-                        <span className="hidden sm:inline">Import</span>
+                        <span className="hidden sm:inline">{t('calendar.import')}</span>
                     </button>
                     <button
                         onClick={() => {
@@ -495,7 +511,7 @@ export function BlockCalendar() {
                         className="btn-accent flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
                     >
                         <Plus className="h-4 w-4" />
-                        <span className="hidden sm:inline">Neu</span>
+                        <span className="hidden sm:inline">{t('calendar.newBlock')}</span>
                     </button>
                 </div>
             </div>
@@ -512,7 +528,7 @@ export function BlockCalendar() {
                 <div className="flex items-center gap-4">
                     <h3 className="text-lg font-bold text-foreground min-w-[200px] text-center">
                         {viewMode === 'month'
-                            ? `${MONTHS_DE[selectedMonth]} ${selectedYear}`
+                            ? `${getMonthName(selectedMonth)} ${selectedYear}`
                             : `KW ${selectedWeek ? (
                                 (() => {
                                     const d = new Date(Date.UTC(selectedWeek.getFullYear(), selectedWeek.getMonth(), selectedWeek.getDate()));
@@ -528,7 +544,7 @@ export function BlockCalendar() {
                         onClick={goToToday}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition"
                     >
-                        Heute
+                        {t('calendar.today')}
                     </button>
                 </div>
 
@@ -548,7 +564,7 @@ export function BlockCalendar() {
                         .map(([type, config]) => (
                             <div key={type} className="flex items-center gap-2">
                                 <div className={`h-3 w-3 rounded-full ${config.color}`} />
-                                <span className="text-sm font-medium text-muted-foreground">{config.label}</span>
+                                <span className="text-sm font-medium text-muted-foreground">{t(config.labelKey)}</span>
                             </div>
                         ))}
                 </div>
@@ -558,7 +574,7 @@ export function BlockCalendar() {
             <div className="rounded-2xl glass-effect overflow-hidden">
                 {/* Weekday Headers */}
                 <div className="grid grid-cols-7 border-b border-border bg-muted/20">
-                    {WEEKDAYS_DE.map((day, i) => (
+                    {weekdays.map((day, i) => (
                         <div
                             key={day}
                             className={`py-3 text-center text-sm font-semibold ${i >= 5 ? 'text-muted-foreground' : 'text-foreground'}`}
@@ -623,7 +639,7 @@ export function BlockCalendar() {
                                                     >
                                                         <blockConfig.Icon className="h-3 w-3 flex-shrink-0" />
                                                         <span className="truncate hidden md:block">
-                                                            {block.title || block.description || blockConfig.label}
+                                                            {block.title || block.description || t(blockConfig.labelKey)}
                                                         </span>
                                                     </div>
                                                 );
@@ -634,7 +650,7 @@ export function BlockCalendar() {
                                                     onClick={(e) => handleMoreClick(dayData.date, e)}
                                                     className="text-[10px] text-muted-foreground px-1.5 hover:text-foreground hover:underline"
                                                 >
-                                                    +{dayData.blocks.length - 2} mehr
+                                                    {t('calendar.more').replace('{count}', String(dayData.blocks.length - 2))}
                                                 </div>
                                             )}
                                         </div>
@@ -660,7 +676,7 @@ export function BlockCalendar() {
                                                     onClick={(e) => handleMoreClick(dayData.date, e)}
                                                     className="text-[10px] text-muted-foreground px-1.5 hover:text-foreground hover:underline"
                                                 >
-                                                    +{dayData.exams.length - 2} Exams
+                                                    {t('calendar.moreExams').replace('{count}', String(dayData.exams.length - 2))}
                                                 </div>
                                             )}
                                         </div>
@@ -702,7 +718,7 @@ export function BlockCalendar() {
                                                     <div className="flex items-start gap-2 mb-1">
                                                         <blockConfig.Icon className="h-4 w-4 mt-0.5 flex-shrink-0" />
                                                         <span className="font-semibold text-xs leading-tight">
-                                                            {block.title || blockConfig.label}
+                                                            {block.title || t(blockConfig.labelKey)}
                                                         </span>
                                                     </div>
                                                     {block.description && (
@@ -730,7 +746,7 @@ export function BlockCalendar() {
                                                     <FileText className="h-4 w-4 mt-0.5" />
                                                     <span className="font-semibold text-xs">{exam.subject}</span>
                                                 </div>
-                                                <p className="text-[10px] opacity-80">{exam.examTypeValue || 'Prüfung'}</p>
+                                                <p className="text-[10px] opacity-80">{exam.examTypeValue || t('calendar.examFallback')}</p>
                                             </div>
                                         ))}
 
@@ -760,7 +776,7 @@ export function BlockCalendar() {
                             <School className="h-5 w-5 text-accent" />
                             <div>
                                 <p className="text-xl font-bold text-foreground">{stats.schoolBlocks}</p>
-                                <p className="text-xs text-accent">Schulblöcke</p>
+                                <p className="text-xs text-accent">{t('calendar.schoolBlocks')}</p>
                             </div>
                         </div>
                     </div>
@@ -769,7 +785,7 @@ export function BlockCalendar() {
                             <Building2 className="h-5 w-5 text-green-600 dark:text-green-400" />
                             <div>
                                 <p className="text-xl font-bold text-foreground">{stats.companyBlocks}</p>
-                                <p className="text-xs text-green-600 dark:text-green-400">Betriebsphasen</p>
+                                <p className="text-xs text-green-600 dark:text-green-400">{t('calendar.companyPhases')}</p>
                             </div>
                         </div>
                     </div>
@@ -778,7 +794,7 @@ export function BlockCalendar() {
                             <Palmtree className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                             <div>
                                 <p className="text-xl font-bold text-foreground">{stats.holidayBlocks}</p>
-                                <p className="text-xs text-amber-600 dark:text-amber-400">Ferienwochen</p>
+                                <p className="text-xs text-amber-600 dark:text-amber-400">{t('calendar.holidayWeeks')}</p>
                             </div>
                         </div>
                     </div>
@@ -792,10 +808,10 @@ export function BlockCalendar() {
                         <Sparkles className="h-7 w-7 text-accent" />
                     </div>
                     <h3 className="text-lg font-bold text-foreground mb-2">
-                        Noch keine Einträge
+                        {t('calendar.emptyState.title')}
                     </h3>
                     <p className="text-muted-foreground max-w-sm mx-auto mb-4 text-sm">
-                        Klicke auf einen Tag, um einen Block hinzuzufügen, oder importiere deinen Schulkalender als CSV.
+                        {t('calendar.emptyState.description')}
                     </p>
                 </div>
             )}
@@ -860,6 +876,7 @@ function BlockDetailModal({
     onClose: () => void;
     onDelete: (blockId: string) => void;
 }) {
+    const { t } = useLanguage();
     const config = BLOCK_CONFIG[block.blockType];
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -891,10 +908,10 @@ function BlockDetailModal({
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-foreground">
-                                    {block.title || config.label}
-                                    {block.blockNumber && <span className="ml-2 text-muted-foreground">Block {block.blockNumber}</span>}
+                                    {block.title || t(config.labelKey)}
+                                    {block.blockNumber && <span className="ml-2 text-muted-foreground">{t('calendar.block.blockNumber').replace('{number}', String(block.blockNumber))}</span>}
                                 </h3>
-                                <p className="text-sm text-muted-foreground">{config.label} • KW {block.calendarWeek}</p>
+                                <p className="text-sm text-muted-foreground">{t(config.labelKey)} • {t('calendar.block.calendarWeek').replace('{week}', String(block.calendarWeek))}</p>
                             </div>
                         </div>
                         <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition text-foreground">
@@ -908,16 +925,16 @@ function BlockDetailModal({
                     <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            Zeitraum
+                            {t('calendar.block.period')}
                         </p>
                         <p className="text-foreground font-medium">{formatDate(block.startDate)}</p>
-                        <p className="text-foreground">bis {formatDate(block.endDate)}</p>
+                        <p className="text-foreground">{t('calendar.block.until').replace('{date}', formatDate(block.endDate))}</p>
                     </div>
 
                     {/* Description (for trainer blockers or sonstiges) */}
                     {block.description && (
                         <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Beschreibung</p>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{t('calendar.block.descriptionLabel')}</p>
                             <p className="text-foreground">{block.description}</p>
                         </div>
                     )}
@@ -925,32 +942,32 @@ function BlockDetailModal({
                     {/* Notes */}
                     {block.notes && (
                         <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Notizen</p>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{t('calendar.block.notes')}</p>
                             <p className="text-foreground">{block.notes}</p>
                         </div>
                     )}
 
                     <div className="grid grid-cols-2 gap-4 pt-2">
                         <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Schuljahr</p>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{t('calendar.block.schoolYear')}</p>
                             <p className="text-foreground font-medium">{block.schuljahr}</p>
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Ausbildungsjahr</p>
-                            <p className="text-foreground font-medium">{block.ausbildungsjahr}. Jahr</p>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{t('calendar.block.trainingYear')}</p>
+                            <p className="text-foreground font-medium">{t('calendar.block.yearFormat').replace('{year}', String(block.ausbildungsjahr))}</p>
                         </div>
                     </div>
 
                     {confirmDelete ? (
                         <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 space-y-3">
-                            <p className="text-sm text-foreground font-medium">Block wirklich löschen?</p>
+                            <p className="text-sm text-foreground font-medium">{t('calendar.block.deleteConfirm')}</p>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setConfirmDelete(false)}
                                     className="flex-1 px-3 py-2 rounded-lg glass-effect text-sm font-medium text-foreground"
                                     disabled={deleting}
                                 >
-                                    Abbrechen
+                                    {t('common.cancel')}
                                 </button>
                                 <button
                                     onClick={handleDelete}
@@ -964,7 +981,7 @@ function BlockDetailModal({
                                             <Trash2 className="h-4 w-4" />
                                         )}
                                     </span>
-                                    Löschen
+                                    {t('common.delete')}
                                 </button>
                             </div>
                         </div>
@@ -975,13 +992,13 @@ function BlockDetailModal({
                                 className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive font-medium transition"
                             >
                                 <Trash2 className="h-4 w-4" />
-                                Löschen
+                                {t('common.delete')}
                             </button>
                             <button
                                 onClick={onClose}
                                 className="flex-1 px-4 py-2.5 rounded-xl glass-effect text-foreground font-medium transition hover:bg-muted"
                             >
-                                Schließen
+                                {t('common.close')}
                             </button>
                         </div>
                     )}
@@ -1001,6 +1018,7 @@ function AddBlockModal({
     onAdd: (data: Partial<Block>) => void;
     initialDate: Date | null;
 }) {
+    const { t } = useLanguage();
     const [startDate, setStartDate] = useState(
         initialDate ? `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}` : ''
     );
@@ -1015,16 +1033,16 @@ function AddBlockModal({
     const [inviteeEmails, setInviteeEmails] = useState('');
 
     // Exam sub-type options for dropdown
-    const EXAM_SUB_TYPES = [
-        { value: 'IHK_ABSCHLUSSPRUEFUNG_T1', label: 'IHK Abschlussprüfung Teil 1' },
-        { value: 'IHK_ABSCHLUSSPRUEFUNG_T2', label: 'IHK Abschlussprüfung Teil 2' },
-        { value: 'KLAUSUR_WMC', label: 'Klausur WMC' },
-        { value: 'KLAUSUR_ALLGEMEIN', label: 'Klausur (Allgemein)' },
-        { value: 'PRAKTISCHE_PRUEFUNG', label: 'Praktische Prüfung' },
-        { value: 'MUENDLICHE_PRUEFUNG', label: 'Mündliche Prüfung' },
-        { value: 'PROJEKTARBEIT', label: 'Projektarbeit' },
-        { value: 'ANDERE', label: 'Andere' },
-    ];
+    const EXAM_SUB_TYPES = useMemo(() => [
+        { value: 'IHK_ABSCHLUSSPRUEFUNG_T1', label: t('calendar.examSubTypes.ihkT1') },
+        { value: 'IHK_ABSCHLUSSPRUEFUNG_T2', label: t('calendar.examSubTypes.ihkT2') },
+        { value: 'KLAUSUR_WMC', label: t('calendar.examSubTypes.klausurWmc') },
+        { value: 'KLAUSUR_ALLGEMEIN', label: t('calendar.examSubTypes.klausurAllgemein') },
+        { value: 'PRAKTISCHE_PRUEFUNG', label: t('calendar.examSubTypes.praktisch') },
+        { value: 'MUENDLICHE_PRUEFUNG', label: t('calendar.examSubTypes.muendlich') },
+        { value: 'PROJEKTARBEIT', label: t('calendar.examSubTypes.projekt') },
+        { value: 'ANDERE', label: t('calendar.examSubTypes.andere') },
+    ], [t]);
 
     // Calculate calendar week from start date
     const getCalendarWeek = (dateStr: string): number => {
@@ -1069,7 +1087,7 @@ function AddBlockModal({
             <div className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
                 <div className="p-6 border-b border-border">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-foreground">Block hinzufügen</h3>
+                        <h3 className="text-lg font-bold text-foreground">{t('calendar.modal.addBlock')}</h3>
                         <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition text-foreground">
                             <X className="h-5 w-5" />
                         </button>
@@ -1079,7 +1097,7 @@ function AddBlockModal({
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Startdatum</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.startDate')}</label>
                             <input
                                 type="date"
                                 value={startDate}
@@ -1089,7 +1107,7 @@ function AddBlockModal({
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Enddatum</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.endDate')}</label>
                             <input
                                 type="date"
                                 value={endDate}
@@ -1101,7 +1119,7 @@ function AddBlockModal({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Block-Typ</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.blockType')}</label>
                         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                             {availableBlockTypes.map(([type, config]) => (
                                 <button
@@ -1117,7 +1135,7 @@ function AddBlockModal({
                                     `}
                                 >
                                     <config.Icon className="h-5 w-5" />
-                                    <span className="text-[10px] font-medium">{config.label}</span>
+                                    <span className="text-[10px] font-medium">{t(config.labelKey)}</span>
                                 </button>
                             ))}
                         </div>
@@ -1125,27 +1143,27 @@ function AddBlockModal({
 
                     {blockType === 'SCHOOL' && (
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Block-Nummer (optional)</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.blockNumber')}</label>
                             <input
                                 type="number"
                                 min="1"
                                 value={blockNumber}
                                 onChange={(e) => setBlockNumber(e.target.value)}
                                 className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
-                                placeholder="z.B. 5"
+                                placeholder={t('calendar.modal.blockNumberPlaceholder')}
                             />
                         </div>
                     )}
 
                     {blockType === 'EXAM' && (
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Prüfungsart</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.examType')}</label>
                             <select
                                 value={examSubType || ''}
                                 onChange={(e) => setExamSubType(e.target.value as Block['examSubType'])}
                                 className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
                             >
-                                <option value="">Bitte auswählen...</option>
+                                <option value="">{t('calendar.modal.selectPlaceholder')}</option>
                                 {EXAM_SUB_TYPES.map((opt) => (
                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                                 ))}
@@ -1155,38 +1173,38 @@ function AddBlockModal({
 
                     {blockType === 'SONSTIGES' && (
                         <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">Beschreibung *</label>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.descriptionRequired')}</label>
                             <textarea
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground min-h-[80px]"
-                                placeholder="z.B. Arzttermin, Behördengang..."
+                                placeholder={t('calendar.modal.descriptionPlaceholder')}
                                 required={blockType === 'SONSTIGES'}
                             />
                         </div>
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Notizen (optional)</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.notesOptional')}</label>
                         <input
                             type="text"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
-                            placeholder="z.B. Prüfungsvorbereitung"
+                            placeholder={t('calendar.modal.notesPlaceholder')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Einladungen senden an (optional)</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.inviteLabel')}</label>
                         <input
                             type="text"
                             value={inviteeEmails}
                             onChange={(e) => setInviteeEmails(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
-                            placeholder="email1@example.com, email2@example.com"
+                            placeholder={t('calendar.modal.invitePlaceholder')}
                         />
-                        <p className="text-xs text-muted-foreground mt-1">Kommagetrennte E-Mail-Adressen für Kalendereinladung</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t('calendar.inviteEmails')}</p>
                     </div>
 
                     <div className="flex gap-3 pt-2">
@@ -1195,14 +1213,14 @@ function AddBlockModal({
                             onClick={onClose}
                             className="flex-1 px-4 py-3 rounded-xl glass-effect text-foreground font-medium transition"
                         >
-                            Abbrechen
+                            {t('common.cancel')}
                         </button>
                         <button
                             type="submit"
                             className="btn-accent flex-1 px-4 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2"
                         >
                             <Check className="h-4 w-4" />
-                            Hinzufügen
+                            {t('common.add')}
                         </button>
                     </div>
                 </form>
@@ -1222,6 +1240,7 @@ function ImportBlocksModal({
     traineeId: string;
     onSuccess: () => void;
 }) {
+    const { t } = useLanguage();
     const [csvData, setCsvData] = useState('');
     const [importing, setImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -1258,7 +1277,7 @@ function ImportBlocksModal({
             const json = await res.json();
 
             if (!res.ok) {
-                throw new Error(json.error || 'Import fehlgeschlagen');
+                throw new Error(json.error || t('calendar.error.importFailed'));
             }
 
             setResult(json.result);
@@ -1279,7 +1298,7 @@ function ImportBlocksModal({
                             <div className="p-2 rounded-lg bg-accent/20">
                                 <Upload className="h-5 w-5 text-accent" />
                             </div>
-                            <h3 className="text-lg font-bold text-foreground">CSV Import</h3>
+                            <h3 className="text-lg font-bold text-foreground">{t('calendar.import.title')}</h3>
                         </div>
                         <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition text-foreground">
                             <X className="h-5 w-5" />
@@ -1291,8 +1310,8 @@ function ImportBlocksModal({
                     <div className="p-4 rounded-xl bg-accent/10 border border-accent/20 flex gap-3">
                         <Info className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" />
                         <div className="text-sm">
-                            <p className="font-medium text-foreground mb-1">Erwartetes Format:</p>
-                            <p className="text-muted-foreground">KW, Datum, 10IT, 11IT, 12IT, Anmerkungen</p>
+                            <p className="font-medium text-foreground mb-1">{t('calendar.import.formatLabel')}</p>
+                            <p className="text-muted-foreground">{t('calendar.import.formatDescription')}</p>
                         </div>
                     </div>
 
@@ -1317,7 +1336,7 @@ function ImportBlocksModal({
                         <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 flex gap-3">
                             <Check className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                             <p className="text-sm text-green-700 dark:text-green-300">
-                                <strong>{result.imported}</strong> Blöcke importiert, <strong>{result.skipped}</strong> übersprungen
+                                {t('calendar.import.result').replace('{imported}', String(result.imported)).replace('{skipped}', String(result.skipped))}
                             </p>
                         </div>
                     )}
@@ -1327,7 +1346,7 @@ function ImportBlocksModal({
                             onClick={onClose}
                             className="flex-1 px-4 py-3 rounded-xl glass-effect text-foreground font-medium transition"
                         >
-                            Abbrechen
+                            {t('common.cancel')}
                         </button>
                         <button
                             onClick={handleImport}
@@ -1337,12 +1356,12 @@ function ImportBlocksModal({
                             {importing ? (
                                 <>
                                     <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Importiere...
+                                    {t('calendar.import.importing')}
                                 </>
                             ) : (
                                 <>
                                     <Upload className="h-4 w-4" />
-                                    Importieren
+                                    {t('calendar.import.importButton')}
                                 </>
                             )}
                         </button>

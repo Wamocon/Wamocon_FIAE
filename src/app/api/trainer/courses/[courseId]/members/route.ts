@@ -190,6 +190,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
       )
     );
 
+    // Notify the removed user
+    try {
+      const [courseInfo] = await db.select({ title: courses.title }).from(courses).where(eq(courses.id, courseId as any));
+      const courseName = courseInfo?.title || 'einem Kurs';
+      await db.insert(notifications).values({
+        userId,
+        actorId: trainerId,
+        type: 'COURSE_MEMBER_REMOVED',
+        title: 'Aus Kurs entfernt',
+        message: `Du wurdest aus dem Kurs "${courseName}" entfernt.`,
+        linkUrl: memberToRemove.role === 'TRAINER' ? '/trainer/courses' : '/trainee/modules',
+        context: { courseId },
+      });
+    } catch (notifyErr) {
+      console.warn('Failed to notify removed course member', notifyErr);
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('Remove course member error', e);

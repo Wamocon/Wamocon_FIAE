@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Layers, Plus, Trash2, Search, BookOpen, ArrowRight } from 'lucide-react';
 
-export default function TrainerLernfelderPage() {
+export function TrainerLernfelderTab() {
     const router = useRouter();
+    const { t } = useLanguage();
     const [lernfelder, setLernfelder] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -79,7 +81,7 @@ export default function TrainerLernfelderPage() {
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (!confirm('Sind Sie sicher, dass Sie dieses Lernfeld löschen möchten?')) return;
+        if (!confirm(t('lernfelder.deleteConfirm'))) return;
         try {
             const res = await fetch(`/api/trainer/lernfelder/${id}`, { method: 'DELETE' });
             if (res.ok) {
@@ -127,20 +129,20 @@ export default function TrainerLernfelderPage() {
     if (loading) return <div className="flex items-center justify-center min-h-[400px]"><div className="border-accent/30 border-t-accent h-8 w-8 animate-spin rounded-full border-4"></div></div>;
 
     return (
-        <div className="from-background to-primary bg-foreground mx-auto max-w-7xl space-y-6 p-6">
+        <div className="space-y-6">
             {/* Header */}
             <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-foreground text-2xl font-bold">Lernfelder</h1>
-                        <p className="text-muted text-sm">Übersicht aller Lernfelder und zugehöriger Use Cases</p>
+                        <h2 className="text-foreground text-2xl font-bold">{t('lernfelder.title')}</h2>
+                        <p className="text-muted text-sm">{t('lernfelder.overview')}</p>
                     </div>
                     <button
                         onClick={openCreate}
                         className="bg-primary from-accent to-primary hover:from-accent/90 hover:to-primary/90 flex items-center gap-2 rounded-xl bg-gradient-to-r px-5 py-2.5 font-medium text-primary-foreground shadow-lg transition-all duration-200 hover:shadow-xl"
                     >
                         <Plus className="h-4 w-4" />
-                        Neues Lernfeld
+                        {t('lernfelder.new')}
                     </button>
                 </div>
             </div>
@@ -151,7 +153,7 @@ export default function TrainerLernfelderPage() {
                     <Search className="text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                     <input
                         type="text"
-                        placeholder="Nach Lernfeldern suchen..."
+                        placeholder={t('lernfelder.search')}
                         className="bg-background/50 border-accent/30 focus:ring-accent text-foreground w-full rounded-xl border py-2.5 pr-4 pl-10 text-sm focus:border-transparent focus:ring-2 focus:outline-none"
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
@@ -193,7 +195,7 @@ export default function TrainerLernfelderPage() {
                                 </p>
                             ) : (
                                 <p className="text-muted-foreground/50 text-xs italic">
-                                    Keine Beschreibung
+                                    {t('lernfelder.noDescription')}
                                 </p>
                             )}
                         </div>
@@ -202,7 +204,7 @@ export default function TrainerLernfelderPage() {
                         <div className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2 mb-3 mt-auto">
                             <div className="flex items-center gap-2">
                                 <BookOpen className="h-4 w-4 text-accent" />
-                                <span className="text-foreground text-sm font-medium">Use Cases</span>
+                                <span className="text-foreground text-sm font-medium">{t('lernfelder.useCases')}</span>
                             </div>
                             <span className="text-accent font-bold">{lf.useCaseCount || 0}</span>
                         </div>
@@ -213,7 +215,7 @@ export default function TrainerLernfelderPage() {
                                 onClick={(e) => openEdit(e, lf)}
                                 className="text-accent hover:text-accent/80 text-sm font-medium flex items-center gap-1 transition-colors"
                             >
-                                Bearbeiten
+                                {t('common.edit')}
                                 <ArrowRight className="h-3 w-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                             </button>
                             <button
@@ -233,15 +235,15 @@ export default function TrainerLernfelderPage() {
                     <div className="from-accent/20 to-primary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br">
                         <Layers className="text-accent h-8 w-8" />
                     </div>
-                    <h3 className="text-foreground mb-2 text-lg font-semibold">Keine Lernfelder gefunden</h3>
+                    <h3 className="text-foreground mb-2 text-lg font-semibold">{t('lernfelder.notFound')}</h3>
                     <p className="text-muted text-sm mb-4">
-                        {searchTerm ? 'Versuchen Sie andere Suchbegriffe.' : 'Erstellen Sie Ihr erstes Lernfeld.'}
+                        {searchTerm ? t('lernfelder.tryDifferentSearch') : t('lernfelder.createFirst')}
                     </p>
                     <button
                         onClick={openCreate}
                         className="from-accent to-primary rounded-xl bg-gradient-to-r px-5 py-2 font-medium text-foreground"
                     >
-                        Lernfeld erstellen
+                        {t('lernfelder.create')}
                     </button>
                 </div>
             )}
@@ -250,29 +252,29 @@ export default function TrainerLernfelderPage() {
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="w-full max-w-md rounded-2xl border border-accent/20 bg-card p-6 shadow-2xl">
-                        <h2 className="mb-4 text-xl font-bold text-foreground">{isEditing ? 'Lernfeld bearbeiten' : 'Neues Lernfeld'}</h2>
+                        <h2 className="mb-4 text-xl font-bold text-foreground">{isEditing ? t('lernfelder.edit') : t('lernfelder.new')}</h2>
                         <div className="space-y-4">
                             <div>
-                                <label className="mb-1.5 block text-sm font-medium text-foreground">Titel *</label>
+                                <label className="mb-1.5 block text-sm font-medium text-foreground">{t('lernfelder.titleLabel')}</label>
                                 <input
                                     value={newTitle}
                                     onChange={(e) => setNewTitle(e.target.value)}
                                     className="w-full rounded-xl border border-accent/20 bg-background px-3 py-2.5 text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-                                    placeholder="z.B. IT-Systeme bereitstellen"
+                                    placeholder={t('lernfelder.titlePlaceholder')}
                                 />
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-sm font-medium text-foreground">Beschreibung</label>
+                                <label className="mb-1.5 block text-sm font-medium text-foreground">{t('lernfelder.descriptionLabel')}</label>
                                 <textarea
                                     value={newDesc}
                                     onChange={(e) => setNewDesc(e.target.value)}
                                     className="w-full rounded-xl border border-accent/20 bg-background px-3 py-2.5 text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
                                     rows={3}
-                                    placeholder="Kurze Beschreibung des Lernfelds..."
+                                    placeholder={t('lernfelder.descriptionPlaceholder')}
                                 />
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-sm font-medium text-foreground">Lernfeld-Label *</label>
+                                <label className="mb-1.5 block text-sm font-medium text-foreground">{t('lernfelder.label')}</label>
                                 <select
                                     value={newLabel}
                                     onChange={(e) => setNewLabel(e.target.value)}
@@ -280,25 +282,25 @@ export default function TrainerLernfelderPage() {
                                 >
                                     {availableLabels.map(opt => (
                                         <option key={opt.label} value={opt.label} disabled={opt.disabled}>
-                                            {opt.label} {opt.disabled ? '(Vergeben)' : ''}
+                                            {opt.label} {opt.disabled ? t('lernfelder.labelTaken') : ''}
                                         </option>
                                     ))}
                                 </select>
-                                <p className="mt-1 text-xs text-muted">Jedes Lernfeld benötigt ein eindeutiges Label (LF-1 bis LF-12).</p>
+                                <p className="mt-1 text-xs text-muted">{t('lernfelder.labelInfo')}</p>
                             </div>
                             <div className="flex justify-end gap-3 pt-3">
                                 <button
                                     onClick={() => setShowModal(false)}
                                     className="rounded-xl border border-accent/20 px-4 py-2 text-sm font-medium text-foreground hover:bg-accent/5 transition-colors"
                                 >
-                                    Abbrechen
+                                    {t('common.cancel')}
                                 </button>
                                 <button
                                     onClick={handleSubmit}
                                     disabled={submitting || !newTitle.trim()}
                                     className="rounded-xl bg-gradient-to-r from-accent to-primary px-5 py-2 text-sm font-medium text-white shadow-lg disabled:opacity-50 transition-all hover:shadow-xl"
                                 >
-                                    {isEditing ? 'Speichern' : 'Erstellen'}
+                                    {isEditing ? t('common.save') : t('common.create')}
                                 </button>
                             </div>
                         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import {
     ClipboardList,
@@ -71,6 +72,7 @@ interface TrainingComponent {
 
 export default function TrainerActivityReportsPage() {
     const { profile, loading: authLoading } = useAuth();
+    const { t } = useLanguage();
     const router = useRouter();
 
     const [reports, setReports] = useState<ActivityReport[]>([]);
@@ -210,14 +212,14 @@ export default function TrainerActivityReportsPage() {
     };
 
     const handleDelete = async (reportId: string) => {
-        if (!confirm('Möchten Sie diesen Nachweis wirklich löschen?')) return;
+        if (!confirm(t('trainer.reports.deleteConfirm'))) return;
 
         try {
             const res = await fetch(`/api/activity-reports/${reportId}`, {
                 method: 'DELETE',
             });
 
-            if (!res.ok) throw new Error('Fehler beim Löschen');
+            if (!res.ok) throw new Error(t('trainer.reports.deleteError'));
 
             setSelectedReport(null);
             if (profile?.id) loadData(profile.id);
@@ -233,7 +235,7 @@ export default function TrainerActivityReportsPage() {
             const reportData = {
                 id: selectedReport.id,
                 traineeId: selectedReport.traineeId,
-                traineeName: trainees[selectedReport.traineeId]?.fullName || 'Unbekannt',
+                traineeName: trainees[selectedReport.traineeId]?.fullName || t('trainer.reports.unknown'),
                 traineeEmail: trainees[selectedReport.traineeId]?.email || '',
                 ausbildungsjahr: selectedReport.ausbildungsjahr,
                 weekNumber: selectedReport.weekNumber,
@@ -245,13 +247,13 @@ export default function TrainerActivityReportsPage() {
                 traineeSignedAt: selectedReport.traineeSignedAt || null,
                 trainerSignedAt: selectedReport.trainerSignedAt || null,
                 reviewerId: selectedReport.reviewerId || null,
-                reviewerName: profile?.full_name || 'Ausbilder',
+                reviewerName: profile?.full_name || t('trainer.reports.trainer'),
                 entries: reportEntries,
             };
 
             await generateActivityReportPDF(reportData, useCases, components);
         } catch (err: any) {
-            setError('Fehler beim Erstellen des PDFs: ' + err.message);
+            setError(t('trainer.reports.pdfError') + err.message);
         }
     };
 
@@ -273,7 +275,7 @@ export default function TrainerActivityReportsPage() {
                 const reportData = {
                     id: report.id,
                     traineeId: report.traineeId,
-                    traineeName: trainees[report.traineeId]?.fullName || 'Unbekannt',
+                    traineeName: trainees[report.traineeId]?.fullName || t('trainer.reports.unknown'),
                     traineeEmail: trainees[report.traineeId]?.email || '',
                     ausbildungsjahr: report.ausbildungsjahr,
                     weekNumber: report.weekNumber,
@@ -285,7 +287,7 @@ export default function TrainerActivityReportsPage() {
                     traineeSignedAt: report.traineeSignedAt || null,
                     trainerSignedAt: report.trainerSignedAt || null,
                     reviewerId: report.reviewerId || null,
-                    reviewerName: profile?.full_name || 'Ausbilder',
+                    reviewerName: profile?.full_name || t('trainer.reports.trainer'),
                     entries: entriesData.entries || [],
                 };
 
@@ -310,7 +312,7 @@ export default function TrainerActivityReportsPage() {
                 document.body.removeChild(a);
             }
         } catch (err: any) {
-            setError('Fehler beim Massenexport: ' + err.message);
+            setError(t('trainer.reports.exportError') + err.message);
         }
     };
 
@@ -322,20 +324,20 @@ export default function TrainerActivityReportsPage() {
             return (
                 <span className="px-2 py-1 rounded-full text-xs bg-yellow-500/20 text-yellow-400 flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3" />
-                    Überbucht
+                    {t('trainer.reports.overbooked')}
                 </span>
             );
         }
 
         switch (status) {
             case 'DRAFT':
-                return <span className="px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground">Entwurf</span>;
+                return <span className="px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground">{t('trainer.reports.draft')}</span>;
             case 'SUBMITTED':
-                return <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">Zur Prüfung</span>;
+                return <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">{t('trainer.reports.pending')}</span>;
             case 'APPROVED':
-                return <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">Genehmigt</span>;
+                return <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">{t('trainer.reports.approved')}</span>;
             case 'REJECTED':
-                return <span className="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">Abgelehnt</span>;
+                return <span className="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">{t('trainer.reports.rejected')}</span>;
             default:
                 return null;
         }
@@ -402,9 +404,9 @@ export default function TrainerActivityReportsPage() {
                     <ClipboardList className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground">Tätigkeitsnachweise</h1>
+                    <h1 className="text-2xl font-bold text-foreground">{t('trainer.reports.title')}</h1>
                     <p className="text-muted-foreground text-sm">
-                        Prüfen und genehmigen Sie die wöchentlichen Ausbildungsnachweise
+                        {t('trainer.reports.description')}
                     </p>
                 </div>
             </div>
@@ -421,7 +423,7 @@ export default function TrainerActivityReportsPage() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-foreground">{pendingCount}</p>
-                            <p className="text-sm text-muted-foreground">Zur Prüfung</p>
+                            <p className="text-sm text-muted-foreground">{t('trainer.reports.pending')}</p>
                         </div>
                     </div>
                 </button>
@@ -436,7 +438,7 @@ export default function TrainerActivityReportsPage() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-foreground">{approvedCount}</p>
-                            <p className="text-sm text-muted-foreground">Genehmigt</p>
+                            <p className="text-sm text-muted-foreground">{t('trainer.reports.approved')}</p>
                         </div>
                     </div>
                 </button>
@@ -451,7 +453,7 @@ export default function TrainerActivityReportsPage() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-foreground">{historyCount}</p>
-                            <p className="text-sm text-muted-foreground">Historie</p>
+                            <p className="text-sm text-muted-foreground">{t('trainer.reports.history')}</p>
                         </div>
                     </div>
                 </button>
@@ -462,30 +464,30 @@ export default function TrainerActivityReportsPage() {
                 <div className="flex flex-wrap items-center gap-4">
                     {/* Trainee Filter */}
                     <div className="flex items-center gap-2">
-                        <label className="text-sm text-muted-foreground">Azubi:</label>
+                        <label className="text-sm text-muted-foreground">{t('trainer.reports.traineeLabel')}</label>
                         <select
                             value={traineeFilter}
                             onChange={(e) => setTraineeFilter(e.target.value)}
                             className="bg-muted border border-border rounded-lg px-3 py-1.5 text-sm text-foreground"
                         >
-                            <option value="all">Alle Azubis</option>
-                            {traineeList.map(t => (
-                                <option key={t.id} value={t.id}>{t.fullName}</option>
+                            <option value="all">{t('trainer.reports.allTrainees')}</option>
+                            {traineeList.map(trainee => (
+                                <option key={trainee.id} value={trainee.id}>{trainee.fullName}</option>
                             ))}
                         </select>
                     </div>
 
                     {/* Period Filter */}
                     <div className="flex items-center gap-2">
-                        <label className="text-sm text-muted-foreground">Zeitraum:</label>
+                        <label className="text-sm text-muted-foreground">{t('trainer.reports.periodLabel')}</label>
                         <select
                             value={periodFilter}
                             onChange={(e) => setPeriodFilter(e.target.value as 'all' | '1-18' | '19-36')}
                             className="bg-muted border border-border rounded-lg px-3 py-1.5 text-sm text-foreground"
                         >
-                            <option value="all">Alle Zeiträume</option>
-                            <option value="1-18">1. bis 18. Monat</option>
-                            <option value="19-36">19. bis 36. Monat</option>
+                            <option value="all">{t('trainer.reports.allPeriods')}</option>
+                            <option value="1-18">{t('trainer.reports.period1to18')}</option>
+                            <option value="19-36">{t('trainer.reports.period19to36')}</option>
                         </select>
                     </div>
 
@@ -496,7 +498,7 @@ export default function TrainerActivityReportsPage() {
                             className="flex items-center gap-2 px-4 py-1.5 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 text-sm"
                         >
                             <Download className="h-4 w-4" />
-                            Alle exportieren ({filteredReports.length})
+                            {t('trainer.reports.exportAll').replace('{count}', String(filteredReports.length))}
                         </button>
                     )}
                 </div>
@@ -506,17 +508,17 @@ export default function TrainerActivityReportsPage() {
             <div className="glass-effect rounded-xl overflow-hidden">
                 <div className="p-4 border-b border-border/50">
                     <h2 className="text-lg font-semibold text-foreground">
-                        {filter === 'pending' && 'Nachweise zur Prüfung'}
-                        {filter === 'overbooked' && 'Überbuchte Nachweise'}
-                        {filter === 'approved' && 'Genehmigte Nachweise'}
-                        {filter === 'history' && 'Historie (Genehmigte & Abgelehnte)'}
+                        {filter === 'pending' && t('trainer.reports.pendingReports')}
+                        {filter === 'overbooked' && t('trainer.reports.overbookedReports')}
+                        {filter === 'approved' && t('trainer.reports.approvedReports')}
+                        {filter === 'history' && t('trainer.reports.historyReports')}
                     </h2>
                 </div>
 
                 {filteredReports.length === 0 ? (
                     <div className="p-8 text-center">
                         <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">Keine Nachweise gefunden</p>
+                        <p className="text-muted-foreground">{t('trainer.reports.noReports')}</p>
                     </div>
                 ) : (
                     <div className="divide-y divide-border/50">
@@ -535,13 +537,13 @@ export default function TrainerActivityReportsPage() {
                                             </div>
                                             <div>
                                                 <h3 className="font-medium text-foreground">
-                                                    {report.trainee?.fullName || 'Unbekannt'}
+                                                    {report.trainee?.fullName || t('trainer.reports.unknown')}
                                                 </h3>
                                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                     <Calendar className="h-3 w-3" />
-                                                    <span>KW {report.weekNumber} / {report.year}</span>
+                                                    <span>{t('trainer.reports.week').replace('{week}', String(report.weekNumber)).replace('{year}', String(report.year))}</span>
                                                     <span>•</span>
-                                                    <span>{report.ausbildungsjahr}. Ausbildungsjahr</span>
+                                                    <span>{t('trainer.reports.trainingYear').replace('{year}', String(report.ausbildungsjahr))}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -606,6 +608,7 @@ function ReportReviewModal({
     onDelete: () => void;
     onDownloadPDF: () => void;
 }) {
+    const { t } = useLanguage();
     const [showRejectForm, setShowRejectForm] = useState(false);
     const [feedback, setFeedback] = useState('');
     const [processing, setProcessing] = useState(false);
@@ -635,14 +638,14 @@ function ReportReviewModal({
                     <div className="flex items-center justify-between">
                         <div>
                             <h2 className="text-xl font-bold text-foreground">
-                                Tätigkeitsnachweis prüfen
+                                {t('trainer.reports.modal.title')}
                             </h2>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                                 <User className="h-4 w-4" />
                                 <span>{report.trainee?.fullName}</span>
                                 <span>•</span>
                                 <Calendar className="h-4 w-4" />
-                                <span>KW {report.weekNumber} / {report.year}</span>
+                                <span>{t('trainer.reports.week').replace('{week}', String(report.weekNumber)).replace('{year}', String(report.year))}</span>
                             </div>
                         </div>
                         <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition-colors">
@@ -653,19 +656,19 @@ function ReportReviewModal({
                     {/* Summary */}
                     <div className="mt-4 grid grid-cols-3 gap-4">
                         <div className="p-3 bg-muted/50 rounded-lg">
-                            <p className="text-xs text-muted-foreground">Plan Gesamt</p>
-                            <p className="text-lg font-bold text-foreground">{totalPlanned} Std</p>
+                            <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.planTotal')}</p>
+                            <p className="text-lg font-bold text-foreground">{totalPlanned} {t('trainer.reports.modal.hours')}</p>
                         </div>
                         <div className="p-3 bg-muted/50 rounded-lg">
-                            <p className="text-xs text-muted-foreground">IST Gesamt</p>
+                            <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.actualTotal')}</p>
                             <p className={`text-lg font-bold ${totalActual > totalPlanned ? 'text-yellow-500' : 'text-foreground'}`}>
-                                {totalActual} Std
+                                {totalActual} {t('trainer.reports.modal.hours')}
                             </p>
                         </div>
                         <div className="p-3 bg-muted/50 rounded-lg">
-                            <p className="text-xs text-muted-foreground">Differenz</p>
+                            <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.difference')}</p>
                             <p className={`text-lg font-bold ${totalActual > totalPlanned ? 'text-yellow-500' : 'text-green-500'}`}>
-                                {totalActual > totalPlanned ? '+' : ''}{(totalActual - totalPlanned).toFixed(1)} Std
+                                {totalActual > totalPlanned ? '+' : ''}{(totalActual - totalPlanned).toFixed(1)} {t('trainer.reports.modal.hours')}
                             </p>
                         </div>
                     </div>
@@ -674,7 +677,7 @@ function ReportReviewModal({
                         <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-yellow-500" />
                             <span className="text-yellow-500 text-sm font-medium">
-                                Dieser Nachweis enthält überbuchte Einträge
+                                {t('trainer.reports.modal.overbookedWarning')}
                             </span>
                         </div>
                     )}
@@ -687,7 +690,7 @@ function ReportReviewModal({
                             <div className="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full" />
                         </div>
                     ) : entries.length === 0 ? (
-                        <p className="text-center text-muted-foreground py-12">Keine Einträge</p>
+                        <p className="text-center text-muted-foreground py-12">{t('trainer.reports.modal.noEntries')}</p>
                     ) : (
                         <div className="space-y-4">
                             {entries.map(entry => {
@@ -706,19 +709,19 @@ function ReportReviewModal({
 
                                         <div className="grid grid-cols-3 gap-4">
                                             <div>
-                                                <p className="text-xs text-muted-foreground">Plan</p>
-                                                <p className="font-medium text-foreground">{entry.plannedHours} Std</p>
+                                                <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.plan')}</p>
+                                                <p className="font-medium text-foreground">{entry.plannedHours} {t('trainer.reports.modal.hours')}</p>
                                             </div>
                                             <div>
-                                                <p className="text-xs text-muted-foreground">IST</p>
+                                                <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.actual')}</p>
                                                 <p className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-foreground'}`}>
-                                                    {entry.actualHours} Std
+                                                    {entry.actualHours} {t('trainer.reports.modal.hours')}
                                                 </p>
                                             </div>
                                             <div>
-                                                <p className="text-xs text-muted-foreground">Differenz</p>
+                                                <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.difference')}</p>
                                                 <p className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-green-500'}`}>
-                                                    {entry.isOverbooked ? '+' : ''}{(entry.actualHours - entry.plannedHours).toFixed(1)} Std
+                                                    {entry.isOverbooked ? '+' : ''}{(entry.actualHours - entry.plannedHours).toFixed(1)} {t('trainer.reports.modal.hours')}
                                                 </p>
                                             </div>
                                         </div>
@@ -743,12 +746,12 @@ function ReportReviewModal({
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-foreground mb-2">
-                                        Feedback / Begründung für Ablehnung
+                                        {t('trainer.reports.modal.feedbackLabel')}
                                     </label>
                                     <textarea
                                         value={feedback}
                                         onChange={e => setFeedback(e.target.value)}
-                                        placeholder="Bitte geben Sie einen Grund für die Ablehnung an..."
+                                        placeholder={t('trainer.reports.modal.feedbackPlaceholder')}
                                         className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground resize-none"
                                         rows={3}
                                     />
@@ -758,7 +761,7 @@ function ReportReviewModal({
                                         onClick={() => setShowRejectForm(false)}
                                         className="px-4 py-2 text-muted-foreground hover:text-foreground"
                                     >
-                                        Abbrechen
+                                        {t('trainer.reports.modal.cancel')}
                                     </button>
                                     <button
                                         onClick={handleReject}
@@ -766,7 +769,7 @@ function ReportReviewModal({
                                         className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50"
                                     >
                                         <X className="h-4 w-4" />
-                                        Ablehnen
+                                        {t('trainer.reports.modal.reject')}
                                     </button>
                                 </div>
                             </div>
@@ -776,7 +779,7 @@ function ReportReviewModal({
                                     onClick={onClose}
                                     className="px-4 py-2 text-muted-foreground hover:text-foreground"
                                 >
-                                    Schließen
+                                    {t('trainer.reports.modal.close')}
                                 </button>
                                 <div className="flex gap-3">
                                     <button
@@ -785,7 +788,7 @@ function ReportReviewModal({
                                         className="flex items-center gap-2 px-4 py-2 bg-destructive/20 text-destructive rounded-lg hover:bg-destructive/30"
                                     >
                                         <X className="h-4 w-4" />
-                                        Ablehnen
+                                        {t('trainer.reports.modal.reject')}
                                     </button>
                                     <button
                                         onClick={handleApprove}
@@ -797,7 +800,7 @@ function ReportReviewModal({
                                         ) : (
                                             <Check className="h-4 w-4" />
                                         )}
-                                        Genehmigen
+                                        {t('trainer.reports.modal.approve')}
                                     </button>
                                 </div>
                             </div>
@@ -809,7 +812,7 @@ function ReportReviewModal({
                     <div className="p-6 border-t border-border/50 flex justify-between">
                         <div className="flex items-center gap-2 text-green-500">
                             <Check className="h-5 w-5" />
-                            <span className="font-medium">Bereits genehmigt</span>
+                            <span className="font-medium">{t('trainer.reports.modal.alreadyApproved')}</span>
                         </div>
                         <div className="flex gap-3">
                             <button
@@ -817,13 +820,13 @@ function ReportReviewModal({
                                 className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90"
                             >
                                 <Download className="h-4 w-4" />
-                                PDF herunterladen
+                                {t('trainer.reports.modal.downloadPdf')}
                             </button>
                             <button
                                 onClick={onClose}
                                 className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
                             >
-                                Schließen
+                                {t('trainer.reports.modal.close')}
                             </button>
                         </div>
                     </div>
@@ -832,7 +835,7 @@ function ReportReviewModal({
                 {report.status === 'REJECTED' && (
                     <div className="p-6 border-t border-border/50">
                         <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg mb-4">
-                            <p className="text-sm text-destructive font-medium mb-1">Abgelehnt</p>
+                            <p className="text-sm text-destructive font-medium mb-1">{t('trainer.reports.rejected')}</p>
                             <p className="text-sm text-destructive/80">{report.reviewerFeedback}</p>
                         </div>
                         <div className="flex justify-between">
@@ -841,13 +844,13 @@ function ReportReviewModal({
                                 className="flex items-center gap-2 px-4 py-2 bg-destructive/20 text-destructive rounded-lg hover:bg-destructive/30"
                             >
                                 <X className="h-4 w-4" />
-                                Löschen
+                                {t('trainer.reports.modal.delete')}
                             </button>
                             <button
                                 onClick={onClose}
                                 className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
                             >
-                                Schließen
+                                {t('trainer.reports.modal.close')}
                             </button>
                         </div>
                     </div>

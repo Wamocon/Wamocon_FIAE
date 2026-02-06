@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     FileText,
     User,
@@ -32,18 +33,48 @@ interface Trainee {
     id: string;
     firstName: string | null;
     lastName: string | null;
+    full_name?: string | null;
+    email?: string | null;
 }
 
-const EXAM_TYPES = {
-    KLAUSUR: { label: 'Klausur', bg: 'bg-rose-500/20', text: 'text-rose-600 dark:text-rose-400' },
-    TEST: { label: 'Test', bg: 'bg-amber-500/20', text: 'text-amber-600 dark:text-amber-400' },
-    PROJEKT: { label: 'Projekt', bg: 'bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400' },
-    PRAESENTATION: { label: 'Präsentation', bg: 'bg-violet-500/20', text: 'text-violet-600 dark:text-violet-400' },
-    COMPANY: { label: 'Betrieblich', bg: 'bg-green-500/20', text: 'text-green-600 dark:text-green-400' },
+// Exam type styles (labels will be translated in component)
+const EXAM_TYPE_STYLES = {
+    KLAUSUR: { bg: 'bg-rose-500/20', text: 'text-rose-600 dark:text-rose-400' },
+    TEST: { bg: 'bg-amber-500/20', text: 'text-amber-600 dark:text-amber-400' },
+    PROJEKT: { bg: 'bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400' },
+    PRAESENTATION: { bg: 'bg-violet-500/20', text: 'text-violet-600 dark:text-violet-400' },
+    COMPANY: { bg: 'bg-green-500/20', text: 'text-green-600 dark:text-green-400' },
 };
+
+// Helper function to get trainee display name
+function getTraineeDisplayName(trainee: Trainee, traineeLabel: string): string {
+    if (trainee.firstName && trainee.lastName) {
+        return `${trainee.firstName} ${trainee.lastName}`;
+    }
+    if (trainee.full_name) {
+        return trainee.full_name;
+    }
+    if (trainee.email) {
+        return trainee.email;
+    }
+    return `${traineeLabel} ${trainee.id.substring(0, 8)}`;
+}
 
 export function TrainerExamsTab() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
+
+    // Get exam type label helper
+    const getExamTypeLabel = (type: string) => {
+        const typeMap: { [key: string]: string } = {
+            'KLAUSUR': t('exams.type.klausur'),
+            'TEST': t('exams.type.test'),
+            'PROJEKT': t('exams.type.projekt'),
+            'PRAESENTATION': t('exams.type.praesentation'),
+            'COMPANY': t('exams.type.company'),
+        };
+        return typeMap[type] || typeMap['KLAUSUR'];
+    };
     const [exams, setExams] = useState<Exam[]>([]);
     const [trainees, setTrainees] = useState<Trainee[]>([]);
     const [loading, setLoading] = useState(true);
@@ -72,13 +103,13 @@ export function TrainerExamsTab() {
                     setTrainees(data.trainees || []);
                 }
             } catch (e) {
-                setError('Fehler beim Laden');
+                setError(t('exams.error.load'));
             } finally {
                 setLoading(false);
             }
         }
         loadData();
-    }, [profile?.id, traineeFilter]);
+    }, [profile?.id, traineeFilter, t]);
 
     const handleAddExam = async (examData: any) => {
         if (!profile?.id) return;
@@ -94,7 +125,7 @@ export function TrainerExamsTab() {
                 setShowAddModal(false);
             }
         } catch (e) {
-            setError('Fehler beim Erstellen');
+            setError(t('exams.error.create'));
         }
     };
 
@@ -112,7 +143,7 @@ export function TrainerExamsTab() {
                 setSelectedExam(null);
             }
         } catch (e) {
-            setError('Fehler beim Bewerten');
+            setError(t('exams.error.grade'));
         }
     };
 
@@ -130,9 +161,9 @@ export function TrainerExamsTab() {
                         onChange={(e) => setTraineeFilter(e.target.value)}
                         className="px-4 py-2.5 rounded-xl bg-background border border-border min-w-[200px]"
                     >
-                        <option value="">Alle Trainees</option>
+                        <option value="">{t('exams.allTrainees')}</option>
                         {trainees.map(t => (
-                            <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+                            <option key={t.id} value={t.id}>{getTraineeDisplayName(t, t('exams.trainee'))}</option>
                         ))}
                     </select>
                 </div>
@@ -141,7 +172,7 @@ export function TrainerExamsTab() {
                     className="btn-accent flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium"
                 >
                     <Plus className="h-4 w-4" />
-                    Betriebliche Prüfung
+                    {t('exams.companyExam')}
                 </button>
             </div>
 
@@ -155,10 +186,10 @@ export function TrainerExamsTab() {
                     <div>
                         <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                             <Award className="h-4 w-4 text-green-500" />
-                            Betriebliche Prüfungen ({companyExams.length})
+                            {t('exams.companyExams')} ({companyExams.length})
                         </h3>
                         {companyExams.length === 0 ? (
-                            <p className="text-sm text-muted-foreground italic">Keine betrieblichen Prüfungen vorhanden.</p>
+                            <p className="text-sm text-muted-foreground italic">{t('exams.noCompanyExams')}</p>
                         ) : (
                             <div className="grid gap-3">
                                 {companyExams.map(exam => (
@@ -167,6 +198,8 @@ export function TrainerExamsTab() {
                                         exam={exam}
                                         onGrade={() => { setSelectedExam(exam); setShowGradeModal(true); }}
                                         canGrade
+                                        getExamTypeLabel={getExamTypeLabel}
+                                        t={t}
                                     />
                                 ))}
                             </div>
@@ -177,14 +210,14 @@ export function TrainerExamsTab() {
                     <div>
                         <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                             <FileText className="h-4 w-4 text-accent" />
-                            Schulische Prüfungen ({schoolExams.length})
+                            {t('exams.schoolExams')} ({schoolExams.length})
                         </h3>
                         {schoolExams.length === 0 ? (
-                            <p className="text-sm text-muted-foreground italic">Keine schulischen Prüfungen vorhanden.</p>
+                            <p className="text-sm text-muted-foreground italic">{t('exams.noSchoolExams')}</p>
                         ) : (
                             <div className="grid gap-3">
                                 {schoolExams.map(exam => (
-                                    <ExamCard key={exam.id} exam={exam} canGrade={false} />
+                                    <ExamCard key={exam.id} exam={exam} canGrade={false} getExamTypeLabel={getExamTypeLabel} t={t} />
                                 ))}
                             </div>
                         )}
@@ -205,6 +238,8 @@ export function TrainerExamsTab() {
                     trainees={trainees}
                     onClose={() => setShowAddModal(false)}
                     onAdd={handleAddExam}
+                    t={t}
+                    traineeLabel={t('exams.trainee')}
                 />
             )}
 
@@ -213,14 +248,23 @@ export function TrainerExamsTab() {
                     exam={selectedExam}
                     onClose={() => { setShowGradeModal(false); setSelectedExam(null); }}
                     onGrade={handleGradeExam}
+                    t={t}
                 />
             )}
         </div>
     );
 }
 
-function ExamCard({ exam, onGrade, canGrade }: { exam: Exam; onGrade?: () => void; canGrade: boolean }) {
-    const typeConfig = EXAM_TYPES[exam.isCompanyExam ? 'COMPANY' : (exam.examTypeValue as keyof typeof EXAM_TYPES)] || EXAM_TYPES.KLAUSUR;
+function ExamCard({ exam, onGrade, canGrade, getExamTypeLabel, t }: {
+    exam: Exam;
+    onGrade?: () => void;
+    canGrade: boolean;
+    getExamTypeLabel: (type: string) => string;
+    t: (key: string) => string;
+}) {
+    const examType = exam.isCompanyExam ? 'COMPANY' : exam.examTypeValue;
+    const typeStyle = EXAM_TYPE_STYLES[examType as keyof typeof EXAM_TYPE_STYLES] || EXAM_TYPE_STYLES.KLAUSUR;
+    const typeLabel = getExamTypeLabel(examType);
     const hasGrade = exam.points !== null;
 
     return (
@@ -238,8 +282,8 @@ function ExamCard({ exam, onGrade, canGrade }: { exam: Exam; onGrade?: () => voi
                                 <Calendar className="h-3 w-3" />
                                 {new Date(exam.examDate).toLocaleDateString('de-DE')}
                             </span>
-                            <span className={`px-2 py-0.5 rounded ${typeConfig.bg} ${typeConfig.text}`}>
-                                {typeConfig.label}
+                            <span className={`px-2 py-0.5 rounded ${typeStyle.bg} ${typeStyle.text}`}>
+                                {typeLabel}
                             </span>
                         </div>
                     </div>
@@ -247,17 +291,17 @@ function ExamCard({ exam, onGrade, canGrade }: { exam: Exam; onGrade?: () => voi
                 <div className="flex items-center gap-3">
                     {hasGrade ? (
                         <div className={`px-3 py-1.5 rounded-lg text-sm font-medium ${exam.passed ? 'bg-green-500/20 text-green-600' : 'bg-rose-500/20 text-rose-600'}`}>
-                            {exam.points}/{exam.maxPoints} ({exam.passed ? 'Bestanden' : 'Nicht bestanden'})
+                            {exam.points}/{exam.maxPoints} ({exam.passed ? t('status.passed') : t('status.failed')})
                         </div>
                     ) : canGrade && onGrade ? (
                         <button
                             onClick={onGrade}
                             className="px-3 py-1.5 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 text-sm font-medium"
                         >
-                            Bewerten
+                            {t('exams.grade')}
                         </button>
                     ) : (
-                        <span className="text-xs text-muted-foreground">Noch nicht bewertet</span>
+                        <span className="text-xs text-muted-foreground">{t('exams.notGraded')}</span>
                     )}
                 </div>
             </div>
@@ -265,10 +309,12 @@ function ExamCard({ exam, onGrade, canGrade }: { exam: Exam; onGrade?: () => voi
     );
 }
 
-function AddCompanyExamModal({ trainees, onClose, onAdd }: {
+function AddCompanyExamModal({ trainees, onClose, onAdd, t, traineeLabel }: {
     trainees: Trainee[];
     onClose: () => void;
     onAdd: (data: any) => void;
+    t: (key: string) => string;
+    traineeLabel: string;
 }) {
     const [traineeId, setTraineeId] = useState('');
     const [subject, setSubject] = useState('');
@@ -292,41 +338,41 @@ function AddCompanyExamModal({ trainees, onClose, onAdd }: {
             <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl">
                 <div className="p-6 border-b border-border">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold">Betriebliche Prüfung anlegen</h3>
+                        <h3 className="text-lg font-bold">{t('exams.addCompanyExam')}</h3>
                         <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted"><X className="h-5 w-5" /></button>
                     </div>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium mb-2">Trainee</label>
+                        <label className="block text-sm font-medium mb-2">{t('exams.trainee')}</label>
                         <select value={traineeId} onChange={e => setTraineeId(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" required>
-                            <option value="">Auswählen...</option>
-                            {trainees.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
+                            <option value="">{t('exams.selectTrainee')}</option>
+                            {trainees.map(t => <option key={t.id} value={t.id}>{getTraineeDisplayName(t, traineeLabel)}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-2">Fach/Thema</label>
-                        <input type="text" value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" placeholder="z.B. Netzwerktechnik" required />
+                        <label className="block text-sm font-medium mb-2">{t('exams.subjectTopic')}</label>
+                        <input type="text" value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" placeholder={t('exams.subjectPlaceholder')} required />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-sm font-medium mb-2">Datum</label>
+                            <label className="block text-sm font-medium mb-2">{t('exams.date')}</label>
                             <input type="date" value={examDate} onChange={e => setExamDate(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" required />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-2">Typ</label>
+                            <label className="block text-sm font-medium mb-2">{t('exams.type')}</label>
                             <select value={examType} onChange={e => setExamType(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border">
-                                <option value="KLAUSUR">Klausur</option>
-                                <option value="TEST">Test</option>
-                                <option value="PROJEKT">Projekt</option>
-                                <option value="PRAESENTATION">Präsentation</option>
+                                <option value="KLAUSUR">{t('exams.type.klausur')}</option>
+                                <option value="TEST">{t('exams.type.test')}</option>
+                                <option value="PROJEKT">{t('exams.type.projekt')}</option>
+                                <option value="PRAESENTATION">{t('exams.type.praesentation')}</option>
                             </select>
                         </div>
                     </div>
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl glass-effect font-medium">Abbrechen</button>
+                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl glass-effect font-medium">{t('common.cancel')}</button>
                         <button type="submit" className="btn-accent flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
-                            <Check className="h-4 w-4" />Erstellen
+                            <Check className="h-4 w-4" />{t('common.create')}
                         </button>
                     </div>
                 </form>
@@ -335,10 +381,11 @@ function AddCompanyExamModal({ trainees, onClose, onAdd }: {
     );
 }
 
-function GradeExamModal({ exam, onClose, onGrade }: {
+function GradeExamModal({ exam, onClose, onGrade, t }: {
     exam: Exam;
     onClose: () => void;
     onGrade: (examId: string, points: number, maxPoints: number) => void;
+    t: (key: string) => string;
 }) {
     const [points, setPoints] = useState(exam.points?.toString() || '');
     const [maxPoints, setMaxPoints] = useState(exam.maxPoints?.toString() || '100');
@@ -357,7 +404,7 @@ function GradeExamModal({ exam, onClose, onGrade }: {
                 <div className="p-6 border-b border-border">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-bold">Prüfung bewerten</h3>
+                            <h3 className="text-lg font-bold">{t('exams.grading')}</h3>
                             <p className="text-sm text-muted-foreground">{exam.traineeName} - {exam.subject}</p>
                         </div>
                         <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted"><X className="h-5 w-5" /></button>
@@ -366,17 +413,17 @@ function GradeExamModal({ exam, onClose, onGrade }: {
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-sm font-medium mb-2">Punkte</label>
+                            <label className="block text-sm font-medium mb-2">{t('exams.points')}</label>
                             <input type="number" value={points} onChange={e => setPoints(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" min="0" required />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-2">Max. Punkte</label>
+                            <label className="block text-sm font-medium mb-2">{t('exams.maxPoints')}</label>
                             <input type="number" value={maxPoints} onChange={e => setMaxPoints(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" min="1" required />
                         </div>
                     </div>
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl glass-effect font-medium">Abbrechen</button>
-                        <button type="submit" className="btn-accent flex-1 px-4 py-3 rounded-xl font-medium">Speichern</button>
+                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl glass-effect font-medium">{t('common.cancel')}</button>
+                        <button type="submit" className="btn-accent flex-1 px-4 py-3 rounded-xl font-medium">{t('common.save')}</button>
                     </div>
                 </form>
             </div>
