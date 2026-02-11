@@ -772,14 +772,14 @@ const translations = {
     'bulk.upload': 'Hochladen',
     'bulk.selectedFile': 'Ausgewählte Datei:',
     'bulk.coursesCreated': 'Kurse erstellt',
-    'bulk.enablersCreated': 'Enabler erstellt',
+    'bulk.enablersCreated': 'Enabler/Szenarien aktualisiert',
     'bulk.useCasesCreated': 'Use Cases erstellt',
     'bulk.skillsCreated': 'Skills erstellt',
     'bulk.errors': 'Fehler',
     'bulk.instructions': 'Anweisungen:',
     'bulk.instruction1': 'Laden Sie die Excel-Vorlage herunter',
     'bulk.instruction2': 'Füllen Sie die Daten in den entsprechenden Sheets aus (Courses, Enablers, Use Cases)',
-    'bulk.instruction3': 'Löschen Sie die Instruktionszeilen (Zeilen 1-9) vor dem Import',
+    'bulk.instruction3': 'NEU: Nutzen Sie das "Scenarios" Sheet für detaillierte Szenario-Inhalte',
     'bulk.instruction4': 'Speichern Sie die Datei und laden Sie sie hier hoch',
     'bulk.instruction5': 'Überprüfen Sie die Ergebnisse und beheben Sie ggf. Fehler',
 
@@ -1027,6 +1027,16 @@ const translations = {
     'scenario.section.initialSituation': 'Ausgangslage',
     'scenario.section.tasksAndSolutions': 'Aufgaben & Lösungen',
     'scenario.section.learningGoalChecklist': 'Lernziel-Checkliste',
+    // Sequential progression & answer submission
+    'scenario.sectionsOverview': 'Abschnitte in diesem Szenario:',
+    'scenario.submitAnswerToUnlock': 'Bitte schreibe erst deine Lösung, um die Musterlösungen freizuschalten.',
+    'scenario.writeYourAnswer': 'Schreibe deine Lösung',
+    'scenario.writeAnswerDescription': 'Bevor du die Musterlösungen siehst, versuche die Aufgaben selbst zu lösen.',
+    'scenario.answerPlaceholder': 'Beschreibe deinen Lösungsansatz...',
+    'scenario.submitAnswer': 'Antwort einreichen',
+    'scenario.readyToSubmit': '✓ Bereit zum Einreichen',
+    'scenario.enterAnswerFirst': 'Bitte schreibe erst deine Lösung',
+    'scenario.answerSubmittedSolutionsUnlocked': 'Antwort eingereicht! Die Lösungen sind jetzt freigeschaltet.',
 
     // PDF Uploader
     'pdf.onlyAllowed': 'Nur PDF-Dateien sind erlaubt',
@@ -2074,14 +2084,14 @@ const translations = {
     'bulk.upload': 'Upload',
     'bulk.selectedFile': 'Selected file:',
     'bulk.coursesCreated': 'Courses Created',
-    'bulk.enablersCreated': 'Enablers Created',
+    'bulk.enablersCreated': 'Enablers/Scenarios Updated',
     'bulk.useCasesCreated': 'Use Cases Created',
     'bulk.skillsCreated': 'Skills Created',
     'bulk.errors': 'Errors',
     'bulk.instructions': 'Instructions:',
     'bulk.instruction1': 'Download the Excel template',
     'bulk.instruction2': 'Fill in the data in the corresponding sheets (Courses, Enablers, Use Cases)',
-    'bulk.instruction3': 'Delete the instruction rows (rows 1-9) before importing',
+    'bulk.instruction3': 'NEW: Use the "Scenarios" sheet for detailed scenario content',
     'bulk.instruction4': 'Save the file and upload it here',
     'bulk.instruction5': 'Review the results and fix any errors',
 
@@ -2329,6 +2339,16 @@ const translations = {
     'scenario.section.initialSituation': 'Initial Situation',
     'scenario.section.tasksAndSolutions': 'Tasks & Solutions',
     'scenario.section.learningGoalChecklist': 'Learning Goal Checklist',
+    // Sequential progression & answer submission
+    'scenario.sectionsOverview': 'Sections in this scenario:',
+    'scenario.submitAnswerToUnlock': 'Please write your solution first to unlock the model solutions.',
+    'scenario.writeYourAnswer': 'Write your solution',
+    'scenario.writeAnswerDescription': 'Before seeing the model solutions, try to solve the tasks yourself.',
+    'scenario.answerPlaceholder': 'Describe your approach...',
+    'scenario.submitAnswer': 'Submit answer',
+    'scenario.readyToSubmit': '✓ Ready to submit',
+    'scenario.enterAnswerFirst': 'Please write your solution first',
+    'scenario.answerSubmittedSolutionsUnlocked': 'Answer submitted! Solutions are now unlocked.',
 
     // PDF Uploader
     'pdf.onlyAllowed': 'Only PDF files are allowed',
@@ -2657,7 +2677,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     (key: string): string => {
       return (
         translations[language][
-          key as keyof (typeof translations)[typeof language]
+        key as keyof (typeof translations)[typeof language]
         ] || key
       );
     },
