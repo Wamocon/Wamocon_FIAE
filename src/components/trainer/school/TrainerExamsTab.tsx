@@ -162,8 +162,8 @@ export function TrainerExamsTab() {
                         className="px-4 py-2.5 rounded-xl bg-background border border-border min-w-[200px]"
                     >
                         <option value="">{t('exams.allTrainees')}</option>
-                        {trainees.map(t => (
-                            <option key={t.id} value={t.id}>{getTraineeDisplayName(t, t('exams.trainee'))}</option>
+                        {trainees.map(trainee => (
+                            <option key={trainee.id} value={trainee.id}>{getTraineeDisplayName(trainee, t('exams.trainee'))}</option>
                         ))}
                     </select>
                 </div>
