@@ -38,6 +38,7 @@ export async function GET(
         descriptionText: e.descriptionText,
         scenarioText: e.scenarioText,
         hintText: e.hintText,
+        scenarios: e.scenarios, // Added missing scenarios array
         pptUrl: e.pptUrl,
         videoUrl: e.videoUrl,
         isActive: e.isActive,

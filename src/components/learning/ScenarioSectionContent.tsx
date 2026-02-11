@@ -117,23 +117,23 @@ function ParagraphContent({ content }: { content: string }) {
  * Renders checklist with interactive checkboxes (light mode compatible)
  * With special "Have you answered all questions?" item for gating
  */
-function ChecklistContent({ 
-  content, 
+function ChecklistContent({
+  content,
   onChecklistComplete,
-  includeFinalQuestion = false 
-}: { 
+  includeFinalQuestion = false
+}: {
   content: string;
   onChecklistComplete?: (completed: boolean) => void;
   includeFinalQuestion?: boolean;
 }) {
   const { t } = useLanguage();
   const initialItems = parseChecklist(content);
-  
+
   // Add the special "answered all questions" item if needed
-  const allItems = includeFinalQuestion 
+  const allItems = includeFinalQuestion
     ? [...initialItems, { text: t('scenario.haveYouAnsweredAll'), checked: false }]
     : initialItems;
-  
+
   const [checkedStates, setCheckedStates] = useState<boolean[]>(
     allItems.map(item => item.checked)
   );
@@ -172,7 +172,7 @@ function ChecklistContent({
           />
         </div>
         <span className={allCompleted ? 'text-green-600 dark:text-green-400 font-medium' : ''}>
-          {allCompleted 
+          {allCompleted
             ? `✓ ${t('scenario.checklistComplete')}`
             : t('scenario.completed').replace('{count}', String(completedCount)).replace('{total}', String(allItems.length))
           }
@@ -188,22 +188,20 @@ function ChecklistContent({
               <button
                 type="button"
                 onClick={() => toggleItem(idx)}
-                className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 transition-all ${
-                  checkedStates[idx]
+                className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 transition-all ${checkedStates[idx]
                     ? isSpecialItem ? 'border-green-500 bg-green-500 text-white' : 'border-accent bg-accent text-white'
                     : isSpecialItem ? 'border-green-400/60 hover:border-green-500 bg-white dark:bg-transparent' : 'border-accent/40 hover:border-accent/60 bg-white dark:bg-transparent'
-                }`}
+                  }`}
               >
                 {checkedStates[idx] && <Check className="h-3 w-3" />}
               </button>
               <span
-                className={`leading-relaxed transition-colors ${
-                  checkedStates[idx] 
-                    ? 'text-slate-400 dark:text-slate-500 line-through' 
-                    : isSpecialItem 
+                className={`leading-relaxed transition-colors ${checkedStates[idx]
+                    ? 'text-slate-400 dark:text-slate-500 line-through'
+                    : isSpecialItem
                       ? 'text-slate-900 dark:text-slate-100 font-medium'
                       : 'text-slate-800 dark:text-slate-200'
-                }`}
+                  }`}
               >
                 {item.text}
                 {isSpecialItem && !checkedStates[idx] && (
@@ -306,9 +304,8 @@ function ProblemSolutionContent({ content }: { content: string }) {
 
               {/* Solution content */}
               <div
-                className={`overflow-hidden transition-all duration-300 ${
-                  expandedSolutions.has(idx) ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
-                }`}
+                className={`overflow-hidden transition-all duration-300 ${expandedSolutions.has(idx) ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+                  }`}
               >
                 <div className="px-4 pb-4 border-t border-green-200 dark:border-green-500/10 pt-3 bg-green-50 dark:bg-green-500/5">
                   <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
@@ -333,9 +330,17 @@ function ProblemsOnlyContent({ content }: { content: string }) {
 
   // If no pairs found, try to display as numbered list or paragraph
   if (pairs.length === 0) {
+    // EXTRA SAFETY: If we find any variation of "LÖSUNG" in the text, 
+    // split the content and only show the part before it.
+    const loesungRegex = /\n?\s*L[OÖ][E]?SUNG\s*:?/i;
+    if (loesungRegex.test(content)) {
+      const parts = content.split(loesungRegex);
+      return <ParagraphContent content={parts[0]} />;
+    }
+
     const lines = content.split('\n').filter(l => l.trim());
     const hasNumbers = lines.some(l => /^\d+\.\s+/.test(l.trim()));
-    
+
     if (hasNumbers) {
       return <NumberedListContent content={content} />;
     }
@@ -392,7 +397,7 @@ function SolutionsOnlyContent({ content }: { content: string }) {
           {t('scenario.solutionsHeader')}
         </p>
       </div>
-      
+
       {pairs.map((pair, idx) => (
         <div
           key={idx}
@@ -425,11 +430,11 @@ function SolutionsOnlyContent({ content }: { content: string }) {
 /**
  * Renders content for a single subsection
  */
-function SubSectionContent({ 
+function SubSectionContent({
   subSection,
   isInChecklistSection = false,
   onChecklistComplete
-}: { 
+}: {
   subSection: SubSection;
   isInChecklistSection?: boolean;
   onChecklistComplete?: (completed: boolean) => void;
@@ -449,8 +454,8 @@ function SubSectionContent({
         {subSection.type === 'bullets' && <BulletListContent content={subSection.content} />}
         {subSection.type === 'numbered' && <NumberedListContent content={subSection.content} />}
         {subSection.type === 'checklist' && (
-          <ChecklistContent 
-            content={subSection.content} 
+          <ChecklistContent
+            content={subSection.content}
             onChecklistComplete={isInChecklistSection ? onChecklistComplete : undefined}
             includeFinalQuestion={isInChecklistSection}
           />
@@ -467,12 +472,12 @@ function SubSectionContent({
 /**
  * Main component that renders section content based on type (with subsection support)
  */
-export function ScenarioSectionContent({ 
-  content, 
-  type, 
+export function ScenarioSectionContent({
+  content,
+  type,
   subSections,
   sectionKey,
-  onChecklistComplete 
+  onChecklistComplete
 }: ScenarioSectionContentProps) {
   const { t } = useLanguage();
 
@@ -488,8 +493,8 @@ export function ScenarioSectionContent({
     return (
       <div className="space-y-6">
         {subSections.map((subSection, idx) => (
-          <SubSectionContent 
-            key={`${subSection.key}-${idx}`} 
+          <SubSectionContent
+            key={`${subSection.key}-${idx}`}
             subSection={subSection}
             isInChecklistSection={isChecklistSection}
             onChecklistComplete={isChecklistSection ? onChecklistComplete : undefined}
@@ -509,8 +514,8 @@ export function ScenarioSectionContent({
       // If this is the checklist section, include the special final question
       const isChecklistSection = sectionKey === 'checklist';
       return (
-        <ChecklistContent 
-          content={content} 
+        <ChecklistContent
+          content={content}
           onChecklistComplete={onChecklistComplete}
           includeFinalQuestion={isChecklistSection}
         />

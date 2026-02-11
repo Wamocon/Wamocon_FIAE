@@ -67,18 +67,24 @@ export default function TraineeEnablerPage() {
       setLoading(true);
       setError(null);
       try {
-        // Enabler details (reuse trainer GET which doesn't require trainerId)
-        const er = await fetch(`/api/trainer/enablers/${enablerId}`, { cache: 'no-store' });
+        // Enabler details (use trainee-facing GET which includes submission info)
+        const er = await fetch(`/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`, { cache: 'no-store' });
         if (er.ok) {
           const ej = await er.json();
           const enablerData = ej.enabler || null;
+          const submissionData = ej.submission || null;
+
           setEnabler(enablerData);
-          // Initialize solutions array based on scenarios count
+
+          // Initialize solutions from submission if available, else empty
           if (enablerData && Array.isArray(enablerData.scenarios) && enablerData.scenarios.length > 0) {
-            setSolutions(enablerData.scenarios.map((_: any, idx: number) => ({ scenarioIndex: idx, text: '' })));
+            const initialSolutions = enablerData.scenarios.map((_: any, idx: number) => {
+              const existing = submissionData?.solutions?.find((s: any) => s.scenarioIndex === idx);
+              return { scenarioIndex: idx, text: existing?.text || '' };
+            });
+            setSolutions(initialSolutions);
           } else if (enablerData?.scenarioText) {
-            // Legacy: single scenario
-            setSolutions([{ scenarioIndex: 0, text: '' }]);
+            setSolutions([{ scenarioIndex: 0, text: submissionData?.solutionText || '' }]);
           }
         }
         
@@ -294,7 +300,7 @@ export default function TraineeEnablerPage() {
             >
               <div className='flex max-w py-1 px-2'><BookOpen className="h-4 w-4" /></div>
               <div> {doc.title}</div>
-              
+
             </button>
           ))}
           {enabler.videoUrl && (
@@ -314,7 +320,7 @@ export default function TraineeEnablerPage() {
         />
 
         {/* Scenarios Section - Redesigned with structured sections */}
-        {((Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0) || enabler.scenarioText) && (
+        {profile?.id && enablerId && ((Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0) || enabler.scenarioText) && (
           <div className="mt-4">
             <ScenarioViewer
               scenarios={enabler.scenarios || []}
@@ -322,6 +328,9 @@ export default function TraineeEnablerPage() {
               onIndexChange={setCurrentScenarioIndex}
               scenarioText={enabler.scenarioText}
               hintText={enabler.hintText}
+              initialAnswers={solutions}
+              traineeId={profile.id}
+              enablerId={enablerId}
             />
           </div>
         )}

@@ -712,16 +712,18 @@ export function parseProblemSolutionPairs(content: string): Array<{
       const afterTitle = block.slice(titleMatch[0].length);
       
       // Find LOESUNG marker (handles LOESUNG, LÖSUNG, Lösung)
-      const loesungIndex = afterTitle.search(/L[OÖ][E]?SUNG\s*\d*\s*:?/i);
-      
+      const loesungRegex = /\n?\s*L[OÖ][E]?SUNG\s*:?/i;
+      const loesungIndex = afterTitle.search(loesungRegex);
+
       let problemContent = '';
       let solutionContent = '';
       
       if (loesungIndex >= 0) {
         problemContent = afterTitle.slice(0, loesungIndex).trim();
-        const loesungMatch = afterTitle.slice(loesungIndex).match(/L[OÖ][E]?SUNG\s*\d*\s*:?\s*([^\n]*)([\s\S]*)/i);
+        const loesungPart = afterTitle.slice(loesungIndex);
+        const loesungMatch = loesungPart.match(/L[OÖ][E]?SUNG\s*:?\s*([\s\S]*)/i);
         if (loesungMatch) {
-          solutionContent = (loesungMatch[1] + '\n' + (loesungMatch[2] || '')).trim();
+          solutionContent = loesungMatch[1].trim();
         }
       } else {
         problemContent = afterTitle.trim();
@@ -739,14 +741,14 @@ export function parseProblemSolutionPairs(content: string): Array<{
     if (pairs.length > 0) return pairs;
   }
 
-  // Fallback: Split content by PROBLEM markers
-  const blocks = content.split(/(?=PROBLEM\s*\d+)/i);
+  // Fallback: Split content by PROBLEM / AUFGABE markers
+  const blocks = content.split(/(?=PROBLEM\s*\d+|AUFGABE\s*\d+)/i);
 
   for (const block of blocks) {
     if (!block.trim()) continue;
 
     // Extract problem number and content
-    const problemHeaderMatch = block.match(/^PROBLEM\s*(\d+)\s*:?\s*([^\n]*)/i);
+    const problemHeaderMatch = block.match(/^(?:PROBLEM|AUFGABE)\s*(\d+)\s*:?\s*([^\n]*)/i);
     if (!problemHeaderMatch) continue;
 
     const problemNum = problemHeaderMatch[1];
@@ -754,16 +756,18 @@ export function parseProblemSolutionPairs(content: string): Array<{
 
     // Find the content between PROBLEM header and LÖSUNG/LOESUNG
     const afterHeader = block.slice(problemHeaderMatch[0].length);
-    const loesungIndex = afterHeader.search(/L[OÖ][E]?SUNG\s*\d*/i);
+    const loesungRegex = /\n?\s*L[OÖ][E]?SUNG\s*:?/i;
+    const loesungIndex = afterHeader.search(loesungRegex);
 
     let problemContent = '';
     let solutionContent = '';
 
     if (loesungIndex >= 0) {
       problemContent = afterHeader.slice(0, loesungIndex).trim();
-      const loesungMatch = afterHeader.slice(loesungIndex).match(/L[OÖ][E]?SUNG\s*\d*\s*:?\s*([^\n]*)([\s\S]*)/i);
+      const loesungPart = afterHeader.slice(loesungIndex);
+      const loesungMatch = loesungPart.match(/L[OÖ][E]?SUNG\s*:?\s*([\s\S]*)/i);
       if (loesungMatch) {
-        solutionContent = (loesungMatch[1] + '\n' + (loesungMatch[2] || '')).trim();
+        solutionContent = loesungMatch[1].trim();
       }
     } else {
       problemContent = afterHeader.trim();
