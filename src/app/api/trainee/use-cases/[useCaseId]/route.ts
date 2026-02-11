@@ -50,7 +50,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ useC
         courseTitle: course?.title
       },
       submission: latest
-        ? { id: latest.id, submissionText: latest.submissionText, status: latest.status, links }
+        ? { id: latest.id, submissionText: latest.submissionText, status: latest.status, trainerFeedback: latest.trainerFeedback, links }
         : null,
     });
   } catch (e) {

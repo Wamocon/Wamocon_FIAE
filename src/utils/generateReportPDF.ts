@@ -25,6 +25,12 @@ interface TrainingComponent {
     title: string;
 }
 
+interface SoftSkillRating {
+    name: string;
+    selfRating?: string;
+    trainerRating?: string;
+}
+
 interface ReportData {
     id: string;
     traineeId: string;
@@ -42,11 +48,17 @@ interface ReportData {
     reviewerId: string | null;
     reviewerName: string | null;
     entries: ReportEntry[];
+    // New Fields
+    selfRating?: string;
+    selfComment?: string;
+    trainerRating?: string;
+    trainerComment?: string;
+    softSkills?: SoftSkillRating[];
 }
 
 /**
  * Generates a professional PDF for an activity report (Tätigkeitsnachweis)
- * Includes WMC logo, entry table, and digital signature sections
+ * Includes WMC logo, entry table, grading, and digital signature sections
  */
 export async function generateActivityReportPDF(
     report: ReportData,
@@ -186,15 +198,108 @@ export async function generateActivityReportPDF(
     });
 
     // Get the Y position after the table
-    const finalY = (doc as any).lastAutoTable?.finalY || yPos + 50;
+    // @ts-ignore
+    let finalY = doc.lastAutoTable?.finalY || yPos + 50;
+
+    // --- GRADING & SOFT SKILLS (New Section) ---
+    if (report.status === 'APPROVED' && (report.selfRating || report.trainerRating)) {
+        yPos = finalY + 15;
+
+        // Ensure space for grading section
+        if (yPos > 220) {
+            doc.addPage();
+            yPos = 20;
+        }
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Leistungsbewertung', 14, yPos);
+        yPos += 8;
+
+        // Overall Grade Table
+        autoTable(doc, {
+            startY: yPos,
+            head: [['Bewertungskriterium', 'Azubi (Selbsteinschätzung)', 'Ausbilder']],
+            body: [
+                ['Gesamtnote', report.selfRating || '-', report.trainerRating || '-']
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [70, 70, 70], textColor: 255, fontSize: 10 },
+            bodyStyles: { fontSize: 10, fontStyle: 'bold' },
+            margin: { left: 14, right: 14 },
+        });
+
+        // @ts-ignore
+        yPos = doc.lastAutoTable?.finalY + 10;
+
+        // Soft Skills Table
+        if (report.softSkills && report.softSkills.length > 0) {
+            const softSkillData = report.softSkills.map(s => [
+                s.name,
+                s.selfRating || '-',
+                s.trainerRating || '-'
+            ]);
+
+            autoTable(doc, {
+                startY: yPos,
+                head: [['Soft Skills / Kompetenzbereich', 'Azubi', 'Ausbilder']],
+                body: softSkillData,
+                theme: 'striped',
+                headStyles: { fillColor: [90, 90, 90], textColor: 255, fontSize: 9 },
+                bodyStyles: { fontSize: 9 },
+                margin: { left: 14, right: 14 },
+            });
+            // @ts-ignore
+            yPos = doc.lastAutoTable?.finalY + 10;
+        }
+    }
+
+    // --- COMMENTS SECTION ---
+    if (report.selfComment || report.trainerComment) {
+        // @ts-ignore
+        yPos = Math.max(yPos, (doc.lastAutoTable?.finalY || yPos) + 10);
+
+        // Ensure space
+        if (yPos > 230) {
+            doc.addPage();
+            yPos = 20;
+        }
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Anmerkungen / Feedback', 14, yPos);
+        yPos += 6;
+
+        if (report.selfComment) {
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Azubi:', 14, yPos);
+            doc.setFont('helvetica', 'italic');
+            const splitComment = doc.splitTextToSize(report.selfComment, 180);
+            doc.text(splitComment, 30, yPos);
+            yPos += (splitComment.length * 4) + 4;
+        }
+
+        if (report.trainerComment) {
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Ausbilder:', 14, yPos);
+            doc.setFont('helvetica', 'italic');
+            const splitComment = doc.splitTextToSize(report.trainerComment, 180);
+            doc.text(splitComment, 30, yPos);
+            yPos += (splitComment.length * 4) + 4;
+        }
+    }
 
     // --- DIGITAL SIGNATURES SECTION ---
-    yPos = finalY + 20;
+    // @ts-ignore
+    finalY = Math.max(yPos, doc.lastAutoTable?.finalY + 20);
+    yPos = finalY + 10;
 
     // Check if we need a new page
-    if (yPos > 250) {
+    if (yPos > 240) {
         doc.addPage();
-        yPos = 20;
+        yPos = 30;
     }
 
     doc.setFontSize(12);
@@ -220,7 +325,9 @@ export async function generateActivityReportPDF(
     doc.setFont('helvetica', 'bold');
     doc.text('Ausbilder/in', 107, yPos + 6);
     doc.setFont('helvetica', 'normal');
-    doc.text(report.reviewerName || 'Ausstehend', 107, yPos + 14);
+    // For approved reports, if signerName is missing, default to "Genehmigt" or similar
+    const signer = report.reviewerName || (report.status === 'APPROVED' ? 'System (Genehmigt)' : 'Ausstehend');
+    doc.text(signer, 107, yPos + 14);
     doc.setFontSize(9);
     doc.text(`Unterschrieben am: ${formatDate(report.trainerSignedAt)}`, 107, yPos + 22);
 
@@ -240,5 +347,3 @@ export async function generateActivityReportPDF(
 
     doc.save(filename);
 }
-
-export default generateActivityReportPDF;

@@ -35,10 +35,23 @@ export default function EditCoursePage() {
   const [enablerDescription, setEnablerDescription] = useState('');
   const [enablerScenario, setEnablerScenario] = useState('');
   const [enablerHint, setEnablerHint] = useState('');
-  // New: multiple scenarios with hints
-  type ScenarioDraft = { id: string; text: string; hint: string };
+  // New: multiple scenarios with structured data support
+  type ScenarioProblem = { p: string; s: string };
+  type ScenarioDraft = {
+    id: string;
+    text: string;
+    hint: string;
+    // Structured data fields
+    topics?: string;
+    goals?: string;
+    theory?: string;
+    context?: string;
+    checklist?: string;
+    problems?: ScenarioProblem[];
+  };
   const [scenarios, setScenarios] = useState<ScenarioDraft[]>([{ id: crypto.randomUUID(), text: '', hint: '' }]);
   const [currentScenarioIndex, setCurrentScenarioIndex] = useState(0);
+  const [isStructuredMode, setIsStructuredMode] = useState(false);
   const [enablerPpt, setEnablerPpt] = useState('');
   const [enablerVideo, setEnablerVideo] = useState('');
   const [enablerDuration, setEnablerDuration] = useState<string>('');
@@ -324,11 +337,26 @@ export default function EditCoursePage() {
                             setEnablerActive(!!en.isActive);
                             // Load scenarios array or migrate legacy
                             if (Array.isArray(en.scenarios) && en.scenarios.length > 0) {
-                              setScenarios(en.scenarios.map((s: any) => ({ id: crypto.randomUUID(), text: s.text || '', hint: s.hint || '' })));
+                              setScenarios(en.scenarios.map((s: any) => ({
+                                id: crypto.randomUUID(),
+                                text: s.text || '',
+                                hint: s.hint || '',
+                                topics: s.topics,
+                                goals: s.goals,
+                                theory: s.theory,
+                                context: s.context,
+                                checklist: s.checklist,
+                                problems: s.problems
+                              })));
+                              // Check if first scenario has structured data to decide mode
+                              const hasStructure = !!(en.scenarios[0].topics || en.scenarios[0].context || (en.scenarios[0].problems && en.scenarios[0].problems.length > 0));
+                              setIsStructuredMode(hasStructure);
                             } else if (en.scenarioText || en.hintText) {
                               setScenarios([{ id: crypto.randomUUID(), text: en.scenarioText || '', hint: en.hintText || '' }]);
+                              setIsStructuredMode(false);
                             } else {
                               setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]);
+                              setIsStructuredMode(false);
                             }
                             setCurrentScenarioIndex(0);
                           }
@@ -728,7 +756,7 @@ export default function EditCoursePage() {
                     setShowAddEnabler(false);
 
                     // Reset add form fields including pending PDFs
-                    setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false); setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]); setCurrentScenarioIndex(0); setPendingEnablerPdfs([]);
+                    setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false); setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]); setCurrentScenarioIndex(0); setPendingEnablerPdfs([]); setIsStructuredMode(false);
                   } catch (e: any) {
                     alert(e?.message || 'Unbekannter Fehler');
                   } finally {
@@ -924,7 +952,7 @@ export default function EditCoursePage() {
       {showEditEnabler && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowEditEnabler(false)} />
-          <div className="glass-effect relative z-10 w-full max-w-2xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="glass-effect relative z-10 w-full max-w-6xl rounded-3xl border border-accent/30 bg-background p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">Lesson bearbeiten</h2>
               <button className="rounded-md border border-accent/30 px-2 py-1 text-sm" onClick={() => setShowEditEnabler(false)}>Schließen</button>
@@ -1107,93 +1135,203 @@ export default function EditCoursePage() {
                   </span>
                 </div>
 
-                {/* Scenario Slider */}
-                <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-background/30 p-4">
-                  <div
-                    className="flex transition-transform duration-300 ease-in-out"
-                    style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
-                  >
-                    {scenarios.map((sc, idx) => (
-                      <div key={sc.id} className="w-full flex-shrink-0 space-y-3 px-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Beschreibung</label>
-                          <textarea
-                            value={sc.text}
-                            onChange={e => setScenarios(s => s.map(x => x.id === sc.id ? { ...x, text: e.target.value } : x))}
-                            className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
-                            rows={4}
-                            placeholder="Beschreibe hier das Szenario, das der Azubi lösen soll..."
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Hinweis (für Trainees sichtbar)</label>
-                          <textarea
-                            value={sc.hint}
-                            onChange={e => setScenarios(s => s.map(x => x.id === sc.id ? { ...x, hint: e.target.value } : x))}
-                            className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
-                            rows={3}
-                            placeholder="Tipp zur Lösung des Szenarios"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              </div>
 
-                {/* Navigation Dots and Controls */}
-                <div className="mt-3 flex items-center justify-between">
-                  <button
-                    type="button"
-                    disabled={currentScenarioIndex === 0}
-                    onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
-                    className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    ← Zurück
-                  </button>
+              {/* Mode Toggle */}
+              <div className="flex justify-end gap-2 mb-2">
+                <button type="button" onClick={() => setIsStructuredMode(!isStructuredMode)} className="text-xs text-primary underline">
+                  {isStructuredMode ? 'Zum Text-Editor wechseln' : 'Zum Struktur-Editor wechseln'}
+                </button>
+              </div>
 
-                  <div className="flex items-center gap-2">
-                    {scenarios.map((sc, idx) => (
-                      <button
-                        key={sc.id}
-                        type="button"
-                        onClick={() => setCurrentScenarioIndex(idx)}
-                        className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
-                          ? 'w-6 bg-primary'
-                          : 'w-2 bg-accent/30 hover:bg-accent/50'
-                          }`}
-                        aria-label={`Go to scenario ${idx + 1}`}
+              {/* Scenario Editor Content */}
+              <div className="space-y-4">
+                {isStructuredMode ? (
+                  // STRUCTURED MODE
+                  <div className="space-y-4">
+                    {/* Topics */}
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Behandelte Themen</label>
+                      <textarea
+                        value={scenarios[currentScenarioIndex].topics || ''}
+                        onChange={e => setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, topics: e.target.value } : x))}
+                        className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                        rows={2} placeholder="z.B. REST APIs, Datenbanken..."
                       />
-                    ))}
+                    </div>
+
+                    {/* Context */}
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Ausgangslage</label>
+                      <textarea
+                        value={scenarios[currentScenarioIndex].context || ''}
+                        onChange={e => setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, context: e.target.value } : x))}
+                        className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                        rows={3} placeholder="Beschreibe die Situation..."
+                      />
+                    </div>
+
+                    {/* Problems List */}
+                    <div className="rounded-xl border border-accent/20 bg-background/40 p-3">
+                      <label className="mb-2 block text-xs font-medium">Problem-Lösung-Paare</label>
+                      <div className="space-y-3">
+                        {(scenarios[currentScenarioIndex].problems || []).map((prob, pIdx) => (
+                          <div key={pIdx} className="relative pl-4 border-l-2 border-accent/30">
+                            <div className="mb-2">
+                              <label className="text-[10px] uppercase text-muted-foreground">Problem {pIdx + 1}</label>
+                              <textarea
+                                value={prob.p}
+                                onChange={e => {
+                                  const newProblems = [...(scenarios[currentScenarioIndex].problems || [])];
+                                  newProblems[pIdx] = { ...newProblems[pIdx], p: e.target.value };
+                                  setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, problems: newProblems } : x));
+                                }}
+                                className="w-full rounded-lg border border-accent/20 bg-background/60 px-2 py-1 text-sm"
+                                rows={2}
+                              />
+                            </div>
+                            <div className="mb-2">
+                              <label className="text-[10px] uppercase text-muted-foreground">Lösung {pIdx + 1}</label>
+                              <textarea
+                                value={prob.s}
+                                onChange={e => {
+                                  const newProblems = [...(scenarios[currentScenarioIndex].problems || [])];
+                                  newProblems[pIdx] = { ...newProblems[pIdx], s: e.target.value };
+                                  setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, problems: newProblems } : x));
+                                }}
+                                className="w-full rounded-lg border border-accent/20 bg-background/60 px-2 py-1 text-sm"
+                                rows={2}
+                              />
+                            </div>
+                            <button type="button" onClick={() => {
+                              const newProblems = (scenarios[currentScenarioIndex].problems || []).filter((_, i) => i !== pIdx);
+                              setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, problems: newProblems } : x));
+                            }} className="text-xs text-red-500 hover:text-red-600">Entfernen</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => {
+                          const newProblems = [...(scenarios[currentScenarioIndex].problems || []), { p: '', s: '' }];
+                          setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, problems: newProblems } : x));
+                        }} className="text-xs text-primary underline">+ Problem hinzufügen</button>
+                      </div>
+                    </div>
+
+                    {/* Goals & Theory */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium">Lernziele</label>
+                        <textarea
+                          value={scenarios[currentScenarioIndex].goals || ''}
+                          onChange={e => setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, goals: e.target.value } : x))}
+                          className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                          rows={3}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium">Theorie</label>
+                        <textarea
+                          value={scenarios[currentScenarioIndex].theory || ''}
+                          onChange={e => setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, theory: e.target.value } : x))}
+                          className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Checklist */}
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Lernziel-Checkliste</label>
+                      <textarea
+                        value={scenarios[currentScenarioIndex].checklist || ''}
+                        onChange={e => setScenarios(s => s.map((x, i) => i === currentScenarioIndex ? { ...x, checklist: e.target.value } : x))}
+                        className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                        rows={3}
+                      />
+                    </div>
                   </div>
-
-                  <button
-                    type="button"
-                    disabled={currentScenarioIndex === scenarios.length - 1}
-                    onClick={() => setCurrentScenarioIndex(i => Math.min(scenarios.length - 1, i + 1))}
-                    className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Weiter →
-                  </button>
-                </div>
-
-                {/* Delete Current Scenario */}
-                {scenarios.length > 1 && (
-                  <div className="mt-3 text-center">
-                    <button
-                      type="button"
-                      className="rounded-md border border-red-300 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
-                      onClick={() => {
-                        const newScenarios = scenarios.filter(s => s.id !== scenarios[currentScenarioIndex].id);
-                        setScenarios(newScenarios);
-                        setCurrentScenarioIndex(prev => Math.min(prev, newScenarios.length - 1));
-                      }}
-                    >
-                      <X className="inline h-3 w-3 mr-1" />
-                      Dieses Szenario löschen
-                    </button>
+                ) : (
+                  // RAW TEXT MODE
+                  <div>
+                    <label className="mb-1 block text-xs font-medium">Kompletter Text (Legacy/Raw)</label>
+                    <div className="text-[10px] text-muted-foreground mb-1">
+                      Dies ist das Feld, das vom Viewer verwendet wird. Im Struktur-Modus wird dieses Feld automatisch generiert.
+                    </div>
+                    <textarea
+                      value={scenarios[currentScenarioIndex].text}
+                      onChange={e => setScenarios(s => s.map(x => x.id === scenarios[currentScenarioIndex].id ? { ...x, text: e.target.value } : x))}
+                      className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm font-mono"
+                      rows={12}
+                      placeholder="Beschreibe hier das Szenario..."
+                    />
                   </div>
                 )}
+
+                {/* Hint is always visible */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium">Hinweis (für Trainees sichtbar)</label>
+                  <textarea
+                    value={scenarios[currentScenarioIndex].hint}
+                    onChange={e => setScenarios(s => s.map(x => x.id === scenarios[currentScenarioIndex].id ? { ...x, hint: e.target.value } : x))}
+                    className="w-full rounded-xl border border-accent/20 bg-background/60 px-3 py-2 text-sm"
+                    rows={2}
+                    placeholder="Tipp zur Lösung..."
+                  />
+                </div>
               </div>
+
+              {/* Navigation Dots and Controls */}
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  disabled={currentScenarioIndex === 0}
+                  onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
+                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ← Zurück
+                </button>
+
+                <div className="flex items-center gap-2">
+                  {scenarios.map((sc, idx) => (
+                    <button
+                      key={sc.id}
+                      type="button"
+                      onClick={() => setCurrentScenarioIndex(idx)}
+                      className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
+                        ? 'w-6 bg-primary'
+                        : 'w-2 bg-accent/30 hover:bg-accent/50'
+                        }`}
+                      aria-label={`Go to scenario ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={currentScenarioIndex === scenarios.length - 1}
+                  onClick={() => setCurrentScenarioIndex(i => Math.min(scenarios.length - 1, i + 1))}
+                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Weiter →
+                </button>
+              </div>
+
+              {/* Delete Current Scenario */}
+              {scenarios.length > 1 && (
+                <div className="mt-3 text-center">
+                  <button
+                    type="button"
+                    className="rounded-md border border-red-300 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      const newScenarios = scenarios.filter(s => s.id !== scenarios[currentScenarioIndex].id);
+                      setScenarios(newScenarios);
+                      setCurrentScenarioIndex(prev => Math.min(prev, newScenarios.length - 1));
+                    }}
+                  >
+                    <X className="inline h-3 w-3 mr-1" />
+                    Dieses Szenario löschen
+                  </button>
+                </div>
+              )}
               {/* Legacy inline Quiz-Fragen removed. Use the multi-difficulty section above to manage quizzes. */}
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditEnabler(false)}>Abbrechen</button>
@@ -1203,7 +1341,51 @@ export default function EditCoursePage() {
                   if (!enablerTitle.trim()) { alert('Bitte Titel eingeben'); return; }
                   try {
                     // PATCH enabler details
-                    const scenariosPayload = scenarios.filter(s => s.text.trim()).map(s => ({ text: s.text.trim(), hint: s.hint.trim() || undefined }));
+                    let scenariosPayload: any[] = [];
+
+                    if (isStructuredMode) {
+                      // Regenerate text from structured fields
+                      scenariosPayload = scenarios.map(s => {
+                        const blocks: string[] = [];
+                        if (s.topics) blocks.push(`Behandelte Themen:\n${s.topics}`);
+                        if (s.goals) blocks.push(`Lernziele:\n${s.goals}`);
+                        if (s.theory) blocks.push(`Theoretische Grundlagen:\n${s.theory}`);
+                        if (s.context) blocks.push(`Ausgangslage:\n${s.context}`);
+
+                        if (s.problems && s.problems.length > 0) {
+                          const problemBlock: string[] = [];
+                          s.problems.forEach((item, idx) => {
+                            problemBlock.push(`Problem ${idx + 1}`);
+                            problemBlock.push(item.p);
+                            if (item.s) {
+                              problemBlock.push('LÖSUNG');
+                              problemBlock.push(item.s);
+                            }
+                            problemBlock.push('');
+                          });
+                          blocks.push(`Problem-Lösung-Paare:\n${problemBlock.join('\n')}`);
+                        }
+
+                        if (s.checklist) blocks.push(`Lernziel-Checkliste:\n${s.checklist}`);
+
+                        const fullText = blocks.join('\n\n' + '-'.repeat(20) + '\n\n');
+
+                        return {
+                          text: fullText,
+                          hint: s.hint || undefined,
+                          topics: s.topics,
+                          goals: s.goals,
+                          theory: s.theory,
+                          context: s.context,
+                          checklist: s.checklist,
+                          problems: s.problems
+                        };
+                      });
+                    } else {
+                      // Use raw text as is
+                      scenariosPayload = scenarios.filter(s => s.text.trim()).map(s => ({ text: s.text.trim(), hint: s.hint.trim() || undefined }));
+                    }
+
                     const pr = await fetch(`/api/trainer/enablers/${editingEnablerId}?trainerId=${trainerId}`, {
                       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
                         title: enablerTitle.trim(),
@@ -1416,6 +1598,6 @@ export default function EditCoursePage() {
         </div>
       )}
 
-    </div>
+    </div >
   );
 }

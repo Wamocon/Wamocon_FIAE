@@ -210,6 +210,30 @@ export default function TraineeActivityReportsPage() {
         }
     };
 
+    const fetchEvaluationData = async (reportId: string, year: number, week: number) => {
+        try {
+            if (!profile?.id) return null;
+
+            // 1. Get all evaluations to find the ID
+            const resLists = await fetch(`/api/trainee/evaluations?userId=${profile.id}`);
+            if (!resLists.ok) return null;
+            const { evaluations } = await resLists.json();
+            const evaluation = evaluations.find((e: any) => e.year === year && e.weekNumber === week);
+
+            // If no evaluation found or it's not approved yet, we might still want to show self ratings if they exist
+            if (!evaluation) return null;
+
+            // 2. Get full details including Soft Skills
+            // Trainee can see their own evaluation details
+            const resDetails = await fetch(`/api/trainee/evaluations/${evaluation.id}`);
+            if (!resDetails.ok) return null;
+            return await resDetails.json();
+        } catch (e) {
+            console.error('Error fetching evaluation for PDF:', e);
+            return null;
+        }
+    };
+
     const handleDownloadPDF = async (e: React.MouseEvent, report: ActivityReport) => {
         e.stopPropagation();
         try {
@@ -217,6 +241,16 @@ export default function TraineeActivityReportsPage() {
             const entriesRes = await fetch(`/api/activity-reports/${report.id}/entries`);
             if (!entriesRes.ok) throw new Error(t('reports.error.loadEntries'));
             const entriesData = await entriesRes.json();
+
+            // Fetch evaluation data
+            const evalData = await fetchEvaluationData(report.id, report.year, report.weekNumber);
+
+            // Prepare soft skills
+            const softSkills = evalData?.softskillRatings?.map((r: any) => ({
+                name: r.criterion.name,
+                selfRating: r.rating.selfRating,
+                trainerRating: r.rating.trainerRating
+            })) || [];
 
             // Prepare report data for PDF
             const reportData = {
@@ -236,6 +270,12 @@ export default function TraineeActivityReportsPage() {
                 reviewerId: report.reviewerId,
                 reviewerName: null, // Would need to fetch trainer name if available
                 entries: entriesData.entries || [],
+                // Grading Data
+                selfRating: evalData?.evaluation?.selfRating,
+                selfComment: evalData?.evaluation?.selfComment,
+                trainerRating: evalData?.evaluation?.trainerRating,
+                trainerComment: evalData?.evaluation?.trainerComment,
+                softSkills: softSkills,
             };
 
             await generateActivityReportPDF(reportData, useCases, components);

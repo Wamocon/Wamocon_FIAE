@@ -96,6 +96,11 @@ export function Sidebar({
             userRole === 'trainee' ? '/trainee/activity-reports' : '/trainer/activity-reports'
           );
           break;
+        case 'evaluations':
+          router.push(
+            userRole === 'trainee' ? '/trainee/evaluations' : '/trainer/evaluations'
+          );
+          break;
         default:
           router.push(
             userRole === 'trainee' ? '/trainee/dashboard' : '/trainer/dashboard'
@@ -131,6 +136,12 @@ export function Sidebar({
             label: t('nav.activityReports'),
             icon: ClipboardList,
             href: '/trainer/activity-reports',
+          },
+          {
+            id: 'evaluations',
+            label: 'Azubi Arbeitszeugnis',
+            icon: FileCheck2,
+            href: '/trainer/arbeitszeugnis',
           },
           {
             id: 'school',
@@ -176,6 +187,12 @@ export function Sidebar({
             label: t('nav.activityReports'),
             icon: ClipboardList,
             href: '/trainee/activity-reports',
+          },
+          {
+            id: 'evaluations',
+            label: 'Azubi Arbeitszeugnis',
+            icon: FileCheck2,
+            href: '/trainee/arbeitszeugnis',
           },
           {
             id: 'school',
