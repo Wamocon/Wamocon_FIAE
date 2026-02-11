@@ -8,7 +8,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LinkifyText from '@/components/ui/LinkifyText';
 import { MarkdownText } from '@/components/ui/MarkdownText';
 import { FlipbookViewer, useFlipbookViewer } from '@/components/ui/FlipbookViewer';
-import { BookOpen } from 'lucide-react';
+import { ScenarioViewer } from '@/components/learning/ScenarioViewer';
+import { BookOpen, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -31,6 +32,17 @@ export default function TraineeEnablerPage() {
   const [solutions, setSolutions] = useState<Array<{ scenarioIndex: number; text: string }>>([]);
   const [currentScenarioIndex, setCurrentScenarioIndex] = useState(0);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  
+  // Submission state for edit/status tracking
+  const [submission, setSubmission] = useState<{
+    id: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    trainerFeedback?: string | null;
+    feedbacks?: Array<{ scenarioIndex: number; feedback: string }> | null;
+  } | null>(null);
+  
+  // Determine if editing is allowed
+  const canEdit = !submission || submission.status === 'REJECTED';
 
   // PDF flipbook viewer
   const flipbook = useFlipbookViewer();
@@ -48,27 +60,56 @@ export default function TraineeEnablerPage() {
 
   const currentQuestion = useMemo(() => (quizContent ? quizContent.questions[currentIndex] : null), [quizContent, currentIndex]);
 
-  // Initial load: enabler details + gated quizzes list
+  // Initial load: enabler details + gated quizzes list + submission status
   useEffect(() => {
     if (!profile?.id || !enablerId) return;
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Enabler details (reuse trainer GET which doesn't require trainerId)
-        const er = await fetch(`/api/trainer/enablers/${enablerId}`, { cache: 'no-store' });
+        // Enabler details (use trainee-facing GET which includes submission info)
+        const er = await fetch(`/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`, { cache: 'no-store' });
         if (er.ok) {
           const ej = await er.json();
           const enablerData = ej.enabler || null;
+          const submissionData = ej.submission || null;
+
           setEnabler(enablerData);
-          // Initialize solutions array based on scenarios count
+
+          // Initialize solutions from submission if available, else empty
           if (enablerData && Array.isArray(enablerData.scenarios) && enablerData.scenarios.length > 0) {
-            setSolutions(enablerData.scenarios.map((_: any, idx: number) => ({ scenarioIndex: idx, text: '' })));
+            const initialSolutions = enablerData.scenarios.map((_: any, idx: number) => {
+              const existing = submissionData?.solutions?.find((s: any) => s.scenarioIndex === idx);
+              return { scenarioIndex: idx, text: existing?.text || '' };
+            });
+            setSolutions(initialSolutions);
           } else if (enablerData?.scenarioText) {
-            // Legacy: single scenario
-            setSolutions([{ scenarioIndex: 0, text: '' }]);
+            setSolutions([{ scenarioIndex: 0, text: submissionData?.solutionText || '' }]);
           }
         }
+        
+        // Fetch trainee submission status (with feedback for rejected submissions)
+        try {
+          const subRes = await fetch(`/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`, { cache: 'no-store' });
+          if (subRes.ok) {
+            const subData = await subRes.json();
+            if (subData.submission) {
+              setSubmission({
+                id: subData.submission.id,
+                status: subData.submission.status,
+                trainerFeedback: subData.submission.trainerFeedback,
+                feedbacks: subData.submission.feedbacks
+              });
+              // Pre-fill solutions from existing submission
+              if (subData.submission.solutions && Array.isArray(subData.submission.solutions)) {
+                setSolutions(subData.submission.solutions);
+              } else if (subData.submission.solutionText) {
+                setSolutions([{ scenarioIndex: 0, text: subData.submission.solutionText }]);
+              }
+            }
+          }
+        } catch { /* ignore */ }
+        
         // Gated quiz list
         const qr = await fetch(`/api/trainee/enablers/${enablerId}/quizzes?traineeId=${profile.id}`, { cache: 'no-store' });
         if (qr.ok) {
@@ -259,7 +300,7 @@ export default function TraineeEnablerPage() {
             >
               <div className='flex max-w py-1 px-2'><BookOpen className="h-4 w-4" /></div>
               <div> {doc.title}</div>
-              
+
             </button>
           ))}
           {enabler.videoUrl && (
@@ -278,96 +319,73 @@ export default function TraineeEnablerPage() {
           onClose={flipbook.closePdf}
         />
 
-        {/* Scenarios Slider */}
-        {((Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0) || enabler.scenarioText) && (
+        {/* Scenarios Section - Redesigned with structured sections */}
+        {profile?.id && enablerId && ((Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0) || enabler.scenarioText) && (
           <div className="mt-4">
-            {/* Counter */}
-            {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 1 && (
-              <div className="mb-3 text-center">
-                <span className="text-sm font-medium text-foreground">
-                  {t('enablerPage.scenarioCounter').replace('{current}', String(currentScenarioIndex + 1)).replace('{total}', String(enabler.scenarios.length))}
-                </span>
-              </div>
-            )}
-
-            {/* Slider Container */}
-            <div className="relative overflow-hidden rounded-xl border border-accent/20 bg-background/20 p-4">
-              <div
-                className="flex transition-transform duration-300 ease-in-out"
-                style={{ transform: `translateX(-${currentScenarioIndex * 100}%)` }}
-              >
-                {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0 ? (
-                  enabler.scenarios.map((sc: any, idx: number) => (
-                    <div key={idx} className="w-full flex-shrink-0 space-y-3 px-2">
-                      <div>
-                        <div className="mb-1 text-sm font-semibold">{t('enablerPage.scenarioNumber').replace('{number}', String(idx + 1))}</div>
-                        <LinkifyText className="text-foreground/90" text={String(sc.text || '')} preserveLineBreaks />
-                      </div>
-                      {sc.hint && (
-                        <div className="rounded-lg border border-accent/20 bg-background/10 p-3">
-                          <div className="mb-1 text-xs font-semibold text-muted-foreground">{t('enablerPage.hint')}</div>
-                          <LinkifyText className="text-muted-foreground text-sm" text={String(sc.hint)} preserveLineBreaks />
-                        </div>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="w-full flex-shrink-0 space-y-3 px-2">
-                    <div>
-                      <div className="mb-1 text-sm font-semibold">{t('enablerPage.scenario')}</div>
-                      <LinkifyText className="text-foreground/90" text={String(enabler.scenarioText || '')} preserveLineBreaks />
-                    </div>
-                    {enabler.hintText && (
-                      <div className="rounded-lg border border-accent/20 bg-background/10 p-3">
-                        <div className="mb-1 text-xs font-semibold text-muted-foreground">{t('enablerPage.hint')}</div>
-                        <LinkifyText className="text-muted-foreground text-sm" text={String(enabler.hintText)} preserveLineBreaks />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Navigation for multiple scenarios */}
-            {Array.isArray(enabler.scenarios) && enabler.scenarios.length > 1 && (
-              <div className="mt-3 flex items-center justify-between">
-                <button
-                  type="button"
-                  disabled={currentScenarioIndex === 0}
-                  onClick={() => setCurrentScenarioIndex(i => Math.max(0, i - 1))}
-                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {t('enablerPage.back')}
-                </button>
-
-                <div className="flex items-center gap-2">
-                  {enabler.scenarios.map((_: any, idx: number) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setCurrentScenarioIndex(idx)}
-                      className={`h-2 rounded-full transition-all ${idx === currentScenarioIndex
-                        ? 'w-6 bg-primary'
-                        : 'w-2 bg-accent/30 hover:bg-accent/50'
-                        }`}
-                      aria-label={`Go to scenario ${idx + 1}`}
-                    />
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={currentScenarioIndex === enabler.scenarios.length - 1}
-                  onClick={() => setCurrentScenarioIndex(i => Math.min(enabler.scenarios.length - 1, i + 1))}
-                  className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {t('enablerPage.next')}
-                </button>
-              </div>
-            )}
+            <ScenarioViewer
+              scenarios={enabler.scenarios || []}
+              currentIndex={currentScenarioIndex}
+              onIndexChange={setCurrentScenarioIndex}
+              scenarioText={enabler.scenarioText}
+              hintText={enabler.hintText}
+              initialAnswers={solutions}
+              traineeId={profile.id}
+              enablerId={enablerId}
+            />
           </div>
         )}
       </div>
+
+      {/* Status Banner */}
+      {submission?.status === 'APPROVED' && (
+        <div className="rounded-2xl border border-green-500/40 bg-green-500/10 p-4 flex items-start gap-3">
+          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold text-green-600 dark:text-green-400">{t('enablerPage.approved')}</div>
+            <div className="text-sm text-green-600/80 dark:text-green-400/80">{t('enablerPage.approvedDesc')}</div>
+          </div>
+        </div>
+      )}
+
+      {submission?.status === 'PENDING' && (
+        <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-4 flex items-start gap-3">
+          <Clock className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold text-yellow-600 dark:text-yellow-400">{t('enablerPage.pending')}</div>
+            <div className="text-sm text-yellow-600/80 dark:text-yellow-400/80">{t('enablerPage.pendingDesc')}</div>
+          </div>
+        </div>
+      )}
+
+      {submission?.status === 'REJECTED' && (
+        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <div className="font-semibold text-red-600 dark:text-red-400">{t('enablerPage.rejected')}</div>
+            <div className="text-sm text-red-600/80 dark:text-red-400/80 mb-2">{t('enablerPage.rejectedDesc')}</div>
+            {/* Show general trainer feedback */}
+            {submission.trainerFeedback && (
+              <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <div className="text-xs font-medium text-red-600/70 dark:text-red-400/70 mb-1">{t('enablerPage.trainerFeedback')}</div>
+                <p className="text-sm text-foreground whitespace-pre-line">{submission.trainerFeedback}</p>
+              </div>
+            )}
+            {/* Show per-scenario feedbacks */}
+            {submission.feedbacks && submission.feedbacks.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {submission.feedbacks.map((fb, idx) => (
+                  <div key={idx} className="rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                    <div className="text-xs font-medium text-red-600/70 dark:text-red-400/70 mb-1">
+                      {t('enablerPage.feedbackForScenario').replace('{number}', String(fb.scenarioIndex + 1))}
+                    </div>
+                    <p className="text-sm text-foreground whitespace-pre-line">{fb.feedback}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Solution Slider */}
       <div className="space-y-4 rounded-3xl border border-accent/30 bg-background p-5">
@@ -398,13 +416,15 @@ export default function TraineeEnablerPage() {
                     <textarea
                       value={sol.text}
                       onChange={e => {
+                        if (!canEdit) return;
                         const newSolutions = [...solutions];
                         newSolutions[idx] = { ...newSolutions[idx], text: e.target.value };
                         setSolutions(newSolutions);
                       }}
-                      className="w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2"
+                      className={`w-full rounded-xl border border-accent/30 bg-black/30 px-3 py-2 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                       rows={6}
                       placeholder={t('enablerPage.describeSolution')}
+                      disabled={!canEdit}
                     />
                   </div>
                 ))}
@@ -451,9 +471,13 @@ export default function TraineeEnablerPage() {
           </>
         )}
 
-        <div className="flex justify-end">
-          <button onClick={submitSolution} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">{t('enablerPage.submitAll')}</button>
-        </div>
+        {canEdit && (
+          <div className="flex justify-end">
+            <button onClick={submitSolution} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">
+              {submission?.status === 'REJECTED' ? t('enablerPage.resubmit') : t('enablerPage.submitAll')}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Gated difficulties */}
