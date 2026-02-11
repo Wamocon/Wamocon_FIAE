@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle } from 'lucide-react';
+import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, Eye } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
 
 type EnablerReviewItem = { id: string; enablerId: string; enablerTitle: string; traineeId: string; traineeName: string; solutionText?: string | null; solutions?: Array<{ scenarioIndex: number; text: string }> | null; trainerFeedback?: string | null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }> | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number | null };
 type UseCaseReviewItem = { id: string; useCaseId: string; useCaseTitle: string; traineeId: string; traineeName: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED'; submittedAt: string; attemptNumber?: number | null };
 type QuizSubmissionItem = { id: string; traineeId: string; traineeName: string; quizId: string; quizTitle: string; quizType?: 'LESSON' | 'GLOBAL'; score: number | null; isReviewed: boolean; submittedAt: string; attemptNumber?: number | null; difficulty?: 'LOW' | 'MEDIUM' | 'HIGH' | null; enablerTitle?: string | null };
+type SolutionDocInfo = { url: string; title: string };
 
 export default function TrainerReviewsPage() {
   const { profile } = useAuth();
@@ -33,6 +35,10 @@ export default function TrainerReviewsPage() {
   const [pendingFilter, setPendingFilter] = useState<'pending' | 'all'>('pending');
   const [quizTypeFilter, setQuizTypeFilter] = useState<'all' | 'LESSON' | 'GLOBAL'>('all');
 
+  // Solution document state for use cases (TRAINER_SOLUTION PDFs)
+  const [solutionDocsMap, setSolutionDocsMap] = useState<Record<string, SolutionDocInfo | null>>({});
+  const [flipbookState, setFlipbookState] = useState<{ isOpen: boolean; url: string; title: string }>({ isOpen: false, url: '', title: '' });
+
   const filteredEnablers = useMemo(() => enablerSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [enablerSubs, statusFilter]);
   const filteredUseCases = useMemo(() => useCaseSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [useCaseSubs, statusFilter]);
   const quizzesFiltered = useMemo(() => quizzes.filter(q => {
@@ -40,6 +46,37 @@ export default function TrainerReviewsPage() {
     const typeOk = quizTypeFilter === 'all' ? true : q.quizType === quizTypeFilter;
     return pendingOk && typeOk;
   }), [quizzes, pendingFilter, quizTypeFilter]);
+
+  // Fetch solution document (TRAINER_SOLUTION) for a use case
+  const fetchSolutionDoc = useCallback(async (useCaseId: string) => {
+    if (solutionDocsMap[useCaseId] !== undefined) return; // Already fetched or loading
+    try {
+      const res = await fetch(`/api/trainer/use-cases/${useCaseId}/documents`);
+      if (!res.ok) {
+        setSolutionDocsMap(prev => ({ ...prev, [useCaseId]: null }));
+        return;
+      }
+      const data = await res.json();
+      const solutionDoc = (data.documents || []).find((d: any) => d.documentType === 'TRAINER_SOLUTION');
+      if (solutionDoc?.storageUrl) {
+        setSolutionDocsMap(prev => ({ ...prev, [useCaseId]: { url: solutionDoc.storageUrl, title: solutionDoc.title || 'Solution PDF' } }));
+      } else {
+        setSolutionDocsMap(prev => ({ ...prev, [useCaseId]: null }));
+      }
+    } catch {
+      setSolutionDocsMap(prev => ({ ...prev, [useCaseId]: null }));
+    }
+  }, [solutionDocsMap]);
+
+  // Load solution documents when use case submissions change
+  useEffect(() => {
+    if (activeTab !== 'usecases' || useCaseSubs.length === 0) return;
+    const uniqueIds = Array.from(new Set(useCaseSubs.map(s => s.useCaseId)));
+    uniqueIds.forEach(id => fetchSolutionDoc(id));
+  }, [useCaseSubs, activeTab, fetchSolutionDoc]);
+
+  const openFlipbook = (url: string, title: string) => setFlipbookState({ isOpen: true, url, title });
+  const closeFlipbook = () => setFlipbookState({ isOpen: false, url: '', title: '' });
 
   // Sync state from URL params (deep-linking from dashboard)
   useEffect(() => {
@@ -340,7 +377,19 @@ export default function TrainerReviewsPage() {
                     <div className="text-xs text-muted-foreground">{it.traineeName} • {new Date(it.submittedAt).toLocaleString()} {it.attemptNumber ? `• ${t('trainer.reviews.attempt').replace('{number}', String(it.attemptNumber))}` : ''}</div>
                   </div>
                 </div>
-                <div className={`text-xs rounded-full px-2.5 py-1 ${it.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' : 'bg-green-500/10 text-green-600 dark:text-green-400'} ${it.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : ''}`}>{it.status}</div>
+                <div className="flex items-center gap-2">
+                  {solutionDocsMap[it.useCaseId] && (
+                    <button
+                      onClick={() => openFlipbook(solutionDocsMap[it.useCaseId]!.url, solutionDocsMap[it.useCaseId]!.title)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-500/20 dark:text-blue-400 transition-colors"
+                      title={t('trainer.reviews.viewSolution')}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      {t('trainer.reviews.solutionPdf')}
+                    </button>
+                  )}
+                  <div className={`text-xs rounded-full px-2.5 py-1 ${it.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' : 'bg-green-500/10 text-green-600 dark:text-green-400'} ${it.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : ''}`}>{it.status}</div>
+                </div>
               </div>
               {it.submissionText && (
                 <div className="mt-3 rounded-xl border border-accent/20 bg-muted p-3">
@@ -443,6 +492,13 @@ export default function TrainerReviewsPage() {
         </div>
       )}
 
+      {/* Solution PDF Flipbook Viewer */}
+      <FlipbookViewer
+        pdfUrl={flipbookState.url}
+        title={flipbookState.title}
+        isOpen={flipbookState.isOpen}
+        onClose={closeFlipbook}
+      />
     </div>
   );
 }

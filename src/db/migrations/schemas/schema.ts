@@ -199,7 +199,18 @@ export const useCases = pgTable('use_cases', {
 
 // --- Content Documents (PDFs for Flipbook Viewer) ---
 
-export const contentDocumentType = pgEnum('content_document_type', ['THEORY', 'EXERCISE', 'REFERENCE', 'OTHER']);
+// Extended document types for Use Case role-based visibility
+export const contentDocumentType = pgEnum('content_document_type', [
+  'THEORY',           // Shared learning material (both roles)
+  'EXERCISE',         // General exercises
+  'REFERENCE',        // Reference material
+  'OTHER',            // Miscellaneous
+  'TRAINEE_QUESTION', // Use Case: Questions only (visible to trainee)
+  'TRAINER_SOLUTION', // Use Case: Full PDF with solutions (trainer only, HAI learns from this)
+]);
+
+// Role visibility for documents
+export const documentVisibility = pgEnum('document_visibility', ['ALL', 'TRAINEE_ONLY', 'TRAINER_ONLY']);
 
 export const contentDocuments = pgTable('content_documents', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -214,12 +225,19 @@ export const contentDocuments = pgTable('content_documents', {
   description: text('description'),
   documentType: contentDocumentType('document_type').default('THEORY'),
 
+  // Role-based visibility (derived from documentType but explicit for queries)
+  visibility: documentVisibility('visibility').default('ALL'),
+
   // Storage info
   fileName: text('file_name').notNull(),
   fileSize: integer('file_size'), // bytes
   mimeType: text('mime_type').default('application/pdf'),
   storageUrl: text('storage_url').notNull(), // Supabase Storage URL
   storagePath: text('storage_path'), // Path in bucket for deletion
+
+  // PageIndex support for HAI
+  pageCount: integer('page_count'), // Total pages in PDF
+  isIndexedByHai: boolean('is_indexed_by_hai').default(false), // True after HAI ingestion
 
   // Ordering for multiple docs
   orderIndex: integer('order_index').default(0),
@@ -631,24 +649,25 @@ export const progress = pgTable('progress', {
 // --- 8. HAI.AI TABLES ---
 // AI Coach tables for embeddings, chat sessions, and messages
 
-// Enum for embedding source types
-export const haiSourceType = pgEnum('hai_source_type', ['enabler', 'course', 'document', 'quiz']);
+// Enum for embedding source types (extended for Use Cases)
+export const haiSourceType = pgEnum('hai_source_type', ['enabler', 'course', 'document', 'quiz', 'use_case']);
 
 // Enum for chat context types
-export const haiContextType = pgEnum('hai_context_type', ['enabler', 'course', 'quiz', 'general']);
+export const haiContextType = pgEnum('hai_context_type', ['enabler', 'course', 'quiz', 'general', 'use_case']);
 
 // Enum for message roles
 export const haiMessageRole = pgEnum('hai_message_role', ['user', 'assistant', 'system']);
 
-// HAI.ai Embeddings - stores vector embeddings for RAG
+// HAI.ai Embeddings - stores vector embeddings for RAG with PageIndex support
 export const haiEmbeddings = pgTable('hai_embeddings', {
   id: uuid('id').primaryKey().defaultRandom(),
-  sourceType: text('source_type').notNull(), // 'enabler', 'course', 'document', 'quiz'
+  sourceType: text('source_type').notNull(), // 'enabler', 'course', 'document', 'quiz', 'use_case'
   sourceId: uuid('source_id').notNull(),
   chunkIndex: integer('chunk_index').notNull().default(0),
   content: text('content').notNull(),
   contentHash: text('content_hash').notNull(),
   embedding: vector('embedding', { dimensions: 768 }),
+  // Enhanced metadata for PageIndex: { page?: number, documentId?: string, useCaseTitle?: string }
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow(),

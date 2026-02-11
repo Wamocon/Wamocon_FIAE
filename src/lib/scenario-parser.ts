@@ -174,7 +174,7 @@ function detectContentType(content: string, defaultType: ContentType): ContentTy
   if (/PROBLEM\s*\d+/i.test(trimmed)) {
     return 'problem-solution';
   }
-
+  
   // Check for numbered format with LOESUNG (e.g., "1. Title\nSzenario\n...\nLOESUNG")
   if (/^\d+\.\s+.+/m.test(trimmed) && /L[OÖ][E]?SUNG/i.test(trimmed)) {
     return 'problem-solution';
@@ -188,9 +188,9 @@ function detectContentType(content: string, defaultType: ContentType): ContentTy
  */
 function containsProblemSolutionPatterns(text: string): boolean {
   // Check for PROBLEM markers or numbered items with LOESUNG/Lösung
-  return /PROBLEM\s*\d+/i.test(text) ||
-    (/^\d+\.\s+.+/m.test(text) && /L[OÖ][E]?SUNG/i.test(text)) ||
-    /Aufgabe\s*:?\s*\n/i.test(text);
+  return /PROBLEM\s*\d+/i.test(text) || 
+         (/^\d+\.\s+.+/m.test(text) && /L[OÖ][E]?SUNG/i.test(text)) ||
+         /Aufgabe\s*:?\s*\n/i.test(text);
 }
 
 /**
@@ -202,12 +202,12 @@ function extractProblemSolutionContent(text: string): string | null {
   if (problemMatches && problemMatches.length > 0) {
     return problemMatches.join('\n\n');
   }
-
+  
   // Try numbered format with LOESUNG
   if (/^\d+\.\s+.+/m.test(text) && /L[OÖ][E]?SUNG/i.test(text)) {
     return text;
   }
-
+  
   return null;
 }
 
@@ -293,7 +293,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
     if (def.key === 'problemLoesungPaare') {
       originalProblemContent = contentText;
       hasExplicitProblems = true;
-
+      
       // Add tasks to the tasks group
       if (!mergedGroups.has('tasks')) {
         mergedGroups.set('tasks', {
@@ -333,7 +333,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
   // Add preamble as introduction if exists and has meaningful content
   const preambleText = preambleContent.join('\n').trim();
   const preambleLines = preambleText.split('\n').filter(l => l.trim());
-
+  
   // CASE 1: Structured scenario (with section headers found)
   if (foundSections.size > 0) {
     if (preambleLines.length > 2) {
@@ -361,7 +361,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
 
       // Combine content from subsections
       const combinedContent = subSections.map(s => s.content).join('\n\n');
-
+      
       // Determine primary type
       const types = [...new Set(subSections.map(s => s.type))];
       const primaryType: ContentType = types.length === 1 ? types[0] : 'mixed';
@@ -390,7 +390,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
         type: 'problems-only' as ContentType,
         order: MERGED_GROUPS.tasks.order,
       });
-
+      
       originalProblemContent = extractedProblemContent;
       hasExplicitProblems = true;
     }
@@ -423,7 +423,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
     }
   } else {
     // CASE 2: NO section headers - Create smart default structure
-
+    
     // Check if plain text has problem-solution patterns
     if (hasProblemSolutionAnywhere && extractedProblemContent) {
       // Section 1: Overview
@@ -436,7 +436,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
         type: 'paragraph',
         order: 1,
       });
-
+      
       // Section 2: Tasks (extracted problems)
       sections.push({
         key: 'tasks',
@@ -447,7 +447,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
         type: 'problems-only' as ContentType,
         order: MERGED_GROUPS.tasks.order,
       });
-
+      
       // Section 3: Checklist
       sections.push({
         key: 'checklist',
@@ -458,7 +458,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
         type: 'checklist',
         order: MERGED_GROUPS.checklist.order,
       });
-
+      
       // Section 4: Solutions (gated)
       sections.push({
         key: 'solutions',
@@ -481,7 +481,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
         type: 'paragraph',
         order: 1,
       });
-
+      
       sections.push({
         key: 'tasks',
         title: 'Aufgabe',
@@ -491,7 +491,7 @@ export function parseScenarioText(text: string, hint?: string): ParsedScenario {
         type: 'paragraph',
         order: MERGED_GROUPS.tasks.order,
       });
-
+      
       sections.push({
         key: 'checklist',
         title: 'Checkliste',
@@ -522,7 +522,7 @@ function generateDefaultChecklist(scenarioText: string): string {
     '[ ] Ich habe mögliche Lösungsansätze überlegt',
     '[ ] Ich bin bereit, die Aufgabe zu bearbeiten',
   ];
-
+  
   return checklistItems.join('\n');
 }
 
@@ -531,7 +531,7 @@ function generateDefaultChecklist(scenarioText: string): string {
  */
 function separateTasksAndSolutions(content: string): { tasksText: string; solutionsText: string } {
   const pairs = parseProblemSolutionPairs(content);
-
+  
   if (pairs.length === 0) {
     // Fallback: try to split by LOESUNG/LÖSUNG markers
     return fallbackSeparation(content);
@@ -544,7 +544,9 @@ function separateTasksAndSolutions(content: string): { tasksText: string; soluti
     const num = index + 1;
     // Tasks: Problem title + scenario (without solution)
     tasksLines.push(`${num}. ${pair.problem}`);
-
+    if (pair.scenario) {
+      tasksLines.push(`Szenario: ${pair.scenario}`);
+    }
     tasksLines.push('');
 
     // Solutions: Problem number + solution
@@ -566,14 +568,14 @@ function fallbackSeparation(content: string): { tasksText: string; solutionsText
   const lines = content.split('\n');
   const tasksLines: string[] = [];
   const solutionsLines: string[] = [];
-
+  
   let inSolution = false;
   let currentTaskBlock: string[] = [];
   let currentSolutionBlock: string[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
-
+    
     // Check if this line starts a solution
     if (/^L[OÖ][E]?SUNG\s*:?/i.test(trimmed)) {
       inSolution = true;
@@ -585,7 +587,7 @@ function fallbackSeparation(content: string): { tasksText: string; solutionsText
       currentSolutionBlock.push(trimmed.replace(/^L[OÖ][E]?SUNG\s*:?\s*/i, 'Lösung: '));
       continue;
     }
-
+    
     // Check if this line starts a new problem/task
     if (/^\d+\.\s+\w/.test(trimmed)) {
       // Save previous blocks
@@ -701,20 +703,20 @@ export function parseProblemSolutionPairs(content: string): Array<{
   if (numberedMatch && content.includes('LOESUNG')) {
     // Parse numbered scenario format
     const blocks = content.split(/(?=^\d+\.\s+)/m).filter(b => b.trim());
-
+    
     for (const block of blocks) {
       const titleMatch = block.match(/^(\d+)\.\s+([^\n]+)/);
       if (!titleMatch) continue;
-
+      
       const problemTitle = titleMatch[2].trim();
       const afterTitle = block.slice(titleMatch[0].length);
-
+      
       // Find LOESUNG marker (handles LOESUNG, LÖSUNG, Lösung)
       const loesungIndex = afterTitle.search(/L[OÖ][E]?SUNG\s*\d*\s*:?/i);
-
+      
       let problemContent = '';
       let solutionContent = '';
-
+      
       if (loesungIndex >= 0) {
         problemContent = afterTitle.slice(0, loesungIndex).trim();
         const loesungMatch = afterTitle.slice(loesungIndex).match(/L[OÖ][E]?SUNG\s*\d*\s*:?\s*([^\n]*)([\s\S]*)/i);
@@ -724,7 +726,7 @@ export function parseProblemSolutionPairs(content: string): Array<{
       } else {
         problemContent = afterTitle.trim();
       }
-
+      
       if (problemContent || solutionContent) {
         pairs.push({
           problemTitle,
@@ -733,7 +735,7 @@ export function parseProblemSolutionPairs(content: string): Array<{
         });
       }
     }
-
+    
     if (pairs.length > 0) return pairs;
   }
 

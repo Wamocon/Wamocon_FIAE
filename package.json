@@ -37,7 +37,11 @@
     "db:reset": "supabase db reset",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "import:use-cases": "tsx scripts/bulk-import-use-case-pdfs.ts",
+    "import:use-cases:dry-run": "tsx scripts/bulk-import-use-case-pdfs.ts --dry-run",
+    "import:use-cases:quick": "tsx scripts/bulk-import-use-case-pdfs.ts --hai-skip",
+    "import:use-cases:scan": "tsx scripts/bulk-import-use-case-pdfs.ts --scan-only"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
