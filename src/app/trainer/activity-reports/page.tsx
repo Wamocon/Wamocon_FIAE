@@ -228,9 +228,43 @@ export default function TrainerActivityReportsPage() {
         }
     };
 
+    const fetchEvaluationData = async (userId: string, year: number, week: number) => {
+        try {
+            // 1. Get all evaluations to find the ID
+            const resLists = await fetch(`/api/trainee/evaluations?userId=${userId}`);
+            if (!resLists.ok) return null;
+            const { evaluations } = await resLists.json();
+            const evaluation = evaluations.find((e: any) => e.year === year && e.weekNumber === week);
+
+            if (!evaluation) return null;
+
+            // 2. Get full details including Soft Skills
+            const resDetails = await fetch(`/api/trainer/evaluations/${evaluation.id}`);
+            if (!resDetails.ok) return null;
+            return await resDetails.json();
+        } catch (e) {
+            console.error('Error fetching evaluation for PDF:', e);
+            return null;
+        }
+    };
+
     const handleDownloadPDF = async () => {
         if (!selectedReport) return;
         try {
+            // Fetch validation data
+            const evalData = await fetchEvaluationData(
+                selectedReport.traineeId,
+                selectedReport.year,
+                selectedReport.weekNumber
+            );
+
+            // Prepare soft skills
+            const softSkills = evalData?.softskillRatings?.map((r: any) => ({
+                name: r.criterion.name,
+                selfRating: r.rating.selfRating,
+                trainerRating: r.rating.trainerRating
+            })) || [];
+
             // Prepare report data for PDF
             const reportData = {
                 id: selectedReport.id,
@@ -249,6 +283,12 @@ export default function TrainerActivityReportsPage() {
                 reviewerId: selectedReport.reviewerId || null,
                 reviewerName: profile?.full_name || t('trainer.reports.trainer'),
                 entries: reportEntries,
+                // Grading Data
+                selfRating: evalData?.evaluation?.selfRating,
+                selfComment: evalData?.evaluation?.selfComment,
+                trainerRating: evalData?.evaluation?.trainerRating,
+                trainerComment: evalData?.evaluation?.trainerComment,
+                softSkills: softSkills,
             };
 
             await generateActivityReportPDF(reportData, useCases, components);
@@ -272,6 +312,19 @@ export default function TrainerActivityReportsPage() {
                 const entriesRes = await fetch(`/api/activity-reports/${report.id}/entries`);
                 const entriesData = entriesRes.ok ? await entriesRes.json() : { entries: [] };
 
+                // Fetch evaluation data
+                const evalData = await fetchEvaluationData(
+                    report.traineeId,
+                    report.year,
+                    report.weekNumber
+                );
+
+                const softSkills = evalData?.softskillRatings?.map((r: any) => ({
+                    name: r.criterion.name,
+                    selfRating: r.rating.selfRating,
+                    trainerRating: r.rating.trainerRating
+                })) || [];
+
                 const reportData = {
                     id: report.id,
                     traineeId: report.traineeId,
@@ -289,6 +342,12 @@ export default function TrainerActivityReportsPage() {
                     reviewerId: report.reviewerId || null,
                     reviewerName: profile?.full_name || t('trainer.reports.trainer'),
                     entries: entriesData.entries || [],
+                    // Grading Data
+                    selfRating: evalData?.evaluation?.selfRating,
+                    selfComment: evalData?.evaluation?.selfComment,
+                    trainerRating: evalData?.evaluation?.trainerRating,
+                    trainerComment: evalData?.evaluation?.trainerComment,
+                    softSkills: softSkills,
                 };
 
                 const blob = await generateActivityReportPDF(reportData, useCases, components, true);

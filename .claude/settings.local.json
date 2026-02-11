@@ -15,7 +15,9 @@
       "Bash(npx next lint:*)",
       "Bash(npx eslint:*)",
       "Bash(timeout 30 npx next build:*)",
-      "Bash(npx next build:*)"
+      "Bash(npx next build:*)",
+      "WebSearch",
+      "WebFetch(domain:supabase.com)"
     ]
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   BookMarked,
   ChevronLeft,
@@ -15,9 +15,12 @@ import {
   CheckSquare,
   FileText,
   Info,
+  ClipboardList,
+  Lock,
 } from 'lucide-react';
 import { parseScenarioText, ParsedScenario } from '@/lib/scenario-parser';
 import { ScenarioModal } from './ScenarioModal';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Scenario {
   text: string;
@@ -42,22 +45,25 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   CheckSquare,
   FileText,
   Info,
+  ClipboardList,
+  Lock,
 };
 
-// Section colors for visual distinction
+// Section colors for visual distinction (light mode compatible)
 const SECTION_COLORS: Record<string, { bg: string; icon: string; border: string }> = {
-  behandelteThemen: { bg: 'bg-blue-500/10', icon: 'text-blue-400', border: 'border-blue-500/20' },
-  lernziele: { bg: 'bg-emerald-500/10', icon: 'text-emerald-400', border: 'border-emerald-500/20' },
-  theoretischeGrundlagen: { bg: 'bg-purple-500/10', icon: 'text-purple-400', border: 'border-purple-500/20' },
-  ausgangslage: { bg: 'bg-amber-500/10', icon: 'text-amber-400', border: 'border-amber-500/20' },
-  problemLoesungPaare: { bg: 'bg-rose-500/10', icon: 'text-rose-400', border: 'border-rose-500/20' },
-  lernzielCheckliste: { bg: 'bg-cyan-500/10', icon: 'text-cyan-400', border: 'border-cyan-500/20' },
-  einleitung: { bg: 'bg-slate-500/10', icon: 'text-slate-400', border: 'border-slate-500/20' },
-  content: { bg: 'bg-slate-500/10', icon: 'text-slate-400', border: 'border-slate-500/20' },
+  overviewAndGoals: { bg: 'bg-emerald-500/10 dark:bg-emerald-500/10', icon: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-500/30 dark:border-emerald-500/20' },
+  theoryAndContext: { bg: 'bg-purple-500/10 dark:bg-purple-500/10', icon: 'text-purple-600 dark:text-purple-400', border: 'border-purple-500/30 dark:border-purple-500/20' },
+  tasks: { bg: 'bg-amber-500/10 dark:bg-amber-500/10', icon: 'text-amber-600 dark:text-amber-400', border: 'border-amber-500/30 dark:border-amber-500/20' },
+  checklist: { bg: 'bg-rose-500/10 dark:bg-rose-500/10', icon: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/30 dark:border-rose-500/20' },
+  solutions: { bg: 'bg-green-500/10 dark:bg-green-500/10', icon: 'text-green-600 dark:text-green-400', border: 'border-green-500/30 dark:border-green-500/20' },
+  // Legacy support
+  tasksAndChecklist: { bg: 'bg-rose-500/10 dark:bg-rose-500/10', icon: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/30 dark:border-rose-500/20' },
+  einleitung: { bg: 'bg-slate-500/10 dark:bg-slate-500/10', icon: 'text-slate-600 dark:text-slate-400', border: 'border-slate-500/30 dark:border-slate-500/20' },
+  content: { bg: 'bg-slate-500/10 dark:bg-slate-500/10', icon: 'text-slate-600 dark:text-slate-400', border: 'border-slate-500/30 dark:border-slate-500/20' },
 };
 
 /**
- * Clean, list-based scenario viewer
+ * Clean, list-based scenario viewer with translations and light mode support
  */
 export function ScenarioViewer({
   scenarios,
@@ -68,6 +74,13 @@ export function ScenarioViewer({
 }: ScenarioViewerProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalSectionIndex, setModalSectionIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  const { t } = useLanguage();
+
+  // Fix hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Normalize scenarios
   const normalizedScenarios: Scenario[] = useMemo(() => {
@@ -104,7 +117,7 @@ export function ScenarioViewer({
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex < normalizedScenarios.length - 1;
 
-  if (normalizedScenarios.length === 0) {
+  if (!mounted || normalizedScenarios.length === 0) {
     return null;
   }
 
@@ -120,16 +133,16 @@ export function ScenarioViewer({
           </div>
           <div>
             <h3 className="font-semibold text-foreground">
-              Szenario {currentIndex + 1}
+              {t('scenario.title')} {currentIndex + 1}
               {normalizedScenarios.length > 1 && (
                 <span className="text-muted-foreground font-normal">
-                  {' '}von {normalizedScenarios.length}
+                  {' '}{t('scenario.of')} {normalizedScenarios.length}
                 </span>
               )}
             </h3>
             {hasSections && (
               <p className="text-xs text-muted-foreground">
-                {parsedScenario.sections.length} Abschnitte zum Lernen
+                {t('scenario.sectionsForLearning').replace('{count}', String(parsedScenario.sections.length))}
               </p>
             )}
           </div>
@@ -143,7 +156,7 @@ export function ScenarioViewer({
               onClick={() => onIndexChange(Math.max(0, currentIndex - 1))}
               disabled={!canGoPrev}
               className="p-2 rounded-lg border border-accent/20 hover:bg-accent/10 hover:border-accent/40 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
-              title="Vorheriges Szenario"
+              title={t('scenario.previousScenario')}
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -159,8 +172,8 @@ export function ScenarioViewer({
                       ? 'w-6 h-2 bg-accent'
                       : 'w-2 h-2 bg-accent/20 hover:bg-accent/50 hover:scale-125'
                   }`}
-                  title={`Zu Szenario ${idx + 1} wechseln`}
-                  aria-label={`Zu Szenario ${idx + 1} wechseln`}
+                  title={t('scenario.goToScenario').replace('{number}', String(idx + 1))}
+                  aria-label={t('scenario.goToScenario').replace('{number}', String(idx + 1))}
                 />
               ))}
             </div>
@@ -170,7 +183,7 @@ export function ScenarioViewer({
               onClick={() => onIndexChange(Math.min(normalizedScenarios.length - 1, currentIndex + 1))}
               disabled={!canGoNext}
               className="p-2 rounded-lg border border-accent/20 hover:bg-accent/10 hover:border-accent/40 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
-              title="Nächstes Szenario"
+              title={t('scenario.nextScenario')}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -188,7 +201,7 @@ export function ScenarioViewer({
           <Play className="h-5 w-5 text-accent group-hover:scale-110 transition-transform" />
         </div>
         <span className="font-semibold text-foreground group-hover:text-accent transition-colors">
-          Szenario {currentIndex + 1} starten
+          {t('scenario.startScenario').replace('{number}', String(currentIndex + 1))}
         </span>
         <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-accent rotate-[-90deg] transition-all group-hover:translate-x-1" />
       </button>
@@ -197,12 +210,13 @@ export function ScenarioViewer({
       {hasSections && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground uppercase tracking-wide px-1">
-            Oder direkt zu einem Abschnitt springen:
+            {t('scenario.jumpToSection')}
           </p>
           <div className="space-y-1.5">
             {parsedScenario.sections.map((section, idx) => {
               const IconComponent = ICON_MAP[section.icon] || FileText;
               const colors = SECTION_COLORS[section.key] || SECTION_COLORS.content;
+              const sectionTitle = t(section.titleKey) || section.title;
 
               return (
                 <button
@@ -219,7 +233,7 @@ export function ScenarioViewer({
                   `}
                 >
                   {/* Section number */}
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-background/50 text-xs font-semibold text-muted-foreground group-hover:bg-accent/20 group-hover:text-accent transition-all">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-background/50 dark:bg-background/50 text-xs font-semibold text-muted-foreground group-hover:bg-accent/20 group-hover:text-accent transition-all">
                     {idx + 1}
                   </span>
 
@@ -230,7 +244,7 @@ export function ScenarioViewer({
 
                   {/* Title */}
                   <span className="flex-1 font-medium text-foreground/90 group-hover:text-foreground transition-colors">
-                    {section.title}
+                    {sectionTitle}
                   </span>
 
                   {/* Arrow */}
@@ -244,14 +258,14 @@ export function ScenarioViewer({
 
       {/* Hint display */}
       {parsedScenario.hint && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+        <div className="rounded-xl border border-amber-500/30 dark:border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/5 p-4">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 rounded-lg bg-amber-500/20 p-1.5">
-              <Info className="h-4 w-4 text-amber-400" />
+              <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </div>
             <div>
-              <h4 className="text-sm font-semibold text-amber-400 mb-1">Hinweis</h4>
-              <p className="text-sm text-amber-200/80 leading-relaxed">
+              <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-1">{t('scenario.hint')}</h4>
+              <p className="text-sm text-amber-800/80 dark:text-amber-200/80 leading-relaxed">
                 {parsedScenario.hint}
               </p>
             </div>
@@ -265,7 +279,8 @@ export function ScenarioViewer({
         onClose={() => setModalOpen(false)}
         sections={parsedScenario.sections.length > 0 ? parsedScenario.sections : [{
           key: 'content',
-          title: 'Szenario-Inhalt',
+          title: t('scenario.scenarioContent'),
+          titleKey: 'scenario.scenarioContent',
           icon: 'FileText',
           content: currentScenario?.text || '',
           type: 'paragraph',
