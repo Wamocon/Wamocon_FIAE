@@ -25,7 +25,7 @@ import { eq, and, sql } from 'drizzle-orm';
 // TYPES
 // ============================================================================
 
-export type SourceType = 'enabler' | 'course' | 'document' | 'quiz';
+export type SourceType = 'enabler' | 'course' | 'document' | 'quiz' | 'use_case';
 
 export interface IndexContentOptions {
     sourceType: SourceType;
@@ -33,6 +33,23 @@ export interface IndexContentOptions {
     title: string;
     content: string;
     metadata?: Record<string, unknown>;
+    forceReindex?: boolean;
+}
+
+/** PageIndex-aware indexing options for use cases */
+export interface IndexUseCaseOptions {
+    sourceType: 'use_case';
+    sourceId: string;           // use_case.id
+    documentId: string;         // content_documents.id
+    title: string;              // Use case title
+    pageNumber: number;         // Page number for citation
+    pageContent: string;        // Text content of the page
+    metadata?: {
+        useCaseTitle?: string;
+        documentTitle?: string;
+        totalPages?: number;
+        documentType?: string;
+    };
     forceReindex?: boolean;
 }
 

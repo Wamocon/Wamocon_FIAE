@@ -45,7 +45,14 @@ export async function GET(
         durationUnit: e.durationUnit,
         activatedAt: e.activatedAt,
       },
-      submission: latest ? { id: latest.id, solutionText: latest.solutionText, status: latest.status } : null,
+      submission: latest ? { 
+        id: latest.id, 
+        solutionText: latest.solutionText, 
+        solutions: latest.solutions,
+        status: latest.status,
+        trainerFeedback: latest.trainerFeedback,
+        feedbacks: latest.feedbacks 
+      } : null,
     });
   } catch (e) {
     console.error('Trainee enabler detail GET error', e);
