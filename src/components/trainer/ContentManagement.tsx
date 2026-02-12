@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
@@ -423,7 +424,7 @@ export function ContentManagement() {
                       if (!res.ok) throw new Error(t('content.error.delete'));
                       setCourses(prev => prev.filter(c => c.id !== course.id));
                     } catch (e: any) {
-                      alert(e?.message || t('content.unknownError'));
+                      toast.error(e?.message || t('content.unknownError'));
                     }
                   }}
                   className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/20"
@@ -512,7 +513,7 @@ export function ContentManagement() {
                           prev.filter(c => c.id !== course.id)
                         );
                       } catch (e: any) {
-                        alert(e?.message || t('content.unknownError'));
+                        toast.error(e?.message || t('content.unknownError'));
                       }
                     }}
                     className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/20"

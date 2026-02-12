@@ -25,6 +25,10 @@ export async function GET(
             actualHours: e.actualHours,
             isOverbooked: e.isOverbooked,
             notes: e.notes,
+            trainerGrade: e.trainerGrade,
+            gradeComment: e.gradeComment,
+            isGradeApproved: e.isGradeApproved,
+            gradeApprovedAt: e.gradeApprovedAt,
             createdAt: e.createdAt,
             updatedAt: e.updatedAt,
         }));
@@ -37,6 +41,58 @@ export async function GET(
             return NextResponse.json({ entries: [] });
         }
         console.error('Error in report entries GET:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+
+// PATCH: Update grades for report entries
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params;
+        const body = await request.json();
+        const { entryGrades, trainerId } = body;
+
+        // entryGrades: Array of { entryId, grade, comment }
+        if (!entryGrades || !Array.isArray(entryGrades)) {
+            return NextResponse.json({ error: 'entryGrades array required' }, { status: 400 });
+        }
+
+        const updatedEntries = [];
+        const now = new Date();
+
+        for (const gradeData of entryGrades) {
+            const { entryId, grade, comment } = gradeData;
+            
+            if (!entryId || !grade) continue;
+
+            const updated = await db
+                .update(activityReportUseCaseEntries)
+                .set({
+                    trainerGrade: grade,
+                    gradeComment: comment || null,
+                    isGradeApproved: true,
+                    gradeApprovedAt: now,
+                    gradeApprovedBy: trainerId || null,
+                    updatedAt: now,
+                })
+                .where(eq(activityReportUseCaseEntries.id, entryId as any))
+                .returning();
+
+            if (updated.length > 0) {
+                updatedEntries.push(updated[0]);
+            }
+        }
+
+        return NextResponse.json({ 
+            success: true, 
+            updatedCount: updatedEntries.length,
+            entries: updatedEntries 
+        });
+    } catch (error: any) {
+        console.error('Error in report entries PATCH:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import toast from 'react-hot-toast';
 import { Users, Eye, MessageSquare, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -164,7 +165,7 @@ export default function TrainerTraineesPage() {
                     setTrainees(data.trainees || []);
                   } catch (e) {
                     console.error(e);
-                    alert(t('trainee.management.updateError'));
+                    toast.error(t('trainee.management.updateError'));
                   }
                 }}
                 className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'bg-green-600 text-foreground hover:bg-green-700'}`}
