@@ -12,6 +12,7 @@ import {
   TrendingUp,
   ChevronRight,
 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import type { ModuleWithLessons } from '@/db/queries';
 import Link from 'next/link';
 
@@ -21,13 +22,14 @@ interface ModuleDetailProps {
 
 export default function ModuleDetail({ data }: ModuleDetailProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   if (!data) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Modul nicht gefunden...</p>
+          <p className="text-muted-foreground">{t('modules.notFound')}</p>
         </div>
       </div>
     );
@@ -57,7 +59,7 @@ export default function ModuleDetail({ data }: ModuleDetailProps) {
             {moduleTitle}
           </h1>
           <p className="text-muted">
-            Modul aus dem {trainingYear}. Ausbildungsjahr
+            {t('modules.fromYear').replace('{year}', String(trainingYear))}
           </p>
         </div>
       </div>
@@ -82,9 +84,9 @@ export default function ModuleDetail({ data }: ModuleDetailProps) {
           <h3 className="text-foreground mb-2 text-xl font-bold">{moduleTitle}</h3>
           <div className="text-muted mb-4 flex items-center gap-4 text-sm">
             <span className="bg-accent/20 text-accent rounded-full px-3 py-1 font-medium">
-              Jahr {trainingYear}
+              {t('modules.year').replace('{year}', String(trainingYear))}
             </span>
-            <span>{totalLessons} Lektionen</span>
+            <span>{totalLessons} {t('modules.lessons')}</span>
           </div>
 
           {/* Lessons List */}
@@ -97,9 +99,11 @@ export default function ModuleDetail({ data }: ModuleDetailProps) {
               >
                 <div className="mb-2 flex items-center justify-between">
                   <h5 className="text-foreground font-medium">{lesson.title}</h5>
-                  <div className="text-muted text-sm">{lesson.subLessonsCount} Aufgaben</div>
+                  <div className="text-muted text-sm">{lesson.subLessonsCount} {t('modules.tasks')}</div>
                 </div>
-                <div className="text-muted text-xs">Dauer: {lesson.duration_weeks ?? 0} Wochen</div>
+                <div className="text-muted text-xs">
+                  {t('modules.duration').replace('{weeks}', String(lesson.duration_weeks ?? 0))}
+                </div>
               </Link>
             ))}
           </div>

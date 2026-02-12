@@ -30,6 +30,7 @@ import {
     courses
 } from '@/db/migrations/schemas/schema';
 import { processMessage, processMessageStream, PipelineContext, ChatMessage } from '@/lib/hai';
+import { getProviderStatus, getChatProvider } from '@/lib/hai/providers';
 
 // ============================================================================
 // TYPES
@@ -178,6 +179,114 @@ async function getContextTitles(
     return { enablerTitle, courseTitle };
 }
 
+/**
+ * Auto-generate a short German title for a new session.
+ * Runs as fire-and-forget after the first response — does not block the user.
+ */
+async function autoGenerateTitle(sessionId: string, userMessage: string): Promise<void> {
+    try {
+        const provider = getChatProvider();
+        const result = await provider.generateResponse(
+            'Du bist ein Titel-Generator. Erstelle einen kurzen deutschen Titel (3-6 Worte) fuer diese Chat-Konversation. Antworte NUR mit dem Titel, ohne Anfuehrungszeichen, ohne Erklaerung.',
+            [],
+            userMessage,
+            { maxOutputTokens: 30, temperature: 0.3 }
+        );
+
+        const title = result.text.trim().replace(/^["']|["']$/g, '').slice(0, 80);
+        if (title.length > 0) {
+            await db
+                .update(haiChatSessions)
+                .set({ title, updatedAt: new Date() })
+                .where(eq(haiChatSessions.id, sessionId));
+        }
+    } catch (error) {
+        // Non-fatal: title generation failure doesn't affect chat
+        console.warn('HAI.ai: Auto-title generation failed:', error);
+    }
+}
+
+/**
+ * Get or generate a conversation summary for sessions with many messages.
+ * Summaries are cached in session metadata to avoid regeneration every turn.
+ *
+ * @returns Summary text if session has >10 messages, undefined otherwise
+ */
+async function getConversationSummary(sessionId: string): Promise<string | undefined> {
+    try {
+        // Count total messages in session
+        const countResult = await db
+            .select({ cnt: sql<number>`count(*)::int` })
+            .from(haiChatMessages)
+            .where(eq(haiChatMessages.sessionId, sessionId));
+
+        const totalMessages = countResult[0]?.cnt ?? 0;
+        if (totalMessages <= 10) return undefined;
+
+        // Check cached summary in session metadata JSONB
+        const sessionMeta = await db.execute(sql`
+            SELECT
+                (metadata->>'conversationSummary') AS cached_summary,
+                (metadata->>'summarizedUpTo')::int AS summarized_up_to
+            FROM hai_chat_sessions
+            WHERE id = ${sessionId}
+            LIMIT 1
+        `);
+
+        const meta = (sessionMeta as any[])[0];
+        const cachedSummary = meta?.cached_summary as string | null;
+        const summarizedUpTo = meta?.summarized_up_to as number | null;
+
+        // If summary is fresh enough (within 5 messages of current), use cached
+        if (cachedSummary && summarizedUpTo && (totalMessages - summarizedUpTo) < 5) {
+            return cachedSummary;
+        }
+
+        // Fetch the older messages (everything except the last 10)
+        const olderMessages = await db
+            .select({
+                role: haiChatMessages.role,
+                content: haiChatMessages.content,
+            })
+            .from(haiChatMessages)
+            .where(eq(haiChatMessages.sessionId, sessionId))
+            .orderBy(haiChatMessages.createdAt)
+            .limit(totalMessages - 10);
+
+        if (olderMessages.length === 0) return undefined;
+
+        // Build a compact transcript for summarization
+        const transcript = olderMessages
+            .map(m => `${m.role === 'user' ? 'Nutzer' : 'HAI'}: ${m.content.slice(0, 200)}`)
+            .join('\n');
+
+        // Generate summary via cheap LLM call
+        const provider = getChatProvider();
+        const result = await provider.generateResponse(
+            'Fasse den bisherigen Gespraechsverlauf in 2-3 kurzen Saetzen auf Deutsch zusammen. Fokussiere auf die Hauptthemen und offene Fragen. Antworte NUR mit der Zusammenfassung.',
+            [],
+            transcript,
+            { maxOutputTokens: 150, temperature: 0.2 }
+        );
+
+        const summary = result.text.trim();
+
+        // Cache the summary in session metadata
+        await db.execute(sql`
+            UPDATE hai_chat_sessions
+            SET metadata = COALESCE(metadata, '{}'::jsonb)
+                || jsonb_build_object('conversationSummary', ${summary}::text, 'summarizedUpTo', ${totalMessages}::int),
+                updated_at = NOW()
+            WHERE id = ${sessionId}
+        `);
+
+        return summary;
+    } catch (error) {
+        console.warn('HAI.ai: Conversation summary failed (non-fatal):', error);
+        return undefined;
+    }
+}
+
 // ============================================================================
 // ROUTE HANDLERS
 // ============================================================================
@@ -261,13 +370,16 @@ export async function POST(req: NextRequest) {
         // Get previous messages for context
         const previousMessages = await getPreviousMessages(sessionId);
 
+        // Phase 2B: Get conversation summary for long sessions
+        const conversationSummary = await getConversationSummary(sessionId);
+
         // Get context titles
         const { enablerTitle, courseTitle } = await getContextTitles(
             context?.enablerId,
             context?.courseId
         );
 
-        // Build pipeline context
+        // Build pipeline context (Phase 1: pass userRole for live data context)
         const pipelineContext: PipelineContext = {
             userId,
             sessionId,
@@ -277,6 +389,8 @@ export async function POST(req: NextRequest) {
             courseTitle,
             scenarioText: context?.scenarioText,
             previousMessages,
+            userRole: user[0].role as 'TRAINER' | 'TRAINEE',
+            conversationSummary,
         };
 
         // Save user message
@@ -304,6 +418,11 @@ export async function POST(req: NextRequest) {
                             result.citations,
                             { intent: result.intent }
                         );
+
+                        // Phase 2A: Auto-generate title for new sessions (fire-and-forget)
+                        if (!providedSessionId) {
+                            autoGenerateTitle(sessionId, message.trim()).catch(() => {});
+                        }
 
                         // Send final event with metadata
                         controller.enqueue(
@@ -350,6 +469,11 @@ export async function POST(req: NextRequest) {
             { intent: result.intent }
         );
 
+        // Phase 2A: Auto-generate title for new sessions (fire-and-forget)
+        if (!providedSessionId) {
+            autoGenerateTitle(sessionId, message.trim()).catch(() => {});
+        }
+
         return NextResponse.json({
             success: true,
             sessionId,
@@ -392,9 +516,18 @@ export async function GET(req: NextRequest) {
             .orderBy(desc(haiChatSessions.lastMessageAt))
             .limit(20);
 
+        // Include provider status for diagnostics
+        let providerInfo;
+        try {
+            providerInfo = getProviderStatus();
+        } catch {
+            providerInfo = null;
+        }
+
         return NextResponse.json({
             success: true,
             sessions,
+            providers: providerInfo,
         });
     } catch (error) {
         console.error('HAI.ai sessions error:', error);

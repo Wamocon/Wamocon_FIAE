@@ -1,13 +1,36 @@
 /**
  * HAI.ai - AI Learning Coach
- * 
+ *
  * Barrel export for all HAI.ai modules.
  * Import from '@/lib/hai' for all AI coach functionality.
- * 
+ *
+ * ARCHITECTURE (2026):
+ *   Chat:       Claude Haiku 4.5 (primary) → Gemini 2.5 Flash (fallback)
+ *   Embeddings: Gemini gemini-embedding-001 (768-dim, MRL)
+ *   Vector DB:  pgvector with IVFFlat index
+ *
  * @module lib/hai
  */
 
-// Core Gemini client
+// --- NEW: Provider abstraction layer ---
+export {
+    getChatProvider,
+    getFallbackChatProvider,
+    getEmbeddingProvider,
+    chatWithFallback,
+    getProviderStatus,
+} from './providers';
+export type {
+    ChatProvider,
+    EmbeddingProvider,
+    ChatMessage as ProviderChatMessage,
+    ChatGenerateOptions,
+    ChatResponse as ProviderChatResponse,
+    EmbeddingResult as ProviderEmbeddingResult,
+    ChatCitation,
+} from './providers';
+
+// --- Legacy client (backward compatibility) ---
 export { haiClient } from './client';
 export type { ChatMessage, GenerateOptions, EmbeddingResult, ChatResponse } from './client';
 
@@ -55,6 +78,19 @@ export {
 } from './prompts';
 export type { PromptMode, PromptContext } from './prompts';
 
+// Live Data Context (Phase 1)
+export {
+    classifyDataIntent,
+    fetchDataContext,
+    fetchUserSnapshot,
+} from './dataContext';
+export type {
+    UserRole,
+    DataIntent,
+    LiveDataContext,
+    UserSnapshot,
+} from './dataContext';
+
 // RAG Pipeline (main orchestration)
 export {
     processMessage,
@@ -68,3 +104,37 @@ export type {
     QuizState,
     Citation
 } from './ragPipeline';
+
+// Action Execution System (Phase 3 — Write Operations)
+export {
+    detectActionIntent,
+    executeAction
+} from './actions';
+export type {
+    ActionType,
+    ActionIntent,
+    ActionResult,
+    ActionDetectionContext
+} from './actions';
+
+// Action Streaming & Progress (Phase 3B — Enhanced UX)
+export {
+    executeActionWithProgress,
+    formatActionResult,
+    createActionProgressStream
+} from './actionStreaming';
+export type {
+    ActionProgress,
+    ProgressCallback
+} from './actionStreaming';
+
+// Proactive Reminder System (Phase 4 — Proactive Features)
+export {
+    runProactiveChecks,
+    createNotificationFromInsight,
+    sendProactiveNotifications
+} from './proactive';
+export type {
+    ProactiveInsight,
+    ProactiveCheck
+} from './proactive';

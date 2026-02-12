@@ -15,7 +15,7 @@ A comprehensive, role-based learning management system designed for German vocat
 - **Modular Learning Paths**: Structured curriculum with progressive difficulty levels
 - **Interactive Lessons**: Rich content with multimedia support
 - **Assessment System**: Comprehensive quizzes and progress tracking
-- **Reflection Tools**: Built-in learning reflection and knowledge submission
+- **Knowledge Submission**: Built-in knowledge submission tools
 
 ### **Professional Dashboard**
 
@@ -88,7 +88,6 @@ src/
 │   │   ├── layout.tsx           # Trainee layout with role validation
 │   │   ├── dashboard/            # Trainee dashboard
 │   │   ├── profile/              # User profile management
-│   │   ├── reflection/           # Learning reflection tools
 │   │   ├── knowledge-submission/ # Knowledge assessment
 │   │   ├── modules/              # Learning modules overview
 │   │   ├── lessons/              # Individual lessons

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useSearchParams } from 'next/navigation';
 import {
     ClipboardCheck,
@@ -45,28 +46,28 @@ interface ReportStats {
 
 const STATUS_CONFIG = {
     DRAFT: {
-        label: 'Entwurf',
+        labelKey: 'status.draft',
         bg: 'bg-muted',
         text: 'text-muted-foreground',
         border: 'border-border',
         icon: Edit,
     },
     SUBMITTED: {
-        label: 'Eingereicht',
+        labelKey: 'status.submitted',
         bg: 'bg-amber-500/20',
         text: 'text-amber-600 dark:text-amber-400',
         border: 'border-amber-500/30',
         icon: Clock,
     },
     APPROVED: {
-        label: 'Genehmigt',
+        labelKey: 'status.approved',
         bg: 'bg-green-500/20',
         text: 'text-green-600 dark:text-green-400',
         border: 'border-green-500/30',
         icon: Check,
     },
     REJECTED: {
-        label: 'Abgelehnt',
+        labelKey: 'status.rejected',
         bg: 'bg-destructive/20',
         text: 'text-destructive',
         border: 'border-destructive/30',
@@ -76,6 +77,7 @@ const STATUS_CONFIG = {
 
 export function ActivityReportsList() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const searchParams = useSearchParams();
 
     const [reports, setReports] = useState<ActivityReport[]>([]);
@@ -105,7 +107,7 @@ export function ActivityReportsList() {
             }
 
             const res = await fetch(url);
-            if (!res.ok) throw new Error('Fehler beim Laden');
+            if (!res.ok) throw new Error(t('reports.error.load'));
             const data = await res.json();
 
             setReports(data.reports || []);
@@ -136,13 +138,13 @@ export function ActivityReportsList() {
 
             if (!res.ok) {
                 if (res.status === 409) {
-                    setError(`Bericht für diese Woche existiert bereits`);
+                    setError(t('reports.error.weekExists'));
                     if (data.existingId) {
                         setSelectedReport(data.existingId);
                     }
                     return;
                 }
-                throw new Error(data.error || 'Fehler beim Erstellen');
+                throw new Error(data.error || t('reports.error.create'));
             }
 
             await loadReports();
@@ -185,9 +187,9 @@ export function ActivityReportsList() {
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-foreground">Tätigkeitsnachweise</h2>
+                    <h2 className="text-xl font-bold text-foreground">{t('reports.title')}</h2>
                     <p className="text-sm text-muted-foreground">
-                        Wöchentliche Ausbildungsdokumentation (IHK)
+                        {t('reports.weeklyDoc')}
                     </p>
                 </div>
 
@@ -201,7 +203,7 @@ export function ActivityReportsList() {
                     ) : (
                         <Plus className="h-4 w-4" />
                     )}
-                    <span>Neue Woche</span>
+                    <span>{t('reports.newWeek')}</span>
                 </button>
             </div>
 
@@ -210,7 +212,7 @@ export function ActivityReportsList() {
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className="p-3 rounded-xl glass-effect text-center">
                         <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                        <p className="text-xs text-muted-foreground">Gesamt</p>
+                        <p className="text-xs text-muted-foreground">{t('reports.total')}</p>
                     </div>
                     <div
                         className={`p-3 rounded-xl cursor-pointer transition-colors border ${filterStatus === 'DRAFT'
@@ -220,7 +222,7 @@ export function ActivityReportsList() {
                         onClick={() => setFilterStatus(filterStatus === 'DRAFT' ? 'all' : 'DRAFT')}
                     >
                         <p className="text-2xl font-bold text-foreground">{stats.draft}</p>
-                        <p className="text-xs text-muted-foreground">Entwürfe</p>
+                        <p className="text-xs text-muted-foreground">{t('reports.drafts')}</p>
                     </div>
                     <div
                         className={`p-3 rounded-xl cursor-pointer transition-colors border ${filterStatus === 'SUBMITTED'
@@ -230,7 +232,7 @@ export function ActivityReportsList() {
                         onClick={() => setFilterStatus(filterStatus === 'SUBMITTED' ? 'all' : 'SUBMITTED')}
                     >
                         <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.submitted}</p>
-                        <p className="text-xs text-muted-foreground">Eingereicht</p>
+                        <p className="text-xs text-muted-foreground">{t('reports.submitted')}</p>
                     </div>
                     <div
                         className={`p-3 rounded-xl cursor-pointer transition-colors border ${filterStatus === 'APPROVED'
@@ -240,7 +242,7 @@ export function ActivityReportsList() {
                         onClick={() => setFilterStatus(filterStatus === 'APPROVED' ? 'all' : 'APPROVED')}
                     >
                         <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approved}</p>
-                        <p className="text-xs text-muted-foreground">Genehmigt</p>
+                        <p className="text-xs text-muted-foreground">{t('reports.approved')}</p>
                     </div>
                     <div
                         className={`p-3 rounded-xl cursor-pointer transition-colors border ${filterStatus === 'REJECTED'
@@ -250,7 +252,7 @@ export function ActivityReportsList() {
                         onClick={() => setFilterStatus(filterStatus === 'REJECTED' ? 'all' : 'REJECTED')}
                     >
                         <p className="text-2xl font-bold text-destructive">{stats.rejected}</p>
-                        <p className="text-xs text-muted-foreground">Abgelehnt</p>
+                        <p className="text-xs text-muted-foreground">{t('reports.rejected')}</p>
                     </div>
                 </div>
             )}
@@ -270,12 +272,12 @@ export function ActivityReportsList() {
             {reports.length === 0 ? (
                 <div className="text-center py-12 glass-effect rounded-2xl">
                     <ClipboardCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">Keine Berichte gefunden</p>
+                    <p className="text-muted-foreground">{t('reports.none')}</p>
                     <button
                         onClick={handleCreateReport}
                         className="mt-4 text-accent hover:underline text-sm"
                     >
-                        Ersten Bericht erstellen
+                        {t('reports.createFirst')}
                     </button>
                 </div>
             ) : (
@@ -297,19 +299,19 @@ export function ActivityReportsList() {
                                         </div>
                                         <div>
                                             <p className="font-semibold text-foreground">
-                                                KW {report.weekNumber} / {report.year}
+                                                {t('reports.week')} {report.weekNumber} / {report.year}
                                             </p>
                                             <p className="text-sm text-muted-foreground">
                                                 {formatWeekPeriod(report.periodStart, report.periodEnd)}
                                                 <span className="mx-2">•</span>
-                                                {report.ausbildungsjahr}. Ausbildungsjahr
+                                                {report.ausbildungsjahr}. {t('reports.trainingYear')}
                                             </p>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-3">
                                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${status.bg} ${status.text}`}>
-                                            {status.label}
+                                            {t(status.labelKey)}
                                         </span>
 
                                         {report.pdfUrl && report.status === 'APPROVED' && (
@@ -319,7 +321,7 @@ export function ActivityReportsList() {
                                                     window.open(report.pdfUrl!, '_blank');
                                                 }}
                                                 className="p-2 rounded-lg bg-card hover:bg-muted transition-colors border border-border"
-                                                title="PDF herunterladen"
+                                                title={t('reports.downloadPdf')}
                                             >
                                                 <Download className="h-4 w-4 text-foreground" />
                                             </button>
@@ -332,7 +334,7 @@ export function ActivityReportsList() {
                                 {report.status === 'REJECTED' && report.reviewerFeedback && (
                                     <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                                         <p className="text-xs text-destructive">
-                                            <strong>Feedback:</strong> {report.reviewerFeedback}
+                                            <strong>{t('reports.feedback')}</strong> {report.reviewerFeedback}
                                         </p>
                                     </div>
                                 )}
@@ -354,6 +356,7 @@ function ActivityReportDetail({
     onBack: () => void;
 }) {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const [report, setReport] = useState<any>(null);
     const [entries, setEntries] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -378,7 +381,7 @@ function ActivityReportDetail({
         setLoading(true);
         try {
             const res = await fetch(`/api/trainee/school/reports/${reportId}`);
-            if (!res.ok) throw new Error('Fehler beim Laden');
+            if (!res.ok) throw new Error(t('reports.error.load'));
             const data = await res.json();
 
             setReport(data.report);
@@ -448,7 +451,7 @@ function ActivityReportDetail({
     };
 
     const handleSubmit = async () => {
-        if (!confirm('Bericht wirklich einreichen? Er kann danach nicht mehr bearbeitet werden.')) return;
+        if (!confirm(t('reports.submitConfirm'))) return;
 
         setSubmitting(true);
         setError(null);
@@ -464,7 +467,7 @@ function ActivityReportDetail({
 
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.error || 'Fehler beim Einreichen');
+                throw new Error(data.error || t('reports.error.submit'));
             }
 
             await loadReport();
@@ -487,9 +490,9 @@ function ActivityReportDetail({
         return (
             <div className="text-center py-12 glass-effect rounded-2xl">
                 <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-                <p className="text-destructive">Bericht nicht gefunden</p>
+                <p className="text-destructive">{t('reports.notFound')}</p>
                 <button onClick={onBack} className="mt-4 text-accent hover:underline">
-                    Zurück zur Liste
+                    {t('reports.backToList')}
                 </button>
             </div>
         );
@@ -511,7 +514,7 @@ function ActivityReportDetail({
                     </button>
                     <div>
                         <h2 className="text-xl font-bold text-foreground">
-                            Tätigkeitsnachweis KW {report.weekNumber} / {report.year}
+                            {t('reports.activityReport')} {t('reports.week')} {report.weekNumber} / {report.year}
                         </h2>
                         <p className="text-sm text-muted-foreground">
                             {new Date(report.periodStart).toLocaleDateString('de-DE')} - {new Date(report.periodEnd).toLocaleDateString('de-DE')}
@@ -519,7 +522,7 @@ function ActivityReportDetail({
                     </div>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${status.bg} ${status.text}`}>
-                    {status.label}
+                    {t(status.labelKey)}
                 </span>
             </div>
 
@@ -535,10 +538,10 @@ function ActivityReportDetail({
             {report.status === 'REJECTED' && report.reviewerFeedback && (
                 <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20">
                     <p className="text-sm text-destructive">
-                        <strong>Feedback vom Ausbilder:</strong> {report.reviewerFeedback}
+                        <strong>{t('reports.trainerFeedback')}</strong> {report.reviewerFeedback}
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">
-                        Bitte überarbeite den Bericht und reiche ihn erneut ein.
+                        {t('reports.revise')}
                     </p>
                 </div>
             )}
@@ -549,19 +552,19 @@ function ActivityReportDetail({
                 <div className="p-5 rounded-xl glass-effect border-l-4 border-l-blue-500">
                     <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        Betriebliche Tätigkeiten
+                        {t('reports.operationalActivities')}
                     </h3>
                     <textarea
                         value={betrieblicheTaetigkeit}
                         onChange={(e) => setBetrieblicheTaetigkeit(e.target.value)}
                         disabled={!isEditable}
                         className="w-full h-32 px-4 py-3 rounded-xl resize-none disabled:opacity-50"
-                        placeholder="Beschreibe deine betrieblichen Tätigkeiten dieser Woche..."
+                        placeholder={t('reports.describeActivities')}
                     />
                     <div className="grid grid-cols-2 gap-4 mt-3">
                         <div>
                             <label className="block text-xs text-muted-foreground mb-1">
-                                Bezug zum Rahmenplan
+                                {t('reports.curriculumReference')}
                             </label>
                             <input
                                 type="text"
@@ -569,11 +572,11 @@ function ActivityReportDetail({
                                 onChange={(e) => setRahmenplanRef(e.target.value)}
                                 disabled={!isEditable}
                                 className="w-full px-4 py-2 rounded-xl text-sm disabled:opacity-50"
-                                placeholder="z.B. Abschnitt A, Thema 1"
+                                placeholder={t('reports.curriculumPlaceholder')}
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-muted-foreground mb-1">Stunden</label>
+                            <label className="block text-xs text-muted-foreground mb-1">{t('reports.hours')}</label>
                             <input
                                 type="number"
                                 value={betrieblicheStunden}
@@ -590,17 +593,17 @@ function ActivityReportDetail({
                 <div className="p-5 rounded-xl glass-effect border-l-4 border-l-green-500">
                     <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
-                        Unterweisungen / Schulungen
+                        {t('reports.instructionsTraining')}
                     </h3>
                     <textarea
                         value={unterweisungenThemen}
                         onChange={(e) => setUnterweisungenThemen(e.target.value)}
                         disabled={!isEditable}
                         className="w-full h-24 px-4 py-3 rounded-xl resize-none disabled:opacity-50"
-                        placeholder="Unterweisungen, betrieblicher Unterricht, sonstige Schulungen..."
+                        placeholder={t('reports.instructionsPlaceholder')}
                     />
                     <div className="mt-3">
-                        <label className="block text-xs text-muted-foreground mb-1">Stunden</label>
+                        <label className="block text-xs text-muted-foreground mb-1">{t('reports.hours')}</label>
                         <input
                             type="number"
                             value={unterweisungenStunden}
@@ -616,17 +619,17 @@ function ActivityReportDetail({
                 <div className="p-5 rounded-xl glass-effect border-l-4 border-l-violet-500">
                     <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                        Themen des Berufsschulunterrichts
+                        {t('reports.schoolTopics')}
                     </h3>
                     <textarea
                         value={berufsschulThemen}
                         onChange={(e) => setBerufsschulThemen(e.target.value)}
                         disabled={!isEditable}
                         className="w-full h-24 px-4 py-3 rounded-xl resize-none disabled:opacity-50"
-                        placeholder="Themen, die diese Woche in der Berufsschule behandelt wurden..."
+                        placeholder={t('reports.schoolTopicsPlaceholder')}
                     />
                     <div className="mt-3">
-                        <label className="block text-xs text-muted-foreground mb-1">Stunden</label>
+                        <label className="block text-xs text-muted-foreground mb-1">{t('reports.hours')}</label>
                         <input
                             type="number"
                             value={berufsschulStunden}
@@ -643,7 +646,7 @@ function ActivityReportDetail({
             {isEditable && (
                 <div className="flex items-center justify-between pt-4 border-t border-border">
                     <p className="text-xs text-muted-foreground">
-                        Mit der Einreichung bestätigst du die Richtigkeit und Vollständigkeit.
+                        {t('reports.confirmAccuracy')}
                     </p>
                     <div className="flex items-center gap-3">
                         <button
@@ -656,7 +659,7 @@ function ActivityReportDetail({
                             ) : (
                                 <Edit className="h-4 w-4" />
                             )}
-                            <span>Speichern</span>
+                            <span>{t('reports.saving')}</span>
                         </button>
                         <button
                             onClick={handleSubmit}
@@ -668,7 +671,7 @@ function ActivityReportDetail({
                             ) : (
                                 <Send className="h-4 w-4" />
                             )}
-                            <span>Einreichen</span>
+                            <span>{t('reports.submitting')}</span>
                         </button>
                     </div>
                 </div>
@@ -679,12 +682,12 @@ function ActivityReportDetail({
                 <div className="flex items-center justify-center pt-4 border-t border-border">
                     <button
                         onClick={() => {
-                            alert('PDF Download wird noch implementiert');
+                            alert(t('reports.pdfDownloadPending'));
                         }}
                         className="flex items-center gap-2 px-6 py-3 rounded-xl bg-green-500/20 hover:bg-green-500/30 text-green-600 dark:text-green-400 font-medium transition-colors"
                     >
                         <Download className="h-5 w-5" />
-                        <span>PDF herunterladen</span>
+                        <span>{t('reports.downloadPdf')}</span>
                     </button>
                 </div>
             )}

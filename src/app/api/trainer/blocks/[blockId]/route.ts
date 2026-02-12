@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
-import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
+import { ausbildungBlocks, profiles, notifications } from '@/db/migrations/schemas/schema';
 
 // Helper to get ISO week number
 function getISOWeek(date: Date): number {
@@ -48,6 +48,23 @@ export async function DELETE(
 
         // Delete the block
         await db.delete(ausbildungBlocks).where(eq(ausbildungBlocks.id, blockId));
+
+        // Notify trainee that block was cancelled
+        if (block.traineeId) {
+            try {
+                const blockLabel = block.title || block.blockType || 'Block';
+                await db.insert(notifications).values({
+                    userId: String(block.traineeId),
+                    type: 'BLOCK_CANCELLED',
+                    title: 'Block storniert',
+                    message: `Der Block "${blockLabel}" wurde storniert.`,
+                    linkUrl: '/trainee/school?tab=blocks',
+                    context: { blockId, blockType: block.blockType },
+                });
+            } catch (notifyErr) {
+                console.warn('Failed to notify trainee for block deletion', notifyErr);
+            }
+        }
 
         return NextResponse.json({ success: true, message: 'Block deleted' });
     } catch (e) {
@@ -117,6 +134,23 @@ export async function PATCH(
             .set(updates)
             .where(eq(ausbildungBlocks.id, blockId))
             .returning();
+
+        // Notify trainee about block update
+        if (existingBlock.traineeId) {
+            try {
+                const blockLabel = updatedBlock.title || updatedBlock.blockType || 'Block';
+                await db.insert(notifications).values({
+                    userId: String(existingBlock.traineeId),
+                    type: 'BLOCK_UPDATED',
+                    title: 'Block aktualisiert',
+                    message: `Der Block "${blockLabel}" wurde aktualisiert.`,
+                    linkUrl: '/trainee/school?tab=blocks',
+                    context: { blockId, blockType: updatedBlock.blockType },
+                });
+            } catch (notifyErr) {
+                console.warn('Failed to notify trainee for block update', notifyErr);
+            }
+        }
 
         return NextResponse.json({ block: updatedBlock });
     } catch (e) {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     GraduationCap,
     TrendingUp,
@@ -29,6 +30,7 @@ interface ExamResult {
 
 export function ExamResultsOverview() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const [results, setResults] = useState<ExamResult[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export function ExamResultsOverview() {
                 const res = await fetch(
                     `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=false`
                 );
-                if (!res.ok) throw new Error('Fehler beim Laden');
+                if (!res.ok) throw new Error(t('exams.results.loading'));
                 const data = await res.json();
 
                 const withResults = (data.exams || [])
@@ -136,18 +138,18 @@ export function ExamResultsOverview() {
         <div className="space-y-6">
             {/* Header */}
             <div>
-                <h2 className="text-xl font-bold text-foreground">Noten-Übersicht</h2>
+                <h2 className="text-xl font-bold text-foreground">{t('exams.results.title')}</h2>
                 <p className="text-sm text-muted-foreground">
-                    {stats.total} Prüfungsergebnisse
+                    {stats.total} {t('exams.results.examResults')}
                 </p>
             </div>
 
             {results.length === 0 ? (
                 <div className="text-center py-12 glass-effect rounded-2xl">
                     <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">Noch keine Prüfungsergebnisse</p>
+                    <p className="text-muted-foreground">{t('exams.results.noResultsYet')}</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Ergebnisse werden hier angezeigt, sobald sie eingetragen werden.
+                        {t('exams.results.noResults')}
                     </p>
                 </div>
             ) : (
@@ -160,7 +162,7 @@ export function ExamResultsOverview() {
                                     <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
-                                    <p className="text-xs text-muted-foreground">Gesamt</p>
+                                    <p className="text-xs text-muted-foreground">{t('exams.results.total')}</p>
                                     <p className="text-2xl font-bold text-foreground">{stats.total}</p>
                                 </div>
                             </div>
@@ -172,7 +174,7 @@ export function ExamResultsOverview() {
                                     <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                                 </div>
                                 <div>
-                                    <p className="text-xs text-muted-foreground">Bestanden</p>
+                                    <p className="text-xs text-muted-foreground">{t('exams.results.passed')}</p>
                                     <p className="text-2xl font-bold text-foreground">
                                         {stats.passed}
                                         <span className="text-sm text-muted-foreground ml-1">({stats.passRate}%)</span>
@@ -187,7 +189,7 @@ export function ExamResultsOverview() {
                                     <GraduationCap className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                                 </div>
                                 <div>
-                                    <p className="text-xs text-muted-foreground">Notenschnitt</p>
+                                    <p className="text-xs text-muted-foreground">{t('exams.results.averageGrade')}</p>
                                     <p className="text-2xl font-bold text-foreground">
                                         {stats.averageGrade || '—'}
                                     </p>
@@ -205,7 +207,7 @@ export function ExamResultsOverview() {
                                     )}
                                 </div>
                                 <div>
-                                    <p className="text-xs text-muted-foreground">Nicht bestanden</p>
+                                    <p className="text-xs text-muted-foreground">{t('exams.results.failed')}</p>
                                     <p className="text-2xl font-bold text-foreground">{stats.failed}</p>
                                 </div>
                             </div>
@@ -217,7 +219,7 @@ export function ExamResultsOverview() {
                         <div className="p-4 rounded-xl glass-effect">
                             <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                                 <BookOpen className="h-4 w-4 text-accent" />
-                                Nach Fach / Lernfeld
+                                {t('exams.results.bySubject')}
                             </h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {Object.entries(stats.bySubject).map(([subject, data]) => (
@@ -227,12 +229,12 @@ export function ExamResultsOverview() {
                                     >
                                         <p className="font-medium text-foreground text-sm">{subject}</p>
                                         <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-xs text-muted-foreground">{data.total} Prüfungen</span>
+                                            <span className="text-xs text-muted-foreground">{data.total} {t('exams.results.exams')}</span>
                                             <span className={`text-xs ${data.passed === data.total
                                                     ? 'text-green-600 dark:text-green-400'
                                                     : 'text-amber-600 dark:text-amber-400'
                                                 }`}>
-                                                {Math.round((data.passed / data.total) * 100)}% bestanden
+                                                {Math.round((data.passed / data.total) * 100)}% {t('exams.results.passedLower')}
                                             </span>
                                         </div>
                                     </div>
@@ -246,10 +248,10 @@ export function ExamResultsOverview() {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-border">
-                                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">Datum</th>
-                                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">Fach</th>
-                                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">Note</th>
-                                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">Status</th>
+                                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">{t('exams.results.date')}</th>
+                                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">{t('exams.results.subject')}</th>
+                                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">{t('exams.results.grade')}</th>
+                                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">{t('common.status')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -271,7 +273,7 @@ export function ExamResultsOverview() {
                                         </td>
                                         <td className="py-3 px-4">
                                             <span className="text-sm font-bold text-foreground">
-                                                {result.grade || (result.points !== null ? `${result.points} Pkt.` : '—')}
+                                                {result.grade || (result.points !== null ? `${result.points} ${t('exams.results.points')}` : '—')}
                                             </span>
                                         </td>
                                         <td className="py-3 px-4">
@@ -286,12 +288,12 @@ export function ExamResultsOverview() {
                                                     {result.passed ? (
                                                         <>
                                                             <CheckCircle className="h-3 w-3" />
-                                                            Bestanden
+                                                            {t('exams.results.passed')}
                                                         </>
                                                     ) : (
                                                         <>
                                                             <XCircle className="h-3 w-3" />
-                                                            Nicht bestanden
+                                                            {t('exams.results.failed')}
                                                         </>
                                                     )}
                                                 </span>

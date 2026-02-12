@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ChevronLeft } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { ChevronLeft, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 
 export default function TraineeUseCaseDetailPage() {
   const params = useParams<{ useCaseId: string }>();
   const useCaseId = params?.useCaseId as string;
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [useCase, setUseCase] = useState<{
@@ -23,6 +25,13 @@ export default function TraineeUseCaseDetailPage() {
     courseId?: string;
     courseTitle?: string;
   } | null>(null);
+  const [submission, setSubmission] = useState<{
+    id: string;
+    submissionText?: string | null;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    trainerFeedback?: string | null;
+    links?: Array<{ url: string; description?: string | null }>;
+  } | null>(null);
   const [submissionText, setSubmissionText] = useState('');
   const [links, setLinks] = useState<Array<{ url: string; description?: string }>>([{ url: '', description: '' }]);
   const [saving, setSaving] = useState(false);
@@ -31,6 +40,9 @@ export default function TraineeUseCaseDetailPage() {
   const [documents, setDocuments] = useState<Array<{ id: string; title: string; storageUrl: string; documentType: string }>>([]);
   const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
 
+  // Determine if editing is allowed
+  const canEdit = !submission || submission.status === 'REJECTED';
+
   useEffect(() => {
     const load = async () => {
       if (!profile?.id || !useCaseId) return;
@@ -38,18 +50,20 @@ export default function TraineeUseCaseDetailPage() {
       setError(null);
       try {
         const r = await fetch(`/api/trainee/use-cases/${useCaseId}?traineeId=${profile.id}`, { cache: 'no-store' });
-        if (!r.ok) throw new Error('Use Case konnte nicht geladen werden');
+        if (!r.ok) throw new Error(t('useCase.loadError'));
         const data = await r.json();
         setUseCase(data.useCase);
         if (data.submission) {
+          setSubmission(data.submission);
           setSubmissionText(data.submission.submissionText || '');
           const mapped = (data.submission.links || []).map((l: any) => ({ url: l.url as string, description: (l.description as string) || '' }));
           setLinks(mapped.length ? mapped : [{ url: '', description: '' }]);
         }
 
-        // Fetch documents
+        // Fetch documents - use trainee-specific endpoint for visibility filtering
+        // This ensures trainees only see questions, not solutions
         try {
-          const dr = await fetch(`/api/trainer/use-cases/${useCaseId}/documents`, { cache: 'no-store' });
+          const dr = await fetch(`/api/trainee/use-cases/${useCaseId}/documents?traineeId=${profile.id}`, { cache: 'no-store' });
           if (dr.ok) {
             const dj = await dr.json();
             setDocuments(dj.documents || []);
@@ -59,7 +73,7 @@ export default function TraineeUseCaseDetailPage() {
         }
 
       } catch (e: any) {
-        setError(e?.message || 'Unbekannter Fehler');
+        setError(e?.message || t('error.unknown'));
       } finally {
         setLoading(false);
       }
@@ -68,7 +82,7 @@ export default function TraineeUseCaseDetailPage() {
   }, [profile?.id, useCaseId]);
 
   const submit = async () => {
-    if (!profile?.id) return setError('Profil fehlt');
+    if (!profile?.id) return setError(t('useCase.profileMissing'));
     setSaving(true);
     setSuccess(null);
     try {
@@ -78,19 +92,19 @@ export default function TraineeUseCaseDetailPage() {
         links: links.filter((l) => l.url && l.url.trim()),
       };
       const r = await fetch(`/api/trainee/use-cases/${useCaseId}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!r.ok) throw new Error('Abgabe fehlgeschlagen');
-      setSuccess('Abgabe gespeichert. Status: Ausstehend');
+      if (!r.ok) throw new Error(t('useCase.submitFailed'));
+      setSuccess(t('useCase.submitSuccess'));
     } catch (e: any) {
-      setError(e?.message || 'Unbekannter Fehler');
+      setError(e?.message || t('error.unknown'));
     } finally {
       setSaving(false);
     }
   };
 
-  if (!profile) return <div className="p-6">Bitte anmelden…</div>;
-  if (loading) return <div className="p-6">Lade…</div>;
+  if (!profile) return <div className="p-6">{t('courses.loginPrompt')}</div>;
+  if (loading) return <div className="p-6">{t('common.loading')}</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
-  if (!useCase) return <div className="p-6">Nicht gefunden</div>;
+  if (!useCase) return <div className="p-6">{t('common.notFound')}</div>;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -138,7 +152,7 @@ export default function TraineeUseCaseDetailPage() {
               const total = Number(useCase.durationValue || 0);
               const left = Math.max(0, total - daysElapsed);
               const dueDate = new Date(started + total * 24 * 60 * 60 * 1000);
-              return <span className="text-muted-foreground">Restzeit: <span className={left < 3 ? 'text-red-400 font-bold' : 'text-foreground'}>{left} Tage</span> • Fällig am {dueDate.toLocaleDateString()}</span>;
+              return <span className="text-muted-foreground">{t('useCase.timeRemaining')} <span className={left < 3 ? 'text-red-400 font-bold' : 'text-foreground'}>{left} {t('useCase.days')}</span> • {t('useCase.dueOn')} {dueDate.toLocaleDateString()}</span>;
             })()}
           </div>
         )}
@@ -146,30 +160,91 @@ export default function TraineeUseCaseDetailPage() {
 
       {success && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-3 text-green-300">{success}</div>}
 
-      <div className="space-y-4 rounded-3xl border border-accent/30 bg-card p-5">
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Deine Lösung / Beschreibung</label>
-          <textarea value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground" rows={6} />
+      {/* Status Banner */}
+      {submission?.status === 'APPROVED' && (
+        <div className="rounded-2xl border border-green-500/40 bg-green-500/10 p-4 flex items-start gap-3">
+          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold text-green-600 dark:text-green-400">{t('useCase.approved')}</div>
+            <div className="text-sm text-green-600/80 dark:text-green-400/80">{t('useCase.approvedDesc')}</div>
+          </div>
         </div>
-        <div className="space-y-2">
-          <div className="text-sm font-medium">Links zu deiner Arbeit</div>
-          {links.map((l, i) => (
-            <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <input className="rounded-xl border border-accent/30 bg-muted px-3 py-2 md:col-span-2 text-foreground" placeholder="https://github.com/... oder https://1drv.ms/..." value={l.url} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))} />
-              <input className="rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground" placeholder="Beschreibung (optional)" value={l.description || ''} onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} />
-            </div>
-          ))}
-          <div className="flex gap-2">
-            <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => [...prev, { url: '', description: '' }])}>+ Link hinzufügen</button>
-            {links.length > 1 && (
-              <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => prev.slice(0, -1))}>Letzten Link entfernen</button>
+      )}
+
+      {submission?.status === 'PENDING' && (
+        <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-4 flex items-start gap-3">
+          <Clock className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold text-yellow-600 dark:text-yellow-400">{t('useCase.pending')}</div>
+            <div className="text-sm text-yellow-600/80 dark:text-yellow-400/80">{t('useCase.pendingDesc')}</div>
+          </div>
+        </div>
+      )}
+
+      {submission?.status === 'REJECTED' && (
+        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <div className="font-semibold text-red-600 dark:text-red-400">{t('useCase.rejected')}</div>
+            <div className="text-sm text-red-600/80 dark:text-red-400/80 mb-2">{t('useCase.rejectedDesc')}</div>
+            {submission.trainerFeedback && (
+              <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <div className="text-xs font-medium text-red-600/70 dark:text-red-400/70 mb-1">{t('useCase.trainerFeedback')}</div>
+                <p className="text-sm text-foreground whitespace-pre-line">{submission.trainerFeedback}</p>
+              </div>
             )}
           </div>
         </div>
-        <div className="flex justify-end">
-          <button disabled={saving} onClick={submit} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-60">Abgeben</button>
+      )}
+
+      <div className="space-y-4 rounded-3xl border border-accent/30 bg-card p-5">
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">{t('useCase.submission')}</label>
+          <textarea 
+            value={submissionText} 
+            onChange={(e) => setSubmissionText(e.target.value)} 
+            className={`w-full rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+            rows={6}
+            disabled={!canEdit}
+          />
         </div>
+        <div className="space-y-2">
+          <div className="text-sm font-medium">{t('useCase.links')}</div>
+          {links.map((l, i) => (
+            <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <input 
+                className={`rounded-xl border border-accent/30 bg-muted px-3 py-2 md:col-span-2 text-foreground ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                placeholder={t('useCase.linkPlaceholder')} 
+                value={l.url} 
+                onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))}
+                disabled={!canEdit}
+              />
+              <input 
+                className={`rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                placeholder={t('useCase.descriptionPlaceholder')} 
+                value={l.description || ''} 
+                onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))}
+                disabled={!canEdit}
+              />
+            </div>
+          ))}
+          {canEdit && (
+            <div className="flex gap-2">
+              <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => [...prev, { url: '', description: '' }])}>+ {t('useCase.addLink')}</button>
+              {links.length > 1 && (
+                <button className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60" onClick={() => setLinks((prev) => prev.slice(0, -1))}>{t('useCase.removeLastLink')}</button>
+              )}
+            </div>
+          )}
+        </div>
+        {canEdit && (
+          <div className="flex justify-end">
+            <button disabled={saving} onClick={submit} className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+              {submission?.status === 'REJECTED' ? t('useCase.resubmit') : t('useCase.submit')}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Link back to module */}
@@ -177,7 +252,7 @@ export default function TraineeUseCaseDetailPage() {
         <div className="flex justify-center mt-8 pb-8">
           <Link href={`/trainee/modules/${useCase.courseId}`} className="text-muted-foreground hover:text-accent transition-colors flex items-center gap-2 text-sm font-medium">
             <ChevronLeft className="h-4 w-4" />
-            Zurück zu {useCase.courseTitle || 'Modul'}
+            {t('useCase.backToModule')} {useCase.courseTitle || 'Modul'}
           </Link>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
-import { schoolExamResults, schoolExams, profiles } from '@/db/migrations/schemas/schema';
+import { schoolExamResults, schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
 
 interface RouteParams {
     params: Promise<{ examId: string }>;
@@ -69,6 +69,25 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
                     passed,
                 })
                 .returning();
+        }
+
+        // Notify the trainee about grading
+        try {
+            const [examInfo] = await db
+                .select({ subject: schoolExams.subject })
+                .from(schoolExams)
+                .where(eq(schoolExams.id, examId as any));
+            const subjectName = examInfo?.subject || 'Prüfung';
+            await db.insert(notifications).values({
+                userId: String(exam.traineeId),
+                type: 'EXAM_GRADED',
+                title: 'Prüfung bewertet',
+                message: `Deine Prüfung "${subjectName}" wurde bewertet: ${numPoints}/${numMaxPoints} Punkte (${percentage.toFixed(1)}%).`,
+                linkUrl: '/trainee/school?tab=exams',
+                context: { examId, points: numPoints, maxPoints: numMaxPoints, passed },
+            });
+        } catch (notifyErr) {
+            console.warn('Failed to notify trainee for exam grading', notifyErr);
         }
 
         return NextResponse.json({

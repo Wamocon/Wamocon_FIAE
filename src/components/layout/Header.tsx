@@ -6,6 +6,7 @@ import { useBreadcrumbs } from '@/contexts/BreadcrumbContext';
 import { Menu, ChevronLeft } from 'lucide-react';
 import NotificationsBell from '@/components/ui/NotificationsBell';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
 interface HeaderProps {
   onGoBack: () => void;
@@ -23,7 +24,7 @@ export function Header({
   hideBackButton = false,
 }: HeaderProps) {
   const { profile } = useAuth();
-  const { language } = useLanguage();
+  const { t } = useLanguage();
   const { breadcrumbs } = useBreadcrumbs();
 
   const hasNotifications = profile?.role === 'trainer';
@@ -60,11 +61,12 @@ export function Header({
           </button>
         )}
         <h2 className="text-foreground text-xl font-semibold">
-          {currentBreadcrumb?.label || 'Dashboard'}
+          {currentBreadcrumb?.label || t('nav.dashboard')}
         </h2>
       </div>
       {/* Right side - Actions */}
       <div className="flex items-center gap-3">
+        <LanguageToggle variant="icon" />
         <ThemeToggle variant="icon" />
         <NotificationsBell />
       </div>

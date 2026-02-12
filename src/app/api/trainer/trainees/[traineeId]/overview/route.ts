@@ -89,8 +89,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tra
       if (!latestUseCaseById.has(key)) latestUseCaseById.set(key, sub);
     }
 
-    // Geschäftsprozesse removed
-
     // Enabler-level quizzes: by difficulty per enabler
     const enablerQuizRows = enablerIds.length
       ? await db
@@ -153,7 +151,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tra
 
     // Pending counts
     const pendingUseCases = Array.from(latestUseCaseById.values()).filter((s) => s.status === 'PENDING').length;
-    const pendingGeschProz = 0; // removed
     const pendingQuizReviews = Array.from(latestQuizSubByQuizId.values()).concat(Array.from(latestGlobalQuizById.values())).filter((s) => s && !s.isReviewed).length;
 
     return NextResponse.json({
@@ -170,7 +167,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tra
         pending: {
           quizzes: pendingQuizReviews,
           useCases: pendingUseCases,
-          // geschaeftsprozesse removed
         },
       },
       enablers: await (async () => {
@@ -221,7 +217,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tra
           };
         });
       })(),
-      // geschaeftsprozesse removed from overview response
       enablerQuizzes: enablerQuizRows.map((r) => {
         const latest = latestQuizSubByQuizId.get(String(r.quizId));
         return {

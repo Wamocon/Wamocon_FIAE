@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import db from '@/db';
 import { courses, enablers, useCases, skills, courseSkills, contentDocuments } from '@/db/migrations/schemas/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 interface ImportResult {
   success: boolean;
@@ -405,6 +405,215 @@ export async function POST(request: NextRequest) {
           result.stats.useCasesCreated++;
         } catch (error: any) {
           result.stats.errors.push(`Use Cases row ${i + 2}: ${error.message}`);
+        }
+      }
+    }
+
+    // Process Scenarios sheet
+    if (workbook.SheetNames.includes('Scenarios')) {
+      const scenariosSheet = workbook.Sheets['Scenarios'];
+      // Use raw: false to get formatted strings, but defval: '' so we don't skip empty cells
+      const scenariosData: any[] = XLSX.utils.sheet_to_json(scenariosSheet);
+
+      // Group by Enabler (Course + Enabler Title)
+      const enablerScenariosMap = new Map<string, Array<{ text: string; hint?: string }>>();
+
+      // Temporary storage data structure to build scenarios row-by-row
+      // Key: "CourseTitle|||EnablerTitle"
+      // Value: Array of structured scenario objects being built
+      interface TempScenario {
+        topics: string;
+        goals: string;
+        theory: string;
+        context: string;
+        checklist: string;
+        hint: string;
+        problems: Array<{ p: string; s: string }>;
+      }
+
+      const tempEnablerScenarios = new Map<string, TempScenario[]>();
+      let lastKey: string | null = null;
+
+      for (let i = 0; i < scenariosData.length; i++) {
+        const row = scenariosData[i];
+        const rowNum = i + 2;
+
+        const courseTitle = row['Kurs / Modul'] || row['Course Title'] || row['course_title'] || row['Course'] || row['Modul'] || row['Module'];
+        const enablerTitle = row['Enabler Title'] || row['enabler_title'] || row['Enabler'] || row['Lerneinheit'];
+
+        // If generic identifiers are missing, maybe it's a continuation row?
+        // But to be safe, require identifiers on every row or assume repetition means continuation?
+        // Let's assume user fills identifiers on every row for safety, OR if missing, we assume same as last row?
+        // "Row for better tracking" usually implies filling the key columns is repetitive but explicit.
+        // Let's require them for now to avoid mix-ups, or use lastKey if strictly sequential.
+
+        let effectiveCourse = courseTitle;
+        let effectiveEnabler = enablerTitle;
+
+        if (!effectiveCourse || !effectiveEnabler) {
+          // Option: strict header requirement
+          // result.stats.errors.push(`...`); continue;
+
+          // Checking user intent: "add them into row". 
+          // Often means:
+          // Row 1: Course | Enabler | Context ... | Prob 1 | Sol 1
+          // Row 2:        |         |             | Prob 2 | Sol 2
+          // If cells are empty in Excel json, they might be undefined.
+
+          if (lastKey) {
+            const [lastC, lastE] = lastKey.split('|||');
+            if (!effectiveCourse) effectiveCourse = lastC;
+            if (!effectiveEnabler) effectiveEnabler = lastE;
+          } else {
+            result.stats.errors.push(`Scenarios row ${rowNum}: 'Kurs / Modul' and 'Enabler Title' are required`);
+            continue;
+          }
+        }
+
+        const key = `${effectiveCourse.trim()}|||${effectiveEnabler.trim()}`;
+        lastKey = key;
+
+        if (!tempEnablerScenarios.has(key)) {
+          tempEnablerScenarios.set(key, []);
+        }
+
+        const scenariosList = tempEnablerScenarios.get(key)!;
+
+        // Determine if this is a NEW scenario definition or a CONTINUATION (just another problem)
+        // Indicator: "Ausgangslage" (Context) or "Behandelte Themen" (Topics) is present => New Scenario
+        // If those are empty, but "Problem" is present => Continuation of last scenario in the list
+
+        const context = row['Ausgangslage'] || row['ausgangslage'];
+        const topics = row['Behandelte Themen'] || row['behandelte_themen'];
+        const isNewScenario = !!(context || topics) || scenariosList.length === 0;
+
+        const problem = row['Problem'] || row['problem'];
+        const solution = row['Lösung'] || row['lösung'] || row['Solution'] || row['solution'];
+
+        if (isNewScenario) {
+          // Init new scenario
+          const newScen: TempScenario = {
+            topics: topics || '',
+            goals: row['Lernziele'] || row['lernziele'] || '',
+            theory: row['Theoretische Grundlagen'] || row['theoretische_grundlagen'] || '',
+            context: context || '',
+            checklist: row['Lernziel-Checkliste'] || row['checklist'] || '',
+            hint: row['Hinweis'] || row['hint'] || '',
+            problems: []
+          };
+          if (problem) {
+            newScen.problems.push({ p: String(problem), s: solution ? String(solution) : '' });
+          }
+          scenariosList.push(newScen);
+        } else {
+          // Continuation - add problem to last scenario
+          if (scenariosList.length > 0) {
+            const lastScen = scenariosList[scenariosList.length - 1];
+            if (problem) {
+              lastScen.problems.push({ p: String(problem), s: solution ? String(solution) : '' });
+            }
+            // Also append checklist lines if provided in continuation row?
+            const extraChecklist = row['Lernziel-Checkliste'] || row['checklist'];
+            if (extraChecklist) {
+              lastScen.checklist += '\n' + extraChecklist;
+            }
+          }
+        }
+      }
+
+      // Convert TempScenarios to Final Structured Format
+      // We store BOTH the generated text (for the current Viewer) AND the structured fields (for the new Trainer UI)
+      for (const [key, tempScenarios] of tempEnablerScenarios.entries()) {
+        const finalScenarios = tempScenarios.map(scen => {
+          const blocks: string[] = [];
+          if (scen.topics) blocks.push(`Behandelte Themen:\n${scen.topics}`);
+          if (scen.goals) blocks.push(`Lernziele:\n${scen.goals}`);
+          if (scen.theory) blocks.push(`Theoretische Grundlagen:\n${scen.theory}`);
+          if (scen.context) blocks.push(`Ausgangslage:\n${scen.context}`);
+
+          if (scen.problems.length > 0) {
+            const problemBlock: string[] = [];
+            scen.problems.forEach((item, idx) => {
+              problemBlock.push(`Problem ${idx + 1}`);
+              problemBlock.push(item.p);
+              if (item.s) {
+                problemBlock.push('LÖSUNG');
+                problemBlock.push(item.s);
+              }
+              problemBlock.push(''); // spacer
+            });
+            blocks.push(`Problem-Lösung-Paare:\n${problemBlock.join('\n')}`);
+          }
+
+          if (scen.checklist) blocks.push(`Lernziel-Checkliste:\n${scen.checklist}`);
+
+          const fullText = blocks.join('\n\n' + '-'.repeat(20) + '\n\n');
+
+          return {
+            text: fullText,
+            hint: scen.hint || undefined,
+            // Persist structured data for Trainer UI
+            topics: scen.topics,
+            goals: scen.goals,
+            theory: scen.theory,
+            context: scen.context,
+            checklist: scen.checklist,
+            problems: scen.problems
+          };
+        });
+
+        enablerScenariosMap.set(key, finalScenarios);
+      }
+
+      // Update DB with collected scenarios
+      for (const [key, scenarios] of enablerScenariosMap.entries()) {
+        const [courseTitle, enablerTitle] = key.split('|||');
+
+        try {
+          // 1. Find Course with whitespace normalization
+          const courseRes = await db
+            .select({ id: courses.id })
+            .from(courses)
+            .where(sql`regexp_replace(${courses.title}, '\\s+', ' ', 'g') = regexp_replace(${courseTitle.trim()}, '\\s+', ' ', 'g')`)
+            .limit(1);
+
+          if (courseRes.length === 0) {
+            result.stats.errors.push(`Scenario Import: Course "${courseTitle}" not found.`);
+            continue;
+          }
+          const courseId = courseRes[0].id;
+
+          // 2. Find Enabler with whitespace normalization
+          const enablerRes = await db
+            .select({ id: enablers.id })
+            .from(enablers)
+            .where(and(
+              eq(enablers.courseId, courseId),
+              sql`regexp_replace(${enablers.title}, '\\s+', ' ', 'g') = regexp_replace(${enablerTitle.trim()}, '\\s+', ' ', 'g')`
+            ))
+            .limit(1);
+
+          if (enablerRes.length === 0) {
+            result.stats.errors.push(`Scenario Import: Enabler "${enablerTitle}" not found in course "${courseTitle}".`);
+            continue;
+          }
+          const enablerId = enablerRes[0].id;
+
+          // 3. Update Enabler Scenarios
+          await db
+            .update(enablers)
+            .set({
+              scenarios: scenarios,
+              // Update legacy fields for compatibility if first scenario
+              scenarioText: scenarios.length > 0 ? scenarios[0].text : null,
+              hintText: scenarios.length > 0 ? scenarios[0].hint : null
+            })
+            .where(eq(enablers.id, enablerId));
+
+          result.stats.enablersCreated++; // Using this stat reusing existing field
+
+        } catch (err: any) {
+          result.stats.errors.push(`Error updating scenarios for ${enablerTitle}: ${err.message}`);
         }
       }
     }

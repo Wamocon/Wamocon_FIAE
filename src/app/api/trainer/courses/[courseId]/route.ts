@@ -8,6 +8,7 @@ import {
   enablers,
   profiles,
   skills,
+  notifications,
 } from '@/db/migrations/schemas/schema';
 
 /**
@@ -125,6 +126,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
       return row;
     });
 
+    // Notify course members about the update
+    try {
+      const memberRows = await db
+        .select({ userId: courseMembers.userId })
+        .from(courseMembers)
+        .where(eq(courseMembers.courseId, courseId as any));
+      const membersToNotify = memberRows.filter((m) => String(m.userId) !== trainerId);
+      if (membersToNotify.length > 0) {
+        const courseTitle = out?.title || 'Kurs';
+        const notifValues = membersToNotify.map((m) => ({
+          userId: String(m.userId),
+          actorId: trainerId,
+          type: 'COURSE_UPDATED',
+          title: 'Kurs aktualisiert',
+          message: `Der Kurs "${courseTitle}" wurde aktualisiert.`,
+          linkUrl: '/trainee/modules',
+          context: { courseId },
+        }));
+        await db.insert(notifications).values(notifValues);
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify members for course update', notifyErr);
+    }
+
     return NextResponse.json({ course: out });
   } catch (e) {
     console.error('Update course error', e);
@@ -153,6 +178,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
       return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
     }
 
+    // Gather course members before deletion to notify them
+    const memberRows = await db
+      .select({ userId: courseMembers.userId, role: courseMembers.role })
+      .from(courseMembers)
+      .where(eq(courseMembers.courseId, courseId as any));
+    const courseName = courseRow.title || 'Kurs';
+
     // Import trainee_achieved_skills for cascade delete
     const { traineeAchievedSkills } = await import('@/db/migrations/schemas/schema');
 
@@ -164,6 +196,25 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
       // Now delete the course (other FKs like courseMembers, courseSkills, enablers have ON DELETE CASCADE)
       await tx.delete(courses).where(eq(courses.id, courseId as any));
     });
+
+    // Notify all course members (except the trainer who deleted it)
+    try {
+      const membersToNotify = memberRows.filter((m) => String(m.userId) !== trainerId);
+      if (membersToNotify.length > 0) {
+        const notifValues = membersToNotify.map((m) => ({
+          userId: String(m.userId),
+          actorId: trainerId,
+          type: 'COURSE_DELETED',
+          title: 'Kurs gelöscht',
+          message: `Der Kurs "${courseName}" wurde gelöscht.`,
+          linkUrl: m.role === 'TRAINER' ? '/trainer/courses' : '/trainee/modules',
+          context: { courseId },
+        }));
+        await db.insert(notifications).values(notifValues);
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify members for course deletion', notifyErr);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e) {
