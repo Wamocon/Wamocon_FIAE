@@ -25,10 +25,9 @@ describe('API: Trainer Profile', () => {
         // 1. traineeRows (profiles)
         // 2. activeCourses (courses count)
         // 3. pendingQuiz (quizSubmissions count)
-        // 4. pendingRefl (reflections count)
-        // 5. pendingUses (useCaseSubmissions count)
-        // 6. recentActivities (activityLog limit 5)
-        // 7. recentCount (activityLog count)
+        // 4. pendingUses (useCaseSubmissions count)
+        // 5. recentActivities (activityLog limit 5)
+        // 6. recentCount (activityLog count)
 
         const sequence: any[] = [
             // 1. traineeRows
@@ -37,11 +36,9 @@ describe('API: Trainer Profile', () => {
             [{ c: 5 }],
             // 3. pendingQuiz
             [{ c: 2 }],
-            // 4. pendingRefl
-            [{ c: 1 }],
-            // 5. pendingUses
+            // 4. pendingUses
             [{ c: 0 }],
-            // 6. recentActivities
+            // 5. recentActivities
             [{ id: 'a1', activityType: 'LOGIN', createdAt: new Date() }],
             // 7. recentCount
             [{ c: 10 }]
@@ -84,7 +81,7 @@ describe('API: Trainer Profile', () => {
 
         expect(body.counts.trainees).toBe(2);
         expect(body.counts.activeCourses).toBe(5);
-        expect(body.counts.pendingReviews).toBe(3); // 2 + 1 + 0
+        expect(body.counts.pendingReviews).toBe(2); // 2 + 0
         expect(body.counts.recentActivity7d).toBe(10);
         expect(body.recentActivities).toHaveLength(1);
     });

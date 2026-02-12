@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -12,6 +13,7 @@ const TraineeLayoutComponent = ({
   children: React.ReactNode;
 }) => {
   const { user, profile, loading } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [waitingForProfile, setWaitingForProfile] = useState(true);
@@ -80,7 +82,7 @@ const TraineeLayoutComponent = ({
         <div className="text-center">
           <LoadingSpinner />
           <p className="text-muted-foreground mt-4">
-            Lade...
+            {t('common.loading')}
           </p>
         </div>
       </div>
@@ -93,7 +95,7 @@ const TraineeLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Weiterleitung...</p>
+          <p className="text-muted-foreground mt-4">{t('common.redirecting')}</p>
         </div>
       </div>
     );
@@ -105,7 +107,7 @@ const TraineeLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Zugriff verweigert...</p>
+          <p className="text-muted-foreground mt-4">{t('quiz.accessDenied')}</p>
         </div>
       </div>
     );

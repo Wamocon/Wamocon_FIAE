@@ -1,12 +1,12 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   BarChart3,
   TrendingUp,
   Users,
   Award,
-  Clock,
   Target,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -24,9 +24,10 @@ import {
 
 export default function TrainerAnalyticsPage() {
   const { profile, user, loading } = useAuth();
+  const { t } = useLanguage();
 
   const [trainees, setTrainees] = useState<Array<{ id: string; full_name: string; progress: number }>>([]);
-  const [counts, setCounts] = useState<{ activeTrainees: number; pendingReviews: number; recentReflections: number }>({ activeTrainees: 0, pendingReviews: 0, recentReflections: 0 });
+  const [counts, setCounts] = useState<{ activeTrainees: number; pendingReviews: number }>({ activeTrainees: 0, pendingReviews: 0 });
   const [progressTrend, setProgressTrend] = useState<Array<{ week: string; progress: number }>>([]);
   const [moduleProgress, setModuleProgress] = useState<Array<{ name: string; completed: number; inProgress: number; notStarted: number }>>([]);
   const [error, setError] = useState<string | null>(null);
@@ -39,16 +40,16 @@ export default function TrainerAnalyticsPage() {
         if (user.id) params.set('trainerAuthId', user.id);
         if (profile.id) params.set('trainerProfileId', profile.id);
         const res = await fetch(`/api/trainer/dashboard?${params.toString()}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Konnte Analytics nicht laden');
+        if (!res.ok) throw new Error(t('trainer.analytics.loadError'));
         const data = await res.json();
         setTrainees(data.trainees || []);
-        setCounts(data.counts || { activeTrainees: 0, pendingReviews: 0, recentReflections: 0 });
+        setCounts(data.counts || { activeTrainees: 0, pendingReviews: 0 });
         setProgressTrend(data.charts?.progressTrend || []);
         setModuleProgress(data.charts?.moduleProgress || []);
       } catch (e: unknown) {
         const message = typeof e === 'object' && e && 'message' in e && typeof (e as any).message === 'string'
           ? (e as any).message
-          : 'Unbekannter Fehler';
+          : t('trainer.analytics.unknownError');
         setError(message);
       }
     };
@@ -63,10 +64,10 @@ export default function TrainerAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Lade Analysen...</p>
+          <p className="text-muted-foreground">{t('trainer.analytics.loading')}</p>
         </div>
       </div>
     );
@@ -74,10 +75,10 @@ export default function TrainerAnalyticsPage() {
 
   if (!profile) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
+          <p className="text-muted-foreground">{t('trainer.analytics.userNotFound')}</p>
         </div>
       </div>
     );
@@ -85,10 +86,10 @@ export default function TrainerAnalyticsPage() {
 
   if (profile.role !== 'trainer') {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Zugriff verweigert...</p>
+          <p className="text-muted-foreground">{t('trainer.analytics.accessDenied')}</p>
         </div>
       </div>
     );
@@ -106,25 +107,24 @@ export default function TrainerAnalyticsPage() {
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
-              Analysen & Statistiken
+              {t('trainer.analytics.title')}
             </h1>
             <p className="text-muted">
-              Überblick über den Fortschritt und die Leistung Ihrer
-              Auszubildenden
+              {t('trainer.analytics.description')}
             </p>
           </div>
         </div>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
               <Users className="h-6 w-6 text-foreground" />
             </div>
             <div>
-              <p className="text-muted text-sm">Aktive Azubis</p>
+              <p className="text-muted text-sm">{t('trainer.analytics.activeTrainees')}</p>
               <p className="text-foreground text-2xl font-bold">{counts.activeTrainees}</p>
             </div>
           </div>
@@ -136,7 +136,7 @@ export default function TrainerAnalyticsPage() {
               <TrendingUp className="h-6 w-6 text-foreground" />
             </div>
             <div>
-              <p className="text-muted text-sm">Ø Fortschritt</p>
+              <p className="text-muted text-sm">{t('trainer.analytics.avgProgress')}</p>
               <p className="text-foreground text-2xl font-bold">{avgProgress}%</p>
             </div>
           </div>
@@ -148,23 +148,12 @@ export default function TrainerAnalyticsPage() {
               <Award className="h-6 w-6 text-foreground" />
             </div>
             <div>
-              <p className="text-muted text-sm">Ausstehende Reviews</p>
+              <p className="text-muted text-sm">{t('trainer.analytics.pendingReviews')}</p>
               <p className="text-foreground text-2xl font-bold">{counts.pendingReviews}</p>
             </div>
           </div>
         </div>
 
-        <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500">
-              <Clock className="h-6 w-6 text-foreground" />
-            </div>
-            <div>
-              <p className="text-muted text-sm">Reflektionen (7 Tage)</p>
-              <p className="text-foreground text-2xl font-bold">{counts.recentReflections}</p>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Charts */}
@@ -173,7 +162,7 @@ export default function TrainerAnalyticsPage() {
         <div className="glass-effect rounded-2xl p-6 shadow-lg">
           <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
             <TrendingUp className="text-accent mr-3 h-6 w-6" />
-            Fortschritt über Zeit
+            {t('trainer.analytics.progressOverTime')}
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={progressTrend}>
@@ -217,7 +206,7 @@ export default function TrainerAnalyticsPage() {
         <div className="glass-effect rounded-2xl p-6 shadow-lg">
           <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
             <Target className="text-primary mr-3 h-6 w-6" />
-            Modul-Fortschritt
+            {t('trainer.analytics.moduleProgress')}
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={moduleProgress}>

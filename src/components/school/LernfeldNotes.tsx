@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     BookOpen,
     ChevronDown,
@@ -43,6 +44,7 @@ const SONSTIGES_CODE = 'SONSTIGES';
 
 export function LernfeldNotes() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const [lernfelder, setLernfelder] = useState<Lernfeld[]>([]);
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ export function LernfeldNotes() {
                     fetch(`/api/trainee/knowledge-notes?traineeId=${profile.id}`)
                 ]);
 
-                if (!lfRes.ok) throw new Error('Fehler beim Laden der Lernfelder');
+                if (!lfRes.ok) throw new Error(t('notes.error.loadFields'));
                 const lfData = await lfRes.json();
                 // Flatten all lernfelder into a single list
                 setLernfelder(lfData.lernfelder || []);
@@ -156,7 +158,7 @@ export function LernfeldNotes() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Fehler beim Speichern');
+            if (!res.ok) throw new Error(t('notes.error.save'));
 
             const result = await res.json();
             setNotes(prev => [...prev, {
@@ -184,7 +186,7 @@ export function LernfeldNotes() {
         return (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
                 <div className="h-10 w-10 animate-spin rounded-full border-4 border-accent/30 border-t-accent" />
-                <p className="text-muted-foreground text-sm">Lade Lernfelder...</p>
+                <p className="text-muted-foreground text-sm">{t('notes.loading')}</p>
             </div>
         );
     }
@@ -203,19 +205,19 @@ export function LernfeldNotes() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-foreground">Lernfeld-Notizen</h2>
+                    <h2 className="text-xl font-bold text-foreground">{t('notes.title')}</h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Organisiere dein Wissen nach Lernfeldern
+                        {t('notes.organize')}
                     </p>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted">
                         <FileText className="h-4 w-4" />
-                        <span>{notes.length} Notizen</span>
+                        <span>{notes.length} {t('notes.count')}</span>
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted">
                         <Layers className="h-4 w-4" />
-                        <span>{lernfelder.length} Lernfelder</span>
+                        <span>{lernfelder.length} {t('notes.lernfelderCount')}</span>
                     </div>
                 </div>
             </div>
@@ -242,12 +244,12 @@ export function LernfeldNotes() {
                                         </span>
                                         {lf.hoursBudget && (
                                             <span className="text-xs text-muted-foreground">
-                                                {lf.hoursBudget} Stunden
+                                                {lf.hoursBudget} {t('notes.hours')}
                                             </span>
                                         )}
                                         {lf.isCommon && (
                                             <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px]">
-                                                Berufsübergreifend
+                                                {t('notes.crossDisciplinary')}
                                             </span>
                                         )}
                                     </div>
@@ -286,7 +288,7 @@ export function LernfeldNotes() {
                             <div className="px-4 pb-4 pl-12 space-y-2">
                                 {getNotesForLernfeld(lf.code).length === 0 ? (
                                     <p className="text-sm text-muted-foreground italic py-2">
-                                        Noch keine Notizen für dieses Lernfeld
+                                        {t('notes.noneForField')}
                                     </p>
                                 ) : (
                                     getNotesForLernfeld(lf.code).map(note => (
@@ -314,14 +316,14 @@ export function LernfeldNotes() {
                                 <div className="flex items-center gap-2">
                                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-500/10 text-slate-600 dark:text-slate-400">
                                         <FolderOpen className="h-3 w-3 inline mr-1" />
-                                        Sonstiges
+                                        {t('notes.other')}
                                     </span>
                                     <span className="font-medium text-foreground text-sm">
-                                        Allgemeine Notizen
+                                        {t('notes.general')}
                                     </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Notizen ohne Lernfeld-Zuordnung
+                                    {t('notes.noFieldAssignment')}
                                 </p>
                             </div>
                         </div>
@@ -334,7 +336,7 @@ export function LernfeldNotes() {
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedLernfeld({ code: SONSTIGES_CODE, name: 'Sonstiges' });
+                                    setSelectedLernfeld({ code: SONSTIGES_CODE, name: t('notes.other') });
                                     setShowAddModal(true);
                                 }}
                                 className="p-1.5 rounded-lg hover:bg-slate-500/10 text-muted-foreground hover:text-slate-600 dark:hover:text-slate-400 transition-colors"
@@ -349,7 +351,7 @@ export function LernfeldNotes() {
                         <div className="px-4 pb-4 pl-12 space-y-2">
                             {getNotesForLernfeld(SONSTIGES_CODE).length === 0 ? (
                                 <p className="text-sm text-muted-foreground italic py-2">
-                                    Noch keine sonstigen Notizen
+                                    {t('notes.noneOther')}
                                 </p>
                             ) : (
                                 getNotesForLernfeld(SONSTIGES_CODE).map(note => (
@@ -463,6 +465,7 @@ function AddNoteModal({
     submitting: boolean;
     status: 'idle' | 'success' | 'error';
 }) {
+    const { t } = useLanguage();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [oneDriveLink, setOneDriveLink] = useState('');
@@ -479,15 +482,15 @@ function AddNoteModal({
                 <div className="p-6 border-b border-border">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-bold text-foreground">Notiz hinzufügen</h3>
+                            <h3 className="text-lg font-bold text-foreground">{t('notes.add')}</h3>
                             <p className="text-sm text-muted-foreground mt-1">
                                 <span className={`px-2 py-0.5 rounded text-xs font-bold mr-2 ${isSonstiges
                                     ? 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
                                     : 'bg-accent/10 text-accent'
                                     }`}>
-                                    {isSonstiges ? 'Sonstiges' : lernfeld.code}
+                                    {isSonstiges ? t('notes.other') : lernfeld.code}
                                 </span>
-                                {isSonstiges ? 'Allgemeine Notiz' : lernfeld.name}
+                                {isSonstiges ? t('notes.generalNote') : lernfeld.name}
                             </p>
                         </div>
                         <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition text-foreground">
@@ -498,32 +501,32 @@ function AddNoteModal({
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Titel</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('notes.titleLabel')}</label>
                         <input
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground placeholder:text-muted-foreground"
-                            placeholder="z.B. Zusammenfassung Kapitel 3"
+                            placeholder={t('notes.titlePlaceholder')}
                             required
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Inhalt</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">{t('notes.content')}</label>
                         <textarea
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
                             rows={4}
                             className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground placeholder:text-muted-foreground resize-none"
-                            placeholder="Deine Notizen, Erkenntnisse oder Zusammenfassungen..."
+                            placeholder={t('notes.contentPlaceholder')}
                             required
                         />
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-foreground mb-2">
-                            OneDrive Link (optional)
+                            {t('notes.oneDriveLink')}
                         </label>
                         <input
                             type="url"
@@ -537,14 +540,14 @@ function AddNoteModal({
                     {status === 'success' && (
                         <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400">
                             <CheckCircle className="h-5 w-5" />
-                            <span className="text-sm font-medium">Notiz gespeichert!</span>
+                            <span className="text-sm font-medium">{t('notes.saved')}</span>
                         </div>
                     )}
 
                     {status === 'error' && (
                         <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive">
                             <AlertCircle className="h-5 w-5" />
-                            <span className="text-sm font-medium">Fehler beim Speichern</span>
+                            <span className="text-sm font-medium">{t('notes.error.save')}</span>
                         </div>
                     )}
 
@@ -554,7 +557,7 @@ function AddNoteModal({
                             onClick={onClose}
                             className="flex-1 px-4 py-3 rounded-xl glass-effect text-foreground font-medium transition"
                         >
-                            Abbrechen
+                            {t('common.cancel')}
                         </button>
                         <button
                             type="submit"
@@ -566,7 +569,7 @@ function AddNoteModal({
                             ) : (
                                 <Send className="h-4 w-4" />
                             )}
-                            Speichern
+                            {t('common.save')}
                         </button>
                     </div>
                 </form>

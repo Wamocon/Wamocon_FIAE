@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     ChevronLeft,
     ChevronRight,
@@ -73,6 +74,7 @@ function isDateInBlock(date: Date, block: Block): boolean {
 
 export function TrainerCalendarTab() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const [trainees, setTrainees] = useState<Trainee[]>([]);
     const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
     const [blocks, setBlocks] = useState<Block[]>([]);
@@ -134,7 +136,7 @@ export function TrainerCalendarTab() {
                     setBlocks(data.blocks || []);
                 }
             } catch (e) {
-                setError('Fehler beim Laden der Blöcke');
+                setError(t('calendar.error.loadBlocks'));
             } finally {
                 setLoading(false);
             }
@@ -276,7 +278,7 @@ export function TrainerCalendarTab() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Fehler beim Erstellen');
+            if (!res.ok) throw new Error(t('calendar.error.addBlock'));
             const data = await res.json();
             if (Array.isArray(data.blocks)) {
                 setBlocks(prev => [...prev, ...data.blocks]);
@@ -294,7 +296,7 @@ export function TrainerCalendarTab() {
             const res = await fetch(`/api/trainer/blocks/${blockId}`, {
                 method: 'DELETE',
             });
-            if (!res.ok) throw new Error('Fehler beim Löschen');
+            if (!res.ok) throw new Error(t('calendar.error.deleteBlock'));
             setBlocks(prev => prev.filter(b => b.id !== blockId));
             setSelectedBlock(null);
         } catch (e: any) {
@@ -309,7 +311,7 @@ export function TrainerCalendarTab() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updates),
             });
-            if (!res.ok) throw new Error('Fehler beim Aktualisieren');
+            if (!res.ok) throw new Error(t('calendar.error.updateBlock'));
             const data = await res.json();
             setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, ...data.block } : b));
             setEditingBlock(null);
@@ -540,8 +542,8 @@ export function TrainerCalendarTab() {
             ) : (
                 <div className="text-center py-16">
                     <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-bold text-foreground mb-2">Trainee auswählen</h3>
-                    <p className="text-muted-foreground">Wähle einen Trainee aus, um deren Kalender zu sehen.</p>
+                    <h3 className="text-lg font-bold text-foreground mb-2">{t('trainee.management.title')}</h3>
+                    <p className="text-muted-foreground">{t('calendar.selectTrainee')}</p>
                 </div>
             )}
 
@@ -594,6 +596,7 @@ function AddBlockerModal({ trainees, initialTraineeId, onClose, onAdd }: {
     onClose: () => void;
     onAdd: (data: any) => void;
 }) {
+    const { t } = useLanguage();
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [title, setTitle] = useState('');
@@ -693,13 +696,13 @@ function AddBlockerModal({ trainees, initialTraineeId, onClose, onAdd }: {
                     <label className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border cursor-pointer">
                         <input type="checkbox" checked={sendInvitation} onChange={e => setSendInvitation(e.target.checked)} className="h-4 w-4 rounded text-accent" />
                         <Send className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">Kalendereinladung senden</span>
+                        <span className="text-sm">{t('calendar.sendInvite')}</span>
                     </label>
 
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl glass-effect font-medium">Abbrechen</button>
+                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl glass-effect font-medium">{t('common.cancel')}</button>
                         <button type="submit" className="btn-accent flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
-                            <Check className="h-4 w-4" />Erstellen
+                            <Check className="h-4 w-4" />{t('common.create')}
                         </button>
                     </div>
                 </form>
@@ -722,6 +725,7 @@ function BlockDetailModal({
     onDelete: (blockId: string) => void;
     onEdit: (block: Block) => void;
 }) {
+    const { t } = useLanguage();
     const config = BLOCK_CONFIG[block.blockType] || BLOCK_CONFIG.TRAINER_BLOCKER;
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -815,14 +819,14 @@ function BlockDetailModal({
                     {/* Actions */}
                     {confirmDelete ? (
                         <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 space-y-3">
-                            <p className="text-sm text-foreground font-medium">Block wirklich löschen?</p>
+                            <p className="text-sm text-foreground font-medium">{t('exams.deleteConfirm')}</p>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setConfirmDelete(false)}
                                     className="flex-1 px-3 py-2 rounded-lg glass-effect text-sm font-medium text-foreground"
                                     disabled={deleting}
                                 >
-                                    Abbrechen
+                                    {t('common.cancel')}
                                 </button>
                                 <button
                                     onClick={handleDelete}
@@ -836,7 +840,7 @@ function BlockDetailModal({
                                             <Trash2 className="h-4 w-4" />
                                         )}
                                     </span>
-                                    Löschen
+                                    {t('common.delete')}
                                 </button>
                             </div>
                         </div>
@@ -848,7 +852,7 @@ function BlockDetailModal({
                                     className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent/10 hover:bg-accent/20 text-accent font-medium transition"
                                 >
                                     <Edit3 className="h-4 w-4" />
-                                    Bearbeiten
+                                    {t('common.edit')}
                                 </button>
                             )}
                             {canEditDelete && (
@@ -857,14 +861,14 @@ function BlockDetailModal({
                                     className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive font-medium transition"
                                 >
                                     <Trash2 className="h-4 w-4" />
-                                    Löschen
+                                    {t('common.delete')}
                                 </button>
                             )}
                             <button
                                 onClick={onClose}
                                 className="flex-1 px-4 py-2.5 rounded-xl glass-effect text-foreground font-medium transition hover:bg-muted"
                             >
-                                Schließen
+                                {t('common.close')}
                             </button>
                         </div>
                     )}
@@ -884,6 +888,7 @@ function EditBlockModal({
     onClose: () => void;
     onSave: (updates: Partial<Block>) => void;
 }) {
+    const { t } = useLanguage();
     const [title, setTitle] = useState(block.title || '');
     const [description, setDescription] = useState(block.description || '');
     const [startDate, setStartDate] = useState(block.startDate.split('T')[0]);
@@ -968,7 +973,7 @@ function EditBlockModal({
                             onClick={onClose}
                             className="flex-1 px-4 py-3 rounded-xl glass-effect font-medium"
                         >
-                            Abbrechen
+                            {t('common.cancel')}
                         </button>
                         <button
                             type="submit"
@@ -980,7 +985,7 @@ function EditBlockModal({
                             ) : (
                                 <Check className="h-4 w-4" />
                             )}
-                            Speichern
+                            {t('common.save')}
                         </button>
                     </div>
                 </form>

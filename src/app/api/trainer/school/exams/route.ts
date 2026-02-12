@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, desc } from 'drizzle-orm';
-import { schoolExams, profiles } from '@/db/migrations/schemas/schema';
+import { schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
 
 // GET /api/trainer/school/exams?trainerId=...&traineeId=...
 export async function GET(req: NextRequest) {
@@ -86,6 +86,22 @@ export async function POST(req: NextRequest) {
                 ausbildungsjahr,
             })
             .returning();
+
+        // Notify the trainee about the scheduled exam
+        try {
+            const examDateStr = new Date(examDate).toLocaleDateString('de-DE');
+            await db.insert(notifications).values({
+                userId: traineeId,
+                actorId: trainerId,
+                type: 'EXAM_SCHEDULED',
+                title: 'Neue Prüfung geplant',
+                message: `Eine Prüfung "${subject}" wurde für den ${examDateStr} geplant.`,
+                linkUrl: '/trainee/school?tab=exams',
+                context: { examId: exam.id, subject, examDate },
+            });
+        } catch (notifyErr) {
+            console.warn('Failed to notify trainee for exam scheduling', notifyErr);
+        }
 
         return NextResponse.json({
             exam: {

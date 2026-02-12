@@ -32,18 +32,6 @@ export const NAVIGATION = {
       label: 'Dashboard',
       view: 'dashboard',
     },
-    {
-      key: 'knowledgeSubmission',
-      icon: 'BookUp',
-      label: 'Berufsschul-Inhalte',
-      view: 'knowledgeSubmission',
-    },
-    {
-      key: 'reflection',
-      icon: 'Swords',
-      label: 'Reflektionen',
-      view: 'reflection',
-    },
     { key: 'profile', icon: 'User', label: 'Mein Profil', view: 'profile' },
   ],
   trainer: [

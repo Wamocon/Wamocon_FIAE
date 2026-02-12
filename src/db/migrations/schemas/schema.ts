@@ -12,6 +12,7 @@ import {
   jsonb,
   pgSchema,
   varchar,
+  vector,
 } from 'drizzle-orm/pg-core';
 
 // --- SUPABASE AUTH HELPER ---
@@ -34,6 +35,17 @@ export const reviewStatus = pgEnum('review_status', [
   'APPROVED',
   'REJECTED',
 ]);
+
+// Arbeitszeugnis enums (moved here for declaration order)
+export const performanceRating = pgEnum('performance_rating', ['1', '2', '3', '4', '5', '6']);
+export const certificateStatus = pgEnum('certificate_status', ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'ISSUED']);
+export const competencyArea = pgEnum('competency_area', [
+  'FACHKOMPETENZ',        // Technical competency
+  'METHODENKOMPETENZ',    // Methodological competency
+  'SOZIALKOMPETENZ',      // Social competency
+  'PERSONALKOMPETENZ'     // Personal competency
+]);
+export const evaluationStatus = pgEnum('evaluation_status', ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED']);
 
 // --- 1. CORE USER TABLES ---
 
@@ -187,7 +199,18 @@ export const useCases = pgTable('use_cases', {
 
 // --- Content Documents (PDFs for Flipbook Viewer) ---
 
-export const contentDocumentType = pgEnum('content_document_type', ['THEORY', 'EXERCISE', 'REFERENCE', 'OTHER']);
+// Extended document types for Use Case role-based visibility
+export const contentDocumentType = pgEnum('content_document_type', [
+  'THEORY',           // Shared learning material (both roles)
+  'EXERCISE',         // General exercises
+  'REFERENCE',        // Reference material
+  'OTHER',            // Miscellaneous
+  'TRAINEE_QUESTION', // Use Case: Questions only (visible to trainee)
+  'TRAINER_SOLUTION', // Use Case: Full PDF with solutions (trainer only, HAI learns from this)
+]);
+
+// Role visibility for documents
+export const documentVisibility = pgEnum('document_visibility', ['ALL', 'TRAINEE_ONLY', 'TRAINER_ONLY']);
 
 export const contentDocuments = pgTable('content_documents', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -202,12 +225,19 @@ export const contentDocuments = pgTable('content_documents', {
   description: text('description'),
   documentType: contentDocumentType('document_type').default('THEORY'),
 
+  // Role-based visibility (derived from documentType but explicit for queries)
+  visibility: documentVisibility('visibility').default('ALL'),
+
   // Storage info
   fileName: text('file_name').notNull(),
   fileSize: integer('file_size'), // bytes
   mimeType: text('mime_type').default('application/pdf'),
   storageUrl: text('storage_url').notNull(), // Supabase Storage URL
   storagePath: text('storage_path'), // Path in bucket for deletion
+
+  // PageIndex support for HAI
+  pageCount: integer('page_count'), // Total pages in PDF
+  isIndexedByHai: boolean('is_indexed_by_hai').default(false), // True after HAI ingestion
 
   // Ordering for multiple docs
   orderIndex: integer('order_index').default(0),
@@ -404,29 +434,9 @@ export const useCaseSubmissionLinks = pgTable('use_case_submission_links', {
   description: text('description'), // e.g., "GitHub Repo", "OneDrive"
 });
 
-// Geschäftsprozesse tables removed
-
 // --- 4. TRAINEE-SPECIFIC TABLES ---
 
-export const reflections = pgTable('reflections', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  traineeId: uuid('trainee_id')
-    .notNull()
-    .references(() => profiles.id, { onDelete: 'cascade' }),
-
-  // SWOT
-  strengths: text('strengths'),
-  weaknesses: text('weaknesses'),
-  // MES
-  mesMore: text('mes_more'),
-  mesEqual: text('mes_equal'),
-
-  // For the trainer's "Action Required" dashboard
-  isReviewed: boolean('is_reviewed').default(false),
-  reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
-
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+// Reflections table removed
 
 // For the "Knowledge Transfer" feature
 export const knowledgeNotes = pgTable('knowledge_notes', {
@@ -517,7 +527,7 @@ export const notifications = pgTable('notifications', {
   // who triggered the notification (optional)
   actorId: uuid('actor_id').references(() => profiles.id, { onDelete: 'set null' }),
   // categorization and content
-  type: text('type').notNull(), // e.g., 'REFLECTION_SUBMITTED'
+  type: text('type').notNull(), // e.g., 'QUIZ_SUBMITTED'
   title: text('title').notNull(),
   message: text('message'),
   linkUrl: text('link_url'),
@@ -580,8 +590,6 @@ export const traineeUseCaseOverrides = pgTable(
   }),
 );
 
-// traineeGeschaeftsprozesseOverrides removed
-
 // Trainee submissions for Enabler scenarios
 export const enablerSubmissions = pgTable('enabler_submissions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -641,25 +649,39 @@ export const progress = pgTable('progress', {
 // --- 8. HAI.AI TABLES ---
 // AI Coach tables for embeddings, chat sessions, and messages
 
-// Enum for embedding source types
-export const haiSourceType = pgEnum('hai_source_type', ['enabler', 'course', 'document', 'quiz']);
+// Enum for embedding source types (extended for Use Cases)
+export const haiSourceType = pgEnum('hai_source_type', ['enabler', 'course', 'document', 'quiz', 'use_case']);
 
 // Enum for chat context types
-export const haiContextType = pgEnum('hai_context_type', ['enabler', 'course', 'quiz', 'general']);
+export const haiContextType = pgEnum('hai_context_type', ['enabler', 'course', 'quiz', 'general', 'use_case']);
 
 // Enum for message roles
 export const haiMessageRole = pgEnum('hai_message_role', ['user', 'assistant', 'system']);
 
-// HAI.ai Embeddings - stores vector embeddings for RAG
+// HAI.ai Embeddings - stores vector embeddings for RAG with PageIndex support
 export const haiEmbeddings = pgTable('hai_embeddings', {
   id: uuid('id').primaryKey().defaultRandom(),
-  sourceType: text('source_type').notNull(), // 'enabler', 'course', 'document', 'quiz'
+  sourceType: text('source_type').notNull(), // 'enabler', 'course', 'document', 'quiz', 'use_case'
   sourceId: uuid('source_id').notNull(),
   chunkIndex: integer('chunk_index').notNull().default(0),
   content: text('content').notNull(),
   contentHash: text('content_hash').notNull(),
-  // Note: 'embedding' column is vector(768) - handled at DB level, not in Drizzle
+  embedding: vector('embedding', { dimensions: 768 }),
+  // Enhanced metadata for PageIndex: { page?: number, documentId?: string, useCaseTitle?: string }
   metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// HAI.ai Reindex Jobs - tracks background reindexing with progress
+export const haiReindexJobs = pgTable('hai_reindex_jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  status: text('status').notNull().default('pending'), // 'pending', 'running', 'completed', 'failed', 'cancelled'
+  forceReindex: boolean('force_reindex').notNull().default(false),
+  progress: jsonb('progress').notNull().default({}),
+  error: text('error'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -679,6 +701,7 @@ export const haiChatSessions = pgTable('hai_chat_sessions', {
   lastMessageAt: timestamp('last_message_at').defaultNow(), // For sorting by recency
 
   isActive: boolean('is_active').default(true), // false = archived (still visible, just not auto-loaded)
+  metadata: jsonb('metadata').default({}), // Phase 2: conversation summary cache, etc.
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -1004,6 +1027,14 @@ export const activityReportUseCaseEntries = pgTable('activity_report_use_case_en
   // Optional notes
   notes: text('notes'),
 
+  // === GRADING (for Arbeitszeugnis) ===
+  trainerGrade: performanceRating('trainer_grade'), // 1-6 scale from trainer
+  gradeComment: text('grade_comment'), // Optional grading comment
+  isGradeApproved: boolean('is_grade_approved').default(false),
+  gradeApprovedAt: timestamp('grade_approved_at'),
+  gradeApprovedBy: uuid('grade_approved_by')
+    .references(() => profiles.id),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at')
     .defaultNow()
@@ -1031,8 +1062,6 @@ export type QuizSubmissionAnswer = typeof quizSubmissionAnswers.$inferSelect;
 export type UseCaseSubmission = typeof useCaseSubmissions.$inferSelect;
 export type UseCaseSubmissionLink = typeof useCaseSubmissionLinks.$inferSelect;
 
-// Removed geschäftsprozesse related types
-export type Reflection = typeof reflections.$inferSelect;
 export type KnowledgeNote = typeof knowledgeNotes.$inferSelect;
 export type AcceptanceProtocol = typeof acceptanceProtocols.$inferSelect;
 export type ActivityLog = typeof activityLog.$inferSelect;
@@ -1046,6 +1075,7 @@ export type LegacySubLesson = typeof subLessons.$inferSelect;
 
 // HAI.ai types
 export type HaiEmbedding = typeof haiEmbeddings.$inferSelect;
+export type HaiReindexJob = typeof haiReindexJobs.$inferSelect;
 export type HaiChatSession = typeof haiChatSessions.$inferSelect;
 export type HaiChatMessage = typeof haiChatMessages.$inferSelect;
 
@@ -1063,6 +1093,14 @@ export type TrainingComponent = typeof trainingComponents.$inferSelect;
 export type TrainingUseCase = typeof trainingUseCases.$inferSelect;
 export type ActivityReportUseCaseEntry = typeof activityReportUseCaseEntries.$inferSelect;
 
+// Arbeitszeugnis types
+export type MesSoftskillCriterion = typeof mesSoftskillCriteria.$inferSelect;
+export type WeeklyEvaluation = typeof weeklyEvaluations.$inferSelect;
+export type WeeklySoftskillRating = typeof weeklySoftskillRatings.$inferSelect;
+export type AnnualPerformanceSummary = typeof annualPerformanceSummaries.$inferSelect;
+export type WorkCertificate = typeof workCertificates.$inferSelect;
+export type CertificateTextTemplate = typeof certificateTextTemplates.$inferSelect;
+
 export const lernfelderSchema = pgTable('lernfelder', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
@@ -1071,3 +1109,222 @@ export const lernfelderSchema = pgTable('lernfelder', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at'),
 });
+
+// --- 10. ARBEITSZEUGNIS MODULE TABLES ---
+// Module for automated work certificate generation based on weekly performance evaluations
+// NOTE: Enums (performanceRating, certificateStatus, competencyArea, evaluationStatus) 
+// are defined at top of file with other enums
+
+// MES Softskill Criteria (19 criteria from MES system)
+export const mesSoftskillCriteria = pgTable('mes_softskill_criteria', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: text('code').notNull().unique(), // e.g., "K3.1", "K4.2"
+  name: text('name').notNull(), // e.g., "Teamfähigkeit", "Problemlösefähigkeit"
+  description: text('description'),
+  kLevel: text('k_level'), // K3, K4, or K5 (ISTQB cognitive levels)
+  competencyArea: competencyArea('competency_area').notNull(),
+  orderIndex: integer('order_index').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Weekly Performance Evaluations
+export const weeklyEvaluations = pgTable('weekly_evaluations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+
+  // Linking
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  trainerId: uuid('trainer_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  activityReportId: uuid('activity_report_id')
+    .references(() => activityReports.id, { onDelete: 'cascade' }), // Link to existing weekly reports
+
+  // Time period
+  weekNumber: integer('week_number').notNull(), // ISO week 1-52
+  year: integer('year').notNull(), // Calendar year
+  ausbildungsjahr: integer('ausbildungsjahr').notNull(), // Training year 1, 2, or 3
+
+  // ARP Theme Selection (from existing trainingUseCases)
+  arpUseCaseId: uuid('arp_use_case_id')
+    .references(() => trainingUseCases.id),
+  arpThemeText: text('arp_theme_text'), // Manual theme entry if not from dropdown
+
+  // Trainee Self-Assessment
+  selfRating: performanceRating('self_rating'),
+  selfComment: text('self_comment'), // Max 500 characters
+  selfSubmittedAt: timestamp('self_submitted_at'),
+
+  // Trainer Assessment
+  trainerRating: performanceRating('trainer_rating').notNull(),
+  trainerComment: text('trainer_comment'), // Max 500 characters
+  trainerApprovedAt: timestamp('trainer_approved_at'),
+
+  // Workflow status
+  status: evaluationStatus('status').notNull().default('DRAFT'),
+  rejectionReason: text('rejection_reason'),
+
+  // Metadata
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  uniqueTraineeWeekYear: unique().on(table.traineeId, table.weekNumber, table.year),
+}));
+
+// Softskill Weekly Ratings (19 criteria per week)
+export const weeklySoftskillRatings = pgTable('weekly_softskill_ratings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+
+  weeklyEvaluationId: uuid('weekly_evaluation_id')
+    .notNull()
+    .references(() => weeklyEvaluations.id, { onDelete: 'cascade' }),
+  softskillCriterionId: uuid('softskill_criterion_id')
+    .notNull()
+    .references(() => mesSoftskillCriteria.id, { onDelete: 'cascade' }),
+
+  // Ratings
+  selfRating: performanceRating('self_rating'), // Trainee self-assessment
+  trainerRating: performanceRating('trainer_rating').notNull(), // Trainer assessment (mandatory)
+
+  trainerComment: text('trainer_comment'), // Optional comment on this specific skill
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  uniqueEvaluationCriterion: unique().on(table.weeklyEvaluationId, table.softskillCriterionId),
+}));
+
+// Annual Performance Summary
+export const annualPerformanceSummaries = pgTable('annual_performance_summaries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
+  year: integer('year').notNull(), // Calendar year
+
+  // Competency Area Averages (automatically calculated)
+  fachkompetenzAvg: real('fachkompetenz_avg'), // Technical competency average
+  methodenkompetenzAvg: real('methodenkompetenz_avg'), // Methodological competency average
+  sozialkompetenzAvg: real('sozialkompetenz_avg'), // Social competency average
+  personalkompetenzAvg: real('personalkompetenz_avg'), // Personal competency average
+
+  overallAverage: real('overall_average'), // Overall grade average across all areas
+
+  // Statistical data
+  totalWeeksEvaluated: integer('total_weeks_evaluated').default(0),
+  evaluationCompletionRate: real('evaluation_completion_rate'), // Percentage of weeks evaluated
+
+  // Warning flags
+  belowCutoffWarning: boolean('below_cutoff_warning').default(false), // True if avg < 2.45 (shortening requirement)
+
+  // Annual Discussion
+  discussionDate: timestamp('discussion_date'),
+  discussionSummary: text('discussion_summary'), // Trainer's summary of annual discussion
+  discussionConductedBy: uuid('discussion_conducted_by')
+    .references(() => profiles.id),
+  traineeStatement: text('trainee_statement'), // Trainee's statement/response
+
+  // Status
+  isFinalized: boolean('is_finalized').default(false),
+  finalizedAt: timestamp('finalized_at'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  uniqueTraineeYear: unique().on(table.traineeId, table.ausbildungsjahr, table.year),
+}));
+
+// Work Certificates (Arbeitszeugnisse)
+export const workCertificates = pgTable('work_certificates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+
+  traineeId: uuid('trainee_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  annualSummaryId: uuid('annual_summary_id')
+    .references(() => annualPerformanceSummaries.id, { onDelete: 'set null' }),
+
+  // Certificate metadata
+  certificateType: text('certificate_type').notNull().default('INTERIM'), // INTERIM (Zwischenzeugnis), FINAL (Endzeugnis)
+  issueDate: timestamp('issue_date').notNull(),
+
+  // Period covered
+  periodStart: timestamp('period_start').notNull(),
+  periodEnd: timestamp('period_end').notNull(),
+  ausbildungsjahr: integer('ausbildungsjahr').notNull(),
+
+  // Generated content
+  generatedText: text('generated_text').notNull(), // Auto-generated based on grades
+  customSummary: text('custom_summary'), // Trainer's mandatory summary (max 2000 chars) - PFLICHTFELD
+
+  // Competency ratings (from annual summary)
+  fachkompetenzGrade: performanceRating('fachkompetenz_grade'),
+  methodenkompetenzGrade: performanceRating('methodenkompetenz_grade'),
+  sozialkompetenzGrade: performanceRating('sozialkompetenz_grade'),
+  personalkompetenzGrade: performanceRating('personalkompetenz_grade'),
+
+  // === SNAPSHOT (Frozen grades at issue time) ===
+  snapshotData: jsonb('snapshot_data'), // Frozen grades/component data at certificate issue
+
+  // === QR CODE VERIFICATION ===
+  qrVerificationCode: text('qr_verification_code').unique(), // Unique code for certificate verification
+  qrVerificationUrl: text('qr_verification_url'), // Full URL for QR code
+
+  // === GENDER-NEUTRAL PRONOUNS ===
+  gender: text('gender').default('neutral'), // 'male', 'female', 'neutral'
+
+  // PDF storage
+  pdfUrl: text('pdf_url'), // Supabase storage URL
+  pdfGeneratedAt: timestamp('pdf_generated_at'),
+
+  // Approval workflow
+  status: certificateStatus('status').default('DRAFT'),
+  approvedByTrainerId: uuid('approved_by_trainer_id')
+    .references(() => profiles.id),
+  approvedAt: timestamp('approved_at'),
+
+  // Digital signatures
+  traineeSignedAt: timestamp('trainee_signed_at'),
+  trainerSignedAt: timestamp('trainer_signed_at'),
+
+  // Locking mechanism (once issued, cannot be edited)
+  isLocked: boolean('is_locked').default(false),
+  lockedAt: timestamp('locked_at'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// Certificate Text Templates (Standard phrases per grade)
+export const certificateTextTemplates = pgTable('certificate_text_templates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+
+  competencyArea: competencyArea('competency_area').notNull(),
+  grade: performanceRating('grade').notNull(),
+
+  // Template texts (German legal phrasing)
+  templateText: text('template_text').notNull(),
+
+  // Editability
+  isSystemDefault: boolean('is_system_default').default(true),
+  createdBy: uuid('created_by')
+    .references(() => profiles.id),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  uniqueAreaGrade: unique().on(table.competencyArea, table.grade),
+}));

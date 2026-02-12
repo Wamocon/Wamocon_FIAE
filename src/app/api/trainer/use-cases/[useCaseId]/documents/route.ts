@@ -64,10 +64,20 @@ export async function POST(
         }
 
         const body = await req.json();
-        const { title, description, documentType, fileName, fileSize, mimeType, storageUrl, storagePath } = body;
+        const { title, description, documentType, fileName, fileSize, mimeType, storageUrl, storagePath, triggerHaiIngestion } = body;
 
         if (!title || !fileName || !storageUrl) {
             return NextResponse.json({ error: 'Missing required fields: title, fileName, storageUrl' }, { status: 400 });
+        }
+
+        // Determine visibility based on document type
+        let visibility: 'ALL' | 'TRAINEE_ONLY' | 'TRAINER_ONLY' = 'ALL';
+        const docType = documentType || 'THEORY';
+        
+        if (docType === 'TRAINER_SOLUTION') {
+            visibility = 'TRAINER_ONLY';
+        } else if (docType === 'TRAINEE_QUESTION') {
+            visibility = 'ALL'; // Trainee questions visible to both
         }
 
         // Insert document
@@ -77,7 +87,8 @@ export async function POST(
                 useCaseId: useCaseId as any,
                 title,
                 description: description || null,
-                documentType: documentType || 'THEORY',
+                documentType: docType as any,
+                visibility: visibility as any,
                 fileName,
                 fileSize: fileSize || null,
                 mimeType: mimeType || 'application/pdf',
@@ -86,6 +97,22 @@ export async function POST(
                 uploadedById: trainerId as any,
             })
             .returning();
+
+        // Trigger HAI ingestion for TRAINER_SOLUTION documents (async, non-blocking)
+        if (docType === 'TRAINER_SOLUTION' && triggerHaiIngestion !== false) {
+            // Import dynamically to avoid circular dependencies
+            import('@/lib/hai/ingestUseCase').then(({ ingestUseCaseDocument }) => {
+                ingestUseCaseDocument(useCaseId, doc.id, false)
+                    .then(result => {
+                        if (result.success) {
+                            console.log(`HAI ingested use case document: ${result.chunksIndexed} chunks`);
+                        } else {
+                            console.warn(`HAI ingestion failed: ${result.error}`);
+                        }
+                    })
+                    .catch(err => console.error('HAI ingestion error:', err));
+            }).catch(err => console.error('Failed to import HAI ingestion module:', err));
+        }
 
         return NextResponse.json({ document: doc });
     } catch (e) {
@@ -127,6 +154,15 @@ export async function DELETE(
         const [doc] = await db.select().from(contentDocuments).where(eq(contentDocuments.id, documentId as any));
         if (!doc) {
             return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+        }
+
+        // If this is a TRAINER_SOLUTION, delete HAI embeddings (async, non-blocking)
+        if (doc.documentType === 'TRAINER_SOLUTION') {
+            import('@/lib/hai/ingestUseCase').then(({ deleteUseCaseEmbeddings }) => {
+                deleteUseCaseEmbeddings(useCaseId)
+                    .then(result => console.log(`Deleted ${result.deleted} HAI embeddings for use case`))
+                    .catch(err => console.error('Failed to delete HAI embeddings:', err));
+            }).catch(err => console.error('Failed to import HAI module:', err));
         }
 
         // Delete from Supabase Storage (best effort - don't fail if storage delete fails)

@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
         const userId = searchParams.get('userId');
         const sessionId = searchParams.get('sessionId');
         const includeArchived = searchParams.get('includeArchived') === 'true';
+        const search = searchParams.get('search')?.trim();
         const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
         const offset = parseInt(searchParams.get('offset') || '0');
 
@@ -64,6 +65,64 @@ export async function GET(req: NextRequest) {
                 { error: 'Benutzer nicht gefunden.' },
                 { status: 404 }
             );
+        }
+
+        // Phase 2C: Search across sessions and messages
+        if (search && search.length >= 2) {
+            const searchPattern = `%${search}%`;
+            const searchResults = await db.execute(sql`
+                SELECT DISTINCT ON (s.id)
+                    s.id,
+                    s.title,
+                    s.context_type,
+                    s.is_active,
+                    s.created_at,
+                    s.last_message_at,
+                    m.content AS matching_snippet,
+                    m.role AS snippet_role
+                FROM hai_chat_sessions s
+                LEFT JOIN hai_chat_messages m ON m.session_id = s.id
+                WHERE s.user_id = ${userId}
+                  AND (
+                      s.title ILIKE ${searchPattern}
+                      OR m.content ILIKE ${searchPattern}
+                  )
+                ORDER BY s.id, s.last_message_at DESC
+                LIMIT ${limit}
+            `);
+
+            // Trim snippets to ~100 chars around the match
+            const results = (searchResults as any[]).map(r => {
+                let snippet = r.matching_snippet || '';
+                if (snippet.length > 0) {
+                    const lowerSnippet = snippet.toLowerCase();
+                    const matchIdx = lowerSnippet.indexOf(search.toLowerCase());
+                    if (matchIdx >= 0) {
+                        const start = Math.max(0, matchIdx - 50);
+                        const end = Math.min(snippet.length, matchIdx + search.length + 50);
+                        snippet = (start > 0 ? '...' : '') + snippet.slice(start, end) + (end < snippet.length ? '...' : '');
+                    } else {
+                        snippet = snippet.slice(0, 100) + (snippet.length > 100 ? '...' : '');
+                    }
+                }
+
+                return {
+                    id: r.id,
+                    title: r.title,
+                    contextType: r.context_type,
+                    isActive: r.is_active,
+                    createdAt: r.created_at,
+                    lastMessageAt: r.last_message_at,
+                    snippet,
+                    snippetRole: r.snippet_role,
+                };
+            });
+
+            return NextResponse.json({
+                success: true,
+                sessions: results,
+                search: true,
+            });
         }
 
         // Single session with messages

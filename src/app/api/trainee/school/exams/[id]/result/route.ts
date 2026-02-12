@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
-import { schoolExams, schoolExamResults } from '@/db/migrations/schemas/schema';
+import { schoolExams, schoolExamResults, profiles, notifications } from '@/db/migrations/schemas/schema';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -76,6 +76,34 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 notes: notes || null,
             })
             .returning();
+
+        // Notify the trainee's assigned trainer about the exam result
+        try {
+            const effectiveTraineeId = traineeId || String(exam.traineeId);
+            const [traineeProfile] = await db
+                .select({ fullName: profiles.fullName, assignedTrainerId: profiles.assignedTrainerId })
+                .from(profiles)
+                .where(eq(profiles.id, effectiveTraineeId as any));
+            const [examDetail] = await db
+                .select({ subject: schoolExams.subject })
+                .from(schoolExams)
+                .where(eq(schoolExams.id, examId as any));
+            if (traineeProfile?.assignedTrainerId) {
+                const traineeName = traineeProfile.fullName || 'Trainee';
+                const subjectName = examDetail?.subject || 'Prüfung';
+                await db.insert(notifications).values({
+                    userId: String(traineeProfile.assignedTrainerId),
+                    actorId: effectiveTraineeId,
+                    type: 'EXAM_RESULT_SUBMITTED',
+                    title: 'Prüfungsergebnis eingetragen',
+                    message: `${traineeName} hat ein Ergebnis für "${subjectName}" eingetragen.`,
+                    linkUrl: `/trainer/trainees/${effectiveTraineeId}`,
+                    context: { examId, traineeId: effectiveTraineeId },
+                });
+            }
+        } catch (notifyErr) {
+            console.warn('Failed to notify trainer for exam result', notifyErr);
+        }
 
         return NextResponse.json({ result }, { status: 201 });
     } catch (e) {
