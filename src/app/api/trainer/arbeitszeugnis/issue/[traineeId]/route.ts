@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
 import db from '@/db';
 import {
     workCertificates,
@@ -32,14 +31,12 @@ export async function POST(
     { params }: { params: Promise<{ traineeId: string }> }
 ) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { traineeId } = await params;
+        
+        if (!traineeId) {
+            return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
         }
 
-        const { traineeId } = await params;
         const body = await request.json();
         const {
             ausbildungsjahr = 1,
@@ -48,7 +45,8 @@ export async function POST(
             gender = 'neutral',
             radarImage,
             startDate,
-            endDate
+            endDate,
+            trainerId
         } = body;
 
         // Get trainee info
@@ -171,7 +169,7 @@ export async function POST(
 
         // Generate verification code (URL-safe, 16 chars)
         const qrVerificationCode = randomBytes(12).toString('base64url').slice(0, 16);
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://wamocon.com';
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fiae-learn.com';
         const qrVerificationUrl = `${baseUrl}/verify/${qrVerificationCode}`;
 
         // Generate certificate text based on grades
@@ -213,7 +211,7 @@ export async function POST(
                 qrVerificationUrl,
                 gender,
                 status: 'ISSUED',
-                approvedByTrainerId: user.id,
+                approvedByTrainerId: trainerId || null,
                 approvedAt: new Date(),
                 isLocked: true,
                 lockedAt: new Date(),

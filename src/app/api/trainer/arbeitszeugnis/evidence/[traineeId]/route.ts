@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
 import db from '@/db';
 import {
     activityReports,
@@ -24,14 +23,12 @@ export async function GET(
     { params }: { params: Promise<{ traineeId: string }> }
 ) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { traineeId } = await params;
+        
+        if (!traineeId) {
+            return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
         }
 
-        const { traineeId } = await params;
         const { searchParams } = new URL(request.url);
         const ausbildungsjahr = parseInt(searchParams.get('ausbildungsjahr') || '1');
         const customStartDate = searchParams.get('startDate');

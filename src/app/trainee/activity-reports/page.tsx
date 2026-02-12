@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
@@ -69,6 +70,10 @@ interface ReportUseCaseEntry {
     actualHours: number;
     isOverbooked: boolean;
     notes: string | null;
+    // Grading fields
+    trainerGrade?: number;
+    gradeComment?: string | null;
+    isGradeApproved?: boolean;
     useCase?: TrainingUseCase;
     component?: TrainingComponent;
 }
@@ -152,13 +157,14 @@ export default function TraineeActivityReportsPage() {
         return grouped;
     }, [useCases]);
 
-    // Get current ISO week number
+    // Get current ISO week number (proper ISO 8601 calculation)
     const getCurrentWeek = () => {
         const now = new Date();
-        const start = new Date(now.getFullYear(), 0, 1);
-        const diff = now.getTime() - start.getTime();
-        const oneWeek = 604800000;
-        return Math.ceil((diff / oneWeek) + 1);
+        const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
     };
 
     // Get status badge
@@ -190,7 +196,7 @@ export default function TraineeActivityReportsPage() {
 
             setReports(reports.filter(r => r.id !== reportId));
         } catch (err: any) {
-            alert(err.message);
+            toast.error(err.message);
         }
     };
 
@@ -206,7 +212,7 @@ export default function TraineeActivityReportsPage() {
             setEditingEntries(data.entries || []);
             setShowCreateModal(true);
         } catch (err: any) {
-            alert(err.message);
+            toast.error(err.message);
         }
     };
 
@@ -280,7 +286,7 @@ export default function TraineeActivityReportsPage() {
 
             await generateActivityReportPDF(reportData, useCases, components);
         } catch (err: any) {
-            alert(t('reports.error.pdfGeneration') + ' ' + err.message);
+            toast.error(t('reports.error.pdfGeneration') + ' ' + err.message);
         }
     };
 
@@ -443,14 +449,14 @@ export default function TraineeActivityReportsPage() {
                                         </div>
                                     </div>
                                     {/* Actions for Drafts */}
-                                    {report.status === 'DRAFT' && (
+                                    {(report.status === 'DRAFT' || report.status === 'REJECTED') && (
                                         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
                                             <button
                                                 onClick={(e) => handleEditReport(e, report)}
                                                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
                                             >
                                                 <Edit3 className="h-3 w-3" />
-                                                {t('common.edit')}
+                                                {report.status === 'REJECTED' ? t('reports.resubmit') : t('common.edit')}
                                             </button>
                                             <button
                                                 onClick={(e) => handleDeleteReport(e, report.id)}
@@ -689,11 +695,22 @@ function CreateReportModal({
             setSaving(true);
             setError(null);
 
-            // Calculate period start and end based on week number
-            const startOfYear = new Date(year, 0, 1);
-            const daysOffset = (weekNumber - 1) * 7;
-            const periodStart = new Date(startOfYear.getTime() + daysOffset * 86400000);
-            const periodEnd = new Date(periodStart.getTime() + 6 * 86400000);
+            // Calculate period start and end based on ISO week number
+            // Get January 4th (always in ISO week 1)
+            const jan4 = new Date(year, 0, 4);
+            const dayOfWeek = jan4.getDay() || 7;
+
+            // Get Monday of week 1
+            const week1Monday = new Date(jan4);
+            week1Monday.setDate(jan4.getDate() - dayOfWeek + 1);
+
+            // Calculate target week's Monday
+            const periodStart = new Date(week1Monday);
+            periodStart.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
+
+            // Sunday of the same week (6 days after Monday)
+            const periodEnd = new Date(periodStart);
+            periodEnd.setDate(periodStart.getDate() + 6);
 
             const url = initialReport ? `/api/activity-reports/${initialReport.id}` : '/api/activity-reports';
             const method = initialReport ? 'PUT' : 'POST';
@@ -848,14 +865,14 @@ function CreateReportModal({
                                                         }`}
                                                 />
                                             </div>
-                                            <div>
+                                            <div className="col-span-2">
                                                 <label className="text-xs text-muted-foreground block mb-1">{t('reports.notesLabel')}</label>
-                                                <input
-                                                    type="text"
+                                                <textarea
                                                     value={entry.notes}
                                                     onChange={e => updateEntry(entry.useCaseId, 'notes', e.target.value)}
-                                                    placeholder={t('reports.optional')}
-                                                    className="w-full px-3 py-1.5 bg-background border border-border rounded text-foreground"
+                                                    placeholder={t('reports.notesPlaceholder')}
+                                                    rows={2}
+                                                    className="w-full px-3 py-1.5 bg-background border border-border rounded text-foreground resize-none"
                                                 />
                                             </div>
                                         </div>
@@ -1099,6 +1116,28 @@ function ReportDetailModal({
                                             <p className="mt-2 text-sm text-muted-foreground">
                                                 {t('reports.notesLabel')}: {entry.notes}
                                             </p>
+                                        )}
+
+                                        {/* Show trainer grade if approved */}
+                                        {entry.trainerGrade && (
+                                            <div className="mt-3 p-3 bg-accent/10 border border-accent/20 rounded-lg">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">{t('reports.trainerGrade')}</span>
+                                                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold ${
+                                                            entry.trainerGrade <= 2 ? 'bg-green-500' :
+                                                            entry.trainerGrade <= 4 ? 'bg-yellow-500' : 'bg-red-500'
+                                                        }`}>
+                                                            {entry.trainerGrade}
+                                                        </span>
+                                                    </div>
+                                                    {entry.gradeComment && (
+                                                        <p className="flex-1 text-sm text-foreground italic">
+                                                            "{entry.gradeComment}"
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
                                         )}
 
                                         {entry.isOverbooked && (

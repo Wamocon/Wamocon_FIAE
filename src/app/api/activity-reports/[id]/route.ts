@@ -93,22 +93,34 @@ export async function PUT(
             .where(eq(activityReports.id, id as any));
 
         if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-        if (report.status !== 'DRAFT') {
-            return NextResponse.json({ error: 'Cannot edit non-draft reports' }, { status: 403 });
+        if (report.status !== 'DRAFT' && report.status !== 'REJECTED') {
+            return NextResponse.json({ error: 'Cannot edit submitted or approved reports' }, { status: 403 });
+        }
+
+        // Build update data - clear previous reviewer data if resubmitting a rejected report
+        const updateData: Record<string, any> = {
+            weekNumber,
+            year,
+            ausbildungsjahr,
+            periodStart: new Date(periodStart),
+            periodEnd: new Date(periodEnd),
+            status: submit ? 'SUBMITTED' : 'DRAFT',
+            submittedAt: submit ? new Date() : null,
+            traineeSignedAt: submit ? new Date() : null,
+            updatedAt: new Date(),
+        };
+
+        // Clear reviewer feedback when resubmitting
+        if (submit && report.status === 'REJECTED') {
+            updateData.reviewerFeedback = null;
+            updateData.reviewerId = null;
+            updateData.reviewedAt = null;
+            updateData.trainerSignedAt = null;
         }
 
         // Update report fields
         await db.update(activityReports)
-            .set({
-                weekNumber,
-                year,
-                ausbildungsjahr,
-                periodStart: new Date(periodStart),
-                periodEnd: new Date(periodEnd),
-                status: submit ? 'SUBMITTED' : 'DRAFT',
-                submittedAt: submit ? new Date() : null,
-                updatedAt: new Date(),
-            })
+            .set(updateData)
             .where(eq(activityReports.id, id as any));
 
         // Update entries: delete old, insert new
@@ -141,7 +153,16 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params;
-        const body = await request.json();
+        
+        // Handle empty body gracefully (can happen with preflight or browser issues)
+        let body;
+        try {
+            const text = await request.text();
+            body = text ? JSON.parse(text) : {};
+        } catch {
+            return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+        }
+        
         const { status, feedback, userId } = body;
 
         if (!userId) {

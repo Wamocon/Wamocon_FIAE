@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import toast from 'react-hot-toast';
 import { notFound } from 'next/navigation';
 import { CheckCircle2, XCircle, Download, FileText, Calendar, ShieldCheck, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -34,29 +35,48 @@ export default function VerificationPage({ params }: { params: Promise<{ code: s
     const [result, setResult] = useState<VerificationResult | null>(null);
     const [downloading, setDownloading] = useState(false);
 
-    useEffect(() => {
-        async function verifyCode() {
-            try {
-                const res = await fetch(`/api/verify/${code}`);
-                if (!res.ok) {
-                    if (res.status === 404) {
-                        setResult({ valid: false, message: 'Zertifikat nicht gefunden' });
-                    } else {
-                        throw new Error('Verification failed');
-                    }
-                } else {
-                    const data = await res.json();
-                    setResult(data);
-                }
-            } catch (error) {
-                console.error(error);
-                setResult({ valid: false, message: 'Ein Fehler ist aufgetreten' });
-            } finally {
-                setLoading(false);
-            }
-        }
+    const triggerDownload = async () => {
+        if (!code || downloading) return;
+        setDownloading(true);
+        try {
+            const res = await fetch(`/api/verify/${code}/download`);
+            if (!res.ok) throw new Error('Download failed');
 
-        verifyCode();
+            const data = await res.json();
+
+            // Generate QR Code for the PDF
+            const qrUrl = `${window.location.origin}/verify/${code}`;
+
+            const blob = await generateArbeitszeugnisPDF({
+                ...data,
+                qrVerificationCode: code,
+                qrCodeUrl: qrUrl,
+                radarImage: data.radarImage || undefined
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Arbeitszeugnis_${code}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Show success and update state
+            setResult({ valid: true, message: 'PDF wurde heruntergeladen' });
+        } catch (error) {
+            console.error('Download error:', error);
+            setResult({ valid: false, message: 'Fehler beim Herunterladen des Zeugnisses' });
+        } finally {
+            setDownloading(false);
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        // Auto-download PDF immediately when page loads
+        triggerDownload();
     }, [code]);
 
     const handleDownload = async () => {
@@ -109,16 +129,20 @@ export default function VerificationPage({ params }: { params: Promise<{ code: s
 
         } catch (error) {
             console.error('Download error:', error);
-            alert('Fehler beim Herunterladen des Zeugnisses.');
+            toast.error('Fehler beim Herunterladen des Zeugnisses.');
         } finally {
             setDownloading(false);
         }
     };
 
-    if (loading) {
+    if (loading || downloading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
+                <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+                <p className="text-lg font-medium text-gray-700">
+                    {downloading ? 'Arbeitszeugnis wird heruntergeladen...' : 'Zertifikat wird verifiziert...'}
+                </p>
+                <p className="text-sm text-gray-500">Bitte warten Sie einen Moment.</p>
             </div>
         );
     }
@@ -165,9 +189,9 @@ export default function VerificationPage({ params }: { params: Promise<{ code: s
                         </div>
 
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">Authentizität bestätigt</h1>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">PDF heruntergeladen!</h1>
                             <p className="text-gray-500 text-lg">
-                                Das digitale Arbeitszeugnis ist gültig und wurde durch {result.issuer} ausgestellt.
+                                Das Arbeitszeugnis ist authentisch und wurde von {result.issuer || 'Wamocon'} ausgestellt.
                             </p>
                         </div>
 
@@ -221,11 +245,11 @@ export default function VerificationPage({ params }: { params: Promise<{ code: s
                             ) : (
                                 <Download className="h-5 w-5" />
                             )}
-                            <span className="font-medium">Original-PDF herunterladen</span>
+                            <span className="font-medium">PDF erneut herunterladen</span>
                         </button>
 
                         <p className="text-xs text-center text-gray-400">
-                            Lädt die originalsignierte Version des Dokumentes herunter.
+                            Das PDF wurde automatisch heruntergeladen. Klicken Sie hier um es erneut zu laden.
                         </p>
                     </div>
                 </div>
