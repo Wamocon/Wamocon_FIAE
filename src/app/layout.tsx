@@ -40,6 +40,7 @@ export default function RootLayout({
             </ThemeProvider>
           </LanguageProvider>
         </AuthProvider>
+        <Toaster containerStyle={{ zIndex: 9999 }} />
         <Analytics />
       </body>
     </html>

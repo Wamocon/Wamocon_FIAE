@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookOpen, Users, Plus, Save, X, FolderEdit, FileText, Trash2 } from 'lucide-react';
 import { PdfUploader } from '@/components/trainer/PdfUploader';
@@ -391,7 +392,7 @@ export default function EditCoursePage() {
                       type="button"
                       className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
                       onClick={async () => {
-                        if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                        if (!trainerId) { toast.error('Kein Trainerprofil'); return; }
                         const ok = window.confirm('Diesen Enabler wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
                         if (!ok) return;
                         try {
@@ -401,7 +402,7 @@ export default function EditCoursePage() {
                           const data = await r.json();
                           setEnablers((data.enablers || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                         } catch (err: any) {
-                          alert(err?.message || 'Unbekannter Fehler');
+                          toast.error(err?.message || 'Unbekannter Fehler');
                         }
                       }}
                     >
@@ -490,7 +491,7 @@ export default function EditCoursePage() {
                       type="button"
                       className="text-xs rounded-md border border-red-300 px-2 py-1 text-red-600"
                       onClick={async () => {
-                        if (!trainerId) { alert('Kein Trainerprofil'); return; }
+                        if (!trainerId) { toast.error('Kein Trainerprofil'); return; }
                         const ok = window.confirm('Diesen Use Case wirklich löschen? Dies kann nicht rückgängig gemacht werden.');
                         if (!ok) return;
                         try {
@@ -500,7 +501,7 @@ export default function EditCoursePage() {
                           const data = await r.json();
                           setUseCases((data.useCases || []).map((x: any) => ({ id: x.id, title: x.title, isActive: !!x.isActive })));
                         } catch (err: any) {
-                          alert(err?.message || 'Unbekannter Fehler');
+                          toast.error(err?.message || 'Unbekannter Fehler');
                         }
                       }}
                     >
@@ -718,8 +719,8 @@ export default function EditCoursePage() {
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => !enablerSubmitting && setShowAddEnabler(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={enablerSubmitting} onClick={async () => {
-                  if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                  if (!enablerTitle.trim()) { alert('Bitte Titel eingeben'); return; }
+                  if (!trainerId) { toast.error('Kein Trainerprofil'); return; }
+                  if (!enablerTitle.trim()) { toast.error('Bitte Titel eingeben'); return; }
                   setEnablerSubmitting(true);
                   try {
                     // 1) Create Enabler
@@ -758,7 +759,7 @@ export default function EditCoursePage() {
                     // Reset add form fields including pending PDFs
                     setEnablerTitle(''); setEnablerDescription(''); setEnablerScenario(''); setEnablerHint(''); setEnablerPpt(''); setEnablerVideo(''); setEnablerDuration(''); setEnablerActive(false); setScenarios([{ id: crypto.randomUUID(), text: '', hint: '' }]); setCurrentScenarioIndex(0); setPendingEnablerPdfs([]); setIsStructuredMode(false);
                   } catch (e: any) {
-                    alert(e?.message || 'Unbekannter Fehler');
+                    toast.error(e?.message || 'Unbekannter Fehler');
                   } finally {
                     setEnablerSubmitting(false);
                   }
@@ -887,9 +888,9 @@ export default function EditCoursePage() {
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => !useCaseSubmitting && setShowAddUseCase(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={useCaseSubmitting} onClick={async () => {
-                  if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                  if (!useCaseTitle.trim()) { alert('Bitte Titel eingeben'); return; }
-                  if (!useCaseDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
+                  if (!trainerId) { toast.error('Kein Trainerprofil'); return; }
+                  if (!useCaseTitle.trim()) { toast.error('Bitte Titel eingeben'); return; }
+                  if (!useCaseDesc.trim()) { toast.error('Bitte Beschreibung eingeben'); return; }
                   setUseCaseSubmitting(true);
                   try {
                     const res = await fetch(`/api/trainer/courses/${courseId}/use-cases?trainerId=${trainerId}`, {
@@ -937,7 +938,7 @@ export default function EditCoursePage() {
                     setUseCaseTitle(''); setUseCaseDesc(''); setUseCaseDuration(''); setUseCaseActive(false); setPendingUseCasePdfs([]);
                     setUseCaseYear(''); setUseCaseStage(''); setUseCaseLernfelder([]);
                   } catch (e: any) {
-                    alert(e?.message || 'Unbekannter Fehler');
+                    toast.error(e?.message || 'Unbekannter Fehler');
                   } finally {
                     setUseCaseSubmitting(false);
                   }
@@ -1336,9 +1337,9 @@ export default function EditCoursePage() {
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditEnabler(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2" onClick={async () => {
-                  if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                  if (!editingEnablerId) { alert('Kein Lesson ausgewählt'); return; }
-                  if (!enablerTitle.trim()) { alert('Bitte Titel eingeben'); return; }
+                  if (!trainerId) { toast.error('Kein Trainerprofil'); return; }
+                  if (!editingEnablerId) { toast.error('Kein Lesson ausgewählt'); return; }
+                  if (!enablerTitle.trim()) { toast.error('Bitte Titel eingeben'); return; }
                   try {
                     // PATCH enabler details
                     let scenariosPayload: any[] = [];
@@ -1407,7 +1408,7 @@ export default function EditCoursePage() {
                     setShowEditEnabler(false);
                     setEditingEnablerId(null);
                   } catch (e: any) {
-                    alert(e?.message || 'Unbekannter Fehler');
+                    toast.error(e?.message || 'Unbekannter Fehler');
                   }
                 }}>Speichern</button>
               </div>
@@ -1563,10 +1564,10 @@ export default function EditCoursePage() {
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => setShowEditUseCase(false)}>Abbrechen</button>
                 <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2" onClick={async () => {
-                  if (!trainerId) { alert('Kein Trainerprofil'); return; }
-                  if (!editingUseCaseId) { alert('Kein Use Case ausgewählt'); return; }
-                  if (!useCaseEditTitle.trim()) { alert('Bitte Titel eingeben'); return; }
-                  if (!useCaseEditDesc.trim()) { alert('Bitte Beschreibung eingeben'); return; }
+                  if (!trainerId) { toast.error('Kein Trainerprofil'); return; }
+                  if (!editingUseCaseId) { toast.error('Kein Use Case ausgewählt'); return; }
+                  if (!useCaseEditTitle.trim()) { toast.error('Bitte Titel eingeben'); return; }
+                  if (!useCaseEditDesc.trim()) { toast.error('Bitte Beschreibung eingeben'); return; }
                   try {
                     const pr = await fetch(`/api/trainer/use-cases/${editingUseCaseId}?trainerId=${trainerId}`, {
                       method: 'PATCH',
@@ -1589,7 +1590,7 @@ export default function EditCoursePage() {
                     setShowEditUseCase(false);
                     setEditingUseCaseId(null);
                   } catch (e: any) {
-                    alert(e?.message || 'Unbekannter Fehler');
+                    toast.error(e?.message || 'Unbekannter Fehler');
                   }
                 }}>Speichern</button>
               </div>

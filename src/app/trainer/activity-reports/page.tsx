@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
@@ -18,6 +19,8 @@ import {
     FileText,
     MessageSquare,
     Download,
+    Award,
+    Star,
 } from 'lucide-react';
 import { generateActivityReportPDF } from '@/utils/generateReportPDF';
 
@@ -54,6 +57,26 @@ interface ReportUseCaseEntry {
     actualHours: number;
     isOverbooked: boolean;
     notes: string | null;
+    trainerGrade?: number;
+    gradeComment?: string | null;
+    isGradeApproved?: boolean;
+    gradeApprovedAt?: string | null;
+}
+
+interface SoftskillCriterion {
+    id: string;
+    code: string;
+    name: string;
+    description?: string;
+    kLevel?: string;
+    competencyArea: string;
+    orderIndex: number;
+}
+
+interface SoftskillRating {
+    criterionId: string;
+    trainerRating: number;
+    trainerComment?: string;
 }
 
 interface TrainingUseCase {
@@ -458,16 +481,25 @@ export default function TrainerActivityReportsPage() {
     return (
         <div className="p-6 space-y-6">
             {/* Header */}
-            <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-accent/20">
-                    <ClipboardList className="h-6 w-6 text-accent" />
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-xl bg-accent/20">
+                        <ClipboardList className="h-6 w-6 text-accent" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">{t('trainer.reports.title')}</h1>
+                        <p className="text-muted-foreground text-sm">
+                            {t('trainer.reports.description')}
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">{t('trainer.reports.title')}</h1>
-                    <p className="text-muted-foreground text-sm">
-                        {t('trainer.reports.description')}
-                    </p>
-                </div>
+                <button
+                    onClick={() => router.push('/trainer/arbeitszeugnis')}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium shadow-lg hover:shadow-xl hover:scale-105 transition-all"
+                >
+                    <Award className="h-5 w-5" />
+                    <span>Arbeitszeugnis erstellen</span>
+                </button>
             </div>
 
             {/* Stats */}
@@ -567,10 +599,10 @@ export default function TrainerActivityReportsPage() {
             <div className="glass-effect rounded-xl overflow-hidden">
                 <div className="p-4 border-b border-border/50">
                     <h2 className="text-lg font-semibold text-foreground">
-                        {filter === 'pending' && t('trainer.reports.pendingReports')}
-                        {filter === 'overbooked' && t('trainer.reports.overbookedReports')}
-                        {filter === 'approved' && t('trainer.reports.approvedReports')}
-                        {filter === 'history' && t('trainer.reports.historyReports')}
+                        {filter === 'pending' ? t('trainer.reports.pendingReports') :
+                         filter === 'overbooked' ? t('trainer.reports.overbookedReports') :
+                         filter === 'approved' ? t('trainer.reports.approvedReports') :
+                         filter === 'history' ? t('trainer.reports.historyReports') : ''}
                     </h2>
                 </div>
 
@@ -633,6 +665,8 @@ export default function TrainerActivityReportsPage() {
                     onReject={handleReject}
                     onDelete={() => handleDelete(selectedReport.id)}
                     onDownloadPDF={handleDownloadPDF}
+                    trainerId={profile?.id || ''}
+                    reloadEntries={() => loadReportEntries(selectedReport.id)}
                 />
             )}
         </div>
@@ -653,6 +687,8 @@ function ReportReviewModal({
     onReject,
     onDelete,
     onDownloadPDF,
+    trainerId,
+    reloadEntries,
 }: {
     report: ActivityReport;
     entries: ReportUseCaseEntry[];
@@ -666,32 +702,254 @@ function ReportReviewModal({
     onReject: (feedback: string) => void;
     onDelete: () => void;
     onDownloadPDF: () => void;
+    trainerId: string;
+    reloadEntries: () => void;
 }) {
     const { t } = useLanguage();
     const [showRejectForm, setShowRejectForm] = useState(false);
     const [feedback, setFeedback] = useState('');
     const [processing, setProcessing] = useState(false);
+    const [activeTab, setActiveTab] = useState<'details' | 'grades' | 'softskills'>('details');
+    
+    // Grading state
+    const [entryGrades, setEntryGrades] = useState<Record<string, { grade: number; comment: string }>>({});
+    const [savingGrades, setSavingGrades] = useState(false);
+    const [gradesSaved, setGradesSaved] = useState(false);
+    
+    // Soft skills state
+    const [softskillCriteria, setSoftskillCriteria] = useState<SoftskillCriterion[]>([]);
+    const [softskillRatings, setSoftskillRatings] = useState<Record<string, { rating: number; comment: string }>>({});
+    const [loadingSoftskills, setLoadingSoftskills] = useState(false);
+    const [savingSoftskills, setSavingSoftskills] = useState(false);
 
     const totalPlanned = entries.reduce((sum, e) => sum + e.plannedHours, 0);
     const totalActual = entries.reduce((sum, e) => sum + e.actualHours, 0);
     const hasOverbooking = entries.some(e => e.isOverbooked);
 
+    // Initialize grades from existing entries
+    useEffect(() => {
+        const initialGrades: Record<string, { grade: number; comment: string }> = {};
+        entries.forEach(entry => {
+            if (entry.trainerGrade) {
+                initialGrades[entry.id] = {
+                    grade: entry.trainerGrade,
+                    comment: entry.gradeComment || ''
+                };
+            }
+        });
+        setEntryGrades(initialGrades);
+    }, [entries]);
+
+    // Load soft skill criteria when tab is opened
+    useEffect(() => {
+        if (activeTab === 'softskills' && softskillCriteria.length === 0) {
+            loadSoftskillCriteria();
+        }
+    }, [activeTab]);
+
+    const loadSoftskillCriteria = async () => {
+        setLoadingSoftskills(true);
+        try {
+            // Load criteria
+            const criteriaRes = await fetch('/api/softskill-criteria');
+            if (criteriaRes.ok) {
+                const data = await criteriaRes.json();
+                setSoftskillCriteria(data.criteria || []);
+            }
+            
+            // Load existing ratings for this report
+            const ratingsRes = await fetch(`/api/weekly-evaluations?activityReportId=${report.id}`);
+            if (ratingsRes.ok) {
+                const data = await ratingsRes.json();
+                const existingRatings: Record<string, { rating: number; comment: string }> = {};
+                (data.softskillRatings || []).forEach((r: any) => {
+                    existingRatings[r.softskillCriterionId] = {
+                        rating: r.trainerRating,
+                        comment: r.trainerComment || ''
+                    };
+                });
+                setSoftskillRatings(existingRatings);
+            }
+        } catch (err) {
+            console.error('Error loading softskills:', err);
+        } finally {
+            setLoadingSoftskills(false);
+        }
+    };
+
+    const handleGradeChange = (entryId: string, grade: number) => {
+        setEntryGrades(prev => ({
+            ...prev,
+            [entryId]: { ...prev[entryId], grade, comment: prev[entryId]?.comment || '' }
+        }));
+        setGradesSaved(false);
+    };
+
+    const handleGradeCommentChange = (entryId: string, comment: string) => {
+        setEntryGrades(prev => ({
+            ...prev,
+            [entryId]: { ...prev[entryId], comment, grade: prev[entryId]?.grade || 3 }
+        }));
+        setGradesSaved(false);
+    };
+
+    const handleSoftskillRatingChange = (criterionId: string, rating: number) => {
+        setSoftskillRatings(prev => ({
+            ...prev,
+            [criterionId]: { ...prev[criterionId], rating, comment: prev[criterionId]?.comment || '' }
+        }));
+    };
+
+    const handleSoftskillCommentChange = (criterionId: string, comment: string) => {
+        setSoftskillRatings(prev => ({
+            ...prev,
+            [criterionId]: { ...prev[criterionId], comment, rating: prev[criterionId]?.rating || 3 }
+        }));
+    };
+
+    const saveGrades = async () => {
+        setSavingGrades(true);
+        try {
+            const gradesToSave = Object.entries(entryGrades)
+                .filter(([_, val]) => val.grade)
+                .map(([entryId, val]) => ({
+                    entryId,
+                    grade: val.grade,
+                    comment: val.comment
+                }));
+
+            if (gradesToSave.length > 0) {
+                const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entryGrades: gradesToSave, trainerId })
+                });
+                if (res.ok) {
+                    setGradesSaved(true);
+                    reloadEntries();
+                    toast.success(t('trainer.reports.modal.gradesSaved'));
+                } else {
+                    toast.error(t('trainer.reports.modal.gradesSaveError'));
+                }
+            }
+        } catch (err) {
+            console.error('Error saving grades:', err);
+            toast.error(t('trainer.reports.modal.gradesSaveError'));
+        } finally {
+            setSavingGrades(false);
+        }
+    };
+
+    const saveSoftskills = async () => {
+        setSavingSoftskills(true);
+        try {
+            const ratingsToSave = Object.entries(softskillRatings)
+                .filter(([_, val]) => val.rating)
+                .map(([criterionId, val]) => ({
+                    criterionId,
+                    trainerRating: val.rating,
+                    trainerComment: val.comment
+                }));
+
+            const res = await fetch('/api/weekly-evaluations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    activityReportId: report.id,
+                    traineeId: report.traineeId,
+                    trainerId,
+                    weekNumber: report.weekNumber,
+                    year: report.year,
+                    ausbildungsjahr: report.ausbildungsjahr,
+                    trainerRating: 3,
+                    softskillRatings: ratingsToSave
+                })
+            });
+            
+            if (res.ok) {
+                toast.success(t('trainer.reports.modal.softskillsSaved'));
+            } else {
+                toast.error(t('trainer.reports.modal.softskillsSaveError'));
+            }
+        } catch (err) {
+            console.error('Error saving softskills:', err);
+            toast.error(t('trainer.reports.modal.softskillsSaveError'));
+        } finally {
+            setSavingSoftskills(false);
+        }
+    };
+
     const handleApprove = async () => {
+        // Validate: all entries must have grades
+        const allEntriesGraded = entries.every(entry => entryGrades[entry.id]?.grade);
+        if (!allEntriesGraded) {
+            toast.error(t('trainer.reports.modal.gradesRequired'));
+            setActiveTab('grades');
+            return;
+        }
+        
+        // Validate: at least some soft skills should be rated
+        const softskillsRated = Object.keys(softskillRatings).filter(k => softskillRatings[k]?.rating).length;
+        if (softskillsRated === 0) {
+            toast.error(t('trainer.reports.modal.softskillsRequired'));
+            setActiveTab('softskills');
+            return;
+        }
+
         setProcessing(true);
-        await onApprove();
-        setProcessing(false);
+        try {
+            // Save grades first
+            await saveGrades();
+            // Save softskills
+            await saveSoftskills();
+            // Approve - this will close the modal, so don't set state after
+            toast.success(t('trainer.reports.modal.approveSuccess'));
+            await onApprove();
+            // Don't call setProcessing(false) here - modal is unmounted
+        } catch (err) {
+            console.error('Approval error:', err);
+            setProcessing(false);
+        }
     };
 
     const handleReject = async () => {
         if (!feedback.trim()) return;
         setProcessing(true);
-        await onReject(feedback);
-        setProcessing(false);
+        try {
+            await onReject(feedback);
+            // Don't call setProcessing(false) - modal is unmounted after reject
+        } catch (err) {
+            console.error('Rejection error:', err);
+            setProcessing(false);
+        }
+    };
+
+    const GradeSelector = ({ value, onChange, size = 'md' }: { value: number | undefined; onChange: (v: number) => void; size?: 'sm' | 'md' }) => {
+        const grades = [1, 2, 3, 4, 5, 6];
+        const sizeClasses = size === 'sm' ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm';
+        return (
+            <div className="flex gap-1">
+                {grades.map(g => (
+                    <button
+                        key={g}
+                        type="button"
+                        onClick={() => onChange(g)}
+                        className={`${sizeClasses} rounded-full font-medium transition-all ${
+                            value === g
+                                ? g <= 2 ? 'bg-green-500 text-white' : g <= 4 ? 'bg-yellow-500 text-white' : 'bg-red-500 text-white'
+                                : 'bg-muted hover:bg-muted/80 text-foreground'
+                        }`}
+                    >
+                        {g}
+                    </button>
+                ))}
+            </div>
+        );
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-card border border-border rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-card border border-border rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
                 <div className="p-6 border-b border-border/50">
                     <div className="flex items-center justify-between">
@@ -740,6 +998,44 @@ function ReportReviewModal({
                             </span>
                         </div>
                     )}
+
+                    {/* Tabs - Only show for SUBMITTED reports */}
+                    {report.status === 'SUBMITTED' && (
+                        <div className="mt-4 flex gap-2 border-b border-border/30">
+                            <button
+                                onClick={() => setActiveTab('details')}
+                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                    activeTab === 'details' 
+                                        ? 'border-accent text-accent' 
+                                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                                {t('trainer.reports.modal.tabDetails')}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('grades')}
+                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                                    activeTab === 'grades' 
+                                        ? 'border-accent text-accent' 
+                                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                                <Star className="h-4 w-4" />
+                                {t('trainer.reports.modal.tabGrades')}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('softskills')}
+                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                                    activeTab === 'softskills' 
+                                        ? 'border-accent text-accent' 
+                                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                                <Award className="h-4 w-4" />
+                                {t('trainer.reports.modal.tabSoftskills')}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Content */}
@@ -748,60 +1044,235 @@ function ReportReviewModal({
                         <div className="flex items-center justify-center py-12">
                             <div className="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full" />
                         </div>
-                    ) : entries.length === 0 ? (
-                        <p className="text-center text-muted-foreground py-12">{t('trainer.reports.modal.noEntries')}</p>
-                    ) : (
+                    ) : activeTab === 'details' ? (
+                        /* Details Tab */
+                        entries.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-12">{t('trainer.reports.modal.noEntries')}</p>
+                        ) : (
+                            <div className="space-y-4">
+                                {entries.map(entry => {
+                                    const useCase = getUseCaseById(entry.useCaseId);
+                                    const component = useCase ? getComponentById(useCase.componentId) : null;
+
+                                    return (
+                                        <div
+                                            key={entry.id}
+                                            className={`p-4 rounded-lg border ${entry.isOverbooked ? 'border-yellow-500/50 bg-yellow-500/10' : 'border-border bg-muted/30'}`}
+                                        >
+                                            <p className="text-xs text-muted-foreground mb-1">{component?.title}</p>
+                                            <p className="font-medium text-foreground mb-3">
+                                                {useCase?.letter}) {useCase?.description}
+                                            </p>
+
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.plan')}</p>
+                                                    <p className="font-medium text-foreground">{entry.plannedHours} {t('trainer.reports.modal.hours')}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.actual')}</p>
+                                                    <p className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-foreground'}`}>
+                                                        {entry.actualHours} {t('trainer.reports.modal.hours')}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.difference')}</p>
+                                                    <p className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-green-500'}`}>
+                                                        {entry.isOverbooked ? '+' : ''}{(entry.actualHours - entry.plannedHours).toFixed(1)} {t('trainer.reports.modal.hours')}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {entry.notes && (
+                                                <div className="mt-3 pt-3 border-t border-border/30">
+                                                    <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                                                        <MessageSquare className="h-3 w-3" />
+                                                        {t('trainer.reports.modal.traineeNotes')}
+                                                    </p>
+                                                    <p className="text-sm text-foreground bg-accent/10 p-2 rounded-lg italic">
+                                                        "{entry.notes}"
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {entry.trainerGrade && (
+                                                <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-2">
+                                                    <Star className="h-4 w-4 text-yellow-500" />
+                                                    <span className="text-sm text-muted-foreground">{t('trainer.reports.modal.graded')}:</span>
+                                                    <span className={`font-bold ${
+                                                        entry.trainerGrade <= 2 ? 'text-green-500' : 
+                                                        entry.trainerGrade <= 4 ? 'text-yellow-500' : 'text-red-500'
+                                                    }`}>{entry.trainerGrade}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
+                    ) : activeTab === 'grades' ? (
+                        /* Grades Tab */
                         <div className="space-y-4">
+                            <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg mb-4">
+                                <p className="text-sm text-foreground">
+                                    {t('trainer.reports.modal.gradeInfo')}
+                                </p>
+                            </div>
                             {entries.map(entry => {
                                 const useCase = getUseCaseById(entry.useCaseId);
                                 const component = useCase ? getComponentById(useCase.componentId) : null;
+                                const currentGrade = entryGrades[entry.id];
 
                                 return (
-                                    <div
-                                        key={entry.id}
-                                        className={`p-4 rounded-lg border ${entry.isOverbooked ? 'border-yellow-500/50 bg-yellow-500/10' : 'border-border bg-muted/30'}`}
-                                    >
-                                        <p className="text-xs text-muted-foreground mb-1">{component?.title}</p>
-                                        <p className="font-medium text-foreground mb-3">
-                                            {useCase?.letter}) {useCase?.description}
-                                        </p>
-
-                                        <div className="grid grid-cols-3 gap-4">
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.plan')}</p>
-                                                <p className="font-medium text-foreground">{entry.plannedHours} {t('trainer.reports.modal.hours')}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.actual')}</p>
-                                                <p className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-foreground'}`}>
-                                                    {entry.actualHours} {t('trainer.reports.modal.hours')}
+                                    <div key={entry.id} className="p-4 rounded-lg border border-border bg-muted/30">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1">
+                                                <p className="text-xs text-muted-foreground mb-1">{component?.title}</p>
+                                                <p className="font-medium text-foreground">
+                                                    {useCase?.letter}) {useCase?.description}
                                                 </p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">{t('trainer.reports.modal.difference')}</p>
-                                                <p className={`font-medium ${entry.isOverbooked ? 'text-yellow-500' : 'text-green-500'}`}>
-                                                    {entry.isOverbooked ? '+' : ''}{(entry.actualHours - entry.plannedHours).toFixed(1)} {t('trainer.reports.modal.hours')}
+                                                <p className="text-sm text-muted-foreground mt-1">
+                                                    {entry.actualHours} {t('trainer.reports.modal.hours')} ({entry.actualHours - entry.plannedHours >= 0 ? '+' : ''}{(entry.actualHours - entry.plannedHours).toFixed(1)})
                                                 </p>
+                                                {entry.notes && (
+                                                    <p className="text-sm text-accent mt-2 bg-accent/10 p-2 rounded italic">
+                                                        "{entry.notes}"
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col items-end gap-2">
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground mb-1 text-right">{t('trainer.reports.modal.grade')}</p>
+                                                    <GradeSelector
+                                                        value={currentGrade?.grade}
+                                                        onChange={(g) => handleGradeChange(entry.id, g)}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-
-                                        {entry.notes && (
-                                            <p className="mt-2 text-sm text-muted-foreground">
-                                                <MessageSquare className="h-3 w-3 inline mr-1" />
-                                                {entry.notes}
-                                            </p>
+                                        {currentGrade?.grade && (
+                                            <div className="mt-3">
+                                                <input
+                                                    type="text"
+                                                    value={currentGrade?.comment || ''}
+                                                    onChange={(e) => handleGradeCommentChange(entry.id, e.target.value)}
+                                                    placeholder={t('trainer.reports.modal.gradeComment')}
+                                                    className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                                                />
+                                            </div>
                                         )}
                                     </div>
                                 );
                             })}
+                            
+                            <div className="flex justify-end pt-4">
+                                <button
+                                    onClick={saveGrades}
+                                    disabled={savingGrades || Object.keys(entryGrades).length === 0}
+                                    className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 disabled:opacity-50"
+                                >
+                                    <span className="w-4 h-4">
+                                        {savingGrades ? (
+                                            <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                                        ) : gradesSaved ? (
+                                            <Check className="h-4 w-4" />
+                                        ) : (
+                                            <Star className="h-4 w-4" />
+                                        )}
+                                    </span>
+                                    {gradesSaved ? t('trainer.reports.modal.gradesSaved') : t('trainer.reports.modal.saveGrades')}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Soft Skills Tab */
+                        <div className="space-y-4">
+                            {loadingSoftskills ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <div className="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full" />
+                                </div>
+                            ) : softskillCriteria.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Award className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                                    <p className="text-muted-foreground">{t('trainer.reports.modal.noSoftskills')}</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg mb-4">
+                                        <p className="text-sm text-foreground">
+                                            {t('trainer.reports.modal.softskillInfo')}
+                                        </p>
+                                    </div>
+                                    
+                                    {/* Group by competency area */}
+                                    {['FACHKOMPETENZ', 'METHODENKOMPETENZ', 'SOZIALKOMPETENZ', 'PERSONALKOMPETENZ'].map(area => {
+                                        const areaCriteria = softskillCriteria.filter(c => c.competencyArea === area);
+                                        if (areaCriteria.length === 0) return null;
+                                        
+                                        const areaLabels: Record<string, string> = {
+                                            'FACHKOMPETENZ': t('trainer.reports.modal.fachkompetenz'),
+                                            'METHODENKOMPETENZ': t('trainer.reports.modal.methodenkompetenz'),
+                                            'SOZIALKOMPETENZ': t('trainer.reports.modal.sozialkompetenz'),
+                                            'PERSONALKOMPETENZ': t('trainer.reports.modal.personalkompetenz'),
+                                        };
+
+                                        return (
+                                            <div key={area} className="mb-6">
+                                                <h4 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">
+                                                    {areaLabels[area] || area}
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {areaCriteria.map(criterion => {
+                                                        const rating = softskillRatings[criterion.id];
+                                                        return (
+                                                            <div key={criterion.id} className="p-3 rounded-lg border border-border bg-muted/30 flex items-center justify-between gap-4">
+                                                                <div className="flex-1">
+                                                                    <p className="font-medium text-foreground text-sm">
+                                                                        {criterion.code} - {criterion.name}
+                                                                    </p>
+                                                                    {criterion.description && (
+                                                                        <p className="text-xs text-muted-foreground mt-0.5">{criterion.description}</p>
+                                                                    )}
+                                                                </div>
+                                                                <GradeSelector
+                                                                    value={rating?.rating}
+                                                                    onChange={(r) => handleSoftskillRatingChange(criterion.id, r)}
+                                                                    size="sm"
+                                                                />
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    
+                                    <div className="flex justify-end pt-4">
+                                        <button
+                                            onClick={saveSoftskills}
+                                            disabled={savingSoftskills || Object.keys(softskillRatings).length === 0}
+                                            className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 disabled:opacity-50"
+                                        >
+                                            <span className="w-4 h-4">
+                                                {savingSoftskills ? (
+                                                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                                                ) : (
+                                                    <Award className="h-4 w-4" />
+                                                )}
+                                            </span>
+                                            {t('trainer.reports.modal.saveSoftskills')}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Footer */}
-                {report.status === 'SUBMITTED' && (
-                    <div className="p-6 border-t border-border/50">
-                        {showRejectForm ? (
+                {/* Footer - consolidated to prevent DOM reconciliation issues */}
+                <div className="p-6 border-t border-border/50">
+                    {report.status === 'SUBMITTED' ? (
+                        showRejectForm ? (
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-foreground mb-2">
@@ -854,57 +1325,64 @@ function ReportReviewModal({
                                         disabled={processing}
                                         className="flex items-center gap-2 px-4 py-2 bg-green-600 text-primary-foreground dark:text-white rounded-lg hover:bg-green-700"
                                     >
-                                        {processing ? (
-                                            <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                                        ) : (
-                                            <Check className="h-4 w-4" />
-                                        )}
+                                        <span className="w-4 h-4">
+                                            {processing ? (
+                                                <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                                            ) : (
+                                                <Check className="h-4 w-4" />
+                                            )}
+                                        </span>
                                         {t('trainer.reports.modal.approve')}
                                     </button>
                                 </div>
                             </div>
-                        )}
-                    </div>
-                )}
-
-                {report.status === 'APPROVED' && (
-                    <div className="p-6 border-t border-border/50 flex justify-between">
-                        <div className="flex items-center gap-2 text-green-500">
-                            <Check className="h-5 w-5" />
-                            <span className="font-medium">{t('trainer.reports.modal.alreadyApproved')}</span>
-                        </div>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={onDownloadPDF}
-                                className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90"
-                            >
-                                <Download className="h-4 w-4" />
-                                {t('trainer.reports.modal.downloadPdf')}
-                            </button>
-                            <button
-                                onClick={onClose}
-                                className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
-                            >
-                                {t('trainer.reports.modal.close')}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {report.status === 'REJECTED' && (
-                    <div className="p-6 border-t border-border/50">
-                        <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg mb-4">
-                            <p className="text-sm text-destructive font-medium mb-1">{t('trainer.reports.rejected')}</p>
-                            <p className="text-sm text-destructive/80">{report.reviewerFeedback}</p>
-                        </div>
+                        )
+                    ) : report.status === 'APPROVED' ? (
                         <div className="flex justify-between">
-                            <button
-                                onClick={onDelete}
-                                className="flex items-center gap-2 px-4 py-2 bg-destructive/20 text-destructive rounded-lg hover:bg-destructive/30"
-                            >
-                                <X className="h-4 w-4" />
-                                {t('trainer.reports.modal.delete')}
-                            </button>
+                            <div className="flex items-center gap-2 text-green-500">
+                                <Check className="h-5 w-5" />
+                                <span className="font-medium">{t('trainer.reports.modal.alreadyApproved')}</span>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={onDownloadPDF}
+                                    className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    {t('trainer.reports.modal.downloadPdf')}
+                                </button>
+                                <button
+                                    onClick={onClose}
+                                    className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
+                                >
+                                    {t('trainer.reports.modal.close')}
+                                </button>
+                            </div>
+                        </div>
+                    ) : report.status === 'REJECTED' ? (
+                        <>
+                            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg mb-4">
+                                <p className="text-sm text-destructive font-medium mb-1">{t('trainer.reports.rejected')}</p>
+                                <p className="text-sm text-destructive/80">{report.reviewerFeedback}</p>
+                            </div>
+                            <div className="flex justify-between">
+                                <button
+                                    onClick={onDelete}
+                                    className="flex items-center gap-2 px-4 py-2 bg-destructive/20 text-destructive rounded-lg hover:bg-destructive/30"
+                                >
+                                    <X className="h-4 w-4" />
+                                    {t('trainer.reports.modal.delete')}
+                                </button>
+                                <button
+                                    onClick={onClose}
+                                    className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
+                                >
+                                    {t('trainer.reports.modal.close')}
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex justify-end">
                             <button
                                 onClick={onClose}
                                 className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
@@ -912,8 +1390,8 @@ function ReportReviewModal({
                                 {t('trainer.reports.modal.close')}
                             </button>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

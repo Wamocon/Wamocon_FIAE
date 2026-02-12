@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import toast from 'react-hot-toast';
 import { notFound } from 'next/navigation';
 import { CheckCircle2, XCircle, Download, FileText, Calendar, ShieldCheck, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -109,7 +110,7 @@ export default function VerificationPage({ params }: { params: Promise<{ code: s
 
         } catch (error) {
             console.error('Download error:', error);
-            alert('Fehler beim Herunterladen des Zeugnisses.');
+            toast.error('Fehler beim Herunterladen des Zeugnisses.');
         } finally {
             setDownloading(false);
         }

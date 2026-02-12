@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { MarkdownText } from '@/components/ui/MarkdownText';
@@ -86,7 +87,7 @@ export default function EditEnablerQuizPage() {
                   if (!r.ok) throw new Error('Löschen fehlgeschlagen');
                   router.back();
                 } catch (e: any) {
-                  alert(e?.message || 'Unbekannter Fehler');
+                  toast.error(e?.message || 'Unbekannter Fehler');
                 }
               }}
             >Löschen</button>
@@ -282,7 +283,7 @@ export default function EditEnablerQuizPage() {
         {editing && (
           <div className="flex justify-end">
             <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={saving} onClick={async () => {
-              if (!profile?.id) { alert('Kein Trainerprofil'); return; }
+              if (!profile?.id) { toast.error('Kein Trainerprofil'); return; }
               setSaving(true);
               try {
                 const payload = {
@@ -300,7 +301,7 @@ export default function EditEnablerQuizPage() {
                 if (!r.ok) throw new Error('Speichern fehlgeschlagen');
                 setEditing(false);
               } catch (e: any) {
-                alert(e?.message || 'Unbekannter Fehler');
+                toast.error(e?.message || 'Unbekannter Fehler');
               } finally {
                 setSaving(false);
               }
