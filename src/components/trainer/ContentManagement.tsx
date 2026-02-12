@@ -704,7 +704,7 @@ export function ContentManagement() {
                           {p.email}
                         </div>
                       </div>
-                      <span className="text-accent text-xs font-semibold">
+                      <span className="text-accent border-accent/50 bg-accent/10 hover:bg-accent/20 flex flex-shrink-0 items-center rounded-full border px-3 py-1.5 text-xs font-semibold whitespace-nowrap">
                         {t('content.clickToAdd')}
                       </span>
                     </button>
