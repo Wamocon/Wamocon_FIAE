@@ -8,6 +8,7 @@ import {
   Circle,
   Loader2,
 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 // Temporary inline mock until this component is wired to real data
 type LessonItem = { id: string; title: string; type: 'lesson' | 'exercise' | 'quiz'; completed: boolean; ref?: string | null };
 const mockChapter = {
@@ -26,6 +27,7 @@ interface ChapterDetailProps {
 }
 
 export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
+  const { t } = useLanguage();
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -71,7 +73,7 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
             {mockChapter.title}
           </h1>
           <p className="text-muted">
-            Kapitel aus dem Modul "Grundlagen der Anwendungsentwicklung"
+            {t('chapter.fromModule').replace('{module}', 'Grundlagen der Anwendungsentwicklung')}
           </p>
         </div>
       </div>
@@ -79,7 +81,7 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
       {/* Lessons List */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <h2 className="text-foreground mb-6 text-2xl font-bold">
-          Lektionen in diesem Kapitel
+          {t('chapter.lessonsInChapter')}
         </h2>
         <div className="space-y-4">
           {mockChapter.lessons.map((lesson: LessonItem) => (
@@ -115,12 +117,12 @@ export function ChapterDetail({ onNavigation }: ChapterDetailProps) {
         <div className="flex items-center justify-between">
           <div>
             <h4 className="text-foreground mb-2 text-2xl font-bold">
-              Abschlusstest: {mockChapter.title}
+              {t('chapter.finalTest').replace('{title}', mockChapter.title)}
             </h4>
-            <p className="text-muted">Teste dein Wissen aus diesem Kapitel.</p>
+            <p className="text-muted">{t('chapter.testKnowledge')}</p>
           </div>
           <button className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 transform rounded-2xl bg-gradient-to-r px-8 py-4 font-semibold text-foreground shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
-            Quiz starten
+            {t('chapter.startQuiz')}
           </button>
         </div>
       </div>

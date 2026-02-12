@@ -7,7 +7,7 @@
  * @module lib/hai/vectorSearch
  */
 
-import { haiClient } from './client';
+import { getEmbeddingProvider } from './providers';
 import db from '@/db';
 import { sql } from 'drizzle-orm';
 
@@ -66,14 +66,15 @@ export async function searchSimilar(
         sourceIds,
     } = options;
 
-    if (!haiClient.isInitialized()) {
-        console.error('HAI.ai: Client not initialized for search');
+    const embeddingProvider = getEmbeddingProvider();
+    if (!embeddingProvider.isInitialized()) {
+        console.error('HAI.ai: Embedding provider not initialized for search');
         return [];
     }
 
     try {
-        // Generate embedding for the query
-        const queryEmbedding = await haiClient.generateEmbedding(query);
+        // Generate embedding for the query via provider
+        const queryEmbedding = await embeddingProvider.generateEmbedding(query);
         const embeddingVector = JSON.stringify(queryEmbedding.embedding);
 
         // Build the SQL query with filters
@@ -84,8 +85,8 @@ export async function searchSimilar(
         }
 
         if (sourceIds && sourceIds.length > 0) {
-            const sourceIdList = sourceIds.map(id => `'${id}'`).join(',');
-            whereClause = sql`${whereClause} AND source_id::text IN (${sql.raw(sourceIdList)})`;
+            // Use parameterized ANY() instead of raw SQL IN() to prevent SQL injection
+            whereClause = sql`${whereClause} AND source_id::text = ANY(${sourceIds})`;
         }
 
         if (options.courseId) {

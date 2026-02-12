@@ -10,6 +10,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useHai } from './HaiProvider';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { HaiMessage } from './HaiMessage';
 import { HaiSessionList } from './HaiSessionList';
 import { HaiLogoBanner, HaiLogoInline } from './HaiLogoBanner';
@@ -37,6 +38,7 @@ export function HaiChat() {
 // ============================================================================
 
 function ChatWidget() {
+    const { t } = useLanguage();
     const {
         setViewMode,
         messages, sendMessage, isLoading, context
@@ -80,14 +82,14 @@ function ChatWidget() {
                     <button
                         onClick={() => setViewMode('full')}
                         className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
-                        title="Vergrößern"
+                        title={t('hai.actions.maximize')}
                     >
                         <Maximize2 className="w-5 h-5" />
                     </button>
                     <button
                         onClick={() => setViewMode('hidden')}
                         className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
-                        title="Schließen"
+                        title={t('common.close')}
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -119,7 +121,7 @@ function ChatWidget() {
                                 handleSend();
                             }
                         }}
-                        placeholder="Frag HAI..."
+                        placeholder={t('hai.askPlaceholder')}
                         className="
               w-full bg-[#0d1117] hover:bg-black focus:bg-black
               border border-white/10 focus:border-cyan-500/50
@@ -158,6 +160,7 @@ function ChatWidget() {
 // ============================================================================
 
 function ChatFull() {
+    const { t } = useLanguage();
     const {
         setViewMode, newSession,
         messages, sendMessage, isLoading, context
@@ -211,7 +214,7 @@ function ChatFull() {
                             className="border-r border-white/10 bg-[#050505]/50 hidden md:flex flex-col"
                         >
                             <div className="h-20 flex items-center justify-between px-6 border-b border-white/10">
-                                <span className="text-lg font-bold text-white tracking-wider uppercase">Verlauf</span>
+                                <span className="text-lg font-bold text-white tracking-wider uppercase">{t('hai.history.title')}</span>
                                 <button onClick={() => setShowSidebar(false)} className="text-muted-foreground hover:text-foreground p-1 hover:bg-white/5 rounded-md transition-colors">
                                     <PanelLeftClose className="w-4 h-4" />
                                 </button>
@@ -242,7 +245,7 @@ function ChatFull() {
                                 <HaiLogoInline />
                                 <span className="text-xl font-light text-gray-500">/</span>
                                 <span className="text-xl font-medium text-gray-200">
-                                    {context.enablerTitle || 'Neuer Chat'}
+                                    {context.enablerTitle || t('hai.newChat')}
                                 </span>
                             </div>
                         </div>
@@ -253,15 +256,15 @@ function ChatFull() {
                                 className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/20 text-sm font-medium transition-colors"
                             >
                                 <Sparkles className="w-4 h-4" />
-                                <span>Neuer Chat</span>
+                                <span>{t('hai.newChat')}</span>
                             </button>
 
                             <div className="w-px h-6 bg-white/10 mx-2" />
 
-                            <button onClick={() => setViewMode('widget')} className="p-2 hover:bg-white/5 rounded-lg text-muted-foreground hover:text-foreground" title="Fenster verkleinern">
+                            <button onClick={() => setViewMode('widget')} className="p-2 hover:bg-white/5 rounded-lg text-muted-foreground hover:text-foreground" title={t('hai.actions.minimize')}>
                                 <Minimize2 className="w-5 h-5" />
                             </button>
-                            <button onClick={() => setViewMode('hidden')} className="p-2 hover:bg-white/5 rounded-lg text-muted-foreground hover:text-foreground" title="Schließen">
+                            <button onClick={() => setViewMode('hidden')} className="p-2 hover:bg-white/5 rounded-lg text-muted-foreground hover:text-foreground" title={t('common.close')}>
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -274,17 +277,17 @@ function ChatFull() {
                                 <div className="h-[50vh] flex flex-col items-center justify-center text-center">
                                     <HaiLogoBanner size="xl" showText={false} className="mb-6" />
                                     <h1 className="text-5xl font-bold text-white mb-6 shadow-xl">
-                                        Moin! Ich bin HAI.
+                                        {t('hai.welcome.greeting')}
                                     </h1>
                                     <p className="text-gray-200 max-w-lg mb-10 text-xl font-medium leading-relaxed">
-                                        Dein KI-Lerncoach für die IT-Ausbildung.
+                                        {t('hai.welcome.description')}
                                     </p>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-3xl">
-                                        <SuggestionCard icon="🧠" title="Quiz starten" desc="Teste dein Wissen" onClick={() => setInputValue('/quiz ')} />
-                                        <SuggestionCard icon="📝" title="Zusammenfassen" desc="Erstelle eine Übersicht" onClick={() => setInputValue('Fasse zusammen: ')} />
-                                        <SuggestionCard icon="💻" title="Code erklären" desc="Verstehe Snippets" onClick={() => setInputValue('Erkläre diesen Code: ')} />
-                                        <SuggestionCard icon="🎓" title="Prüfungstipps" desc="IHK-Vorbereitung" onClick={() => setInputValue('Gib mir Prüfungstipps')} />
+                                        <SuggestionCard icon="🧠" title={t('hai.suggestions.quiz')} desc={t('hai.suggestions.quizDesc')} onClick={() => setInputValue('/quiz ')} />
+                                        <SuggestionCard icon="📝" title={t('hai.suggestions.summarize')} desc={t('hai.suggestions.summarizeDesc')} onClick={() => setInputValue(t('hai.suggestions.summarizePrompt'))} />
+                                        <SuggestionCard icon="💻" title={t('hai.suggestions.explainCode')} desc={t('hai.suggestions.explainCodeDesc')} onClick={() => setInputValue(t('hai.suggestions.explainCodePrompt'))} />
+                                        <SuggestionCard icon="🎓" title={t('hai.suggestions.examTips')} desc={t('hai.suggestions.examTipsDesc')} onClick={() => setInputValue(t('hai.suggestions.examTipsPrompt'))} />
                                     </div>
                                 </div>
                             ) : (
@@ -320,7 +323,7 @@ function ChatFull() {
                                             handleSend();
                                         }
                                     }}
-                                    placeholder="Frag HAI..."
+                                    placeholder={t('hai.askPlaceholder')}
                                     className="
                      w-full bg-transparent border-none
                      text-xl text-white px-6 py-5 pr-14
@@ -345,7 +348,7 @@ function ChatFull() {
                                 </button>
                             </div>
                             <p className="text-center text-xs text-gray-500 mt-3">
-                                HAI kann Fehler machen. Überprüfe wichtige Fakten.
+                                {t('hai.disclaimer')}
                             </p>
                         </div>
                     </div>
@@ -361,14 +364,15 @@ function ChatFull() {
 // ============================================================================
 
 function EmptyState() {
+    const { t } = useLanguage();
     return (
         <div className="flex flex-col items-center justify-center h-[300px] text-center opacity-80">
             <HaiLogoBanner size="xl" showText={false} hideSpeechBubble={true} className="mb-4" />
             <p className="text-base font-medium text-gray-300">
-                HAI bereit.
+                {t('hai.ready')}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-                Stelle eine Frage um zu beginnen.
+                {t('hai.askToStart')}
             </p>
         </div>
     );

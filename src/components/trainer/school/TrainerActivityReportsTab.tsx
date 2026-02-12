@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     ClipboardCheck,
     Check,
@@ -39,6 +40,7 @@ const STATUS_CONFIG = {
 
 export function TrainerActivityReportsTab() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,7 @@ export function TrainerActivityReportsTab() {
                     setReports(data.reports || []);
                 }
             } catch (e) {
-                setError('Fehler beim Laden der Berichte');
+                setError(t('reports.error.loadData'));
             } finally {
                 setLoading(false);
             }
@@ -80,7 +82,7 @@ export function TrainerActivityReportsTab() {
                 setSelectedReport(null);
             }
         } catch (e) {
-            setError('Fehler beim Verarbeiten');
+            setError(t('reports.error.processing'));
         }
     };
 
@@ -117,8 +119,8 @@ export function TrainerActivityReportsTab() {
             ) : reports.length === 0 ? (
                 <div className="text-center py-16">
                     <ClipboardCheck className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-bold text-foreground mb-2">Keine Nachweise</h3>
-                    <p className="text-muted-foreground">Keine Tätigkeitsnachweise mit diesem Status gefunden.</p>
+                    <h3 className="text-lg font-bold text-foreground mb-2">{t('reports.noReports')}</h3>
+                    <p className="text-muted-foreground">{t('reports.noReportsWithStatus')}</p>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -197,6 +199,10 @@ export function TrainerActivityReportsTab() {
     );
 }
 
+import { GradeInputSection } from '@/components/trainer/arbeitszeugnis';
+
+// ... existing imports
+
 function ReviewModal({ report, onClose, onReview }: {
     report: Report;
     onClose: () => void;
@@ -204,6 +210,38 @@ function ReviewModal({ report, onClose, onReview }: {
 }) {
     const [feedback, setFeedback] = useState('');
     const [action, setAction] = useState<'approve' | 'reject' | null>(null);
+    const [entries, setEntries] = useState<any[]>([]);
+    const [loadingEntries, setLoadingEntries] = useState(false);
+
+    useEffect(() => {
+        async function fetchEntries() {
+            setLoadingEntries(true);
+            try {
+                const res = await fetch(`/api/trainer/arbeitszeugnis/grade?reportId=${report.id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setEntries(data.entries.map((e: any) => ({
+                        entryId: e.id,
+                        useCaseLetter: e.useCaseLetter || '',
+                        useCaseDescription: e.useCaseDescription || 'Keine Beschreibung verfügbar',
+                        actualHours: e.actualHours,
+                        currentGrade: e.trainerGrade,
+                        comment: e.gradeComment
+                    })));
+                }
+            } catch (error) {
+                console.error('Error fetching entries for grading:', error);
+            } finally {
+                setLoadingEntries(false);
+            }
+        }
+
+        // Only fetch if we are in a state where grading makes sense (e.g. approving)
+        // Or just always fetch to show current grades.
+        if (report.status !== 'REJECTED') {
+            fetchEntries();
+        }
+    }, [report.id, report.status]);
 
     const handleSubmit = () => {
         if (!action) return;
@@ -214,10 +252,15 @@ function ReviewModal({ report, onClose, onReview }: {
         onReview(report.id, action, feedback || undefined);
     };
 
+    // Helper to refresh entries after save
+    const handleGradesSaved = () => {
+        // Optionally refetch or just show success
+    };
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-2xl overflow-hidden">
-                <div className="p-6 border-b border-border">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+            <div className="w-full max-w-2xl rounded-2xl bg-card border border-border shadow-2xl overflow-hidden my-8">
+                <div className="p-6 border-b border-border sticky top-0 bg-card z-10">
                     <div className="flex items-center justify-between">
                         <div>
                             <h3 className="text-lg font-bold">Tätigkeitsnachweis prüfen</h3>
@@ -229,7 +272,7 @@ function ReviewModal({ report, onClose, onReview }: {
                     </div>
                 </div>
 
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-6">
                     <div className="grid grid-cols-3 gap-3 text-center">
                         <div className="p-3 rounded-xl bg-green-500/10">
                             <p className="text-lg font-bold text-green-600">{report.betrieblicheStunden}h</p>
@@ -244,6 +287,21 @@ function ReviewModal({ report, onClose, onReview }: {
                             <p className="text-xs text-muted-foreground">Berufsschule</p>
                         </div>
                     </div>
+
+                    {/* Grade Input Section */}
+                    <div className="border-t border-border pt-6">
+                        {loadingEntries ? (
+                            <div className="py-4 text-center text-muted-foreground">Lade Einträge zur Bewertung...</div>
+                        ) : (
+                            <GradeInputSection
+                                reportId={report.id}
+                                entries={entries}
+                                onGradesSaved={handleGradesSaved}
+                                isReadOnly={report.status === 'APPROVED' || report.status === 'REJECTED'} // Or logic based on permissions
+                            />
+                        )}
+                    </div>
+
 
                     <div>
                         <label className="block text-sm font-medium mb-2">Feedback (erforderlich bei Ablehnung)</label>

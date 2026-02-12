@@ -5,7 +5,6 @@ import {
   profiles,
   courses,
   quizSubmissions,
-  reflections,
   useCaseSubmissions,
   activityLog,
   enablers,
@@ -107,7 +106,6 @@ export async function GET(req: NextRequest) {
     // Pending reviews
     let pendingReviews = 0;
     let pendingQuizzes = 0;
-    let pendingReflections = 0;
     let pendingUseCases = 0;
 
     // Count all pending reviews (not just from assigned trainees)
@@ -117,19 +115,13 @@ export async function GET(req: NextRequest) {
       .where(eq(quizSubmissions.isReviewed, false));
     pendingQuizzes = Number(pq);
 
-    const [{ c: pr = 0 } = { c: 0 }] = await db
-      .select({ c: count() })
-      .from(reflections)
-      .where(eq(reflections.isReviewed, false));
-    pendingReflections = Number(pr);
-
     const [{ c: pu = 0 } = { c: 0 }] = await db
       .select({ c: count() })
       .from(useCaseSubmissions)
       .where(eq(useCaseSubmissions.status, 'PENDING'));
     pendingUseCases = Number(pu);
 
-    pendingReviews = pendingQuizzes + pendingReflections + pendingUseCases;
+    pendingReviews = pendingQuizzes + pendingUseCases;
 
     // Recent activity from activity_log (last 7 days)
     const lastWeek = new Date();
@@ -193,27 +185,6 @@ export async function GET(req: NextRequest) {
         });
       });
 
-      // Get recent reflections
-      const refSubs = await db
-        .select({
-          id: reflections.id,
-          traineeId: reflections.traineeId,
-          createdAt: reflections.createdAt,
-        })
-        .from(reflections)
-        .orderBy(desc(reflections.createdAt))
-        .limit(5);
-
-      refSubs.forEach(r => {
-        recentSubmissions.push({
-          id: r.id,
-          userFullName: userMap.get(r.traineeId) || 'Azubi',
-          activityType: 'REFLECTION_SUBMITTED',
-          createdAt: r.createdAt,
-          details: 'Reflexion eingereicht',
-        });
-      });
-
       // Get recent use case submissions
       const ucSubs = await db
         .select({
@@ -261,7 +232,6 @@ export async function GET(req: NextRequest) {
         totalLernfelder: Number(totalLernfelder) || 0,
         pendingReviews,
         pendingQuizzes,
-        pendingReflections,
         pendingUseCases,
         recentActivity7d: recentCount7d,
       },
@@ -282,7 +252,6 @@ function getActivityDescription(activityType: string): string {
     'QUIZ_COMPLETED': 'Quiz abgeschlossen',
     'LESSON_STARTED': 'Lektion gestartet',
     'LESSON_COMPLETED': 'Lektion abgeschlossen',
-    'REFLECTION_SUBMITTED': 'Reflexion eingereicht',
     'USECASE_STARTED': 'Use Case gestartet',
     'USECASE_SUBMITTED': 'Use Case abgegeben',
     'COURSE_STARTED': 'Kurs gestartet',

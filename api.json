@@ -269,23 +269,6 @@
         "responses": { "200": { "description": "Updated" } }
       }
     },
-    "/api/trainer/reflections": {
-      "get": {
-        "tags": ["Trainer"],
-        "summary": "List trainee reflections for trainer",
-        "parameters": [{ "in": "query", "name": "trainerProfileId", "schema": { "type": "string" } }],
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/api/trainer/reflections/{reflectionId}": {
-      "patch": {
-        "tags": ["Trainer"],
-        "summary": "Review/update reflection",
-        "parameters": [{ "in": "path", "name": "reflectionId", "required": true, "schema": { "type": "string" } }],
-        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
-        "responses": { "200": { "description": "Updated" } }
-      }
-    },
     "/api/trainer/reviews": {
       "get": {
         "tags": ["Trainer"],
@@ -483,25 +466,6 @@
         "tags": ["Trainee"],
         "summary": "List available quizzes",
         "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/api/trainee/reflection": {
-      "get": {
-        "tags": ["Trainee"],
-        "summary": "Get trainee reflection",
-        "responses": { "200": { "description": "OK" } }
-      },
-      "post": {
-        "tags": ["Trainee"],
-        "summary": "Create reflection",
-        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
-        "responses": { "201": { "description": "Created" } }
-      },
-      "put": {
-        "tags": ["Trainee"],
-        "summary": "Update reflection",
-        "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } },
-        "responses": { "200": { "description": "Updated" } }
       }
     },
     "/api/trainee/feedback": {

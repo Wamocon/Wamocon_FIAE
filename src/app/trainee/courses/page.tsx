@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { BookOpen, ArrowRight, Play, CheckCircle2 } from 'lucide-react';
 
 type CourseItem = {
@@ -17,6 +18,7 @@ type CourseItem = {
 
 export default function TraineeCoursesPage() {
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<CourseItem[]>([]);
@@ -28,11 +30,11 @@ export default function TraineeCoursesPage() {
       setError(null);
       try {
         const r = await fetch(`/api/trainee/courses?traineeId=${profile.id}`, { cache: 'no-store' });
-        if (!r.ok) throw new Error('Kurse konnten nicht geladen werden');
+        if (!r.ok) throw new Error(t('courses.loadError'));
         const data = await r.json();
         setCourses(data.courses || []);
       } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : 'Unbekannter Fehler';
+        const message = e instanceof Error ? e.message : t('error.unknown');
         setError(message);
       } finally {
         setLoading(false);
@@ -45,7 +47,7 @@ export default function TraineeCoursesPage() {
     return (
       <div className="mx-auto max-w-7xl space-y-8 p-6">
         <div className="glass-effect rounded-3xl border border-destructive/30 p-8 shadow-lg">
-          <h1 className="text-foreground text-2xl font-bold">Bitte anmelden…</h1>
+          <h1 className="text-foreground text-2xl font-bold">{t('courses.loginPrompt')}</h1>
         </div>
       </div>
     );
@@ -57,7 +59,7 @@ export default function TraineeCoursesPage() {
         <div className="glass-effect rounded-3xl border border-accent/30 p-8 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-accent border-t-transparent"></div>
-            <h1 className="text-foreground text-2xl font-bold">Lade Kurse…</h1>
+            <h1 className="text-foreground text-2xl font-bold">{t('courses.loading')}</h1>
           </div>
         </div>
       </div>
@@ -83,8 +85,8 @@ export default function TraineeCoursesPage() {
             <BookOpen className="h-8 w-8 text-foreground" />
           </div>
           <div>
-            <h1 className="text-foreground mb-1 text-3xl font-bold">Meine Kurse</h1>
-            <p className="text-muted">Wähle einen Kurs um fortzufahren</p>
+            <h1 className="text-foreground mb-1 text-3xl font-bold">{t('courses.title')}</h1>
+            <p className="text-muted">{t('courses.description')}</p>
           </div>
         </div>
       </div>
@@ -93,7 +95,7 @@ export default function TraineeCoursesPage() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {courses.length === 0 ? (
           <div className="glass-effect col-span-full rounded-3xl border border-accent/30 p-8 shadow-lg">
-            <div className="text-muted-foreground text-center">Keine Kurse zugewiesen.</div>
+            <div className="text-muted-foreground text-center">{t('courses.none')}</div>
           </div>
         ) : (
           courses.map((c) => (
@@ -108,7 +110,7 @@ export default function TraineeCoursesPage() {
                   {c.title}
                 </h3>
                 <div className="text-sm text-muted-foreground">
-                  {c.year ? `Jahr ${c.year}` : '—'} {c.chapter ? `• Kapitel ${c.chapter}` : ''}
+                  {c.year ? t('courses.year').replace('{year}', String(c.year)) : '—'} {c.chapter ? `• ${t('courses.chapter').replace('{chapter}', String(c.chapter))}` : ''}
                 </div>
               </div>
 
@@ -116,7 +118,7 @@ export default function TraineeCoursesPage() {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-muted-foreground">
-                    {c.completedCount} von {c.enablerCount} Enabler abgeschlossen
+                    {t('courses.completed').replace('{completed}', String(c.completedCount)).replace('{total}', String(c.enablerCount))}
                   </span>
                   <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-bold ${c.progress === 100
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
@@ -148,17 +150,17 @@ export default function TraineeCoursesPage() {
                   {c.progress === 100 ? (
                     <>
                       <CheckCircle2 className="h-4 w-4" />
-                      Abgeschlossen
+                      {t('status.completed')}
                     </>
                   ) : c.progress > 0 ? (
                     <>
                       <Play className="h-4 w-4" />
-                      Weiter lernen
+                      {t('courses.continue')}
                     </>
                   ) : (
                     <>
                       <Play className="h-4 w-4" />
-                      Starten
+                      {t('courses.start')}
                     </>
                   )}
                 </div>

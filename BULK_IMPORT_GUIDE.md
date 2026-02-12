@@ -235,3 +235,131 @@ If you encounter issues:
 ---
 
 **Last Updated**: November 27, 2025
+
+---
+
+## 📄 Use Case PDF Bulk Import
+
+A separate script is available for importing Use Case PDF documents with role-based visibility (trainee vs trainer) and automatic HAI indexing.
+
+### Overview
+
+The `bulk-import-use-case-pdfs.ts` script:
+- Scans a folder structure for PDF files
+- Uploads to Supabase Storage
+- Creates `contentDocuments` records with proper visibility
+- Triggers HAI ingestion for TRAINER_SOLUTION documents (for RAG)
+
+### Expected Folder Structure
+
+```
+use_cases_import/
+├── K1_Use-Cases/          (Kapitel 1)
+│   ├── 1a/                (Use Case identifier)
+│   │   ├── Example_Use-Case_1a.pdf           → TRAINER_SOLUTION (full)
+│   │   └── Example_Use-Case_1a_Fragen.pdf    → TRAINEE_QUESTION
+│   └── 1b/
+│       └── ...
+├── K2_Use-Cases/
+│   └── ...
+└── ...
+```
+
+**Naming Convention:**
+- `*_Fragen.pdf` → **TRAINEE_QUESTION** (visible to trainees)
+- All other PDFs → **TRAINER_SOLUTION** (trainer only, indexed by HAI)
+
+### Usage Commands
+
+```bash
+# Dry run (preview changes without modifying anything)
+npm run import:use-cases:dry-run
+
+# Full import with HAI indexing
+npm run import:use-cases
+
+# Quick import (skip HAI indexing - can index later)
+npm run import:use-cases:quick
+```
+
+### Configuration
+
+Edit `scripts/bulk-import-use-case-pdfs.ts` to customize:
+
+```typescript
+const CONFIG = {
+    importFolder: './use_cases_import',     // Source folder
+    componentFolderPattern: /^K(\d+)_Use-Cases$/i,  // K1, K2 pattern
+    useCaseFolderPattern: /^(\d+)([a-z])$/i,        // 1a, 1b pattern
+    questionSuffix: '_Fragen.pdf',          // Question PDF suffix
+    storageBucket: 'content',               // Supabase bucket
+    storagePrefix: 'use-cases',             // Storage path prefix
+    enableHaiIngestion: true,               // Enable RAG indexing
+};
+```
+
+### How It Works
+
+1. **Folder Scanning**: Identifies PDFs by folder hierarchy (K1→1a→files)
+2. **Use Case Matching**: Matches to existing `useCases` by chapter/orderIndex or creates new ones
+3. **Storage Upload**: Uploads to Supabase Storage with deduplication
+4. **Document Records**: Creates `contentDocuments` with:
+   - `documentType`: TRAINEE_QUESTION or TRAINER_SOLUTION
+   - `visibility`: ALL (questions) or TRAINER_ONLY (solutions)
+5. **HAI Indexing**: For TRAINER_SOLUTION, extracts text page-by-page and creates embeddings
+
+### Role-Based Visibility
+
+| Document Type | Trainee Visible | Trainer Visible | HAI Indexed |
+|--------------|-----------------|-----------------|-------------|
+| TRAINEE_QUESTION | ✅ | ✅ | ❌ |
+| TRAINER_SOLUTION | ❌ | ✅ | ✅ |
+
+### Mapping to Courses
+
+The script maps folders to courses by:
+1. **K{n}** → `courses.chapter = n` (e.g., K1 → chapter 1)
+2. Falls back to title matching: `%Kapitel {n}%`
+3. Creates new use cases if not found
+
+### Output Example
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║       BULK USE CASE PDF IMPORTER                                 ║
+╚══════════════════════════════════════════════════════════════════╝
+
+📁 Scanning folder: D:\project\use_cases_import
+
+  📂 K1_Use-Cases (Component: K1)
+     └─ 1a: 2 PDF(s)
+     └─ 1b: 2 PDF(s)
+
+📊 Found 4 PDF files to import
+
+📁 Processing K1/1a (2 files)
+   📋 Use Case: Use Case 1a (uuid-123)
+   📄 Example_Use-Case_1a.pdf (TRAINER_SOLUTION)
+      ✅ Uploaded successfully
+      🤖 HAI indexed: 15 chunks, 5 pages
+   📄 Example_Use-Case_1a_Fragen.pdf (TRAINEE_QUESTION)
+      ✅ Uploaded successfully
+
+═══════════════════════════════════════════════════════════════════
+IMPORT SUMMARY
+═══════════════════════════════════════════════════════════════════
+Total files scanned: 4
+Successfully uploaded: 4
+Failed: 0
+HAI indexed: 2
+═══════════════════════════════════════════════════════════════════
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "No course found for chapter N" | Create course with `chapter = N` or matching title |
+| Storage upload failed | Check SUPABASE_SERVICE_ROLE_KEY |
+| HAI ingestion failed | Verify GEMINI_API_KEY and hai_embeddings table exists |
+| Missing trainer | Add TRAINER role user or set CONFIG.defaultTrainerId |

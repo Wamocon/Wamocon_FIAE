@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
     Calendar,
@@ -25,45 +26,41 @@ type TabId = 'lernfelder' | 'calendar' | 'exams' | 'notes' | 'reports';
 
 interface TabConfig {
     id: TabId;
-    label: string;
-    labelDe: string;
+    labelKey: string;
+    descKey: string;
     icon: React.ComponentType<{ className?: string }>;
-    description: string;
 }
 
 const TABS: TabConfig[] = [
     {
         id: 'lernfelder',
-        label: 'Lernfelder',
-        labelDe: 'Lernfelder',
+        labelKey: 'school.tabs.lernfelder',
+        descKey: 'school.tabs.lernfelderDesc',
         icon: Layers,
-        description: 'Deine Lernfelder und Aufgaben',
     },
     {
         id: 'calendar',
-        label: 'Block Calendar',
-        labelDe: 'Blockkalender',
+        labelKey: 'school.tabs.calendar',
+        descKey: 'school.tabs.calendarDesc',
         icon: Calendar,
-        description: 'Schul- und Betriebsblöcke verwalten',
     },
     {
         id: 'exams',
-        label: 'Exams',
-        labelDe: 'Prüfungen',
+        labelKey: 'school.tabs.exams',
+        descKey: 'school.tabs.examsDesc',
         icon: FileText,
-        description: 'Prüfungstermine und Details',
     },
     {
         id: 'notes',
-        label: 'Lernfeld Notes',
-        labelDe: 'Lernfeld-Notizen',
+        labelKey: 'school.tabs.notes',
+        descKey: 'school.tabs.notesDesc',
         icon: BookOpen,
-        description: 'Notizen nach Lernfeldern organisiert',
     },
 ];
 
 export function SchoolView() {
     const { profile } = useAuth();
+    const { t } = useLanguage();
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -141,14 +138,14 @@ export function SchoolView() {
     };
 
     return (
-        <div className="min-h-screen p-4 md:p-6 lg:p-8">
+        <div className="min-h-full p-4 md:p-6 lg:p-8">
             {/* Header */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-foreground md:text-3xl">
-                    Berufsschule
+                    {t('school.title')}
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                    Verwalte deine Ausbildung: Stundenplan, Prüfungen und Tätigkeitsnachweise
+                    {t('school.description')}
                 </p>
             </div>
 
@@ -160,7 +157,7 @@ export function SchoolView() {
                             <FileText className="h-5 w-5 text-accent" />
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground">Anstehende Prüfungen</p>
+                            <p className="text-xs text-muted-foreground">{t('school.stats.upcomingExams')}</p>
                             <p className="text-xl font-bold text-foreground">
                                 {loading ? '...' : stats.upcomingExams}
                             </p>
@@ -174,7 +171,7 @@ export function SchoolView() {
                             <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground">Offene Nachweise</p>
+                            <p className="text-xs text-muted-foreground">{t('school.stats.pendingReports')}</p>
                             <p className="text-xl font-bold text-foreground">
                                 {loading ? '...' : stats.pendingReports}
                             </p>
@@ -188,7 +185,7 @@ export function SchoolView() {
                             <Calendar className="h-5 w-5 text-green-600 dark:text-green-400" />
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground">Aktueller Block</p>
+                            <p className="text-xs text-muted-foreground">{t('school.stats.currentBlock')}</p>
                             <p className="text-lg font-bold text-foreground">
                                 {loading ? '...' : stats.currentBlock || 'WMC'}
                             </p>
@@ -218,8 +215,7 @@ export function SchoolView() {
                                 `}
                             >
                                 <Icon className={`h-4 w-4 ${isActive ? 'text-primary-foreground' : ''}`} />
-                                <span className="hidden sm:inline">{tab.labelDe}</span>
-                                <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+                                <span>{t(tab.labelKey)}</span>
                             </button>
                         );
                     })}
