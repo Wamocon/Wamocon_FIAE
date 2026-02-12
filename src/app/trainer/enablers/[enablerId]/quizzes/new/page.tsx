@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEffect, useState } from 'react';
@@ -117,8 +118,8 @@ export default function NewEnablerQuizPage() {
         <div className="flex justify-end gap-2">
           <button className="rounded-md border border-accent/30 px-4 py-2" type="button" onClick={() => router.back()}>{t('enablerQuiz.cancel')}</button>
           <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60" disabled={submitting} onClick={async () => {
-            if (!profile?.id) { alert(t('enablerQuiz.noTrainerProfile')); return; }
-            if (!title.trim()) { alert(t('enablerQuiz.titleRequired')); return; }
+            if (!profile?.id) { toast.error(t('enablerQuiz.noTrainerProfile')); return; }
+            if (!title.trim()) { toast.error(t('enablerQuiz.titleRequired')); return; }
             const cleaned = questions
               .map(q => q.questionType === 'TEXT'
                 ? ({ questionText: q.questionText.trim(), questionType: 'TEXT', expectedAnswer: (q.expectedAnswer || '').trim() })
@@ -135,7 +136,7 @@ export default function NewEnablerQuizPage() {
               if (!r.ok) throw new Error(t('enablerQuiz.saveFailed'));
               router.back();
             } catch (e: any) {
-              alert(e?.message || t('error.unknown'));
+              toast.error(e?.message || t('error.unknown'));
             } finally {
               setSubmitting(false);
             }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import toast from 'react-hot-toast';
 import { User, Edit3, Award, Clock, Target, TrendingUp, Users, Upload, Lock, BookOpen, FileText, Layers, CheckCircle, GraduationCap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { FILE_UPLOAD } from '@/lib/constants';
@@ -148,16 +149,16 @@ export function Profile() {
 
   const handleAvatarUpload = async (file: File) => {
     if (!profile) {
-      alert(t('profile.notLoggedIn'));
+      toast.error(t('profile.notLoggedIn'));
       return;
     }
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (!ext || !FILE_UPLOAD.allowedTypes.includes(ext)) {
-      alert(`${t('profile.invalidFileType')} ${FILE_UPLOAD.allowedTypes.join(', ')}`);
+      toast.error(`${t('profile.invalidFileType')} ${FILE_UPLOAD.allowedTypes.join(', ')}`);
       return;
     }
     if (file.size > FILE_UPLOAD.maxSize) {
-      alert(t('profile.fileTooLarge'));
+      toast.error(t('profile.fileTooLarge'));
       return;
     }
 
@@ -182,7 +183,7 @@ export function Profile() {
       const hint = msg.toLowerCase().includes('not found')
         ? t('profile.storageBucketHint')
         : '';
-      alert(`${t('profile.uploadFailed')}\n\n${t('profile.uploadError')} ${msg}${hint}`);
+      toast.error(`${t('profile.uploadFailed')} ${msg}${hint}`);
     } finally {
       setIsUploading(false);
     }

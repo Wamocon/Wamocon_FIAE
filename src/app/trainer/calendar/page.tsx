@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
@@ -455,7 +456,7 @@ function TrainerAddBlockModal({
         e.preventDefault();
         if (!startDate || !endDate) return;
         if (selectedTraineeIds.length === 0) {
-            alert(t('trainer.calendar.modal.selectAtLeastOne'));
+            toast.error(t('trainer.calendar.modal.selectAtLeastOne'));
             return;
         }
 
