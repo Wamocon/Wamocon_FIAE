@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import toast from 'react-hot-toast';
 import {
   FileCheck2,
   TrendingUp,
@@ -140,7 +141,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       URL.revokeObjectURL(url);
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || t('trainee.detail.exportError'));
+      toast.error(e?.message || t('trainee.detail.exportError'));
     } finally {
       setExporting(false);
     }
@@ -161,7 +162,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       }
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || t('trainee.detail.shareError'));
+      toast.error(e?.message || t('trainee.detail.shareError'));
     } finally {
       setExporting(false);
     }

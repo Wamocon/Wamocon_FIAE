@@ -33,7 +33,10 @@ function getDb(): ReturnType<typeof drizzle> {
     postgres(process.env.DB_CONNECTION_STRING, {
       max: 5, // keep small for local/dev; adjust if needed
       idle_timeout: 30, // seconds before idle connections are closed
+      connect_timeout: 30, // 30 seconds connection timeout
       ssl: needsTls ? 'require' : undefined,
+      // Retry on connection failures
+      onnotice: () => {}, // suppress notices
     });
 
   const db = drizzle(client);

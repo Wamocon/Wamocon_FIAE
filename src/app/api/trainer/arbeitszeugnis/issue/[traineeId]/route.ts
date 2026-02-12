@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
 import db from '@/db';
 import {
     workCertificates,
@@ -32,14 +31,12 @@ export async function POST(
     { params }: { params: Promise<{ traineeId: string }> }
 ) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { traineeId } = await params;
+        
+        if (!traineeId) {
+            return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
         }
 
-        const { traineeId } = await params;
         const body = await request.json();
         const {
             ausbildungsjahr = 1,
@@ -48,7 +45,8 @@ export async function POST(
             gender = 'neutral',
             radarImage,
             startDate,
-            endDate
+            endDate,
+            trainerId
         } = body;
 
         // Get trainee info
@@ -213,7 +211,7 @@ export async function POST(
                 qrVerificationUrl,
                 gender,
                 status: 'ISSUED',
-                approvedByTrainerId: user.id,
+                approvedByTrainerId: trainerId || null,
                 approvedAt: new Date(),
                 isLocked: true,
                 lockedAt: new Date(),

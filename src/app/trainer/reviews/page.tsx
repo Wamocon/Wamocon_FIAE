@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { CheckCircle2, Circle, BookOpen, FileText, HelpCircle, Eye } from 'lucide-react';
@@ -150,7 +151,7 @@ export default function TrainerReviewsPage() {
       : { status, trainerFeedback: feedback };
     const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok) {
-      alert(t('trainer.reviews.saveError'));
+      toast.error(t('trainer.reviews.saveError'));
       return;
     }
     // Refresh the list with same filter

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
@@ -246,7 +247,7 @@ function ReviewModal({ report, onClose, onReview }: {
     const handleSubmit = () => {
         if (!action) return;
         if (action === 'reject' && !feedback.trim()) {
-            alert('Bitte geben Sie einen Grund für die Ablehnung an.');
+            toast.error('Bitte geben Sie einen Grund für die Ablehnung an.');
             return;
         }
         onReview(report.id, action, feedback || undefined);

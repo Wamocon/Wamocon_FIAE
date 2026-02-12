@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
@@ -264,7 +265,7 @@ export function ContentManagement() {
                       if (!res.ok) throw new Error(t('content.error.delete'));
                       setCourses(prev => prev.filter(c => c.id !== course.id));
                     } catch (e: any) {
-                      alert(e?.message || t('content.unknownError'));
+                      toast.error(e?.message || t('content.unknownError'));
                     }
                   }}
                   className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
@@ -310,7 +311,7 @@ export function ContentManagement() {
                         if (!res.ok) throw new Error(t('content.error.delete'));
                         setCourses(prev => prev.filter(c => c.id !== course.id));
                       } catch (e: any) {
-                        alert(e?.message || t('content.unknownError'));
+                        toast.error(e?.message || t('content.unknownError'));
                       }
                     }}
                     className="text-muted rounded-xl p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
@@ -446,9 +447,9 @@ export function ContentManagement() {
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-border px-4 py-2" type="button" onClick={() => !enSubmitting && setShowAddEnabler(false)}>{t('common.cancel')}</button>
                 <button className="rounded-md bg-primary px-4 py-2 text-foreground disabled:opacity-60" disabled={enSubmitting} onClick={async () => {
-                  if (!profile?.id) { alert(t('content.noTrainerProfile')); return; }
-                  if (!activeCourseId) { alert(t('content.noCourseSelected')); return; }
-                  if (!enTitle.trim()) { alert(t('content.enterTitle')); return; }
+                  if (!profile?.id) { toast.error(t('content.noTrainerProfile')); return; }
+                  if (!activeCourseId) { toast.error(t('content.noCourseSelected')); return; }
+                  if (!enTitle.trim()) { toast.error(t('content.enterTitle')); return; }
                   const cleaned = enQuestions
                     .map(q => ({ questionText: q.questionText.trim(), options: q.options.map(o => o.trim()) as [string, string, string, string], correctIndex: Number(q.correctIndex) }))
                     .filter(q => q.questionText && q.options.every(o => o));
@@ -476,7 +477,7 @@ export function ContentManagement() {
                     setActiveCourseId(null);
                     setEnTitle(''); setEnDescription(''); setEnScenario(''); setEnHint(''); setEnPpt(''); setEnVideo(''); setEnDuration(''); setEnActive(false); setEnQuestions([{ questionText: '', options: ['', '', '', ''], correctIndex: 0 }]);
                   } catch (e: any) {
-                    alert(e?.message || t('content.unknownError'));
+                    toast.error(e?.message || t('content.unknownError'));
                   } finally {
                     setEnSubmitting(false);
                   }
@@ -520,10 +521,10 @@ export function ContentManagement() {
               <div className="flex justify-end gap-2">
                 <button className="rounded-md border border-border px-4 py-2" type="button" onClick={() => !ucSubmitting && setShowAddUseCase(false)}>{t('common.cancel')}</button>
                 <button className="rounded-md bg-primary px-4 py-2 text-foreground disabled:opacity-60" disabled={ucSubmitting} onClick={async () => {
-                  if (!profile?.id) { alert(t('content.noTrainerProfile')); return; }
-                  if (!activeCourseId) { alert(t('content.noCourseSelected')); return; }
-                  if (!ucTitle.trim()) { alert(t('content.enterTitle')); return; }
-                  if (!ucDesc.trim()) { alert(t('content.enterDescription')); return; }
+                  if (!profile?.id) { toast.error(t('content.noTrainerProfile')); return; }
+                  if (!activeCourseId) { toast.error(t('content.noCourseSelected')); return; }
+                  if (!ucTitle.trim()) { toast.error(t('content.enterTitle')); return; }
+                  if (!ucDesc.trim()) { toast.error(t('content.enterDescription')); return; }
                   setUcSubmitting(true);
                   try {
                     const res = await fetch(`/api/trainer/courses/${activeCourseId}/use-cases?trainerId=${profile.id}`, {
@@ -545,7 +546,7 @@ export function ContentManagement() {
                     setUcDuration('');
                     setUcActive(false);
                   } catch (e: any) {
-                    alert(e?.message || t('content.unknownError'));
+                    toast.error(e?.message || t('content.unknownError'));
                   } finally {
                     setUcSubmitting(false);
                   }
