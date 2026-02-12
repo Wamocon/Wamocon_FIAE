@@ -10,6 +10,7 @@ import {
   useRef,
 } from 'react';
 import { usePathname } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export interface BreadcrumbItem {
   label: string;
@@ -37,62 +38,74 @@ export function BreadcrumbProvider({
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
   const pathname = usePathname();
   const labelCache = useRef<Map<string, string>>(new Map());
+  const { t, language } = useLanguage();
 
   // Memoize breadcrumb building logic to prevent unnecessary recalculations
-  const buildBreadcrumbs = useCallback((path: string) => {
-    if (!path) return [];
+  const buildBreadcrumbs = useCallback(
+    (path: string) => {
+      if (!path) return [];
 
-    const pathSegments = path.split('/').filter(Boolean);
-    const newBreadcrumbs: BreadcrumbItem[] = [];
+      const pathSegments = path.split('/').filter(Boolean);
+      const newBreadcrumbs: BreadcrumbItem[] = [];
 
-    // Build breadcrumbs from path segments
-    let currentPath = '';
+      // Build breadcrumbs from path segments
+      let currentPath = '';
 
-    // Role-aware base breadcrumb
-    if (pathSegments[0] === 'trainee') {
-      newBreadcrumbs.push({ label: 'Trainee', href: '/trainee/dashboard' });
-    } else if (pathSegments[0] === 'trainer') {
-      newBreadcrumbs.push({ label: 'Trainer', href: '/trainer/dashboard' });
-    }
-
-    pathSegments.forEach((segment, index) => {
-      currentPath += `/${segment}`;
-
-      // Skip adding the role again since we already added it above
-      if (index === 0) return;
-
-      // Map segment to readable label
-      let label = segment;
-
-      // If it's a UUID-like segment, map it to a friendly static label based on its parent
-      const uuidLike = /^[0-9a-fA-F-]{32,36}$/.test(segment);
-      if (uuidLike) {
-        const prev = pathSegments[index - 1];
-        if (prev === 'modules') label = 'Modul';
-        else if (prev === 'lessons') label = 'Lektion';
-        else if (prev === 'quizzes') label = 'Quiz';
-        else label = 'Details';
+      // Role-aware base breadcrumb
+      if (pathSegments[0] === 'trainee') {
+        newBreadcrumbs.push({
+          label: t('breadcrumb.trainee'),
+          href: '/trainee/dashboard',
+        });
+      } else if (pathSegments[0] === 'trainer') {
+        newBreadcrumbs.push({
+          label: t('breadcrumb.trainer'),
+          href: '/trainer/dashboard',
+        });
       }
-      if (segment === 'dashboard') label = 'Dashboard';
-      else if (segment === 'profile') label = 'Profil';
-      else if (segment === 'modules') label = 'Module';
-      else if (segment === 'lessons') label = 'Trainer-Feedback';
-      else if (segment === 'quizzes') label = 'Quizze';
-      else if (segment === 'content-management') label = 'Inhalts-Management';
-      else if (segment === 'quiz-management') label = 'Quiz-Verwaltung';
-      else if (segment === 'trainees') label = 'Auszubildende';
-      else if (segment === 'analytics') label = 'Analysen';
-      else if (segment === 'login') label = 'Anmeldung';
-      else if (segment === 'school') label = 'Berufsschule';
 
-      // Capitalize first letter
-      label = label.charAt(0).toUpperCase() + label.slice(1);
+      pathSegments.forEach((segment, index) => {
+        currentPath += `/${segment}`;
 
-      newBreadcrumbs.push({ label, href: currentPath });
-    });
+        // Skip adding the role again since we already added it above
+        if (index === 0) return;
 
-    return newBreadcrumbs;
-  }, []);
+        // Map segment to readable label
+        let label = segment;
+
+        // If it's a UUID-like segment, map it to a friendly static label based on its parent
+        const uuidLike = /^[0-9a-fA-F-]{32,36}$/.test(segment);
+        if (uuidLike) {
+          const prev = pathSegments[index - 1];
+          if (prev === 'modules') label = t('breadcrumb.module');
+          else if (prev === 'lessons') label = t('breadcrumb.lesson');
+          else if (prev === 'quizzes') label = t('breadcrumb.quiz');
+          else label = t('breadcrumb.details');
+        }
+        if (segment === 'dashboard') label = t('breadcrumb.dashboard');
+        else if (segment === 'profile') label = t('breadcrumb.profile');
+        else if (segment === 'modules') label = t('breadcrumb.modules');
+        else if (segment === 'lessons') label = t('breadcrumb.trainerFeedback');
+        else if (segment === 'quizzes') label = t('breadcrumb.quizzes');
+        else if (segment === 'content-management')
+          label = t('breadcrumb.contentManagement');
+        else if (segment === 'quiz-management')
+          label = t('breadcrumb.quizManagement');
+        else if (segment === 'trainees') label = t('breadcrumb.trainees');
+        else if (segment === 'analytics') label = t('breadcrumb.analytics');
+        else if (segment === 'login') label = t('breadcrumb.login');
+        else if (segment === 'school') label = t('breadcrumb.school');
+
+        // Capitalize first letter
+        label = label.charAt(0).toUpperCase() + label.slice(1);
+
+        newBreadcrumbs.push({ label, href: currentPath });
+      });
+
+      return newBreadcrumbs;
+    },
+    [t]
+  );
 
   // Initialize breadcrumbs based on current path - optimized with useMemo
   useEffect(() => {
@@ -116,22 +129,32 @@ export function BreadcrumbProvider({
         else if (parent === 'lessons') entity = 'lesson';
         else if (parent === 'quizzes') entity = 'quiz';
         // sub-lesson nested under lessons/<lesson-id>/<sub-lesson-id>
-        else if (/^[0-9a-fA-F-]{32,36}$/.test(parent) && segments[index - 2] === 'lessons') entity = 'subLesson';
+        else if (
+          /^[0-9a-fA-F-]{32,36}$/.test(parent) &&
+          segments[index - 2] === 'lessons'
+        )
+          entity = 'subLesson';
         if (!entity) continue;
 
         const cacheKey = `${entity}:${segment}`;
         let label = labelCache.current.get(cacheKey);
         if (!label) {
           try {
-            const res = await fetch(`/api/breadcrumb/label?entity=${entity}&id=${segment}`);
+            const res = await fetch(
+              `/api/breadcrumb/label?entity=${entity}&id=${segment}`
+            );
             if (res.ok) {
               const data = await res.json();
               const name: string | undefined = data?.label;
               if (name) {
-                if (entity === 'module') label = `Modul: ${name}`;
-                else if (entity === 'lesson') label = `Lektion: ${name}`;
-                else if (entity === 'quiz') label = `Quiz: ${name}`;
-                else if (entity === 'subLesson') label = `Aufgabe: ${name}`;
+                if (entity === 'module')
+                  label = `${t('breadcrumb.module')}: ${name}`;
+                else if (entity === 'lesson')
+                  label = `${t('breadcrumb.lesson')}: ${name}`;
+                else if (entity === 'quiz')
+                  label = `${t('breadcrumb.quiz')}: ${name}`;
+                else if (entity === 'subLesson')
+                  label = `${t('breadcrumb.subLesson')}: ${name}`;
                 if (label) labelCache.current.set(cacheKey, label);
               }
             }
@@ -149,6 +172,10 @@ export function BreadcrumbProvider({
     };
     enhanceLabels();
   }, [pathname, buildBreadcrumbs]);
+
+  useEffect(() => {
+    labelCache.current.clear();
+  }, [language]);
 
   const addBreadcrumb = useCallback((item: BreadcrumbItem) => {
     setBreadcrumbs(prev => {
