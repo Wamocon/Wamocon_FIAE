@@ -25,6 +25,10 @@ const LanguageContext = createContext<LanguageContextType | undefined>(
 // German translations
 const translations = {
   de: {
+    // Sidebar
+    'sidebar.title': 'FIAE',
+    'sidebar.subtitle': 'Lernplattform',
+
     // Navigation
     'nav.dashboard': 'Dashboard',
     'nav.learningPath': 'Lernpfad',
@@ -1349,6 +1353,12 @@ const translations = {
     'register.passwordMinLength':
       'Passwort muss mindestens 6 Zeichen lang sein.',
     'register.failed': 'Registrierung fehlgeschlagen',
+    'register.trainerSuccess': 'Registrierung erfolgreich!',
+    'register.trainerSuccessMessage':
+      'Sie wurden als Trainer registriert. Sie können sich jetzt anmelden.',
+    'register.traineeSuccess': 'Registrierung erfolgreich!',
+    'register.traineeSuccessMessage':
+      'Ihre Registrierung wurde übermittelt und wartet auf die Freischaltung durch einen Trainer. Sie erhalten eine Benachrichtigung, sobald Ihr Konto aktiviert wurde.',
 
     // Reset Password Page
     'resetPassword.title': 'Neues Passwort setzen',
@@ -2854,6 +2864,12 @@ const translations = {
     'register.passwordMinLength':
       'Password must be at least 6 characters long.',
     'register.failed': 'Registration failed',
+    'register.trainerSuccess': 'Registration successful!',
+    'register.trainerSuccessMessage':
+      'You have been registered as a trainer. You can now log in.',
+    'register.traineeSuccess': 'Registration successful!',
+    'register.traineeSuccessMessage':
+      'Your registration has been submitted and is pending approval by a trainer. You will be notified once your account has been activated.',
 
     // Reset Password Page
     'resetPassword.title': 'Set New Password',
