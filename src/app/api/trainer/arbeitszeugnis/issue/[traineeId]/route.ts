@@ -169,7 +169,7 @@ export async function POST(
 
         // Generate verification code (URL-safe, 16 chars)
         const qrVerificationCode = randomBytes(12).toString('base64url').slice(0, 16);
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://wamocon.com';
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fiae-learn.com';
         const qrVerificationUrl = `${baseUrl}/verify/${qrVerificationCode}`;
 
         // Generate certificate text based on grades
