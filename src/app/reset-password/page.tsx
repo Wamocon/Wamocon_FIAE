@@ -6,8 +6,10 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Eye, EyeOff, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function ResetPasswordPage() {
+  const { t } = useLanguage();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [status, setStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error'; message?: string }>({ type: 'idle' });
@@ -67,22 +69,22 @@ export default function ResetPasswordPage() {
   const onSubmit = async (e: React.FormEvent) =>{
     e.preventDefault();
     if (password.length < 6) {
-      setStatus({ type: 'error', message: 'Passwort muss mindestens 6 Zeichen lang sein.' });
+      setStatus({ type: 'error', message: t('resetPassword.passwordMinLength') });
       return;
     }
     if (password !== confirm) {
-      setStatus({ type: 'error', message: 'Passwörter stimmen nicht überein.' });
+      setStatus({ type: 'error', message: t('resetPassword.passwordMismatch') });
       return;
     }
     setStatus({ type: 'loading' });
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      setStatus({ type: 'success', message: 'Passwort aktualisiert. Bitte melden Sie sich erneut an.' });
-      toast.success('Passwort erfolgreich aktualisiert. Bitte melden Sie sich erneut an.');
+      setStatus({ type: 'success', message: t('resetPassword.success') });
+      toast.success(t('resetPassword.successToast'));
       setTimeout(() => router.replace('/login'), 800);
     } catch (err: any) {
-      setStatus({ type: 'error', message: err?.message || 'Fehler beim Aktualisieren des Passworts.' });
+      setStatus({ type: 'error', message: err?.message || t('resetPassword.error') });
     }
   };
 
@@ -93,11 +95,11 @@ export default function ResetPasswordPage() {
         <ThemeToggle variant="icon" />
       </div>
       <div className="w-full max-w-md rounded-2xl border-2 border-accent/30 p-8 shadow-xl glass-effect-enhanced">
-        <h1 className="mb-2 text-2xl font-bold text-foreground">Neues Passwort setzen</h1>
-       
+        <h1 className="mb-2 text-2xl font-bold text-foreground">{t('resetPassword.title')}</h1>
+
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block text-sm">
-            Neues Passwort
+            {t('resetPassword.newPassword')}
             <div className="relative mt-1">
               <Lock className="text-muted absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
               <input
@@ -112,14 +114,14 @@ export default function ResetPasswordPage() {
                 type="button"
                 onClick={() => setShowPwd((s) => !s)}
                 className="text-muted hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2 p-1"
-                aria-label={showPwd ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                aria-label={showPwd ? t('resetPassword.hidePassword') : t('resetPassword.showPassword')}
               >
                 {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </label>
           <label className="block text-sm">
-            Passwort bestätigen
+            {t('resetPassword.confirmPassword')}
             <div className="relative mt-1">
               <Lock className="text-muted absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
               <input
@@ -134,7 +136,7 @@ export default function ResetPasswordPage() {
                 type="button"
                 onClick={() => setShowConfirm((s) => !s)}
                 className="text-muted hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2 p-1"
-                aria-label={showConfirm ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                aria-label={showConfirm ? t('resetPassword.hidePassword') : t('resetPassword.showPassword')}
               >
                 {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -145,7 +147,7 @@ export default function ResetPasswordPage() {
             disabled={!canSubmit}
             className="w-full rounded-xl bg-primary py-3 font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-primary/50"
           >
-            {status.type === 'loading' ? 'Speichern…' : 'Passwort ändern'}
+            {status.type === 'loading' ? t('resetPassword.saving') : t('resetPassword.changePassword')}
           </button>
         </form>
         {status.type === 'success' && (

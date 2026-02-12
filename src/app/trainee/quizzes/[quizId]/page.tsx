@@ -10,7 +10,7 @@ export default async function QuizPage({ params }: { params: Promise<{ quizId: s
   const [qz] = await db.select().from(quizzes).where(eq(quizzes.id, quizId as any)).limit(1);
   if (!qz) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground">Quiz nicht gefunden...</p>
         </div>

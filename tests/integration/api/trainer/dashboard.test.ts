@@ -33,15 +33,14 @@ describe('API: Trainer Dashboard', () => {
         // 9. memberQuizRows
         // 10. pendingQuiz
         // 11. pendingLessonQuiz
-        // 12. pendingRefl
-        // 13. pendingUseCases
-        // 14. pendingEnablers
-        // 15. recentReflections
-        // 16. compRows (trend)
-        // 17. subRows (trend)
-        // 18. trainerCourses (chart)
-        // 19. enablerCounts (chart)
-        // 20. compByCourseAndTrainee (chart)
+        // 12. pendingUseCases
+        // 13. pendingEnablers
+        // 14. pendingActivityReports
+        // 15. compRows (trend)
+        // 16. subRows (trend)
+        // 17. trainerCourses (chart)
+        // 18. enablerCounts (chart)
+        // 19. compByCourseAndTrainee (chart)
 
         const sequence: any[] = [
             // 1. createdCourses
@@ -70,26 +69,23 @@ describe('API: Trainer Dashboard', () => {
             [{ c: 1 }],
             // 11. pendingLessonQuiz
             [{ c: 0 }],
-            // 12. pendingRefl
+            // 12. pendingUseCases
             [{ c: 0 }],
-            // 13. pendingUseCases
+            // 13. pendingEnablers
             [{ c: 0 }],
-            // 14. pendingEnablers
+            // 14. pendingActivityReports
             [{ c: 0 }],
 
-            // 15. recentReflections
-            [{ c: 1 }],
-
-            // 16. compRows (trend)
+            // 15. compRows (trend)
             [{ at: new Date() }],
-            // 17. subRows (trend)
+            // 16. subRows (trend)
             [],
 
-            // 18. trainerCourses
+            // 17. trainerCourses
             [{ id: 'c1', title: 'Course 1' }],
-            // 19. enablerCounts
+            // 18. enablerCounts
             [{ courseId: 'c1', c: 2 }],
-            // 20. compByCourseAndTrainee
+            // 19. compByCourseAndTrainee
             [{ traineeId: 't1', courseId: 'c1', c: 1 }],
         ];
 

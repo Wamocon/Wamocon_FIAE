@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Users, Eye, MessageSquare, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,6 +10,7 @@ type TraineeItem = { id: string; full_name: string; avatar_url?: string | null; 
 
 export default function TrainerTraineesPage() {
   const { profile, user, loading } = useAuth() as any;
+  const { t } = useLanguage();
   const router = useRouter();
   const [trainees, setTrainees] = useState<TraineeItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +23,11 @@ export default function TrainerTraineesPage() {
         if (user.id) params.set('trainerAuthId', user.id);
         if (profile.id) params.set('trainerProfileId', profile.id);
         const res = await fetch(`/api/trainer/trainees?${params.toString()}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Konnte Auszubildende nicht laden');
+        if (!res.ok) throw new Error(t('trainee.management.loadError'));
         const data = await res.json();
         setTrainees(data.trainees || []);
       } catch (e: any) {
-        setError(e?.message || 'Unbekannter Fehler');
+        setError(e?.message || t('error.unknown'));
       }
     };
     if (profile?.role === 'trainer') load();
@@ -33,10 +35,10 @@ export default function TrainerTraineesPage() {
 
   if (loading) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Lade Auszubildende...</p>
+          <p className="text-muted-foreground">{t('trainee.management.loading')}</p>
         </div>
       </div>
     );
@@ -44,10 +46,10 @@ export default function TrainerTraineesPage() {
 
   if (!profile) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
+          <p className="text-muted-foreground">{t('quiz.userNotFound')}</p>
         </div>
       </div>
     );
@@ -55,10 +57,10 @@ export default function TrainerTraineesPage() {
 
   if (profile.role !== 'trainer') {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">Zugriff verweigert...</p>
+          <p className="text-muted-foreground">{t('quiz.accessDenied')}</p>
         </div>
       </div>
     );
@@ -74,11 +76,10 @@ export default function TrainerTraineesPage() {
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
-              Auszubildende
+              {t('trainee.management.title')}
             </h1>
             <p className="text-muted">
-              Verwalten Sie Ihre Auszubildenden und verfolgen Sie deren
-              Fortschritt
+              {t('trainee.management.description')}
             </p>
           </div>
         </div>
@@ -109,8 +110,8 @@ export default function TrainerTraineesPage() {
                     {trainee.full_name}
                   </h3>
                   <div className="flex items-center gap-2">
-                    <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">Auszubildender</span>
-                    <span className={`text-xs rounded-full px-2 py-0.5 border ${trainee.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{trainee.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                    <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">{t('roles.trainee')}</span>
+                    <span className={`text-xs rounded-full px-2 py-0.5 border ${trainee.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{trainee.isActive ? t('common.active') : t('common.inactive')}</span>
                   </div>
                 </div>
               </div>
@@ -119,7 +120,7 @@ export default function TrainerTraineesPage() {
             {/* Progress */}
             <div className="mb-4">
               <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="text-muted">Gesamtfortschritt</span>
+                <span className="text-muted">{t('trainee.management.overallProgress')}</span>
                 <span className="text-foreground font-medium">{trainee.progress ?? 0}%</span>
               </div>
               <div className="h-3 w-full rounded-full bg-muted/30">
@@ -134,11 +135,11 @@ export default function TrainerTraineesPage() {
             <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
               <div className="bg-background/50 rounded-xl p-3 text-center">
                 <div className="text-accent text-2xl font-bold">{trainee.progress}%</div>
-                <div className="text-muted">Fortschritt</div>
+                <div className="text-muted">{t('modules.progress')}</div>
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
                 <div className="text-primary text-2xl font-bold">12</div>
-                <div className="text-muted">Module</div>
+                <div className="text-muted">{t('trainee.management.modules')}</div>
               </div>
             </div>
 
@@ -149,7 +150,7 @@ export default function TrainerTraineesPage() {
                 className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-4 py-2 text-sm font-medium transition-colors"
               >
                 <Eye className="mr-2 inline h-4 w-4" />
-                Details
+                {t('trainee.management.details')}
               </button>
               <button
                 onClick={async () => {
@@ -163,12 +164,12 @@ export default function TrainerTraineesPage() {
                     setTrainees(data.trainees || []);
                   } catch (e) {
                     console.error(e);
-                    alert('Fehler beim Aktualisieren des Status');
+                    alert(t('trainee.management.updateError'));
                   }
                 }}
                 className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'bg-green-600 text-foreground hover:bg-green-700'}`}
               >
-                {trainee.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                {trainee.isActive ? t('trainee.management.deactivate') : t('trainee.management.activate')}
               </button>
             </div>
           </div>

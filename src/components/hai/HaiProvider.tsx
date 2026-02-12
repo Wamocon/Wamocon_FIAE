@@ -11,6 +11,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // ============================================================================
 // TYPES
@@ -77,6 +78,7 @@ interface HaiProviderState {
     renameSession: (sessionId: string, newTitle: string) => Promise<void>;
 
     refreshSessions: () => Promise<void>;
+    searchSessions: (query: string) => Promise<HaiSession[]>;
 }
 
 const HaiContext = createContext<HaiProviderState | null>(null);
@@ -104,6 +106,8 @@ interface HaiProviderProps {
 }
 
 export function HaiProvider({ children, userId, initialContext }: HaiProviderProps) {
+    const { t } = useLanguage();
+
     // UI State
     const [viewMode, setViewModeState] = useState<ViewMode>('hidden');
     const [isLoading, setIsLoading] = useState(false);
@@ -157,6 +161,22 @@ export function HaiProvider({ children, userId, initialContext }: HaiProviderPro
         } catch (error) {
             console.error('Failed to fetch sessions:', error);
         }
+    }, [userId]);
+
+    const searchSessions = useCallback(async (query: string): Promise<HaiSession[]> => {
+        if (!query || query.trim().length < 2) return [];
+        try {
+            const response = await fetch(
+                `/api/hai/session?userId=${userId}&search=${encodeURIComponent(query.trim())}&limit=20`
+            );
+            if (response.ok) {
+                const data = await response.json();
+                return data.sessions || [];
+            }
+        } catch (error) {
+            console.error('Failed to search sessions:', error);
+        }
+        return [];
     }, [userId]);
 
     const loadSession = useCallback(async (sessionId: string) => {
@@ -287,7 +307,7 @@ export function HaiProvider({ children, userId, initialContext }: HaiProviderPro
                 const assistantMessage: HaiMessage = {
                     id: `error-${Date.now()}`,
                     role: 'assistant',
-                    content: 'Ups, da ist etwas schiefgelaufen! 🦈💫 Bitte versuche es später erneut.',
+                    content: t('hai.error.somethingWrong'),
                     createdAt: new Date().toISOString(),
                 };
                 setMessages(prev => [...prev, assistantMessage]);
@@ -297,14 +317,14 @@ export function HaiProvider({ children, userId, initialContext }: HaiProviderPro
             const assistantMessage: HaiMessage = {
                 id: `error-${Date.now()}`,
                 role: 'assistant',
-                content: 'Verbindungsfehler. Bitte prüfe deine Internetverbindung.',
+                content: t('hai.error.connectionError'),
                 createdAt: new Date().toISOString(),
             };
             setMessages(prev => [...prev, assistantMessage]);
         } finally {
             setIsLoading(false);
         }
-    }, [userId, currentSessionId, context, refreshSessions]);
+    }, [userId, currentSessionId, context, refreshSessions, t]);
 
     // ========================================================================
     // EFFECTS
@@ -345,6 +365,7 @@ export function HaiProvider({ children, userId, initialContext }: HaiProviderPro
         deleteSession,
         renameSession,
         refreshSessions,
+        searchSessions,
     };
 
     return (

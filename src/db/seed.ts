@@ -19,7 +19,6 @@ import {
   quizAssignments,
   quizSubmissions,
   quizSubmissionAnswers,
-  reflections,
   knowledgeNotes,
   acceptanceProtocols,
   traineeAchievedSkills,
@@ -50,7 +49,6 @@ async function main() {
     await tx.delete(quizzes);
     await tx.delete(useCaseSubmissionLinks);
     await tx.delete(useCaseSubmissions);
-    await tx.delete(reflections);
     await tx.delete(knowledgeNotes);
     await tx.delete(acceptanceProtocols);
     await tx.delete(traineeAchievedSkills);
@@ -253,11 +251,6 @@ async function main() {
       { submissionId: sub2.id, questionId: g2.id, selectedOptionId: g2Wrong },
     ]);
 
-    // Reflections
-    await tx.insert(reflections).values([
-      { traineeId: trainee1Id, strengths: 'CSS layouts', weaknesses: 'JS basics', mesMore: 'Practice', mesEqual: 'Focus', isReviewed: false, reviewedById: null },
-      { traineeId: trainee2Id, strengths: 'HTML semantics', weaknesses: 'Accessibility', mesMore: 'Refactor', mesEqual: 'Consistency', isReviewed: true, reviewedById: trainerId },
-    ]);
 
     // Knowledge notes
     await tx.insert(knowledgeNotes).values([

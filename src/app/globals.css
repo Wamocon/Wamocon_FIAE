@@ -96,7 +96,7 @@
     ) !important;
     min-height: 100vh;
     position: relative;
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   /* Light mode HTML */
@@ -111,7 +111,7 @@
     ) !important;
     min-height: 100vh;
     position: relative;
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   .dark body,
@@ -131,7 +131,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     position: relative;
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   .light body,
@@ -149,7 +149,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     position: relative;
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   /* Force base colors - theme aware */

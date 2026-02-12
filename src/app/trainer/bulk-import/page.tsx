@@ -1,17 +1,20 @@
 'use client';
 
+import { useLanguage } from '@/contexts/LanguageContext';
 import { BulkImportUploader } from '@/components/trainer/BulkImportUploader';
 
 export default function BulkImportPage() {
+  const { t } = useLanguage();
+
   return (
-    <div className="bg-background min-h-screen p-6">
+    <div className="bg-background min-h-full p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6">
           <h1 className="text-foreground mb-2 text-3xl font-bold">
-            Bulk Import
+            {t('bulk.title')}
           </h1>
           <p className="text-muted-foreground">
-            Importieren Sie mehrere Kurse, Enabler und Use Cases gleichzeitig
+            {t('bulk.description')}
           </p>
         </div>
 
