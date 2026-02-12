@@ -42,7 +42,12 @@ import {
 // Types for dashboard data
 type DashboardData = {
   modules: any[];
-  nextItem: { lessonId: string; lessonTitle: string; moduleTitle: string; estimatedTime: string } | null;
+  nextItem: {
+    lessonId: string;
+    lessonTitle: string;
+    moduleTitle: string;
+    estimatedTime: string;
+  } | null;
   weeklyProgress: any[];
   skillRadar: any[];
   achievements: any[];
@@ -51,7 +56,7 @@ type DashboardData = {
 
 // Cache helpers for instant dashboard loading
 const TRAINEE_DASHBOARD_CACHE_KEY = 'wmc_trainee_dashboard_cache';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5)
 
 const getCachedDashboard = (): DashboardData | null => {
   try {
@@ -66,7 +71,10 @@ const getCachedDashboard = (): DashboardData | null => {
 
 const setCachedDashboard = (data: DashboardData) => {
   try {
-    localStorage.setItem(TRAINEE_DASHBOARD_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+    localStorage.setItem(
+      TRAINEE_DASHBOARD_CACHE_KEY,
+      JSON.stringify({ data, timestamp: Date.now() })
+    );
   } catch (_) {}
 };
 
@@ -93,7 +101,9 @@ export default function TraineeDashboard() {
   // Apply cached or fresh dashboard data to state
   const applyDashboardData = (data: DashboardData) => {
     setModules(Array.isArray(data.modules) ? data.modules : []);
-    setWeeklyProgress(Array.isArray(data.weeklyProgress) ? data.weeklyProgress : []);
+    setWeeklyProgress(
+      Array.isArray(data.weeklyProgress) ? data.weeklyProgress : []
+    );
     setSkillRadar(Array.isArray(data.skillRadar) ? data.skillRadar : []);
     setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
     setDeadlines(Array.isArray(data.deadlines) ? data.deadlines : []);
@@ -156,9 +166,17 @@ export default function TraineeDashboard() {
   // Derived module progress for charts
 
   const moduleProgress = modules.map((module: any) => ({
-    name: module.title.length > 20 ? module.title.substring(0, 20) + '...' : module.title,
+    name:
+      module.title.length > 20
+        ? module.title.substring(0, 20) + '...'
+        : module.title,
     progress: module.progress ?? 0,
-    color: (module.progress ?? 0) > 70 ? '#ef4444' : (module.progress ?? 0) > 40 ? '#dc2626' : '#3c2846',
+    color:
+      (module.progress ?? 0) > 70
+        ? '#ef4444'
+        : (module.progress ?? 0) > 40
+          ? '#dc2626'
+          : '#3c2846',
   }));
 
   const handleModuleClick = (moduleId: string) => {
@@ -219,14 +237,17 @@ export default function TraineeDashboard() {
                     {t('dashboard.continueLearning').toUpperCase()}
                   </h3>
                   <p className="text-foreground text-2xl leading-tight font-bold">
-                    {nextLesson ? nextLesson.title : t('dashboard.keepLearning')}
+                    {nextLesson
+                      ? nextLesson.title
+                      : t('dashboard.keepLearning')}
                   </p>
                   <p className="text-muted-foreground mt-2">
-                    {t('dashboard.module')} {nextLesson ? nextLesson.module : '-'}
+                    {t('dashboard.module')}{' '}
+                    {nextLesson ? nextLesson.module : '-'}
                   </p>
                 </div>
                 <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg">
-                  <Play className="h-8 w-8 text-foreground" />
+                  <Play className="text-foreground h-8 w-8" />
                 </div>
               </div>
               <div className="text-accent mt-4 flex items-center">
@@ -241,7 +262,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
               <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
                 <div className="from-accent to-primary mr-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
-                  <BookOpen className="h-5 w-5 text-foreground" />
+                  <BookOpen className="text-foreground h-5 w-5" />
                 </div>
                 {t('dashboard.myLearningPath')}
               </h3>
@@ -284,21 +305,34 @@ export default function TraineeDashboard() {
             <div className="glass-effect border-accent/20 rounded-2xl border p-6 shadow-lg">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-500 to-orange-500">
-                  <Award className="h-4 w-4 text-foreground" />
+                  <Award className="text-foreground h-4 w-4" />
                 </div>
                 {t('dashboard.recentAchievements')}
               </h3>
               <div className="space-y-3">
                 {achievements.length === 0 && (
-                  <div className="text-muted-foreground">{t('dashboard.noActivities')}</div>
+                  <div className="text-muted-foreground">
+                    {t('dashboard.noActivities')}
+                  </div>
                 )}
                 {achievements.map((a, idx) => (
-                  <div key={idx} className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
-                    <span className="text-foreground font-medium">{a.text}</span>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/20">
-                      {a.kind === 'quiz' && <Award className="text-accent h-4 w-4" />}
-                      {a.kind === 'module' && <BookOpen className="text-green-400 h-4 w-4" />}
-                      {a.kind === 'streak' && <TrendingUp className="text-blue-400 h-4 w-4" />}
+                  <div
+                    key={idx}
+                    className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors"
+                  >
+                    <span className="text-foreground font-medium">
+                      {a.text}
+                    </span>
+                    <div className="bg-accent/20 flex h-8 w-8 items-center justify-center rounded-full">
+                      {a.kind === 'quiz' && (
+                        <Award className="text-accent h-4 w-4" />
+                      )}
+                      {a.kind === 'module' && (
+                        <BookOpen className="h-4 w-4 text-green-400" />
+                      )}
+                      {a.kind === 'streak' && (
+                        <TrendingUp className="h-4 w-4 text-blue-400" />
+                      )}
                     </div>
                   </div>
                 ))}
@@ -309,16 +343,21 @@ export default function TraineeDashboard() {
             <div className="glass-effect border-accent/20 rounded-2xl border p-6 shadow-lg">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-500">
-                  <Calendar className="h-4 w-4 text-foreground" />
+                  <Calendar className="text-foreground h-4 w-4" />
                 </div>
                 {t('dashboard.upcomingDeadlines')}
               </h3>
               <div className="space-y-3">
                 {deadlines.length === 0 && (
-                  <div className="text-muted-foreground">{t('dashboard.noDeadlines')}</div>
+                  <div className="text-muted-foreground">
+                    {t('dashboard.noDeadlines')}
+                  </div>
                 )}
                 {deadlines.map((d, idx) => (
-                  <div key={idx} className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors">
+                  <div
+                    key={idx}
+                    className="from-background/60 border-accent/20 hover:border-accent/40 flex items-center justify-between rounded-xl border bg-gradient-to-r to-red-900/10 p-4 transition-colors"
+                  >
                     <span className="text-foreground font-medium">
                       {d.label}: {new Date(d.dueDate).toLocaleDateString()}
                     </span>
@@ -337,7 +376,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="from-accent to-primary mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br">
-                  <BarChart3 className="h-4 w-4 text-foreground" />
+                  <BarChart3 className="text-foreground h-4 w-4" />
                 </div>
                 {t('dashboard.weeklyProgress')}
               </h3>
@@ -409,7 +448,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
-                  <Target className="h-4 w-4 text-foreground" />
+                  <Target className="text-foreground h-4 w-4" />
                 </div>
                 {t('dashboard.skills')}
               </h3>
@@ -464,7 +503,7 @@ export default function TraineeDashboard() {
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
               <h3 className="text-foreground mb-4 flex items-center text-lg font-bold">
                 <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-500">
-                  <PieChart className="h-4 w-4 text-foreground" />
+                  <PieChart className="text-foreground h-4 w-4" />
                 </div>
                 {t('dashboard.moduleProgress')}
               </h3>
