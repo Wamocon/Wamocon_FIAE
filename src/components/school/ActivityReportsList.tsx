@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSearchParams } from 'next/navigation';
@@ -682,7 +683,7 @@ function ActivityReportDetail({
                 <div className="flex items-center justify-center pt-4 border-t border-border">
                     <button
                         onClick={() => {
-                            alert(t('reports.pdfDownloadPending'));
+                            toast(t('reports.pdfDownloadPending'));
                         }}
                         className="flex items-center gap-2 px-6 py-3 rounded-xl bg-green-500/20 hover:bg-green-500/30 text-green-600 dark:text-green-400 font-medium transition-colors"
                     >

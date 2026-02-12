@@ -9,6 +9,9 @@ interface ReportEntry {
     actualHours: number;
     isOverbooked: boolean;
     notes: string | null;
+    // Grading fields
+    trainerGrade?: number;
+    gradeComment?: string | null;
 }
 
 interface TrainingUseCase {
@@ -27,7 +30,6 @@ interface TrainingComponent {
 
 interface SoftSkillRating {
     name: string;
-    selfRating?: string;
     trainerRating?: string;
 }
 
@@ -146,18 +148,21 @@ export async function generateActivityReportPDF(
     // --- ENTRIES TABLE ---
     yPos += 12;
 
-    // Prepare table data
+    // Prepare table data with trainer grades
     const tableData = report.entries.map(entry => {
         const useCase = getUseCaseById(entry.useCaseId);
         const component = useCase ? getComponentById(useCase.componentId) : null;
+        
+        // Format grade with comment if available
+        let gradeDisplay = entry.trainerGrade ? String(entry.trainerGrade) : '-';
 
         return [
             component?.code || '-',
             `${useCase?.letter || '-'}) ${useCase?.description || 'Unbekannt'}`,
             `${entry.plannedHours} Std`,
             `${entry.actualHours} Std`,
-            entry.isOverbooked ? 'Ja' : 'Nein',
-            entry.notes || '-'
+            gradeDisplay,
+            entry.gradeComment || entry.notes || '-'
         ];
     });
 
@@ -167,7 +172,7 @@ export async function generateActivityReportPDF(
 
     autoTable(doc, {
         startY: yPos,
-        head: [['Komp.', 'Use Case / Tätigkeit', 'Plan', 'IST', 'Überb.', 'Notizen']],
+        head: [['Komp.', 'Use Case / Tätigkeit', 'Plan', 'IST', 'Note', 'Anmerkungen']],
         body: tableData,
         foot: [['', 'Gesamt:', `${totalPlanned} Std`, `${totalActual} Std`, '', '']],
         theme: 'striped',
@@ -202,7 +207,7 @@ export async function generateActivityReportPDF(
     let finalY = doc.lastAutoTable?.finalY || yPos + 50;
 
     // --- GRADING & SOFT SKILLS (New Section) ---
-    if (report.status === 'APPROVED' && (report.selfRating || report.trainerRating)) {
+    if (report.status === 'APPROVED' && report.trainerRating) {
         yPos = finalY + 15;
 
         // Ensure space for grading section
@@ -216,12 +221,12 @@ export async function generateActivityReportPDF(
         doc.text('Leistungsbewertung', 14, yPos);
         yPos += 8;
 
-        // Overall Grade Table
+        // Overall Grade Table - Only trainer rating (no Azubi self-assessment in Tätigkeitsnachweis)
         autoTable(doc, {
             startY: yPos,
-            head: [['Bewertungskriterium', 'Azubi (Selbsteinschätzung)', 'Ausbilder']],
+            head: [['Bewertungskriterium', 'Ausbilder-Bewertung']],
             body: [
-                ['Gesamtnote', report.selfRating || '-', report.trainerRating || '-']
+                ['Gesamtnote', report.trainerRating || '-']
             ],
             theme: 'grid',
             headStyles: { fillColor: [70, 70, 70], textColor: 255, fontSize: 10 },
@@ -232,17 +237,16 @@ export async function generateActivityReportPDF(
         // @ts-ignore
         yPos = doc.lastAutoTable?.finalY + 10;
 
-        // Soft Skills Table
+        // Soft Skills Table - Only trainer ratings
         if (report.softSkills && report.softSkills.length > 0) {
             const softSkillData = report.softSkills.map(s => [
                 s.name,
-                s.selfRating || '-',
                 s.trainerRating || '-'
             ]);
 
             autoTable(doc, {
                 startY: yPos,
-                head: [['Soft Skills / Kompetenzbereich', 'Azubi', 'Ausbilder']],
+                head: [['Soft Skills / Kompetenzbereich', 'Ausbilder-Bewertung']],
                 body: softSkillData,
                 theme: 'striped',
                 headStyles: { fillColor: [90, 90, 90], textColor: 255, fontSize: 9 },
@@ -254,8 +258,8 @@ export async function generateActivityReportPDF(
         }
     }
 
-    // --- COMMENTS SECTION ---
-    if (report.selfComment || report.trainerComment) {
+    // --- COMMENTS SECTION (Trainer feedback only for Tätigkeitsnachweis) ---
+    if (report.trainerComment) {
         // @ts-ignore
         yPos = Math.max(yPos, (doc.lastAutoTable?.finalY || yPos) + 10);
 
@@ -267,28 +271,14 @@ export async function generateActivityReportPDF(
 
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.text('Anmerkungen / Feedback', 14, yPos);
+        doc.text('Anmerkungen des Ausbilders', 14, yPos);
         yPos += 6;
 
-        if (report.selfComment) {
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Azubi:', 14, yPos);
-            doc.setFont('helvetica', 'italic');
-            const splitComment = doc.splitTextToSize(report.selfComment, 180);
-            doc.text(splitComment, 30, yPos);
-            yPos += (splitComment.length * 4) + 4;
-        }
-
-        if (report.trainerComment) {
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Ausbilder:', 14, yPos);
-            doc.setFont('helvetica', 'italic');
-            const splitComment = doc.splitTextToSize(report.trainerComment, 180);
-            doc.text(splitComment, 30, yPos);
-            yPos += (splitComment.length * 4) + 4;
-        }
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'italic');
+        const splitComment = doc.splitTextToSize(report.trainerComment, 180);
+        doc.text(splitComment, 14, yPos);
+        yPos += (splitComment.length * 4) + 4;
     }
 
     // --- DIGITAL SIGNATURES SECTION ---

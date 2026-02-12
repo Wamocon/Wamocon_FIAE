@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
@@ -32,7 +33,7 @@ export function BulkImportUploader() {
     if (selectedFile) {
       // Validate file type
       if (!selectedFile.name.endsWith('.xlsx') && !selectedFile.name.endsWith('.xls')) {
-        alert(t('bulk.selectExcelFile'));
+        toast.error(t('bulk.selectExcelFile'));
         return;
       }
       setFile(selectedFile);
@@ -42,7 +43,7 @@ export function BulkImportUploader() {
 
   const handleUpload = async () => {
     if (!file || !profile?.id) {
-      alert(t('bulk.selectFile'));
+      toast.error(t('bulk.selectFile'));
       return;
     }
 

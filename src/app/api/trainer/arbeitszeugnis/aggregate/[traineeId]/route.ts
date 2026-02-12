@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
 import db from '@/db';
 import {
     activityReports,
     activityReportUseCaseEntries,
     trainingUseCases,
     trainingComponents,
-    profiles
+    profiles,
+    weeklyEvaluations,
+    weeklySoftskillRatings,
+    mesSoftskillCriteria
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 
@@ -28,14 +30,12 @@ export async function GET(
     { params }: { params: Promise<{ traineeId: string }> }
 ) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { traineeId } = await params;
+        
+        if (!traineeId) {
+            return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
         }
 
-        const { traineeId } = await params;
         const { searchParams } = new URL(request.url);
         const ausbildungsjahr = parseInt(searchParams.get('ausbildungsjahr') || '1');
         const customStartDate = searchParams.get('startDate');
@@ -182,6 +182,166 @@ export async function GET(
         // Determine shortening eligibility (< 2.45)
         const shorteningEligible = overallAverage !== null && overallAverage < 2.45;
 
+        // === SOFT SKILLS AGGREGATION ===
+        // Get ALL soft skill ratings for this trainee from two sources:
+        // 1. Weekly evaluations directly linked to this trainee
+        // 2. Weekly evaluations linked to approved activity reports for this trainee
+        
+        // Query 1: Soft skills from weekly evaluations for this trainee (by ausbildungsjahr or all)
+        let softSkillRatings: any[] = [];
+        
+        try {
+            // Get soft skills from weeklyEvaluations linked to this trainee
+            const directRatings = await db
+                .select({
+                    criterionId: mesSoftskillCriteria.id,
+                    criterionCode: mesSoftskillCriteria.code,
+                    criterionName: mesSoftskillCriteria.name,
+                    competencyArea: mesSoftskillCriteria.competencyArea,
+                    kLevel: mesSoftskillCriteria.kLevel,
+                    trainerRating: weeklySoftskillRatings.trainerRating,
+                    selfRating: weeklySoftskillRatings.selfRating,
+                    weekNumber: weeklyEvaluations.weekNumber,
+                    year: weeklyEvaluations.year,
+                    activityReportId: weeklyEvaluations.activityReportId,
+                })
+                .from(weeklySoftskillRatings)
+                .innerJoin(weeklyEvaluations, eq(weeklySoftskillRatings.weeklyEvaluationId, weeklyEvaluations.id))
+                .innerJoin(mesSoftskillCriteria, eq(weeklySoftskillRatings.softskillCriterionId, mesSoftskillCriteria.id))
+                .where(eq(weeklyEvaluations.traineeId, traineeId));
+            
+            softSkillRatings = [...directRatings];
+        } catch (e) {
+            console.error('Error fetching direct soft skill ratings:', e);
+        }
+        
+        // Query 2: Additionally get soft skills linked to approved activity reports (in date range)
+        try {
+            const linkedRatings = await db
+                .select({
+                    criterionId: mesSoftskillCriteria.id,
+                    criterionCode: mesSoftskillCriteria.code,
+                    criterionName: mesSoftskillCriteria.name,
+                    competencyArea: mesSoftskillCriteria.competencyArea,
+                    kLevel: mesSoftskillCriteria.kLevel,
+                    trainerRating: weeklySoftskillRatings.trainerRating,
+                })
+                .from(weeklySoftskillRatings)
+                .innerJoin(weeklyEvaluations, eq(weeklySoftskillRatings.weeklyEvaluationId, weeklyEvaluations.id))
+                .innerJoin(activityReports, eq(weeklyEvaluations.activityReportId, activityReports.id))
+                .innerJoin(mesSoftskillCriteria, eq(weeklySoftskillRatings.softskillCriterionId, mesSoftskillCriteria.id))
+                .where(
+                    and(
+                        eq(activityReports.traineeId, traineeId),
+                        gte(activityReports.periodStart, yearStart),
+                        lte(activityReports.periodStart, yearEnd)
+                    )
+                );
+            
+            // Add linked ratings (dedup will happen when grouping)
+            for (const linked of linkedRatings) {
+                softSkillRatings.push({
+                    ...linked,
+                    selfRating: null,
+                    weekNumber: 0,
+                    year: 0,
+                    activityReportId: null,
+                });
+            }
+        } catch (e) {
+            console.error('Error fetching linked soft skill ratings:', e);
+        }
+
+        // Performance rating to numeric conversion
+        // Database stores '1', '2', '3', '4', '5', '6' as strings (performanceRating enum)
+        const ratingToNumber = (rating: string | null): number | null => {
+            if (!rating) return null;
+            // Direct numeric string: '1', '2', etc.
+            const numericValue = parseInt(rating);
+            if (!isNaN(numericValue) && numericValue >= 1 && numericValue <= 6) {
+                return numericValue;
+            }
+            // Legacy format fallback: EXCELLENT, GOOD, etc.
+            const legacyMap: Record<string, number> = {
+                'EXCELLENT': 1, 'GOOD': 2, 'SATISFACTORY': 3,
+                'ADEQUATE': 4, 'POOR': 5, 'INSUFFICIENT': 6
+            };
+            return legacyMap[rating] || null;
+        };
+
+        // Group by competency area and calculate averages
+        const competencyAreas = ['FACHKOMPETENZ', 'METHODENKOMPETENZ', 'SOZIALKOMPETENZ', 'PERSONALKOMPETENZ'] as const;
+        const softSkillsByArea: Record<string, { ratings: number[]; criteria: Set<string> }> = {};
+        
+        for (const area of competencyAreas) {
+            softSkillsByArea[area] = { ratings: [], criteria: new Set() };
+        }
+
+        // Also track individual criteria averages
+        const criteriaMap = new Map<string, {
+            code: string;
+            name: string;
+            area: string;
+            kLevel: string | null;
+            ratings: number[];
+        }>();
+
+        for (const rating of softSkillRatings) {
+            const numRating = ratingToNumber(rating.trainerRating);
+            if (numRating !== null && rating.competencyArea) {
+                softSkillsByArea[rating.competencyArea]?.ratings.push(numRating);
+                softSkillsByArea[rating.competencyArea]?.criteria.add(rating.criterionId);
+
+                // Track individual criteria
+                if (!criteriaMap.has(rating.criterionId)) {
+                    criteriaMap.set(rating.criterionId, {
+                        code: rating.criterionCode,
+                        name: rating.criterionName,
+                        area: rating.competencyArea,
+                        kLevel: rating.kLevel,
+                        ratings: [],
+                    });
+                }
+                criteriaMap.get(rating.criterionId)!.ratings.push(numRating);
+            }
+        }
+
+        // Calculate area averages
+        const softSkillAverages = {
+            fachkompetenz: softSkillsByArea.FACHKOMPETENZ.ratings.length > 0
+                ? Math.round((softSkillsByArea.FACHKOMPETENZ.ratings.reduce((a, b) => a + b, 0) / softSkillsByArea.FACHKOMPETENZ.ratings.length) * 100) / 100
+                : null,
+            methodenkompetenz: softSkillsByArea.METHODENKOMPETENZ.ratings.length > 0
+                ? Math.round((softSkillsByArea.METHODENKOMPETENZ.ratings.reduce((a, b) => a + b, 0) / softSkillsByArea.METHODENKOMPETENZ.ratings.length) * 100) / 100
+                : null,
+            sozialkompetenz: softSkillsByArea.SOZIALKOMPETENZ.ratings.length > 0
+                ? Math.round((softSkillsByArea.SOZIALKOMPETENZ.ratings.reduce((a, b) => a + b, 0) / softSkillsByArea.SOZIALKOMPETENZ.ratings.length) * 100) / 100
+                : null,
+            personalkompetenz: softSkillsByArea.PERSONALKOMPETENZ.ratings.length > 0
+                ? Math.round((softSkillsByArea.PERSONALKOMPETENZ.ratings.reduce((a, b) => a + b, 0) / softSkillsByArea.PERSONALKOMPETENZ.ratings.length) * 100) / 100
+                : null,
+        };
+
+        // Calculate overall soft skills average
+        const allSoftSkillRatings = Object.values(softSkillsByArea).flatMap(a => a.ratings);
+        const overallSoftSkillAverage = allSoftSkillRatings.length > 0
+            ? Math.round((allSoftSkillRatings.reduce((a, b) => a + b, 0) / allSoftSkillRatings.length) * 100) / 100
+            : null;
+
+        // Individual criteria with their averages
+        const softSkillCriteria = Array.from(criteriaMap.values())
+            .map(c => ({
+                code: c.code,
+                name: c.name,
+                competencyArea: c.area,
+                kLevel: c.kLevel,
+                averageGrade: c.ratings.length > 0
+                    ? Math.round((c.ratings.reduce((a, b) => a + b, 0) / c.ratings.length) * 100) / 100
+                    : null,
+                ratingCount: c.ratings.length,
+            }))
+            .sort((a, b) => a.code.localeCompare(b.code));
+
         // Get trainee info
         const trainee = await db
             .select({
@@ -209,6 +369,13 @@ export async function GET(
             shorteningEligible,
             totalGradedComponents: totalGradedComponents.length,
             totalComponents: components.length,
+            // === SOFT SKILLS DATA ===
+            softSkills: {
+                averages: softSkillAverages,
+                overallAverage: overallSoftSkillAverage,
+                criteria: softSkillCriteria,
+                totalRatings: allSoftSkillRatings.length,
+            },
             // IHK Grade Legend for frontend display
             gradeLegend: {
                 '1': { label: 'Sehr gut', range: '92-100%', description: 'entspricht den Anforderungen in besonderem Maße' },

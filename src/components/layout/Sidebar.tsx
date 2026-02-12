@@ -11,7 +11,6 @@ import {
   GraduationCap,
   HelpCircle,
   BarChart3,
-  FileCheck2,
   Upload,
   School,
   Calendar,
