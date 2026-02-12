@@ -40,12 +40,86 @@ const translations = {
     'nav.trainees': 'Auszubildende',
     'nav.analytics': 'Analysen',
     'nav.trainerFeedback': 'Trainer-Feedback',
+    'nav.evaluations': 'Azubi-Arbeitszeugnis',
 
-    // Common
-    'common.loading': 'Laden...',
-    'common.redirecting': 'Weiterleitung...',
+    // Trainer Content Management
+    'trainer.content.editCourse': 'Kurs bearbeiten',
+    'trainer.content.editCourseSub':
+      'Titel, Jahr, Kapitel und Inhalte verwalten',
+    'trainer.content.courseDetails': 'Kursdetails',
+    'trainer.content.courseTitle': 'Kurstitel',
+    'trainer.content.trainingYear': 'Trainingsjahr',
+    'trainer.content.chapter': 'Kapitel/Abschnitt',
+    'trainer.content.skills': 'Skills (Kommagetrennt)',
+    'trainer.content.members': 'Mitglieder',
+    'trainer.content.trainers': 'Trainer',
+    'trainer.content.trainees': 'Azubis',
+    'trainer.content.searchTrainer': 'Trainer suchen',
+    'trainer.content.searchTrainee': 'Azubi suchen',
+    'trainer.content.lessons': 'Lessons',
+    'trainer.content.addLesson': 'Lesson hinzufügen',
+    'trainer.content.addUseCase': 'Use Case hinzufügen',
+    'trainer.content.useCases': 'Use Cases',
+    'trainer.content.createLesson': 'Neue Lesson erstellen',
+    'trainer.content.createUseCase': 'Neuen Use Case erstellen',
+    'trainer.content.pptLink': 'PPT-Link',
+    'trainer.content.videoLink': 'Video-Link',
+    'trainer.content.durationDays': 'Dauer (Tage)',
+    'trainer.content.scenarios': 'Szenarien (mit Hinweisen)',
+    'trainer.content.addScenario': 'Szenario hinzufügen',
+    'trainer.content.scenarioOf': 'Szenario {current} von {total}',
+    'trainer.content.hintVisible': 'Hinweis (für Trainees sichtbar)',
+    'trainer.content.hintPlaceholder': 'Tipp zur Lösung des Szenarios',
+    'trainer.content.deleteScenario': 'Dieses Szenario löschen',
+    'trainer.content.confirmDeleteEnabler':
+      'Diesen Enabler wirklich löschen? Dies kann nicht rückgängig gemacht werden.',
+    'trainer.content.confirmDeleteUseCase':
+      'Diesen Use Case wirklich löschen? Dies kann nicht rückgängig gemacht werden.',
+    'trainer.content.errorTitle': 'Bitte einen Kurstitel eingeben.',
+    'trainer.content.errorYear': 'Bitte ein Trainingsjahr wählen.',
+    'trainer.content.errorNoTrainer': 'Kein Trainerprofil',
+    'trainer.content.trainingStage': 'Ausbildungsabschnitt',
+    'trainer.content.stage1': 'Ausbildungsabschnitt 1',
+    'trainer.content.stage2': 'Ausbildungsabschnitt 2',
+    'trainer.content.noQuiz': 'Kein {level}-Quiz',
+    'trainer.content.questionCount': 'Fragen: {count}',
+    'trainer.content.confirmDeleteQuiz': 'Dieses Quiz löschen?',
+    'trainer.content.topics': 'Behandelte Themen',
+    'trainer.content.context': 'Ausgangslage',
+    'trainer.content.problemSolutionPairs': 'Problem-Lösung-Paare',
+    'trainer.content.goals': 'Lernziele',
+    'trainer.content.theory': 'Theorie',
+    'trainer.content.checklist': 'Lernziel-Checkliste',
+    'trainer.content.rawText': 'Kompletter Text (Legacy/Raw)',
+    'trainer.content.rawTextHint':
+      'Dies ist das Feld, das vom Viewer verwendet wird. Im Struktur-Modus wird dieses Feld automatisch generiert.',
+    'trainer.content.switchTextMode': 'Zum Text-Editor wechseln',
+    'trainer.content.switchStructuredMode': 'Zum Struktur-Editor wechseln',
+    'trainer.content.placeholderSituation': 'Beschreibe die Situation...',
+    'trainer.content.placeholderTopics': 'z.B. REST APIs, Datenbanken...',
+    'trainer.content.placeholderScenario':
+      'Beschreibe hier das Szenario, das der Azubi lösen soll...',
+    'trainer.content.errorNoTitle': 'Bitte Titel eingeben',
+    'trainer.content.errorNoDescription': 'Bitte Beschreibung eingeben',
+    'trainer.content.errorNoLessonSelected': 'Kein Lesson ausgewählt',
+    'trainer.content.errorNoUseCaseSelected': 'Kein Use Case ausgewählt',
+    'trainer.content.confirmDeleteDoc': 'Dieses Dokument löschen?',
+    'trainer.content.addProblem': 'Problem hinzufügen',
+    'trainer.content.problemIndex': 'Problem {index}',
+    'trainer.content.solutionIndex': 'Lösung {index}',
+    'trainer.content.editLesson': 'Lesson bearbeiten',
+    'trainer.content.lessonQuizzes': 'Lesson-Quizzes (Low / Medium / High)',
+    'trainer.content.lessonDescriptionPlaceholder':
+      'Kurze Beschreibung des Lessons',
+    'trainer.content.pdfSaveNotice':
+      'PDFs werden nach dem Erstellen gespeichert.',
+    'trainer.content.errorLessonUpdateFailed': 'Lesson-Update fehlgeschlagen',
+    'trainer.content.errorLessonCreateFailed':
+      'Lesson konnte nicht erstellt werden',
+    'trainer.content.durationPlaceholder': 'z.B. 7',
     'common.error': 'Fehler',
     'common.success': 'Erfolgreich',
+    'common.loading': 'Lädt...',
     'common.cancel': 'Abbrechen',
     'common.save': 'Speichern',
     'common.edit': 'Bearbeiten',
@@ -59,14 +133,29 @@ const translations = {
     'common.add': 'Hinzufügen',
     'common.remove': 'Entfernen',
     'common.close': 'Schließen',
+    'common.redirecting': 'Wird weitergeleitet...',
+    'trainer.content.errorUseCaseUpdateFailed':
+      'Use Case-Update fehlgeschlagen',
+    'common.unknownError': 'Unbekannter Fehler',
     'common.switchToEnglish': 'Switch to English',
     'common.switchToGerman': 'Zu Deutsch wechseln',
+    'common.select': 'Bitte wählen',
     'common.submit': 'Einreichen',
     'common.download': 'Herunterladen',
     'common.upload': 'Hochladen',
     'common.uploading': 'Wird hochgeladen...',
     'common.noResults': 'Keine Ergebnisse',
     'common.confirm': 'Bestätigen',
+    'trainer.content.errorCourseLoadFailed': 'Konnte Kurs nicht laden',
+    'trainer.content.errorSaveFailed': 'Speichern fehlgeschlagen',
+    'trainer.content.errorDeleteFailed': 'Löschen fehlgeschlagen',
+    'trainer.content.errorUseCaseCreateFailed':
+      'Use Case konnte nicht erstellt werden',
+    'trainer.content.chapterPlaceholder': 'z.B. 1',
+    'trainer.content.skillsPlaceholder': 'z.B. Git, HTML, CSS, JavaScript',
+    'trainer.content.searchHint':
+      'Tippen, um Vorschläge zu sehen. Klick auf einen Namen, um hinzuzufügen.',
+    'trainer.content.clickToAdd': 'Hinzufügen',
     'common.view': 'Anzeigen',
     'common.details': 'Details',
     'common.actions': 'Aktionen',
@@ -76,6 +165,26 @@ const translations = {
     'common.open': 'Öffnen',
     'common.notFound': 'Nicht gefunden',
     'common.status': 'Status',
+    'common.title': 'Titel',
+    'common.description': 'Beschreibung',
+    'common.lernfelder': 'Lernfelder',
+    'common.year1': 'Jahr 1',
+    'common.year2': 'Jahr 2',
+    'common.year3': 'Jahr 3',
+    'common.activate': 'Aktivieren',
+    'common.deactivate': 'Deaktivieren',
+    'common.backLabel': '← Zurück',
+    'common.nextLabel': 'Weiter →',
+    'common.problem': 'Problem',
+    'common.saving': 'Wird gespeichert...',
+    'common.untitled': 'Ohne Titel',
+    'common.solution': 'LÖSUNG',
+    'trainer.content.genTopics': 'Behandelte Themen:',
+    'trainer.content.genGoals': 'Lernziele:',
+    'trainer.content.genTheory': 'Theoretische Grundlagen:',
+    'trainer.content.genContext': 'Ausgangslage:',
+    'trainer.content.genProblemPairs': 'Problem-Lösung-Paare:',
+    'trainer.content.genChecklist': 'Lernziel-Checkliste:',
 
     // Auth
     'auth.login': 'Anmelden',
@@ -149,7 +258,8 @@ const translations = {
 
     // Trainee Management
     'trainee.management.title': 'Auszubildende',
-    'trainee.management.description': 'Verwalten Sie Ihre Auszubildenden und verfolgen Sie deren Fortschritt',
+    'trainee.management.description':
+      'Verwalten Sie Ihre Auszubildenden und verfolgen Sie deren Fortschritt',
     'trainee.management.loading': 'Lade Auszubildende...',
     'trainee.management.loadError': 'Konnte Auszubildende nicht laden',
     'trainee.management.overallProgress': 'Gesamtfortschritt',
@@ -233,7 +343,8 @@ const translations = {
     'profile.statistics': 'Statistiken',
     'profile.recentActivities': 'Letzte Aktivitäten',
     'profile.noActivities': 'Keine Aktivitäten gefunden',
-    'profile.traineeActivities': 'Aktivitäten Ihrer Azubis werden hier angezeigt.',
+    'profile.traineeActivities':
+      'Aktivitäten Ihrer Azubis werden hier angezeigt.',
     'profile.modulesCompleted': 'Module abgeschlossen',
     'profile.certificates': 'Zertifikate',
     'profile.learningHours': 'Lernstunden',
@@ -254,7 +365,8 @@ const translations = {
     'profile.close': 'Schließen',
 
     // Profile - Validation & Messages
-    'profile.passwordMinLength': 'Das Passwort muss mindestens 8 Zeichen lang sein.',
+    'profile.passwordMinLength':
+      'Das Passwort muss mindestens 8 Zeichen lang sein.',
     'profile.passwordMismatch': 'Die Passwörter stimmen nicht überein.',
     'profile.passwordChanged': 'Passwort erfolgreich geändert.',
     'profile.passwordChangeFailed': 'Passwort konnte nicht geändert werden',
@@ -263,7 +375,8 @@ const translations = {
     'profile.fileTooLarge': 'Datei ist zu groß. Maximal 10MB.',
     'profile.uploadFailed': 'Upload fehlgeschlagen. Bitte erneut versuchen.',
     'profile.uploadError': 'Fehler:',
-    'profile.storageBucketHint': '\nHinweis: Existiert der Storage-Bucket "avatar" und ist er öffentlich?',
+    'profile.storageBucketHint':
+      '\nHinweis: Existiert der Storage-Bucket "avatar" und ist er öffentlich?',
 
     // Profile - Time formatting
     'profile.time.justNow': 'Gerade eben',
@@ -285,7 +398,8 @@ const translations = {
 
     // School
     'school.title': 'Berufsschule',
-    'school.description': 'Verwalte deine Ausbildung: Stundenplan, Prüfungen und Tätigkeitsnachweise',
+    'school.description':
+      'Verwalte deine Ausbildung: Stundenplan, Prüfungen und Tätigkeitsnachweise',
     'school.loading': 'Lade Schul-Ansicht...',
     'school.tabs.lernfelder': 'Lernfelder',
     'school.tabs.lernfelderDesc': 'Deine Lernfelder und Aufgaben',
@@ -314,13 +428,15 @@ const translations = {
     'calendar.week': 'Woche',
     'calendar.today': 'Heute',
     'calendar.loading': 'Lade Kalender...',
-    'calendar.inviteEmails': 'Kommagetrennte E-Mail-Adressen für Kalendereinladung',
+    'calendar.inviteEmails':
+      'Kommagetrennte E-Mail-Adressen für Kalendereinladung',
     'calendar.error.loadBlocks': 'Fehler beim Laden der Blöcke',
     'calendar.error.addBlock': 'Fehler beim Hinzufügen',
     'calendar.error.deleteBlock': 'Fehler beim Löschen',
     'calendar.error.updateBlock': 'Fehler beim Aktualisieren',
     'calendar.error.importFailed': 'Import fehlgeschlagen',
-    'calendar.selectTrainee': 'Wähle einen Trainee aus, um deren Kalender zu sehen.',
+    'calendar.selectTrainee':
+      'Wähle einen Trainee aus, um deren Kalender zu sehen.',
     'calendar.sendInvite': 'Kalendereinladung senden',
     'calendar.description': 'Schul- und Betriebsblöcke, Ferien, Prüfungen',
     'calendar.newBlock': 'Neu',
@@ -331,7 +447,8 @@ const translations = {
     'calendar.companyPhases': 'Betriebsphasen',
     'calendar.holidayWeeks': 'Ferienwochen',
     'calendar.emptyState.title': 'Noch keine Einträge',
-    'calendar.emptyState.description': 'Klicke auf einen Tag, um einen Block hinzuzufügen, oder importiere deinen Schulkalender als CSV.',
+    'calendar.emptyState.description':
+      'Klicke auf einen Tag, um einen Block hinzuzufügen, oder importiere deinen Schulkalender als CSV.',
     'calendar.block.period': 'Zeitraum',
     'calendar.block.until': 'bis {date}',
     'calendar.block.descriptionLabel': 'Beschreibung',
@@ -355,13 +472,16 @@ const translations = {
     'calendar.modal.notesOptional': 'Notizen (optional)',
     'calendar.modal.notesPlaceholder': 'z.B. Prüfungsvorbereitung',
     'calendar.modal.inviteLabel': 'Einladungen senden an (optional)',
-    'calendar.modal.invitePlaceholder': 'email1@example.com, email2@example.com',
+    'calendar.modal.invitePlaceholder':
+      'email1@example.com, email2@example.com',
     'calendar.import.title': 'CSV Import',
     'calendar.import.formatLabel': 'Erwartetes Format:',
-    'calendar.import.formatDescription': 'KW, Datum, 10IT, 11IT, 12IT, Anmerkungen',
+    'calendar.import.formatDescription':
+      'KW, Datum, 10IT, 11IT, 12IT, Anmerkungen',
     'calendar.import.importing': 'Importiere...',
     'calendar.import.importButton': 'Importieren',
-    'calendar.import.result': '{imported} Blöcke importiert, {skipped} übersprungen',
+    'calendar.import.result':
+      '{imported} Blöcke importiert, {skipped} übersprungen',
     'calendar.examFallback': 'Prüfung',
 
     // Exam Sub-Types (for trainee calendar)
@@ -413,15 +533,19 @@ const translations = {
     'lernfelder.viewTasks': 'Aufgaben ansehen',
     'lernfelder.notFound': 'Keine Lernfelder gefunden',
     'lernfelder.tryDifferentSearch': 'Versuchen Sie andere Suchbegriffe.',
-    'lernfelder.noneAssigned': 'Es wurden noch keine Lernfelder für Sie freigeschaltet.',
-    'lernfelder.overview': 'Übersicht aller Lernfelder und zugehöriger Use Cases',
+    'lernfelder.noneAssigned':
+      'Es wurden noch keine Lernfelder für Sie freigeschaltet.',
+    'lernfelder.overview':
+      'Übersicht aller Lernfelder und zugehöriger Use Cases',
     'lernfelder.new': 'Neues Lernfeld',
     'lernfelder.edit': 'Lernfeld bearbeiten',
     'lernfelder.create': 'Lernfeld erstellen',
     'lernfelder.createFirst': 'Erstellen Sie Ihr erstes Lernfeld.',
-    'lernfelder.deleteConfirm': 'Sind Sie sicher, dass Sie dieses Lernfeld löschen möchten?',
+    'lernfelder.deleteConfirm':
+      'Sind Sie sicher, dass Sie dieses Lernfeld löschen möchten?',
     'lernfelder.label': 'Lernfeld-Label *',
-    'lernfelder.labelInfo': 'Jedes Lernfeld benötigt ein eindeutiges Label (LF-1 bis LF-12).',
+    'lernfelder.labelInfo':
+      'Jedes Lernfeld benötigt ein eindeutiges Label (LF-1 bis LF-12).',
     'lernfelder.labelTaken': '(Vergeben)',
     'lernfelder.titleLabel': 'Titel *',
     'lernfelder.titlePlaceholder': 'z.B. IT-Systeme bereitstellen',
@@ -459,7 +583,8 @@ const translations = {
     'exams.grading': 'Prüfung bewerten',
     'exams.notGraded': 'Noch nicht bewertet',
     'exams.results.loading': 'Fehler beim Laden',
-    'exams.results.noResults': 'Ergebnisse werden hier angezeigt, sobald sie eingetragen werden.',
+    'exams.results.noResults':
+      'Ergebnisse werden hier angezeigt, sobald sie eingetragen werden.',
     'exams.results.passed': 'Bestanden',
     'exams.results.failed': 'Nicht bestanden',
     'exams.results.title': 'Noten-Übersicht',
@@ -519,33 +644,41 @@ const translations = {
     'reports.feedback': 'Feedback:',
     'reports.activityReport': 'Tätigkeitsnachweis',
     'reports.trainerFeedback': 'Feedback vom Ausbilder:',
-    'reports.revise': 'Bitte überarbeite den Bericht und reiche ihn erneut ein.',
+    'reports.revise':
+      'Bitte überarbeite den Bericht und reiche ihn erneut ein.',
     'reports.operationalActivities': 'Betriebliche Tätigkeiten',
-    'reports.describeActivities': 'Beschreibe deine betrieblichen Tätigkeiten dieser Woche...',
+    'reports.describeActivities':
+      'Beschreibe deine betrieblichen Tätigkeiten dieser Woche...',
     'reports.curriculumReference': 'Bezug zum Rahmenplan',
     'reports.curriculumPlaceholder': 'z.B. Abschnitt A, Thema 1',
     'reports.hours': 'Stunden',
     'reports.instructionsTraining': 'Unterweisungen / Schulungen',
-    'reports.instructionsPlaceholder': 'Unterweisungen, betrieblicher Unterricht, sonstige Schulungen...',
+    'reports.instructionsPlaceholder':
+      'Unterweisungen, betrieblicher Unterricht, sonstige Schulungen...',
     'reports.schoolTopics': 'Themen des Berufsschulunterrichts',
-    'reports.schoolTopicsPlaceholder': 'Themen, die diese Woche in der Berufsschule behandelt wurden...',
-    'reports.confirmAccuracy': 'Mit der Einreichung bestätigst du die Richtigkeit und Vollständigkeit.',
+    'reports.schoolTopicsPlaceholder':
+      'Themen, die diese Woche in der Berufsschule behandelt wurden...',
+    'reports.confirmAccuracy':
+      'Mit der Einreichung bestätigst du die Richtigkeit und Vollständigkeit.',
     'reports.saving': 'Speichern',
     'reports.submitting': 'Einreichen',
     'reports.pdfDownloadPending': 'PDF Download wird noch implementiert',
     'reports.notFound': 'Bericht nicht gefunden',
     'reports.backToList': 'Zurück zur Liste',
-    'reports.submitConfirm': 'Bericht wirklich einreichen? Er kann danach nicht mehr bearbeitet werden.',
+    'reports.submitConfirm':
+      'Bericht wirklich einreichen? Er kann danach nicht mehr bearbeitet werden.',
     'reports.error.submit': 'Fehler beim Einreichen',
     'reports.error.create': 'Fehler beim Erstellen',
     'reports.error.load': 'Fehler beim Laden',
     'reports.error.weekExists': 'Bericht für diese Woche existiert bereits',
     'reports.error.save': 'Fehler beim Speichern',
     'reports.error.processing': 'Fehler beim Verarbeiten',
-    'reports.noReportsWithStatus': 'Keine Tätigkeitsnachweise mit diesem Status gefunden.',
+    'reports.noReportsWithStatus':
+      'Keine Tätigkeitsnachweise mit diesem Status gefunden.',
     'reports.reject': 'Ablehnen',
     'reports.approve': 'Genehmigen',
-    'reports.description': 'Wöchentliche Ausbildungsnachweise erstellen und verwalten',
+    'reports.description':
+      'Wöchentliche Ausbildungsnachweise erstellen und verwalten',
     'reports.new': 'Neuer Nachweis',
     'reports.status.draft': 'Entwurf',
     'reports.status.submitted': 'Eingereicht',
@@ -554,7 +687,8 @@ const translations = {
     'reports.myReports': 'Meine Nachweise',
     'reports.resetFilter': 'Filter zurücksetzen',
     'reports.noReports': 'Noch keine Nachweise',
-    'reports.createFirstPrompt': 'Erstellen Sie Ihren ersten wöchentlichen Tätigkeitsnachweis',
+    'reports.createFirstPrompt':
+      'Erstellen Sie Ihren ersten wöchentlichen Tätigkeitsnachweis',
     'reports.createFirstReport': 'Ersten Nachweis erstellen',
     'reports.deleteConfirm': 'Möchten Sie diesen Entwurf wirklich löschen?',
     'reports.error.loadData': 'Fehler beim Laden der Daten',
@@ -563,9 +697,12 @@ const translations = {
     'reports.error.pdfGeneration': 'Fehler beim Erstellen des PDFs:',
     'reports.modal.edit': 'Tätigkeitsnachweis bearbeiten',
     'reports.modal.new': 'Neuer Tätigkeitsnachweis',
-    'reports.modal.instructions': 'Wählen Sie Komponenten und Use Cases aus dem Ausbildungsrahmenplan',
-    'reports.modal.duplicate': 'Ein Nachweis für KW {week}/{year} existiert bereits. Bitte wählen Sie eine andere Kalenderwoche.',
-    'reports.modal.overbooking': 'Eine oder mehrere Tätigkeiten überschreiten die verfügbaren Stunden. Bitte korrigieren Sie die IST-Stunden.',
+    'reports.modal.instructions':
+      'Wählen Sie Komponenten und Use Cases aus dem Ausbildungsrahmenplan',
+    'reports.modal.duplicate':
+      'Ein Nachweis für KW {week}/{year} existiert bereits. Bitte wählen Sie eine andere Kalenderwoche.',
+    'reports.modal.overbooking':
+      'Eine oder mehrere Tätigkeiten überschreiten die verfügbaren Stunden. Bitte korrigieren Sie die IST-Stunden.',
     'reports.calendarWeek': 'Kalenderwoche',
     'reports.yearLabel': 'Jahr',
     'reports.selectedActivities': 'Ausgewählte Tätigkeiten',
@@ -606,7 +743,8 @@ const translations = {
     'notes.titleLabel': 'Titel',
     'notes.titlePlaceholder': 'z.B. Zusammenfassung Kapitel 3',
     'notes.content': 'Inhalt',
-    'notes.contentPlaceholder': 'Deine Notizen, Erkenntnisse oder Zusammenfassungen...',
+    'notes.contentPlaceholder':
+      'Deine Notizen, Erkenntnisse oder Zusammenfassungen...',
     'notes.oneDriveLink': 'OneDrive Link (optional)',
     'notes.saved': 'Notiz gespeichert!',
     'notes.error.save': 'Fehler beim Speichern',
@@ -614,14 +752,16 @@ const translations = {
 
     // Trainer - School Management
     'trainer.school.management': 'Berufsschul-Verwaltung',
-    'trainer.school.description': 'Verwalte Kalender, Tätigkeitsnachweise und Prüfungen deiner Trainees',
+    'trainer.school.description':
+      'Verwalte Kalender, Tätigkeitsnachweise und Prüfungen deiner Trainees',
     'trainer.school.pendingReports': 'Ausstehende Nachweise',
     'trainer.school.upcomingExams': 'Anstehende Prüfungen',
     'trainer.school.activeTrainees': 'Aktive Trainees',
     'trainer.school.tabs.lernfelder': 'Lernfelder',
     'trainer.school.tabs.lernfelderDesc': 'Lernfelder und Use Cases verwalten',
     'trainer.school.tabs.traineeCalendar': 'Trainee-Kalender',
-    'trainer.school.tabs.traineeCalendarDesc': 'Blockertermine für Trainees verwalten',
+    'trainer.school.tabs.traineeCalendarDesc':
+      'Blockertermine für Trainees verwalten',
     'trainer.school.tabs.exams': 'Prüfungen',
     'trainer.school.tabs.examsDesc': 'Prüfungsergebnisse und Bewertungen',
 
@@ -660,16 +800,19 @@ const translations = {
     'useCase.timeRemaining': 'Restzeit:',
     'useCase.days': 'Tage',
     'useCase.dueOn': 'Fällig am',
-    'useCase.linkPlaceholder': 'https://github.com/... oder https://1drv.ms/...',
+    'useCase.linkPlaceholder':
+      'https://github.com/... oder https://1drv.ms/...',
     'useCase.descriptionPlaceholder': 'Beschreibung (optional)',
     'useCase.removeLastLink': 'Letzten Link entfernen',
     'useCase.backToModule': 'Zurück zu',
     'useCase.approved': 'Genehmigt',
     'useCase.approvedDesc': 'Diese Abgabe wurde vom Trainer genehmigt.',
     'useCase.pending': 'Wird geprüft',
-    'useCase.pendingDesc': 'Deine Abgabe wartet auf die Überprüfung durch den Trainer.',
+    'useCase.pendingDesc':
+      'Deine Abgabe wartet auf die Überprüfung durch den Trainer.',
     'useCase.rejected': 'Überarbeitung erforderlich',
-    'useCase.rejectedDesc': 'Bitte überarbeite deine Abgabe und reiche sie erneut ein.',
+    'useCase.rejectedDesc':
+      'Bitte überarbeite deine Abgabe und reiche sie erneut ein.',
     'useCase.trainerFeedback': 'Feedback vom Trainer',
     'useCase.resubmit': 'Erneut einreichen',
 
@@ -677,7 +820,8 @@ const translations = {
     'modules.title': 'Meine Module',
     'modules.loading': 'Lade Module...',
     'modules.notFound': 'Modul nicht gefunden...',
-    'modules.description': 'Entdecken Sie alle verfügbaren Lernmodule und starten Sie Ihre Ausbildung',
+    'modules.description':
+      'Entdecken Sie alle verfügbaren Lernmodule und starten Sie Ihre Ausbildung',
     'modules.year': 'Jahr {year}',
     'modules.fromYear': 'Modul aus dem {year}. Ausbildungsjahr',
     'modules.progress': 'Fortschritt',
@@ -690,7 +834,8 @@ const translations = {
 
     // Quizzes
     'quiz.title': 'Quizze & Tests',
-    'quiz.description': 'Testen Sie Ihr Wissen mit verschiedenen Quizzen und bewerten Sie Ihren Fortschritt',
+    'quiz.description':
+      'Testen Sie Ihr Wissen mit verschiedenen Quizzen und bewerten Sie Ihren Fortschritt',
     'quiz.loading': 'Lade Quizze...',
     'quiz.userNotFound': 'Benutzer nicht gefunden...',
     'quiz.accessDenied': 'Zugriff verweigert...',
@@ -723,7 +868,8 @@ const translations = {
     'quiz.yourAnswerWas': 'Deine Antwort war',
     'quiz.noAnswer': 'Keine Antwort',
     'quiz.correctWrongAnswers': 'Falsche Antworten korrigieren',
-    'quiz.mustGet100': 'Du musst alle Fragen richtig beantworten, um das Quiz abzuschließen.',
+    'quiz.mustGet100':
+      'Du musst alle Fragen richtig beantworten, um das Quiz abzuschließen.',
     'quiz.perfectScore': 'Perfekt!',
     'quiz.youGot': 'Du hast',
     'quiz.correct': 'richtig',
@@ -733,7 +879,8 @@ const translations = {
 
     // Trainer Feedback
     'feedback.title': 'Trainer-Feedback',
-    'feedback.description': 'Status deiner Einreichungen und Ergebnisse der Lesson-Quizzes',
+    'feedback.description':
+      'Status deiner Einreichungen und Ergebnisse der Lesson-Quizzes',
     'feedback.loading': 'Lade Trainer-Feedback...',
     'feedback.lessonSubmissions': 'Lesson-Einreichungen',
     'feedback.useCaseSubmissions': 'Use-Case-Einreichungen',
@@ -759,13 +906,16 @@ const translations = {
 
     // Bulk Import
     'bulk.title': 'Bulk Import',
-    'bulk.description': 'Importieren Sie mehrere Kurse, Enabler und Use Cases gleichzeitig aus einer Excel-Datei',
-    'bulk.selectExcelFile': 'Bitte wählen Sie eine Excel-Datei (.xlsx oder .xls)',
+    'bulk.description':
+      'Importieren Sie mehrere Kurse, Enabler und Use Cases gleichzeitig aus einer Excel-Datei',
+    'bulk.selectExcelFile':
+      'Bitte wählen Sie eine Excel-Datei (.xlsx oder .xls)',
     'bulk.selectFile': 'Bitte wählen Sie eine Datei aus',
     'bulk.uploadFailed': 'Upload fehlgeschlagen',
     'bulk.unknownError': 'Unbekannter Fehler',
     'bulk.downloadTemplate': 'Excel-Vorlage herunterladen',
-    'bulk.downloadTemplateDesc': 'Laden Sie die Vorlage herunter und füllen Sie sie mit Ihren Daten',
+    'bulk.downloadTemplateDesc':
+      'Laden Sie die Vorlage herunter und füllen Sie sie mit Ihren Daten',
     'bulk.templateDownload': 'Vorlage herunterladen',
     'bulk.selectFileLabel': 'Excel-Datei auswählen',
     'bulk.uploading': 'Wird hochgeladen...',
@@ -778,10 +928,13 @@ const translations = {
     'bulk.errors': 'Fehler',
     'bulk.instructions': 'Anweisungen:',
     'bulk.instruction1': 'Laden Sie die Excel-Vorlage herunter',
-    'bulk.instruction2': 'Füllen Sie die Daten in den entsprechenden Sheets aus (Courses, Enablers, Use Cases)',
-    'bulk.instruction3': 'NEU: Nutzen Sie das "Scenarios" Sheet für detaillierte Szenario-Inhalte',
+    'bulk.instruction2':
+      'Füllen Sie die Daten in den entsprechenden Sheets aus (Courses, Enablers, Use Cases)',
+    'bulk.instruction3':
+      'NEU: Nutzen Sie das "Scenarios" Sheet für detaillierte Szenario-Inhalte',
     'bulk.instruction4': 'Speichern Sie die Datei und laden Sie sie hier hoch',
-    'bulk.instruction5': 'Überprüfen Sie die Ergebnisse und beheben Sie ggf. Fehler',
+    'bulk.instruction5':
+      'Überprüfen Sie die Ergebnisse und beheben Sie ggf. Fehler',
 
     // Learning - SubLesson
     'sublesson.notFound': 'Aufgabe nicht gefunden...',
@@ -810,7 +963,8 @@ const translations = {
     'content.descriptionPlaceholder': 'Kurze Beschreibung des Lessons',
     'content.descriptionRequired': 'Beschreibung (erforderlich)',
     'content.scenario': 'Szenario',
-    'content.scenarioPlaceholder': 'Beschreibe hier das Szenario, das der Azubi lösen soll...',
+    'content.scenarioPlaceholder':
+      'Beschreibe hier das Szenario, das der Azubi lösen soll...',
     'content.hint': 'Hinweis (für Trainees sichtbar)',
     'content.hintPlaceholder': 'Tipp zur Lösung des Szenarios',
     'content.quizQuestions': 'Quiz-Fragen',
@@ -819,7 +973,8 @@ const translations = {
     'content.enterDescription': 'Bitte Beschreibung eingeben',
     'content.error.delete': 'Fehler beim Löschen',
     'content.management.title': 'Inhalts-Verwaltung',
-    'content.management.description': 'Verwalten Sie Lernmodule, Kapitel und Lektionen',
+    'content.management.description':
+      'Verwalten Sie Lernmodule, Kapitel und Lektionen',
     'content.newCourse': 'Neuer Kurs',
     'content.searchModules': 'Nach Modulen suchen...',
     'content.allYears': 'Alle Jahre',
@@ -834,11 +989,31 @@ const translations = {
     'content.useCases': 'Use Cases',
     'content.tasks': 'Aufgaben',
     'content.tasksInCourse': 'Aufgaben im Kurs',
-    'content.deleteModuleConfirm': 'Modul löschen? Dies löscht auch alle enthaltenen Kapitel.',
+    'content.assignCourses': 'Kurse zuweisen',
+    'content.assignCoursesTitle': 'Kurse zuweisen',
+    'content.assignCoursesDesc':
+      'Weise einen oder mehrere Kurse an einen oder mehrere Azubis zu.',
+    'content.assignSelectCourses': 'Kurse auswaehlen',
+    'content.assignAllCourses': 'Alle Kurse',
+    'content.assignSelectedCoursesCount': '{count} ausgewaehlt',
+    'content.assignSelectTrainees': 'Azubis auswaehlen',
+    'content.assignSearchTrainees': 'Azubis suchen...',
+    'content.assignSelectedTraineesCount': '{count} ausgewaehlt',
+    'content.clickToAdd': 'Hinzufuegen',
+    'content.assignNow': 'Jetzt zuweisen',
+    'content.assigning': 'Weise zu...',
+    'content.assignFailed': 'Zuweisung fehlgeschlagen',
+    'content.assignSelectTrainee': 'Bitte mindestens einen Azubi auswaehlen.',
+    'content.assignSelectCourse': 'Bitte mindestens einen Kurs auswaehlen.',
+    'content.assignedTrainers': '{count} Trainer',
+    'content.assignedTrainees': '{count} Azubis',
+    'content.deleteModuleConfirm':
+      'Modul löschen? Dies löscht auch alle enthaltenen Kapitel.',
     'content.unknownError': 'Unbekannter Fehler',
     'content.deleteCourse': 'Kurs löschen',
     'content.noCoursesFound': 'Keine Kurse gefunden',
-    'content.tryOtherCriteria': 'Versuchen Sie andere Suchkriterien oder Filter.',
+    'content.tryOtherCriteria':
+      'Versuchen Sie andere Suchkriterien oder Filter.',
     'content.createNewCourse': 'Neuen Kurs erstellen',
     'content.newLesson': 'Neuen Lesson erstellen',
     'content.newUseCase': 'Neuen Use Case erstellen',
@@ -860,7 +1035,8 @@ const translations = {
 
     // Course Form
     'course.form.newCourse': 'Neuen Kurs anlegen',
-    'course.form.description': 'Erstellen Sie einen Kurs und definieren Sie Jahr, Modul und Skills.',
+    'course.form.description':
+      'Erstellen Sie einen Kurs und definieren Sie Jahr, Modul und Skills.',
     'course.form.titleLabel': 'Kurstitel',
     'course.form.titlePlaceholder': 'z.B. Einführung in Webentwicklung',
     'course.form.titleRequired': 'Bitte einen Kurstitel eingeben.',
@@ -901,7 +1077,8 @@ const translations = {
 
     // Enabler Quiz Form
     'enablerQuiz.newTitle': 'Neues Quiz für Lesson',
-    'enablerQuiz.description': 'Wählen Sie Schwierigkeit, geben Sie einen Titel ein und fügen Sie Fragen hinzu.',
+    'enablerQuiz.description':
+      'Wählen Sie Schwierigkeit, geben Sie einen Titel ein und fügen Sie Fragen hinzu.',
     'enablerQuiz.difficulty': 'Schwierigkeit',
     'enablerQuiz.quizTitle': 'Quiz-Titel',
     'enablerQuiz.titlePlaceholder': 'z.B. Grundlagen',
@@ -912,10 +1089,13 @@ const translations = {
     'enablerQuiz.questionText': 'Fragetext',
     'enablerQuiz.multipleChoice': 'Multiple Choice',
     'enablerQuiz.textAnswer': 'Textantwort',
-    'enablerQuiz.expectedAnswer': 'Erwartete Antwort (optional für automatische Bewertung)',
-    'enablerQuiz.expectedAnswerPlaceholder': 'Erwartete Antwort eingeben (optional)',
+    'enablerQuiz.expectedAnswer':
+      'Erwartete Antwort (optional für automatische Bewertung)',
+    'enablerQuiz.expectedAnswerPlaceholder':
+      'Erwartete Antwort eingeben (optional)',
     'enablerQuiz.optionPlaceholder': 'Option {number}',
-    'enablerQuiz.explanation': 'Erklärung (warum ist die richtige Antwort korrekt?)',
+    'enablerQuiz.explanation':
+      'Erklärung (warum ist die richtige Antwort korrekt?)',
     'enablerQuiz.addMcq': '+ MCQ Frage',
     'enablerQuiz.addText': '+ Text Frage',
     'enablerQuiz.cancel': 'Abbrechen',
@@ -971,9 +1151,11 @@ const translations = {
     'enablerPage.approved': 'Genehmigt',
     'enablerPage.approvedDesc': 'Diese Abgabe wurde vom Trainer genehmigt.',
     'enablerPage.pending': 'Wird geprüft',
-    'enablerPage.pendingDesc': 'Deine Abgabe wartet auf die Überprüfung durch den Trainer.',
+    'enablerPage.pendingDesc':
+      'Deine Abgabe wartet auf die Überprüfung durch den Trainer.',
     'enablerPage.rejected': 'Überarbeitung erforderlich',
-    'enablerPage.rejectedDesc': 'Bitte überarbeite deine Abgabe und reiche sie erneut ein.',
+    'enablerPage.rejectedDesc':
+      'Bitte überarbeite deine Abgabe und reiche sie erneut ein.',
     'enablerPage.trainerFeedback': 'Feedback vom Trainer',
     'enablerPage.feedbackForScenario': 'Feedback für Szenario {number}',
     'enablerPage.resubmit': 'Erneut einreichen',
@@ -1002,14 +1184,16 @@ const translations = {
     'scenario.scenarioContent': 'Szenario-Inhalt',
     // Solution gating
     'scenario.solutionsLocked': 'Lösungen sind gesperrt',
-    'scenario.completeChecklistToUnlock': 'Bitte vervollständige zuerst die Checkliste und bestätige, dass du alle Aufgaben bearbeitet hast.',
+    'scenario.completeChecklistToUnlock':
+      'Bitte vervollständige zuerst die Checkliste und bestätige, dass du alle Aufgaben bearbeitet hast.',
     'scenario.completeChecklistFirst': 'Bitte erst Checkliste abschließen',
     'scenario.sectionLocked': 'Dieser Abschnitt ist gesperrt',
     'scenario.goToChecklist': 'Zur Checkliste',
     'scenario.haveYouAnsweredAll': 'Hast du alle Aufgaben bearbeitet?',
     'scenario.unlocksSolutions': 'Schaltet Lösungen frei',
     'scenario.solutionsUnlocked': 'Lösungen freigeschaltet!',
-    'scenario.solutionsNowAvailable': 'Super! Du kannst jetzt die Lösungen einsehen.',
+    'scenario.solutionsNowAvailable':
+      'Super! Du kannst jetzt die Lösungen einsehen.',
     'scenario.checklistComplete': 'Checkliste abgeschlossen!',
     'scenario.solutionsHeader': 'Hier sind die Lösungen zu den Aufgaben',
     // Section titles (merged groups)
@@ -1029,19 +1213,23 @@ const translations = {
     'scenario.section.learningGoalChecklist': 'Lernziel-Checkliste',
     // Sequential progression & answer submission
     'scenario.sectionsOverview': 'Abschnitte in diesem Szenario:',
-    'scenario.submitAnswerToUnlock': 'Bitte schreibe erst deine Lösung, um die Musterlösungen freizuschalten.',
+    'scenario.submitAnswerToUnlock':
+      'Bitte schreibe erst deine Lösung, um die Musterlösungen freizuschalten.',
     'scenario.writeYourAnswer': 'Schreibe deine Lösung',
-    'scenario.writeAnswerDescription': 'Bevor du die Musterlösungen siehst, versuche die Aufgaben selbst zu lösen.',
+    'scenario.writeAnswerDescription':
+      'Bevor du die Musterlösungen siehst, versuche die Aufgaben selbst zu lösen.',
     'scenario.answerPlaceholder': 'Beschreibe deinen Lösungsansatz...',
     'scenario.submitAnswer': 'Antwort einreichen',
     'scenario.readyToSubmit': '✓ Bereit zum Einreichen',
     'scenario.enterAnswerFirst': 'Bitte schreibe erst deine Lösung',
-    'scenario.answerSubmittedSolutionsUnlocked': 'Antwort eingereicht! Die Lösungen sind jetzt freigeschaltet.',
+    'scenario.answerSubmittedSolutionsUnlocked':
+      'Antwort eingereicht! Die Lösungen sind jetzt freigeschaltet.',
 
     // PDF Uploader
     'pdf.onlyAllowed': 'Nur PDF-Dateien sind erlaubt',
     'pdf.tooLarge': 'Datei zu groß. Maximum: {size}MB',
-    'pdf.bucketNotFound': 'Storage-Bucket "content" nicht gefunden. Bitte in Supabase erstellen.',
+    'pdf.bucketNotFound':
+      'Storage-Bucket "content" nicht gefunden. Bitte in Supabase erstellen.',
     'pdf.uploadFailed': 'Upload fehlgeschlagen',
     'pdf.file': 'PDF-Datei',
     'pdf.uploaded': 'PDF erfolgreich hochgeladen',
@@ -1087,8 +1275,10 @@ const translations = {
     'hai.button.close': 'Schließen',
     'hai.button.open': 'HAI öffnen',
     'hai.button.askHai': 'Frag HAI',
-    'hai.error.somethingWrong': 'Ups, da ist etwas schiefgelaufen! Bitte versuche es später erneut.',
-    'hai.error.connectionError': 'Verbindungsfehler. Bitte prüfe deine Internetverbindung.',
+    'hai.error.somethingWrong':
+      'Ups, da ist etwas schiefgelaufen! Bitte versuche es später erneut.',
+    'hai.error.connectionError':
+      'Verbindungsfehler. Bitte prüfe deine Internetverbindung.',
     'hai.welcome.greeting': 'Moin! Ich bin HAI.',
     'hai.welcome.description': 'Dein KI-Lerncoach für die IT-Ausbildung.',
     'hai.suggestions.quiz': 'Quiz starten',
@@ -1107,10 +1297,12 @@ const translations = {
     'hai.askToStart': 'Stelle eine Frage um zu beginnen.',
     'hai.admin.title': 'HAI Content Management',
     'hai.admin.knowledgeBase': 'Wissensdatenbank',
-    'hai.admin.description': 'Aktualisiere das Wissen von HAI.ai basierend auf den neuesten Enablers und PDFs. Dies erstellt neue Embeddings für die Suche.',
+    'hai.admin.description':
+      'Aktualisiere das Wissen von HAI.ai basierend auf den neuesten Enablers und PDFs. Dies erstellt neue Embeddings für die Suche.',
     'hai.admin.indexing': 'Indexiere...',
     'hai.admin.indexNow': 'Jetzt Indexieren',
-    'hai.admin.indexSuccess': 'Erfolgreich indexiert: {chunks} Chunks. (Verarbeitet: {enablers} Enablers, {docs} Docs)',
+    'hai.admin.indexSuccess':
+      'Erfolgreich indexiert: {chunks} Chunks. (Verarbeitet: {enablers} Enablers, {docs} Docs)',
     'hai.admin.indexError': 'Fehler beim Indexieren.',
     'hai.admin.networkError': 'Netzwerkfehler beim Indexieren.',
 
@@ -1127,15 +1319,19 @@ const translations = {
     'landing.beingRedirected': 'Sie werden weitergeleitet',
     'landing.signUp': 'Anmelden',
     'landing.welcome': 'Willkommen bei der',
-    'landing.description': 'Eine interne Lernplattform für FIAE-Auszubildende und Ausbilder. Entdecken Sie interaktive Module, Quizze und Reflexionsmöglichkeiten.',
+    'landing.description':
+      'Eine interne Lernplattform für FIAE-Auszubildende und Ausbilder. Entdecken Sie interaktive Module, Quizze und Reflexionsmöglichkeiten.',
     'landing.getStarted': 'Jetzt starten',
     'landing.whyPlatform': 'Warum FIAE-Lernplattform?',
     'landing.interactiveLearning': 'Interaktives Lernen',
-    'landing.interactiveLearningDesc': 'Moderne Lernmodule mit Quizzen und praktischen Übungen für ein effektives Lernerlebnis.',
+    'landing.interactiveLearningDesc':
+      'Moderne Lernmodule mit Quizzen und praktischen Übungen für ein effektives Lernerlebnis.',
     'landing.personalSupport': 'Persönliche Betreuung',
-    'landing.personalSupportDesc': 'Individuelle Unterstützung durch Ausbilder und kontinuierliches Feedback.',
+    'landing.personalSupportDesc':
+      'Individuelle Unterstützung durch Ausbilder und kontinuierliches Feedback.',
     'landing.securePlatform': 'Sichere Plattform',
-    'landing.securePlatformDesc': 'Moderne Sicherheitsstandards und Datenschutz für Ihre Lerninhalte.',
+    'landing.securePlatformDesc':
+      'Moderne Sicherheitsstandards und Datenschutz für Ihre Lerninhalte.',
     'landing.copyright': '© 2025 FIAE-Lernplattform. Alle Rechte vorbehalten.',
 
     // Register Page
@@ -1148,8 +1344,10 @@ const translations = {
     'register.createAccount': 'Konto erstellen',
     'register.alreadyHaveAccount': 'Bereits ein Konto?',
     'register.loginHere': 'Hier anmelden',
-    'register.emailPasswordRequired': 'Bitte geben Sie eine E-Mail-Adresse und ein Passwort ein.',
-    'register.passwordMinLength': 'Passwort muss mindestens 6 Zeichen lang sein.',
+    'register.emailPasswordRequired':
+      'Bitte geben Sie eine E-Mail-Adresse und ein Passwort ein.',
+    'register.passwordMinLength':
+      'Passwort muss mindestens 6 Zeichen lang sein.',
     'register.failed': 'Registrierung fehlgeschlagen',
 
     // Reset Password Page
@@ -1160,19 +1358,24 @@ const translations = {
     'resetPassword.showPassword': 'Passwort anzeigen',
     'resetPassword.saving': 'Speichern…',
     'resetPassword.changePassword': 'Passwort ändern',
-    'resetPassword.passwordMinLength': 'Passwort muss mindestens 6 Zeichen lang sein.',
+    'resetPassword.passwordMinLength':
+      'Passwort muss mindestens 6 Zeichen lang sein.',
     'resetPassword.passwordMismatch': 'Passwörter stimmen nicht überein.',
-    'resetPassword.success': 'Passwort aktualisiert. Bitte melden Sie sich erneut an.',
-    'resetPassword.successToast': 'Passwort erfolgreich aktualisiert. Bitte melden Sie sich erneut an.',
+    'resetPassword.success':
+      'Passwort aktualisiert. Bitte melden Sie sich erneut an.',
+    'resetPassword.successToast':
+      'Passwort erfolgreich aktualisiert. Bitte melden Sie sich erneut an.',
     'resetPassword.error': 'Fehler beim Aktualisieren des Passworts.',
 
     // Forgot Password Page
     'forgotPassword.title': 'Passwort zurücksetzen',
-    'forgotPassword.description': 'Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen Link zum Zurücksetzen des Passworts.',
+    'forgotPassword.description':
+      'Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen Link zum Zurücksetzen des Passworts.',
     'forgotPassword.emailLabel': 'E-Mail-Adresse',
     'forgotPassword.sending': 'Senden…',
     'forgotPassword.sendLink': 'Link senden',
-    'forgotPassword.success': 'Wenn die E-Mail existiert, wurde ein Link zum Zurücksetzen gesendet.',
+    'forgotPassword.success':
+      'Wenn die E-Mail existiert, wurde ein Link zum Zurücksetzen gesendet.',
     'forgotPassword.error': 'Fehler beim Senden der E-Mail.',
     'forgotPassword.backToLogin': 'Zurück zur Anmeldung',
 
@@ -1183,7 +1386,8 @@ const translations = {
     'trainer.analytics.accessDenied': 'Zugriff verweigert...',
     'trainer.analytics.unknownError': 'Unbekannter Fehler',
     'trainer.analytics.title': 'Analysen & Statistiken',
-    'trainer.analytics.description': 'Überblick über den Fortschritt und die Leistung Ihrer Auszubildenden',
+    'trainer.analytics.description':
+      'Überblick über den Fortschritt und die Leistung Ihrer Auszubildenden',
     'trainer.analytics.activeTrainees': 'Aktive Azubis',
     'trainer.analytics.avgProgress': 'Ø Fortschritt',
     'trainer.analytics.pendingReviews': 'Ausstehende Reviews',
@@ -1192,14 +1396,16 @@ const translations = {
 
     // Trainer Calendar Page
     'trainer.calendar.title': 'Trainee-Kalender',
-    'trainer.calendar.description': 'Verwalte Blockertermine für deine Trainees',
+    'trainer.calendar.description':
+      'Verwalte Blockertermine für deine Trainees',
     'trainer.calendar.selectTrainee': 'Trainee auswählen...',
     'trainer.calendar.createBlock': 'Blocker erstellen',
     'trainer.calendar.today': 'Heute',
     'trainer.calendar.loadError': 'Fehler beim Laden der Blöcke',
     'trainer.calendar.createError': 'Fehler beim Erstellen',
     'trainer.calendar.selectTraineePrompt': 'Trainee auswählen',
-    'trainer.calendar.selectTraineeDesc': 'Wähle einen Trainee aus, um deren Kalender zu sehen.',
+    'trainer.calendar.selectTraineeDesc':
+      'Wähle einen Trainee aus, um deren Kalender zu sehen.',
     'trainer.calendar.more': '+{count} mehr',
     'trainer.calendar.modal.title': 'Blocker erstellen',
     'trainer.calendar.modal.forTrainee': 'Für {name}',
@@ -1217,10 +1423,12 @@ const translations = {
     'trainer.calendar.modal.descriptionPlaceholder': 'Details zum Termin...',
     'trainer.calendar.modal.notesField': 'Notizen (optional)',
     'trainer.calendar.modal.notesPlaceholder': 'Interne Notizen...',
-    'trainer.calendar.modal.sendInvitation': 'Kalendereinladung an Trainee(s) senden',
+    'trainer.calendar.modal.sendInvitation':
+      'Kalendereinladung an Trainee(s) senden',
     'trainer.calendar.modal.cancel': 'Abbrechen',
     'trainer.calendar.modal.create': 'Erstellen',
-    'trainer.calendar.modal.selectAtLeastOne': 'Bitte mindestens einen Trainee auswählen',
+    'trainer.calendar.modal.selectAtLeastOne':
+      'Bitte mindestens einen Trainee auswählen',
     'trainer.calendar.blockTypes.school': 'Schule',
     'trainer.calendar.blockTypes.company': 'WMC',
     'trainer.calendar.blockTypes.holiday': 'Urlaub',
@@ -1250,7 +1458,8 @@ const translations = {
 
     // Trainer Activity Reports Page
     'trainer.reports.title': 'Tätigkeitsnachweise',
-    'trainer.reports.description': 'Prüfen und genehmigen Sie die wöchentlichen Ausbildungsnachweise',
+    'trainer.reports.description':
+      'Prüfen und genehmigen Sie die wöchentlichen Ausbildungsnachweise',
     'trainer.reports.pending': 'Zur Prüfung',
     'trainer.reports.approved': 'Genehmigt',
     'trainer.reports.history': 'Historie',
@@ -1272,7 +1481,8 @@ const translations = {
     'trainer.reports.period1to18': '1. bis 18. Monat',
     'trainer.reports.period19to36': '19. bis 36. Monat',
     'trainer.reports.exportAll': 'Alle exportieren ({count})',
-    'trainer.reports.deleteConfirm': 'Möchten Sie diesen Nachweis wirklich löschen?',
+    'trainer.reports.deleteConfirm':
+      'Möchten Sie diesen Nachweis wirklich löschen?',
     'trainer.reports.deleteError': 'Fehler beim Löschen',
     'trainer.reports.pdfError': 'Fehler beim Erstellen des PDFs: ',
     'trainer.reports.exportError': 'Fehler beim Massenexport: ',
@@ -1281,12 +1491,15 @@ const translations = {
     'trainer.reports.modal.actualTotal': 'IST Gesamt',
     'trainer.reports.modal.difference': 'Differenz',
     'trainer.reports.modal.hours': 'Std',
-    'trainer.reports.modal.overbookedWarning': 'Dieser Nachweis enthält überbuchte Einträge',
+    'trainer.reports.modal.overbookedWarning':
+      'Dieser Nachweis enthält überbuchte Einträge',
     'trainer.reports.modal.noEntries': 'Keine Einträge',
     'trainer.reports.modal.plan': 'Plan',
     'trainer.reports.modal.actual': 'IST',
-    'trainer.reports.modal.feedbackLabel': 'Feedback / Begründung für Ablehnung',
-    'trainer.reports.modal.feedbackPlaceholder': 'Bitte geben Sie einen Grund für die Ablehnung an...',
+    'trainer.reports.modal.feedbackLabel':
+      'Feedback / Begründung für Ablehnung',
+    'trainer.reports.modal.feedbackPlaceholder':
+      'Bitte geben Sie einen Grund für die Ablehnung an...',
     'trainer.reports.modal.cancel': 'Abbrechen',
     'trainer.reports.modal.reject': 'Ablehnen',
     'trainer.reports.modal.close': 'Schließen',
@@ -1348,10 +1561,88 @@ const translations = {
     'nav.activityReports': 'Activity Reports',
     'nav.school': 'School',
     'nav.courses': 'Courses',
+    'nav.trainerFeedback': 'Trainer Feedback',
+    'nav.evaluations': 'Certificate',
+
+    // Trainer Content Management
+    'trainer.content.editCourse': 'Edit Course',
+    'trainer.content.editCourseSub': 'Manage title, year, chapter and content',
+    'trainer.content.courseDetails': 'Course Details',
+    'trainer.content.courseTitle': 'Course Title',
+    'trainer.content.trainingYear': 'Training Year',
+    'trainer.content.chapter': 'Chapter/Section',
+    'trainer.content.skills': 'Skills (Comma separated)',
+    'trainer.content.members': 'Members',
+    'trainer.content.trainers': 'Trainers',
+    'trainer.content.trainees': 'Trainees',
+    'trainer.content.searchTrainer': 'Search Trainer',
+    'trainer.content.searchTrainee': 'Search Trainee',
+    'trainer.content.lessons': 'Lessons',
+    'trainer.content.addLesson': 'Add Lesson',
+    'trainer.content.addUseCase': 'Add Use Case',
+    'trainer.content.useCases': 'Use Cases',
+    'trainer.content.createLesson': 'Create New Lesson',
+    'trainer.content.createUseCase': 'Create New Use Case',
+    'trainer.content.pptLink': 'PPT Link',
+    'trainer.content.videoLink': 'Video Link',
+    'trainer.content.durationDays': 'Duration (Days)',
+    'trainer.content.scenarios': 'Scenarios (with hints)',
+    'trainer.content.addScenario': 'Add Scenario',
+    'trainer.content.scenarioOf': 'Scenario {current} of {total}',
+    'trainer.content.hintVisible': 'Hint (visible to trainees)',
+    'trainer.content.hintPlaceholder': 'Tip for solving the scenario',
+    'trainer.content.deleteScenario': 'Delete this scenario',
+    'trainer.content.confirmDeleteEnabler':
+      'Really delete this enabler? This cannot be undone.',
+    'trainer.content.confirmDeleteUseCase':
+      'Really delete this use case? This cannot be undone.',
+    'trainer.content.errorTitle': 'Please enter a course title.',
+    'trainer.content.errorYear': 'Please select a training year.',
+    'trainer.content.errorNoTrainer': 'No trainer profile',
+    'trainer.content.trainingStage': 'Training Stage',
+    'trainer.content.stage1': 'Training Stage 1',
+    'trainer.content.stage2': 'Training Stage 2',
+    'trainer.content.noQuiz': 'No {level} quiz',
+    'trainer.content.questionCount': 'Questions: {count}',
+    'trainer.content.confirmDeleteQuiz': 'Delete this quiz?',
+    'trainer.content.topics': 'Topics Covered',
+    'trainer.content.context': 'Initial Situation',
+    'trainer.content.problemSolutionPairs': 'Problem-Solution Pairs',
+    'trainer.content.goals': 'Learning Goals',
+    'trainer.content.theory': 'Theory',
+    'trainer.content.checklist': 'Learning Goal Checklist',
+    'trainer.content.rawText': 'Complete Text (Legacy/Raw)',
+    'trainer.content.rawTextHint':
+      'This is the field used by the viewer. In structured mode, this field is generated automatically.',
+    'trainer.content.switchTextMode': 'Switch to Text Editor',
+    'trainer.content.switchStructuredMode': 'Switch to Structure Editor',
+    'trainer.content.placeholderSituation': 'Describe the situation...',
+    'trainer.content.placeholderTopics': 'e.g. REST APIs, Databases...',
+    'trainer.content.placeholderScenario':
+      'Describe the scenario the trainee should solve...',
+    'trainer.content.errorNoTitle': 'Please enter a title',
+    'trainer.content.errorNoDescription': 'Please enter a description',
+    'trainer.content.errorNoLessonSelected': 'No lesson selected',
+    'trainer.content.errorNoUseCaseSelected': 'No use case selected',
+    'trainer.content.confirmDeleteDoc': 'Delete this document?',
+    'trainer.content.addProblem': 'Add Problem',
+    'trainer.content.problemIndex': 'Problem {index}',
+    'trainer.content.solutionIndex': 'Solution {index}',
+    'trainer.content.editLesson': 'Edit Lesson',
+    'trainer.content.lessonQuizzes': 'Lesson Quizzes (Low / Medium / High)',
+    'trainer.content.lessonDescriptionPlaceholder':
+      'Short description of the lesson',
+    'trainer.content.pdfSaveNotice': 'PDFs are saved after creation.',
+    'trainer.content.errorLessonUpdateFailed': 'Lesson update failed',
+    'trainer.content.errorLessonCreateFailed': 'Could not create lesson',
+    'trainer.content.durationPlaceholder': 'e.g. 7',
     'nav.bulkImport': 'Bulk Import',
     'nav.trainees': 'Trainees',
     'nav.analytics': 'Analytics',
-    'nav.trainerFeedback': 'Trainer Feedback',
+
+    // Sidebar
+    'sidebar.title': 'FIAE',
+    'sidebar.subtitle': 'Learning Platform',
 
     // Common
     'common.loading': 'Loading...',
@@ -1371,11 +1662,23 @@ const translations = {
     'common.add': 'Add',
     'common.remove': 'Remove',
     'common.close': 'Close',
+    'trainer.content.errorUseCaseUpdateFailed': 'Use Case update failed',
+    'common.unknownError': 'Unknown error',
     'common.switchToEnglish': 'Switch to English',
-    'common.switchToGerman': 'Zu Deutsch wechseln',
+    'common.switchToGerman': 'Switch to German',
+    'common.select': 'Please select',
     'common.submit': 'Submit',
     'common.download': 'Download',
     'common.upload': 'Upload',
+    'trainer.content.errorCourseLoadFailed': 'Failed to load course',
+    'trainer.content.errorSaveFailed': 'Save failed',
+    'trainer.content.errorDeleteFailed': 'Delete failed',
+    'trainer.content.errorUseCaseCreateFailed': 'Could not create use case',
+    'trainer.content.chapterPlaceholder': 'e.g. 1',
+    'trainer.content.skillsPlaceholder': 'e.g. Git, HTML, CSS, JavaScript',
+    'trainer.content.searchHint':
+      'Type to see suggestions. Click a name to add.',
+    'trainer.content.clickToAdd': 'Click to add',
     'common.uploading': 'Uploading...',
     'common.noResults': 'No Results',
     'common.confirm': 'Confirm',
@@ -1388,6 +1691,20 @@ const translations = {
     'common.open': 'Open',
     'common.notFound': 'Not Found',
     'common.status': 'Status',
+    'common.title': 'Title',
+    'common.description': 'Description',
+    'common.lernfelder': 'Learning Fields',
+    'common.year1': 'Year 1',
+    'common.year2': 'Year 2',
+    'common.year3': 'Year 3',
+    'common.activate': 'Activate',
+    'common.deactivate': 'Deactivate',
+    'common.backLabel': '← Back',
+    'common.nextLabel': 'Next →',
+    'common.problem': 'Problem',
+    'common.saving': 'Saving...',
+    'common.untitled': 'Untitled',
+    'common.solution': 'SOLUTION',
 
     // Auth
     'auth.login': 'Login',
@@ -1461,7 +1778,8 @@ const translations = {
 
     // Trainee Management
     'trainee.management.title': 'Trainees',
-    'trainee.management.description': 'Manage your trainees and track their progress',
+    'trainee.management.description':
+      'Manage your trainees and track their progress',
     'trainee.management.loading': 'Loading trainees...',
     'trainee.management.loadError': 'Could not load trainees',
     'trainee.management.overallProgress': 'Overall Progress',
@@ -1545,7 +1863,8 @@ const translations = {
     'profile.statistics': 'Statistics',
     'profile.recentActivities': 'Recent Activities',
     'profile.noActivities': 'No activities found',
-    'profile.traineeActivities': 'Your trainees\' activities will be shown here.',
+    'profile.traineeActivities':
+      "Your trainees' activities will be shown here.",
     'profile.modulesCompleted': 'Modules Completed',
     'profile.certificates': 'Certificates',
     'profile.learningHours': 'Learning Hours',
@@ -1575,7 +1894,8 @@ const translations = {
     'profile.fileTooLarge': 'File is too large. Maximum 10MB.',
     'profile.uploadFailed': 'Upload failed. Please try again.',
     'profile.uploadError': 'Error:',
-    'profile.storageBucketHint': '\nNote: Does the storage bucket "avatar" exist and is it public?',
+    'profile.storageBucketHint':
+      '\nNote: Does the storage bucket "avatar" exist and is it public?',
 
     // Profile - Time formatting
     'profile.time.justNow': 'Just now',
@@ -1597,7 +1917,8 @@ const translations = {
 
     // School
     'school.title': 'Vocational School',
-    'school.description': 'Manage your training: Schedule, exams, and activity reports',
+    'school.description':
+      'Manage your training: Schedule, exams, and activity reports',
     'school.loading': 'Loading school view...',
     'school.tabs.lernfelder': 'Learning Fields',
     'school.tabs.lernfelderDesc': 'Your learning fields and tasks',
@@ -1626,7 +1947,8 @@ const translations = {
     'calendar.week': 'Week',
     'calendar.today': 'Today',
     'calendar.loading': 'Loading calendar...',
-    'calendar.inviteEmails': 'Comma-separated email addresses for calendar invitation',
+    'calendar.inviteEmails':
+      'Comma-separated email addresses for calendar invitation',
     'calendar.error.loadBlocks': 'Error loading blocks',
     'calendar.error.addBlock': 'Error adding block',
     'calendar.error.deleteBlock': 'Error deleting block',
@@ -1643,7 +1965,8 @@ const translations = {
     'calendar.companyPhases': 'Company Phases',
     'calendar.holidayWeeks': 'Holiday Weeks',
     'calendar.emptyState.title': 'No entries yet',
-    'calendar.emptyState.description': 'Click on a day to add a block, or import your school calendar as CSV.',
+    'calendar.emptyState.description':
+      'Click on a day to add a block, or import your school calendar as CSV.',
     'calendar.block.period': 'Period',
     'calendar.block.until': 'until {date}',
     'calendar.block.descriptionLabel': 'Description',
@@ -1663,11 +1986,13 @@ const translations = {
     'calendar.modal.examType': 'Exam Type',
     'calendar.modal.selectPlaceholder': 'Please select...',
     'calendar.modal.descriptionRequired': 'Description *',
-    'calendar.modal.descriptionPlaceholder': 'e.g. Doctor appointment, official errand...',
+    'calendar.modal.descriptionPlaceholder':
+      'e.g. Doctor appointment, official errand...',
     'calendar.modal.notesOptional': 'Notes (optional)',
     'calendar.modal.notesPlaceholder': 'e.g. Exam preparation',
     'calendar.modal.inviteLabel': 'Send invitations to (optional)',
-    'calendar.modal.invitePlaceholder': 'email1@example.com, email2@example.com',
+    'calendar.modal.invitePlaceholder':
+      'email1@example.com, email2@example.com',
     'calendar.import.title': 'CSV Import',
     'calendar.import.formatLabel': 'Expected format:',
     'calendar.import.formatDescription': 'CW, Date, 10IT, 11IT, 12IT, Notes',
@@ -1725,20 +2050,25 @@ const translations = {
     'lernfelder.viewTasks': 'View tasks',
     'lernfelder.notFound': 'No learning fields found',
     'lernfelder.tryDifferentSearch': 'Try different search terms.',
-    'lernfelder.noneAssigned': 'No learning fields have been assigned to you yet.',
-    'lernfelder.overview': 'Overview of all learning fields and associated use cases',
+    'lernfelder.noneAssigned':
+      'No learning fields have been assigned to you yet.',
+    'lernfelder.overview':
+      'Overview of all learning fields and associated use cases',
     'lernfelder.new': 'New Learning Field',
     'lernfelder.edit': 'Edit Learning Field',
     'lernfelder.create': 'Create Learning Field',
     'lernfelder.createFirst': 'Create your first learning field.',
-    'lernfelder.deleteConfirm': 'Are you sure you want to delete this learning field?',
+    'lernfelder.deleteConfirm':
+      'Are you sure you want to delete this learning field?',
     'lernfelder.label': 'Learning Field Label *',
-    'lernfelder.labelInfo': 'Each learning field requires a unique label (LF-1 to LF-12).',
+    'lernfelder.labelInfo':
+      'Each learning field requires a unique label (LF-1 to LF-12).',
     'lernfelder.labelTaken': '(Taken)',
     'lernfelder.titleLabel': 'Title *',
     'lernfelder.titlePlaceholder': 'e.g. Provide IT Systems',
     'lernfelder.descriptionLabel': 'Description',
-    'lernfelder.descriptionPlaceholder': 'Brief description of the learning field...',
+    'lernfelder.descriptionPlaceholder':
+      'Brief description of the learning field...',
 
     // Exams
     'exams.type.klausur': 'Written Exam',
@@ -1771,7 +2101,8 @@ const translations = {
     'exams.grading': 'Grade Exam',
     'exams.notGraded': 'Not yet graded',
     'exams.results.loading': 'Error loading',
-    'exams.results.noResults': 'Results will be displayed here once they are recorded.',
+    'exams.results.noResults':
+      'Results will be displayed here once they are recorded.',
     'exams.results.passed': 'Passed',
     'exams.results.failed': 'Failed',
     'exams.results.title': 'Grade Overview',
@@ -1833,28 +2164,34 @@ const translations = {
     'reports.trainerFeedback': 'Feedback from trainer:',
     'reports.revise': 'Please revise the report and submit again.',
     'reports.operationalActivities': 'Operational Activities',
-    'reports.describeActivities': 'Describe your operational activities this week...',
+    'reports.describeActivities':
+      'Describe your operational activities this week...',
     'reports.curriculumReference': 'Curriculum Reference',
     'reports.curriculumPlaceholder': 'e.g. Section A, Topic 1',
     'reports.hours': 'Hours',
     'reports.instructionsTraining': 'Instructions / Training',
-    'reports.instructionsPlaceholder': 'Instructions, company training, other training...',
+    'reports.instructionsPlaceholder':
+      'Instructions, company training, other training...',
     'reports.schoolTopics': 'Vocational School Topics',
-    'reports.schoolTopicsPlaceholder': 'Topics covered this week in vocational school...',
-    'reports.confirmAccuracy': 'By submitting, you confirm accuracy and completeness.',
+    'reports.schoolTopicsPlaceholder':
+      'Topics covered this week in vocational school...',
+    'reports.confirmAccuracy':
+      'By submitting, you confirm accuracy and completeness.',
     'reports.saving': 'Save',
     'reports.submitting': 'Submit',
     'reports.pdfDownloadPending': 'PDF download coming soon',
     'reports.notFound': 'Report not found',
     'reports.backToList': 'Back to list',
-    'reports.submitConfirm': 'Really submit report? It cannot be edited afterwards.',
+    'reports.submitConfirm':
+      'Really submit report? It cannot be edited afterwards.',
     'reports.error.submit': 'Error submitting',
     'reports.error.create': 'Error creating',
     'reports.error.load': 'Error loading',
     'reports.error.weekExists': 'Report for this week already exists',
     'reports.error.save': 'Error saving',
     'reports.error.processing': 'Error processing',
-    'reports.noReportsWithStatus': 'No activity reports found with this status.',
+    'reports.noReportsWithStatus':
+      'No activity reports found with this status.',
     'reports.reject': 'Reject',
     'reports.approve': 'Approve',
     'reports.description': 'Create and manage weekly training reports',
@@ -1875,9 +2212,12 @@ const translations = {
     'reports.error.pdfGeneration': 'Error generating PDF:',
     'reports.modal.edit': 'Edit Activity Report',
     'reports.modal.new': 'New Activity Report',
-    'reports.modal.instructions': 'Select components and use cases from the training curriculum',
-    'reports.modal.duplicate': 'A report for CW {week}/{year} already exists. Please choose a different calendar week.',
-    'reports.modal.overbooking': 'One or more activities exceed the available hours. Please correct the actual hours.',
+    'reports.modal.instructions':
+      'Select components and use cases from the training curriculum',
+    'reports.modal.duplicate':
+      'A report for CW {week}/{year} already exists. Please choose a different calendar week.',
+    'reports.modal.overbooking':
+      'One or more activities exceed the available hours. Please correct the actual hours.',
     'reports.calendarWeek': 'Calendar Week',
     'reports.yearLabel': 'Year',
     'reports.selectedActivities': 'Selected Activities',
@@ -1926,14 +2266,17 @@ const translations = {
 
     // Trainer - School Management
     'trainer.school.management': 'Vocational School Management',
-    'trainer.school.description': 'Manage calendars, activity reports and exams for your trainees',
+    'trainer.school.description':
+      'Manage calendars, activity reports and exams for your trainees',
     'trainer.school.pendingReports': 'Pending Reports',
     'trainer.school.upcomingExams': 'Upcoming Exams',
     'trainer.school.activeTrainees': 'Active Trainees',
     'trainer.school.tabs.lernfelder': 'Learning Fields',
-    'trainer.school.tabs.lernfelderDesc': 'Manage learning fields and use cases',
+    'trainer.school.tabs.lernfelderDesc':
+      'Manage learning fields and use cases',
     'trainer.school.tabs.traineeCalendar': 'Trainee Calendar',
-    'trainer.school.tabs.traineeCalendarDesc': 'Manage block schedules for trainees',
+    'trainer.school.tabs.traineeCalendarDesc':
+      'Manage block schedules for trainees',
     'trainer.school.tabs.exams': 'Exams',
     'trainer.school.tabs.examsDesc': 'Exam results and grading',
 
@@ -1989,7 +2332,8 @@ const translations = {
     'modules.title': 'My Modules',
     'modules.loading': 'Loading modules...',
     'modules.notFound': 'Module not found...',
-    'modules.description': 'Discover all available learning modules and start your training',
+    'modules.description':
+      'Discover all available learning modules and start your training',
     'modules.year': 'Year {year}',
     'modules.fromYear': 'Module from training year {year}',
     'modules.progress': 'Progress',
@@ -2002,7 +2346,8 @@ const translations = {
 
     // Quizzes
     'quiz.title': 'Quizzes & Tests',
-    'quiz.description': 'Test your knowledge with various quizzes and track your progress',
+    'quiz.description':
+      'Test your knowledge with various quizzes and track your progress',
     'quiz.loading': 'Loading quizzes...',
     'quiz.userNotFound': 'User not found...',
     'quiz.accessDenied': 'Access denied...',
@@ -2035,7 +2380,8 @@ const translations = {
     'quiz.yourAnswerWas': 'Your answer was',
     'quiz.noAnswer': 'No answer',
     'quiz.correctWrongAnswers': 'Correct wrong answers',
-    'quiz.mustGet100': 'You must answer all questions correctly to complete the quiz.',
+    'quiz.mustGet100':
+      'You must answer all questions correctly to complete the quiz.',
     'quiz.perfectScore': 'Perfect!',
     'quiz.youGot': 'You got',
     'quiz.correct': 'correct',
@@ -2045,7 +2391,8 @@ const translations = {
 
     // Trainer Feedback
     'feedback.title': 'Trainer Feedback',
-    'feedback.description': 'Status of your submissions and lesson quiz results',
+    'feedback.description':
+      'Status of your submissions and lesson quiz results',
     'feedback.loading': 'Loading trainer feedback...',
     'feedback.lessonSubmissions': 'Lesson Submissions',
     'feedback.useCaseSubmissions': 'Use Case Submissions',
@@ -2071,13 +2418,15 @@ const translations = {
 
     // Bulk Import
     'bulk.title': 'Bulk Import',
-    'bulk.description': 'Import multiple courses, enablers and use cases at once from an Excel file',
+    'bulk.description':
+      'Import multiple courses, enablers and use cases at once from an Excel file',
     'bulk.selectExcelFile': 'Please select an Excel file (.xlsx or .xls)',
     'bulk.selectFile': 'Please select a file',
     'bulk.uploadFailed': 'Upload failed',
     'bulk.unknownError': 'Unknown error',
     'bulk.downloadTemplate': 'Download Excel Template',
-    'bulk.downloadTemplateDesc': 'Download the template and fill it with your data',
+    'bulk.downloadTemplateDesc':
+      'Download the template and fill it with your data',
     'bulk.templateDownload': 'Download Template',
     'bulk.selectFileLabel': 'Select Excel File',
     'bulk.uploading': 'Uploading...',
@@ -2090,8 +2439,10 @@ const translations = {
     'bulk.errors': 'Errors',
     'bulk.instructions': 'Instructions:',
     'bulk.instruction1': 'Download the Excel template',
-    'bulk.instruction2': 'Fill in the data in the corresponding sheets (Courses, Enablers, Use Cases)',
-    'bulk.instruction3': 'NEW: Use the "Scenarios" sheet for detailed scenario content',
+    'bulk.instruction2':
+      'Fill in the data in the corresponding sheets (Courses, Enablers, Use Cases)',
+    'bulk.instruction3':
+      'NEW: Use the "Scenarios" sheet for detailed scenario content',
     'bulk.instruction4': 'Save the file and upload it here',
     'bulk.instruction5': 'Review the results and fix any errors',
 
@@ -2122,7 +2473,8 @@ const translations = {
     'content.descriptionPlaceholder': 'Brief description of the lesson',
     'content.descriptionRequired': 'Description (required)',
     'content.scenario': 'Scenario',
-    'content.scenarioPlaceholder': 'Describe the scenario the trainee should solve...',
+    'content.scenarioPlaceholder':
+      'Describe the scenario the trainee should solve...',
     'content.hint': 'Hint (visible to trainees)',
     'content.hintPlaceholder': 'Tip for solving the scenario',
     'content.quizQuestions': 'Quiz Questions',
@@ -2131,7 +2483,8 @@ const translations = {
     'content.enterDescription': 'Please enter a description',
     'content.error.delete': 'Error deleting',
     'content.management.title': 'Content Management',
-    'content.management.description': 'Manage learning modules, chapters and lessons',
+    'content.management.description':
+      'Manage learning modules, chapters and lessons',
     'content.newCourse': 'New Course',
     'content.searchModules': 'Search modules...',
     'content.allYears': 'All Years',
@@ -2146,7 +2499,26 @@ const translations = {
     'content.useCases': 'Use Cases',
     'content.tasks': 'Tasks',
     'content.tasksInCourse': 'Tasks in course',
-    'content.deleteModuleConfirm': 'Delete module? This will also delete all contained chapters.',
+    'content.assignCourses': 'Assign courses',
+    'content.assignCoursesTitle': 'Assign courses',
+    'content.assignCoursesDesc':
+      'Assign one or more courses to one or more trainees.',
+    'content.assignSelectCourses': 'Select courses',
+    'content.assignAllCourses': 'All courses',
+    'content.assignSelectedCoursesCount': '{count} selected',
+    'content.assignSelectTrainees': 'Select trainees',
+    'content.assignSearchTrainees': 'Search trainees...',
+    'content.assignSelectedTraineesCount': '{count} selected',
+    'content.clickToAdd': 'Click to add',
+    'content.assignNow': 'Assign now',
+    'content.assigning': 'Assigning...',
+    'content.assignFailed': 'Assignment failed',
+    'content.assignSelectTrainee': 'Please select at least one trainee.',
+    'content.assignSelectCourse': 'Please select at least one course.',
+    'content.assignedTrainers': '{count} trainers',
+    'content.assignedTrainees': '{count} trainees',
+    'content.deleteModuleConfirm':
+      'Delete module? This will also delete all contained chapters.',
     'content.unknownError': 'Unknown error',
     'content.deleteCourse': 'Delete course',
     'content.noCoursesFound': 'No courses found',
@@ -2172,7 +2544,8 @@ const translations = {
 
     // Course Form
     'course.form.newCourse': 'Create New Course',
-    'course.form.description': 'Create a course and define the year, module, and skills.',
+    'course.form.description':
+      'Create a course and define the year, module, and skills.',
     'course.form.titleLabel': 'Course Title',
     'course.form.titlePlaceholder': 'e.g. Introduction to Web Development',
     'course.form.titleRequired': 'Please enter a course title.',
@@ -2213,7 +2586,8 @@ const translations = {
 
     // Enabler Quiz Form
     'enablerQuiz.newTitle': 'New Quiz for Lesson',
-    'enablerQuiz.description': 'Select difficulty, enter a title, and add questions.',
+    'enablerQuiz.description':
+      'Select difficulty, enter a title, and add questions.',
     'enablerQuiz.difficulty': 'Difficulty',
     'enablerQuiz.quizTitle': 'Quiz Title',
     'enablerQuiz.titlePlaceholder': 'e.g. Basics',
@@ -2224,7 +2598,8 @@ const translations = {
     'enablerQuiz.questionText': 'Question text',
     'enablerQuiz.multipleChoice': 'Multiple Choice',
     'enablerQuiz.textAnswer': 'Text Answer',
-    'enablerQuiz.expectedAnswer': 'Expected Answer (optional for automatic grading)',
+    'enablerQuiz.expectedAnswer':
+      'Expected Answer (optional for automatic grading)',
     'enablerQuiz.expectedAnswerPlaceholder': 'Enter expected answer (optional)',
     'enablerQuiz.optionPlaceholder': 'Option {number}',
     'enablerQuiz.explanation': 'Explanation (why is the correct answer right?)',
@@ -2281,7 +2656,8 @@ const translations = {
     'enablerPage.viewOnly': 'View only (locked)',
     'enablerPage.backToModules': 'Back to my modules',
     'enablerPage.approved': 'Approved',
-    'enablerPage.approvedDesc': 'This submission has been approved by the trainer.',
+    'enablerPage.approvedDesc':
+      'This submission has been approved by the trainer.',
     'enablerPage.pending': 'Under Review',
     'enablerPage.pendingDesc': 'Your submission is waiting for trainer review.',
     'enablerPage.rejected': 'Revision Required',
@@ -2314,7 +2690,8 @@ const translations = {
     'scenario.scenarioContent': 'Scenario content',
     // Solution gating
     'scenario.solutionsLocked': 'Solutions are locked',
-    'scenario.completeChecklistToUnlock': 'Please complete the checklist first and confirm that you have worked on all tasks.',
+    'scenario.completeChecklistToUnlock':
+      'Please complete the checklist first and confirm that you have worked on all tasks.',
     'scenario.completeChecklistFirst': 'Please complete checklist first',
     'scenario.sectionLocked': 'This section is locked',
     'scenario.goToChecklist': 'Go to checklist',
@@ -2341,19 +2718,23 @@ const translations = {
     'scenario.section.learningGoalChecklist': 'Learning Goal Checklist',
     // Sequential progression & answer submission
     'scenario.sectionsOverview': 'Sections in this scenario:',
-    'scenario.submitAnswerToUnlock': 'Please write your solution first to unlock the model solutions.',
+    'scenario.submitAnswerToUnlock':
+      'Please write your solution first to unlock the model solutions.',
     'scenario.writeYourAnswer': 'Write your solution',
-    'scenario.writeAnswerDescription': 'Before seeing the model solutions, try to solve the tasks yourself.',
+    'scenario.writeAnswerDescription':
+      'Before seeing the model solutions, try to solve the tasks yourself.',
     'scenario.answerPlaceholder': 'Describe your approach...',
     'scenario.submitAnswer': 'Submit answer',
     'scenario.readyToSubmit': '✓ Ready to submit',
     'scenario.enterAnswerFirst': 'Please write your solution first',
-    'scenario.answerSubmittedSolutionsUnlocked': 'Answer submitted! Solutions are now unlocked.',
+    'scenario.answerSubmittedSolutionsUnlocked':
+      'Answer submitted! Solutions are now unlocked.',
 
     // PDF Uploader
     'pdf.onlyAllowed': 'Only PDF files are allowed',
     'pdf.tooLarge': 'File too large. Maximum: {size}MB',
-    'pdf.bucketNotFound': 'Storage bucket "content" not found. Please create it in Supabase.',
+    'pdf.bucketNotFound':
+      'Storage bucket "content" not found. Please create it in Supabase.',
     'pdf.uploadFailed': 'Upload failed',
     'pdf.file': 'PDF File',
     'pdf.uploaded': 'PDF successfully uploaded',
@@ -2399,9 +2780,11 @@ const translations = {
     'hai.button.close': 'Close',
     'hai.button.open': 'Open HAI',
     'hai.button.askHai': 'Ask HAI',
-    'hai.error.somethingWrong': 'Oops, something went wrong! Please try again later.',
-    'hai.error.connectionError': 'Connection error. Please check your internet connection.',
-    'hai.welcome.greeting': 'Hi! I\'m HAI.',
+    'hai.error.somethingWrong':
+      'Oops, something went wrong! Please try again later.',
+    'hai.error.connectionError':
+      'Connection error. Please check your internet connection.',
+    'hai.welcome.greeting': "Hi! I'm HAI.",
     'hai.welcome.description': 'Your AI learning coach for IT training.',
     'hai.suggestions.quiz': 'Start Quiz',
     'hai.suggestions.quizDesc': 'Test your knowledge',
@@ -2419,10 +2802,12 @@ const translations = {
     'hai.askToStart': 'Ask a question to begin.',
     'hai.admin.title': 'HAI Content Management',
     'hai.admin.knowledgeBase': 'Knowledge Base',
-    'hai.admin.description': 'Update HAI.ai\'s knowledge based on the latest enablers and PDFs. This creates new embeddings for search.',
+    'hai.admin.description':
+      "Update HAI.ai's knowledge based on the latest enablers and PDFs. This creates new embeddings for search.",
     'hai.admin.indexing': 'Indexing...',
     'hai.admin.indexNow': 'Index Now',
-    'hai.admin.indexSuccess': 'Successfully indexed: {chunks} chunks. (Processed: {enablers} enablers, {docs} docs)',
+    'hai.admin.indexSuccess':
+      'Successfully indexed: {chunks} chunks. (Processed: {enablers} enablers, {docs} docs)',
     'hai.admin.indexError': 'Error indexing.',
     'hai.admin.networkError': 'Network error during indexing.',
 
@@ -2439,15 +2824,19 @@ const translations = {
     'landing.beingRedirected': 'You are being redirected',
     'landing.signUp': 'Sign Up',
     'landing.welcome': 'Welcome to the',
-    'landing.description': 'An internal learning platform for FIAE trainees and trainers. Discover interactive modules, quizzes and reflection opportunities.',
+    'landing.description':
+      'An internal learning platform for FIAE trainees and trainers. Discover interactive modules, quizzes and reflection opportunities.',
     'landing.getStarted': 'Get Started',
     'landing.whyPlatform': 'Why FIAE Learning Platform?',
     'landing.interactiveLearning': 'Interactive Learning',
-    'landing.interactiveLearningDesc': 'Modern learning modules with quizzes and practical exercises for an effective learning experience.',
+    'landing.interactiveLearningDesc':
+      'Modern learning modules with quizzes and practical exercises for an effective learning experience.',
     'landing.personalSupport': 'Personal Support',
-    'landing.personalSupportDesc': 'Individual support from trainers and continuous feedback.',
+    'landing.personalSupportDesc':
+      'Individual support from trainers and continuous feedback.',
     'landing.securePlatform': 'Secure Platform',
-    'landing.securePlatformDesc': 'Modern security standards and data protection for your learning content.',
+    'landing.securePlatformDesc':
+      'Modern security standards and data protection for your learning content.',
     'landing.copyright': '© 2025 FIAE Learning Platform. All rights reserved.',
 
     // Register Page
@@ -2460,8 +2849,10 @@ const translations = {
     'register.createAccount': 'Create Account',
     'register.alreadyHaveAccount': 'Already have an account?',
     'register.loginHere': 'Login here',
-    'register.emailPasswordRequired': 'Please enter an email address and password.',
-    'register.passwordMinLength': 'Password must be at least 6 characters long.',
+    'register.emailPasswordRequired':
+      'Please enter an email address and password.',
+    'register.passwordMinLength':
+      'Password must be at least 6 characters long.',
     'register.failed': 'Registration failed',
 
     // Reset Password Page
@@ -2472,19 +2863,23 @@ const translations = {
     'resetPassword.showPassword': 'Show password',
     'resetPassword.saving': 'Saving…',
     'resetPassword.changePassword': 'Change Password',
-    'resetPassword.passwordMinLength': 'Password must be at least 6 characters long.',
+    'resetPassword.passwordMinLength':
+      'Password must be at least 6 characters long.',
     'resetPassword.passwordMismatch': 'Passwords do not match.',
     'resetPassword.success': 'Password updated. Please log in again.',
-    'resetPassword.successToast': 'Password successfully updated. Please log in again.',
+    'resetPassword.successToast':
+      'Password successfully updated. Please log in again.',
     'resetPassword.error': 'Error updating password.',
 
     // Forgot Password Page
     'forgotPassword.title': 'Reset Password',
-    'forgotPassword.description': 'Enter your email address. We will send you a link to reset your password.',
+    'forgotPassword.description':
+      'Enter your email address. We will send you a link to reset your password.',
     'forgotPassword.emailLabel': 'Email Address',
     'forgotPassword.sending': 'Sending…',
     'forgotPassword.sendLink': 'Send Link',
-    'forgotPassword.success': 'If the email exists, a reset link has been sent.',
+    'forgotPassword.success':
+      'If the email exists, a reset link has been sent.',
     'forgotPassword.error': 'Error sending email.',
     'forgotPassword.backToLogin': 'Back to Login',
 
@@ -2495,7 +2890,8 @@ const translations = {
     'trainer.analytics.accessDenied': 'Access denied...',
     'trainer.analytics.unknownError': 'Unknown error',
     'trainer.analytics.title': 'Analytics & Statistics',
-    'trainer.analytics.description': 'Overview of your trainees\' progress and performance',
+    'trainer.analytics.description':
+      "Overview of your trainees' progress and performance",
     'trainer.analytics.activeTrainees': 'Active Trainees',
     'trainer.analytics.avgProgress': 'Avg. Progress',
     'trainer.analytics.pendingReviews': 'Pending Reviews',
@@ -2511,7 +2907,8 @@ const translations = {
     'trainer.calendar.loadError': 'Error loading blocks',
     'trainer.calendar.createError': 'Error creating',
     'trainer.calendar.selectTraineePrompt': 'Select Trainee',
-    'trainer.calendar.selectTraineeDesc': 'Select a trainee to see their calendar.',
+    'trainer.calendar.selectTraineeDesc':
+      'Select a trainee to see their calendar.',
     'trainer.calendar.more': '+{count} more',
     'trainer.calendar.modal.title': 'Create Block',
     'trainer.calendar.modal.forTrainee': 'For {name}',
@@ -2526,13 +2923,22 @@ const translations = {
     'trainer.calendar.modal.titleField': 'Title',
     'trainer.calendar.modal.titlePlaceholder': 'e.g. Meeting, Training...',
     'trainer.calendar.modal.descriptionField': 'Description',
-    'trainer.calendar.modal.descriptionPlaceholder': 'Details about the appointment...',
+    'trainer.calendar.modal.descriptionPlaceholder':
+      'Details about the appointment...',
     'trainer.calendar.modal.notesField': 'Notes (optional)',
     'trainer.calendar.modal.notesPlaceholder': 'Internal notes...',
-    'trainer.calendar.modal.sendInvitation': 'Send calendar invitation to trainee(s)',
+    'trainer.calendar.modal.sendInvitation':
+      'Send calendar invitation to trainee(s)',
+    'trainer.content.genTopics': 'Topics Covered:',
+    'trainer.content.genGoals': 'Learning Goals:',
+    'trainer.content.genTheory': 'Theory Foundations:',
+    'trainer.content.genContext': 'Initial Situation:',
+    'trainer.content.genProblemPairs': 'Problem-Solution Pairs:',
+    'trainer.content.genChecklist': 'Learning Goal Checklist:',
     'trainer.calendar.modal.cancel': 'Cancel',
     'trainer.calendar.modal.create': 'Create',
-    'trainer.calendar.modal.selectAtLeastOne': 'Please select at least one trainee',
+    'trainer.calendar.modal.selectAtLeastOne':
+      'Please select at least one trainee',
     'trainer.calendar.blockTypes.school': 'School',
     'trainer.calendar.blockTypes.company': 'WMC',
     'trainer.calendar.blockTypes.holiday': 'Holiday',
@@ -2584,7 +2990,8 @@ const translations = {
     'trainer.reports.period1to18': 'Month 1 to 18',
     'trainer.reports.period19to36': 'Month 19 to 36',
     'trainer.reports.exportAll': 'Export all ({count})',
-    'trainer.reports.deleteConfirm': 'Do you really want to delete this report?',
+    'trainer.reports.deleteConfirm':
+      'Do you really want to delete this report?',
     'trainer.reports.deleteError': 'Error deleting',
     'trainer.reports.pdfError': 'Error creating PDF: ',
     'trainer.reports.exportError': 'Error during mass export: ',
@@ -2593,12 +3000,14 @@ const translations = {
     'trainer.reports.modal.actualTotal': 'Actual Total',
     'trainer.reports.modal.difference': 'Difference',
     'trainer.reports.modal.hours': 'hrs',
-    'trainer.reports.modal.overbookedWarning': 'This report contains overbooked entries',
+    'trainer.reports.modal.overbookedWarning':
+      'This report contains overbooked entries',
     'trainer.reports.modal.noEntries': 'No entries',
     'trainer.reports.modal.plan': 'Plan',
     'trainer.reports.modal.actual': 'Actual',
     'trainer.reports.modal.feedbackLabel': 'Feedback / Reason for Rejection',
-    'trainer.reports.modal.feedbackPlaceholder': 'Please provide a reason for the rejection...',
+    'trainer.reports.modal.feedbackPlaceholder':
+      'Please provide a reason for the rejection...',
     'trainer.reports.modal.cancel': 'Cancel',
     'trainer.reports.modal.reject': 'Reject',
     'trainer.reports.modal.close': 'Close',
@@ -2677,7 +3086,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     (key: string): string => {
       return (
         translations[language][
-        key as keyof (typeof translations)[typeof language]
+          key as keyof (typeof translations)[typeof language]
         ] || key
       );
     },
