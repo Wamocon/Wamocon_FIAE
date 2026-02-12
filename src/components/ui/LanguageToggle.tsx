@@ -10,7 +10,11 @@ interface LanguageToggleProps {
   className?: string;
 }
 
-export function LanguageToggle({ variant = 'outline', showLabel = false, className = '' }: LanguageToggleProps) {
+export function LanguageToggle({
+  variant = 'outline',
+  showLabel = false,
+  className = '',
+}: LanguageToggleProps) {
   const { language, setLanguage, t } = useLanguage();
   const isGerman = language === 'de';
 
@@ -18,22 +22,22 @@ export function LanguageToggle({ variant = 'outline', showLabel = false, classNa
     setLanguage(isGerman ? 'en' : 'de');
   };
 
-  const switchLabel = isGerman ? t('common.switchToEnglish') : t('common.switchToGerman');
+  const switchLabel = isGerman
+    ? t('common.switchToEnglish')
+    : t('common.switchToGerman');
 
   if (variant === 'icon') {
     return (
       <button
         onClick={toggleLanguage}
-        className={`rounded-lg p-2 transition-all duration-200 hover:bg-accent/10 ${className}`}
+        className={`hover:bg-accent/10 flex items-center gap-1 rounded-lg p-2 transition-all duration-200 ${className}`}
         aria-label={switchLabel}
         title={switchLabel}
       >
-        <div className="relative">
-          <Languages className="h-5 w-5 text-muted-foreground" />
-          <span className="absolute -bottom-0.5 -right-0.5 text-[10px] font-bold text-accent">
-            {language.toUpperCase()}
-          </span>
-        </div>
+        <Languages className="text-muted-foreground h-5 w-5" />
+        <span className="text-foreground/80 text-xs font-semibold">
+          {language.toUpperCase()}
+        </span>
       </button>
     );
   }
@@ -47,9 +51,7 @@ export function LanguageToggle({ variant = 'outline', showLabel = false, classNa
     >
       <Languages className="h-4 w-4" />
       {showLabel && (
-        <span className="hidden sm:inline">
-          {isGerman ? 'EN' : 'DE'}
-        </span>
+        <span className="hidden sm:inline">{isGerman ? 'EN' : 'DE'}</span>
       )}
     </Button>
   );

@@ -31,21 +31,19 @@ function getDb(): ReturnType<typeof drizzle> {
   const client =
     globalThis.__pgClient__ ||
     postgres(process.env.DB_CONNECTION_STRING, {
-      max: 5, // keep small for local/dev; adjust if needed
-      idle_timeout: 30, // seconds before idle connections are closed
-      connect_timeout: 30, // 30 seconds connection timeout
+      max: 20, // Increased from 5 to 20 for better performance
+      idle_timeout: 20, // Reduce idle timeout to free connections faster
+      connect_timeout: 10, // Add connect timeout
+      max_lifetime: 60 * 30, // 30 minutes max connection lifetime
       ssl: needsTls ? 'require' : undefined,
-      // Retry on connection failures
-      onnotice: () => {}, // suppress notices
+      prepare: false, // Disable prepared statements for connection pool efficiency
     });
 
   const db = drizzle(client);
 
-  // Cache in global in dev/non-serverless to survive HMR and route re-imports
-  if (process.env.NODE_ENV !== 'production') {
-    globalThis.__pgClient__ = client;
-    globalThis.__drizzleDb__ = db;
-  }
+  // Cache in global for all environments to improve performance
+  globalThis.__pgClient__ = client;
+  globalThis.__drizzleDb__ = db;
 
   return db;
 }

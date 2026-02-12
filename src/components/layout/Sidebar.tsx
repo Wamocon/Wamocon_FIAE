@@ -92,12 +92,16 @@ export function Sidebar({
 
         case 'activityReports':
           router.push(
-            userRole === 'trainee' ? '/trainee/activity-reports' : '/trainer/activity-reports'
+            userRole === 'trainee'
+              ? '/trainee/activity-reports'
+              : '/trainer/activity-reports'
           );
           break;
         case 'evaluations':
           router.push(
-            userRole === 'trainee' ? '/trainee/evaluations' : '/trainer/evaluations'
+            userRole === 'trainee'
+              ? '/trainee/evaluations'
+              : '/trainer/evaluations'
           );
           break;
         default:
@@ -135,6 +139,12 @@ export function Sidebar({
             label: t('nav.activityReports'),
             icon: ClipboardList,
             href: '/trainer/activity-reports',
+          },
+          {
+            id: 'evaluations',
+            label: t('nav.evaluations'),
+            icon: FileCheck2,
+            href: '/trainer/arbeitszeugnis',
           },
           {
             id: 'school',
@@ -182,6 +192,12 @@ export function Sidebar({
             href: '/trainee/activity-reports',
           },
           {
+            id: 'evaluations',
+            label: t('nav.evaluations'),
+            icon: FileCheck2,
+            href: '/trainee/arbeitszeugnis',
+          },
+          {
             id: 'school',
             label: t('nav.school'),
             icon: School,
@@ -206,7 +222,6 @@ export function Sidebar({
             icon: HelpCircle,
             href: '/trainee/quizzes',
           },
-
         ]),
       {
         id: 'profile',
@@ -228,24 +243,28 @@ export function Sidebar({
         'fixed inset-y-0 left-0 z-40 w-64',
         isOpen ? 'translate-x-0' : '-translate-x-full',
         // Desktop: in-flow sidebar that pushes content
-        'lg:static lg:inset-auto lg:translate-x-0 lg:h-full lg:overflow-hidden lg:shrink-0',
-        isOpen ? 'lg:w-64 lg:pointer-events-auto' : 'lg:w-0 lg:pointer-events-none',
+        'lg:static lg:inset-auto lg:h-full lg:shrink-0 lg:translate-x-0 lg:overflow-hidden',
+        isOpen
+          ? 'lg:pointer-events-auto lg:w-64'
+          : 'lg:pointer-events-none lg:w-0',
         // Desktop hover to reveal when collapsed
-        'group-hover:lg:w-64 group-hover:lg:pointer-events-auto'
+        'group-hover:lg:pointer-events-auto group-hover:lg:w-64',
       ].join(' ')}
     >
       <div className="flex h-full flex-col">
         {/* Logo Section */}
-        <div className="border-border/50 flex h-16 items-center justify-center border-b px-6">
-          <div className="flex items-center space-x-3">
-            <div className="from-primary to-primary/80 flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br">
-              <GraduationCap className="text-primary-foreground h-6 w-6" />
+        <div className="border-border/50 flex h-16 items-center justify-start border-b px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="from-primary to-primary/80 flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br shadow-md ring-1 ring-white/10">
+              <GraduationCap className="text-foreground h-6 w-6" />
             </div>
-            <div>
-              <h1 className="text-foreground text-xl font-bold">
-                FIAE-Plattform
+            <div className="min-w-0">
+              <h1 className="text-foreground truncate text-lg font-semibold tracking-wide">
+                {t('sidebar.title')}
               </h1>
-              <p className="text-muted-foreground text-xs">Learning Platform</p>
+              <p className="text-muted-foreground/80 truncate text-[11px] tracking-[0.2em] uppercase">
+                {t('sidebar.subtitle')}
+              </p>
             </div>
           </div>
         </div>
@@ -264,22 +283,28 @@ export function Sidebar({
                 key={item.id}
                 onClick={() => handleNavigation(item.id)}
                 className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${isActive
-                  ? 'bg-accent/20 text-accent border-accent/30 border'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
+                    ? 'bg-accent/20 text-accent border-accent/30 border'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
                   }`}
               >
                 {item.id === 'profile' ? (
                   <Avatar className="h-5 w-5">
                     {profile.avatar ? (
-                      <AvatarImage src={profile.avatar} alt={profile.full_name} />
+                      <AvatarImage
+                        src={profile.avatar}
+                        alt={profile.full_name}
+                      />
                     ) : (
                       <AvatarFallback>
-                        {profile.full_name?.trim()?.charAt(0)?.toUpperCase() || 'U'}
+                        {profile.full_name?.trim()?.charAt(0)?.toUpperCase() ||
+                          'U'}
                       </AvatarFallback>
                     )}
                   </Avatar>
                 ) : (
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-accent' : ''}`} />
+                  <Icon
+                    className={`h-5 w-5 ${isActive ? 'text-accent' : ''}`}
+                  />
                 )}
                 <span className="font-medium">{item.label}</span>
               </button>
@@ -298,7 +323,7 @@ export function Sidebar({
                   <AvatarFallback>
                     {profile.full_name
                       .split(' ')
-                      .map((n) => n[0])
+                      .map(n => n[0])
                       .join('')
                       .toUpperCase()}
                   </AvatarFallback>
@@ -310,7 +335,9 @@ export function Sidebar({
                 {profile.full_name}
               </p>
               <p className="text-muted-foreground text-xs capitalize">
-                {profile.role === 'trainee' ? t('roles.trainee') : t('roles.trainer')}
+                {profile.role === 'trainee'
+                  ? t('roles.trainee')
+                  : t('roles.trainer')}
               </p>
             </div>
           </div>
@@ -318,7 +345,7 @@ export function Sidebar({
           <button
             onClick={handleSignOut}
             disabled={loading}
-            className={`mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${loading ? 'opacity-60 cursor-not-allowed' : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'}`}
+            className={`mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${loading ? 'cursor-not-allowed opacity-60' : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'}`}
           >
             <LogOut className={`h-5 w-5 ${loading ? 'animate-pulse' : ''}`} />
             <span className="font-medium">

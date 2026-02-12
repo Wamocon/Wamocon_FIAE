@@ -1,9 +1,19 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import type {
+  RealtimeChannel,
+  RealtimePostgresChangesPayload,
+} from '@supabase/supabase-js';
 
 interface User {
   id: string;
@@ -96,7 +106,11 @@ const clearCachedAuth = () => {
     // Also clear supabase keys
     for (const k of Object.keys(localStorage)) {
       if (k.startsWith('sb-')) {
-        try { localStorage.removeItem(k); } catch { /* ignore */ }
+        try {
+          localStorage.removeItem(k);
+        } catch {
+          /* ignore */
+        }
       }
     }
   } catch {
@@ -145,17 +159,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void signOut(true);
       return;
     }
-    logoutTimerRef.current = setTimeout(() => { void signOut(true); }, remaining);
+    logoutTimerRef.current = setTimeout(() => {
+      void signOut(true);
+    }, remaining);
   };
 
   // Load profile from Supabase
-  const loadProfile = async (userId: string, email?: string): Promise<Profile | null> => {
+  const loadProfile = async (
+    userId: string,
+    email?: string
+  ): Promise<Profile | null> => {
     try {
       const userEmail = email || user?.email || '';
-      
+
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, is_active')
+        .select(
+          'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, is_active'
+        )
         .eq('id', userId)
         .single();
 
@@ -182,9 +203,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         avatar: row.avatar_url || null,
         training_start_date: row.start_of_training_date || null,
         trainer_id: row.assigned_trainer_id || null,
-        isActive: row.is_active === null || row.is_active === undefined ? true : Boolean(row.is_active),
+        isActive:
+          row.is_active === null || row.is_active === undefined
+            ? true
+            : Boolean(row.is_active),
       };
-      
+
       setProfile(mapped);
       setCachedAuth(user, mapped);
       return mapped;
@@ -195,11 +219,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Fast profile load with short timeout
-  const loadProfileFast = async (userId: string, email?: string, timeoutMs = 3000): Promise<Profile | null> => {
+  const loadProfileFast = async (
+    userId: string,
+    email?: string,
+    timeoutMs = 3000
+  ): Promise<Profile | null> => {
     try {
       const result = await Promise.race([
         loadProfile(userId, email),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
+        new Promise<null>(resolve =>
+          setTimeout(() => resolve(null), timeoutMs)
+        ),
       ]);
       return result;
     } catch {
@@ -212,7 +242,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetch('/api/auth/sync-profile', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => { /* ignore */ });
+    }).catch(() => {
+      /* ignore */
+    });
   };
 
   useEffect(() => {
@@ -220,19 +252,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initRef.current = true;
 
     let profileChannel: RealtimeChannel | null = null;
-    
+
     const setupRealtime = (userId: string) => {
       try {
         if (profileChannel) profileChannel.unsubscribe();
-      } catch { /* ignore */ }
-      
+      } catch {
+        /* ignore */
+      }
+
       try {
         profileChannel = supabase
           .channel(`profile:${userId}`)
           .on(
             'postgres_changes',
-            { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
-            (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'profiles',
+              filter: `id=eq.${userId}`,
+            },
+            (
+              payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+            ) => {
               const newRow = payload?.new as Record<string, unknown> | null;
               if (newRow && newRow['is_active'] === false) {
                 signOut(false);
@@ -241,9 +282,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   if (!prev) return prev;
                   const updated: Profile = {
                     ...prev,
-                    full_name: typeof newRow['full_name'] === 'string' ? newRow['full_name'] : prev.full_name,
-                    avatar: typeof newRow['avatar_url'] === 'string' ? newRow['avatar_url'] : prev.avatar,
-                    isActive: typeof newRow['is_active'] === 'boolean' ? newRow['is_active'] : prev.isActive,
+                    full_name:
+                      typeof newRow['full_name'] === 'string'
+                        ? newRow['full_name']
+                        : prev.full_name,
+                    avatar:
+                      typeof newRow['avatar_url'] === 'string'
+                        ? newRow['avatar_url']
+                        : prev.avatar,
+                    isActive:
+                      typeof newRow['is_active'] === 'boolean'
+                        ? newRow['is_active']
+                        : prev.isActive,
                   };
                   setCachedAuth(user, updated);
                   return updated;
@@ -252,25 +302,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           )
           .subscribe();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
 
     const init = async () => {
       try {
         // Get session quickly
-        const { data: { session } } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
         if (session?.user) {
           const u = { id: session.user.id, email: session.user.email || '' };
           setUser(u);
           setCachedAuth(u, profile);
-          
+
           // If we have cached profile, use it immediately and refresh in background
           if (profile && profile.id === u.id) {
             setLoading(false);
             // Background refresh
             if (!isPublicPath) {
-              if (session.access_token) syncProfileBackground(session.access_token);
+              if (session.access_token)
+                syncProfileBackground(session.access_token);
               loadProfileFast(u.id, u.email).then(loaded => {
                 if (loaded) setCachedAuth(u, loaded);
               });
@@ -278,7 +333,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } else if (!isPublicPath) {
             // No cache, need to load profile
-            if (session.access_token) syncProfileBackground(session.access_token);
+            if (session.access_token)
+              syncProfileBackground(session.access_token);
             const loaded = await loadProfileFast(u.id, u.email, 2000);
             if (!loaded) {
               // Retry once more
@@ -309,13 +365,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.replace('/reset-password');
           return;
         }
-        
+
         if (session?.user) {
           const u = { id: session.user.id, email: session.user.email || '' };
           setUser(u);
-          
+
           if (!isPublicPath) {
-            if (session.access_token) syncProfileBackground(session.access_token);
+            if (session.access_token)
+              syncProfileBackground(session.access_token);
             loadProfileFast(u.id, u.email);
             setupRealtime(u.id);
           }
@@ -323,7 +380,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
           setProfile(null);
           clearCachedAuth();
-          try { if (profileChannel) profileChannel.unsubscribe(); } catch { /* ignore */ }
+          try {
+            if (profileChannel) profileChannel.unsubscribe();
+          } catch {
+            /* ignore */
+          }
         }
       }
     );
@@ -331,8 +392,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     init();
 
     return () => {
-      try { authListener.subscription.unsubscribe(); } catch { /* ignore */ }
-      try { if (profileChannel) profileChannel.unsubscribe(); } catch { /* ignore */ }
+      try {
+        authListener.subscription.unsubscribe();
+      } catch {
+        /* ignore */
+      }
+      try {
+        if (profileChannel) profileChannel.unsubscribe();
+      } catch {
+        /* ignore */
+      }
     };
   }, []);
 
@@ -340,7 +409,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user?.id || isPublicPath) return;
     let mounted = true;
-    
+
     const check = async () => {
       if (!mounted) return;
       const loaded = await loadProfile(user.id);
@@ -348,7 +417,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut(false);
       }
     };
-    
+
     // Check every 30 seconds (less frequent)
     const id = setInterval(check, 30000);
     return () => {
@@ -357,7 +426,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user?.id, isPublicPath]);
 
-  const waitForProfile = async (userId: string, timeoutMs = 2000, intervalMs = 200) => {
+  const waitForProfile = async (
+    userId: string,
+    timeoutMs = 2000,
+    intervalMs = 200
+  ) => {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const { data } = await supabase
@@ -375,8 +448,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     let userId: string | null = null;
     let userEmail: string | null = null;
-    
-    const sdkResult = await supabase.auth.signInWithPassword({ email, password });
+
+    const sdkResult = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (sdkResult.error) {
       // Fallback to REST login
       try {
@@ -390,10 +466,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           setLoading(false);
-          if (resp.status === 400 && /email/i.test(text) && /confirm/i.test(text)) {
+          if (
+            resp.status === 400 &&
+            /email/i.test(text) &&
+            /confirm/i.test(text)
+          ) {
             throw new Error('E-Mail ist noch nicht bestätigt.');
           }
-          if (resp.status === 400) throw new Error('E-Mail oder Passwort ist falsch.');
+          if (resp.status === 400)
+            throw new Error('E-Mail oder Passwort ist falsch.');
           throw new Error('Anmeldung fehlgeschlagen.');
         }
         const data = await resp.json();
@@ -424,16 +505,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const u = { id: userId, email: userEmail || '' };
       setUser(u);
       localStorage.setItem(CACHE_KEYS.LOGIN_AT, Date.now().toString());
-      
+
       // Sync profile in background
       const { data: sessionRes } = await supabase.auth.getSession();
       if (sessionRes.session?.access_token) {
         syncProfileBackground(sessionRes.session.access_token);
       }
-      
+
       await waitForProfile(userId);
       const loaded = await loadProfile(userId, userEmail || '');
-      
+
       if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
         await supabase.auth.signOut();
         setUser(null);
@@ -442,13 +523,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         throw new Error('Account ist noch nicht aktiviert.');
       }
-      
+
       setCachedAuth(u, loaded);
       setLoading(false);
       scheduleAutoLogout();
-      
+
       if (isPublicPath) {
-        const target = loaded?.role === 'trainer' ? '/trainer/dashboard' : '/trainee/dashboard';
+        const target =
+          loaded?.role === 'trainer'
+            ? '/trainer/dashboard'
+            : '/trainee/dashboard';
         router.replace(target);
       }
       return;
@@ -483,7 +567,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setUser({ id: data.user.id, email });
-    try { if (typeof window !== 'undefined') window.localStorage.setItem('auth_login_at', Date.now().toString()); } catch (_) { /* ignore */ }
+    try {
+      if (typeof window !== 'undefined')
+        window.localStorage.setItem('auth_login_at', Date.now().toString());
+    } catch (_) {
+      /* ignore */
+    }
 
     // Wait for DB trigger to create profile, then load it
     await waitForProfile(data.user.id);
@@ -492,9 +581,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     scheduleAutoLogout();
     // After sign up redirect to dashboard appropriate for role
     try {
-      const target = loaded?.role === 'trainer' ? '/trainer/dashboard' : '/trainee/dashboard';
+      const target =
+        loaded?.role === 'trainer'
+          ? '/trainer/dashboard'
+          : '/trainee/dashboard';
       router.replace(target);
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   };
   const signOut = async (silent?: boolean) => {
     setLoading(true);
@@ -503,7 +597,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await Promise.race([
         supabase.auth.signOut(),
-        new Promise((resolve) => setTimeout(resolve, 3000)), // timeout safeguard
+        new Promise(resolve => setTimeout(resolve, 3000)), // timeout safeguard
       ]);
     } catch (error) {
       console.error('Auth signOut failed:', error);
@@ -514,16 +608,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.localStorage.removeItem('auth_login_at');
         for (const k of Object.keys(window.localStorage)) {
           if (k.startsWith('sb-')) {
-            try { window.localStorage.removeItem(k); } catch (_) { /* ignore */ }
+            try {
+              window.localStorage.removeItem(k);
+            } catch (_) {
+              /* ignore */
+            }
           }
         }
       }
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
     setUser(null);
     setProfile(null);
     setLoading(false);
     if (!silent) {
-      try { router.replace('/login'); } catch (_) { /* ignore */ }
+      try {
+        router.replace('/login');
+      } catch (_) {
+        /* ignore */
+      }
     }
   };
 
@@ -532,72 +636,101 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user?.id) {
       scheduleAutoLogout();
     } else {
-      try { if (typeof window !== 'undefined') window.localStorage.removeItem('auth_login_at'); } catch (_) { /* ignore */ }
+      try {
+        if (typeof window !== 'undefined')
+          window.localStorage.removeItem('auth_login_at');
+      } catch (_) {
+        /* ignore */
+      }
       clearLogoutTimer();
     }
-    return () => { clearLogoutTimer(); };
+    return () => {
+      clearLogoutTimer();
+    };
   }, [user?.id]);
 
-  const value: AuthContextType = {
-    user,
-    profile,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    updateProfile: async updates => {
-      if (!profile) return;
-      await supabase
-        .from('profiles')
-        .update({
-          // map legacy keys to new column names when present
-          full_name: updates.full_name,
-          avatar_url: updates.avatar_url ?? null,
-          start_of_training_date: updates.training_start_date ?? null,
-          assigned_trainer_id: updates.trainer_auth_id ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', profile.id);
-      if (user) await loadProfile(user.id);
-    },
-    refreshProfile: async () => {
-      if (user) await loadProfile(user.id);
-    },
-    switchRole: async (role: 'trainee' | 'trainer') => {
-      if (!profile) return;
-      const dbRole = role.toUpperCase(); // 'TRAINEE' | 'TRAINER'
-      await supabase
-        .from('profiles')
-        .update({ role: dbRole, updated_at: new Date().toISOString() })
-        .eq('id', profile.id);
-      if (user) await loadProfile(user.id);
-    },
-    changePassword: async (newPassword: string) => {
-      console.log('[AuthContext] changePassword called with password length:', newPassword.length);
-      if (!newPassword || newPassword.length < 8) {
-        throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
-      }
-      console.log('[AuthContext] Calling supabase.auth.updateUser...');
-      
-      // Supabase updateUser hangs when email confirmation is enabled
-      // The password still changes successfully, so we treat timeout as success
-      const timeoutPromise = new Promise<{ data: any; error: null }>((resolve) => {
-        setTimeout(() => {
-          console.log('[AuthContext] Password update timeout reached - treating as success');
-          resolve({ data: null, error: null });
-        }, 3000); // 3 seconds is enough
-      });
-      
-      const updatePromise = supabase.auth.updateUser({ password: newPassword });
-      
-      const { error, data } = await Promise.race([updatePromise, timeoutPromise]);
-      console.log('[AuthContext] supabase.auth.updateUser completed. Error:', error, 'Data:', data);
-      if (error) {
-        throw new Error(error.message || 'Passwort konnte nicht geändert werden');
-      }
-      console.log('[AuthContext] Password changed successfully, returning');
-    },
-  };
+  const value: AuthContextType = useMemo(
+    () => ({
+      user,
+      profile,
+      loading,
+      signIn,
+      signUp,
+      signOut,
+      updateProfile: async updates => {
+        if (!profile) return;
+        await supabase
+          .from('profiles')
+          .update({
+            // map legacy keys to new column names when present
+            full_name: updates.full_name,
+            avatar_url: updates.avatar_url ?? null,
+            start_of_training_date: updates.training_start_date ?? null,
+            assigned_trainer_id: updates.trainer_auth_id ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', profile.id);
+        if (user) await loadProfile(user.id);
+      },
+      refreshProfile: async () => {
+        if (user) await loadProfile(user.id);
+      },
+      switchRole: async (role: 'trainee' | 'trainer') => {
+        if (!profile) return;
+        const dbRole = role.toUpperCase(); // 'TRAINEE' | 'TRAINER'
+        await supabase
+          .from('profiles')
+          .update({ role: dbRole, updated_at: new Date().toISOString() })
+          .eq('id', profile.id);
+        if (user) await loadProfile(user.id);
+      },
+      changePassword: async (newPassword: string) => {
+        console.log(
+          '[AuthContext] changePassword called with password length:',
+          newPassword.length
+        );
+        if (!newPassword || newPassword.length < 8) {
+          throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
+        }
+        console.log('[AuthContext] Calling supabase.auth.updateUser...');
+
+        // Supabase updateUser hangs when email confirmation is enabled
+        // The password still changes successfully, so we treat timeout as success
+        const timeoutPromise = new Promise<{ data: any; error: null }>(
+          resolve => {
+            setTimeout(() => {
+              console.log(
+                '[AuthContext] Password update timeout reached - treating as success'
+              );
+              resolve({ data: null, error: null });
+            }, 3000); // 3 seconds is enough
+          }
+        );
+
+        const updatePromise = supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+        const { error, data } = await Promise.race([
+          updatePromise,
+          timeoutPromise,
+        ]);
+        console.log(
+          '[AuthContext] supabase.auth.updateUser completed. Error:',
+          error,
+          'Data:',
+          data
+        );
+        if (error) {
+          throw new Error(
+            error.message || 'Passwort konnte nicht geändert werden'
+          );
+        }
+        console.log('[AuthContext] Password changed successfully, returning');
+      },
+    }),
+    [user, profile, loading, signIn, signUp, signOut, loadProfile]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
