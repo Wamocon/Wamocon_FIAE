@@ -25,6 +25,10 @@ const LanguageContext = createContext<LanguageContextType | undefined>(
 // German translations
 const translations = {
   de: {
+    // Sidebar
+    'sidebar.title': 'FIAE',
+    'sidebar.subtitle': 'Lernplattform',
+
     // Navigation
     'nav.dashboard': 'Dashboard',
     'nav.learningPath': 'Lernpfad',
@@ -41,6 +45,26 @@ const translations = {
     'nav.analytics': 'Analysen',
     'nav.trainerFeedback': 'Trainer-Feedback',
     'nav.evaluations': 'Azubi-Arbeitszeugnis',
+
+    // Breadcrumbs
+    'breadcrumb.trainer': 'Trainer',
+    'breadcrumb.trainee': 'Azubi',
+    'breadcrumb.details': 'Details',
+    'breadcrumb.module': 'Modul',
+    'breadcrumb.lesson': 'Lektion',
+    'breadcrumb.quiz': 'Quiz',
+    'breadcrumb.subLesson': 'Aufgabe',
+    'breadcrumb.dashboard': 'Dashboard',
+    'breadcrumb.profile': 'Profil',
+    'breadcrumb.modules': 'Module',
+    'breadcrumb.trainerFeedback': 'Trainer-Feedback',
+    'breadcrumb.quizzes': 'Quizze',
+    'breadcrumb.contentManagement': 'Inhalts-Management',
+    'breadcrumb.quizManagement': 'Quiz-Verwaltung',
+    'breadcrumb.trainees': 'Auszubildende',
+    'breadcrumb.analytics': 'Analysen',
+    'breadcrumb.login': 'Anmeldung',
+    'breadcrumb.school': 'Berufsschule',
 
     // Trainer Content Management
     'trainer.content.editCourse': 'Kurs bearbeiten',
@@ -1055,10 +1079,53 @@ const translations = {
 
     // Quiz Management
     'quiz.managementLoading': 'Lade Quiz-Verwaltung...',
-    'quiz.newQuiz': 'Neues Quiz',
-    'quiz.form.title': 'Titel',
-    'quiz.form.titlePlaceholder': 'Quiz-Titel',
-    'quiz.form.titleRequired': 'Bitte einen Titel eingeben.',
+    'quiz.managementTitle': 'Quiz-Verwaltung',
+    'quiz.managementCreate': 'Neues Quiz erstellen',
+    'quiz.managementTableTitle': 'Quiz-Titel',
+    'quiz.managementTableStatus': 'Status',
+    'quiz.managementTableAssigned': 'Zugewiesene Azubis',
+    'quiz.managementTableCreated': 'Erstellt am',
+    'quiz.managementTableActions': 'Aktionen',
+    'quiz.managementActive': 'Aktiv',
+    'quiz.managementInactive': 'Inaktiv',
+    'quiz.managementTrainees': 'Azubis',
+    'quiz.managementEdit': 'Bearbeiten',
+    'quiz.managementView': 'Ansehen',
+    'quiz.managementDelete': 'Löschen',
+    'quiz.managementDialogEditTitle': 'Globales Quiz bearbeiten',
+    'quiz.managementDialogCreateTitle': 'Neues globales Quiz erstellen',
+    'quiz.managementDialogHelpEdit':
+      'Folgen Sie den Schritten, um Ihr Quiz zu aktualisieren.',
+    'quiz.managementDialogHelpCreate':
+      'Folgen Sie den Schritten, um Ihr Quiz einzurichten.',
+    'quiz.managementTitlePlaceholder': 'Quiz-Titel eingeben',
+    'quiz.managementSetActive': 'Aktiv setzen',
+    'quiz.managementSetActiveDesc': 'Dieses Quiz für Azubis verfügbar machen',
+    'quiz.managementQuestion': 'Frage',
+    'quiz.managementQuestionText': 'Fragetext',
+    'quiz.managementQuestionPlaceholder': 'Geben Sie Ihre Frage ein...',
+    'quiz.managementOption': 'Option',
+    'quiz.managementCorrectAnswer': 'Richtige Antwort',
+    'quiz.managementAddQuestion': 'Frage hinzufügen',
+    'quiz.managementAssignTrainees': 'Azubis zuweisen',
+    'quiz.managementCollaborators': 'Mitwirkende Trainer',
+    'quiz.managementSearchTrainees': 'Azubis suchen...',
+    'quiz.managementSearchTrainers': 'Trainer suchen...',
+    'quiz.managementNoResults': 'Keine Ergebnisse',
+    'quiz.managementDone': 'Fertig',
+    'quiz.managementBack': 'Zurück',
+    'quiz.managementNext': 'Weiter',
+    'quiz.managementCancel': 'Abbrechen',
+    'quiz.managementSaveChanges': 'Änderungen speichern',
+    'quiz.managementSaveQuiz': 'Quiz speichern',
+    'quiz.managementLoadQuizError': 'Quiz konnte nicht geladen werden',
+    'quiz.managementLoadQuizzesError': 'Quizze konnten nicht geladen werden',
+    'quiz.managementSaveError': 'Änderungen konnten nicht gespeichert werden',
+    'quiz.managementCreateError': 'Quiz konnte nicht erstellt werden', 
+    'quiz.managementDeleteError': 'Quiz konnte nicht gelöscht werden', 
+    'quiz.newQuiz': 'Neues Quiz', 'quiz.form.title': 'Titel', 
+    'quiz.form.titlePlaceholder': 'Quiz-Titel', 
+    'quiz.form.titleRequired': 'Bitte einen Titel eingeben.',  
     'quiz.form.quizType': 'Quiz-Typ',
     'quiz.form.typeMini': 'Mini',
     'quiz.form.typeBig': 'Groß',
@@ -1159,6 +1226,8 @@ const translations = {
     'enablerPage.trainerFeedback': 'Feedback vom Trainer',
     'enablerPage.feedbackForScenario': 'Feedback für Szenario {number}',
     'enablerPage.resubmit': 'Erneut einreichen',
+
+
 
     // Scenario Viewer
     'scenario.title': 'Szenario',
@@ -1349,6 +1418,12 @@ const translations = {
     'register.passwordMinLength':
       'Passwort muss mindestens 6 Zeichen lang sein.',
     'register.failed': 'Registrierung fehlgeschlagen',
+    'register.trainerSuccess': 'Registrierung erfolgreich!',
+    'register.trainerSuccessMessage':
+      'Sie wurden als Trainer registriert. Sie können sich jetzt anmelden.',
+    'register.traineeSuccess': 'Registrierung erfolgreich!',
+    'register.traineeSuccessMessage':
+      'Ihre Registrierung wurde übermittelt und wartet auf die Freischaltung durch einen Trainer. Sie erhalten eine Benachrichtigung, sobald Ihr Konto aktiviert wurde.',
 
     // Reset Password Page
     'resetPassword.title': 'Neues Passwort setzen',
@@ -1563,6 +1638,26 @@ const translations = {
     'nav.courses': 'Courses',
     'nav.trainerFeedback': 'Trainer Feedback',
     'nav.evaluations': 'Certificate',
+
+    // Breadcrumbs
+    'breadcrumb.trainer': 'Trainer',
+    'breadcrumb.trainee': 'Trainee',
+    'breadcrumb.details': 'Details',
+    'breadcrumb.module': 'Module',
+    'breadcrumb.lesson': 'Lesson',
+    'breadcrumb.quiz': 'Quiz',
+    'breadcrumb.subLesson': 'Task',
+    'breadcrumb.dashboard': 'Dashboard',
+    'breadcrumb.profile': 'Profile',
+    'breadcrumb.modules': 'Modules',
+    'breadcrumb.trainerFeedback': 'Trainer Feedback',
+    'breadcrumb.quizzes': 'Quizzes',
+    'breadcrumb.contentManagement': 'Content Management',
+    'breadcrumb.quizManagement': 'Quiz Management',
+    'breadcrumb.trainees': 'Trainees',
+    'breadcrumb.analytics': 'Analytics',
+    'breadcrumb.login': 'Login',
+    'breadcrumb.school': 'School',
 
     // Trainer Content Management
     'trainer.content.editCourse': 'Edit Course',
@@ -2564,6 +2659,48 @@ const translations = {
 
     // Quiz Management
     'quiz.managementLoading': 'Loading quiz management...',
+    'quiz.managementTitle': 'Quiz Management',
+    'quiz.managementCreate': 'Create New Quiz',
+    'quiz.managementTableTitle': 'Quiz Title',
+    'quiz.managementTableStatus': 'Status',
+    'quiz.managementTableAssigned': 'Trainees Assigned',
+    'quiz.managementTableCreated': 'Date Created',
+    'quiz.managementTableActions': 'Actions',
+    'quiz.managementActive': 'Active',
+    'quiz.managementInactive': 'Inactive',
+    'quiz.managementTrainees': 'Trainees',
+    'quiz.managementEdit': 'Edit',
+    'quiz.managementView': 'View',
+    'quiz.managementDelete': 'Delete',
+    'quiz.managementDialogEditTitle': 'Edit Global Quiz',
+    'quiz.managementDialogCreateTitle': 'Create New Global Quiz',
+    'quiz.managementDialogHelpEdit': 'Follow the steps to update your quiz.',
+    'quiz.managementDialogHelpCreate': 'Follow the steps to set up your quiz.',
+    'quiz.managementTitlePlaceholder': 'Enter quiz title',
+    'quiz.managementSetActive': 'Set Active',
+    'quiz.managementSetActiveDesc': 'Make this quiz available to trainees',
+    'quiz.managementQuestion': 'Question',
+    'quiz.managementQuestionText': 'Question Text',
+    'quiz.managementQuestionPlaceholder': 'Type your question...',
+    'quiz.managementOption': 'Option',
+    'quiz.managementCorrectAnswer': 'Correct Answer',
+    'quiz.managementAddQuestion': 'Add Question',
+    'quiz.managementAssignTrainees': 'Assign Trainees',
+    'quiz.managementCollaborators': 'Collaborating Trainers',
+    'quiz.managementSearchTrainees': 'Search trainees...',
+    'quiz.managementSearchTrainers': 'Search trainers...',
+    'quiz.managementNoResults': 'No results',
+    'quiz.managementDone': 'Done',
+    'quiz.managementBack': 'Back',
+    'quiz.managementNext': 'Next',
+    'quiz.managementCancel': 'Cancel',
+    'quiz.managementSaveChanges': 'Save Changes',
+    'quiz.managementSaveQuiz': 'Save Quiz',
+    'quiz.managementLoadQuizError': 'Failed to load quiz',
+    'quiz.managementLoadQuizzesError': 'Failed to load quizzes',
+    'quiz.managementSaveError': 'Failed to save changes',
+    'quiz.managementCreateError': 'Failed to create quiz',
+    'quiz.managementDeleteError': 'Failed to delete quiz',
     'quiz.newQuiz': 'New Quiz',
     'quiz.form.title': 'Title',
     'quiz.form.titlePlaceholder': 'Quiz title',
@@ -2854,6 +2991,12 @@ const translations = {
     'register.passwordMinLength':
       'Password must be at least 6 characters long.',
     'register.failed': 'Registration failed',
+    'register.trainerSuccess': 'Registration successful!',
+    'register.trainerSuccessMessage':
+      'You have been registered as a trainer. You can now log in.',
+    'register.traineeSuccess': 'Registration successful!',
+    'register.traineeSuccessMessage':
+      'Your registration has been submitted and is pending approval by a trainer. You will be notified once your account has been activated.',
 
     // Reset Password Page
     'resetPassword.title': 'Set New Password',

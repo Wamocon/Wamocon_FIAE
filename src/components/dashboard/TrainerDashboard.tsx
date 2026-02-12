@@ -17,12 +17,26 @@ import HaiAdminWidget from '@/components/hai/HaiAdminWidget';
 // Dynamically import chart components with SSR disabled
 const ProgressTrendChart = dynamic(
   () => import('./DashboardCharts').then(mod => mod.ProgressTrendChart),
-  { ssr: false, loading: () => <div className="flex h-[200px] items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent/30 border-t-accent" /></div> }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[200px] items-center justify-center">
+        <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-2" />
+      </div>
+    ),
+  }
 );
 
 const ModuleProgressChart = dynamic(
   () => import('./DashboardCharts').then(mod => mod.ModuleProgressChart),
-  { ssr: false, loading: () => <div className="flex h-[200px] items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent/30 border-t-accent" /></div> }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[200px] items-center justify-center">
+        <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-2" />
+      </div>
+    ),
+  }
 );
 
 interface Trainee {
@@ -34,16 +48,28 @@ interface Trainee {
 
 type DashboardResponse = {
   trainees: Trainee[];
-  counts: { activeTrainees: number; pendingReviews: number; pendingQuiz: number; pendingUseCases: number; pendingEnablers?: number; pendingActivityReports?: number };
+  counts: {
+    activeTrainees: number;
+    pendingReviews: number;
+    pendingQuiz: number;
+    pendingUseCases: number;
+    pendingEnablers?: number;
+    pendingActivityReports?: number;
+  };
   charts: {
     progressTrend: { week: string; progress: number }[];
-    moduleProgress: { name: string; completed: number; inProgress: number; notStarted: number }[];
+    moduleProgress: {
+      name: string;
+      completed: number;
+      inProgress: number;
+      notStarted: number;
+    }[];
   };
 };
 
 // Cache helpers for instant dashboard loading
 const TRAINER_DASHBOARD_CACHE_KEY = 'wmc_trainer_dashboard_cache_v4';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5)
 
 const getCachedDashboard = (): DashboardResponse | null => {
   try {
@@ -52,14 +78,17 @@ const getCachedDashboard = (): DashboardResponse | null => {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < CACHE_TTL) return data;
     }
-  } catch (_) { }
+  } catch (_) {}
   return null;
 };
 
 const setCachedDashboard = (data: DashboardResponse) => {
   try {
-    localStorage.setItem(TRAINER_DASHBOARD_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-  } catch (_) { }
+    localStorage.setItem(
+      TRAINER_DASHBOARD_CACHE_KEY,
+      JSON.stringify({ data, timestamp: Date.now() })
+    );
+  } catch (_) {}
 };
 
 export default function TrainerDashboard() {
@@ -72,9 +101,19 @@ export default function TrainerDashboard() {
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [pendingReviews, setPendingReviews] = useState<number>(0);
   const [pendingQuiz, setPendingQuiz] = useState<number>(0);
-  const [pendingActivityReports, setPendingActivityReports] = useState<number>(0);
-  const [progressTrend, setProgressTrend] = useState<{ week: string; progress: number }[]>([]);
-  const [moduleProgress, setModuleProgress] = useState<{ name: string; completed: number; inProgress: number; notStarted: number }[]>([]);
+  const [pendingActivityReports, setPendingActivityReports] =
+    useState<number>(0);
+  const [progressTrend, setProgressTrend] = useState<
+    { week: string; progress: number }[]
+  >([]);
+  const [moduleProgress, setModuleProgress] = useState<
+    {
+      name: string;
+      completed: number;
+      inProgress: number;
+      notStarted: number;
+    }[]
+  >([]);
 
   // Apply cached or fresh dashboard data to state
   const applyDashboardData = (data: DashboardResponse) => {
@@ -140,25 +179,29 @@ export default function TrainerDashboard() {
   // Chart data now comes from API: progressTrend and moduleProgress
 
   // Ensure chart data is safe and numeric to avoid runtime errors
-  const progressTrendSafe = (progressTrend || []).filter(p => p && typeof p === 'object').map((p) => ({
-    week: String(p?.week ?? ''),
-    progress: Number(p?.progress ?? 0),
-  }));
+  const progressTrendSafe = (progressTrend || [])
+    .filter(p => p && typeof p === 'object')
+    .map(p => ({
+      week: String(p?.week ?? ''),
+      progress: Number(p?.progress ?? 0),
+    }));
 
-  const moduleProgressSafe = (moduleProgress || []).filter(m => m && typeof m === 'object').map((m) => ({
-    name: String(m?.name ?? ''),
-    completed: Number(m?.completed ?? 0),
-    inProgress: Number(m?.inProgress ?? 0),
-    notStarted: Number(m?.notStarted ?? 0),
-  }));
+  const moduleProgressSafe = (moduleProgress || [])
+    .filter(m => m && typeof m === 'object')
+    .map(m => ({
+      name: String(m?.name ?? ''),
+      completed: Number(m?.completed ?? 0),
+      inProgress: Number(m?.inProgress ?? 0),
+      notStarted: Number(m?.notStarted ?? 0),
+    }));
 
   const avgProgress = trainees.length
     ? Math.round(
-      trainees.reduce(
-        (acc: number, t: Trainee) => acc + (t.progress || 0),
-        0
-      ) / trainees.length
-    )
+        trainees.reduce(
+          (acc: number, t: Trainee) => acc + (t.progress || 0),
+          0
+        ) / trainees.length
+      )
     : 0;
 
   return (
@@ -188,7 +231,12 @@ export default function TrainerDashboard() {
                   <p className="text-muted-foreground text-sm">
                     Warten auf Genehmigung
                   </p>
-                  <button onClick={() => router.push('/trainer/activity-reports?filter=pending')} className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors w-full">
+                  <button
+                    onClick={() =>
+                      router.push('/trainer/activity-reports?filter=pending')
+                    }
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 w-full rounded-xl px-4 py-2 text-sm transition-colors"
+                  >
                     Prüfen
                   </button>
                 </div>
@@ -205,11 +253,17 @@ export default function TrainerDashboard() {
                   <p className="text-muted-foreground text-sm">
                     Warten auf Bewertung
                   </p>
-                  <button onClick={() => router.push('/trainer/reviews?view=quizzes&onlyPending=true')} className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 rounded-xl px-4 py-2 text-sm transition-colors w-full">
+                  <button
+                    onClick={() =>
+                      router.push(
+                        '/trainer/reviews?view=quizzes&onlyPending=true'
+                      )
+                    }
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 w-full rounded-xl px-4 py-2 text-sm transition-colors"
+                  >
                     Jetzt bewerten
                   </button>
                 </div>
-
               </div>
             </div>
 
@@ -226,7 +280,9 @@ export default function TrainerDashboard() {
                   className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
                 >
                   <Users className="text-accent mx-auto mb-3 h-8 w-8" />
-                  <p className="text-muted-foreground text-sm">{t('dashboard.activeTrainees')}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {t('dashboard.activeTrainees')}
+                  </p>
                   <p className="text-foreground text-2xl font-bold">
                     {trainees.length}
                   </p>
@@ -238,7 +294,9 @@ export default function TrainerDashboard() {
                   className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
                 >
                   <TrendingUp className="text-primary mx-auto mb-3 h-8 w-8" />
-                  <p className="text-muted-foreground text-sm">{t('dashboard.averageProgress')}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {t('dashboard.averageProgress')}
+                  </p>
                   <p className="text-foreground text-2xl font-bold">
                     {avgProgress}%
                   </p>
@@ -246,14 +304,18 @@ export default function TrainerDashboard() {
 
                 <div
                   role="button"
-                  onClick={() => router.push('/trainer/reviews?onlyPending=true')}
+                  onClick={() =>
+                    router.push('/trainer/reviews?onlyPending=true')
+                  }
                   className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
                 >
                   <Clock className="text-accent mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">
                     {t('dashboard.pendingReviews')}
                   </p>
-                  <p className="text-foreground text-2xl font-bold">{pendingReviews}</p>
+                  <p className="text-foreground text-2xl font-bold">
+                    {pendingReviews}
+                  </p>
                 </div>
               </div>
             </div>
@@ -276,9 +338,12 @@ export default function TrainerDashboard() {
                   className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
                 >
                   {t('common.view')}
-</button>
+                </button>
               </div>
-              <ProgressTrendChart data={progressTrendSafe} loading={dataLoading} />
+              <ProgressTrendChart
+                data={progressTrendSafe}
+                loading={dataLoading}
+              />
             </div>
 
             {/* Module Progress Chart */}
@@ -293,9 +358,12 @@ export default function TrainerDashboard() {
                   className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
                 >
                   {t('common.view')}
-</button>
+                </button>
               </div>
-              <ModuleProgressChart data={moduleProgressSafe} loading={dataLoading} />
+              <ModuleProgressChart
+                data={moduleProgressSafe}
+                loading={dataLoading}
+              />
             </div>
           </div>
         </div>
