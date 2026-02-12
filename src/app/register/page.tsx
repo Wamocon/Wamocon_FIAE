@@ -13,6 +13,9 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState<{
+    type: 'trainer' | 'trainee' | null;
+  }>({ type: null });
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,9 +34,6 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
-      // Perform server-side registration which will:
-      // - create the auth user via service role
-      // - create a matching profile where email fields match
       const resp = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -50,12 +50,26 @@ export default function RegisterPage() {
         return;
       }
 
-      router.push('/login');
+      // Show success message based on role
+      if (body.role === 'TRAINER') {
+        setSuccessMessage({ type: 'trainer' });
+        // Redirect to login after 3 seconds
+        setTimeout(() => {
+          router.push('/login');
+        }, 3000);
+      } else if (body.role === 'TRAINEE') {
+        setSuccessMessage({ type: 'trainee' });
+        // Redirect to login info page after 5 seconds
+        setTimeout(() => {
+          router.push('/login');
+        }, 5000);
+      } else {
+        // Fallback
+        router.push('/login');
+      }
     } catch (err: unknown) {
       console.error('Registration failed:', err);
-      setError(
-        err instanceof Error ? err.message : t('register.failed')
-      );
+      setError(err instanceof Error ? err.message : t('register.failed'));
     } finally {
       setIsLoading(false);
     }
@@ -81,9 +95,7 @@ export default function RegisterPage() {
           <h1 className="text-foreground from-accent to-primary mb-2 bg-gradient-to-r bg-clip-text text-4xl font-bold text-transparent">
             {t('landing.platformName')}
           </h1>
-          <p className="text-muted text-lg">
-            {t('register.title')}
-          </p>
+          <p className="text-muted text-lg">{t('register.title')}</p>
           <button
             onClick={() => router.push('/')}
             className="text-accent hover:text-accent/80 mt-2 text-sm underline"
@@ -155,9 +167,70 @@ export default function RegisterPage() {
               </div>
             )}
 
+            {/* Success messages */}
+            {successMessage.type === 'trainer' && (
+              <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-full bg-green-500/20 p-1">
+                    <svg
+                      className="h-5 w-5 text-green-500"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-green-600 dark:text-green-400">
+                      {t('register.trainerSuccess')}
+                    </p>
+                    <p className="mt-1 text-xs text-green-600/80 dark:text-green-400/80">
+                      {t('register.trainerSuccessMessage')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {successMessage.type === 'trainee' && (
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-full bg-blue-500/20 p-1">
+                    <svg
+                      className="h-5 w-5 text-blue-500"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                      {t('register.traineeSuccess')}
+                    </p>
+                    <p className="mt-1 text-xs text-blue-600/80 dark:text-blue-400/80">
+                      {t('register.traineeSuccessMessage')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || successMessage.type !== null}
               className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-primary/50 focus:ring-offset-background focus:ring-accent w-full rounded-xl py-3 font-semibold shadow-lg transition-colors duration-300 hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:outline-none"
             >
               {isLoading ? (
