@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, desc, eq, max } from 'drizzle-orm';
-import { quizAssignments, quizzes, questions, quizSubmissions } from '@/db/migrations/schemas/schema';
+import { and, count, desc, eq, max, sql } from 'drizzle-orm';
+import {
+  quizAssignments,
+  quizzes,
+  questions,
+  quizSubmissions,
+} from '@/db/migrations/schemas/schema';
+import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 
 // Return only GLOBAL (big) quizzes assigned to this trainee
 export async function GET(req: NextRequest) {
@@ -12,46 +18,87 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Assigned GLOBAL quizzes for this trainee
-    const rows = await db
-      .select({ id: quizzes.id, title: quizzes.title })
-      .from(quizAssignments)
-      .innerJoin(quizzes, eq(quizAssignments.quizId, quizzes.id))
-      .where(and(eq(quizAssignments.traineeId, userId as any), eq(quizzes.quizType, 'GLOBAL' as any)))
-      .orderBy(desc(quizzes.createdAt));
+    const data = await apiCache.getOrFetch(
+      `trainee_quizzes_${userId}`,
+      async () => {
+        // Assigned GLOBAL quizzes for this trainee
+        const rows = await db
+          .select({ id: quizzes.id, title: quizzes.title })
+          .from(quizAssignments)
+          .innerJoin(quizzes, eq(quizAssignments.quizId, quizzes.id))
+          .where(
+            and(
+              eq(quizAssignments.traineeId, userId as any),
+              eq(quizzes.quizType, 'GLOBAL' as any)
+            )
+          )
+          .orderBy(desc(quizzes.createdAt));
 
-    const out: any[] = [];
-    for (const r of rows) {
-      const [{ qCount = 0 } = { qCount: 0 }] = await db
-        .select({ qCount: count() })
-        .from(questions)
-        .where(eq(questions.quizId, r.id as any));
+        if (rows.length === 0) return [];
 
-      const [{ maxScore = 0 } = { maxScore: 0 }] = await db
-        .select({ maxScore: max(quizSubmissions.score) })
-        .from(quizSubmissions)
-        .where(and(eq(quizSubmissions.traineeId, userId as any), eq(quizSubmissions.quizId, r.id as any)));
+        const quizIds = rows.map(r => r.id);
 
-      const [{ attempts = 0 } = { attempts: 0 }] = await db
-        .select({ attempts: count() })
-        .from(quizSubmissions)
-        .where(and(eq(quizSubmissions.traineeId, userId as any), eq(quizSubmissions.quizId, r.id as any)));
+        // Batch: question counts per quiz (single query instead of N)
+        const questionCounts = await db
+          .select({ quizId: questions.quizId, qCount: count() })
+          .from(questions)
+          .where(sql`${questions.quizId} IN ${quizIds}`)
+          .groupBy(questions.quizId);
+        const qCountMap = new Map(
+          questionCounts.map(r => [String(r.quizId), Number(r.qCount)])
+        );
 
-      out.push({
-        id: r.id,
-        title: r.title,
-        description: 'Global Quiz',
-        difficulty: 'intermediate',
-        bestScore: Number(maxScore) || 0,
-        questionsCount: Number(qCount) || 0,
-        timeLimit: '30 min',
-        attempts: Number(attempts) || 0,
-      });
-    }
+        // Batch: best scores and attempt counts per quiz (single query instead of 2N)
+        const submissionStats = await db
+          .select({
+            quizId: quizSubmissions.quizId,
+            maxScore: max(quizSubmissions.score),
+            attempts: count(),
+          })
+          .from(quizSubmissions)
+          .where(
+            and(
+              eq(quizSubmissions.traineeId, userId as any),
+              sql`${quizSubmissions.quizId} IN ${quizIds}`
+            )
+          )
+          .groupBy(quizSubmissions.quizId);
+        const statsMap = new Map(
+          submissionStats.map(r => [
+            String(r.quizId),
+            {
+              maxScore: Number(r.maxScore) || 0,
+              attempts: Number(r.attempts) || 0,
+            },
+          ])
+        );
 
-    return NextResponse.json(out);
+        return rows.map(r => {
+          const stats = statsMap.get(String(r.id)) || {
+            maxScore: 0,
+            attempts: 0,
+          };
+          return {
+            id: r.id,
+            title: r.title,
+            description: 'Global Quiz',
+            difficulty: 'intermediate',
+            bestScore: stats.maxScore,
+            questionsCount: qCountMap.get(String(r.id)) || 0,
+            timeLimit: '30 min',
+            attempts: stats.attempts,
+          };
+        });
+      },
+      ApiCache.TTL.MEDIUM
+    );
+
+    return NextResponse.json(data, { headers: cacheHeaders.medium });
   } catch (e) {
     console.error('Quizzes API error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }

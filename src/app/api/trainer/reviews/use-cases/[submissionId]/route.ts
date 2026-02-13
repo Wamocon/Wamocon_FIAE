@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
-import { useCases, useCaseSubmissions, notifications, profiles } from '@/db/migrations/schemas/schema';
+import {
+  useCases,
+  useCaseSubmissions,
+  notifications,
+} from '@/db/migrations/schemas/schema';
+import { verifyTrainer } from '@/lib/auth-helpers';
 
-async function verifyTrainer(trainerId: string): Promise<boolean> {
-  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
-  return trainer?.role === 'TRAINER';
-}
-
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ submissionId: string }> }
+) {
   try {
     const { submissionId } = await params;
     const { searchParams } = new URL(req.url);
@@ -19,31 +22,53 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ su
     }
 
     const body = await req.json();
-    const status: 'PENDING' | 'APPROVED' | 'REJECTED' | undefined = body?.status;
-    const trainerFeedback: string | null | undefined = body?.trainerFeedback ?? undefined;
+    const status: 'PENDING' | 'APPROVED' | 'REJECTED' | undefined =
+      body?.status;
+    const trainerFeedback: string | null | undefined =
+      body?.trainerFeedback ?? undefined;
 
     if (!status) {
       return NextResponse.json({ error: 'Missing status' }, { status: 400 });
     }
 
-    const [sub] = await db.select().from(useCaseSubmissions).where(eq(useCaseSubmissions.id, submissionId));
+    const [sub] = await db
+      .select()
+      .from(useCaseSubmissions)
+      .where(eq(useCaseSubmissions.id, submissionId));
     if (!sub) {
-      return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Submission not found' },
+        { status: 404 }
+      );
     }
 
-    const [uc] = await db.select().from(useCases).where(eq(useCases.id, sub.useCaseId));
+    const [uc] = await db
+      .select()
+      .from(useCases)
+      .where(eq(useCases.id, sub.useCaseId));
     if (!uc) {
-      return NextResponse.json({ error: 'Invalid submission' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Invalid submission' },
+        { status: 400 }
+      );
     }
 
     // Shared curriculum: any valid trainer can review submissions
     if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
     }
 
     const [row] = await db
       .update(useCaseSubmissions)
-      .set({ status, trainerFeedback: trainerFeedback ?? null, reviewedById: trainerId, reviewedAt: new Date() })
+      .set({
+        status,
+        trainerFeedback: trainerFeedback ?? null,
+        reviewedById: trainerId,
+        reviewedAt: new Date(),
+      })
       .where(eq(useCaseSubmissions.id, submissionId))
       .returning();
 
@@ -67,7 +92,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ su
     return NextResponse.json({ submission: row });
   } catch (e) {
     console.error('Trainer review use-case PATCH error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
-

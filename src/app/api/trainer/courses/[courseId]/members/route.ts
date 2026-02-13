@@ -1,29 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
+import { createClient } from '@supabase/supabase-js';
 import {
   courseMembers,
   profiles,
   courses,
   notifications,
 } from '@/db/migrations/schemas/schema';
+import { verifyTrainer } from '@/lib/auth-helpers';
 
-/**
- * Helper to verify the requesting user is a valid trainer in the system.
- * For shared curriculum model, any TRAINER can manage any course.
- */
-async function verifyTrainer(trainerId: string): Promise<boolean> {
-  try {
-    const [trainer] = await db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, trainerId as any));
-    console.log('[verifyTrainer] Query result:', { trainerId, trainer });
-    return trainer?.role === 'TRAINER';
-  } catch (err) {
-    console.error('[verifyTrainer] Database error:', err);
-    return false;
-  }
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  return createClient(url, key, { auth: { persistSession: false } });
 }
 
 /**
@@ -141,32 +131,55 @@ export async function POST(
     }
 
     // Check if user is already a member of this course
-    const [existingMember] = await db
-      .select()
-      .from(courseMembers)
-      .where(
-        and(
-          eq(courseMembers.courseId, courseId as any),
-          eq(courseMembers.userId, userId as any)
-        )
-      );
+    // Use ON CONFLICT DO NOTHING to handle race conditions and pooler issues
+    let row;
+    try {
+      const [existingMember] = await db
+        .select()
+        .from(courseMembers)
+        .where(
+          and(
+            eq(courseMembers.courseId, courseId as any),
+            eq(courseMembers.userId, userId as any)
+          )
+        );
 
-    if (existingMember) {
-      return NextResponse.json(
-        { error: 'User is already a member of this course' },
-        { status: 409 }
-      );
+      if (existingMember) {
+        return NextResponse.json(
+          { error: 'User is already a member of this course' },
+          { status: 409 }
+        );
+      }
+
+      // Insert the new member
+      const result = await db
+        .insert(courseMembers)
+        .values({
+          courseId: courseId as any,
+          userId,
+          role,
+        })
+        .returning();
+
+      row = result[0];
+    } catch (insertErr: unknown) {
+      // Handle duplicate key violation (unique constraint on courseId + userId)
+      const pgCode = (insertErr as { cause?: { code?: string } })?.cause?.code;
+      if (pgCode === '23505') {
+        return NextResponse.json(
+          { error: 'User is already a member of this course' },
+          { status: 409 }
+        );
+      }
+      throw insertErr;
     }
 
-    // Insert the new member
-    const [row] = await db
-      .insert(courseMembers)
-      .values({
-        courseId: courseId as any,
-        userId,
-        role,
-      })
-      .returning();
+    if (!row) {
+      return NextResponse.json(
+        { error: 'Failed to add member' },
+        { status: 500 }
+      );
+    }
 
     // Notify the added user
     try {
@@ -177,19 +190,45 @@ export async function POST(
       const courseName = courseInfo?.title || 'einem Kurs';
       const isTrainer = role === 'TRAINER';
 
-      await db.insert(notifications).values({
-        userId,
-        actorId: trainerId,
-        type: isTrainer ? 'COURSE_CO_TRAINER_ADDED' : 'COURSE_ASSIGNED',
-        title: isTrainer ? 'Als Trainer hinzugefügt' : 'Zu Kurs hinzugefügt',
-        message: isTrainer
-          ? `Du wurdest als Trainer zu "${courseName}" hinzugefügt`
-          : `Du wurdest dem Kurs "${courseName}" zugewiesen`,
-        linkUrl: isTrainer
-          ? `/trainer/courses/${courseId}`
-          : '/trainee/modules',
-        context: { courseId },
-      });
+      try {
+        await db.insert(notifications).values({
+          userId,
+          actorId: trainerId,
+          type: isTrainer ? 'COURSE_CO_TRAINER_ADDED' : 'COURSE_ASSIGNED',
+          title: isTrainer ? 'Als Trainer hinzugefügt' : 'Zu Kurs hinzugefügt',
+          message: isTrainer
+            ? `Du wurdest als Trainer zu "${courseName}" hinzugefügt`
+            : `Du wurdest dem Kurs "${courseName}" zugewiesen`,
+          linkUrl: isTrainer
+            ? `/trainer/courses/${courseId}`
+            : '/trainee/modules',
+          context: { courseId },
+        });
+      } catch (drizzleErr: unknown) {
+        const pgCode = (drizzleErr as { cause?: { code?: string } })?.cause
+          ?.code;
+        if (pgCode === '23503') {
+          // FK violation — pooler can't see profiles; fall back to admin client
+          const admin = getAdminClient();
+          await admin.from('notifications').insert({
+            user_id: userId,
+            actor_id: trainerId,
+            type: isTrainer ? 'COURSE_CO_TRAINER_ADDED' : 'COURSE_ASSIGNED',
+            title: isTrainer
+              ? 'Als Trainer hinzugefügt'
+              : 'Zu Kurs hinzugefügt',
+            message: isTrainer
+              ? `Du wurdest als Trainer zu "${courseName}" hinzugefügt`
+              : `Du wurdest dem Kurs "${courseName}" zugewiesen`,
+            link_url: isTrainer
+              ? `/trainer/courses/${courseId}`
+              : '/trainee/modules',
+            context: { courseId },
+          });
+        } else {
+          throw drizzleErr;
+        }
+      }
     } catch (notifyErr) {
       console.warn('Failed to notify added course member', notifyErr);
     }

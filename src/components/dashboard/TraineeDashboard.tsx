@@ -17,27 +17,42 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-} from 'recharts';
+import dynamic from 'next/dynamic';
+
+// Lazy-load recharts components (~200KB) - they're not needed for initial render
+const WeeklyProgressChart = dynamic(
+  () => import('./TraineeDashboardCharts').then(mod => mod.WeeklyProgressChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[200px] items-center justify-center">
+        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+      </div>
+    ),
+  }
+);
+const SkillRadarChart = dynamic(
+  () => import('./TraineeDashboardCharts').then(mod => mod.SkillRadarChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[200px] items-center justify-center">
+        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+      </div>
+    ),
+  }
+);
+const ModuleBarChart = dynamic(
+  () => import('./TraineeDashboardCharts').then(mod => mod.ModuleBarChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[200px] items-center justify-center">
+        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+      </div>
+    ),
+  }
+);
 
 // Types for dashboard data
 type DashboardData = {
@@ -380,52 +395,7 @@ export default function TraineeDashboard() {
                 </div>
                 {t('dashboard.weeklyProgress')}
               </h3>
-              <ResponsiveContainer
-                width="100%"
-                height={200}
-                className="from-background/40 rounded-xl bg-gradient-to-br to-red-900/10 p-2"
-              >
-                <LineChart data={weeklyProgress}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#6b7280"
-                    strokeOpacity={0.2}
-                  />
-                  <XAxis
-                    dataKey="week"
-                    stroke="currentColor"
-                    fontSize={12}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <YAxis
-                    stroke="currentColor"
-                    fontSize={12}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e1423',
-                      border: '2px solid #ff1a1a',
-                      borderRadius: '12px',
-                      color: 'currentColor',
-                      boxShadow: '0 8px 24px rgba(255, 26, 26, 0.3)',
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="progress"
-                    stroke="#ff1a1a"
-                    strokeWidth={4}
-                    dot={{
-                      fill: '#ff1a1a',
-                      strokeWidth: 3,
-                      r: 6,
-                      stroke: 'currentColor',
-                    }}
-                    activeDot={{ r: 8, stroke: 'currentColor', strokeWidth: 2 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <WeeklyProgressChart data={weeklyProgress} />
               {/* Compact data display */}
               <div className="mt-4 grid grid-cols-3 gap-2">
                 {weeklyProgress.map((item: any, index: number) => (
@@ -452,35 +422,7 @@ export default function TraineeDashboard() {
                 </div>
                 {t('dashboard.skills')}
               </h3>
-              <ResponsiveContainer
-                width="100%"
-                height={200}
-                className="from-background/40 rounded-xl bg-gradient-to-br to-green-900/10 p-2"
-              >
-                <RadarChart data={skillRadar}>
-                  <PolarGrid stroke="#6b7280" strokeOpacity={0.2} />
-                  <PolarAngleAxis
-                    dataKey="skill"
-                    stroke="currentColor"
-                    fontSize={11}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <PolarRadiusAxis
-                    stroke="currentColor"
-                    fontSize={10}
-                    tick={{ fill: 'currentColor' }}
-                    axisLine={false}
-                  />
-                  <Radar
-                    name="Skills"
-                    dataKey="value"
-                    stroke="#ff1a1a"
-                    fill="#ff1a1a"
-                    fillOpacity={0.3}
-                    strokeWidth={3}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
+              <SkillRadarChart data={skillRadar} />
               {/* Compact skills display */}
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {skillRadar.map((item: any, index: number) => (
@@ -507,49 +449,7 @@ export default function TraineeDashboard() {
                 </div>
                 {t('dashboard.moduleProgress')}
               </h3>
-              <ResponsiveContainer
-                width="100%"
-                height={200}
-                className="from-background/40 rounded-xl bg-gradient-to-br to-blue-900/10 p-2"
-              >
-                <BarChart data={moduleProgress}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#6b7280"
-                    strokeOpacity={0.2}
-                  />
-                  <XAxis
-                    dataKey="name"
-                    stroke="currentColor"
-                    fontSize={10}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <YAxis
-                    stroke="currentColor"
-                    fontSize={10}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e1423',
-                      border: '2px solid #ff1a1a',
-                      borderRadius: '12px',
-                      color: 'currentColor',
-                      boxShadow: '0 8px 24px rgba(255, 26, 26, 0.3)',
-                    }}
-                  />
-                  <Bar
-                    dataKey="progress"
-                    fill="#ff1a1a"
-                    radius={[4, 4, 0, 0]}
-                    stroke="currentColor"
-                    strokeWidth={1}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <ModuleBarChart data={moduleProgress} />
               {/* Compact module progress display */}
               <div className="mt-4 space-y-2">
                 {moduleProgress.map((item: any, index: number) => (
