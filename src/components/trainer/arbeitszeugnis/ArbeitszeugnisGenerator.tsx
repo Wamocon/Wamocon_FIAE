@@ -142,40 +142,16 @@ export function ArbeitszeugnisGenerator() {
 
     const radarRef = useRef<HTMLDivElement>(null);
 
-    // Load trainees with activity report stats
+    // Load trainees with activity report stats (single API call)
     useEffect(() => {
         async function loadTrainees() {
             setTraineesLoading(true);
             try {
-                const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile?.id}`);
+                // Use batch endpoint to get trainees WITH stats in one call
+                const res = await fetch(`/api/trainer/trainees/with-stats?trainerProfileId=${profile?.id}`);
                 if (res.ok) {
                     const data = await res.json();
-                    const traineeList = data.trainees || [];
-                    
-                    // For each trainee, fetch their activity report stats
-                    const enrichedTrainees = await Promise.all(
-                        traineeList.map(async (trainee: Trainee) => {
-                            try {
-                                const statsRes = await fetch(`/api/activity-reports?userId=${trainee.id}&role=trainer`);
-                                if (statsRes.ok) {
-                                    const statsData = await statsRes.json();
-                                    const reports = statsData.reports || [];
-                                    const approved = reports.filter((r: { status: string }) => r.status === 'APPROVED').length;
-                                    const pending = reports.filter((r: { status: string }) => r.status === 'SUBMITTED').length;
-                                    return {
-                                        ...trainee,
-                                        approvedReports: approved,
-                                        pendingReports: pending,
-                                    };
-                                }
-                            } catch (e) {
-                                console.error('Error fetching stats for trainee:', trainee.id);
-                            }
-                            return { ...trainee, approvedReports: 0, pendingReports: 0 };
-                        })
-                    );
-                    
-                    setTrainees(enrichedTrainees);
+                    setTrainees(data.trainees || []);
                 }
             } catch (err) {
                 console.error('Error loading trainees:', err);

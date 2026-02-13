@@ -141,21 +141,12 @@ export default function TrainerActivityReportsPage() {
             setUseCases(useCasesData.useCases || []);
             setComponents(componentsData.components || []);
 
-            // Enhance reports with trainee info and check for overbooking
-            const enhancedReports = await Promise.all(
-                (reportsData.reports || []).map(async (r: ActivityReport) => {
-                    // Fetch entries to check for overbooking
-                    const entriesRes = await fetch(`/api/activity-reports/${r.id}/entries`);
-                    const entriesData = entriesRes.ok ? await entriesRes.json() : { entries: [] };
-                    const hasOverbooking = entriesData.entries?.some((e: ReportUseCaseEntry) => e.isOverbooked);
-
-                    return {
-                        ...r,
-                        trainee: traineeMap[r.traineeId],
-                        hasOverbooking,
-                    };
-                })
-            );
+            // Reports now include hasOverbooking from the API - no N+1 calls needed
+            const enhancedReports = (reportsData.reports || []).map((r: ActivityReport) => ({
+                ...r,
+                trainee: traineeMap[r.traineeId],
+                hasOverbooking: r.hasOverbooking || false,
+            }));
 
             setReports(enhancedReports);
         } catch (err: any) {
@@ -494,7 +485,7 @@ export default function TrainerActivityReportsPage() {
                     </div>
                 </div>
                 <button
-                    onClick={() => router.push('/trainer/arbeitszeugnis')}
+                    onClick={() => router.push('/trainer/activity-reports/arbeitszeugnis')}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium shadow-lg hover:shadow-xl hover:scale-105 transition-all"
                 >
                     <Award className="h-5 w-5" />
