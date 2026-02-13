@@ -11,6 +11,33 @@ import {
 } from '@/lib/scenario-parser';
 import { useLanguage } from '@/contexts/LanguageContext';
 
+/**
+ * Parse basic markdown to HTML
+ * Converts **bold**, *italic*, --- (horizontal rules)
+ */
+function parseMarkdown(text: string): string {
+  if (!text) return '';
+  
+  return text
+    // Bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-slate-900 dark:text-slate-100">$1</strong>')
+    .replace(/__(.+?)__/g, '<strong class="font-semibold text-slate-900 dark:text-slate-100">$1</strong>')
+    // Italic: *text* or _text_ (but not inside **)
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>')
+    // Horizontal rules: ---
+    .replace(/^---$/gm, '<hr class="my-4 border-slate-300 dark:border-slate-600" />')
+    // Line breaks for better display
+    .replace(/\n/g, '<br />');
+}
+
+/**
+ * Check if text contains markdown that needs parsing
+ */
+function containsMarkdown(text: string): boolean {
+  return /\*\*[^*]+\*\*|__[^_]+__|(?<!\*)\*[^*]+\*(?!\*)|(?<!_)_[^_]+_(?!_)|^---$/m.test(text);
+}
+
 interface SubSection {
   key: string;
   title: string;
@@ -103,26 +130,37 @@ function containsHtml(content: string): boolean {
 }
 
 /**
+ * Check if content needs special rendering (HTML or markdown)
+ */
+function needsHtmlRendering(content: string): boolean {
+  return containsHtml(content) || containsMarkdown(content);
+}
+
+/**
  * Renders HTML content safely (for imported tables etc.)
  */
 function HtmlContent({ content }: { content: string }) {
+  // Parse markdown first if present, then render as HTML
+  const processedContent = containsMarkdown(content) ? parseMarkdown(content) : content;
+  
   return (
     <div 
       className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_th]:bg-slate-100 [&_th]:dark:bg-slate-700 [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-slate-600 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-slate-600 [&_td]:px-3 [&_td]:py-2 [&_tr:nth-child(even)]:bg-slate-50 [&_tr:nth-child(even)]:dark:bg-slate-800/50"
-      dangerouslySetInnerHTML={{ __html: content }} 
+      dangerouslySetInnerHTML={{ __html: processedContent }} 
     />
   );
 }
 
 /**
- * Renders text that may contain HTML - used for inline content in cards
+ * Renders text that may contain HTML or markdown - used for inline content in cards
  */
 function TextOrHtml({ content, className }: { content: string; className?: string }) {
-  if (containsHtml(content)) {
+  if (needsHtmlRendering(content)) {
+    const processedContent = containsMarkdown(content) ? parseMarkdown(content) : content;
     return (
       <div 
         className={`prose prose-slate dark:prose-invert max-w-none [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_th]:bg-slate-100 [&_th]:dark:bg-slate-700 [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-slate-600 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-slate-600 [&_td]:px-3 [&_td]:py-2 [&_tr:nth-child(even)]:bg-slate-50 [&_tr:nth-child(even)]:dark:bg-slate-800/50 ${className || ''}`}
-        dangerouslySetInnerHTML={{ __html: content }} 
+        dangerouslySetInnerHTML={{ __html: processedContent }} 
       />
     );
   }
@@ -135,11 +173,11 @@ function TextOrHtml({ content, className }: { content: string; className?: strin
 
 /**
  * Renders paragraph content with proper formatting (light mode compatible)
- * Supports HTML content like tables
+ * Supports HTML content like tables and markdown
  */
 function ParagraphContent({ content }: { content: string }) {
-  // If content contains HTML, render it as HTML
-  if (containsHtml(content)) {
+  // If content contains HTML or markdown, render it accordingly
+  if (needsHtmlRendering(content)) {
     return <HtmlContent content={content} />;
   }
 
