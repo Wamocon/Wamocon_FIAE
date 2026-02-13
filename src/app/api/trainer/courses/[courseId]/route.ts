@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
+import { verifyTrainer } from '@/lib/auth-helpers';
 import {
   courses,
   courseMembers,
@@ -10,24 +11,6 @@ import {
   skills,
   notifications,
 } from '@/db/migrations/schemas/schema';
-
-/**
- * Helper to verify the requesting user is a valid trainer in the system.
- * For shared curriculum model, any TRAINER can manage any course.
- */
-async function verifyTrainer(trainerId: string): Promise<boolean> {
-  try {
-    const [trainer] = await db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, trainerId as any));
-    console.log('[verifyTrainer] Query result:', { trainerId, trainer });
-    return trainer?.role === 'TRAINER';
-  } catch (err) {
-    console.error('[verifyTrainer] Database error:', err);
-    return false;
-  }
-}
 
 export async function GET(
   _req: NextRequest,
@@ -169,14 +152,12 @@ export async function PATCH(
             .from(skills)
             .where(inArray(skills.name, skillsArr));
           if (allSkills.length) {
-            await tx
-              .insert(courseSkills)
-              .values(
-                allSkills.map(s => ({
-                  courseId: courseId as any,
-                  skillId: s.id,
-                }))
-              );
+            await tx.insert(courseSkills).values(
+              allSkills.map(s => ({
+                courseId: courseId as any,
+                skillId: s.id,
+              }))
+            );
           }
         }
       }
