@@ -13,9 +13,8 @@ import {
   BarChart3,
   Upload,
   School,
-  Calendar,
   ClipboardList,
-  FolderEdit,
+  FileCheck2,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback } from 'react';
@@ -134,95 +133,95 @@ export function Sidebar({
       },
       ...(userRole === 'trainer'
         ? [
-          {
-            id: 'activityReports',
-            label: t('nav.activityReports'),
-            icon: ClipboardList,
-            href: '/trainer/activity-reports',
-          },
-          {
-            id: 'evaluations',
-            label: t('nav.evaluations'),
-            icon: FileCheck2,
-            href: '/trainer/arbeitszeugnis',
-          },
-          {
-            id: 'school',
-            label: t('nav.school'),
-            icon: School,
-            href: '/trainer/school',
-          },
-          {
-            id: 'contentManagement',
-            label: t('nav.contentManagement'),
-            icon: BookOpen,
-            href: '/trainer/content-management',
-          },
+            {
+              id: 'activityReports',
+              label: t('nav.activityReports'),
+              icon: ClipboardList,
+              href: '/trainer/activity-reports',
+            },
+            {
+              id: 'evaluations',
+              label: t('nav.evaluations'),
+              icon: FileCheck2,
+              href: '/trainer/arbeitszeugnis',
+            },
+            {
+              id: 'school',
+              label: t('nav.school'),
+              icon: School,
+              href: '/trainer/school',
+            },
+            {
+              id: 'contentManagement',
+              label: t('nav.contentManagement'),
+              icon: BookOpen,
+              href: '/trainer/content-management',
+            },
 
-          {
-            id: 'quizManagement',
-            label: t('nav.quizzes'),
-            icon: HelpCircle,
-            href: '/trainer/quiz-management',
-          },
-          {
-            id: 'bulkImport',
-            label: t('nav.bulkImport'),
-            icon: Upload,
-            href: '/trainer/bulk-import',
-          },
-          {
-            id: 'trainees',
-            label: t('nav.trainees'),
-            icon: Users,
-            href: '/trainer/trainees',
-          },
-          {
-            id: 'analytics',
-            label: t('nav.analytics'),
-            icon: BarChart3,
-            href: '/trainer/analytics',
-          },
-        ]
+            {
+              id: 'quizManagement',
+              label: t('nav.quizzes'),
+              icon: HelpCircle,
+              href: '/trainer/quiz-management',
+            },
+            {
+              id: 'bulkImport',
+              label: t('nav.bulkImport'),
+              icon: Upload,
+              href: '/trainer/bulk-import',
+            },
+            {
+              id: 'trainees',
+              label: t('nav.trainees'),
+              icon: Users,
+              href: '/trainer/trainees',
+            },
+            {
+              id: 'analytics',
+              label: t('nav.analytics'),
+              icon: BarChart3,
+              href: '/trainer/analytics',
+            },
+          ]
         : [
-          {
-            id: 'activityReports',
-            label: t('nav.activityReports'),
-            icon: ClipboardList,
-            href: '/trainee/activity-reports',
-          },
-          {
-            id: 'evaluations',
-            label: t('nav.evaluations'),
-            icon: FileCheck2,
-            href: '/trainee/arbeitszeugnis',
-          },
-          {
-            id: 'school',
-            label: t('nav.school'),
-            icon: School,
-            href: '/trainee/school',
-          },
-          {
-            id: 'courses',
-            label: t('nav.courses'),
-            icon: BookOpen,
-            href: '/trainee/courses',
-          },
+            {
+              id: 'activityReports',
+              label: t('nav.activityReports'),
+              icon: ClipboardList,
+              href: '/trainee/activity-reports',
+            },
+            {
+              id: 'evaluations',
+              label: t('nav.evaluations'),
+              icon: FileCheck2,
+              href: '/trainee/arbeitszeugnis',
+            },
+            {
+              id: 'school',
+              label: t('nav.school'),
+              icon: School,
+              href: '/trainee/school',
+            },
+            {
+              id: 'courses',
+              label: t('nav.courses'),
+              icon: BookOpen,
+              href: '/trainee/courses',
+            },
 
-          {
-            id: 'lessons',
-            label: t('nav.trainerFeedback'),
-            icon: GraduationCap,
-            href: '/trainee/trainer-feedback',
-          },
-          {
-            id: 'quizzes',
-            label: t('nav.quizzes'),
-            icon: HelpCircle,
-            href: '/trainee/quizzes',
-          },
-        ]),
+            {
+              id: 'lessons',
+              label: t('nav.trainerFeedback'),
+              icon: GraduationCap,
+              href: '/trainee/trainer-feedback',
+            },
+            {
+              id: 'quizzes',
+              label: t('nav.quizzes'),
+              icon: HelpCircle,
+              href: '/trainee/quizzes',
+            },
+          ]),
       {
         id: 'profile',
         label: t('nav.profile'),
@@ -282,10 +281,11 @@ export function Sidebar({
               <button
                 key={item.id}
                 onClick={() => handleNavigation(item.id)}
-                className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${isActive
+                className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${
+                  isActive
                     ? 'bg-accent/20 text-accent border-accent/30 border'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
-                  }`}
+                }`}
               >
                 {item.id === 'profile' ? (
                   <Avatar className="h-5 w-5">
