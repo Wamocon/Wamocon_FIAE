@@ -26,6 +26,7 @@ interface Profile {
   full_name: string;
   role: 'trainee' | 'trainer';
   avatar?: string | null;
+  birth_date?: string | null;
   training_start_date?: string | null;
   trainer_id?: string | null;
   isActive?: boolean;
@@ -46,6 +47,7 @@ interface AuthContextType {
   updateProfile: (updates: {
     full_name?: string;
     avatar_url?: string | null;
+    birth_date?: string | null;
     training_start_date?: string | null;
     trainer_auth_id?: string | null;
   }) => Promise<void>;
@@ -137,7 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       '/forgot-password',
       '/reset-password',
     ]);
-    return publicPaths.has(pathname || '');
+    const p = pathname || '';
+    return publicPaths.has(p) || p.startsWith('/verify');
   }, [pathname]);
 
   // Auto logout after 4 hours
@@ -175,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase
         .from('profiles')
         .select(
-          'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, is_active'
+          'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, birth_date, is_active'
         )
         .eq('id', userId)
         .single();
@@ -192,6 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         avatar_url: string | null;
         assigned_trainer_id: string | null;
         start_of_training_date: string | null;
+        birth_date: string | null;
         is_active: boolean | null;
       };
       const row = data as ProfileRow;
@@ -201,6 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         full_name: row.full_name ?? '',
         role: String(row.role).toLowerCase() as 'trainee' | 'trainer',
         avatar: row.avatar_url || null,
+        birth_date: row.birth_date || null,
         training_start_date: row.start_of_training_date || null,
         trainer_id: row.assigned_trainer_id || null,
         isActive:
@@ -665,6 +670,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // map legacy keys to new column names when present
             full_name: updates.full_name,
             avatar_url: updates.avatar_url ?? null,
+            birth_date: updates.birth_date ?? null,
             start_of_training_date: updates.training_start_date ?? null,
             assigned_trainer_id: updates.trainer_auth_id ?? null,
             updated_at: new Date().toISOString(),

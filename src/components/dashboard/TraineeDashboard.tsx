@@ -149,6 +149,13 @@ export default function TraineeDashboard() {
         setFetching(false);
         return;
       }
+
+      // Check if trainee has completed their profile with birth date
+      if (profile.role === 'trainee' && !profile.birth_date) {
+        router.replace('/trainee/profile?required=true');
+        return;
+      }
+
       setFetching(true);
       setDataError(null);
       try {
