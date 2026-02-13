@@ -313,10 +313,42 @@ function extractProblemsAndSolutions(text: string, html: string): { tasks: Probl
           : html.length;
         
         const solutionHtml = html.substring(loesungHtmlMatch, loesungEndPos);
-        const tables = extractAndStyleTables(solutionHtml);
         
-        if (tables) {
-          solutionContent = solutionContent + '\n\n' + tables;
+        // If this solution has tables, use HTML content (with styled tables) instead of plain text
+        // This prevents duplication (table data appearing twice: once as text, once as HTML)
+        if (solutionHtml.includes('<table')) {
+          // Convert HTML to text but preserve tables
+          // 1. Style the tables first
+          const styledHtml = solutionHtml
+            .replace(/<table/g, '<table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden my-4"')
+            .replace(/<thead/g, '<thead class="bg-slate-50 dark:bg-slate-800"')
+            .replace(/<th/g, '<th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider"')
+            .replace(/<td/g, '<td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 border-t border-slate-100 dark:border-slate-700"')
+            .replace(/<tr/g, '<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"');
+          
+          // 2. Convert non-table HTML to text, preserve tables
+          // Split by tables, process non-table parts
+          const parts = styledHtml.split(/(<table[\s\S]*?<\/table>)/gi);
+          const processedParts = parts.map(part => {
+            if (part.startsWith('<table')) {
+              return part; // Keep tables as-is
+            }
+            // Convert HTML to plain text for non-table parts
+            return part
+              .replace(/<br\s*\/?>/gi, '\n')
+              .replace(/<\/p>/gi, '\n\n')
+              .replace(/<\/li>/gi, '\n')
+              .replace(/<\/h[1-6]>/gi, '\n\n')
+              .replace(/<[^>]+>/g, '') // Remove remaining tags
+              .replace(/&nbsp;/g, ' ')
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/\n{3,}/g, '\n\n') // Normalize multiple newlines
+              .trim();
+          });
+          
+          solutionContent = processedParts.join('\n\n').trim();
         }
       }
       
