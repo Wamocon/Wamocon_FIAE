@@ -301,7 +301,8 @@ function extractProblemsAndSolutions(text: string, html: string): { tasks: Probl
     if (solutionContent) {
       // Find corresponding HTML section for this solution to extract tables
       // Look for Lösung marker followed by problem number in HTML
-      const loesungHtmlRegex = new RegExp(`(LÖSUNG|Lösung|LOESUNG)\\s*${problemNum}?\\s*:?`, 'i');
+      // IMPORTANT: Must require the number to avoid matching "PROBLEM-LÖSUNG-PAARE" header
+      const loesungHtmlRegex = new RegExp(`(LÖSUNG|Lösung|LOESUNG)\\s*${problemNum}\\s*:`, 'i');
       const loesungHtmlMatch = html.search(loesungHtmlRegex);
       
       if (loesungHtmlMatch >= 0) {
