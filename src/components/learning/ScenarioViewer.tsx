@@ -5,13 +5,40 @@ import {
   BookMarked, ChevronLeft, ChevronRight, ChevronDown, Play, Tags, Target,
   BookOpen, Compass, Lightbulb, CheckSquare, FileText, Info, ClipboardList, Lock,
 } from 'lucide-react';
-import { parseScenarioText, ParsedScenario } from '@/lib/scenario-parser';
+import { parseScenarioText, ParsedScenario, ScenarioSection, ContentType } from '@/lib/scenario-parser';
 import { ScenarioModal } from './ScenarioModal';
 import { useLanguage } from '@/contexts/LanguageContext';
+
+// Task structure from database
+interface DbTask {
+  task: string;
+  title: string;
+  number: number;
+  scenario: string;
+}
+
+// Solution structure from database
+interface DbSolution {
+  problemNumber: number;
+  title: string;
+  content: string;
+}
+
+// Database sections structure
+interface DbSections {
+  behandelteThemen?: string[];
+  lernziele?: string[];
+  theoretischeGrundlagen?: string;  // May contain HTML tables
+  ausgangslage?: string;
+  aufgaben?: DbTask[];
+  checkliste?: string[];
+  loesungen?: DbSolution[];
+}
 
 interface Scenario {
   text: string;
   hint?: string;
+  sections?: DbSections;  // Pre-structured sections from DB
 }
 
 interface ScenarioViewerProps {
@@ -84,8 +111,118 @@ export function ScenarioViewer({
   }, [scenarios, scenarioText, hintText]);
 
   const currentScenario = normalizedScenarios[currentIndex];
+  
+  // Convert database sections to ParsedScenario format
   const parsedScenario: ParsedScenario = useMemo(() => {
     if (!currentScenario) return { sections: [], rawText: '', hint: undefined };
+    
+    // If we have pre-structured sections from DB, use them directly
+    const dbSections = currentScenario.sections;
+    if (dbSections && (dbSections.behandelteThemen?.length || dbSections.theoretischeGrundlagen || dbSections.aufgaben?.length)) {
+      const sections: ScenarioSection[] = [];
+      let order = 0;
+      
+      // Section 1: Overview & Goals
+      const overviewContent: string[] = [];
+      if (dbSections.behandelteThemen?.length) {
+        overviewContent.push('**Behandelte Themen:**\n' + dbSections.behandelteThemen.map(t => `• ${t}`).join('\n'));
+      }
+      if (dbSections.lernziele?.length) {
+        overviewContent.push('**Lernziele:**\n' + dbSections.lernziele.map(l => `• ${l}`).join('\n'));
+      }
+      if (overviewContent.length > 0) {
+        sections.push({
+          key: 'overviewAndGoals',
+          title: 'Überblick & Lernziele',
+          titleKey: 'scenario.section.overviewAndGoals',
+          icon: 'Target',
+          content: overviewContent.join('\n\n'),
+          type: 'mixed' as ContentType,
+          order: order++,
+        });
+      }
+      
+      // Section 2: Theory & Context (with HTML tables!)
+      const theoryContent: string[] = [];
+      if (dbSections.theoretischeGrundlagen) {
+        theoryContent.push(dbSections.theoretischeGrundlagen);
+      }
+      if (dbSections.ausgangslage) {
+        theoryContent.push('**Ausgangslage:**\n' + dbSections.ausgangslage);
+      }
+      if (theoryContent.length > 0) {
+        sections.push({
+          key: 'theoryAndContext',
+          title: 'Theorie & Kontext',
+          titleKey: 'scenario.section.theoryAndContext',
+          icon: 'BookOpen',
+          content: theoryContent.join('\n\n'),
+          type: 'paragraph' as ContentType,
+          order: order++,
+        });
+      }
+      
+      // Section 3: Tasks (without solutions!)
+      if (dbSections.aufgaben?.length) {
+        const tasksContent = dbSections.aufgaben.map((task, i) => {
+          const parts: string[] = [];
+          parts.push(`**${task.title || `Aufgabe ${task.number}`}**`);
+          if (task.scenario) parts.push(task.scenario);
+          if (task.task) parts.push('**Aufgabe:** ' + task.task);
+          return parts.join('\n');
+        }).join('\n\n---\n\n');
+        
+        sections.push({
+          key: 'tasks',
+          title: 'Aufgaben',
+          titleKey: 'scenario.section.tasks',
+          icon: 'ClipboardList',
+          content: tasksContent,
+          type: 'paragraph' as ContentType,
+          order: order++,
+        });
+      }
+      
+      // Section 4: Checklist
+      const checklistItems = dbSections.checkliste?.length ? dbSections.checkliste : [
+        'Ich habe das Szenario vollständig gelesen und verstanden',
+        'Ich habe die Kernkonzepte identifiziert',
+        'Ich habe die Aufgabenstellung verstanden',
+        'Ich habe mögliche Lösungsansätze überlegt',
+        'Ich bin bereit, die Aufgabe zu bearbeiten',
+      ];
+      sections.push({
+        key: 'checklist',
+        title: 'Checkliste',
+        titleKey: 'scenario.section.checklist',
+        icon: 'CheckSquare',
+        content: checklistItems.map(item => `[ ] ${item}`).join('\n'),
+        type: 'checklist' as ContentType,
+        order: order++,
+      });
+      
+      // Section 5: Solutions (GATED - with HTML tables!)
+      if (dbSections.loesungen?.length) {
+        const solutionsContent = dbSections.loesungen.map((sol, i) => {
+          return `**Lösung ${sol.problemNumber}: ${sol.title}**\n${sol.content}`;
+        }).join('\n\n---\n\n');
+        
+        sections.push({
+          key: 'solutions',
+          title: 'Lösungen',
+          titleKey: 'scenario.section.solutions',
+          icon: 'Lightbulb',
+          content: solutionsContent,
+          type: 'paragraph' as ContentType,
+          order: order++,
+          isGated: true,
+        });
+      }
+      
+      return { sections, rawText: currentScenario.text, hint: currentScenario.hint };
+    }
+    
+    // Fallback: parse text if no structured sections
     return parseScenarioText(currentScenario.text, currentScenario.hint);
   }, [currentScenario]);
 
