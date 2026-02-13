@@ -222,7 +222,7 @@ function extractAndStyleTables(html: string): string {
  * MAIN PARSER: Extract problems and solutions separately
  * THIS IS CRITICAL - Solutions must NEVER appear in Tasks section
  */
-function extractProblemsAndSolutions(text: string): { tasks: ProblemTask[]; solutions: Solution[] } {
+function extractProblemsAndSolutions(text: string, html: string): { tasks: ProblemTask[]; solutions: Solution[] } {
   const tasks: ProblemTask[] = [];
   const solutions: Solution[] = [];
   
@@ -299,6 +299,26 @@ function extractProblemsAndSolutions(text: string): { tasks: ProblemTask[]; solu
     
     // Add solution separately (GATED IN UI)
     if (solutionContent) {
+      // Find corresponding HTML section for this solution to extract tables
+      // Look for Lösung marker followed by problem number in HTML
+      const loesungHtmlRegex = new RegExp(`(LÖSUNG|Lösung|LOESUNG)\\s*${problemNum}?\\s*:?`, 'i');
+      const loesungHtmlMatch = html.search(loesungHtmlRegex);
+      
+      if (loesungHtmlMatch >= 0) {
+        // Find end of this solution section (next PROBLEM marker or end)
+        const nextProblemInHtml = html.substring(loesungHtmlMatch).search(/PROBLEM\s*\d+/i);
+        const loesungEndPos = nextProblemInHtml >= 0 
+          ? loesungHtmlMatch + nextProblemInHtml 
+          : html.length;
+        
+        const solutionHtml = html.substring(loesungHtmlMatch, loesungEndPos);
+        const tables = extractAndStyleTables(solutionHtml);
+        
+        if (tables) {
+          solutionContent = solutionContent + '\n\n' + tables;
+        }
+      }
+      
       solutions.push({
         problemNumber: problemNum,
         title: problemTitle,
@@ -369,8 +389,8 @@ async function parseScenarioDoc(filePath: string): Promise<StructuredScenario> {
     sections.ausgangslage = ausgangslageMatch[0].replace(/Ausgangslage\s*:?/i, '').trim();
   }
   
-  // Extract Problems and Solutions SEPARATELY
-  const { tasks, solutions } = extractProblemsAndSolutions(text);
+  // Extract Problems and Solutions SEPARATELY (pass HTML for table extraction)
+  const { tasks, solutions } = extractProblemsAndSolutions(text, html);
   sections.aufgaben = tasks;
   sections.loesungen = solutions;
   

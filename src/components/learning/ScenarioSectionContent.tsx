@@ -325,7 +325,7 @@ function ProblemSolutionContent({ content }: { content: string }) {
             </div>
           </div>
 
-          {/* Solution toggle */}}
+          {/* Solution toggle */}
           {pair.solution && (
             <div>
               <button
