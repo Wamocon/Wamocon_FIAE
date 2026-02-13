@@ -187,7 +187,13 @@ function TextOrHtml({ content, className }: { content: string; className?: strin
  * Supports HTML content like tables and markdown
  */
 function ParagraphContent({ content }: { content: string }) {
-  // If content contains HTML or markdown, render it accordingly
+  // CRITICAL: Always use HTML rendering if content contains tables
+  // Tables must be rendered via dangerouslySetInnerHTML to display properly
+  if (content.includes('<table')) {
+    return <HtmlContent content={content} />;
+  }
+  
+  // Also use HTML rendering for other HTML tags or markdown
   if (needsHtmlRendering(content)) {
     return <HtmlContent content={content} />;
   }
