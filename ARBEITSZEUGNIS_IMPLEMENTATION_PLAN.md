@@ -11,6 +11,7 @@
 ## 🎯 Executive Summary
 
 This module implements an **automated work certificate (Arbeitszeugnis) generation system** for trainees, based on:
+
 - Weekly performance evaluations (trainee self-assessment + trainer rating)
 - 19 MES Softskill criteria tracking
 - Integration with existing Ausbildungsrahmenplan (ARP) themes
@@ -23,6 +24,7 @@ This module implements an **automated work certificate (Arbeitszeugnis) generati
 ## 📊 Module Architecture
 
 ### **Data Flow**
+
 ```
 Weekly Activity Report
        ↓
@@ -96,12 +98,14 @@ Work Certificate Generation (PDF)
 #### **1.1 Backend API Routes**
 
 **Trainee Routes:**
+
 - `POST /api/trainee/evaluations/weekly` - Submit self-assessment
 - `GET /api/trainee/evaluations/weekly?week=X&year=Y` - Get evaluation for week
 - `GET /api/trainee/evaluations/history?year=Y` - Get all evaluations for year
 - `GET /api/trainee/evaluations/softskills` - Get MES criteria list
 
 **Trainer Routes:**
+
 - `GET /api/trainer/evaluations/pending` - Get pending evaluations
 - `PUT /api/trainer/evaluations/[id]` - Submit trainer assessment
 - `POST /api/trainer/evaluations/[id]/approve` - Approve evaluation
@@ -109,12 +113,14 @@ Work Certificate Generation (PDF)
 - `GET /api/trainer/evaluations/trainee/[traineeId]?year=Y` - Get trainee's evaluations
 
 **Shared Routes:**
+
 - `GET /api/softskills` - Get MES criteria master data
 - `GET /api/arp-themes` - Get ARP use cases (training_use_cases)
 
 #### **1.2 UI Components**
 
 **Trainee Side:**
+
 1. **`WeeklyEvaluationForm.tsx`**
    - Dropdown: Select ARP theme (from training_use_cases)
    - Self-rating selector (1-6) with German grade labels
@@ -128,6 +134,7 @@ Work Certificate Generation (PDF)
    - Filter by year/month
 
 **Trainer Side:**
+
 1. **`PendingEvaluationsQueue.tsx`**
    - List of submitted evaluations awaiting review
    - Quick view of trainee's self-assessment
@@ -143,6 +150,7 @@ Work Certificate Generation (PDF)
 #### **1.3 Integration with Activity Reports**
 
 **Modify existing `activity_reports` workflow:**
+
 - Add "Leistungsbewertung" section to weekly report
 - When trainee submits activity report → also create `weekly_evaluations` entry
 - When trainer approves activity report → prompt for evaluation
@@ -170,17 +178,20 @@ npx tsx scripts/seed-mes-criteria.ts
 #### **2.1 Backend API Routes**
 
 **Trainer Routes:**
+
 - `GET /api/trainer/evaluations/annual/[traineeId]?year=Y` - Generate annual summary
 - `POST /api/trainer/evaluations/annual/[traineeId]/finalize` - Finalize annual performance
 - `PUT /api/trainer/evaluations/annual/[id]/discussion` - Document annual discussion
 
 **Trainee Routes:**
+
 - `GET /api/trainee/evaluations/annual?year=Y` - View own annual summary
 - `POST /api/trainee/evaluations/annual/[id]/statement` - Add trainee statement
 
 #### **2.2 Calculation Logic**
 
 **Automatic Calculation Service:**
+
 ```typescript
 // src/lib/arbeitszeugnis/calculateAnnualPerformance.ts
 function calculateAnnualPerformance(traineeId, year, ausbildungsjahr) {
@@ -200,6 +211,7 @@ function calculateAnnualPerformance(traineeId, year, ausbildungsjahr) {
 #### **2.3 UI Components**
 
 **Trainer Side:**
+
 1. **`AnnualPerformanceOverview.tsx`**
    - Yearly calendar grid (52 weeks)
    - Heatmap visualization (green/yellow/red deviations)
@@ -214,6 +226,7 @@ function calculateAnnualPerformance(traineeId, year, ausbildungsjahr) {
    - Finalize button
 
 **Trainee Side:**
+
 1. **`MyAnnualPerformance.tsx`**
    - Read-only view of aggregated performance
    - Deviation analysis charts
@@ -229,6 +242,7 @@ function calculateAnnualPerformance(traineeId, year, ausbildungsjahr) {
 #### **3.1 Backend API Routes**
 
 **Trainer Routes:**
+
 - `POST /api/trainer/certificates` - Create new certificate
 - `GET /api/trainer/certificates/[id]/preview` - Preview certificate text
 - `POST /api/trainer/certificates/[id]/generate-pdf` - Generate PDF
@@ -236,6 +250,7 @@ function calculateAnnualPerformance(traineeId, year, ausbildungsjahr) {
 - `GET /api/trainer/certificates/templates` - Get/edit text templates
 
 **Trainee Routes:**
+
 - `GET /api/trainee/certificates` - List own certificates
 - `GET /api/trainee/certificates/[id]` - View certificate details
 - `GET /api/trainee/certificates/[id]/download` - Download PDF
@@ -245,6 +260,7 @@ function calculateAnnualPerformance(traineeId, year, ausbildungsjahr) {
 **Library:** `@react-pdf/renderer` (already in use for activity reports)
 
 **Template Structure:**
+
 ```typescript
 // src/lib/arbeitszeugnis/certificatePdfGenerator.ts
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
@@ -309,6 +325,7 @@ function generateCertificatePDF(certificate, traineeProfile, trainerProfile) {
 #### **3.3 UI Components**
 
 **Trainer Side:**
+
 1. **`CertificateGenerator.tsx`**
    - Input: Select trainee + year
    - Auto-load annual performance data
@@ -324,6 +341,7 @@ function generateCertificatePDF(certificate, traineeProfile, trainerProfile) {
    - Reset to system defaults
 
 **Trainee Side:**
+
 1. **`MyCertificates.tsx`**
    - List of issued certificates
    - Download PDF button
@@ -338,6 +356,7 @@ function generateCertificatePDF(certificate, traineeProfile, trainerProfile) {
 #### **4.1 Warning System**
 
 **Triggers:**
+
 1. **Weekly Warning:**
    - If trainee's weekly avg < 2.45 for 3 consecutive weeks
    - Notification to trainee + assigned trainer
@@ -352,6 +371,7 @@ function generateCertificatePDF(certificate, traineeProfile, trainerProfile) {
    - Alert that training shortening is at risk
 
 **Implementation:**
+
 ```typescript
 // src/lib/arbeitszeugnis/warningSystem.ts
 async function checkPerformanceWarnings(traineeId) {
@@ -382,6 +402,7 @@ async function checkPerformanceWarnings(traineeId) {
 #### **4.2 Analytics Dashboard**
 
 **Trainer Analytics:**
+
 - Performance trends over time (line chart)
 - Competency area radar chart
 - Trainee comparison (anonymized)
@@ -389,6 +410,7 @@ async function checkPerformanceWarnings(traineeId) {
 - Warning flag overview
 
 **Trainee Analytics:**
+
 - Personal performance timeline
 - Competency area strengths/weaknesses
 - Self-assessment accuracy
@@ -591,11 +613,13 @@ Add to `src/components/layout/Sidebar.tsx`:
 ### **2. Dashboard Widgets**
 
 **Trainee Dashboard:**
+
 - Performance summary card (current average)
 - Pending evaluation reminder
 - Warning badge if below 2.45
 
 **Trainer Dashboard:**
+
 - Pending evaluations count
 - Upcoming annual discussions list
 - Performance warnings (trainees at risk)
@@ -603,16 +627,19 @@ Add to `src/components/layout/Sidebar.tsx`:
 ### **3. Activity Reports Integration**
 
 Modify `src/app/api/trainee/school/reports/[id]/submit/route.ts`:
+
 - After trainee submits activity report → create `weekly_evaluations` entry (status: DRAFT)
 - Prompt trainee to complete self-assessment
 
 Modify `src/app/api/trainer/activity-reports/[id]/route.ts`:
+
 - After trainer approves activity report → redirect to evaluation review
 - Link evaluation status in reports table
 
 ### **4. Notifications**
 
 Use existing `notifications` table to send:
+
 - "Bitte deine Wochenleistung bewerten" (Trainee reminder on Fridays)
 - "Neue Bewertung wartet auf Freigabe" (Trainer notification)
 - "Leistungswarnung: Durchschnitt unter 2.45" (Warning alerts)
@@ -673,26 +700,6 @@ describe('POST /api/trainer/evaluations/[id]', () => {
 });
 ```
 
-### **E2E Tests (Playwright)**
-
-```typescript
-// tests/e2e/arbeitszeugnis.spec.ts
-test('trainee can submit self-assessment', async ({ page }) => {
-  // Navigate to evaluations
-  // Fill form
-  // Submit
-  // Verify success message
-});
-
-test('trainer can approve evaluation', async ({ page }) => {
-  // Navigate to pending queue
-  // Select evaluation
-  // Enter ratings
-  // Approve
-  // Verify notification sent
-});
-```
-
 ---
 
 ## 📈 Performance Considerations
@@ -700,6 +707,7 @@ test('trainer can approve evaluation', async ({ page }) => {
 ### **Database Indexing**
 
 ✅ Already defined in schema:
+
 - `idx_weekly_evals_trainee` on `trainee_id`
 - `idx_weekly_evals_year` on `year, ausbildungsjahr`
 - `idx_annual_summaries_warning` on `below_cutoff_warning`
@@ -722,15 +730,15 @@ test('trainer can approve evaluation', async ({ page }) => {
 
 ### **Role-Based Access Control (RBAC)**
 
-| Feature | Trainee | Trainer | Admin |
-|---------|---------|---------|-------|
-| Submit self-assessment | ✅ Own only | ❌ | ❌ |
-| View own evaluations | ✅ Own only | ❌ | ✅ All |
-| Submit trainer assessment | ❌ | ✅ Assigned only | ✅ All |
-| View annual summary | ✅ Own only | ✅ Assigned only | ✅ All |
-| Generate certificate | ❌ | ✅ Assigned only | ✅ All |
-| Edit templates | ❌ | ❌ | ✅ |
-| Download own certificate | ✅ Own only | ❌ | ✅ All |
+| Feature                   | Trainee     | Trainer          | Admin  |
+| ------------------------- | ----------- | ---------------- | ------ |
+| Submit self-assessment    | ✅ Own only | ❌               | ❌     |
+| View own evaluations      | ✅ Own only | ❌               | ✅ All |
+| Submit trainer assessment | ❌          | ✅ Assigned only | ✅ All |
+| View annual summary       | ✅ Own only | ✅ Assigned only | ✅ All |
+| Generate certificate      | ❌          | ✅ Assigned only | ✅ All |
+| Edit templates            | ❌          | ❌               | ✅     |
+| Download own certificate  | ✅ Own only | ❌               | ✅ All |
 
 ### **Data Validation**
 
@@ -835,25 +843,25 @@ evaluations: {
 
 ### **Identified Risks**
 
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| Trainer forgets weekly evaluations | High | Medium | Automated Friday reminders + dashboard badge |
-| Database performance (52 weeks × N trainees) | Medium | Low | Proper indexing + pagination |
-| Legal non-compliance in certificate text | High | Low | Legal review of templates + immutability |
-| User confusion (complex UI) | Medium | Medium | Gradual rollout + training + tooltips |
-| PDF generation errors | Medium | Low | Error handling + fallback plain text |
+| Risk                                         | Impact | Probability | Mitigation                                   |
+| -------------------------------------------- | ------ | ----------- | -------------------------------------------- |
+| Trainer forgets weekly evaluations           | High   | Medium      | Automated Friday reminders + dashboard badge |
+| Database performance (52 weeks × N trainees) | Medium | Low         | Proper indexing + pagination                 |
+| Legal non-compliance in certificate text     | High   | Low         | Legal review of templates + immutability     |
+| User confusion (complex UI)                  | Medium | Medium      | Gradual rollout + training + tooltips        |
+| PDF generation errors                        | Medium | Low         | Error handling + fallback plain text         |
 
 ---
 
 ## 📅 Timeline & Milestones
 
-| Milestone | Target Date | Status | Deliverables |
-|-----------|-------------|--------|--------------|
-| **Phase 1: MVP** | 13.02.2026 | 🟡 Planned | Weekly evaluations, softskill ratings, basic UI |
-| **Phase 2: Annual Review** | 20.02.2026 | 🟡 Planned | Annual summaries, discussion docs, averages |
-| **Phase 3: Certificates** | 28.02.2026 | 🟡 Planned | PDF generation, templates, approval workflow |
-| **Phase 4: Analytics** | 04.03.2026 | 🟡 Planned | Warnings, dashboards, insights |
-| **IHK Demo** | 04.03.2026 | 🟡 Planned | Demo-ready with 2-3 trainee samples |
+| Milestone                  | Target Date | Status     | Deliverables                                    |
+| -------------------------- | ----------- | ---------- | ----------------------------------------------- |
+| **Phase 1: MVP**           | 13.02.2026  | 🟡 Planned | Weekly evaluations, softskill ratings, basic UI |
+| **Phase 2: Annual Review** | 20.02.2026  | 🟡 Planned | Annual summaries, discussion docs, averages     |
+| **Phase 3: Certificates**  | 28.02.2026  | 🟡 Planned | PDF generation, templates, approval workflow    |
+| **Phase 4: Analytics**     | 04.03.2026  | 🟡 Planned | Warnings, dashboards, insights                  |
+| **IHK Demo**               | 04.03.2026  | 🟡 Planned | Demo-ready with 2-3 trainee samples             |
 
 ---
 
@@ -880,6 +888,7 @@ evaluations: {
 ### **Sample Data**
 
 Create 3 demo trainees:
+
 - **Trainee A:** Excellent (avg 1.5) - no warnings
 - **Trainee B:** Good (avg 2.8) - just below cutoff, shows warning
 - **Trainee C:** Struggling (avg 4.2) - multiple warnings, needs support
@@ -958,6 +967,7 @@ Add to: `.claude/settings.local.json` (already exists in your project)
 ```
 
 **How to get your Supabase credentials:**
+
 1. Go to Supabase Dashboard → Settings → API
 2. Copy **Project URL** → `SUPABASE_URL`
 3. Copy **service_role (secret)** key → `SUPABASE_SERVICE_ROLE_KEY`
