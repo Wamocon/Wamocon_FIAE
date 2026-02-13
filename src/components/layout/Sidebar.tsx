@@ -141,12 +141,6 @@ export function Sidebar({
             href: '/trainer/activity-reports',
           },
           {
-            id: 'evaluations',
-            label: t('nav.evaluations'),
-            icon: FileCheck2,
-            href: '/trainer/arbeitszeugnis',
-          },
-          {
             id: 'school',
             label: t('nav.school'),
             icon: School,
@@ -190,12 +184,6 @@ export function Sidebar({
             label: t('nav.activityReports'),
             icon: ClipboardList,
             href: '/trainee/activity-reports',
-          },
-          {
-            id: 'evaluations',
-            label: t('nav.evaluations'),
-            icon: FileCheck2,
-            href: '/trainee/arbeitszeugnis',
           },
           {
             id: 'school',
