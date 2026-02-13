@@ -96,9 +96,53 @@ function NumberedListContent({ content }: { content: string }) {
 }
 
 /**
+ * Check if content contains HTML tags that need to be rendered
+ */
+function containsHtml(content: string): boolean {
+  return /<(table|ul|ol|p|div|br|strong|em|b|i|h[1-6])[^>]*>/i.test(content);
+}
+
+/**
+ * Renders HTML content safely (for imported tables etc.)
+ */
+function HtmlContent({ content }: { content: string }) {
+  return (
+    <div 
+      className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_th]:bg-slate-100 [&_th]:dark:bg-slate-700 [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-slate-600 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-slate-600 [&_td]:px-3 [&_td]:py-2 [&_tr:nth-child(even)]:bg-slate-50 [&_tr:nth-child(even)]:dark:bg-slate-800/50"
+      dangerouslySetInnerHTML={{ __html: content }} 
+    />
+  );
+}
+
+/**
+ * Renders text that may contain HTML - used for inline content in cards
+ */
+function TextOrHtml({ content, className }: { content: string; className?: string }) {
+  if (containsHtml(content)) {
+    return (
+      <div 
+        className={`prose prose-slate dark:prose-invert max-w-none [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_th]:bg-slate-100 [&_th]:dark:bg-slate-700 [&_th]:border [&_th]:border-slate-300 [&_th]:dark:border-slate-600 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-slate-300 [&_td]:dark:border-slate-600 [&_td]:px-3 [&_td]:py-2 [&_tr:nth-child(even)]:bg-slate-50 [&_tr:nth-child(even)]:dark:bg-slate-800/50 ${className || ''}`}
+        dangerouslySetInnerHTML={{ __html: content }} 
+      />
+    );
+  }
+  return (
+    <p className={`whitespace-pre-wrap ${className || ''}`}>
+      {content}
+    </p>
+  );
+}
+
+/**
  * Renders paragraph content with proper formatting (light mode compatible)
+ * Supports HTML content like tables
  */
 function ParagraphContent({ content }: { content: string }) {
+  // If content contains HTML, render it as HTML
+  if (containsHtml(content)) {
+    return <HtmlContent content={content} />;
+  }
+
   // Split by double newlines to create paragraphs
   const paragraphs = content.split(/\n\n+/).filter(p => p.trim());
 
@@ -276,12 +320,12 @@ function ProblemSolutionContent({ content }: { content: string }) {
                 {pair.problemTitle || t('scenario.task').replace('{number}', String(idx + 1))}
               </span>
             </div>
-            <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap pl-9">
-              {pair.problem}
-            </p>
+            <div className="pl-9">
+              <TextOrHtml content={pair.problem} className="text-slate-700 dark:text-slate-300 leading-relaxed" />
+            </div>
           </div>
 
-          {/* Solution toggle */}
+          {/* Solution toggle */}}
           {pair.solution && (
             <div>
               <button
@@ -308,9 +352,7 @@ function ProblemSolutionContent({ content }: { content: string }) {
                   }`}
               >
                 <div className="px-4 pb-4 border-t border-green-200 dark:border-green-500/10 pt-3 bg-green-50 dark:bg-green-500/5">
-                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                    {pair.solution}
-                  </p>
+                  <TextOrHtml content={pair.solution} className="text-slate-700 dark:text-slate-300 leading-relaxed" />
                 </div>
               </div>
             </div>
@@ -366,9 +408,9 @@ function ProblemsOnlyContent({ content }: { content: string }) {
             </div>
             {/* Show the problem/task description - NOT the solution */}
             {pair.problem && (
-              <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap pl-9">
-                {pair.problem}
-              </p>
+              <div className="pl-9">
+                <TextOrHtml content={pair.problem} className="text-slate-700 dark:text-slate-300 leading-relaxed" />
+              </div>
             )}
           </div>
         </div>
@@ -415,9 +457,7 @@ function SolutionsOnlyContent({ content }: { content: string }) {
             </div>
             {pair.solution && (
               <div className="pl-9">
-                <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {pair.solution}
-                </p>
+                <TextOrHtml content={pair.solution} className="text-slate-700 dark:text-slate-300 leading-relaxed" />
               </div>
             )}
           </div>
@@ -460,7 +500,9 @@ function SubSectionContent({
             includeFinalQuestion={isInChecklistSection}
           />
         )}
-        {subSection.type === 'problem-solution' && <ProblemSolutionContent content={subSection.content} />}
+        {/* IMPORTANT: problem-solution in subsections should render as paragraph (no toggle) */}
+        {/* Solution toggles should ONLY appear in the dedicated Solutions section */}
+        {subSection.type === 'problem-solution' && <ParagraphContent content={subSection.content} />}
         {subSection.type === 'problems-only' && <ProblemsOnlyContent content={subSection.content} />}
         {subSection.type === 'solutions-only' && <SolutionsOnlyContent content={subSection.content} />}
         {(subSection.type === 'paragraph' || subSection.type === 'mixed') && <ParagraphContent content={subSection.content} />}
