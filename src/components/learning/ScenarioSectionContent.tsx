@@ -14,21 +14,32 @@ import { useLanguage } from '@/contexts/LanguageContext';
 /**
  * Parse basic markdown to HTML
  * Converts **bold**, *italic*, --- (horizontal rules)
+ * IMPORTANT: Preserves HTML tables - doesn't convert newlines inside <table> tags
  */
 function parseMarkdown(text: string): string {
   if (!text) return '';
   
-  return text
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-slate-900 dark:text-slate-100">$1</strong>')
-    .replace(/__(.+?)__/g, '<strong class="font-semibold text-slate-900 dark:text-slate-100">$1</strong>')
-    // Italic: *text* or _text_ (but not inside **)
-    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
-    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>')
-    // Horizontal rules: ---
-    .replace(/^---$/gm, '<hr class="my-4 border-slate-300 dark:border-slate-600" />')
-    // Line breaks for better display
-    .replace(/\n/g, '<br />');
+  // Split by tables to preserve them
+  const parts = text.split(/(<table[\s\S]*?<\/table>)/gi);
+  
+  return parts.map(part => {
+    // Don't process table HTML
+    if (part.toLowerCase().startsWith('<table')) {
+      return part;
+    }
+    
+    return part
+      // Bold: **text** or __text__
+      .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-slate-900 dark:text-slate-100">$1</strong>')
+      .replace(/__(.+?)__/g, '<strong class="font-semibold text-slate-900 dark:text-slate-100">$1</strong>')
+      // Italic: *text* or _text_ (but not inside **)
+      .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+      .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>')
+      // Horizontal rules: ---
+      .replace(/^---$/gm, '<hr class="my-4 border-slate-300 dark:border-slate-600" />')
+      // Line breaks for better display (only outside tables!)
+      .replace(/\n/g, '<br />');
+  }).join('');
 }
 
 /**
