@@ -8,9 +8,17 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
-class ApiCache {
+export class ApiCache {
   private cache: Map<string, CacheEntry<any>> = new Map();
-  private readonly defaultTTL = 2 * 60 * 1000; // 2 minutes default
+  private readonly defaultTTL = 5 * 60 * 1000; // 5 minutes default
+
+  /** Pre-defined TTL durations */
+  static readonly TTL = {
+    SHORT: 2 * 60 * 1000, // 2 minutes - for frequently changing data
+    MEDIUM: 5 * 60 * 1000, // 5 minutes - default, for dashboards
+    LONG: 15 * 60 * 1000, // 15 minutes - for rarely changing data (courses, skills)
+    EXTRA_LONG: 30 * 60 * 1000, // 30 minutes - for static lookups (lernfelder, criteria)
+  };
 
   /**
    * Get cached data if available and not expired
