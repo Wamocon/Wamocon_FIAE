@@ -14,25 +14,24 @@ const TrainerLayoutComponent = ({
   const { user, profile, loading } = useAuth();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [waitingForProfile, setWaitingForProfile] = useState(true);
 
-  // Wait for profile to load with a timeout
+  // If profile is already available from cache, skip waiting entirely.
+  const [waitingForProfile, setWaitingForProfile] = useState(() => !profile);
+
+  // Wait for profile to load with a short timeout
   useEffect(() => {
-    // If we have profile, stop waiting
     if (profile) {
       setWaitingForProfile(false);
       return;
     }
-    
-    // If loading is done but no profile, wait a bit more for profile sync
+
     if (!loading && user && !profile) {
       const timer = setTimeout(() => {
         setWaitingForProfile(false);
-      }, 5000); // Give 5 seconds for profile to load after auth loading is done
+      }, 1500);
       return () => clearTimeout(timer);
     }
-    
-    // If loading is done and no user, stop waiting
+
     if (!loading && !user) {
       setWaitingForProfile(false);
     }
@@ -79,9 +78,7 @@ const TrainerLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">
-            Lade...
-          </p>
+          <p className="text-muted-foreground mt-4">Lade...</p>
         </div>
       </div>
     );
@@ -99,7 +96,19 @@ const TrainerLayoutComponent = ({
     );
   }
 
-  // Show access denied state only after we've finished waiting
+  // User exists but profile hasn't arrived yet
+  if (user && !profile) {
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">Lade...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No user and no profile after auth completed
   if (!isAuthenticated) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">

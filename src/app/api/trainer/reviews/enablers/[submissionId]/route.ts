@@ -46,7 +46,7 @@ export async function PATCH(
     }
 
     const [en] = await db
-      .select()
+      .select({ id: enablers.id })
       .from(enablers)
       .where(eq(enablers.id, sub.enablerId));
     if (!en) {

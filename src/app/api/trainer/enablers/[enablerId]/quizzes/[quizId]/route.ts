@@ -80,7 +80,7 @@ export async function PATCH(
     }
 
     const [enabler] = await db
-      .select()
+      .select({ id: enablers.id })
       .from(enablers)
       .where(eq(enablers.id, enablerId));
     if (!enabler) {

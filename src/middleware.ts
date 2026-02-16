@@ -1,10 +1,45 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+/* =====================================================================
+ * Cache-Control tiers for API GET responses.
+ * Values are aligned with src/lib/api-cache.ts `cacheHeaders`.
+ * ===================================================================== */
+const CC_LONG = 'public, s-maxage=900, stale-while-revalidate=1800'; // 15 min
+const CC_MEDIUM = 'public, s-maxage=300, stale-while-revalidate=600'; // 5 min
+const CC_SHORT = 'public, s-maxage=120, stale-while-revalidate=300'; // 2 min
+
+/** Static / reference data — rarely or never changes */
+const LONG_RE =
+  /^\/api\/(training-(use-cases|components)|softskill-criteria|trainee\/evaluations\/softskills|trainee\/lernfelder\/|verify\/)/;
+
+/** Trainer & trainee data routes — changes on writes, 5 min TTL */
+const MEDIUM_RE = /^\/api\/(trainer|trainee)\//;
+
+/** Routes that must NOT be cached (AI chat, auth, real-time) */
+const NO_CACHE_RE = /^\/api\/(hai\/|auth\/|register)/;
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Public routes that don't require authentication
+  /* ── API route caching (GET only) ─────────────────────────────── */
+  if (pathname.startsWith('/api/')) {
+    const response = NextResponse.next();
+
+    if (request.method === 'GET' && !NO_CACHE_RE.test(pathname)) {
+      if (LONG_RE.test(pathname)) {
+        response.headers.set('Cache-Control', CC_LONG);
+      } else if (MEDIUM_RE.test(pathname)) {
+        response.headers.set('Cache-Control', CC_MEDIUM);
+      } else {
+        response.headers.set('Cache-Control', CC_SHORT);
+      }
+    }
+
+    return response;
+  }
+
+  /* ── Page routes ──────────────────────────────────────────────── */
   const publicRoutes = [
     '/',
     '/register',
@@ -15,34 +50,23 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for authentication token in localStorage (this will be handled client-side)
-  // For now, we'll let the client-side components handle authentication
-  // The middleware will just ensure the routes are accessible
-
-  // Role-based route protection
-  if (pathname.startsWith('/trainee/')) {
-    // Trainee routes - let the component handle role checking
+  if (pathname.startsWith('/trainee/') || pathname.startsWith('/trainer/')) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith('/trainer/')) {
-    // Trainer routes - let the component handle role checking
-    return NextResponse.next();
-  }
-
-  // Default: allow access
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
+    /* API routes — for Cache-Control headers */
+    '/api/:path*',
     /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
+     * All other paths except:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

@@ -22,7 +22,6 @@ import {
   Award,
   Star,
 } from 'lucide-react';
-import { generateActivityReportPDF } from '@/utils/generateReportPDF';
 
 interface TraineeProfile {
   id: string;
@@ -334,7 +333,9 @@ export default function TrainerActivityReportsPage() {
         softSkills: softSkills,
       };
 
-      await generateActivityReportPDF(reportData, useCases, components);
+      await (
+        await import('@/utils/generateReportPDF')
+      ).generateActivityReportPDF(reportData, useCases, components);
     } catch (err: any) {
       setError(t('trainer.reports.pdfError') + err.message);
     }
@@ -400,12 +401,9 @@ export default function TrainerActivityReportsPage() {
           softSkills: softSkills,
         };
 
-        const blob = await generateActivityReportPDF(
-          reportData,
-          useCases,
-          components,
-          true
-        );
+        const blob = await (
+          await import('@/utils/generateReportPDF')
+        ).generateActivityReportPDF(reportData, useCases, components, true);
         if (blob instanceof Blob) {
           const filename = `Tätigkeitsnachweis_KW${report.weekNumber}_${report.year}_${reportData.traineeName.replace(/\s+/g, '_')}.pdf`;
           folder?.file(filename, blob);
