@@ -89,6 +89,7 @@ const SUB_COLORS: Record<string, { bg: string; text: string; border: string }> =
 
 /**
  * Renders bullet list content with styled bullets (light mode compatible)
+ * Supports HTML content like tables inside list items
  */
 function BulletListContent({ content }: { content: string }) {
   const items = parseBulletList(content);
@@ -102,7 +103,9 @@ function BulletListContent({ content }: { content: string }) {
       {items.map((item, idx) => (
         <li key={idx} className="flex items-start gap-3">
           <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-accent/60" />
-          <span className="text-slate-800 dark:text-slate-200 leading-relaxed">{item}</span>
+          <div className="flex-1 text-slate-800 dark:text-slate-200 leading-relaxed">
+            <TextOrHtml content={item} />
+          </div>
         </li>
       ))}
     </ul>
@@ -111,6 +114,7 @@ function BulletListContent({ content }: { content: string }) {
 
 /**
  * Renders numbered list content with styled numbers (light mode compatible)
+ * Supports HTML content like tables inside list items
  */
 function NumberedListContent({ content }: { content: string }) {
   const items = parseNumberedList(content);
@@ -126,7 +130,9 @@ function NumberedListContent({ content }: { content: string }) {
           <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-accent/20 text-sm font-semibold text-accent">
             {item.number}
           </span>
-          <span className="text-slate-800 dark:text-slate-200 leading-relaxed pt-0.5">{item.text}</span>
+          <div className="flex-1 text-slate-800 dark:text-slate-200 leading-relaxed pt-0.5">
+            <TextOrHtml content={item.text} />
+          </div>
         </li>
       ))}
     </ol>
@@ -294,15 +300,15 @@ function ChecklistContent({
               >
                 {checkedStates[idx] && <Check className="h-3 w-3" />}
               </button>
-              <span
-                className={`leading-relaxed transition-colors ${checkedStates[idx]
+              <div
+                className={`flex-1 leading-relaxed transition-colors ${checkedStates[idx]
                     ? 'text-slate-400 dark:text-slate-500 line-through'
                     : isSpecialItem
                       ? 'text-slate-900 dark:text-slate-100 font-medium'
                       : 'text-slate-800 dark:text-slate-200'
                   }`}
               >
-                {item.text}
+                <TextOrHtml content={item.text} />
                 {isSpecialItem && !checkedStates[idx] && (
                   <span className="ml-2 text-xs text-green-600 dark:text-green-400">
                     ({t('scenario.unlocksSolutions')})
@@ -314,7 +320,7 @@ function ChecklistContent({
                     {t('scenario.solutionsUnlocked')}
                   </span>
                 )}
-              </span>
+              </div>
             </li>
           );
         })}
