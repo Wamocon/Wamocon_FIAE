@@ -20,7 +20,7 @@ export async function GET(
   try {
     const { enablerId } = await params;
     const [enabler] = await db
-      .select()
+      .select({ id: enablers.id })
       .from(enablers)
       .where(eq(enablers.id, enablerId));
     if (!enabler)
@@ -90,7 +90,11 @@ export async function POST(
 
     // Verify enabler exists
     const [enabler] = await db
-      .select()
+      .select({
+        id: enablers.id,
+        courseId: enablers.courseId,
+        title: enablers.title,
+      })
       .from(enablers)
       .where(eq(enablers.id, enablerId));
     if (!enabler) {

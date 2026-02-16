@@ -14,9 +14,28 @@ export default function TraineeModuleDetailPage() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [course, setCourse] = useState<{ id: string; title: string; year: number | null; chapter: number | null } | null>(null);
-  const [enablers, setEnablers] = useState<Array<{ id: string; title: string; attemptNumber?: number | null; status?: string | null }>>([]);
-  const [useCases, setUseCases] = useState<Array<{ id: string; title: string; attemptNumber?: number | null; status?: string | null }>>([]);
+  const [course, setCourse] = useState<{
+    id: string;
+    title: string;
+    year: number | null;
+    chapter: number | null;
+  } | null>(null);
+  const [enablers, setEnablers] = useState<
+    Array<{
+      id: string;
+      title: string;
+      attemptNumber?: number | null;
+      status?: string | null;
+    }>
+  >([]);
+  const [useCases, setUseCases] = useState<
+    Array<{
+      id: string;
+      title: string;
+      attemptNumber?: number | null;
+      status?: string | null;
+    }>
+  >([]);
 
   useEffect(() => {
     const load = async () => {
@@ -24,7 +43,10 @@ export default function TraineeModuleDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const r = await fetch(`/api/trainee/courses/${courseId}?traineeId=${profile.id}`, { cache: 'no-store' });
+        const r = await fetch(
+          `/api/trainee/courses/${courseId}?traineeId=${profile.id}`,
+          { cache: 'no-store' }
+        );
         if (!r.ok) throw new Error(t('courses.loadError'));
         const data = await r.json();
         setCourse(data.course);
@@ -75,36 +97,59 @@ export default function TraineeModuleDetailPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <div className="rounded-3xl border-5 border-accent/30 bg-card/50 p-6">
+      <div className="border-accent/30 bg-card/50 rounded-3xl border-5 p-6">
         <h1 className="text-foreground text-2xl font-bold">{course.title}</h1>
         <div className="text-muted-foreground mt-1 text-sm">
-          {course.year ? t('courses.year').replace('{year}', String(course.year)) : '—'} {course.chapter ? `• ${t('courses.chapter').replace('{chapter}', String(course.chapter))}` : ''}
+          {course.year
+            ? t('courses.year').replace('{year}', String(course.year))
+            : '—'}{' '}
+          {course.chapter
+            ? `• ${t('courses.chapter').replace('{chapter}', String(course.chapter))}`
+            : ''}
         </div>
       </div>
 
       <div className="space-y-5">
-        <div className="rounded-3xl border-5 border-accent/30 bg-card/50 p-5">
-          <div className="mb-3 text-sm font-semibold">{t('courses.lessons')}</div>
+        <div className="border-accent/30 bg-card/50 rounded-3xl border-5 p-5">
+          <div className="mb-3 text-sm font-semibold">
+            {t('courses.lessons')}
+          </div>
           {enablers.length === 0 ? (
-            <div className="text-sm text-muted-foreground">{t('courses.noActiveLessons')}</div>
+            <div className="text-muted-foreground text-sm">
+              {t('courses.noActiveLessons')}
+            </div>
           ) : (
             <ul className="space-y-2">
-              {enablers.map((e) => (
-                <li key={e.id} className={`flex items-center justify-between rounded-xl border-3 p-3 ${e.status === 'APPROVED' ? 'border-green-500/40 bg-green-500/10' :
-                  e.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
-                    e.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
-                      'border-accent/20 bg-card'
-                  }`}>
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+              {enablers.map(e => (
+                <li
+                  key={e.id}
+                  className={`flex items-center justify-between rounded-xl border-3 p-3 ${
+                    e.status === 'APPROVED'
+                      ? 'border-green-500/40 bg-green-500/10'
+                      : e.status === 'PENDING'
+                        ? 'border-yellow-500/30 bg-yellow-500/5'
+                        : e.status === 'REJECTED'
+                          ? 'border-red-500/30 bg-red-500/5'
+                          : 'border-accent/20 bg-card'
+                  }`}
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <StatusIndicator status={e.status} />
                     <span className="truncate">{e.title}</span>
                     {e.attemptNumber && !e.status ? (
-                      <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs shrink-0">
-                        {t('courses.attempt').replace('{number}', String(e.attemptNumber))}
+                      <span className="border-accent/30 ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs">
+                        {t('courses.attempt').replace(
+                          '{number}',
+                          String(e.attemptNumber)
+                        )}
                       </span>
                     ) : null}
                   </div>
-                  <Link href={`/trainee/enablers/${e.id}`} className="rounded-lg border-3 border-accent/30 px-2 py-1 text-sm hover:bg-background/60 shrink-0 ml-2">
+                  <Link
+                    prefetch={false}
+                    href={`/trainee/enablers/${e.id}`}
+                    className="border-accent/30 hover:bg-background/60 ml-2 shrink-0 rounded-lg border-3 px-2 py-1 text-sm"
+                  >
                     {t('common.open')}
                   </Link>
                 </li>
@@ -113,28 +158,46 @@ export default function TraineeModuleDetailPage() {
           )}
         </div>
 
-        <div className="rounded-3xl border-5 border-accent/30 bg-card/50 p-5">
-          <div className="mb-3 text-sm font-semibold">{t('courses.useCases')}</div>
+        <div className="border-accent/30 bg-card/50 rounded-3xl border-5 p-5">
+          <div className="mb-3 text-sm font-semibold">
+            {t('courses.useCases')}
+          </div>
           {useCases.length === 0 ? (
-            <div className="text-sm text-muted-foreground">{t('courses.noActiveUseCases')}</div>
+            <div className="text-muted-foreground text-sm">
+              {t('courses.noActiveUseCases')}
+            </div>
           ) : (
             <ul className="space-y-2">
-              {useCases.map((u) => (
-                <li key={u.id} className={`flex items-center justify-between rounded-xl border p-3 ${u.status === 'APPROVED' ? 'border-green-500/40 bg-green-500/10' :
-                  u.status === 'PENDING' ? 'border-yellow-500/30 bg-yellow-500/5' :
-                    u.status === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' :
-                      'border-accent/20 bg-card'
-                  }`}>
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+              {useCases.map(u => (
+                <li
+                  key={u.id}
+                  className={`flex items-center justify-between rounded-xl border p-3 ${
+                    u.status === 'APPROVED'
+                      ? 'border-green-500/40 bg-green-500/10'
+                      : u.status === 'PENDING'
+                        ? 'border-yellow-500/30 bg-yellow-500/5'
+                        : u.status === 'REJECTED'
+                          ? 'border-red-500/30 bg-red-500/5'
+                          : 'border-accent/20 bg-card'
+                  }`}
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <StatusIndicator status={u.status} />
                     <span className="truncate">{u.title}</span>
                     {u.attemptNumber && !u.status ? (
-                      <span className="ml-2 rounded-full border border-accent/30 px-2 py-0.5 text-xs shrink-0">
-                        {t('courses.attempt').replace('{number}', String(u.attemptNumber))}
+                      <span className="border-accent/30 ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs">
+                        {t('courses.attempt').replace(
+                          '{number}',
+                          String(u.attemptNumber)
+                        )}
                       </span>
                     ) : null}
                   </div>
-                  <Link href={`/trainee/use-cases/${u.id}`} className="rounded-lg border-3 border-accent/30 px-2 py-1 text-sm hover:bg-background/60 shrink-0 ml-2">
+                  <Link
+                    prefetch={false}
+                    href={`/trainee/use-cases/${u.id}`}
+                    className="border-accent/30 hover:bg-background/60 ml-2 shrink-0 rounded-lg border-3 px-2 py-1 text-sm"
+                  >
                     {t('common.open')}
                   </Link>
                 </li>
@@ -146,4 +209,3 @@ export default function TraineeModuleDetailPage() {
     </div>
   );
 }
-

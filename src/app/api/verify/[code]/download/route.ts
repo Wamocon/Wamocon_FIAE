@@ -8,7 +8,7 @@ import {
   weeklySoftskillRatings,
   mesSoftskillCriteria,
 } from '@/db/migrations/schemas/schema';
-import { eq, and, gte, lte, isNotNull } from 'drizzle-orm';
+import { eq, and, gte, lte, isNotNull, inArray } from 'drizzle-orm';
 import { generateArbeitszeugnisPDF } from '@/lib/arbeitszeugnis/pdfGenerator';
 import QRCode from 'qrcode';
 
@@ -106,23 +106,24 @@ export async function GET(
           const reportIds = reports.map(r => r.id);
 
           // Find weekly evaluations for these reports
-          const evaluationsData = await db
+          const relevantEvaluations = await db
             .select({
               id: weeklyEvaluations.id,
               activityReportId: weeklyEvaluations.activityReportId,
             })
             .from(weeklyEvaluations)
-            .where(isNotNull(weeklyEvaluations.activityReportId));
-
-          const relevantEvaluations = evaluationsData.filter(
-            e => e.activityReportId && reportIds.includes(e.activityReportId)
-          );
+            .where(
+              and(
+                isNotNull(weeklyEvaluations.activityReportId),
+                inArray(weeklyEvaluations.activityReportId, reportIds)
+              )
+            );
 
           if (relevantEvaluations.length > 0) {
             const evaluationIds = relevantEvaluations.map(e => e.id);
 
             // Get MES ratings with criteria info for these evaluations
-            const ratingsData = await db
+            const relevantRatings = await db
               .select({
                 weeklyEvaluationId: weeklySoftskillRatings.weeklyEvaluationId,
                 trainerRating: weeklySoftskillRatings.trainerRating,
@@ -136,12 +137,15 @@ export async function GET(
                   mesSoftskillCriteria.id
                 )
               )
-              .where(isNotNull(weeklySoftskillRatings.trainerRating));
-
-            // Filter ratings for our specific evaluations
-            const relevantRatings = ratingsData.filter(r =>
-              evaluationIds.includes(r.weeklyEvaluationId)
-            );
+              .where(
+                and(
+                  isNotNull(weeklySoftskillRatings.trainerRating),
+                  inArray(
+                    weeklySoftskillRatings.weeklyEvaluationId,
+                    evaluationIds
+                  )
+                )
+              );
 
             // Helper to convert string ratings to numbers
             const ratingToNumber = (rating: string | null): number | null => {

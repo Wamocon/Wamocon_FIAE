@@ -53,75 +53,75 @@ export async function GET(req: NextRequest) {
 
 async function fetchDashboardData(userId: string) {
   try {
-    // ── Phase 1a: Core user data (4 queries max) ──
-    const [memberCourses, userQuizSubs, allCompletionsRaw, achievedSkillsRaw] =
-      await Promise.all([
-        db
-          .select({
-            id: courses.id,
-            title: courses.title,
-            year: courses.year,
-          })
-          .from(courseMembers)
-          .innerJoin(courses, eq(courseMembers.courseId, courses.id))
-          .where(
-            and(
-              eq(courseMembers.userId, userId as any),
-              eq(courseMembers.role, 'TRAINEE' as any)
-            )
-          ),
-        db
-          .select({
-            quizId: quizSubmissions.quizId,
-            score: quizSubmissions.score,
-          })
-          .from(quizSubmissions)
-          .where(eq(quizSubmissions.traineeId, userId as any)),
-        // Single query for completions – reused for nextItem + weekly progress + streak
-        db
-          .select({
-            enablerId: enablerCompletions.enablerId,
-            completedAt: enablerCompletions.completedAt,
-          })
-          .from(enablerCompletions)
-          .where(eq(enablerCompletions.traineeId, userId as any))
-          .orderBy(desc(enablerCompletions.completedAt)),
-        db
-          .select({ skillId: traineeAchievedSkills.skillId })
-          .from(traineeAchievedSkills)
-          .where(eq(traineeAchievedSkills.traineeId, userId as any)),
-      ]);
-
-    // ── Phase 1b: Achievement + quiz timeline (3 queries max) ──
-    const [recentQuizWithTitle, recentEnWithTitle, quizSubRows] =
-      await Promise.all([
-        db
-          .select({
-            score: quizSubmissions.score,
-            submittedAt: quizSubmissions.submittedAt,
-            quizTitle: quizzes.title,
-          })
-          .from(quizSubmissions)
-          .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
-          .where(eq(quizSubmissions.traineeId, userId as any))
-          .orderBy(desc(quizSubmissions.submittedAt))
-          .limit(1),
-        db
-          .select({
-            completedAt: enablerCompletions.completedAt,
-            enablerTitle: enablers.title,
-          })
-          .from(enablerCompletions)
-          .innerJoin(enablers, eq(enablerCompletions.enablerId, enablers.id))
-          .where(eq(enablerCompletions.traineeId, userId as any))
-          .orderBy(desc(enablerCompletions.completedAt))
-          .limit(1),
-        db
-          .select({ at: quizSubmissions.submittedAt })
-          .from(quizSubmissions)
-          .where(eq(quizSubmissions.traineeId, userId as any))
-          .orderBy(desc(quizSubmissions.submittedAt)),
-      ]);
+    // ── Phase 1: All user data in ONE parallel batch (was 2 sequential phases) ──
+    const [
+      memberCourses,
+      allQuizSubs,
+      allCompletionsRaw,
+      achievedSkillsRaw,
+      recentQuizWithTitle,
+      recentEnWithTitle,
+    ] = await Promise.all([
+      db
+        .select({
+          id: courses.id,
+          title: courses.title,
+          year: courses.year,
+        })
+        .from(courseMembers)
+        .innerJoin(courses, eq(courseMembers.courseId, courses.id))
+        .where(
+          and(
+            eq(courseMembers.userId, userId as any),
+            eq(courseMembers.role, 'TRAINEE' as any)
+          )
+        ),
+      // Merged: quiz scores + timestamps (was 2 separate queries)
+      db
+        .select({
+          quizId: quizSubmissions.quizId,
+          score: quizSubmissions.score,
+          submittedAt: quizSubmissions.submittedAt,
+        })
+        .from(quizSubmissions)
+        .where(eq(quizSubmissions.traineeId, userId as any)),
+      // Completions – reused for nextItem + weekly progress + streak
+      db
+        .select({
+          enablerId: enablerCompletions.enablerId,
+          completedAt: enablerCompletions.completedAt,
+        })
+        .from(enablerCompletions)
+        .where(eq(enablerCompletions.traineeId, userId as any))
+        .orderBy(desc(enablerCompletions.completedAt)),
+      db
+        .select({ skillId: traineeAchievedSkills.skillId })
+        .from(traineeAchievedSkills)
+        .where(eq(traineeAchievedSkills.traineeId, userId as any)),
+      // Recent quiz with title (for achievements, LIMIT 1)
+      db
+        .select({
+          score: quizSubmissions.score,
+          submittedAt: quizSubmissions.submittedAt,
+          quizTitle: quizzes.title,
+        })
+        .from(quizSubmissions)
+        .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
+        .where(eq(quizSubmissions.traineeId, userId as any))
+        .orderBy(desc(quizSubmissions.submittedAt))
+        .limit(1),
+      // Recent enabler completion with title (for achievements, LIMIT 1)
+      db
+        .select({
+          completedAt: enablerCompletions.completedAt,
+          enablerTitle: enablers.title,
+        })
+        .from(enablerCompletions)
+        .innerJoin(enablers, eq(enablerCompletions.enablerId, enablers.id))
+        .where(eq(enablerCompletions.traineeId, userId as any))
+        .orderBy(desc(enablerCompletions.completedAt))
+        .limit(1),
+    ]);
 
     const courseIds = memberCourses.map(c => c.id);
     const completedSet = new Set(
@@ -131,7 +131,7 @@ async function fetchDashboardData(userId: string) {
 
     // Build quiz best-scores map
     const quizBestScores = new Map<string, number>();
-    for (const s of userQuizSubs) {
+    for (const s of allQuizSubs) {
       const qid = String(s.quizId);
       const currentBest = quizBestScores.get(qid) || 0;
       if ((s.score || 0) > currentBest) {
@@ -145,56 +145,46 @@ async function fetchDashboardData(userId: string) {
     let skillRadar: Array<{ skill: string; value: number }> = [];
 
     if (courseIds.length > 0) {
-      const [allEnablers, useCaseRows, allEns, courseSkillRows] =
-        await Promise.all([
-          // All enablers for these courses
-          db
-            .select({
-              id: enablers.id,
-              courseId: enablers.courseId,
-              scenarios: enablers.scenarios,
-            })
-            .from(enablers)
-            .where(
-              and(
-                inArray(enablers.courseId, courseIds as any),
-                eq(enablers.isActive, true)
-              )
-            ),
-          // Use cases for these courses
-          db
-            .select({ id: useCases.id, courseId: useCases.courseId })
-            .from(useCases)
-            .where(
-              and(
-                inArray(useCases.courseId, courseIds as any),
-                eq(useCases.isActive, true)
-              )
-            ),
-          // All enablers ordered (for nextItem)
-          db
-            .select({
-              id: enablers.id,
-              title: enablers.title,
-              orderIndex: enablers.orderIndex,
-              durationValue: enablers.durationValue,
-              durationUnit: enablers.durationUnit,
-              courseId: enablers.courseId,
-              courseTitle: courses.title,
-              courseYear: courses.year,
-            })
-            .from(enablers)
-            .innerJoin(courses, eq(enablers.courseId, courses.id))
-            .where(inArray(enablers.courseId, courseIds as any))
-            .orderBy(asc(courses.year), asc(enablers.orderIndex)),
-          // Course skills (for radar)
-          db
-            .select({ skillId: courseSkills.skillId, name: skills.name })
-            .from(courseSkills)
-            .innerJoin(skills, eq(courseSkills.skillId, skills.id))
-            .where(inArray(courseSkills.courseId, courseIds as any)),
-        ]);
+      // ── Phase 2: courseId-dependent (3 queries, was 4 – merged enabler queries) ──
+      const [allEnablerData, useCaseRows, courseSkillRows] = await Promise.all([
+        // All enablers with full data (merged: active check + nextItem ordering)
+        db
+          .select({
+            id: enablers.id,
+            title: enablers.title,
+            orderIndex: enablers.orderIndex,
+            durationValue: enablers.durationValue,
+            durationUnit: enablers.durationUnit,
+            courseId: enablers.courseId,
+            courseTitle: courses.title,
+            courseYear: courses.year,
+            scenarios: enablers.scenarios,
+            isActive: enablers.isActive,
+          })
+          .from(enablers)
+          .innerJoin(courses, eq(enablers.courseId, courses.id))
+          .where(inArray(enablers.courseId, courseIds as any))
+          .orderBy(asc(courses.year), asc(enablers.orderIndex)),
+        // Use cases for these courses
+        db
+          .select({ id: useCases.id, courseId: useCases.courseId })
+          .from(useCases)
+          .where(
+            and(
+              inArray(useCases.courseId, courseIds as any),
+              eq(useCases.isActive, true)
+            )
+          ),
+        // Course skills (for radar)
+        db
+          .select({ skillId: courseSkills.skillId, name: skills.name })
+          .from(courseSkills)
+          .innerJoin(skills, eq(courseSkills.skillId, skills.id))
+          .where(inArray(courseSkills.courseId, courseIds as any)),
+      ]);
 
+      // Filter to active enablers for progress; keep full set for nextItem
+      const allEnablers = allEnablerData.filter(e => e.isActive);
       const allEnablerIds = allEnablers.map(e => e.id);
       const useCaseIds = useCaseRows.map(u => u.id);
 
@@ -316,7 +306,7 @@ async function fetchDashboardData(userId: string) {
       }
 
       // Next item: next uncompleted enabler
-      for (const e of allEns) {
+      for (const e of allEnablerData) {
         if (!completedSet.has(String(e.id))) {
           const dur = e.durationValue
             ? `${e.durationValue} ${e.durationUnit?.toLowerCase()}`
@@ -365,7 +355,9 @@ async function fetchDashboardData(userId: string) {
     allCompletionsRaw.forEach(r =>
       addToBucket(r.completedAt ? new Date(r.completedAt as any) : null)
     );
-    quizSubRows.forEach(r => addToBucket(r.at ? new Date(r.at as any) : null));
+    allQuizSubs.forEach(r =>
+      addToBucket(r.submittedAt ? new Date(r.submittedAt as any) : null)
+    );
 
     // ── Achievements from Phase 1 results (no DB) ──
     const achievements: Array<{
