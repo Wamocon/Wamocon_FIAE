@@ -11,8 +11,11 @@ import dynamic from 'next/dynamic';
 import QueryProvider from '@/components/QueryProvider';
 
 // Lazy-load HAI chat widget - it's not needed for initial page render
+// Import directly instead of through barrel to avoid pulling in all HAI modules
 const HaiWrapper = dynamic(() =>
-  import('@/components/hai').then(mod => ({ default: mod.HaiWrapper }))
+  import('@/components/hai/HaiWrapper').then(mod => ({
+    default: mod.HaiWrapper,
+  }))
 );
 
 const inter = Inter({ subsets: ['latin'] });

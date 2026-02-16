@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import JSZip from 'jszip';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -344,6 +343,7 @@ export default function TrainerActivityReportsPage() {
   const handleMassExport = async () => {
     try {
       setError(null);
+      const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       const folderName = `Nachweise_Export_${new Date().toLocaleDateString('de-DE').replace(/\./g, '-')}`;
       const folder = zip.folder(folderName);

@@ -8,8 +8,14 @@ import {
   ReactNode,
   useMemo,
   useCallback,
-  useRef,
 } from 'react';
+
+/**
+ * Static imports — bundled at build time so the first render already has
+ * every translation string.  No network fetch, no FOUC, no double render.
+ */
+import deStrings from '@/locales/de.json';
+import enStrings from '@/locales/en.json';
 
 export type Language = 'de' | 'en';
 
@@ -25,53 +31,26 @@ const LanguageContext = createContext<LanguageContextType | undefined>(
   undefined
 );
 
-/**
- * Cache loaded translations so we never fetch the same locale twice.
- * Lives outside the component so it survives re-mounts.
- */
-const translationCache: Record<string, TranslationMap> = {};
-
-async function loadTranslations(lang: Language): Promise<TranslationMap> {
-  if (translationCache[lang]) return translationCache[lang];
-  const resp = await fetch(`/locales/${lang}.json`);
-  const data: TranslationMap = await resp.json();
-  translationCache[lang] = data;
-  return data;
-}
+/** Pre-built lookup so we never need async loading */
+const TRANSLATIONS: Record<Language, TranslationMap> = {
+  de: deStrings as TranslationMap,
+  en: enStrings as TranslationMap,
+};
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>('de');
-  const [strings, setStrings] = useState<TranslationMap>(
-    translationCache['de'] ?? {}
-  );
   const [mounted, setMounted] = useState(false);
-  const loadingRef = useRef(false);
 
-  // Load translations whenever the active language changes
-  useEffect(() => {
-    let cancelled = false;
-    loadingRef.current = true;
-    loadTranslations(language).then(data => {
-      if (!cancelled) {
-        setStrings(data);
-        loadingRef.current = false;
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [language]);
-
-  // Initialize language on mount - check localStorage first
+  // Initialize language on mount — check localStorage first
   useEffect(() => {
     setMounted(true);
-    const savedLanguage = localStorage.getItem('language') as Language | null;
-    if (savedLanguage && (savedLanguage === 'de' || savedLanguage === 'en')) {
-      setLanguageState(savedLanguage);
+    const saved = localStorage.getItem('language') as Language | null;
+    if (saved === 'de' || saved === 'en') {
+      setLanguageState(saved);
     }
   }, []);
 
-  // Save language to localStorage when it changes
+  // Persist language choice
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem('language', language);
@@ -81,20 +60,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     setLanguageState(lang);
   }, []);
 
+  const strings = TRANSLATIONS[language];
+
   const t = useCallback(
-    (key: string): string => {
-      return strings[key] || key;
-    },
+    (key: string): string => strings[key] || key,
     [strings]
   );
 
-  // Memoize the context value to prevent unnecessary re-renders
   const value = useMemo<LanguageContextType>(
-    () => ({
-      language,
-      setLanguage,
-      t,
-    }),
+    () => ({ language, setLanguage, t }),
     [language, setLanguage, t]
   );
 
