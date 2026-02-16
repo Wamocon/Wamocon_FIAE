@@ -34,7 +34,7 @@ export function Breadcrumbs({ items, className = '' }: BreadcrumbsProps) {
           <ChevronRight className="text-muted-foreground h-4 w-4" />
           {item.href ? (
             <Link
-              prefetch
+              prefetch={false}
               href={item.href}
               className="text-muted-foreground hover:text-foreground flex items-center transition-colors"
             >

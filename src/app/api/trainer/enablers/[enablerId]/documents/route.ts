@@ -14,7 +14,7 @@ export async function GET(
 
     // Verify enabler exists
     const [enabler] = await db
-      .select()
+      .select({ id: enablers.id })
       .from(enablers)
       .where(eq(enablers.id, enablerId as any));
     if (!enabler) {
@@ -54,7 +54,7 @@ export async function POST(
 
     // Verify enabler exists
     const [enabler] = await db
-      .select()
+      .select({ id: enablers.id })
       .from(enablers)
       .where(eq(enablers.id, enablerId as any));
     if (!enabler) {
@@ -138,7 +138,7 @@ export async function DELETE(
 
     // Verify enabler exists
     const [enabler] = await db
-      .select()
+      .select({ id: enablers.id })
       .from(enablers)
       .where(eq(enablers.id, enablerId as any));
     if (!enabler) {

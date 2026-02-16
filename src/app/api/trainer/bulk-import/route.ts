@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import db from '@/db';
-import { courses, enablers, useCases, skills, courseSkills, contentDocuments } from '@/db/migrations/schemas/schema';
+import {
+  courses,
+  enablers,
+  useCases,
+  skills,
+  courseSkills,
+  contentDocuments,
+} from '@/db/migrations/schemas/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
 interface ImportResult {
@@ -124,7 +131,9 @@ export async function POST(request: NextRequest) {
         const row = skillsData[i];
         try {
           if (!row.skill_name?.trim()) {
-            result.stats.errors.push(`Skills row ${i + 2}: skill_name is required`);
+            result.stats.errors.push(
+              `Skills row ${i + 2}: skill_name is required`
+            );
             continue;
           }
 
@@ -191,21 +200,25 @@ export async function POST(request: NextRequest) {
           // Link skills to course if provided in Skills sheet
           if (workbook.SheetNames.includes('Skills')) {
             const skillsSheet = workbook.Sheets['Skills'];
-            const skillsData: SkillRow[] = XLSX.utils.sheet_to_json(skillsSheet);
+            const skillsData: SkillRow[] =
+              XLSX.utils.sheet_to_json(skillsSheet);
 
             for (const skillRow of skillsData) {
               if (skillRow.course_titles) {
                 const courseTitles = skillRow.course_titles
                   .split(',')
-                  .map((t) => t.trim());
+                  .map(t => t.trim());
 
                 if (courseTitles.includes(row.title.trim())) {
                   const skillId = skillIdMap.get(skillRow.skill_name.trim());
                   if (skillId) {
-                    await db.insert(courseSkills).values({
-                      courseId: newCourse.id,
-                      skillId: skillId,
-                    }).onConflictDoNothing();
+                    await db
+                      .insert(courseSkills)
+                      .values({
+                        courseId: newCourse.id,
+                        skillId: skillId,
+                      })
+                      .onConflictDoNothing();
                   }
                 }
               }
@@ -220,7 +233,8 @@ export async function POST(request: NextRequest) {
     // Process Enablers sheet
     if (workbook.SheetNames.includes('Enablers')) {
       const enablersSheet = workbook.Sheets['Enablers'];
-      const enablersData: EnablerRow[] = XLSX.utils.sheet_to_json(enablersSheet);
+      const enablersData: EnablerRow[] =
+        XLSX.utils.sheet_to_json(enablersSheet);
 
       // Group rows by enabler (course_title + title)
       const enablerGroups = new Map<string, EnablerRow[]>();
@@ -228,7 +242,9 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < enablersData.length; i++) {
         const row = enablersData[i];
         if (!row.course_title?.trim() || !row.title?.trim()) {
-          result.stats.errors.push(`Enablers row ${i + 2}: course_title and title are required`);
+          result.stats.errors.push(
+            `Enablers row ${i + 2}: course_title and title are required`
+          );
           continue;
         }
 
@@ -244,8 +260,13 @@ export async function POST(request: NextRequest) {
         try {
           const firstRow = rows[0];
 
-          if (firstRow.order_index === undefined || firstRow.order_index === null) {
-            result.stats.errors.push(`Enabler "${firstRow.title}": order_index is required`);
+          if (
+            firstRow.order_index === undefined ||
+            firstRow.order_index === null
+          ) {
+            result.stats.errors.push(
+              `Enabler "${firstRow.title}": order_index is required`
+            );
             continue;
           }
 
@@ -278,7 +299,7 @@ export async function POST(request: NextRequest) {
 
           // Check if enabler already exists
           const existing = await db
-            .select()
+            .select({ id: enablers.id })
             .from(enablers)
             .where(
               and(
@@ -308,19 +329,22 @@ export async function POST(request: NextRequest) {
               .where(eq(enablers.id, existing[0].id));
           } else {
             // Create new enabler
-            const [newEnabler] = await db.insert(enablers).values({
-              courseId: courseId,
-              title: firstRow.title.trim(),
-              orderIndex: firstRow.order_index,
-              descriptionText: firstRow.description_text?.trim() || null,
-              scenarios: scenarios.length > 0 ? scenarios : null,
-              pptUrl: firstRow.ppt_url?.trim() || null,
-              videoUrl: firstRow.video_url?.trim() || null,
-              scenarioImageUrl: firstRow.scenario_image_url?.trim() || null,
-              durationValue: firstRow.duration_value || null,
-              durationUnit: durationUnit,
-              isActive: parseBoolean(firstRow.is_active),
-            }).returning({ id: enablers.id });
+            const [newEnabler] = await db
+              .insert(enablers)
+              .values({
+                courseId: courseId,
+                title: firstRow.title.trim(),
+                orderIndex: firstRow.order_index,
+                descriptionText: firstRow.description_text?.trim() || null,
+                scenarios: scenarios.length > 0 ? scenarios : null,
+                pptUrl: firstRow.ppt_url?.trim() || null,
+                videoUrl: firstRow.video_url?.trim() || null,
+                scenarioImageUrl: firstRow.scenario_image_url?.trim() || null,
+                durationValue: firstRow.duration_value || null,
+                durationUnit: durationUnit,
+                isActive: parseBoolean(firstRow.is_active),
+              })
+              .returning({ id: enablers.id });
 
             // Insert PDF document if provided
             if (firstRow.pdf_url?.trim()) {
@@ -334,7 +358,9 @@ export async function POST(request: NextRequest) {
                 title: title,
                 fileName: fileName,
                 storageUrl: pdfUrl,
-                storagePath: pdfUrl.includes('/storage/v1/object/public/content/')
+                storagePath: pdfUrl.includes(
+                  '/storage/v1/object/public/content/'
+                )
                   ? pdfUrl.split('/storage/v1/object/public/content/')[1]
                   : null,
                 documentType: 'THEORY',
@@ -346,7 +372,9 @@ export async function POST(request: NextRequest) {
 
           result.stats.enablersCreated++;
         } catch (error: any) {
-          result.stats.errors.push(`Enabler "${rows[0].title}": ${error.message}`);
+          result.stats.errors.push(
+            `Enabler "${rows[0].title}": ${error.message}`
+          );
         }
       }
     }
@@ -354,25 +382,34 @@ export async function POST(request: NextRequest) {
     // Process Use Cases sheet
     if (workbook.SheetNames.includes('Use Cases')) {
       const useCasesSheet = workbook.Sheets['Use Cases'];
-      const useCasesData: UseCaseRow[] = XLSX.utils.sheet_to_json(useCasesSheet);
+      const useCasesData: UseCaseRow[] =
+        XLSX.utils.sheet_to_json(useCasesSheet);
 
       for (let i = 0; i < useCasesData.length; i++) {
         const row = useCasesData[i];
         try {
           if (!row.course_title?.trim()) {
-            result.stats.errors.push(`Use Cases row ${i + 2}: course_title is required`);
+            result.stats.errors.push(
+              `Use Cases row ${i + 2}: course_title is required`
+            );
             continue;
           }
           if (!row.title?.trim()) {
-            result.stats.errors.push(`Use Cases row ${i + 2}: title is required`);
+            result.stats.errors.push(
+              `Use Cases row ${i + 2}: title is required`
+            );
             continue;
           }
           if (!row.description_text?.trim()) {
-            result.stats.errors.push(`Use Cases row ${i + 2}: description_text is required`);
+            result.stats.errors.push(
+              `Use Cases row ${i + 2}: description_text is required`
+            );
             continue;
           }
           if (row.order_index === undefined || row.order_index === null) {
-            result.stats.errors.push(`Use Cases row ${i + 2}: order_index is required`);
+            result.stats.errors.push(
+              `Use Cases row ${i + 2}: order_index is required`
+            );
             continue;
           }
 
@@ -416,7 +453,10 @@ export async function POST(request: NextRequest) {
       const scenariosData: any[] = XLSX.utils.sheet_to_json(scenariosSheet);
 
       // Group by Enabler (Course + Enabler Title)
-      const enablerScenariosMap = new Map<string, Array<{ text: string; hint?: string }>>();
+      const enablerScenariosMap = new Map<
+        string,
+        Array<{ text: string; hint?: string }>
+      >();
 
       // Temporary storage data structure to build scenarios row-by-row
       // Key: "CourseTitle|||EnablerTitle"
@@ -438,8 +478,18 @@ export async function POST(request: NextRequest) {
         const row = scenariosData[i];
         const rowNum = i + 2;
 
-        const courseTitle = row['Kurs / Modul'] || row['Course Title'] || row['course_title'] || row['Course'] || row['Modul'] || row['Module'];
-        const enablerTitle = row['Enabler Title'] || row['enabler_title'] || row['Enabler'] || row['Lerneinheit'];
+        const courseTitle =
+          row['Kurs / Modul'] ||
+          row['Course Title'] ||
+          row['course_title'] ||
+          row['Course'] ||
+          row['Modul'] ||
+          row['Module'];
+        const enablerTitle =
+          row['Enabler Title'] ||
+          row['enabler_title'] ||
+          row['Enabler'] ||
+          row['Lerneinheit'];
 
         // If generic identifiers are missing, maybe it's a continuation row?
         // But to be safe, require identifiers on every row or assume repetition means continuation?
@@ -454,7 +504,7 @@ export async function POST(request: NextRequest) {
           // Option: strict header requirement
           // result.stats.errors.push(`...`); continue;
 
-          // Checking user intent: "add them into row". 
+          // Checking user intent: "add them into row".
           // Often means:
           // Row 1: Course | Enabler | Context ... | Prob 1 | Sol 1
           // Row 2:        |         |             | Prob 2 | Sol 2
@@ -465,7 +515,9 @@ export async function POST(request: NextRequest) {
             if (!effectiveCourse) effectiveCourse = lastC;
             if (!effectiveEnabler) effectiveEnabler = lastE;
           } else {
-            result.stats.errors.push(`Scenarios row ${rowNum}: 'Kurs / Modul' and 'Enabler Title' are required`);
+            result.stats.errors.push(
+              `Scenarios row ${rowNum}: 'Kurs / Modul' and 'Enabler Title' are required`
+            );
             continue;
           }
         }
@@ -485,24 +537,32 @@ export async function POST(request: NextRequest) {
 
         const context = row['Ausgangslage'] || row['ausgangslage'];
         const topics = row['Behandelte Themen'] || row['behandelte_themen'];
-        const isNewScenario = !!(context || topics) || scenariosList.length === 0;
+        const isNewScenario =
+          !!(context || topics) || scenariosList.length === 0;
 
         const problem = row['Problem'] || row['problem'];
-        const solution = row['Lösung'] || row['lösung'] || row['Solution'] || row['solution'];
+        const solution =
+          row['Lösung'] || row['lösung'] || row['Solution'] || row['solution'];
 
         if (isNewScenario) {
           // Init new scenario
           const newScen: TempScenario = {
             topics: topics || '',
             goals: row['Lernziele'] || row['lernziele'] || '',
-            theory: row['Theoretische Grundlagen'] || row['theoretische_grundlagen'] || '',
+            theory:
+              row['Theoretische Grundlagen'] ||
+              row['theoretische_grundlagen'] ||
+              '',
             context: context || '',
             checklist: row['Lernziel-Checkliste'] || row['checklist'] || '',
             hint: row['Hinweis'] || row['hint'] || '',
-            problems: []
+            problems: [],
           };
           if (problem) {
-            newScen.problems.push({ p: String(problem), s: solution ? String(solution) : '' });
+            newScen.problems.push({
+              p: String(problem),
+              s: solution ? String(solution) : '',
+            });
           }
           scenariosList.push(newScen);
         } else {
@@ -510,10 +570,14 @@ export async function POST(request: NextRequest) {
           if (scenariosList.length > 0) {
             const lastScen = scenariosList[scenariosList.length - 1];
             if (problem) {
-              lastScen.problems.push({ p: String(problem), s: solution ? String(solution) : '' });
+              lastScen.problems.push({
+                p: String(problem),
+                s: solution ? String(solution) : '',
+              });
             }
             // Also append checklist lines if provided in continuation row?
-            const extraChecklist = row['Lernziel-Checkliste'] || row['checklist'];
+            const extraChecklist =
+              row['Lernziel-Checkliste'] || row['checklist'];
             if (extraChecklist) {
               lastScen.checklist += '\n' + extraChecklist;
             }
@@ -528,7 +592,8 @@ export async function POST(request: NextRequest) {
           const blocks: string[] = [];
           if (scen.topics) blocks.push(`Behandelte Themen:\n${scen.topics}`);
           if (scen.goals) blocks.push(`Lernziele:\n${scen.goals}`);
-          if (scen.theory) blocks.push(`Theoretische Grundlagen:\n${scen.theory}`);
+          if (scen.theory)
+            blocks.push(`Theoretische Grundlagen:\n${scen.theory}`);
           if (scen.context) blocks.push(`Ausgangslage:\n${scen.context}`);
 
           if (scen.problems.length > 0) {
@@ -545,7 +610,8 @@ export async function POST(request: NextRequest) {
             blocks.push(`Problem-Lösung-Paare:\n${problemBlock.join('\n')}`);
           }
 
-          if (scen.checklist) blocks.push(`Lernziel-Checkliste:\n${scen.checklist}`);
+          if (scen.checklist)
+            blocks.push(`Lernziel-Checkliste:\n${scen.checklist}`);
 
           const fullText = blocks.join('\n\n' + '-'.repeat(20) + '\n\n');
 
@@ -558,7 +624,7 @@ export async function POST(request: NextRequest) {
             theory: scen.theory,
             context: scen.context,
             checklist: scen.checklist,
-            problems: scen.problems
+            problems: scen.problems,
           };
         });
 
@@ -574,11 +640,15 @@ export async function POST(request: NextRequest) {
           const courseRes = await db
             .select({ id: courses.id })
             .from(courses)
-            .where(sql`regexp_replace(${courses.title}, '\\s+', ' ', 'g') = regexp_replace(${courseTitle.trim()}, '\\s+', ' ', 'g')`)
+            .where(
+              sql`regexp_replace(${courses.title}, '\\s+', ' ', 'g') = regexp_replace(${courseTitle.trim()}, '\\s+', ' ', 'g')`
+            )
             .limit(1);
 
           if (courseRes.length === 0) {
-            result.stats.errors.push(`Scenario Import: Course "${courseTitle}" not found.`);
+            result.stats.errors.push(
+              `Scenario Import: Course "${courseTitle}" not found.`
+            );
             continue;
           }
           const courseId = courseRes[0].id;
@@ -587,14 +657,18 @@ export async function POST(request: NextRequest) {
           const enablerRes = await db
             .select({ id: enablers.id })
             .from(enablers)
-            .where(and(
-              eq(enablers.courseId, courseId),
-              sql`regexp_replace(${enablers.title}, '\\s+', ' ', 'g') = regexp_replace(${enablerTitle.trim()}, '\\s+', ' ', 'g')`
-            ))
+            .where(
+              and(
+                eq(enablers.courseId, courseId),
+                sql`regexp_replace(${enablers.title}, '\\s+', ' ', 'g') = regexp_replace(${enablerTitle.trim()}, '\\s+', ' ', 'g')`
+              )
+            )
             .limit(1);
 
           if (enablerRes.length === 0) {
-            result.stats.errors.push(`Scenario Import: Enabler "${enablerTitle}" not found in course "${courseTitle}".`);
+            result.stats.errors.push(
+              `Scenario Import: Enabler "${enablerTitle}" not found in course "${courseTitle}".`
+            );
             continue;
           }
           const enablerId = enablerRes[0].id;
@@ -606,14 +680,15 @@ export async function POST(request: NextRequest) {
               scenarios: scenarios,
               // Update legacy fields for compatibility if first scenario
               scenarioText: scenarios.length > 0 ? scenarios[0].text : null,
-              hintText: scenarios.length > 0 ? scenarios[0].hint : null
+              hintText: scenarios.length > 0 ? scenarios[0].hint : null,
             })
             .where(eq(enablers.id, enablerId));
 
           result.stats.enablersCreated++; // Using this stat reusing existing field
-
         } catch (err: any) {
-          result.stats.errors.push(`Error updating scenarios for ${enablerTitle}: ${err.message}`);
+          result.stats.errors.push(
+            `Error updating scenarios for ${enablerTitle}: ${err.message}`
+          );
         }
       }
     }

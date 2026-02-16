@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import HaiAdminWidget from '@/components/hai/HaiAdminWidget';
 
 // Dynamically import chart components with SSR disabled
@@ -67,7 +68,7 @@ type DashboardResponse = {
   };
 };
 
-// Cache helpers for instant dashboard loading
+// Cache helpers for instant dashboard loading (used as placeholderData)
 const TRAINER_DASHBOARD_CACHE_KEY = 'wmc_trainer_dashboard_cache_v4';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5)
 
@@ -95,84 +96,36 @@ export default function TrainerDashboard() {
   const router = useRouter();
   const { user, profile } = useAuth();
   const { t } = useLanguage();
+
   const [mounted, setMounted] = useState(false);
-  const [dataLoading, setDataLoading] = useState(true);
-  const [dataError, setDataError] = useState<string | null>(null);
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [pendingReviews, setPendingReviews] = useState<number>(0);
-  const [pendingQuiz, setPendingQuiz] = useState<number>(0);
-  const [pendingActivityReports, setPendingActivityReports] =
-    useState<number>(0);
-  const [progressTrend, setProgressTrend] = useState<
-    { week: string; progress: number }[]
-  >([]);
-  const [moduleProgress, setModuleProgress] = useState<
-    {
-      name: string;
-      completed: number;
-      inProgress: number;
-      notStarted: number;
-    }[]
-  >([]);
+  useEffect(() => setMounted(true), []);
 
-  // Apply cached or fresh dashboard data to state
-  const applyDashboardData = (data: DashboardResponse) => {
-    setTrainees(data.trainees || []);
-    setPendingReviews(data.counts?.pendingReviews || 0);
-    setPendingQuiz(data.counts?.pendingQuiz || 0);
-    setPendingActivityReports(data.counts?.pendingActivityReports || 0);
-    setProgressTrend(data.charts?.progressTrend || []);
-    setModuleProgress(data.charts?.moduleProgress || []);
-  };
+  // ── React Query replaces manual useState + useEffect + fetch ──
+  const url = (() => {
+    if (!user?.id && !profile?.id) return null;
+    const params = new URLSearchParams();
+    if (user?.id) params.set('trainerAuthId', user.id);
+    if (profile?.id) params.set('trainerProfileId', profile.id);
+    return `/api/trainer/dashboard?${params.toString()}`;
+  })();
 
+  const { data, isLoading: dataLoading } = useApiQuery<DashboardResponse>(url, {
+    usePrefetch: true,
+    placeholderData: () => getCachedDashboard() ?? undefined,
+  });
+
+  // Persist fresh data to localStorage for instant display on next visit
   useEffect(() => {
-    setMounted(true);
-    // Load cached data immediately on mount
-    const cached = getCachedDashboard();
-    if (cached) {
-      applyDashboardData(cached);
-      setDataLoading(false);
-    }
-  }, []);
+    if (data) setCachedDashboard(data);
+  }, [data]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        if (!user?.id && !profile?.id) {
-          setDataLoading(false);
-          return;
-        }
-        // Only show loading if no cached data
-        const hasCached = getCachedDashboard() !== null;
-        if (!hasCached) setDataLoading(true);
-        setDataError(null);
-
-        const params = new URLSearchParams();
-        if (user?.id) params.set('trainerAuthId', user.id);
-        if (profile?.id) params.set('trainerProfileId', profile.id);
-        const url = `/api/trainer/dashboard?${params.toString()}`;
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errText = await res.text().catch(() => 'Unknown error');
-          console.error('Trainer Dashboard API error:', res.status, errText);
-          setDataError(`${t('dashboard.error.loading')} ${res.status}`);
-          setDataLoading(false);
-          return;
-        }
-        const data: DashboardResponse = await res.json();
-
-        // Update state and cache
-        applyDashboardData(data);
-        setCachedDashboard(data);
-      } catch (e) {
-        console.error(e);
-        setDataError(t('dashboard.error.network'));
-      } finally {
-        setDataLoading(false);
-      }
-    };
-    load();
-  }, [user?.id, profile?.id]);
+  // Derive state from the query response
+  const trainees = data?.trainees ?? [];
+  const pendingReviews = data?.counts?.pendingReviews ?? 0;
+  const pendingQuiz = data?.counts?.pendingQuiz ?? 0;
+  const pendingActivityReports = data?.counts?.pendingActivityReports ?? 0;
+  const progressTrend = data?.charts?.progressTrend ?? [];
+  const moduleProgress = data?.charts?.moduleProgress ?? [];
 
   if (!mounted) return null;
 

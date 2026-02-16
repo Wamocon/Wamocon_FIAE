@@ -16,25 +16,30 @@ const TraineeLayoutComponent = ({
   const { t } = useLanguage();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [waitingForProfile, setWaitingForProfile] = useState(true);
 
-  // Wait for profile to load with a timeout
+  // If profile is already available from cache, skip waiting entirely.
+  // This avoids a flash of the loading spinner on cached sessions.
+  const [waitingForProfile, setWaitingForProfile] = useState(() => !profile);
+
+  // Wait for profile to load with a short timeout
   useEffect(() => {
-    // If we have profile, stop waiting
+    // Profile arrived — stop waiting immediately
     if (profile) {
       setWaitingForProfile(false);
       return;
     }
-    
-    // If loading is done but no profile, wait a bit more for profile sync
+
+    // Auth loading is done but no profile yet — give a brief window.
+    // The AuthContext is still loading the profile in the background;
+    // this timeout only controls how long the *layout* shows a spinner.
     if (!loading && user && !profile) {
       const timer = setTimeout(() => {
         setWaitingForProfile(false);
-      }, 5000); // Give 5 seconds for profile to load after auth loading is done
+      }, 1500);
       return () => clearTimeout(timer);
     }
-    
-    // If loading is done and no user, stop waiting
+
+    // No user at all — stop waiting
     if (!loading && !user) {
       setWaitingForProfile(false);
     }
@@ -81,9 +86,7 @@ const TraineeLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">
-            {t('common.loading')}
-          </p>
+          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
         </div>
       </div>
     );
@@ -95,13 +98,29 @@ const TraineeLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">{t('common.redirecting')}</p>
+          <p className="text-muted-foreground mt-4">
+            {t('common.redirecting')}
+          </p>
         </div>
       </div>
     );
   }
 
-  // Show access denied state only after we've finished waiting
+  // User exists but profile hasn't arrived yet — keep showing a
+  // non-blocking loading state. AuthContext will update `profile` in the
+  // background and this layout will re-render automatically.
+  if (user && !profile) {
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No user and no profile after auth completed — truly not authenticated
   if (!isAuthenticated) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
