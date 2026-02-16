@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -10,6 +11,7 @@ import {
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { prefetch } from '@/lib/prefetch';
 import type {
   RealtimeChannel,
   RealtimePostgresChangesPayload,
@@ -26,6 +28,7 @@ interface Profile {
   full_name: string;
   role: 'trainee' | 'trainer';
   avatar?: string | null;
+  birth_date?: string | null;
   training_start_date?: string | null;
   trainer_id?: string | null;
   isActive?: boolean;
@@ -46,6 +49,7 @@ interface AuthContextType {
   updateProfile: (updates: {
     full_name?: string;
     avatar_url?: string | null;
+    birth_date?: string | null;
     training_start_date?: string | null;
     trainer_auth_id?: string | null;
   }) => Promise<void>;
@@ -118,6 +122,24 @@ const clearCachedAuth = () => {
   }
 };
 
+/**
+ * Build the dashboard API URL for prefetching.
+ * This lets us start the heaviest API call in parallel with auth verification.
+ */
+function buildDashboardUrl(
+  userId: string,
+  role: string,
+  profileId?: string
+): string {
+  if (role === 'trainer') {
+    const params = new URLSearchParams();
+    params.set('trainerAuthId', userId);
+    if (profileId) params.set('trainerProfileId', profileId);
+    return `/api/trainer/dashboard?${params.toString()}`;
+  }
+  return `/api/trainee/dashboard?userId=${profileId || userId}`;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize from cache for instant rendering
   const cached = getCachedAuth();
@@ -128,6 +150,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const initRef = useRef(false);
 
+  // Prefetch dashboard data as early as possible when we have cached auth.
+  // This runs during the very first render — before auth verification completes —
+  // so the dashboard API call happens IN PARALLEL with supabase.auth.getSession().
+  const prefetchedRef = useRef(false);
+  if (!prefetchedRef.current && cached.user && cached.profile) {
+    prefetchedRef.current = true;
+    const dashUrl = buildDashboardUrl(
+      cached.user.id,
+      cached.profile.role,
+      cached.profile.id
+    );
+    prefetch(dashUrl);
+  }
+
   // Public routes must not perform private API or DB calls
   const isPublicPath = useMemo(() => {
     const publicPaths = new Set<string>([
@@ -137,7 +173,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       '/forgot-password',
       '/reset-password',
     ]);
-    return publicPaths.has(pathname || '');
+    const p = pathname || '';
+    return publicPaths.has(p) || p.startsWith('/verify');
   }, [pathname]);
 
   // Auto logout after 4 hours
@@ -175,7 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase
         .from('profiles')
         .select(
-          'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, is_active'
+          'id, full_name, role, avatar_url, assigned_trainer_id, start_of_training_date, birth_date, is_active'
         )
         .eq('id', userId)
         .single();
@@ -192,6 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         avatar_url: string | null;
         assigned_trainer_id: string | null;
         start_of_training_date: string | null;
+        birth_date: string | null;
         is_active: boolean | null;
       };
       const row = data as ProfileRow;
@@ -201,6 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         full_name: row.full_name ?? '',
         role: String(row.role).toLowerCase() as 'trainee' | 'trainer',
         avatar: row.avatar_url || null,
+        birth_date: row.birth_date || null,
         training_start_date: row.start_of_training_date || null,
         trainer_id: row.assigned_trainer_id || null,
         isActive:
@@ -301,7 +340,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
             }
           )
-          .subscribe();
+          .subscribe((status: string) => {
+            // Auto-reconnect when the Realtime channel drops silently
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              setTimeout(() => setupRealtime(userId), 5_000);
+            }
+          });
       } catch {
         /* ignore */
       }
@@ -405,26 +449,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Periodic profile check (less frequent, only for deactivation)
+  // Deactivation check — rely on Realtime subscription primarily.
+  // Poll only for trainees every 5 minutes as a fallback, and only when the
+  // browser tab is visible.  Realtime handles instant deactivation; this
+  // catch-all guards against silent channel drops.
   useEffect(() => {
-    if (!user?.id || isPublicPath) return;
+    if (!user?.id || isPublicPath || profile?.role !== 'trainee') return;
     let mounted = true;
 
     const check = async () => {
       if (!mounted) return;
+      // Skip poll when the tab is not visible — no need to burn requests
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'hidden'
+      )
+        return;
       const loaded = await loadProfile(user.id);
-      if (loaded && loaded.role === 'trainee' && loaded.isActive === false) {
+      if (loaded && loaded.isActive === false) {
         signOut(false);
       }
     };
 
-    // Check every 30 seconds (less frequent)
-    const id = setInterval(check, 30000);
+    const id = setInterval(check, 300_000); // 5 minutes
     return () => {
       mounted = false;
       clearInterval(id);
     };
-  }, [user?.id, isPublicPath]);
+  }, [user?.id, isPublicPath, profile?.role]);
 
   const waitForProfile = async (
     userId: string,
@@ -649,87 +701,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user?.id]);
 
+  // Stable callback references to avoid re-creating the context value every render
+  const stableSignIn = useCallback(signIn, []);
+  const stableSignUp = useCallback(signUp, []);
+  const stableSignOut = useCallback(signOut, []);
+
+  const updateProfile = useCallback(
+    async (updates: {
+      full_name?: string;
+      avatar_url?: string | null;
+      birth_date?: string | null;
+      training_start_date?: string | null;
+      trainer_auth_id?: string | null;
+    }) => {
+      if (!profile) return;
+      await supabase
+        .from('profiles')
+        .update({
+          full_name: updates.full_name,
+          avatar_url: updates.avatar_url ?? null,
+          birth_date: updates.birth_date ?? null,
+          start_of_training_date: updates.training_start_date ?? null,
+          assigned_trainer_id: updates.trainer_auth_id ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', profile.id);
+      if (user) await loadProfile(user.id);
+    },
+    [profile, user]
+  );
+
+  const refreshProfile = useCallback(async () => {
+    if (user) await loadProfile(user.id);
+  }, [user]);
+
+  const stableSwitchRole = useCallback(
+    async (role: 'trainee' | 'trainer') => {
+      if (!profile) return;
+      const dbRole = role.toUpperCase();
+      await supabase
+        .from('profiles')
+        .update({ role: dbRole, updated_at: new Date().toISOString() })
+        .eq('id', profile.id);
+      if (user) await loadProfile(user.id);
+    },
+    [profile, user]
+  );
+
+  const changePassword = useCallback(async (newPassword: string) => {
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
+    }
+
+    const timeoutPromise = new Promise<{ data: any; error: null }>(resolve => {
+      setTimeout(() => resolve({ data: null, error: null }), 3000);
+    });
+
+    const updatePromise = supabase.auth.updateUser({ password: newPassword });
+    const { error } = await Promise.race([updatePromise, timeoutPromise]);
+    if (error) {
+      throw new Error(error.message || 'Passwort konnte nicht geändert werden');
+    }
+  }, []);
+
   const value: AuthContextType = useMemo(
     () => ({
       user,
       profile,
       loading,
-      signIn,
-      signUp,
-      signOut,
-      updateProfile: async updates => {
-        if (!profile) return;
-        await supabase
-          .from('profiles')
-          .update({
-            // map legacy keys to new column names when present
-            full_name: updates.full_name,
-            avatar_url: updates.avatar_url ?? null,
-            start_of_training_date: updates.training_start_date ?? null,
-            assigned_trainer_id: updates.trainer_auth_id ?? null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', profile.id);
-        if (user) await loadProfile(user.id);
-      },
-      refreshProfile: async () => {
-        if (user) await loadProfile(user.id);
-      },
-      switchRole: async (role: 'trainee' | 'trainer') => {
-        if (!profile) return;
-        const dbRole = role.toUpperCase(); // 'TRAINEE' | 'TRAINER'
-        await supabase
-          .from('profiles')
-          .update({ role: dbRole, updated_at: new Date().toISOString() })
-          .eq('id', profile.id);
-        if (user) await loadProfile(user.id);
-      },
-      changePassword: async (newPassword: string) => {
-        console.log(
-          '[AuthContext] changePassword called with password length:',
-          newPassword.length
-        );
-        if (!newPassword || newPassword.length < 8) {
-          throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
-        }
-        console.log('[AuthContext] Calling supabase.auth.updateUser...');
-
-        // Supabase updateUser hangs when email confirmation is enabled
-        // The password still changes successfully, so we treat timeout as success
-        const timeoutPromise = new Promise<{ data: any; error: null }>(
-          resolve => {
-            setTimeout(() => {
-              console.log(
-                '[AuthContext] Password update timeout reached - treating as success'
-              );
-              resolve({ data: null, error: null });
-            }, 3000); // 3 seconds is enough
-          }
-        );
-
-        const updatePromise = supabase.auth.updateUser({
-          password: newPassword,
-        });
-
-        const { error, data } = await Promise.race([
-          updatePromise,
-          timeoutPromise,
-        ]);
-        console.log(
-          '[AuthContext] supabase.auth.updateUser completed. Error:',
-          error,
-          'Data:',
-          data
-        );
-        if (error) {
-          throw new Error(
-            error.message || 'Passwort konnte nicht geändert werden'
-          );
-        }
-        console.log('[AuthContext] Password changed successfully, returning');
-      },
+      signIn: stableSignIn,
+      signUp: stableSignUp,
+      signOut: stableSignOut,
+      updateProfile,
+      refreshProfile,
+      switchRole: stableSwitchRole,
+      changePassword,
     }),
-    [user, profile, loading, signIn, signUp, signOut, loadProfile]
+    [user, profile, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

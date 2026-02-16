@@ -35,16 +35,24 @@ export async function GET(
     if (!member)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const [c] = await db.select().from(courses).where(eq(courses.id, courseId));
+    const [c] = await db
+      .select({
+        id: courses.id,
+        title: courses.title,
+        year: courses.year,
+        chapter: courses.chapter,
+      })
+      .from(courses)
+      .where(eq(courses.id, courseId));
     if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const ens = await db
-      .select()
+      .select({ id: enablers.id, title: enablers.title })
       .from(enablers)
       .where(and(eq(enablers.courseId, courseId), eq(enablers.isActive, true)))
       .orderBy(enablers.orderIndex);
     const ucs = await db
-      .select()
+      .select({ id: useCases.id, title: useCases.title })
       .from(useCases)
       .where(and(eq(useCases.courseId, courseId), eq(useCases.isActive, true)))
       .orderBy(useCases.orderIndex);

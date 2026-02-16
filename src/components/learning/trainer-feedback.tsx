@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { ArrowLeft, BookOpen, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
@@ -48,8 +48,6 @@ export default function Lesson({ data }: LessonProps) {
 
   const handleGoBack = () => router.back();
 
-  
-
   const toggleCompletion = async (subLessonId: string, next: boolean) => {
     if (!profile?.id) return;
     setSaving(subLessonId);
@@ -64,7 +62,11 @@ export default function Lesson({ data }: LessonProps) {
       await fetch('/api/trainee/progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: profile.id, subLessonId, completed: next }),
+        body: JSON.stringify({
+          userId: profile.id,
+          subLessonId,
+          completed: next,
+        }),
       });
     } catch (e) {
       console.error(e);
@@ -85,7 +87,9 @@ export default function Lesson({ data }: LessonProps) {
             <ArrowLeft className="h-6 w-6" />
           </button>
           <div className="flex-1">
-            <h1 className="text-foreground text-3xl font-bold">{data.lesson.title}</h1>
+            <h1 className="text-foreground text-3xl font-bold">
+              {data.lesson.title}
+            </h1>
             <p className="text-muted mt-1">{data.subLessons.length} Aufgaben</p>
           </div>
         </div>
@@ -93,19 +97,24 @@ export default function Lesson({ data }: LessonProps) {
 
       {/* Sub-lessons list */}
       <div className="space-y-4">
-        {data.subLessons.map((s) => (
-          <div key={s.id} className="glass-effect border-accent/30 rounded-2xl border p-6 shadow-lg">
+        {data.subLessons.map(s => (
+          <div
+            key={s.id}
+            className="glass-effect border-accent/30 rounded-2xl border p-6 shadow-lg"
+          >
             <div className="mb-2 flex items-center gap-3">
               <div className="from-accent to-primary flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
-                <BookOpen className="h-5 w-5 text-foregroundround" />
+                <BookOpen className="text-foregroundround h-5 w-5" />
               </div>
-              <h3 className="text-foreground text-lg font-semibold flex-1">{s.title}</h3>
+              <h3 className="text-foreground flex-1 text-lg font-semibold">
+                {s.title}
+              </h3>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className="h-5 w-5 accent-red-600"
                   checked={completedIds.has(s.id)}
-                  onChange={(e) => toggleCompletion(s.id, e.target.checked)}
+                  onChange={e => toggleCompletion(s.id, e.target.checked)}
                   disabled={!!saving}
                 />
                 <span className="text-muted-foreground">Abgeschlossen</span>
@@ -114,9 +123,15 @@ export default function Lesson({ data }: LessonProps) {
             {s.content && (
               <p className="text-muted whitespace-pre-wrap">{s.content}</p>
             )}
-            <div className="text-muted mt-2 text-xs">Dauer: {s.duration_minutes ?? 0} Minuten</div>
+            <div className="text-muted mt-2 text-xs">
+              Dauer: {s.duration_minutes ?? 0} Minuten
+            </div>
             <div className="mt-4 flex justify-end">
-              <Link href={`/trainee/lessons/${data.lesson.id}/${s.id}`} className="text-sm text-accent hover:underline inline-flex items-center gap-1">
+              <Link
+                prefetch={false}
+                href={`/trainee/lessons/${data.lesson.id}/${s.id}`}
+                className="text-accent inline-flex items-center gap-1 text-sm hover:underline"
+              >
                 Öffnen
                 <ChevronRight className="h-4 w-4" />
               </Link>
@@ -126,7 +141,10 @@ export default function Lesson({ data }: LessonProps) {
       </div>
 
       <div className="flex justify-end">
-        <Link href="/trainee/modules" className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors">
+        <Link
+          href="/trainee/modules"
+          className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors"
+        >
           Zurück zu den Modulen
         </Link>
       </div>

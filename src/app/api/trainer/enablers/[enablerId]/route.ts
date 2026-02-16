@@ -45,7 +45,13 @@ export async function PATCH(
 
     // Verify enabler exists
     const [row0] = await db
-      .select()
+      .select({
+        id: enablers.id,
+        isActive: enablers.isActive,
+        activatedAt: enablers.activatedAt,
+        courseId: enablers.courseId,
+        title: enablers.title,
+      })
       .from(enablers)
       .where(eq(enablers.id, enablerId as any));
     if (!row0) {
@@ -158,7 +164,7 @@ export async function DELETE(
 
     // Verify enabler exists
     const [row0] = await db
-      .select()
+      .select({ id: enablers.id })
       .from(enablers)
       .where(eq(enablers.id, enablerId as any));
     if (!row0) {
