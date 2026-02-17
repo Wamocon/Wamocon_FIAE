@@ -16,7 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/db';
+import haiDb from '@/db/haiDb';
 import { eq, sql } from 'drizzle-orm';
 import {
   enablers,
@@ -67,7 +67,7 @@ interface IndexRequestBody {
  */
 async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
   // Get enabler details
-  const enabler = await db
+  const enabler = await haiDb
     .select({
       id: enablers.id,
       title: enablers.title,
@@ -113,7 +113,7 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
   // Get course title for metadata
   let courseTitle: string | undefined;
   if (e.courseId) {
-    const course = await db
+    const course = await haiDb
       .select({ title: courses.title })
       .from(courses)
       .where(eq(courses.id, e.courseId))
@@ -132,7 +132,7 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
   });
 
   // Also index associated PDFs
-  const documents = await db
+  const documents = await haiDb
     .select({
       id: contentDocuments.id,
       title: contentDocuments.title,
@@ -216,12 +216,12 @@ async function runBackgroundReindex(
     await markJobRunning(jobId);
 
     // --- Count total sources ---
-    const allEnablers = await db
+    const allEnablers = await haiDb
       .select({ id: enablers.id, title: enablers.title })
       .from(enablers)
       .where(eq(enablers.isActive, true));
 
-    const standaloneDocuments = await db
+    const standaloneDocuments = await haiDb
       .select({
         id: contentDocuments.id,
         title: contentDocuments.title,
