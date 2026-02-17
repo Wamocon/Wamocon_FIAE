@@ -752,6 +752,7 @@
   "quiz.questionsToCorrect": "Diese Fragen musst du korrigieren",
   "quiz.yourAnswerWas": "Deine Antwort war",
   "quiz.noAnswer": "Keine Antwort",
+  "quiz.unansweredQuestions": "Bitte beantworte alle Fragen bevor du einreichst. {count} offen: {numbers}",
   "quiz.correctWrongAnswers": "Falsche Antworten korrigieren",
   "quiz.mustGet100": "Du musst alle Fragen richtig beantworten, um das Quiz abzuschließen.",
   "quiz.perfectScore": "Perfekt!",

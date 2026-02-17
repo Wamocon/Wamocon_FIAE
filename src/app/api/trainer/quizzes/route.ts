@@ -221,8 +221,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Bust the cached GET so the next read returns fresh data
+    // Bust cached GETs so the next read returns fresh data
     apiCache.invalidate('trainer_quizzes');
+    apiCache.invalidate('trainee_quizzes');
 
     return NextResponse.json({ id: qz.id }, { status: 201 });
   } catch (e) {

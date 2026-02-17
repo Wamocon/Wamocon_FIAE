@@ -7,6 +7,7 @@ import {
   questions,
   quizSubmissionAnswers,
   quizSubmissions,
+  quizAssignments,
   quizzes,
   courseMembers,
   enablers,
@@ -37,36 +38,59 @@ export async function POST(
     if (!quiz || !quiz.isActive)
       return NextResponse.json({ error: 'Quiz unavailable' }, { status: 404 });
 
-    // Ensure quiz belongs to an enabler (lesson) for membership gating
-    const [link] = await db
-      .select()
-      .from(enablerQuizLinks)
-      .where(eq(enablerQuizLinks.quizId, quizId));
-    if (!link)
-      return NextResponse.json({ error: 'Quiz detached' }, { status: 400 });
-    const [enabler] = await db
-      .select({
-        id: enablers.id,
-        isActive: enablers.isActive,
-        courseId: enablers.courseId,
-        title: enablers.title,
-      })
-      .from(enablers)
-      .where(eq(enablers.id, link.enablerId));
-    if (!enabler || !enabler.isActive)
-      return NextResponse.json({ error: 'Enabler inactive' }, { status: 404 });
+    const isGlobal = String((quiz as any).quizType || '').toUpperCase() === 'GLOBAL';
 
-    const [member] = await db
-      .select()
-      .from(courseMembers)
-      .where(
-        and(
-          eq(courseMembers.courseId, enabler.courseId),
-          eq(courseMembers.userId, traineeId)
-        )
-      );
-    if (!member)
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // For GLOBAL quizzes, ensure the trainee is assigned to this quiz.
+    // For lesson quizzes, keep the original membership gating via enabler/course.
+    let link: any = null;
+    let enabler: any = null;
+    if (isGlobal) {
+      const [assignment] = await db
+        .select()
+        .from(quizAssignments)
+        .where(
+          and(
+            eq(quizAssignments.quizId, quizId as any),
+            eq(quizAssignments.traineeId, traineeId as any)
+          )
+        );
+      if (!assignment)
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    } else {
+      // Ensure quiz belongs to an enabler (lesson) for membership gating
+      const [l] = await db
+        .select()
+        .from(enablerQuizLinks)
+        .where(eq(enablerQuizLinks.quizId, quizId));
+      if (!l)
+        return NextResponse.json({ error: 'Quiz detached' }, { status: 400 });
+      link = l;
+
+      const [e] = await db
+        .select({
+          id: enablers.id,
+          isActive: enablers.isActive,
+          courseId: enablers.courseId,
+          title: enablers.title,
+        })
+        .from(enablers)
+        .where(eq(enablers.id, link.enablerId));
+      if (!e || !e.isActive)
+        return NextResponse.json({ error: 'Enabler inactive' }, { status: 404 });
+      enabler = e;
+
+      const [member] = await db
+        .select()
+        .from(courseMembers)
+        .where(
+          and(
+            eq(courseMembers.courseId, enabler.courseId),
+            eq(courseMembers.userId, traineeId)
+          )
+        );
+      if (!member)
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const qs = await db
       .select()
@@ -78,7 +102,9 @@ export async function POST(
       : [];
     const optMap = new Map(optRows.map(o => [String(o.id), o]));
 
-    // Check for existing submission (single-attempt enforcement)
+    const allowMultipleAttempts = isGlobal;
+
+    // Check for existing submission (single-attempt enforcement for non-global quizzes)
     const existingSubmission = await db
       .select()
       .from(quizSubmissions)
@@ -88,7 +114,7 @@ export async function POST(
           eq(quizSubmissions.traineeId, traineeId)
         )
       );
-    if (existingSubmission.length) {
+    if (!allowMultipleAttempts && existingSubmission.length) {
       // Build feedback from stored answers for review-only mode
       const [sub] = existingSubmission;
       const storedAnswers = await db
@@ -157,6 +183,27 @@ export async function POST(
       }
       return { questionId: a.questionId, selectedOptionId: a.selectedOptionId };
     });
+
+    // Require an answer for every question (MCQ must have selectedOptionId, TEXT must have non-empty textAnswer)
+    const answerByQuestionId = new Map<string, any>(
+      normalized.map(a => [String(a.questionId), a])
+    );
+    const missing = qs.filter(q => {
+      const a = answerByQuestionId.get(String(q.id));
+      const qType = (q as any)?.questionType || 'MCQ';
+      if (!a) return true;
+      if (qType === 'TEXT') {
+        const text = String((a as any).textAnswer || '').trim();
+        return text.length === 0;
+      }
+      return !String((a as any).selectedOptionId || '').trim();
+    });
+    if (missing.length) {
+      return NextResponse.json(
+        { error: `Missing answers (${missing.length})`, missingCount: missing.length },
+        { status: 400 }
+      );
+    }
 
     let correctCount = 0;
     for (const a of normalized) {
@@ -248,6 +295,15 @@ export async function POST(
 
     // Notify trainers (reuse existing pattern)
     try {
+      if (isGlobal) {
+        // No trainer notification for global quizzes (trainee can attempt multiple times)
+        return NextResponse.json({
+          submissionId: submission.id,
+          score,
+          feedback,
+          locked: false,
+        });
+      }
       const [courseRow] = await db
         .select()
         .from(courses)
