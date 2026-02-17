@@ -5,6 +5,7 @@ import { GraduationCap, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function RegisterPage() {
@@ -82,17 +83,18 @@ export default function RegisterPage() {
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25 dark:from-red-900/20 dark:via-red-800/15 dark:to-red-900/25"></div>
-      {/* Theme Toggle in top right */}
-      <div className="absolute top-4 right-4 z-20">
+      <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-red-900/20 via-red-800/15 to-red-900/25 dark:from-red-900/20 dark:via-red-800/15 dark:to-red-900/25"></div>
+      {/* Theme + Language Toggle in top right */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        <LanguageToggle variant="icon" />
         <ThemeToggle variant="icon" />
       </div>
       <div className="relative z-10 w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="from-accent to-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br shadow-2xl">
+          <div className="from-accent to-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br shadow-2xl">
             <GraduationCap className="text-primary-foreground h-8 w-8" />
           </div>
-          <h1 className="text-foreground from-accent to-primary mb-2 bg-gradient-to-r bg-clip-text text-4xl font-bold text-transparent">
+          <h1 className="text-foreground from-accent to-primary mb-2 bg-linear-to-r bg-clip-text text-4xl font-bold text-transparent">
             {t('landing.platformName')}
           </h1>
           <p className="text-muted text-lg">{t('register.title')}</p>

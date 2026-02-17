@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -41,17 +42,18 @@ export default function LoginForm() {
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-900/20 via-red-800/15 to-red-900/25 dark:from-red-900/20 dark:via-red-800/15 dark:to-red-900/25"></div>
-      {/* Theme Toggle in top right */}
-      <div className="absolute top-4 right-4 z-20">
+      <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-red-900/20 via-red-800/15 to-red-900/25 dark:from-red-900/20 dark:via-red-800/15 dark:to-red-900/25"></div>
+      {/* Theme + Language Toggle in top right */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        <LanguageToggle variant="icon" />
         <ThemeToggle variant="icon" />
       </div>
       <div className="relative z-10 w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="from-accent to-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br shadow-2xl">
+          <div className="from-accent to-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br shadow-2xl">
             <BookOpen className="text-primary-foreground h-8 w-8" />
           </div>
-          <h1 className="text-foreground from-accent to-primary mb-2 bg-gradient-to-r bg-clip-text text-4xl font-bold text-transparent">
+          <h1 className="text-foreground from-accent to-primary mb-2 bg-linear-to-r bg-clip-text text-4xl font-bold text-transparent">
             {t('auth.title')}
           </h1>
           <p className="text-muted text-lg">{t('auth.welcomeBack')}</p>
@@ -115,7 +117,10 @@ export default function LoginForm() {
                 </button>
               </div>
               <div className="mt-2 text-right">
-                <Link href="/forgot-password" className="text-sm text-accent hover:text-accent/80 underline">
+                <Link
+                  href="/forgot-password"
+                  className="text-accent hover:text-accent/80 text-sm underline"
+                >
                   {t('auth.forgotPassword')}
                 </Link>
               </div>
@@ -139,7 +144,7 @@ export default function LoginForm() {
                 t('auth.login')
               )}
             </button>
-            <div className="text-center space-y-1">
+            <div className="space-y-1 text-center">
               <p className="text-muted-foreground">
                 {t('auth.noAccount')}{' '}
                 <Link
@@ -153,9 +158,7 @@ export default function LoginForm() {
           </form>
         </div>
         <div className="text-center">
-          <p className="text-muted text-xs">
-            {t('auth.copyright')}
-          </p>
+          <p className="text-muted text-xs">{t('auth.copyright')}</p>
         </div>
       </div>
     </div>
