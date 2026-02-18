@@ -8,13 +8,16 @@
  *   - CHAT: Environment-based routing via HAI_CHAT_PROVIDER
  *     - 'openrouter' (default) → Free Llama models for QA/testing
  *     - 'claude' → Anthropic Claude for production
- *   - EMBEDDINGS: Gemini gemini-embedding-001 (always)
+ *   - EMBEDDINGS: Environment-based routing via HAI_EMBEDDING_PROVIDER
+ *     - 'ollama' (default) → Local Ollama, no rate limits
+ *     - 'gemini' → Google Gemini API (rate limited)
  *
  * @module lib/hai/providers
  */
 
 import { ClaudeChatProvider } from './claude';
 import { GeminiEmbeddingProvider } from './gemini';
+import { OllamaEmbeddingProvider } from './ollama';
 import { OpenRouterChatProvider } from './openrouter';
 import {
   loadProviderConfig,
@@ -53,12 +56,20 @@ function ensureInitialized(): void {
 
   const config = loadProviderConfig();
 
-  // --- EMBEDDING PROVIDER (always Gemini) ---
-  _embeddingProvider = new GeminiEmbeddingProvider(
-    config.gemini.apiKey,
-    config.gemini.embeddingModel,
-    config.gemini.embeddingDimensions
-  );
+  // --- EMBEDDING PROVIDER (Ollama or Gemini) ---
+  if (config.embeddingProvider === 'ollama') {
+    _embeddingProvider = new OllamaEmbeddingProvider(
+      config.ollama.baseUrl,
+      config.ollama.embeddingModel,
+      config.ollama.embeddingDimensions
+    );
+  } else {
+    _embeddingProvider = new GeminiEmbeddingProvider(
+      config.gemini.apiKey,
+      config.gemini.embeddingModel,
+      config.gemini.embeddingDimensions
+    );
+  }
 
   // --- CHAT PROVIDER (environment-based) ---
   if (config.chatProvider === 'claude') {
@@ -116,14 +127,19 @@ export function getChatProvider(): ChatProvider {
 }
 
 /**
- * Get the embedding provider (always Gemini).
+ * Get the embedding provider (Ollama or Gemini).
  */
 export function getEmbeddingProvider(): EmbeddingProvider {
   ensureInitialized();
 
   if (!_embeddingProvider || !_embeddingProvider.isInitialized()) {
+    const config = loadProviderConfig();
+    const hint =
+      config.embeddingProvider === 'ollama'
+        ? 'Ollama server (ollama serve)'
+        : 'GEMINI_API_KEY';
     throw new Error(
-      'HAI.ai: Embedding provider not available. Check GEMINI_API_KEY.'
+      `HAI.ai: Embedding provider (${config.embeddingProvider}) not available. Check ${hint}.`
     );
   }
 
@@ -190,8 +206,7 @@ export function getProviderStatus(): {
     embedding: {
       provider: _embeddingProvider?.name ?? 'none',
       initialized: _embeddingProvider?.isInitialized() ?? false,
-      dimensions:
-        (_embeddingProvider as GeminiEmbeddingProvider)?.dimensions ?? 0,
+      dimensions: (_embeddingProvider as any)?.dimensions ?? 0,
     },
   };
 }

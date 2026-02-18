@@ -28,6 +28,7 @@ import type {
   ChatGenerateOptions,
 } from './providers';
 import { searchWithContext, SearchResult } from './vectorSearch';
+import { fetchPageIndexContext } from './pageIndexService';
 import {
   buildSystemPrompt,
   buildRetrievedContext,
@@ -499,6 +500,47 @@ export async function processMessage(
           metadata: r.metadata,
         }))
       );
+
+      // Step 3a: PageIndex — fetch relevant PDF pages at query time (non-fatal)
+      try {
+        const pageIndexResult = await fetchPageIndexContext(
+          userMessage,
+          searchResults,
+          {
+            currentEnablerId: context.currentEnablerId,
+            currentCourseId: context.currentCourseId,
+          }
+        );
+        if (pageIndexResult.pdfContext) {
+          retrievedContext = retrievedContext
+            ? `${retrievedContext}\n\n${pageIndexResult.pdfContext}`
+            : pageIndexResult.pdfContext;
+
+          // Add PageIndex citations to search results for citation merging
+          for (const pCit of pageIndexResult.citations) {
+            searchResults.push({
+              id: `pageindex-${pCit.documentId}-p${pCit.pageNumber}`,
+              chunkIndex: pCit.pageNumber,
+              content: `[PDF Page ${pCit.pageNumber}]`,
+              similarity: pCit.relevanceScore,
+              sourceType: 'document',
+              sourceId: pCit.documentId,
+              metadata: {
+                title: pCit.documentTitle,
+                fileName: pCit.fileName,
+                storageUrl: pCit.storageUrl,
+                page: pCit.pageNumber,
+                sourceType: 'pageindex',
+              },
+            });
+          }
+        }
+      } catch (pageIndexError) {
+        console.warn(
+          'HAI.ai: PageIndex fetch failed (non-fatal):',
+          pageIndexError
+        );
+      }
     }
 
     // If web search is enabled, switch to general mode to allow external knowledge
@@ -547,9 +589,14 @@ export async function processMessage(
     );
 
     // Step 6: Generate response via provider factory (with automatic fallback)
+    // Token budget: quizzes/scenarios need longer output, simple Q&A can be shorter
+    const getMaxTokens = () => {
+      if (intent === 'quiz_request' || intent === 'scenario_help') return 3000;
+      if (intent === 'explanation' || intent === 'code_help') return 2048;
+      return 1024;
+    };
     const options: ChatGenerateOptions = {
-      maxOutputTokens:
-        intent === 'explanation' || intent === 'code_help' ? 1024 : 512,
+      maxOutputTokens: getMaxTokens(),
       temperature: intent === 'quiz_request' ? 0.8 : 0.7,
       enableWebSearch,
     };
@@ -745,6 +792,47 @@ export async function processMessageStream(
           metadata: r.metadata,
         }))
       );
+
+      // PageIndex — fetch relevant PDF pages at query time (non-fatal)
+      try {
+        const pageIndexResult = await fetchPageIndexContext(
+          userMessage,
+          searchResults,
+          {
+            currentEnablerId: context.currentEnablerId,
+            currentCourseId: context.currentCourseId,
+          }
+        );
+        if (pageIndexResult.pdfContext) {
+          retrievedContext = retrievedContext
+            ? `${retrievedContext}\n\n${pageIndexResult.pdfContext}`
+            : pageIndexResult.pdfContext;
+
+          // Add PageIndex citations
+          for (const pCit of pageIndexResult.citations) {
+            searchResults.push({
+              id: `pageindex-${pCit.documentId}-p${pCit.pageNumber}`,
+              chunkIndex: pCit.pageNumber,
+              content: `[PDF Page ${pCit.pageNumber}]`,
+              similarity: pCit.relevanceScore,
+              sourceType: 'document',
+              sourceId: pCit.documentId,
+              metadata: {
+                title: pCit.documentTitle,
+                fileName: pCit.fileName,
+                storageUrl: pCit.storageUrl,
+                page: pCit.pageNumber,
+                sourceType: 'pageindex',
+              },
+            });
+          }
+        }
+      } catch (pageIndexError) {
+        console.warn(
+          'HAI.ai: PageIndex fetch failed (non-fatal):',
+          pageIndexError
+        );
+      }
     }
 
     let mode = determineMode(intent, context);
@@ -791,9 +879,14 @@ export async function processMessageStream(
     );
 
     // Stream response via provider factory (with automatic fallback + web search routing)
+    // Token budget: quizzes/scenarios need longer output, simple Q&A can be shorter
+    const getStreamMaxTokens = () => {
+      if (intent === 'quiz_request' || intent === 'scenario_help') return 3000;
+      if (intent === 'explanation' || intent === 'code_help') return 2048;
+      return 1024;
+    };
     const options: ChatGenerateOptions = {
-      maxOutputTokens:
-        intent === 'explanation' || intent === 'code_help' ? 1024 : 512,
+      maxOutputTokens: getStreamMaxTokens(),
       temperature: 0.7,
       enableWebSearch,
     };

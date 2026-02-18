@@ -72,7 +72,6 @@ export interface ReindexProgress {
  * This prevents concurrent embedding API calls that would exceed rate limits.
  */
 let _activeJobId: string | null = null;
-let _cancelRequested = false;
 
 // ============================================================================
 // JOB MANAGEMENT
@@ -127,7 +126,6 @@ export async function createReindexJob(
   }
 
   _activeJobId = jobId;
-  _cancelRequested = false;
 
   return { jobId };
 }
@@ -196,19 +194,67 @@ export async function getLatestJob(): Promise<ReindexJob | null> {
 
 /**
  * Request cancellation of the active job.
+ * Persists cancel flag to the database so it works across serverless instances.
  * The job will stop at the next source boundary (won't stop mid-chunk).
  */
-export function requestCancellation(): boolean {
-  if (!_activeJobId) return false;
-  _cancelRequested = true;
-  return true;
+export async function requestCancellation(): Promise<boolean> {
+  // Try in-memory job ID first, then fall back to latest running job from DB
+  let jobId = _activeJobId;
+
+  if (!jobId) {
+    // Find the currently running job from DB (handles cross-instance scenario)
+    try {
+      const result = await haiDb.execute(sql`
+        SELECT id FROM hai_reindex_jobs
+        WHERE status IN ('pending', 'running')
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+      jobId = (result as any)[0]?.id || null;
+    } catch {
+      return false;
+    }
+  }
+
+  if (!jobId) return false;
+
+  try {
+    await haiDb.execute(sql`
+      UPDATE hai_reindex_jobs
+      SET
+        progress = progress || '{"cancelRequested": true}'::jsonb,
+        updated_at = NOW()
+      WHERE id = ${jobId}::uuid
+        AND status IN ('pending', 'running')
+    `);
+    return true;
+  } catch (err) {
+    console.error('HAI.ai: Error requesting cancellation:', err);
+    return false;
+  }
 }
 
 /**
- * Check if cancellation was requested for the active job.
+ * Check if cancellation was requested for the given job.
+ * Reads from the database for cross-instance consistency.
  */
-export function isCancellationRequested(): boolean {
-  return _cancelRequested;
+export async function isCancellationRequested(
+  jobId?: string
+): Promise<boolean> {
+  const targetJobId = jobId || _activeJobId;
+  if (!targetJobId) return false;
+
+  try {
+    const result = await haiDb.execute(sql`
+      SELECT (progress->>'cancelRequested')::boolean AS cancel_requested
+      FROM hai_reindex_jobs
+      WHERE id = ${targetJobId}::uuid
+      LIMIT 1
+    `);
+    return (result as any)[0]?.cancel_requested === true;
+  } catch {
+    return false;
+  }
 }
 
 // ============================================================================
@@ -327,5 +373,4 @@ export async function markJobCancelled(
  */
 export function clearActiveJob(): void {
   _activeJobId = null;
-  _cancelRequested = false;
 }
