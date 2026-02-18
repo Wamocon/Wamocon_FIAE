@@ -70,7 +70,18 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
 
       return { ok: true };
     } catch (error: any) {
+      const isVercel = process.env.VERCEL === '1';
+      const isLocalhost =
+        this.baseUrl.includes('localhost') ||
+        this.baseUrl.includes('127.0.0.1');
+
       if (error.name === 'TimeoutError' || error.code === 'ECONNREFUSED') {
+        if (isVercel && isLocalhost) {
+          return {
+            ok: false,
+            error: `Cannot connect to Ollama on localhost from Vercel. Set HAI_EMBEDDING_PROVIDER=gemini in Vercel environment variables.`,
+          };
+        }
         return {
           ok: false,
           error: 'Ollama server not running. Start it with: ollama serve',
