@@ -273,13 +273,21 @@ export default function TrainerReviewsPage() {
                             <div key={idx} className="w-full flex-shrink-0 px-2 space-y-3">
                               {/* Solution Box */}
                               <div className="rounded-xl border border-accent/20 bg-muted/30 p-4">
-                                <div className="text-sm font-medium mb-2">{t('trainer.reviews.solutionFor').replace('{index}', String(sol.scenarioIndex + 1))}</div>
+                                <div className="text-sm font-medium mb-2">
+                                  {(it.solutions?.length || 0) > 1
+                                    ? t('trainer.reviews.solutionFor').replace('{index}', String(sol.scenarioIndex + 1))
+                                    : t('enablerPage.summaryLabel') || t('trainer.reviews.solution')}
+                                </div>
                                 <p className="whitespace-pre-line text-sm text-foreground/90">{sol.text}</p>
                               </div>
 
                               {/* Feedback Box for this scenario */}
                               <div>
-                                <label className="mb-1 block text-sm font-medium">{t('trainer.reviews.feedbackFor').replace('{index}', String(sol.scenarioIndex + 1))}</label>
+                                <label className="mb-1 block text-sm font-medium">
+                                  {(it.solutions?.length || 0) > 1
+                                    ? t('trainer.reviews.feedbackFor').replace('{index}', String(sol.scenarioIndex + 1))
+                                    : t('trainer.reviews.feedback')}
+                                </label>
                                 <textarea
                                   className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2"
                                   rows={3}
@@ -294,7 +302,9 @@ export default function TrainerReviewsPage() {
                                     }
                                     setFeedbacksMap(prev => ({ ...prev, [it.id]: newFeedbacks }));
                                   }}
-                                  placeholder={t('trainer.reviews.feedbackFor').replace('{index}', String(sol.scenarioIndex + 1))}
+                                  placeholder={(it.solutions?.length || 0) > 1
+                                    ? t('trainer.reviews.feedbackFor').replace('{index}', String(sol.scenarioIndex + 1))
+                                    : t('trainer.reviews.feedbackPlaceholder')}
                                 />
                               </div>
                             </div>

@@ -37,7 +37,11 @@ export async function GET() {
             },
         }));
 
-        return NextResponse.json({ useCases: formattedUseCases });
+        return NextResponse.json({ useCases: formattedUseCases }, {
+            headers: {
+                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=59',
+            },
+        });
     } catch (error: any) {
         // If table doesn't exist yet, return empty use cases
         if (error?.cause?.code === '42P01') {

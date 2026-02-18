@@ -158,7 +158,7 @@ async function fetchDashboardData(userId: string) {
             courseId: enablers.courseId,
             courseTitle: courses.title,
             courseYear: courses.year,
-            scenarios: enablers.scenarios,
+            scenarioPdfUrl: enablers.scenarioPdfUrl,
             isActive: enablers.isActive,
           })
           .from(enablers)
@@ -192,36 +192,36 @@ async function fetchDashboardData(userId: string) {
       const [quizLinks, enablerSubRows, useCaseSubRows] = await Promise.all([
         allEnablerIds.length > 0
           ? db
-              .select({
-                enablerId: enablerQuizLinks.enablerId,
-                quizId: enablerQuizLinks.quizId,
-              })
-              .from(enablerQuizLinks)
-              .where(inArray(enablerQuizLinks.enablerId, allEnablerIds as any))
+            .select({
+              enablerId: enablerQuizLinks.enablerId,
+              quizId: enablerQuizLinks.quizId,
+            })
+            .from(enablerQuizLinks)
+            .where(inArray(enablerQuizLinks.enablerId, allEnablerIds as any))
           : Promise.resolve([]),
         allEnablerIds.length > 0
           ? db
-              .select({ enablerId: enablerSubmissions.enablerId })
-              .from(enablerSubmissions)
-              .where(
-                and(
-                  eq(enablerSubmissions.traineeId, userId as any),
-                  inArray(enablerSubmissions.enablerId, allEnablerIds as any),
-                  eq(enablerSubmissions.status, 'APPROVED')
-                )
+            .select({ enablerId: enablerSubmissions.enablerId })
+            .from(enablerSubmissions)
+            .where(
+              and(
+                eq(enablerSubmissions.traineeId, userId as any),
+                inArray(enablerSubmissions.enablerId, allEnablerIds as any),
+                eq(enablerSubmissions.status, 'APPROVED')
               )
+            )
           : Promise.resolve([]),
         useCaseIds.length > 0
           ? db
-              .select({ useCaseId: useCaseSubmissions.useCaseId })
-              .from(useCaseSubmissions)
-              .where(
-                and(
-                  eq(useCaseSubmissions.traineeId, userId as any),
-                  inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
-                  eq(useCaseSubmissions.status, 'APPROVED')
-                )
+            .select({ useCaseId: useCaseSubmissions.useCaseId })
+            .from(useCaseSubmissions)
+            .where(
+              and(
+                eq(useCaseSubmissions.traineeId, userId as any),
+                inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
+                eq(useCaseSubmissions.status, 'APPROVED')
               )
+            )
           : Promise.resolve([]),
       ]);
 
@@ -232,20 +232,47 @@ async function fetchDashboardData(userId: string) {
         useCaseSubRows.map(r => String(r.useCaseId))
       );
 
+      // Build optimized Maps for O(1) access
+      // Explicitly infer element types to avoid 'never' issues with empty array unions
+      type EnablerType = typeof allEnablers[number];
+      const enablersByCourse = new Map<string, EnablerType[]>();
+      for (const e of allEnablers) {
+        const key = String(e.courseId);
+        if (!enablersByCourse.has(key)) enablersByCourse.set(key, []);
+        enablersByCourse.get(key)!.push(e);
+      }
+
+      type UseCaseType = typeof useCaseRows[number];
+      const useCasesByCourse = new Map<string, UseCaseType[]>();
+      for (const u of useCaseRows) {
+        const key = String(u.courseId);
+        if (!useCasesByCourse.has(key)) useCasesByCourse.set(key, []);
+        useCasesByCourse.get(key)!.push(u);
+      }
+
+      type QuizLinkType = typeof quizLinks[number];
+      const quizzesByEnabler = new Map<string, QuizLinkType[]>();
+      for (const l of quizLinks) {
+        const key = String(l.enablerId);
+        if (!quizzesByEnabler.has(key)) quizzesByEnabler.set(key, []);
+        quizzesByEnabler.get(key)!.push(l);
+      }
+
       // Calculate progress per course with STRICT logic
       for (const c of memberCourses) {
-        const courseEnablers = allEnablers.filter(
-          e => String(e.courseId) === String(c.id)
-        );
+        const cId = String(c.id);
+        const courseEnablers = enablersByCourse.get(cId) || [];
         const totalEnablers = courseEnablers.length;
 
-        const courseUseCases = useCaseRows.filter(
-          u => String(u.courseId) === String(c.id)
-        );
+        const courseUseCases = useCasesByCourse.get(cId) || [];
         const totalUseCases = courseUseCases.length;
-        const approvedUseCaseCount = courseUseCases.filter(u =>
-          approvedUseCases.has(String(u.id))
-        ).length;
+
+        let approvedUseCaseCount = 0;
+        for (const u of courseUseCases) {
+          if (approvedUseCases.has(String(u.id))) {
+            approvedUseCaseCount++;
+          }
+        }
 
         // Count completed enablers with STRICT logic
         let completedCount = 0;
@@ -253,9 +280,7 @@ async function fetchDashboardData(userId: string) {
           const enablerId = String(enabler.id);
 
           // Check ALL quizzes must be passed
-          const enablerQuizzes = quizLinks.filter(
-            l => String(l.enablerId) === enablerId
-          );
+          const enablerQuizzes = quizzesByEnabler.get(enablerId) || [];
           let allQuizzesPassed = true;
 
           if (enablerQuizzes.length > 0) {
@@ -269,10 +294,7 @@ async function fetchDashboardData(userId: string) {
           }
 
           // Check scenarios – must be approved
-          const hasScenarios =
-            enabler.scenarios &&
-            Array.isArray(enabler.scenarios) &&
-            enabler.scenarios.length > 0;
+          const hasScenarios = !!enabler.scenarioPdfUrl;
           let scenariosApproved = true;
           if (hasScenarios) {
             scenariosApproved = approvedEnablerSubs.has(enablerId);
@@ -302,7 +324,7 @@ async function fetchDashboardData(userId: string) {
           pct = 0;
         }
 
-        modules.push({ id: String(c.id), title: c.title, progress: pct });
+        modules.push({ id: cId, title: c.title, progress: pct });
       }
 
       // Next item: next uncompleted enabler

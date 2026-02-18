@@ -36,9 +36,7 @@ export async function GET(
         id: e.id,
         title: e.title,
         descriptionText: e.descriptionText,
-        scenarioText: e.scenarioText,
-        hintText: e.hintText,
-        scenarios: e.scenarios, // Added missing scenarios array
+        scenarioPdfUrl: e.scenarioPdfUrl,
         pptUrl: e.pptUrl,
         videoUrl: e.videoUrl,
         isActive: e.isActive,
@@ -46,13 +44,13 @@ export async function GET(
         durationUnit: e.durationUnit,
         activatedAt: e.activatedAt,
       },
-      submission: latest ? { 
-        id: latest.id, 
-        solutionText: latest.solutionText, 
+      submission: latest ? {
+        id: latest.id,
+        solutionText: latest.solutionText,
         solutions: latest.solutions,
         status: latest.status,
         trainerFeedback: latest.trainerFeedback,
-        feedbacks: latest.feedbacks 
+        feedbacks: latest.feedbacks
       } : null,
     });
   } catch (e) {
