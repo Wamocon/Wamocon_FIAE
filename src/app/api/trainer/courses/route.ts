@@ -187,6 +187,9 @@ export async function POST(req: NextRequest) {
       return course;
     });
 
+    // Bust the cached GET so the next read returns fresh data
+    apiCache.invalidate('trainer_courses');
+
     return NextResponse.json({ course: result });
   } catch (e) {
     console.error('Create course error', e);

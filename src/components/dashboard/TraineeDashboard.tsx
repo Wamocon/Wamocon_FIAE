@@ -14,9 +14,9 @@ import {
   BarChart3,
   PieChart,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import dynamic from 'next/dynamic';
 
 // Lazy-load recharts components (~200KB) - they're not needed for initial render
@@ -69,7 +69,7 @@ type DashboardData = {
   deadlines: any[];
 };
 
-// Cache helpers for instant dashboard loading
+// Cache helpers for instant dashboard loading (used as placeholderData)
 const TRAINEE_DASHBOARD_CACHE_KEY = 'wmc_trainee_dashboard_cache';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5)
 
@@ -99,81 +99,44 @@ export default function TraineeDashboard() {
   const { t } = useLanguage();
 
   const [mounted, setMounted] = useState(false);
-  const [fetching, setFetching] = useState(false);
-  const [dataError, setDataError] = useState<string | null>(null);
-  const [nextLesson, setNextLesson] = useState<{
-    id: string;
-    title: string;
-    module: string;
-    estimatedTime: string;
-  } | null>(null);
-  const [modules, setModules] = useState<any[]>([]);
-  const [weeklyProgress, setWeeklyProgress] = useState<any[]>([]);
-  const [skillRadar, setSkillRadar] = useState<any[]>([]);
-  const [achievements, setAchievements] = useState<any[]>([]);
-  const [deadlines, setDeadlines] = useState<any[]>([]);
+  useEffect(() => setMounted(true), []);
 
-  // Apply cached or fresh dashboard data to state
-  const applyDashboardData = (data: DashboardData) => {
-    setModules(Array.isArray(data.modules) ? data.modules : []);
-    setWeeklyProgress(
-      Array.isArray(data.weeklyProgress) ? data.weeklyProgress : []
-    );
-    setSkillRadar(Array.isArray(data.skillRadar) ? data.skillRadar : []);
-    setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
-    setDeadlines(Array.isArray(data.deadlines) ? data.deadlines : []);
-    if (data.nextItem) {
-      setNextLesson({
+  // Redirect trainee without birth_date to profile completion
+  useEffect(() => {
+    if (profile?.role === 'trainee' && !profile.birth_date) {
+      router.replace('/trainee/profile?required=true');
+    }
+  }, [profile, router]);
+
+  // ── React Query replaces manual useState + useEffect + fetch ──
+  const url = profile?.id
+    ? `/api/trainee/dashboard?userId=${profile.id}`
+    : null;
+
+  const { data, error: dataError } = useApiQuery<DashboardData>(url, {
+    usePrefetch: true,
+    placeholderData: () => getCachedDashboard() ?? undefined,
+  });
+
+  // Persist fresh data to localStorage for instant display on next visit
+  useEffect(() => {
+    if (data) setCachedDashboard(data);
+  }, [data]);
+
+  // Derive state from the query response
+  const modules = data?.modules ?? [];
+  const weeklyProgress = data?.weeklyProgress ?? [];
+  const skillRadar = data?.skillRadar ?? [];
+  const achievements = data?.achievements ?? [];
+  const deadlines = data?.deadlines ?? [];
+  const nextLesson = data?.nextItem
+    ? {
         id: data.nextItem.lessonId,
         title: data.nextItem.lessonTitle,
         module: data.nextItem.moduleTitle,
         estimatedTime: data.nextItem.estimatedTime,
-      });
-    } else {
-      setNextLesson(null);
-    }
-  };
-
-  useEffect(() => {
-    setMounted(true);
-    // Load cached data immediately on mount
-    const cached = getCachedDashboard();
-    if (cached) {
-      applyDashboardData(cached);
-    }
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) {
-        setFetching(false);
-        return;
       }
-      setFetching(true);
-      setDataError(null);
-      try {
-        const res = await fetch(`/api/trainee/dashboard?userId=${profile.id}`);
-        if (!res.ok) {
-          const errText = await res.text().catch(() => 'Unknown error');
-          console.error('Dashboard API error:', res.status, errText);
-          setDataError(`${t('dashboard.error.loading')} ${res.status}`);
-          setFetching(false);
-          return;
-        }
-        const data = await res.json();
-
-        // Update state and cache
-        applyDashboardData(data);
-        setCachedDashboard(data);
-      } catch (e) {
-        console.error(e);
-        setDataError(t('dashboard.error.network'));
-      } finally {
-        setFetching(false);
-      }
-    };
-    load();
-  }, [profile?.id]);
+    : null;
 
   // Don't render until mounted (SSR fix)
   if (!mounted) return null;

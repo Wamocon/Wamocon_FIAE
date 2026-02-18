@@ -85,7 +85,7 @@ export async function POST(
 
     // Verify enabler exists
     const [enabler] = await db
-      .select()
+      .select({ id: enablers.id })
       .from(enablers)
       .where(eq(enablers.id, enablerId as any));
     if (!enabler) {
@@ -153,13 +153,11 @@ export async function POST(
         for (let j = 0; j < 4; j++) {
           const optText = q.options[j];
           if (!optText) continue;
-          await tx
-            .insert(options)
-            .values({
-              questionId: qRow.id,
-              optionText: optText,
-              isCorrect: j === q.correctIndex,
-            });
+          await tx.insert(options).values({
+            questionId: qRow.id,
+            optionText: optText,
+            isCorrect: j === q.correctIndex,
+          });
         }
       }
 

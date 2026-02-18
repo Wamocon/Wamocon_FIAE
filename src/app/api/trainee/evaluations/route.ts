@@ -110,6 +110,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Bust the cached GET so the next read returns fresh data
+    apiCache.invalidate('trainee_evaluations');
+
     return NextResponse.json({
       success: true,
       evaluationId,
