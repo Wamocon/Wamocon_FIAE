@@ -195,7 +195,7 @@ export function loadProviderConfig(): ProviderConfig {
       embeddingModel:
         process.env.HAI_GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
       embeddingDimensions: parseInt(
-        process.env.HAI_EMBEDDING_DIMENSIONS || '768',
+        process.env.HAI_EMBEDDING_DIMENSIONS || '3072',
         10
       ),
     },
@@ -205,7 +205,7 @@ export function loadProviderConfig(): ProviderConfig {
       embeddingModel:
         process.env.HAI_OLLAMA_EMBEDDING_MODEL || 'nomic-embed-text',
       embeddingDimensions: parseInt(
-        process.env.HAI_EMBEDDING_DIMENSIONS || '768',
+        process.env.HAI_EMBEDDING_DIMENSIONS || '3072',
         10
       ),
     },
