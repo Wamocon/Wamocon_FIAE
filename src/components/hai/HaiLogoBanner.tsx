@@ -87,7 +87,6 @@ export function HaiLogoBanner({
                         style={{ minWidth: '180px' }}
                     >
                         <div className="relative">
-                            <span className="font-medium">Hi! 👋<br />Wie kann ich dir helfen?</span>
                             {/* Pointer Arrow */}
                             <div className="absolute -bottom-2 -left-2 w-4 h-4 bg-white/10 border-b border-l border-cyan-500/30 transform -rotate-45" style={{ backdropFilter: 'blur(12px)' }}></div>
                         </div>

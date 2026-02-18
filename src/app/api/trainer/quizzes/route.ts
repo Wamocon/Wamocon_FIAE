@@ -75,7 +75,8 @@ export async function GET(req: NextRequest) {
             quizzes.updatedAt,
             quizzes.createdAt
           )
-          .orderBy(desc(quizzes.updatedAt), desc(quizzes.createdAt));
+          .orderBy(desc(quizzes.updatedAt), desc(quizzes.createdAt))
+          .limit(200);
 
         const out = rows.map(r => ({
           id: r.id,
@@ -178,13 +179,11 @@ export async function POST(req: NextRequest) {
         // Create options, mark correct
         for (let i = 0; i < q.options.length; i++) {
           const optText = q.options[i];
-          await db
-            .insert(options)
-            .values({
-              questionId: qRow.id,
-              optionText: optText,
-              isCorrect: i === Number(q.correct_index),
-            });
+          await db.insert(options).values({
+            questionId: qRow.id,
+            optionText: optText,
+            isCorrect: i === Number(q.correct_index),
+          });
         }
       }
     }
@@ -221,6 +220,10 @@ export async function POST(req: NextRequest) {
         );
       }
     }
+
+    // Bust cached GETs so the next read returns fresh data
+    apiCache.invalidate('trainer_quizzes');
+    apiCache.invalidate('trainee_quizzes');
 
     return NextResponse.json({ id: qz.id }, { status: 201 });
   } catch (e) {

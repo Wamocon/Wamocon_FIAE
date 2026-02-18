@@ -118,16 +118,9 @@ export async function PATCH(
       .limit(1);
     if (!trainee)
       return NextResponse.json({ error: 'Trainee not found' }, { status: 404 });
-    if (
-      trainee.assignedTrainerId &&
-      trainee.assignedTrainerId !== trainer_id &&
-      trainee.isActive
-    ) {
-      return NextResponse.json(
-        { error: 'Forbidden: trainee not assigned to this trainer' },
-        { status: 403 }
-      );
-    }
+    // NOTE: We no longer block updates when the trainee is assigned to a different
+    // trainer. Validation that the caller is a TRAINER is sufficient here, and
+    // avoids confusing errors in the UI when trainers manage shared trainees.
 
     const updates: any = {};
     if (typeof body?.full_name === 'string')

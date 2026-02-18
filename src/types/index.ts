@@ -11,6 +11,7 @@ export interface Profile {
   full_name: string;
   role: 'trainee' | 'trainer';
   avatar_url?: string;
+  birth_date?: string;
   trainer_id?: string;
   training_start_date?: string;
   created_at: string;

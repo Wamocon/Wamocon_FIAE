@@ -29,7 +29,11 @@ export const userRole = pgEnum('user_role', ['TRAINER', 'TRAINEE']);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
 export const quizType = pgEnum('quiz_type', ['LESSON', 'GLOBAL']);
 export const questionType = pgEnum('question_type', ['MCQ', 'TEXT']);
-export const quizDifficulty = pgEnum('quiz_difficulty', ['LOW', 'MEDIUM', 'HIGH']);
+export const quizDifficulty = pgEnum('quiz_difficulty', [
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+]);
 export const reviewStatus = pgEnum('review_status', [
   'PENDING',
   'APPROVED',
@@ -37,15 +41,32 @@ export const reviewStatus = pgEnum('review_status', [
 ]);
 
 // Arbeitszeugnis enums (moved here for declaration order)
-export const performanceRating = pgEnum('performance_rating', ['1', '2', '3', '4', '5', '6']);
-export const certificateStatus = pgEnum('certificate_status', ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'ISSUED']);
-export const competencyArea = pgEnum('competency_area', [
-  'FACHKOMPETENZ',        // Technical competency
-  'METHODENKOMPETENZ',    // Methodological competency
-  'SOZIALKOMPETENZ',      // Social competency
-  'PERSONALKOMPETENZ'     // Personal competency
+export const performanceRating = pgEnum('performance_rating', [
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
 ]);
-export const evaluationStatus = pgEnum('evaluation_status', ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED']);
+export const certificateStatus = pgEnum('certificate_status', [
+  'DRAFT',
+  'PENDING_REVIEW',
+  'APPROVED',
+  'ISSUED',
+]);
+export const competencyArea = pgEnum('competency_area', [
+  'FACHKOMPETENZ', // Technical competency
+  'METHODENKOMPETENZ', // Methodological competency
+  'SOZIALKOMPETENZ', // Social competency
+  'PERSONALKOMPETENZ', // Personal competency
+]);
+export const evaluationStatus = pgEnum('evaluation_status', [
+  'DRAFT',
+  'SUBMITTED',
+  'APPROVED',
+  'REJECTED',
+]);
 
 // --- 1. CORE USER TABLES ---
 
@@ -62,6 +83,7 @@ export const profiles = pgTable('profiles', {
   lastName: varchar('last_name', { length: 256 }),
   email: text('email').notNull().unique(),
   avatarUrl: varchar('avatar_url', { length: 256 }),
+  birthDate: timestamp('birth_date'),
   role: userRole('role').notNull(),
   isActive: boolean('is_active').default(false),
   startOfTrainingDate: timestamp('start_of_training_date'),
@@ -113,10 +135,10 @@ export const courseMembers = pgTable(
       .references(() => profiles.id, { onDelete: 'cascade' }),
     role: userRole('role').notNull(), // To store if the member is a co-trainer or trainee
   },
-  (table) => ({
+  table => ({
     // A user can only be in a course once
     unq: unique().on(table.courseId, table.userId),
-  }),
+  })
 );
 
 // Table for skills, powering the "Skills Achieved" feature
@@ -136,10 +158,10 @@ export const courseSkills = pgTable(
       .notNull()
       .references(() => skills.id, { onDelete: 'cascade' }),
   },
-  (table) => ({
+  table => ({
     // Set the composite primary key
     pk: primaryKey({ columns: [table.courseId, table.skillId] }),
-  }),
+  })
 );
 
 // --- Course Content: Enablers & Use Cases ---
@@ -201,24 +223,34 @@ export const useCases = pgTable('use_cases', {
 
 // Extended document types for Use Case role-based visibility
 export const contentDocumentType = pgEnum('content_document_type', [
-  'THEORY',           // Shared learning material (both roles)
-  'EXERCISE',         // General exercises
-  'REFERENCE',        // Reference material
-  'OTHER',            // Miscellaneous
+  'THEORY', // Shared learning material (both roles)
+  'EXERCISE', // General exercises
+  'REFERENCE', // Reference material
+  'OTHER', // Miscellaneous
   'TRAINEE_QUESTION', // Use Case: Questions only (visible to trainee)
   'TRAINER_SOLUTION', // Use Case: Full PDF with solutions (trainer only, HAI learns from this)
 ]);
 
 // Role visibility for documents
-export const documentVisibility = pgEnum('document_visibility', ['ALL', 'TRAINEE_ONLY', 'TRAINER_ONLY']);
+export const documentVisibility = pgEnum('document_visibility', [
+  'ALL',
+  'TRAINEE_ONLY',
+  'TRAINER_ONLY',
+]);
 
 export const contentDocuments = pgTable('content_documents', {
   id: uuid('id').primaryKey().defaultRandom(),
 
   // Flexible linking - one of these will be set
-  enablerId: uuid('enabler_id').references(() => enablers.id, { onDelete: 'cascade' }),
-  useCaseId: uuid('use_case_id').references(() => useCases.id, { onDelete: 'cascade' }),
-  courseId: uuid('course_id').references(() => courses.id, { onDelete: 'cascade' }),
+  enablerId: uuid('enabler_id').references(() => enablers.id, {
+    onDelete: 'cascade',
+  }),
+  useCaseId: uuid('use_case_id').references(() => useCases.id, {
+    onDelete: 'cascade',
+  }),
+  courseId: uuid('course_id').references(() => courses.id, {
+    onDelete: 'cascade',
+  }),
 
   // Document metadata
   title: text('title').notNull(),
@@ -293,10 +325,10 @@ export const enablerQuizLinks = pgTable(
       .references(() => quizzes.id, { onDelete: 'cascade' }),
     difficulty: quizDifficulty('difficulty').notNull(),
   },
-  (table) => ({
+  table => ({
     unqEnablerDifficulty: unique().on(table.enablerId, table.difficulty),
     unqQuiz: unique().on(table.quizId),
-  }),
+  })
 );
 
 export const questions = pgTable('questions', {
@@ -342,9 +374,9 @@ export const quizAssignments = pgTable(
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     unq: unique().on(table.quizId, table.traineeId), // Trainee can only be assigned once
-  }),
+  })
 );
 
 // Header for a single quiz attempt
@@ -383,9 +415,9 @@ export const quizMembers = pgTable(
       .references(() => profiles.id),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     unq: unique().on(table.quizId, table.trainerId),
-  }),
+  })
 );
 
 // Trainee's answer for each question in that submission
@@ -398,8 +430,9 @@ export const quizSubmissionAnswers = pgTable('quiz_submission_answers', {
     .notNull()
     .references(() => questions.id, { onDelete: 'cascade' }),
   // For MCQ answers; nullable to support TEXT questions
-  selectedOptionId: uuid('selected_option_id')
-    .references(() => options.id, { onDelete: 'cascade' }),
+  selectedOptionId: uuid('selected_option_id').references(() => options.id, {
+    onDelete: 'cascade',
+  }),
   // For TEXT answers
   textAnswer: text('text_answer'),
 });
@@ -490,13 +523,13 @@ export const traineeAchievedSkills = pgTable(
 
     // Store how they earned it
     achievedViaCourseId: uuid('achieved_via_course_id').references(
-      () => courses.id,
+      () => courses.id
     ),
     achievedAt: timestamp('achieved_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     unq: unique().on(table.traineeId, table.skillId), // Can only achieve a skill once
-  }),
+  })
 );
 
 // Central log for all major events (powers "Recent Activity" feeds)
@@ -525,7 +558,9 @@ export const notifications = pgTable('notifications', {
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
   // who triggered the notification (optional)
-  actorId: uuid('actor_id').references(() => profiles.id, { onDelete: 'set null' }),
+  actorId: uuid('actor_id').references(() => profiles.id, {
+    onDelete: 'set null',
+  }),
   // categorization and content
   type: text('type').notNull(), // e.g., 'QUIZ_SUBMITTED'
   title: text('title').notNull(),
@@ -549,10 +584,10 @@ export const enablerCompletions = pgTable(
       .references(() => enablers.id, { onDelete: 'cascade' }),
     completedAt: timestamp('completed_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     // A trainee can only complete an enabler once
     pk: primaryKey({ columns: [table.traineeId, table.enablerId] }),
-  }),
+  })
 );
 
 // Per-trainee activation overrides (nullable isActive => inherit default)
@@ -568,9 +603,9 @@ export const traineeEnablerOverrides = pgTable(
     isActive: boolean('is_active'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     pk: primaryKey({ columns: [table.traineeId, table.enablerId] }),
-  }),
+  })
 );
 
 export const traineeUseCaseOverrides = pgTable(
@@ -585,9 +620,9 @@ export const traineeUseCaseOverrides = pgTable(
     isActive: boolean('is_active'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     pk: primaryKey({ columns: [table.traineeId, table.useCaseId] }),
-  }),
+  })
 );
 
 // Trainee submissions for Enabler scenarios
@@ -600,10 +635,14 @@ export const enablerSubmissions = pgTable('enabler_submissions', {
     .notNull()
     .references(() => enablers.id, { onDelete: 'cascade' }),
   solutionText: text('solution_text'), // Legacy: single solution
-  solutions: jsonb('solutions').$type<Array<{ scenarioIndex: number; text: string }>>(), // New: multiple scenario solutions
+  solutions:
+    jsonb('solutions').$type<Array<{ scenarioIndex: number; text: string }>>(), // New: multiple scenario solutions
   status: reviewStatus('status').default('PENDING'),
   trainerFeedback: text('trainer_feedback'), // Legacy: single feedback
-  feedbacks: jsonb('feedbacks').$type<Array<{ scenarioIndex: number; feedback: string }>>(), // New: multiple scenario feedbacks
+  feedbacks:
+    jsonb('feedbacks').$type<
+      Array<{ scenarioIndex: number; feedback: string }>
+    >(), // New: multiple scenario feedbacks
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
   reviewedAt: timestamp('reviewed_at'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
@@ -627,7 +666,9 @@ export const modules = pgTable('modules', {
 
 export const lessons = pgTable('lessons', {
   id: uuid('id').primaryKey().defaultRandom(),
-  module_id: uuid('module_id').references(() => modules.id, { onDelete: 'cascade' }),
+  module_id: uuid('module_id').references(() => modules.id, {
+    onDelete: 'cascade',
+  }),
   title: text('title').notNull(),
   order_index: integer('order_index'),
   duration_weeks: integer('duration_weeks'),
@@ -636,13 +677,19 @@ export const lessons = pgTable('lessons', {
 
 export const subLessons = pgTable('sub_lessons', {
   id: uuid('id').primaryKey().defaultRandom(),
-  lesson_id: uuid('lesson_id').references(() => lessons.id, { onDelete: 'cascade' }),
+  lesson_id: uuid('lesson_id').references(() => lessons.id, {
+    onDelete: 'cascade',
+  }),
   title: text('title').notNull(),
 });
 
 export const progress = pgTable('progress', {
-  user_id: uuid('user_id').references(() => profiles.id, { onDelete: 'cascade' }),
-  sub_lesson_id: uuid('sub_lesson_id').references(() => subLessons.id, { onDelete: 'cascade' }),
+  user_id: uuid('user_id').references(() => profiles.id, {
+    onDelete: 'cascade',
+  }),
+  sub_lesson_id: uuid('sub_lesson_id').references(() => subLessons.id, {
+    onDelete: 'cascade',
+  }),
   created_at: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -650,13 +697,29 @@ export const progress = pgTable('progress', {
 // AI Coach tables for embeddings, chat sessions, and messages
 
 // Enum for embedding source types (extended for Use Cases)
-export const haiSourceType = pgEnum('hai_source_type', ['enabler', 'course', 'document', 'quiz', 'use_case']);
+export const haiSourceType = pgEnum('hai_source_type', [
+  'enabler',
+  'course',
+  'document',
+  'quiz',
+  'use_case',
+]);
 
 // Enum for chat context types
-export const haiContextType = pgEnum('hai_context_type', ['enabler', 'course', 'quiz', 'general', 'use_case']);
+export const haiContextType = pgEnum('hai_context_type', [
+  'enabler',
+  'course',
+  'quiz',
+  'general',
+  'use_case',
+]);
 
 // Enum for message roles
-export const haiMessageRole = pgEnum('hai_message_role', ['user', 'assistant', 'system']);
+export const haiMessageRole = pgEnum('hai_message_role', [
+  'user',
+  'assistant',
+  'system',
+]);
 
 // HAI.ai Embeddings - stores vector embeddings for RAG with PageIndex support
 export const haiEmbeddings = pgTable('hai_embeddings', {
@@ -726,42 +789,42 @@ export const haiChatMessages = pgTable('hai_chat_messages', {
 // Enum for calendar block types
 // Note: Labels in UI - SCHOOL="Berufsschule", COMPANY="WMC", HOLIDAY="Urlaub"
 export const blockType = pgEnum('block_type', [
-  'SCHOOL',          // Berufsschule block
-  'COMPANY',         // WMC (Betriebsphase)
-  'HOLIDAY',         // Urlaub (Ferien)
-  'EXAM',            // Prüfungszeitraum
-  'PERSONAL',        // Personal appointment/reminder
-  'SONSTIGES',       // Custom/Other blocker with description
+  'SCHOOL', // Berufsschule block
+  'COMPANY', // WMC (Betriebsphase)
+  'HOLIDAY', // Urlaub (Ferien)
+  'EXAM', // Prüfungszeitraum
+  'PERSONAL', // Personal appointment/reminder
+  'SONSTIGES', // Custom/Other blocker with description
   'TRAINER_BLOCKER', // Trainer-created blocker for trainee
 ]);
 
 // Enum for exam sub-types (detailed Prüfung categories)
 export const examSubType = pgEnum('exam_sub_type', [
-  'IHK_ABSCHLUSSPRUEFUNG_T1',   // IHK Abschlussprüfung Teil 1
-  'IHK_ABSCHLUSSPRUEFUNG_T2',   // IHK Abschlussprüfung Teil 2
-  'KLAUSUR_WMC',                // Klausur WMC
-  'KLAUSUR_ALLGEMEIN',          // Klausur (Allgemein)
-  'PRAKTISCHE_PRUEFUNG',        // Praktische Prüfung
-  'MUENDLICHE_PRUEFUNG',        // Mündliche Prüfung
-  'PROJEKTARBEIT',              // Projektarbeit
-  'ANDERE',                     // Other exam type
+  'IHK_ABSCHLUSSPRUEFUNG_T1', // IHK Abschlussprüfung Teil 1
+  'IHK_ABSCHLUSSPRUEFUNG_T2', // IHK Abschlussprüfung Teil 2
+  'KLAUSUR_WMC', // Klausur WMC
+  'KLAUSUR_ALLGEMEIN', // Klausur (Allgemein)
+  'PRAKTISCHE_PRUEFUNG', // Praktische Prüfung
+  'MUENDLICHE_PRUEFUNG', // Mündliche Prüfung
+  'PROJEKTARBEIT', // Projektarbeit
+  'ANDERE', // Other exam type
 ]);
 
 // Enum for activity report workflow status
 export const activityReportStatus = pgEnum('activity_report_status', [
-  'DRAFT',      // Trainee is editing
-  'SUBMITTED',  // Submitted for trainer review
-  'APPROVED',   // Trainer approved (signed)
-  'REJECTED',   // Trainer rejected (needs revision)
+  'DRAFT', // Trainee is editing
+  'SUBMITTED', // Submitted for trainer review
+  'APPROVED', // Trainer approved (signed)
+  'REJECTED', // Trainer rejected (needs revision)
 ]);
 
 // Enum for exam types
 export const examType = pgEnum('exam_type', [
-  'KLAUSUR',    // Written exam
-  'TEST',       // Short test
-  'ABGABE',     // Project submission
+  'KLAUSUR', // Written exam
+  'TEST', // Short test
+  'ABGABE', // Project submission
   'PRAESENTATION', // Presentation
-  'MUENDLICH',  // Oral exam
+  'MUENDLICH', // Oral exam
 ]);
 
 // === AUSBILDUNG BLOCKS (Calendar) ===
@@ -799,9 +862,13 @@ export const ausbildungBlocks = pgTable('ausbildung_blocks', {
   importedFrom: text('imported_from'), // CSV filename if imported
 
   // NEW: Trainer blocker fields
-  createdByTrainerId: uuid('created_by_trainer_id').references(() => profiles.id), // If trainer created this block
+  createdByTrainerId: uuid('created_by_trainer_id').references(
+    () => profiles.id
+  ), // If trainer created this block
   requiresTrainerApproval: boolean('requires_trainer_approval').default(false),
-  approvedByTrainerId: uuid('approved_by_trainer_id').references(() => profiles.id),
+  approvedByTrainerId: uuid('approved_by_trainer_id').references(
+    () => profiles.id
+  ),
   approvedAt: timestamp('approved_at'),
 
   // NEW: Invitation tracking
@@ -900,12 +967,16 @@ export const lernfeldMappings = pgTable(
     lernfeldId: uuid('lernfeld_id')
       .notNull()
       .references(() => lernfelder.id, { onDelete: 'cascade' }),
-    enablerId: uuid('enabler_id').references(() => enablers.id, { onDelete: 'set null' }),
-    useCaseId: uuid('use_case_id').references(() => useCases.id, { onDelete: 'set null' }),
+    enablerId: uuid('enabler_id').references(() => enablers.id, {
+      onDelete: 'set null',
+    }),
+    useCaseId: uuid('use_case_id').references(() => useCases.id, {
+      onDelete: 'set null',
+    }),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     // Each enabler/useCase can only be mapped once per Lernfeld
     unqEnablerLf: unique().on(table.lernfeldId, table.enablerId),
     unqUseCaseLf: unique().on(table.lernfeldId, table.useCaseId),
@@ -1010,36 +1081,38 @@ export const trainingUseCases = pgTable('training_use_cases', {
 
 // === ACTIVITY REPORT USE CASE ENTRIES ===
 // Links activity reports to specific use cases with Plan vs Act tracking
-export const activityReportUseCaseEntries = pgTable('activity_report_use_case_entries', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  reportId: uuid('report_id')
-    .notNull()
-    .references(() => activityReports.id, { onDelete: 'cascade' }),
-  useCaseId: uuid('use_case_id')
-    .notNull()
-    .references(() => trainingUseCases.id, { onDelete: 'cascade' }),
+export const activityReportUseCaseEntries = pgTable(
+  'activity_report_use_case_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reportId: uuid('report_id')
+      .notNull()
+      .references(() => activityReports.id, { onDelete: 'cascade' }),
+    useCaseId: uuid('use_case_id')
+      .notNull()
+      .references(() => trainingUseCases.id, { onDelete: 'cascade' }),
 
-  // Time tracking
-  plannedHours: real('planned_hours').notNull(), // Sollzeit (copied from use case)
-  actualHours: real('actual_hours').notNull(), // IST-Stunden (trainee input)
-  isOverbooked: boolean('is_overbooked').default(false), // actual > planned
+    // Time tracking
+    plannedHours: real('planned_hours').notNull(), // Sollzeit (copied from use case)
+    actualHours: real('actual_hours').notNull(), // IST-Stunden (trainee input)
+    isOverbooked: boolean('is_overbooked').default(false), // actual > planned
 
-  // Optional notes
-  notes: text('notes'),
+    // Optional notes
+    notes: text('notes'),
 
-  // === GRADING (for Arbeitszeugnis) ===
-  trainerGrade: performanceRating('trainer_grade'), // 1-6 scale from trainer
-  gradeComment: text('grade_comment'), // Optional grading comment
-  isGradeApproved: boolean('is_grade_approved').default(false),
-  gradeApprovedAt: timestamp('grade_approved_at'),
-  gradeApprovedBy: uuid('grade_approved_by')
-    .references(() => profiles.id),
+    // === GRADING (for Arbeitszeugnis) ===
+    trainerGrade: performanceRating('trainer_grade'), // 1-6 scale from trainer
+    gradeComment: text('grade_comment'), // Optional grading comment
+    isGradeApproved: boolean('is_grade_approved').default(false),
+    gradeApprovedAt: timestamp('grade_approved_at'),
+    gradeApprovedBy: uuid('grade_approved_by').references(() => profiles.id),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  }
+);
 
 // --- TYPE EXPORTS ---
 
@@ -1091,15 +1164,18 @@ export type ActivityReportEntry = typeof activityReportEntries.$inferSelect;
 // Training/Tätigkeitsnachweis types
 export type TrainingComponent = typeof trainingComponents.$inferSelect;
 export type TrainingUseCase = typeof trainingUseCases.$inferSelect;
-export type ActivityReportUseCaseEntry = typeof activityReportUseCaseEntries.$inferSelect;
+export type ActivityReportUseCaseEntry =
+  typeof activityReportUseCaseEntries.$inferSelect;
 
 // Arbeitszeugnis types
 export type MesSoftskillCriterion = typeof mesSoftskillCriteria.$inferSelect;
 export type WeeklyEvaluation = typeof weeklyEvaluations.$inferSelect;
 export type WeeklySoftskillRating = typeof weeklySoftskillRatings.$inferSelect;
-export type AnnualPerformanceSummary = typeof annualPerformanceSummaries.$inferSelect;
+export type AnnualPerformanceSummary =
+  typeof annualPerformanceSummaries.$inferSelect;
 export type WorkCertificate = typeof workCertificates.$inferSelect;
-export type CertificateTextTemplate = typeof certificateTextTemplates.$inferSelect;
+export type CertificateTextTemplate =
+  typeof certificateTextTemplates.$inferSelect;
 
 export const lernfelderSchema = pgTable('lernfelder', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -1112,7 +1188,7 @@ export const lernfelderSchema = pgTable('lernfelder', {
 
 // --- 10. ARBEITSZEUGNIS MODULE TABLES ---
 // Module for automated work certificate generation based on weekly performance evaluations
-// NOTE: Enums (performanceRating, certificateStatus, competencyArea, evaluationStatus) 
+// NOTE: Enums (performanceRating, certificateStatus, competencyArea, evaluationStatus)
 // are defined at top of file with other enums
 
 // MES Softskill Criteria (19 criteria from MES system)
@@ -1128,120 +1204,145 @@ export const mesSoftskillCriteria = pgTable('mes_softskill_criteria', {
 });
 
 // Weekly Performance Evaluations
-export const weeklyEvaluations = pgTable('weekly_evaluations', {
-  id: uuid('id').primaryKey().defaultRandom(),
+export const weeklyEvaluations = pgTable(
+  'weekly_evaluations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
 
-  // Linking
-  traineeId: uuid('trainee_id')
-    .notNull()
-    .references(() => profiles.id, { onDelete: 'cascade' }),
-  trainerId: uuid('trainer_id')
-    .notNull()
-    .references(() => profiles.id, { onDelete: 'cascade' }),
-  activityReportId: uuid('activity_report_id')
-    .references(() => activityReports.id, { onDelete: 'cascade' }), // Link to existing weekly reports
+    // Linking
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    trainerId: uuid('trainer_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    activityReportId: uuid('activity_report_id').references(
+      () => activityReports.id,
+      { onDelete: 'cascade' }
+    ), // Link to existing weekly reports
 
-  // Time period
-  weekNumber: integer('week_number').notNull(), // ISO week 1-52
-  year: integer('year').notNull(), // Calendar year
-  ausbildungsjahr: integer('ausbildungsjahr').notNull(), // Training year 1, 2, or 3
+    // Time period
+    weekNumber: integer('week_number').notNull(), // ISO week 1-52
+    year: integer('year').notNull(), // Calendar year
+    ausbildungsjahr: integer('ausbildungsjahr').notNull(), // Training year 1, 2, or 3
 
-  // ARP Theme Selection (from existing trainingUseCases)
-  arpUseCaseId: uuid('arp_use_case_id')
-    .references(() => trainingUseCases.id),
-  arpThemeText: text('arp_theme_text'), // Manual theme entry if not from dropdown
+    // ARP Theme Selection (from existing trainingUseCases)
+    arpUseCaseId: uuid('arp_use_case_id').references(() => trainingUseCases.id),
+    arpThemeText: text('arp_theme_text'), // Manual theme entry if not from dropdown
 
-  // Trainee Self-Assessment
-  selfRating: performanceRating('self_rating'),
-  selfComment: text('self_comment'), // Max 500 characters
-  selfSubmittedAt: timestamp('self_submitted_at'),
+    // Trainee Self-Assessment
+    selfRating: performanceRating('self_rating'),
+    selfComment: text('self_comment'), // Max 500 characters
+    selfSubmittedAt: timestamp('self_submitted_at'),
 
-  // Trainer Assessment
-  trainerRating: performanceRating('trainer_rating').notNull(),
-  trainerComment: text('trainer_comment'), // Max 500 characters
-  trainerApprovedAt: timestamp('trainer_approved_at'),
+    // Trainer Assessment
+    trainerRating: performanceRating('trainer_rating').notNull(),
+    trainerComment: text('trainer_comment'), // Max 500 characters
+    trainerApprovedAt: timestamp('trainer_approved_at'),
 
-  // Workflow status
-  status: evaluationStatus('status').notNull().default('DRAFT'),
-  rejectionReason: text('rejection_reason'),
+    // Workflow status
+    status: evaluationStatus('status').notNull().default('DRAFT'),
+    rejectionReason: text('rejection_reason'),
 
-  // Metadata
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-}, (table) => ({
-  uniqueTraineeWeekYear: unique().on(table.traineeId, table.weekNumber, table.year),
-}));
+    // Metadata
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    uniqueTraineeWeekYear: unique().on(
+      table.traineeId,
+      table.weekNumber,
+      table.year
+    ),
+  })
+);
 
 // Softskill Weekly Ratings (19 criteria per week)
-export const weeklySoftskillRatings = pgTable('weekly_softskill_ratings', {
-  id: uuid('id').primaryKey().defaultRandom(),
+export const weeklySoftskillRatings = pgTable(
+  'weekly_softskill_ratings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
 
-  weeklyEvaluationId: uuid('weekly_evaluation_id')
-    .notNull()
-    .references(() => weeklyEvaluations.id, { onDelete: 'cascade' }),
-  softskillCriterionId: uuid('softskill_criterion_id')
-    .notNull()
-    .references(() => mesSoftskillCriteria.id, { onDelete: 'cascade' }),
+    weeklyEvaluationId: uuid('weekly_evaluation_id')
+      .notNull()
+      .references(() => weeklyEvaluations.id, { onDelete: 'cascade' }),
+    softskillCriterionId: uuid('softskill_criterion_id')
+      .notNull()
+      .references(() => mesSoftskillCriteria.id, { onDelete: 'cascade' }),
 
-  // Ratings
-  selfRating: performanceRating('self_rating'), // Trainee self-assessment
-  trainerRating: performanceRating('trainer_rating').notNull(), // Trainer assessment (mandatory)
+    // Ratings
+    selfRating: performanceRating('self_rating'), // Trainee self-assessment
+    trainerRating: performanceRating('trainer_rating').notNull(), // Trainer assessment (mandatory)
 
-  trainerComment: text('trainer_comment'), // Optional comment on this specific skill
+    trainerComment: text('trainer_comment'), // Optional comment on this specific skill
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-}, (table) => ({
-  uniqueEvaluationCriterion: unique().on(table.weeklyEvaluationId, table.softskillCriterionId),
-}));
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    uniqueEvaluationCriterion: unique().on(
+      table.weeklyEvaluationId,
+      table.softskillCriterionId
+    ),
+  })
+);
 
 // Annual Performance Summary
-export const annualPerformanceSummaries = pgTable('annual_performance_summaries', {
-  id: uuid('id').primaryKey().defaultRandom(),
+export const annualPerformanceSummaries = pgTable(
+  'annual_performance_summaries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
 
-  traineeId: uuid('trainee_id')
-    .notNull()
-    .references(() => profiles.id, { onDelete: 'cascade' }),
-  ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
-  year: integer('year').notNull(), // Calendar year
+    traineeId: uuid('trainee_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
+    year: integer('year').notNull(), // Calendar year
 
-  // Competency Area Averages (automatically calculated)
-  fachkompetenzAvg: real('fachkompetenz_avg'), // Technical competency average
-  methodenkompetenzAvg: real('methodenkompetenz_avg'), // Methodological competency average
-  sozialkompetenzAvg: real('sozialkompetenz_avg'), // Social competency average
-  personalkompetenzAvg: real('personalkompetenz_avg'), // Personal competency average
+    // Competency Area Averages (automatically calculated)
+    fachkompetenzAvg: real('fachkompetenz_avg'), // Technical competency average
+    methodenkompetenzAvg: real('methodenkompetenz_avg'), // Methodological competency average
+    sozialkompetenzAvg: real('sozialkompetenz_avg'), // Social competency average
+    personalkompetenzAvg: real('personalkompetenz_avg'), // Personal competency average
 
-  overallAverage: real('overall_average'), // Overall grade average across all areas
+    overallAverage: real('overall_average'), // Overall grade average across all areas
 
-  // Statistical data
-  totalWeeksEvaluated: integer('total_weeks_evaluated').default(0),
-  evaluationCompletionRate: real('evaluation_completion_rate'), // Percentage of weeks evaluated
+    // Statistical data
+    totalWeeksEvaluated: integer('total_weeks_evaluated').default(0),
+    evaluationCompletionRate: real('evaluation_completion_rate'), // Percentage of weeks evaluated
 
-  // Warning flags
-  belowCutoffWarning: boolean('below_cutoff_warning').default(false), // True if avg < 2.45 (shortening requirement)
+    // Warning flags
+    belowCutoffWarning: boolean('below_cutoff_warning').default(false), // True if avg < 2.45 (shortening requirement)
 
-  // Annual Discussion
-  discussionDate: timestamp('discussion_date'),
-  discussionSummary: text('discussion_summary'), // Trainer's summary of annual discussion
-  discussionConductedBy: uuid('discussion_conducted_by')
-    .references(() => profiles.id),
-  traineeStatement: text('trainee_statement'), // Trainee's statement/response
+    // Annual Discussion
+    discussionDate: timestamp('discussion_date'),
+    discussionSummary: text('discussion_summary'), // Trainer's summary of annual discussion
+    discussionConductedBy: uuid('discussion_conducted_by').references(
+      () => profiles.id
+    ),
+    traineeStatement: text('trainee_statement'), // Trainee's statement/response
 
-  // Status
-  isFinalized: boolean('is_finalized').default(false),
-  finalizedAt: timestamp('finalized_at'),
+    // Status
+    isFinalized: boolean('is_finalized').default(false),
+    finalizedAt: timestamp('finalized_at'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-}, (table) => ({
-  uniqueTraineeYear: unique().on(table.traineeId, table.ausbildungsjahr, table.year),
-}));
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    uniqueTraineeYear: unique().on(
+      table.traineeId,
+      table.ausbildungsjahr,
+      table.year
+    ),
+  })
+);
 
 // Work Certificates (Arbeitszeugnisse)
 export const workCertificates = pgTable('work_certificates', {
@@ -1250,8 +1351,10 @@ export const workCertificates = pgTable('work_certificates', {
   traineeId: uuid('trainee_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
-  annualSummaryId: uuid('annual_summary_id')
-    .references(() => annualPerformanceSummaries.id, { onDelete: 'set null' }),
+  annualSummaryId: uuid('annual_summary_id').references(
+    () => annualPerformanceSummaries.id,
+    { onDelete: 'set null' }
+  ),
 
   // Certificate metadata
   certificateType: text('certificate_type').notNull().default('INTERIM'), // INTERIM (Zwischenzeugnis), FINAL (Endzeugnis)
@@ -1288,8 +1391,9 @@ export const workCertificates = pgTable('work_certificates', {
 
   // Approval workflow
   status: certificateStatus('status').default('DRAFT'),
-  approvedByTrainerId: uuid('approved_by_trainer_id')
-    .references(() => profiles.id),
+  approvedByTrainerId: uuid('approved_by_trainer_id').references(
+    () => profiles.id
+  ),
   approvedAt: timestamp('approved_at'),
 
   // Digital signatures
@@ -1307,24 +1411,27 @@ export const workCertificates = pgTable('work_certificates', {
 });
 
 // Certificate Text Templates (Standard phrases per grade)
-export const certificateTextTemplates = pgTable('certificate_text_templates', {
-  id: uuid('id').primaryKey().defaultRandom(),
+export const certificateTextTemplates = pgTable(
+  'certificate_text_templates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
 
-  competencyArea: competencyArea('competency_area').notNull(),
-  grade: performanceRating('grade').notNull(),
+    competencyArea: competencyArea('competency_area').notNull(),
+    grade: performanceRating('grade').notNull(),
 
-  // Template texts (German legal phrasing)
-  templateText: text('template_text').notNull(),
+    // Template texts (German legal phrasing)
+    templateText: text('template_text').notNull(),
 
-  // Editability
-  isSystemDefault: boolean('is_system_default').default(true),
-  createdBy: uuid('created_by')
-    .references(() => profiles.id),
+    // Editability
+    isSystemDefault: boolean('is_system_default').default(true),
+    createdBy: uuid('created_by').references(() => profiles.id),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-}, (table) => ({
-  uniqueAreaGrade: unique().on(table.competencyArea, table.grade),
-}));
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    uniqueAreaGrade: unique().on(table.competencyArea, table.grade),
+  })
+);

@@ -95,6 +95,9 @@ export function BreadcrumbProvider({
         else if (segment === 'analytics') label = t('breadcrumb.analytics');
         else if (segment === 'login') label = t('breadcrumb.login');
         else if (segment === 'school') label = t('breadcrumb.school');
+        else if (segment === 'activity-reports')
+          label = t('nav.activityReports');
+        else if (segment === 'courses') label = t('nav.courses');
 
         // Capitalize first letter
         label = label.charAt(0).toUpperCase() + label.slice(1);
