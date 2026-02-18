@@ -13,59 +13,59 @@
 // ============================================================================
 
 export interface ChatMessage {
-    role: 'user' | 'assistant';
-    content: string;
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export interface ChatGenerateOptions {
-    maxOutputTokens?: number;
-    temperature?: number;
-    topP?: number;
-    topK?: number;
-    stopSequences?: string[];
-    enableWebSearch?: boolean;
+  maxOutputTokens?: number;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  stopSequences?: string[];
+  enableWebSearch?: boolean;
 }
 
 export interface ChatCitation {
-    title: string;
-    url?: string;
-    sourceType: 'web' | 'document' | 'enabler' | 'course' | 'quiz';
+  title: string;
+  url?: string;
+  sourceType: 'web' | 'document' | 'enabler' | 'course' | 'quiz';
 }
 
 export interface ChatResponse {
-    text: string;
-    citations: ChatCitation[];
-    tokenCount?: number;
-    finishReason?: string;
-    provider: string;
+  text: string;
+  citations: ChatCitation[];
+  tokenCount?: number;
+  finishReason?: string;
+  provider: string;
 }
 
 /**
  * Common interface for all chat providers (Gemini, Claude, etc.)
  */
 export interface ChatProvider {
-    /** Provider identifier (e.g., 'gemini', 'claude') */
-    readonly name: string;
+  /** Provider identifier (e.g., 'gemini', 'claude') */
+  readonly name: string;
 
-    /** Check if the provider is properly initialized with API keys */
-    isInitialized(): boolean;
+  /** Check if the provider is properly initialized with API keys */
+  isInitialized(): boolean;
 
-    /** Generate a complete response */
-    generateResponse(
-        systemPrompt: string,
-        messages: ChatMessage[],
-        userMessage: string,
-        options?: ChatGenerateOptions
-    ): Promise<ChatResponse>;
+  /** Generate a complete response */
+  generateResponse(
+    systemPrompt: string,
+    messages: ChatMessage[],
+    userMessage: string,
+    options?: ChatGenerateOptions
+  ): Promise<ChatResponse>;
 
-    /** Generate a streaming response */
-    generateResponseStream(
-        systemPrompt: string,
-        messages: ChatMessage[],
-        userMessage: string,
-        onChunk: (text: string) => void,
-        options?: ChatGenerateOptions
-    ): Promise<ChatResponse>;
+  /** Generate a streaming response */
+  generateResponseStream(
+    systemPrompt: string,
+    messages: ChatMessage[],
+    userMessage: string,
+    onChunk: (text: string) => void,
+    options?: ChatGenerateOptions
+  ): Promise<ChatResponse>;
 }
 
 // ============================================================================
@@ -73,8 +73,8 @@ export interface ChatProvider {
 // ============================================================================
 
 export interface EmbeddingResult {
-    embedding: number[];
-    tokenCount?: number;
+  embedding: number[];
+  tokenCount?: number;
 }
 
 /**
@@ -83,69 +83,123 @@ export interface EmbeddingResult {
  * Claude does not have an embedding model.
  */
 export interface EmbeddingProvider {
-    /** Provider identifier */
-    readonly name: string;
+  /** Provider identifier */
+  readonly name: string;
 
-    /** Vector dimensions this provider outputs */
-    readonly dimensions: number;
+  /** Vector dimensions this provider outputs */
+  readonly dimensions: number;
 
-    /** Check if initialized */
-    isInitialized(): boolean;
+  /** Check if initialized */
+  isInitialized(): boolean;
 
-    /** Generate embedding for a single text */
-    generateEmbedding(text: string): Promise<EmbeddingResult>;
+  /** Generate embedding for a single text */
+  generateEmbedding(text: string): Promise<EmbeddingResult>;
 
-    /** Generate embeddings for multiple texts in batch */
-    generateEmbeddingsBatch(texts: string[]): Promise<EmbeddingResult[]>;
+  /** Generate embeddings for multiple texts in batch */
+  generateEmbeddingsBatch(texts: string[]): Promise<EmbeddingResult[]>;
 }
 
 // ============================================================================
 // PROVIDER CONFIGURATION
 // ============================================================================
 
-export type ChatProviderType = 'claude' | 'gemini' | 'auto';
-export type EmbeddingProviderType = 'gemini'; // Only Gemini — Claude has no embeddings
+export type ChatProviderType = 'openrouter' | 'claude';
+export type EmbeddingProviderType = 'gemini' | 'ollama';
 
 export interface ProviderConfig {
-    /** Which provider to use for chat (default: 'claude') */
-    chatProvider: ChatProviderType;
+  /** Which provider to use for chat — set via HAI_CHAT_PROVIDER env var */
+  chatProvider: ChatProviderType;
 
-    /** Which provider to use for embeddings (always 'gemini') */
-    embeddingProvider: EmbeddingProviderType;
+  /** Which provider to use for embeddings ('ollama' or 'gemini') */
+  embeddingProvider: EmbeddingProviderType;
 
-    /** Claude-specific config */
-    claude: {
-        apiKey: string | undefined;
-        model: string;
-    };
+  /** Gemini-specific config (embeddings — fallback) */
+  gemini: {
+    apiKey: string | undefined;
+    embeddingModel: string;
+    embeddingDimensions: number;
+  };
 
-    /** Gemini-specific config */
-    gemini: {
-        apiKey: string | undefined;
-        chatModel: string;
-        embeddingModel: string;
-        embeddingDimensions: number;
-    };
+  /** Ollama-specific config (embeddings — local, no rate limits) */
+  ollama: {
+    baseUrl: string;
+    embeddingModel: string;
+    embeddingDimensions: number;
+  };
+
+  /** OpenRouter-specific config (chat — QA/testing) */
+  openrouter: {
+    apiKey: string | undefined;
+    model: string;
+  };
+
+  /** Claude/Anthropic-specific config (chat — production) */
+  claude: {
+    apiKey: string | undefined;
+    model: string;
+  };
 }
 
 /**
- * Load provider configuration from environment variables
+ * Load provider configuration from environment variables.
+ *
+ * HAI_CHAT_PROVIDER controls which chat backend is used:
+ *   - 'openrouter' (default) → Free models, for QA/testing
+ *   - 'claude' → Anthropic Claude, for production
+ *
+ * HAI_EMBEDDING_PROVIDER controls which embedding backend is used:
+ *   - 'ollama' (default) → Local Ollama, no rate limits
+ *   - 'gemini' → Google Gemini API (rate limited)
  */
 export function loadProviderConfig(): ProviderConfig {
-    return {
-        chatProvider: (process.env.HAI_CHAT_PROVIDER as ChatProviderType) || 'claude',
-        embeddingProvider: 'gemini', // Always Gemini — Claude has no embedding model
+  const chatProvider = (process.env.HAI_CHAT_PROVIDER ||
+    'openrouter') as ChatProviderType;
 
-        claude: {
-            apiKey: process.env.ANTHROPIC_API_KEY,
-            model: process.env.HAI_CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
-        },
+  // Validate
+  if (chatProvider !== 'openrouter' && chatProvider !== 'claude') {
+    console.warn(
+      `HAI.ai: Unknown HAI_CHAT_PROVIDER "${chatProvider}". Falling back to "openrouter".`
+    );
+  }
 
-        gemini: {
-            apiKey: process.env.GEMINI_API_KEY,
-            chatModel: process.env.HAI_GEMINI_CHAT_MODEL || 'gemini-2.5-flash',
-            embeddingModel: process.env.HAI_GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
-            embeddingDimensions: parseInt(process.env.HAI_EMBEDDING_DIMENSIONS || '768', 10),
-        },
-    };
+  // Determine embedding provider
+  const embeddingProvider = (process.env.HAI_EMBEDDING_PROVIDER ||
+    'ollama') as EmbeddingProviderType;
+
+  return {
+    chatProvider: chatProvider === 'claude' ? 'claude' : 'openrouter',
+    embeddingProvider: embeddingProvider === 'gemini' ? 'gemini' : 'ollama',
+
+    gemini: {
+      apiKey: process.env.GEMINI_API_KEY,
+      embeddingModel:
+        process.env.HAI_GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
+      embeddingDimensions: parseInt(
+        process.env.HAI_EMBEDDING_DIMENSIONS || '768',
+        10
+      ),
+    },
+
+    ollama: {
+      baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+      embeddingModel:
+        process.env.HAI_OLLAMA_EMBEDDING_MODEL || 'nomic-embed-text',
+      embeddingDimensions: parseInt(
+        process.env.HAI_EMBEDDING_DIMENSIONS || '768',
+        10
+      ),
+    },
+
+    openrouter: {
+      apiKey: process.env.OPENROUTER_API_KEY,
+      model:
+        process.env.HAI_OPENROUTER_MODEL ||
+        'meta-llama/llama-3.3-70b-instruct:free',
+    },
+
+    claude: {
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: process.env.HAI_CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
+    },
+  };
 }

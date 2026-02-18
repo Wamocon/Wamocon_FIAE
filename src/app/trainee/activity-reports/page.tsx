@@ -807,6 +807,27 @@ function CreateReportModal({
 
   const totalActualHours = entries.reduce((sum, e) => sum + e.actualHours, 0);
 
+  // Validation helpers
+  const periodValid =
+    weekNumber >= 1 &&
+    weekNumber <= 52 &&
+    year >= 2020 &&
+    year <= 2030 &&
+    !!ausbildungsjahr;
+
+  const entriesValid =
+    entries.length > 0 &&
+    entries.every(
+      e => e.actualHours > 0 && typeof e.actualHours === 'number' && e.notes.trim().length > 0
+    );
+
+  const canSubmit =
+    !saving &&
+    !duplicateExists &&
+    !hasOverbooking &&
+    periodValid &&
+    entriesValid;
+
   const handleSave = async (submit: boolean = false) => {
     try {
       setSaving(true);
@@ -1182,12 +1203,7 @@ function CreateReportModal({
             </button>
             <button
               onClick={() => handleSave(true)}
-              disabled={
-                saving ||
-                entries.length === 0 ||
-                duplicateExists ||
-                hasOverbooking
-              }
+              disabled={!canSubmit}
               className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
             >
               <Send className="h-4 w-4" />
