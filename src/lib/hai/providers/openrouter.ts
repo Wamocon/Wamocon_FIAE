@@ -34,11 +34,11 @@ import type {
  * at the end of the chain or excluded if they consistently cause errors.
  */
 const FREE_MODEL_CHAIN = [
+  'deepseek/deepseek-r1-0528:free',
   'meta-llama/llama-3.3-70b-instruct:free',
   'mistralai/mistral-small-3.1-24b-instruct:free',
   'qwen/qwen3-coder:free',
   'nousresearch/hermes-3-llama-3.1-405b:free',
-  'deepseek/deepseek-r1-0528:free',
   'openai/gpt-oss-120b:free',
   'stepfun/step-3.5-flash:free',
   'nvidia/nemotron-3-nano-30b-a3b:free',
