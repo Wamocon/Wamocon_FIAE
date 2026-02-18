@@ -298,7 +298,20 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 flex h-[420px] flex-col rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl"
+              className="glass-effect border-accent/30 flex h-[420px] flex-col rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl cursor-pointer"
+              onClick={() =>
+                router.push(`/trainer/content-management/${course.id}/edit`)
+              }
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  router.push(
+                    `/trainer/content-management/${course.id}/edit`
+                  );
+                }
+              }}
             >
               <div className="mb-4 flex items-start justify-between">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
@@ -404,16 +417,20 @@ export function ContentManagement() {
 
               <div className="border-accent/30 flex items-center justify-between gap-2 border-t pt-4">
                 <button
-                  onClick={() =>
-                    router.push(`/trainer/content-management/${course.id}/edit`)
-                  }
+                  onClick={e => {
+                    e.stopPropagation();
+                    router.push(
+                      `/trainer/content-management/${course.id}/edit`
+                    );
+                  }}
                   className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold"
                 >
                   <Edit className="h-4 w-4" />
                   {t('content.edit')}
                 </button>
                 <button
-                  onClick={async () => {
+                  onClick={async e => {
+                    e.stopPropagation();
                     if (!window.confirm(t('content.deleteModuleConfirm')))
                       return;
                     try {
@@ -441,7 +458,20 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg"
+              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg cursor-pointer"
+              onClick={() =>
+                router.push(`/trainer/content-management/${course.id}/edit`)
+              }
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  router.push(
+                    `/trainer/content-management/${course.id}/edit`
+                  );
+                }
+              }}
             >
               {/* Header Row */}
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -490,17 +520,19 @@ export function ContentManagement() {
                 </div>
                 <div className="flex items-center gap-2 self-end md:self-auto">
                   <button
-                    onClick={() =>
+                    onClick={e => {
+                      e.stopPropagation();
                       router.push(
                         `/trainer/content-management/${course.id}/edit`
-                      )
-                    }
+                      );
+                    }}
                     className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold"
                   >
                     {t('content.edit')}
                   </button>
                   <button
-                    onClick={async () => {
+                    onClick={async e => {
+                      e.stopPropagation();
                       if (!window.confirm(t('content.deleteModuleConfirm')))
                         return;
                       try {

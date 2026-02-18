@@ -429,6 +429,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch {
             /* ignore */
           }
+          if (!isPublicPath) {
+            try {
+              router.replace('/');
+            } catch {
+              /* ignore */
+            }
+          }
         }
       }
     );
@@ -676,7 +683,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
     if (!silent) {
       try {
-        router.replace('/login');
+        router.replace('/');
       } catch (_) {
         /* ignore */
       }

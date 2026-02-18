@@ -746,6 +746,7 @@
   "quiz.questionsToCorrect": "Questions you need to correct",
   "quiz.yourAnswerWas": "Your answer was",
   "quiz.noAnswer": "No answer",
+  "quiz.unansweredQuestions": "Please answer all questions before submitting. {count} left: {numbers}",
   "quiz.correctWrongAnswers": "Correct wrong answers",
   "quiz.mustGet100": "You must answer all questions correctly to complete the quiz.",
   "quiz.perfectScore": "Perfect!",

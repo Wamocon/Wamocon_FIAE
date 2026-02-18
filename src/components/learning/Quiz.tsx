@@ -2,37 +2,66 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Award, Target, RefreshCw, AlertTriangle } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Award,
+  RefreshCw,
+  AlertTriangle,
+} from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import type { QuizWithQuestions } from '@/db/queries';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface QuizProps {
-  quiz: QuizWithQuestions;
+  quiz: {
+    id: string;
+    title: string;
+    description?: string;
+    totalQuestions: number;
+    timeLimitMinutes: number;
+    questions: Array<{
+      id: string;
+      question: string;
+      options: Array<{ id: string; text: string }>;
+      order_index?: number;
+    }>;
+  };
 }
 
-type QuizPhase = 'answering' | 'review' | 'retry' | 'completed';
+type QuizPhase = 'answering' | 'submitting' | 'results';
 
 export default function Quiz({ quiz }: QuizProps) {
   const router = useRouter();
   const { t } = useLanguage();
+  const { profile } = useAuth() as any;
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
+  const [selectedAnswers, setSelectedAnswers] = useState<
+    Record<string, string>
+  >({});
   const [timeLeft, setTimeLeft] = useState(quiz.timeLimitMinutes * 60);
-  const [phase, setPhase] = useState<QuizPhase>('answering');
-  const [score, setScore] = useState(0);
-  const [wrongQuestionIds, setWrongQuestionIds] = useState<string[]>([]);
   const [attemptCount, setAttemptCount] = useState(1);
+  const [phase, setPhase] = useState<QuizPhase>('answering');
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<null | {
+    score: number;
+    feedback: Array<{
+      questionId: string;
+      correct: boolean;
+      correctOptionId: string | null;
+      explanation?: string | null;
+      selectedOptionId?: string | null;
+      selectedText?: string | null;
+      correctAnswerText?: string | null;
+    }>;
+  }>(null);
 
   // Memoize quiz data to prevent unnecessary recalculations
   const quizData = useMemo(() => quiz, [quiz]);
 
-  // Get current questions based on phase (all questions or only wrong ones)
-  const currentQuestions = useMemo(() => {
-    if (phase === 'retry') {
-      return quizData.questions.filter(q => wrongQuestionIds.includes(q.id));
-    }
-    return quizData.questions;
-  }, [quizData.questions, wrongQuestionIds, phase]);
+  const questions = quizData.questions;
 
   // Reset quiz state function
   const resetQuiz = useCallback(() => {
@@ -40,9 +69,8 @@ export default function Quiz({ quiz }: QuizProps) {
     setSelectedAnswers({});
     setTimeLeft(quiz.timeLimitMinutes * 60);
     setPhase('answering');
-    setScore(0);
-    setWrongQuestionIds([]);
-    setAttemptCount(1);
+    setError(null);
+    setResult(null);
   }, [quiz.timeLimitMinutes]);
 
   const handlePrevQuestion = useCallback(() => {
@@ -50,68 +78,91 @@ export default function Quiz({ quiz }: QuizProps) {
   }, []);
 
   const handleAnswerSelect = useCallback(
-    (questionId: string, optionIndex: number) => {
+    (questionId: string, optionId: string) => {
       setSelectedAnswers(prev => ({
         ...prev,
-        [questionId]: optionIndex,
+        [questionId]: optionId,
       }));
     },
     []
   );
 
+  const unansweredQuestionIndexes = useMemo(() => {
+    const out: number[] = [];
+    questions.forEach((q, idx) => {
+      if (!selectedAnswers[q.id]) out.push(idx + 1);
+    });
+    return out;
+  }, [questions, selectedAnswers]);
+
+  const allAnswered = unansweredQuestionIndexes.length === 0;
+
+  const handleSubmit = useCallback(async () => {
+    if (!profile?.id) {
+      setError(t('quiz.userNotFound'));
+      return;
+    }
+
+    if (!allAnswered) {
+      const left = unansweredQuestionIndexes.length;
+      // UI requirement: show an alert with how many questions are left
+      alert(
+        t('quiz.unansweredQuestions')
+          .replace('{count}', String(left))
+          .replace('{numbers}', unansweredQuestionIndexes.join(', '))
+      );
+      return;
+    }
+
+    try {
+      setPhase('submitting');
+      setError(null);
+
+      const payload = {
+        traineeId: profile.id,
+        answers: questions.map(q => ({
+          questionId: q.id,
+          selectedOptionId: selectedAnswers[q.id],
+        })),
+      };
+
+      const res = await fetch(`/api/trainee/quizzes/${quizData.id}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || 'Submit failed');
+      }
+      setResult({ score: data.score, feedback: data.feedback || [] });
+      setAttemptCount(prev => prev + 1);
+      setPhase('results');
+    } catch (e: any) {
+      setError(e?.message || 'Unknown error');
+      setPhase('answering');
+    }
+  }, [
+    profile?.id,
+    allAnswered,
+    unansweredQuestionIndexes,
+    t,
+    questions,
+    selectedAnswers,
+    quizData.id,
+  ]);
+
   const handleNextQuestion = useCallback(() => {
-    if (currentQuestion < currentQuestions.length - 1) {
+    if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(prev => prev + 1);
     } else {
-      handleQuizCompletion();
+      handleSubmit();
     }
-  }, [currentQuestion, currentQuestions.length]);
-
-  const handleQuizCompletion = useCallback(() => {
-    // Calculate which answers are wrong
-    const wrongIds: string[] = [];
-    let correctAnswers = 0;
-
-    currentQuestions.forEach(question => {
-      const selectedAnswer = selectedAnswers[question.id];
-      if (selectedAnswer !== undefined && selectedAnswer === question.correctIndex) {
-        correctAnswers++;
-      } else {
-        wrongIds.push(question.id);
-      }
-    });
-
-    const finalScore = Math.round((correctAnswers / currentQuestions.length) * 100);
-    setScore(finalScore);
-
-    if (wrongIds.length === 0) {
-      // 100% correct - quiz completed!
-      setPhase('completed');
-    } else {
-      // Some wrong answers - show review
-      setWrongQuestionIds(wrongIds);
-      setPhase('review');
-    }
-  }, [selectedAnswers, currentQuestions]);
-
-  // Start retry with wrong questions only
-  const handleStartRetry = useCallback(() => {
-    // Clear answers only for wrong questions
-    setSelectedAnswers(prev => {
-      const newAnswers = { ...prev };
-      wrongQuestionIds.forEach(id => {
-        delete newAnswers[id];
-      });
-      return newAnswers;
-    });
-    setCurrentQuestion(0);
-    setAttemptCount(prev => prev + 1);
-    setPhase('retry');
-  }, [wrongQuestionIds]);
+  }, [currentQuestion, questions.length, handleSubmit]);
 
   const getProgressPercentage = useCallback(() => {
-    return ((currentQuestion + 1) / currentQuestions.length) * 100;
-  }, [currentQuestion, currentQuestions.length]);
+    return ((currentQuestion + 1) / questions.length) * 100;
+  }, [currentQuestion, questions.length]);
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -125,161 +176,126 @@ export default function Quiz({ quiz }: QuizProps) {
 
     const timer = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev <= 1) {
-          handleQuizCompletion();
-          return 0;
-        }
+        if (prev <= 1) return 0;
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [phase, timeLeft, handleQuizCompletion]);
+  }, [phase, timeLeft]);
 
-  // Review screen - showing wrong answers
-  if (phase === 'review') {
-    const correctCount = quizData.totalQuestions - wrongQuestionIds.length;
-    
-    return (
-      <div className="from-background flex min-h-full items-center justify-center bg-gradient-to-br via-amber-900/20 to-amber-800/30 p-6">
-        <div className="glass-effect-enhanced border-amber-500/40 w-full max-w-3xl rounded-3xl border-2 p-8 shadow-2xl">
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-500 shadow-2xl">
-              <AlertTriangle className="h-12 w-12 text-white" />
-            </div>
-
-            <h1 className="text-slate-900 dark:text-white mb-4 text-3xl font-bold">
-              {t('quiz.notPerfectYet')}
-            </h1>
-
-            <p className="text-slate-600 dark:text-slate-300 mb-2 text-lg">
-              {t('quiz.yourScore')}: <span className="text-amber-600 font-bold">{score}%</span>
-            </p>
-            
-            <p className="text-slate-500 dark:text-slate-400 mb-6">
-              {t('quiz.wrongAnswersCount').replace('{count}', String(wrongQuestionIds.length))}
-            </p>
-          </div>
-
-          {/* Show wrong questions for review */}
-          <div className="bg-slate-100 dark:bg-slate-800/50 rounded-2xl p-6 mb-8 max-h-[300px] overflow-y-auto">
-            <h3 className="text-slate-900 dark:text-white font-semibold mb-4">
-              {t('quiz.questionsToCorrect')}:
-            </h3>
-            <div className="space-y-3">
-              {wrongQuestionIds.map((qId, idx) => {
-                const question = quizData.questions.find(q => q.id === qId);
-                if (!question) return null;
-                
-                return (
-                  <div key={qId} className="bg-white dark:bg-slate-700/50 rounded-xl p-4 border border-red-200 dark:border-red-500/30">
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 text-xs font-bold text-red-600 dark:text-red-400">
-                        {idx + 1}
-                      </span>
-                      <div className="flex-1">
-                        <p className="text-slate-800 dark:text-slate-200 text-sm font-medium">
-                          {question.question}
-                        </p>
-                        <p className="text-red-600 dark:text-red-400 text-xs mt-1">
-                          {t('quiz.yourAnswerWas')}: {question.options[selectedAnswers[qId]] || t('quiz.noAnswer')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-col justify-center gap-4 sm:flex-row">
-            <button
-              onClick={handleStartRetry}
-              className="flex items-center justify-center gap-2 from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transform rounded-2xl bg-gradient-to-r px-8 py-4 font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-            >
-              <RefreshCw className="h-5 w-5" />
-              {t('quiz.correctWrongAnswers')}
-            </button>
-          </div>
-
-          <p className="text-center text-slate-500 dark:text-slate-400 text-sm mt-4">
-            {t('quiz.mustGet100')}
-          </p>
-        </div>
-      </div>
+  // Results screen (submit regardless of correctness)
+  if (phase === 'results' && result) {
+    const feedbackMap = new Map(
+      result.feedback.map(f => [String(f.questionId), f])
     );
-  }
 
-  // Completed screen - 100% correct!
-  if (phase === 'completed') {
     return (
-      <div className="from-background flex min-h-full items-center justify-center bg-gradient-to-br via-green-900/20 to-emerald-800/30 p-6">
-        <div className="glass-effect-enhanced border-green-500/40 w-full max-w-2xl rounded-3xl border-2 p-8 text-center shadow-2xl">
-          <div className="mb-8">
-            <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500 shadow-2xl animate-pulse">
-              <Award className="h-12 w-12 text-white" />
+      <div className="from-background flex min-h-full items-center justify-center bg-gradient-to-br via-slate-900/10 to-slate-800/10 p-6">
+        <div className="glass-effect-enhanced w-full max-w-3xl rounded-3xl border border-border/60 p-8 shadow-2xl">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-accent to-primary shadow-xl">
+              <Award className="h-10 w-10 text-foreground" />
             </div>
-
-            <h1 className="text-slate-900 dark:text-white mb-4 text-4xl font-bold">
-              🎉 {t('quiz.perfectScore')} 🎉
+            <h1 className="text-foreground mb-2 text-3xl font-bold">
+              {t('quiz.yourScore')}: {result.score}%
             </h1>
-
-            <p className="text-slate-600 dark:text-slate-300 mb-6 text-xl">
-              {t('quiz.youGot')} <span className="text-green-600 font-bold">100%</span> {t('quiz.correct')}!
+            <p className="text-muted-foreground">
+              {t('quiz.totalQuestions')}: {questions.length}
             </p>
-
-            <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-6 mb-8">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="bg-white dark:bg-slate-800/50 rounded-xl p-3 text-center">
-                  <p className="text-slate-500 dark:text-slate-400">{t('quiz.totalQuestions')}</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {quizData.totalQuestions}
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-slate-800/50 rounded-xl p-3 text-center">
-                  <p className="text-slate-500 dark:text-slate-400">{t('quiz.attempts')}</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                    {attemptCount}
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
 
-          <div className="flex flex-col justify-center gap-4 sm:flex-row">
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">
+              {error}
+            </div>
+          )}
+
+          <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+            {questions.map((q, idx) => {
+              const fb = feedbackMap.get(String(q.id));
+              const chosenOptId = selectedAnswers[q.id];
+              const chosenText =
+                q.options.find(o => String(o.id) === String(chosenOptId))?.text ||
+                t('quiz.noAnswer');
+              const correctText = fb?.correctOptionId
+                ? q.options.find(o => String(o.id) === String(fb.correctOptionId))
+                    ?.text
+                : null;
+
+              return (
+                <div
+                  key={q.id}
+                  className={`rounded-2xl border p-4 ${
+                    fb?.correct
+                      ? 'border-green-500/30 bg-green-500/10'
+                      : 'border-red-500/30 bg-red-500/10'
+                  }`}
+                >
+                  <div className="mb-2 flex items-start gap-3">
+                    <span className="bg-muted/50 text-muted-foreground flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold">
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-foreground font-medium">{q.question}</p>
+                      <p
+                        className={`mt-1 text-sm ${
+                          fb?.correct ? 'text-green-500' : 'text-red-500'
+                        }`}
+                      >
+                        {t('quiz.yourAnswerWas')}: {chosenText}
+                      </p>
+                      {!fb?.correct && correctText && (
+                        <p className="mt-1 text-sm text-green-500">
+                          {t('quiz.correct')}: {correctText}
+                        </p>
+                      )}
+                      {fb?.explanation && (
+                        <p className="text-muted-foreground mt-1 text-xs">
+                          {fb.explanation}
+                        </p>
+                      )}
+                    </div>
+                    {fb?.correct ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 flex flex-col justify-end gap-3 sm:flex-row">
             <button
-              onClick={() => router.push('/trainee/dashboard')}
-              className="from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+              onClick={() => router.push('/trainee/quizzes')}
+              className="bg-muted text-foreground hover:bg-muted/80 rounded-2xl px-6 py-3 font-medium transition"
             >
               {t('quiz.toDashboard')}
             </button>
+            <button
+              onClick={() => {
+                resetQuiz();
+                setAttemptCount(prev => prev + 1);
+              }}
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold shadow-lg transition"
+            >
+              <RefreshCw className="h-5 w-5" />
+              {t('quiz.retryAgain')}
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-const currentQ = currentQuestions[currentQuestion];
-  const isAnswerSelected = selectedAnswers[currentQ.id] !== undefined;
-  const isRetryPhase = phase === 'retry';
+  const currentQ = questions[currentQuestion];
+  const isAnswerSelected = !!selectedAnswers[currentQ.id];
+  const isLast = currentQuestion === questions.length - 1;
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-6">
-      {/* Retry Mode Banner */}
-      {isRetryPhase && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-500/30 rounded-2xl p-4 flex items-center gap-3">
-          <RefreshCw className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-          <div>
-            <p className="text-amber-800 dark:text-amber-200 font-medium">
-              {t('quiz.retryMode')} - {t('quiz.attemptNumber').replace('{number}', String(attemptCount))}
-            </p>
-            <p className="text-amber-600 dark:text-amber-400 text-sm">
-              {t('quiz.correctingQuestions').replace('{count}', String(currentQuestions.length))}
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-4">
@@ -300,8 +316,8 @@ const currentQ = currentQuestions[currentQuestion];
           <button
             onClick={handleNextQuestion}
             className="text-muted hover:text-foreground hover:bg-accent/20 rounded-xl p-2 transition-all duration-200 disabled:opacity-50"
-            disabled={!isAnswerSelected && currentQuestion !== currentQuestions.length - 1}
-            aria-label={currentQuestion === currentQuestions.length - 1 ? t('quiz.complete') : t('quiz.nextQuestion')}
+            disabled={!isAnswerSelected || phase === 'submitting'}
+            aria-label={isLast ? t('common.submit') : t('quiz.nextQuestion')}
           >
             <ArrowRight className="h-6 w-6" />
           </button>
@@ -319,7 +335,7 @@ const currentQ = currentQuestions[currentQuestion];
           <span>
             {t('quiz.questionOf')
               .replace('{current}', String(currentQuestion + 1))
-              .replace('{total}', String(currentQuestions.length))}
+              .replace('{total}', String(questions.length))}
           </span>
           <span>
             {t('quiz.completed').replace('{percent}', String(Math.round(getProgressPercentage())))}
@@ -346,6 +362,12 @@ const currentQ = currentQuestions[currentQuestion];
         </div>
       )}
 
+      {error && (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-500">
+          {error}
+        </div>
+      )}
+
       {/* Current Question */}
       <div className="rounded-3xl border glass-effect border-accent/30 p-8 shadow-lg">
         <div className="mb-6">
@@ -356,10 +378,10 @@ const currentQ = currentQuestions[currentQuestion];
         </div>
 
         <div className="space-y-4">
-          {currentQ.options.map((option, oIndex) => (
+          {currentQ.options.map((option) => (
             <label
-              key={oIndex}
-              className={`flex cursor-pointer items-center rounded-2xl glass-effect border-accent/30 border-2 p-4 transition-all duration-200 ${selectedAnswers[currentQ.id] === oIndex
+              key={option.id}
+              className={`flex cursor-pointer items-center rounded-2xl glass-effect border-accent/30 border-2 p-4 transition-all duration-200 ${selectedAnswers[currentQ.id] === option.id
                   ? 'border-red-300 bg-gradient-to-r from-red-50 to-indigo-50 shadow-md dark:border-red-500/50 dark:from-red-950/40 dark:to-indigo-950/40'
                   : 'border-red-200/50 bg-card hover:border-red-200 hover:bg-accent/5 dark:border-border dark:hover:bg-accent/10'
                 }`}
@@ -367,22 +389,22 @@ const currentQ = currentQuestions[currentQuestion];
               <input
                 type="radio"
                 name={`question-${currentQ.id}`}
-                value={oIndex}
-                checked={selectedAnswers[currentQ.id] === oIndex}
-                onChange={() => handleAnswerSelect(currentQ.id, oIndex)}
+                value={option.id}
+                checked={selectedAnswers[currentQ.id] === option.id}
+                onChange={() => handleAnswerSelect(currentQ.id, option.id)}
                 className="sr-only"
               />
               <div
-                className={`mr-4 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selectedAnswers[currentQ.id] === oIndex
+                className={`mr-4 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selectedAnswers[currentQ.id] === option.id
                     ? 'border-red-500 bg-red-500'
                     : 'border-muted-foreground/30'
                   }`}
               >
-                {selectedAnswers[currentQ.id] === oIndex && (
+                {selectedAnswers[currentQ.id] === option.id && (
                   <CheckCircle className="h-3 w-3 text-foreground" />
                 )}
               </div>
-              <span className="text-foreground">{option}</span>
+              <span className="text-foreground">{option.text}</span>
             </label>
           ))}
         </div>
@@ -399,10 +421,18 @@ const currentQ = currentQuestions[currentQuestion];
 
           <button
             onClick={handleNextQuestion}
-            disabled={!isAnswerSelected}
+            disabled={
+              phase === 'submitting' ||
+              !isAnswerSelected ||
+              (isLast && !allAnswered)
+            }
             className="min-w-[160px] flex items-center justify-center rounded-2xl bg-red-600 px-6 py-3 font-semibold text-foreground shadow-lg transition duration-200 hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {currentQuestion === currentQuestions.length - 1 ? t('quiz.complete') : t('quiz.nextQuestion')}
+            {phase === 'submitting'
+              ? t('reports.submitting')
+              : isLast
+                ? t('common.submit')
+                : t('quiz.nextQuestion')}
           </button>
         </div>
       </div>

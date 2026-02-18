@@ -17,6 +17,7 @@ import {
   Download,
   Share2,
   MoreVertical,
+  ChevronDown,
 } from 'lucide-react';
 
 interface TraineeDetailProps {
@@ -275,6 +276,17 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     }
   };
 
+  const [openSections, setOpenSections] = useState({
+    modules: true,
+    lessonQuizzes: false,
+    useCases: false,
+    globalQuizzes: false,
+  });
+
+  const toggleSection = (section: keyof typeof openSections) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
   // Helpers
   const toggleItem = async (
     itemType: 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ',
@@ -437,207 +449,271 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           )}
 
           {/* Redesigned third row content */}
-          <div className="space-y-8">
+          <div className="space-y-4">
             {/* Enablers (Modules) */}
-            <section>
-              <div className="bg-background text-foreground mb-3 flex items-center justify-between">
-                <h3 className="text-foreground text-xl font-bold">
-                  {t('trainee.detail.modules')}
-                </h3>
-                <div className="text-foreground text-sm">
-                  {t('trainee.detail.completed')}{' '}
-                  {overview?.stats.completedEnablers ?? 0} /{' '}
-                  {overview?.stats.totalEnablers ?? 0}
+            <section className="border-accent/20 rounded-2xl border p-4">
+              <button
+                type="button"
+                onClick={() => toggleSection('modules')}
+                className="flex w-full items-center justify-between gap-4"
+              >
+                <div className="bg-background text-foreground flex flex-1 items-center justify-between">
+                  <h3 className="text-foreground text-xl font-bold">
+                    {t('trainee.detail.modules')}
+                  </h3>
+                  <div className="text-foreground text-sm">
+                    {t('trainee.detail.completed')}{' '}
+                    {overview?.stats.completedEnablers ?? 0} /{' '}
+                    {overview?.stats.totalEnablers ?? 0}
+                  </div>
                 </div>
-              </div>
-              {overview?.enablers?.length ? (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {overview.enablers.map(e => (
-                    <div
-                      key={e.id}
-                      className="border-accent/30 rounded-2xl border p-4"
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="text-foreground font-semibold">
-                          {e.title}
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${
+                    openSections.modules ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              {openSections.modules && (
+                <div className="mt-4">
+                  {overview?.enablers?.length ? (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {overview.enablers.map(e => (
+                        <div
+                          key={e.id}
+                          className="border-accent/30 rounded-2xl border p-4"
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="text-foreground font-semibold">
+                              {e.title}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-xs ${e.completed ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
+                              >
+                                {e.completed
+                                  ? t('trainee.detail.participated')
+                                  : t('trainee.detail.notParticipated')}
+                              </span>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-xs ${e.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
+                              >
+                                {e.isActive
+                                  ? t('trainee.detail.active')
+                                  : t('trainee.detail.inactive')}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {profile?.role === 'trainer' && (
+                              <button
+                                onClick={() =>
+                                  toggleItem('ENABLER', e.id, !e.isActive)
+                                }
+                                className={`rounded-md border px-2 py-1 text-sm ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
+                              >
+                                {e.isActive
+                                  ? t('trainee.detail.deactivate')
+                                  : t('trainee.detail.activate')}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-xs ${e.completed ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
-                          >
-                            {e.completed
-                              ? t('trainee.detail.participated')
-                              : t('trainee.detail.notParticipated')}
-                          </span>
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-xs ${e.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
-                          >
-                            {e.isActive
-                              ? t('trainee.detail.active')
-                              : t('trainee.detail.inactive')}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {profile?.role === 'trainer' && (
-                          <button
-                            onClick={() =>
-                              toggleItem('ENABLER', e.id, !e.isActive)
-                            }
-                            className={`rounded-md border px-2 py-1 text-sm ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
-                          >
-                            {e.isActive
-                              ? t('trainee.detail.deactivate')
-                              : t('trainee.detail.activate')}
-                          </button>
-                        )}
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-foreground text-sm">
-                  {t('trainee.detail.noEnablers')}
+                  ) : (
+                    <div className="text-foreground text-sm">
+                      {t('trainee.detail.noEnablers')}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
 
             {/* Enabler Quizzes by difficulty */}
-            <section>
-              <h3 className="text-foreground mb-3 text-xl font-bold">
-                {t('trainee.detail.lessonQuizzes')}
-              </h3>
-              {overview?.enablerQuizzes?.length ? (
-                <div className="space-y-2">
-                  {overview.enablerQuizzes.map(q => (
-                    <div
-                      key={`${q.enablerId}-${q.quizId}`}
-                      className="border-accent/30 flex items-center justify-between rounded-2xl border p-4"
-                    >
-                      <div>
-                        <div className="text-foreground font-medium">
-                          {t('trainee.detail.difficulty')} {q.difficulty}
+            <section className="border-accent/20 rounded-2xl border p-4">
+              <button
+                type="button"
+                onClick={() => toggleSection('lessonQuizzes')}
+                className="flex w-full items-center justify-between gap-4"
+              >
+                <h3 className="text-foreground text-xl font-bold">
+                  {t('trainee.detail.lessonQuizzes')}
+                </h3>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${
+                    openSections.lessonQuizzes ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              {openSections.lessonQuizzes && (
+                <div className="mt-4">
+                  {overview?.enablerQuizzes?.length ? (
+                    <div className="space-y-2">
+                      {overview.enablerQuizzes.map(q => (
+                        <div
+                          key={`${q.enablerId}-${q.quizId}`}
+                          className="border-accent/30 flex items-center justify-between rounded-2xl border p-4"
+                        >
+                          <div>
+                            <div className="text-foreground font-medium">
+                              {t('trainee.detail.difficulty')} {q.difficulty}
+                            </div>
+                            <div className="text-foreground text-sm">
+                              {t('trainee.detail.attempts')}{' '}
+                              {q.attemptNumber ?? 0} ·{' '}
+                              {t('trainee.detail.result')}{' '}
+                              {typeof q.lastScore === 'number'
+                                ? `${q.lastScore}%`
+                                : '—'}{' '}
+                              {q.isReviewed === false
+                                ? `· ${t('trainee.detail.forReview')}`
+                                : ''}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-foreground text-sm">
-                          {t('trainee.detail.attempts')} {q.attemptNumber ?? 0}{' '}
-                          · {t('trainee.detail.result')}{' '}
-                          {typeof q.lastScore === 'number'
-                            ? `${q.lastScore}%`
-                            : '—'}{' '}
-                          {q.isReviewed === false
-                            ? `· ${t('trainee.detail.forReview')}`
-                            : ''}
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-foreground text-sm">
-                  {t('trainee.detail.noEnablerQuizzes')}
+                  ) : (
+                    <div className="text-foreground text-sm">
+                      {t('trainee.detail.noEnablerQuizzes')}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
+
             {/* Use Cases */}
-            <section>
-              <h3 className="text-foreground mb-3 text-xl font-bold">
-                {t('trainee.detail.useCases')}
-              </h3>
-              {overview?.useCases?.length ? (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {overview.useCases.map(u => (
-                    <div
-                      key={u.id}
-                      className="border-accent/30 rounded-2xl border p-4"
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="text-foreground font-semibold">
-                          {u.title}
+            <section className="border-accent/20 rounded-2xl border p-4">
+              <button
+                type="button"
+                onClick={() => toggleSection('useCases')}
+                className="flex w-full items-center justify-between gap-4"
+              >
+                <h3 className="text-foreground text-xl font-bold">
+                  {t('trainee.detail.useCases')}
+                </h3>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${
+                    openSections.useCases ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              {openSections.useCases && (
+                <div className="mt-4">
+                  {overview?.useCases?.length ? (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {overview.useCases.map(u => (
+                        <div
+                          key={u.id}
+                          className="border-accent/30 rounded-2xl border p-4"
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="text-foreground font-semibold">
+                              {u.title}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-xs ${u.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : u.status ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
+                              >
+                                {u.status ??
+                                  t('trainee.detail.notSubmitted')}
+                              </span>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-xs ${u.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
+                              >
+                                {u.isActive
+                                  ? t('trainee.detail.active')
+                                  : t('trainee.detail.inactive')}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {profile?.role === 'trainer' && (
+                              <button
+                                onClick={() =>
+                                  toggleItem('USE_CASE', u.id, !u.isActive)
+                                }
+                                className={`rounded-md border px-2 py-1 text-sm ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
+                              >
+                                {u.isActive
+                                  ? t('trainee.detail.deactivate')
+                                  : t('trainee.detail.activate')}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-xs ${u.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : u.status ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
-                          >
-                            {u.status ?? t('trainee.detail.notSubmitted')}
-                          </span>
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-xs ${u.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
-                          >
-                            {u.isActive
-                              ? t('trainee.detail.active')
-                              : t('trainee.detail.inactive')}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {profile?.role === 'trainer' && (
-                          <button
-                            onClick={() =>
-                              toggleItem('USE_CASE', u.id, !u.isActive)
-                            }
-                            className={`rounded-md border px-2 py-1 text-sm ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
-                          >
-                            {u.isActive
-                              ? t('trainee.detail.deactivate')
-                              : t('trainee.detail.activate')}
-                          </button>
-                        )}
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-foreground text-sm">
-                  {t('trainee.detail.noUseCases')}
+                  ) : (
+                    <div className="text-foreground text-sm">
+                      {t('trainee.detail.noUseCases')}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
 
             {/* Global (Big) Quizzes */}
-            <section>
-              <h3 className="text-foreground mb-3 text-xl font-bold">
-                {t('trainee.detail.globalQuizzes')}
-              </h3>
-              {overview?.globalQuizzes?.length ? (
-                <div className="space-y-2">
-                  {overview.globalQuizzes.map(q => (
-                    <div
-                      key={q.quizId}
-                      className="border-accent/30 flex items-center justify-between rounded-2xl border p-4"
-                    >
-                      <div>
-                        <div className="text-foreground font-medium">
-                          {q.title}
+            <section className="border-accent/20 rounded-2xl border p-4">
+              <button
+                type="button"
+                onClick={() => toggleSection('globalQuizzes')}
+                className="flex w-full items-center justify-between gap-4"
+              >
+                <h3 className="text-foreground text-xl font-bold">
+                  {t('trainee.detail.globalQuizzes')}
+                </h3>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${
+                    openSections.globalQuizzes ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              {openSections.globalQuizzes && (
+                <div className="mt-4">
+                  {overview?.globalQuizzes?.length ? (
+                    <div className="space-y-2">
+                      {overview.globalQuizzes.map(q => (
+                        <div
+                          key={q.quizId}
+                          className="border-accent/30 flex items-center justify-between rounded-2xl border p-4"
+                        >
+                          <div>
+                            <div className="text-foreground font-medium">
+                              {q.title}
+                            </div>
+                            <div className="text-foreground text-sm">
+                              {t('trainee.detail.attempts')}{' '}
+                              {q.attemptNumber ?? 0} ·{' '}
+                              {t('trainee.detail.result')}{' '}
+                              {typeof q.lastScore === 'number'
+                                ? `${q.lastScore}%`
+                                : '—'}{' '}
+                              {q.isReviewed === false
+                                ? `· ${t('trainee.detail.forReview')}`
+                                : ''}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {profile?.role === 'trainer' && (
+                              <button
+                                onClick={() =>
+                                  toggleItem('GLOBAL_QUIZ', q.quizId, false)
+                                }
+                                className="rounded-md border border-yellow-500 px-2 py-1 text-sm text-yellow-500"
+                              >
+                                {t('trainee.detail.remove')}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-foreground text-sm">
-                          {t('trainee.detail.attempts')} {q.attemptNumber ?? 0}{' '}
-                          · {t('trainee.detail.result')}{' '}
-                          {typeof q.lastScore === 'number'
-                            ? `${q.lastScore}%`
-                            : '—'}{' '}
-                          {q.isReviewed === false
-                            ? `· ${t('trainee.detail.forReview')}`
-                            : ''}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {profile?.role === 'trainer' && (
-                          <button
-                            onClick={() =>
-                              toggleItem('GLOBAL_QUIZ', q.quizId, false)
-                            }
-                            className="rounded-md border border-yellow-500 px-2 py-1 text-sm text-yellow-500"
-                          >
-                            {t('trainee.detail.remove')}
-                          </button>
-                        )}
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-foreground text-sm">
-                  {t('trainee.detail.noGlobalQuizzes')}
+                  ) : (
+                    <div className="text-foreground text-sm">
+                      {t('trainee.detail.noGlobalQuizzes')}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
