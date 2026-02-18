@@ -111,7 +111,7 @@ async function importSkills(): Promise<ImportResult> {
         VALUES ('${skill.id}', ${escapeString(skill.name)})
         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
       `;
-      
+
       if (!DRY_RUN) {
         await db.execute(sql.raw(query));
       }
@@ -212,7 +212,7 @@ async function importEnablers(): Promise<ImportResult> {
       const query = `
         INSERT INTO enablers (
           id, course_id, title, order_index, description_text,
-          ppt_url, video_url, scenario_text, hint_text, scenario_image_url, scenarios,
+          ppt_url, video_url,
           duration_value, duration_unit, is_active, activated_at,
           created_at, updated_at
         )
@@ -224,10 +224,7 @@ async function importEnablers(): Promise<ImportResult> {
           ${escapeString(enabler.description_text)},
           ${escapeString(enabler.ppt_url)},
           ${escapeString(enabler.video_url)},
-          ${escapeString(enabler.scenario_text)},
-          ${escapeString(enabler.hint_text)},
-          ${escapeString(enabler.scenario_image_url)},
-          ${escapeJson(enabler.scenarios)},
+          ${escapeString(enabler.video_url)},
           ${escapeInt(enabler.duration_value)},
           ${enabler.duration_unit ? `'${enabler.duration_unit}'` : 'NULL'},
           ${escapeBool(isActive)},
@@ -241,10 +238,7 @@ async function importEnablers(): Promise<ImportResult> {
           description_text = EXCLUDED.description_text,
           ppt_url = EXCLUDED.ppt_url,
           video_url = EXCLUDED.video_url,
-          scenario_text = EXCLUDED.scenario_text,
-          hint_text = EXCLUDED.hint_text,
-          scenario_image_url = EXCLUDED.scenario_image_url,
-          scenarios = EXCLUDED.scenarios,
+          video_url = EXCLUDED.video_url,
           duration_value = EXCLUDED.duration_value,
           duration_unit = EXCLUDED.duration_unit,
           is_active = EXCLUDED.is_active,
@@ -605,7 +599,7 @@ async function main() {
       const result = await db.execute(
         sql.raw(`SELECT id, full_name, role FROM profiles WHERE id = '${TRAINER_ID}'`)
       );
-      const rows = Array.from(result as any);
+      const rows: any[] = Array.from(result as any);
       if (rows.length === 0) {
         console.error(`❌ Error: Trainer ID ${TRAINER_ID} not found in target database`);
         console.log('Make sure the trainer profile exists before importing content.');
@@ -653,7 +647,7 @@ async function main() {
 
     const status = errorCount > 0 ? '⚠️' : '✅';
     console.log(`   ${status} ${result.table}: ${result.stats.inserted} rows`);
-    
+
     if (errorCount > 0) {
       for (const err of result.stats.errors.slice(0, 3)) {
         console.log(`      - ${err}`);

@@ -178,11 +178,7 @@ export const enablers = pgTable('enablers', {
   descriptionText: text('description_text'),
   pptUrl: text('ppt_url'), // Link to Supabase Storage
   videoUrl: text('video_url'), // Link to Supabase Storage or external
-  scenarioText: text('scenario_text'),
-  hintText: text('hint_text'),
-  scenarioImageUrl: text('scenario_image_url'),
-  // Multiple scenarios with hints (new)
-  scenarios: jsonb('scenarios').$type<Array<{ text: string; hint?: string }>>(),
+  scenarioPdfUrl: text('scenario_pdf_url'), // Link to Supabase Storage (PDF)
 
   // Settings
   durationValue: integer('duration_value'),

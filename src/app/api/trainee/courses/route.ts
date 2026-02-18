@@ -22,7 +22,7 @@ const PASS_THRESHOLD = 50;
 // - If no quizzes and no scenarios: enabler is considered complete (content-only)
 async function calculateEnablerCompletion(
   traineeId: string,
-  enablerRows: Array<{ id: any; scenarios: any }>,
+  enablerRows: Array<{ id: any; scenarioPdfUrl: string | null }>,
   quizLinks: Array<{ enablerId: any; quizId: any }>,
   quizBestScores: Map<string, number>,
   approvedEnablerSubs: Set<string>
@@ -51,10 +51,7 @@ async function calculateEnablerCompletion(
     // If no quizzes, quizzesComplete remains true
 
     // Check scenarios (enabler submissions)
-    const hasScenarios =
-      enabler.scenarios &&
-      Array.isArray(enabler.scenarios) &&
-      enabler.scenarios.length > 0;
+    const hasScenarios = !!enabler.scenarioPdfUrl;
     let scenariosComplete = true;
 
     if (hasScenarios) {
@@ -102,7 +99,7 @@ export async function GET(req: NextRequest) {
           .select({
             id: enablers.id,
             courseId: enablers.courseId,
-            scenarios: enablers.scenarios,
+            scenarioPdfUrl: enablers.scenarioPdfUrl,
           })
           .from(enablers)
           .where(
@@ -187,15 +184,15 @@ export async function GET(req: NextRequest) {
         const useCaseSubRows =
           useCaseIds.length > 0
             ? await db
-                .select({ useCaseId: useCaseSubmissions.useCaseId })
-                .from(useCaseSubmissions)
-                .where(
-                  and(
-                    eq(useCaseSubmissions.traineeId, traineeId as any),
-                    inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
-                    eq(useCaseSubmissions.status, 'APPROVED')
-                  )
+              .select({ useCaseId: useCaseSubmissions.useCaseId })
+              .from(useCaseSubmissions)
+              .where(
+                and(
+                  eq(useCaseSubmissions.traineeId, traineeId as any),
+                  inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
+                  eq(useCaseSubmissions.status, 'APPROVED')
                 )
+              )
             : [];
         const approvedUseCases = new Set(
           useCaseSubRows.map(r => String(r.useCaseId))
@@ -251,10 +248,7 @@ export async function GET(req: NextRequest) {
             }
 
             // Check scenarios - must be approved
-            const hasScenarios =
-              enabler.scenarios &&
-              Array.isArray(enabler.scenarios) &&
-              enabler.scenarios.length > 0;
+            const hasScenarios = !!enabler.scenarioPdfUrl;
             let scenariosApproved = true;
             if (hasScenarios) {
               scenariosApproved = approvedEnablerSubs.has(enablerId);

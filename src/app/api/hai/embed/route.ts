@@ -77,8 +77,6 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
       id: enablers.id,
       title: enablers.title,
       descriptionText: enablers.descriptionText,
-      scenarioText: enablers.scenarioText,
-      hintText: enablers.hintText,
       courseId: enablers.courseId,
     })
     .from(enablers)
@@ -100,8 +98,6 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
   // Combine all text content (DB text only — no PDF extraction)
   const contentParts: string[] = [];
   if (e.descriptionText) contentParts.push(e.descriptionText);
-  if (e.scenarioText) contentParts.push(`Szenario: ${e.scenarioText}`);
-  if (e.hintText) contentParts.push(`Hinweis: ${e.hintText}`);
 
   const content = contentParts.join('\n\n');
 
@@ -516,11 +512,11 @@ async function runBackgroundReindex(
 
     console.log(
       `HAI.ai: Reindex job ${jobId} completed (Hybrid mode — DB text only). ` +
-        `${allCourses.length} courses, ${progress.enablersProcessed} enablers, ` +
-        `${allQuizzes.length} quizzes, ${allLernfelder.length} lernfelder, ` +
-        `${progress.totalChunksIndexed} chunks indexed, ${progress.totalChunksSkipped} skipped, ` +
-        `${progress.failedSources} failures. ` +
-        `PDFs handled by PageIndex at query time.`
+      `${allCourses.length} courses, ${progress.enablersProcessed} enablers, ` +
+      `${allQuizzes.length} quizzes, ${allLernfelder.length} lernfelder, ` +
+      `${progress.totalChunksIndexed} chunks indexed, ${progress.totalChunksSkipped} skipped, ` +
+      `${progress.failedSources} failures. ` +
+      `PDFs handled by PageIndex at query time.`
     );
   } catch (error) {
     progress.currentSource = null;

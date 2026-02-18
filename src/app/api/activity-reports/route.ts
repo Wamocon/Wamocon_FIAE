@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
                     inArray(activityReportUseCaseEntries.reportId, reportIds as any),
                     eq(activityReportUseCaseEntries.isOverbooked, true)
                 ));
-            
+
             overbookedEntries.forEach(e => {
                 overbookingMap.set(String(e.reportId), true);
             });
@@ -84,7 +84,11 @@ export async function GET(req: NextRequest) {
             hasOverbooking: overbookingMap.get(String(r.id)) || false,
         }));
 
-        return NextResponse.json({ reports: formattedReports });
+        return NextResponse.json({ reports: formattedReports }, {
+            headers: {
+                'Cache-Control': 'private, max-age=10, stale-while-revalidate=59',
+            },
+        });
     } catch (error: any) {
         console.error('Error in activity-reports GET:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

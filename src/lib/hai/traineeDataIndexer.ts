@@ -652,8 +652,6 @@ export async function indexAllContent(): Promise<{
         title: enablers.title,
         courseId: enablers.courseId,
         descriptionText: enablers.descriptionText,
-        scenarioText: enablers.scenarioText,
-        hintText: enablers.hintText,
       })
       .from(enablers)
       .where(eq(enablers.isActive, true));
@@ -663,9 +661,6 @@ export async function indexAllContent(): Promise<{
       const parts: string[] = [`# Enabler: ${enabler.title}`];
       if (enabler.descriptionText)
         parts.push(`\n## Beschreibung\n${enabler.descriptionText}`);
-      if (enabler.scenarioText)
-        parts.push(`\n## Szenario\n${enabler.scenarioText}`);
-      if (enabler.hintText) parts.push(`\n## Hinweise\n${enabler.hintText}`);
 
       const enablerText = parts.join('\n');
       if (enablerText.length < 20) continue; // Skip empty enablers
