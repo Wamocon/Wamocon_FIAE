@@ -4,11 +4,12 @@
  * Endpoint for indexing content for RAG search.
  * Trainer-only access for content management.
  *
- * CHANGES (Phase 0C — Bulletproof Reindex):
- *   - index_all now runs as a background job (non-blocking)
- *   - GET supports job status polling via ?jobId=xxx
- *   - Progress is tracked in hai_reindex_jobs table
- *   - Cancellation support via POST { action: 'cancel_job' }
+ * ARCHITECTURE (Hybrid RAG + PageIndex):
+ *   - VECTOR DB: Structured DB text only (courses, enablers, quizzes, lernfelder)
+ *   - PageIndex: PDFs accessed at query time (no embedding needed)
+ *   - Live SQL: Trainee data fetched at query time via dataContext.ts
+ *
+ * This dramatically reduces embedding count and avoids Gemini rate limits.
  *
  * POST /api/hai/embed - Index content or start background job
  * GET /api/hai/embed  - Get indexing status or poll job progress
@@ -21,7 +22,11 @@ import { eq, sql } from 'drizzle-orm';
 import {
   enablers,
   courses,
-  contentDocuments,
+  quizzes,
+  questions,
+  options,
+  lernfelderSchema,
+  lernfeldMappings,
 } from '@/db/migrations/schemas/schema';
 import { verifyTrainer } from '@/lib/auth-helpers';
 import {
@@ -31,7 +36,6 @@ import {
   getIndexedSources,
   SourceType,
 } from '@/lib/hai';
-import { extractTextFromPDF } from '@/lib/hai/pdfExtractor';
 import {
   createReindexJob,
   getJobStatus,
@@ -64,6 +68,7 @@ interface IndexRequestBody {
 
 /**
  * Index a single enabler (synchronous — used for individual enabler indexing).
+ * Only indexes TEXT content from the database — PDFs are handled by PageIndex at query time.
  */
 async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
   // Get enabler details
@@ -92,7 +97,7 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
 
   const e = enabler[0];
 
-  // Combine all text content
+  // Combine all text content (DB text only — no PDF extraction)
   const contentParts: string[] = [];
   if (e.descriptionText) contentParts.push(e.descriptionText);
   if (e.scenarioText) contentParts.push(`Szenario: ${e.scenarioText}`);
@@ -121,7 +126,7 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
     courseTitle = course[0]?.title || undefined;
   }
 
-  // Index the enabler text
+  // Index the enabler text only
   const result = await indexContent({
     sourceType: 'enabler',
     sourceId: e.id,
@@ -131,58 +136,11 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
     forceReindex,
   });
 
-  // Also index associated PDFs
-  const documents = await haiDb
-    .select({
-      id: contentDocuments.id,
-      title: contentDocuments.title,
-      storageUrl: contentDocuments.storageUrl,
-      fileName: contentDocuments.fileName,
-    })
-    .from(contentDocuments)
-    .where(eq(contentDocuments.enablerId, enablerId));
-
-  let totalIndexed = result.chunksIndexed;
-  let totalSkipped = result.chunksSkipped;
-  let totalFailed = result.chunksFailed;
-
-  for (const doc of documents) {
-    if (doc.storageUrl) {
-      try {
-        const pdfResult = await extractTextFromPDF(doc.storageUrl);
-        if (pdfResult.success && pdfResult.text) {
-          const docResult = await indexContent({
-            sourceType: 'document',
-            sourceId: doc.id,
-            title: doc.title || doc.fileName || 'PDF Document',
-            content: pdfResult.text,
-            metadata: {
-              enablerId,
-              enablerTitle: e.title,
-              courseId: e.courseId,
-              ...pdfResult.metadata,
-              fileName: doc.fileName,
-              storageUrl: doc.storageUrl,
-              mimeType: 'application/pdf',
-            },
-            forceReindex,
-          });
-          totalIndexed += docResult.chunksIndexed;
-          totalSkipped += docResult.chunksSkipped;
-          totalFailed += docResult.chunksFailed;
-        }
-      } catch (error) {
-        console.error(`HAI.ai: Error indexing PDF ${doc.id}:`, error);
-        totalFailed++;
-      }
-    }
-  }
-
   return {
     ...result,
-    chunksIndexed: totalIndexed,
-    chunksSkipped: totalSkipped,
-    chunksFailed: totalFailed,
+    chunksIndexed: result.chunksIndexed,
+    chunksSkipped: result.chunksSkipped,
+    chunksFailed: result.chunksFailed,
   };
 }
 
@@ -193,6 +151,15 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
 /**
  * Run the full reindex as a background job.
  * Called via setTimeout(0) so the HTTP response returns immediately.
+ *
+ * HYBRID ARCHITECTURE — Only indexes structured DB text:
+ *   1. Courses (titles, metadata)
+ *   2. Enablers (text content only — no PDFs)
+ *   3. Quizzes (questions + answers for learning content)
+ *   4. Lernfelder (learning field definitions + mappings)
+ *
+ * PDFs are handled by PageIndex at query time (no embedding needed).
+ * Trainee data is handled by dataContext.ts at query time (live SQL).
  *
  * Progress is written to hai_reindex_jobs table and polled by the UI.
  */
@@ -215,28 +182,127 @@ async function runBackgroundReindex(
   try {
     await markJobRunning(jobId);
 
-    // --- Count total sources ---
+    // --- Count total sources (DB text only) ---
+    const allCourses = await haiDb
+      .select({
+        id: courses.id,
+        title: courses.title,
+        year: courses.year,
+        chapter: courses.chapter,
+      })
+      .from(courses)
+      .where(eq(courses.isActive, true));
+
     const allEnablers = await haiDb
       .select({ id: enablers.id, title: enablers.title })
       .from(enablers)
       .where(eq(enablers.isActive, true));
 
-    const standaloneDocuments = await haiDb
-      .select({
-        id: contentDocuments.id,
-        title: contentDocuments.title,
-        storageUrl: contentDocuments.storageUrl,
-        fileName: contentDocuments.fileName,
-      })
-      .from(contentDocuments)
-      .where(sql`enabler_id IS NULL AND use_case_id IS NULL`);
+    const allQuizzes = await haiDb
+      .select({ id: quizzes.id, title: quizzes.title })
+      .from(quizzes)
+      .where(eq(quizzes.isActive, true));
 
-    progress.totalSources = allEnablers.length + standaloneDocuments.length;
+    // Lernfelder table may not exist on all environments — check first
+    let allLernfelder: Array<{
+      id: string;
+      label: string;
+      title: string;
+      description: string | null;
+    }> = [];
+    try {
+      const tableCheck = await haiDb.execute(sql`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = 'lernfelder_schema'
+        ) as exists
+      `);
+      const tableExists =
+        (tableCheck as any)?.[0]?.exists === true ||
+        (tableCheck as any)?.rows?.[0]?.exists === true;
+      if (tableExists) {
+        allLernfelder = await haiDb
+          .select({
+            id: lernfelderSchema.id,
+            label: lernfelderSchema.label,
+            title: lernfelderSchema.title,
+            description: lernfelderSchema.description,
+          })
+          .from(lernfelderSchema);
+      } else {
+        console.log(
+          'HAI.ai: lernfelder_schema table not found — skipping lernfelder indexing'
+        );
+      }
+    } catch (lfError) {
+      console.warn(
+        'HAI.ai: Failed to query lernfelder_schema (skipping):',
+        lfError
+      );
+    }
+
+    progress.totalSources =
+      allCourses.length +
+      allEnablers.length +
+      allQuizzes.length +
+      allLernfelder.length;
     await updateJobProgress(jobId, { totalSources: progress.totalSources });
 
-    // --- Process Enablers ---
+    // ==========================================
+    // 1. INDEX COURSES
+    // ==========================================
+    for (const course of allCourses) {
+      if (await isCancellationRequested(jobId)) {
+        await markJobCancelled(jobId, progress);
+        return;
+      }
+
+      progress.currentSource = `Kurs: ${course.title}`;
+      await updateJobProgress(jobId, { currentSource: progress.currentSource });
+
+      try {
+        const courseText = `# Kurs: ${course.title}\nJahr: ${course.year}\nKapitel: ${course.chapter}`;
+        const result = await indexContent({
+          sourceType: 'course',
+          sourceId: course.id,
+          title: course.title,
+          content: courseText,
+          metadata: {
+            courseId: course.id,
+            year: course.year,
+            chapter: course.chapter,
+          },
+          forceReindex,
+        });
+        if (result.success || result.chunksIndexed > 0) {
+          progress.totalChunksIndexed += result.chunksIndexed;
+          progress.totalChunksSkipped += result.chunksSkipped;
+        } else if (result.error) {
+          progress.failedSources++;
+          progress.errors.push(`Kurs "${course.title}": ${result.error}`);
+        }
+      } catch (error) {
+        progress.failedSources++;
+        progress.errors.push(
+          `Kurs "${course.title}": ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+
+      progress.processedSources++;
+      await updateJobProgress(jobId, {
+        processedSources: progress.processedSources,
+        totalChunksIndexed: progress.totalChunksIndexed,
+        totalChunksSkipped: progress.totalChunksSkipped,
+        failedSources: progress.failedSources,
+        errors: progress.errors,
+      });
+    }
+
+    // ==========================================
+    // 2. INDEX ENABLERS (text only — PDFs via PageIndex)
+    // ==========================================
     for (const e of allEnablers) {
-      if (isCancellationRequested()) {
+      if (await isCancellationRequested(jobId)) {
         await markJobCancelled(jobId, progress);
         return;
       }
@@ -276,50 +342,167 @@ async function runBackgroundReindex(
       });
     }
 
-    // --- Process Standalone Documents ---
-    for (const doc of standaloneDocuments) {
-      if (isCancellationRequested()) {
+    // ==========================================
+    // 3. INDEX QUIZZES (questions + answers)
+    // ==========================================
+    for (const quiz of allQuizzes) {
+      if (await isCancellationRequested(jobId)) {
         await markJobCancelled(jobId, progress);
         return;
       }
 
-      const docName = doc.title || doc.fileName || doc.id;
-      progress.currentSource = `Dokument: ${docName}`;
+      progress.currentSource = `Quiz: ${quiz.title}`;
       await updateJobProgress(jobId, { currentSource: progress.currentSource });
 
-      if (doc.storageUrl) {
-        try {
-          const pdfResult = await extractTextFromPDF(doc.storageUrl);
-          if (pdfResult.success && pdfResult.text) {
-            const result = await indexContent({
-              sourceType: 'document',
-              sourceId: doc.id,
-              title: doc.title || doc.fileName || 'PDF Document',
-              content: pdfResult.text,
-              forceReindex,
-              metadata: {
-                ...pdfResult.metadata,
-                fileName: doc.fileName,
-                storageUrl: doc.storageUrl,
-                mimeType: 'application/pdf',
-              },
-            });
-            progress.documentsProcessed++;
-            progress.totalChunksIndexed += result.chunksIndexed;
-            progress.totalChunksSkipped += result.chunksSkipped;
+      try {
+        // Fetch questions with their options
+        const quizQuestions = await haiDb
+          .select({
+            id: questions.id,
+            questionText: questions.questionText,
+            questionType: questions.questionType,
+            expectedAnswer: questions.expectedAnswer,
+            orderIndex: questions.orderIndex,
+          })
+          .from(questions)
+          .where(eq(questions.quizId, quiz.id))
+          .orderBy(questions.orderIndex);
+
+        if (quizQuestions.length > 0) {
+          const contentParts: string[] = [`# Quiz: ${quiz.title}`, ``];
+
+          for (const q of quizQuestions) {
+            const qNum = (q.orderIndex ?? 0) + 1;
+            contentParts.push(`## Frage ${qNum}: ${q.questionText}`);
+
+            if (q.questionType === 'MCQ') {
+              // Get options for MCQ questions
+              const qOptions = await haiDb
+                .select({
+                  optionText: options.optionText,
+                  isCorrect: options.isCorrect,
+                  explanation: options.explanation,
+                })
+                .from(options)
+                .where(eq(options.questionId, q.id));
+
+              for (const opt of qOptions) {
+                const marker = opt.isCorrect ? '✓' : '✗';
+                contentParts.push(`  ${marker} ${opt.optionText}`);
+                if (opt.explanation) {
+                  contentParts.push(`    Erklärung: ${opt.explanation}`);
+                }
+              }
+            } else if (q.expectedAnswer) {
+              contentParts.push(`  Erwartete Antwort: ${q.expectedAnswer}`);
+            }
+            contentParts.push(``);
           }
-        } catch (error) {
-          progress.failedSources++;
-          progress.errors.push(
-            `Dokument "${docName}": ${error instanceof Error ? error.message : 'Unknown error'}`
-          );
+
+          const quizContent = contentParts.join('\n');
+          const result = await indexContent({
+            sourceType: 'quiz' as SourceType,
+            sourceId: quiz.id,
+            title: quiz.title,
+            content: quizContent,
+            metadata: { quizId: quiz.id, questionCount: quizQuestions.length },
+            forceReindex,
+          });
+          progress.totalChunksIndexed += result.chunksIndexed;
+          progress.totalChunksSkipped += result.chunksSkipped;
+          if (result.chunksFailed > 0) {
+            progress.failedSources++;
+            progress.errors.push(
+              `Quiz "${quiz.title}": ${result.chunksFailed} chunk(s) failed`
+            );
+          }
         }
+      } catch (error) {
+        progress.failedSources++;
+        progress.errors.push(
+          `Quiz "${quiz.title}": ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
 
       progress.processedSources++;
       await updateJobProgress(jobId, {
         processedSources: progress.processedSources,
-        documentsProcessed: progress.documentsProcessed,
+        totalChunksIndexed: progress.totalChunksIndexed,
+        totalChunksSkipped: progress.totalChunksSkipped,
+        failedSources: progress.failedSources,
+        errors: progress.errors,
+      });
+    }
+
+    // ==========================================
+    // 4. INDEX LERNFELDER (learning fields)
+    // ==========================================
+    for (const lf of allLernfelder) {
+      if (await isCancellationRequested(jobId)) {
+        await markJobCancelled(jobId, progress);
+        return;
+      }
+
+      progress.currentSource = `Lernfeld: ${lf.label} - ${lf.title}`;
+      await updateJobProgress(jobId, { currentSource: progress.currentSource });
+
+      try {
+        const contentParts: string[] = [
+          `# Lernfeld ${lf.label}: ${lf.title}`,
+          ``,
+        ];
+        if (lf.description) contentParts.push(lf.description);
+
+        // Get mapped enablers and use cases
+        const mappings = await haiDb
+          .select({
+            enablerId: lernfeldMappings.enablerId,
+            useCaseId: lernfeldMappings.useCaseId,
+          })
+          .from(lernfeldMappings)
+          .where(eq(lernfeldMappings.lernfeldId, lf.id));
+
+        if (mappings.length > 0) {
+          const enablerMappings = mappings.filter(m => m.enablerId);
+          const useCaseMappings = mappings.filter(m => m.useCaseId);
+          if (enablerMappings.length > 0) {
+            contentParts.push(
+              `\nVerknüpfte Enabler: ${enablerMappings.length}`
+            );
+          }
+          if (useCaseMappings.length > 0) {
+            contentParts.push(
+              `Verknüpfte Use Cases: ${useCaseMappings.length}`
+            );
+          }
+        }
+
+        const lfContent = contentParts.join('\n');
+        if (lfContent.trim().length > 10) {
+          const result = await indexContent({
+            sourceType: 'enabler' as SourceType,
+            sourceId: lf.id,
+            title: `Lernfeld ${lf.label}: ${lf.title}`,
+            content: lfContent,
+            metadata: {
+              type: 'lernfeld',
+              label: lf.label,
+            },
+            forceReindex,
+          });
+          progress.totalChunksIndexed += result.chunksIndexed;
+          progress.totalChunksSkipped += result.chunksSkipped;
+        }
+      } catch (error) {
+        progress.failedSources++;
+        progress.errors.push(
+          `Lernfeld "${lf.label}": ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+
+      progress.processedSources++;
+      await updateJobProgress(jobId, {
+        processedSources: progress.processedSources,
         totalChunksIndexed: progress.totalChunksIndexed,
         totalChunksSkipped: progress.totalChunksSkipped,
         failedSources: progress.failedSources,
@@ -332,10 +515,12 @@ async function runBackgroundReindex(
     await markJobCompleted(jobId, progress);
 
     console.log(
-      `HAI.ai: Reindex job ${jobId} completed. ` +
-        `${progress.enablersProcessed} enablers, ${progress.documentsProcessed} docs, ` +
+      `HAI.ai: Reindex job ${jobId} completed (Hybrid mode — DB text only). ` +
+        `${allCourses.length} courses, ${progress.enablersProcessed} enablers, ` +
+        `${allQuizzes.length} quizzes, ${allLernfelder.length} lernfelder, ` +
         `${progress.totalChunksIndexed} chunks indexed, ${progress.totalChunksSkipped} skipped, ` +
-        `${progress.failedSources} failures.`
+        `${progress.failedSources} failures. ` +
+        `PDFs handled by PageIndex at query time.`
     );
   } catch (error) {
     progress.currentSource = null;
@@ -447,7 +632,7 @@ export async function POST(req: NextRequest) {
       }
 
       case 'cancel_job': {
-        const cancelled = requestCancellation();
+        const cancelled = await requestCancellation();
         return NextResponse.json({
           success: cancelled,
           message: cancelled
@@ -504,8 +689,12 @@ export async function GET(req: NextRequest) {
     const indexedSources = await getIndexedSources();
 
     const enablerCount = await getEmbeddingCount('enabler');
-    const documentCount = await getEmbeddingCount('document');
     const courseCount = await getEmbeddingCount('course');
+    const quizCount = await getEmbeddingCount('quiz' as SourceType);
+
+    // Legacy counts (may still have old embeddings until cleaned up)
+    const documentCount = await getEmbeddingCount('document');
+    const useCaseCount = await getEmbeddingCount('use_case' as SourceType);
 
     const latestJob = await getLatestJob();
 
@@ -513,12 +702,17 @@ export async function GET(req: NextRequest) {
       success: true,
       stats: {
         totalEmbeddings: totalCount,
+        architecture: 'hybrid', // Indicates Hybrid RAG + PageIndex mode
         byType: {
           enabler: enablerCount,
-          document: documentCount,
           course: courseCount,
+          quiz: quizCount,
+          // Legacy (will be 0 after cleanup)
+          document: documentCount,
+          use_case: useCaseCount,
         },
         indexedSources: indexedSources.slice(0, 50),
+        info: 'PDFs are now handled by PageIndex at query time. Trainee data is fetched live via dataContext.',
       },
       latestJob,
     });

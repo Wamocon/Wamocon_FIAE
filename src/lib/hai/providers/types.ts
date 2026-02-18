@@ -104,18 +104,25 @@ export interface EmbeddingProvider {
 // ============================================================================
 
 export type ChatProviderType = 'openrouter' | 'claude';
-export type EmbeddingProviderType = 'gemini'; // Only Gemini — Claude/OpenRouter have no embeddings
+export type EmbeddingProviderType = 'gemini' | 'ollama';
 
 export interface ProviderConfig {
   /** Which provider to use for chat — set via HAI_CHAT_PROVIDER env var */
   chatProvider: ChatProviderType;
 
-  /** Which provider to use for embeddings (always 'gemini') */
+  /** Which provider to use for embeddings ('ollama' or 'gemini') */
   embeddingProvider: EmbeddingProviderType;
 
-  /** Gemini-specific config (embeddings only) */
+  /** Gemini-specific config (embeddings — fallback) */
   gemini: {
     apiKey: string | undefined;
+    embeddingModel: string;
+    embeddingDimensions: number;
+  };
+
+  /** Ollama-specific config (embeddings — local, no rate limits) */
+  ollama: {
+    baseUrl: string;
     embeddingModel: string;
     embeddingDimensions: number;
   };
@@ -139,6 +146,10 @@ export interface ProviderConfig {
  * HAI_CHAT_PROVIDER controls which chat backend is used:
  *   - 'openrouter' (default) → Free models, for QA/testing
  *   - 'claude' → Anthropic Claude, for production
+ *
+ * HAI_EMBEDDING_PROVIDER controls which embedding backend is used:
+ *   - 'ollama' (default) → Local Ollama, no rate limits
+ *   - 'gemini' → Google Gemini API (rate limited)
  */
 export function loadProviderConfig(): ProviderConfig {
   const chatProvider = (process.env.HAI_CHAT_PROVIDER ||
@@ -151,14 +162,28 @@ export function loadProviderConfig(): ProviderConfig {
     );
   }
 
+  // Determine embedding provider
+  const embeddingProvider = (process.env.HAI_EMBEDDING_PROVIDER ||
+    'ollama') as EmbeddingProviderType;
+
   return {
     chatProvider: chatProvider === 'claude' ? 'claude' : 'openrouter',
-    embeddingProvider: 'gemini',
+    embeddingProvider: embeddingProvider === 'gemini' ? 'gemini' : 'ollama',
 
     gemini: {
       apiKey: process.env.GEMINI_API_KEY,
       embeddingModel:
         process.env.HAI_GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
+      embeddingDimensions: parseInt(
+        process.env.HAI_EMBEDDING_DIMENSIONS || '768',
+        10
+      ),
+    },
+
+    ollama: {
+      baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+      embeddingModel:
+        process.env.HAI_OLLAMA_EMBEDDING_MODEL || 'nomic-embed-text',
       embeddingDimensions: parseInt(
         process.env.HAI_EMBEDDING_DIMENSIONS || '768',
         10

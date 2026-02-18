@@ -86,16 +86,28 @@ export interface EmbeddingRecord {
 /**
  * Simple token-bucket rate limiter for embedding API calls.
  *
- * Gemini free tier: ~100 RPM (1.67 req/s) for embeddings.
- * We use 700ms between calls = ~1.43 req/s (safe margin).
+ * Only applies to cloud providers (Gemini):
+ *   - Gemini free tier: ~100 RPM (1.67 req/s) → 700ms between calls
  *
- * The provider-level retry handles 429 errors if we still exceed limits,
- * but this prevents hitting 429 in the first place.
+ * Ollama (local): No rate limiting needed — runs on your machine.
  */
-const EMBEDDING_RATE_LIMIT_MS = 700; // ms between embedding calls
+const EMBEDDING_RATE_LIMIT_MS = 700; // ms between embedding calls (cloud only)
 let _lastEmbeddingCall = 0;
 
+/**
+ * Check if the current embedding provider is local (no rate limiting needed)
+ */
+function isLocalProvider(): boolean {
+  const provider = (
+    process.env.HAI_EMBEDDING_PROVIDER || 'ollama'
+  ).toLowerCase();
+  return provider === 'ollama';
+}
+
 async function rateLimitedWait(): Promise<void> {
+  // Skip rate limiting for local providers (Ollama)
+  if (isLocalProvider()) return;
+
   const now = Date.now();
   const elapsed = now - _lastEmbeddingCall;
   if (elapsed < EMBEDDING_RATE_LIMIT_MS) {
