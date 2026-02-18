@@ -58,6 +58,15 @@ interface ChatRequestBody {
 // ============================================================================
 
 /**
+ * Check if a string is a valid UUID format
+ */
+function isValidUUID(str: string): boolean {
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+/**
  * Get or create a chat session for the user.
  *
  * When forceNew=true (default), ALWAYS creates a new session.
@@ -554,6 +563,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate editMessageId is a valid UUID (not a temporary client ID like "temp-...")
+    // If it's not valid, treat this as a new message instead of an edit
+    const isValidEdit = editMessageId && isValidUUID(editMessageId);
+    const validEditMessageId = isValidEdit ? editMessageId : undefined;
+
+    if (editMessageId && !isValidEdit) {
+      console.warn(
+        `[HAI] Ignoring invalid editMessageId (likely temporary client ID): ${editMessageId}`
+      );
+    }
+
     // Determine context type
     const contextType = context?.enablerId
       ? 'enabler'
@@ -579,7 +599,7 @@ export async function POST(req: NextRequest) {
         .limit(1);
 
       if (existingSession.length === 0) {
-        if (editMessageId) {
+        if (validEditMessageId) {
           return NextResponse.json(
             { error: 'Session nicht gefunden.' },
             { status: 404 }
@@ -611,7 +631,7 @@ export async function POST(req: NextRequest) {
     // and find the existing assistant message to update in-place (not create new)
     let existingAssistantId: string | null = null;
 
-    if (editMessageId) {
+    if (validEditMessageId) {
       const messageRecord = await db
         .select({
           messageId: haiChatMessages.id,
@@ -628,7 +648,7 @@ export async function POST(req: NextRequest) {
         )
         .where(
           and(
-            eq(haiChatMessages.id, editMessageId),
+            eq(haiChatMessages.id, validEditMessageId),
             eq(haiChatSessions.userId, userId),
             eq(haiChatMessages.sessionId, sessionId)
           )
@@ -689,7 +709,7 @@ export async function POST(req: NextRequest) {
             editedAt: new Date().toISOString(),
           },
         })
-        .where(eq(haiChatMessages.id, editMessageId));
+        .where(eq(haiChatMessages.id, validEditMessageId));
 
       // Update session lastMessageAt so session list sorts by recency
       await db
@@ -799,7 +819,7 @@ export async function POST(req: NextRequest) {
     };
 
     // Save user message (skip if we are editing an existing message)
-    if (!editMessageId) {
+    if (!validEditMessageId) {
       await saveMessage(sessionId, 'user', message.trim());
     }
 
@@ -820,7 +840,7 @@ export async function POST(req: NextRequest) {
             );
 
             // Save assistant response — UPDATE existing or INSERT new
-            if (editMessageId && existingAssistantId) {
+            if (validEditMessageId && existingAssistantId) {
               await updateAssistantMessage(
                 existingAssistantId,
                 result.response,
@@ -920,7 +940,7 @@ export async function POST(req: NextRequest) {
     const result = await processMessage(message.trim(), pipelineContext);
 
     // Save assistant response — UPDATE existing or INSERT new
-    if (editMessageId && existingAssistantId) {
+    if (validEditMessageId && existingAssistantId) {
       await updateAssistantMessage(
         existingAssistantId,
         result.response,
