@@ -166,6 +166,26 @@ export function loadProviderConfig(): ProviderConfig {
   const embeddingProvider = (process.env.HAI_EMBEDDING_PROVIDER ||
     'ollama') as EmbeddingProviderType;
 
+  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+
+  // Detect if we're in a serverless environment (Vercel) with localhost Ollama
+  const isVercel = process.env.VERCEL === '1';
+  const isLocalhostOllama =
+    ollamaBaseUrl.includes('localhost') || ollamaBaseUrl.includes('127.0.0.1');
+
+  if (isVercel && embeddingProvider === 'ollama' && isLocalhostOllama) {
+    console.error(
+      '⚠️  HAI.ai Configuration Error: Ollama is set to localhost but running on Vercel!'
+    );
+    console.error('   Localhost is not accessible from Vercel servers.');
+    console.error(
+      '   → Set HAI_EMBEDDING_PROVIDER=gemini in Vercel environment variables'
+    );
+    console.error(
+      '   → Or update OLLAMA_BASE_URL to a publicly accessible URL'
+    );
+  }
+
   return {
     chatProvider: chatProvider === 'claude' ? 'claude' : 'openrouter',
     embeddingProvider: embeddingProvider === 'gemini' ? 'gemini' : 'ollama',
@@ -181,7 +201,7 @@ export function loadProviderConfig(): ProviderConfig {
     },
 
     ollama: {
-      baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+      baseUrl: ollamaBaseUrl,
       embeddingModel:
         process.env.HAI_OLLAMA_EMBEDDING_MODEL || 'nomic-embed-text',
       embeddingDimensions: parseInt(
