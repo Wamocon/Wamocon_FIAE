@@ -29,10 +29,12 @@ import type {
  * Ordered list of free models to try. If the first is rate-limited (429),
  * we immediately try the next one instead of waiting 8+ seconds per retry.
  * All models use the ':free' suffix to ensure zero cost.
+ *
+ * Note: Some models like Gemma may not support system prompts and are placed
+ * at the end of the chain or excluded if they consistently cause errors.
  */
 const FREE_MODEL_CHAIN = [
   'meta-llama/llama-3.3-70b-instruct:free',
-  'google/gemma-3-27b-it:free',
   'mistralai/mistral-small-3.1-24b-instruct:free',
   'qwen/qwen3-coder:free',
   'nousresearch/hermes-3-llama-3.1-405b:free',
@@ -41,6 +43,8 @@ const FREE_MODEL_CHAIN = [
   'stepfun/step-3.5-flash:free',
   'nvidia/nemotron-3-nano-30b-a3b:free',
   'qwen/qwen3-next-80b-a3b-instruct:free',
+  // Gemma models don't support system prompts, placing at end as last resort
+  // 'google/gemma-3-27b-it:free',
 ];
 
 /** How many times to retry the full model chain before giving up */
@@ -355,16 +359,28 @@ export class OpenRouterChatProvider implements ChatProvider {
           const isModelUnavailable =
             status === 404 || message.includes('No endpoints found');
 
+          // 400 with specific provider errors that indicate incompatibility
+          const isModelIncompatible =
+            status === 400 &&
+            (message.includes('Developer instruction is not enabled') ||
+              message.includes('not supported by this model'));
+
           const isServerError =
             status === 500 || status === 502 || status === 503;
 
           const isTransient =
             message.includes('ECONNREFUSED') || message.includes('timeout');
 
-          if (isRateLimited || isModelUnavailable) {
-            // 429 or 404: Don't wait, immediately try next model
+          if (isRateLimited || isModelUnavailable || isModelIncompatible) {
+            // 429, 404, or incompatible model: Don't wait, immediately try next model
             console.warn(
-              `HAI.ai [OpenRouter]: ${model} ${isRateLimited ? 'rate-limited (429)' : 'unavailable (404)'}. Trying next free model...`
+              `HAI.ai [OpenRouter]: ${model} ${
+                isRateLimited
+                  ? 'rate-limited (429)'
+                  : isModelIncompatible
+                    ? 'incompatible (400)'
+                    : 'unavailable (404)'
+              }. Trying next free model...`
             );
             continue;
           }
