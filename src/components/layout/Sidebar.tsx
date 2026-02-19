@@ -15,14 +15,17 @@ import {
   School,
   Calendar,
   ClipboardList,
-  FolderEdit,
-
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import dynamic from 'next/dynamic';
+
+const HaiAdminDialog = dynamic(() => import('@/components/hai/HaiAdminDialog'), {
+  ssr: false,
+});
 
 interface SidebarProps {
   currentView: string;
@@ -41,6 +44,7 @@ export function Sidebar({
   const { language, t } = useLanguage();
   const router = useRouter();
   const pathname = usePathname();
+  const [haiAdminOpen, setHaiAdminOpen] = useState(false);
 
   const handleNavigation = useCallback(
     (view: string) => {
@@ -303,6 +307,24 @@ export function Sidebar({
 
           })}
         </nav>
+
+        {/* HAI Admin Button — trainer only */}
+        {userRole === 'trainer' && (
+          <div className="px-4 pb-2">
+            <button
+              onClick={() => setHaiAdminOpen(true)}
+              className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-accent/10"
+            >
+              <span className="text-lg">🦈</span>
+              <span className="font-medium">HAI Admin</span>
+            </button>
+          </div>
+        )}
+
+        <HaiAdminDialog
+          open={haiAdminOpen}
+          onClose={() => setHaiAdminOpen(false)}
+        />
 
         {/* User Profile Section */}
         <div className="border-border/50 border-t p-4">
