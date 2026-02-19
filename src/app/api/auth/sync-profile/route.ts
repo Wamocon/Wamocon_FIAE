@@ -140,7 +140,6 @@ export async function POST(request: Request) {
             fullName: full_name,
             firstName,
             lastName,
-            role: role as any,
             isActive: true,
           },
         });
@@ -148,7 +147,14 @@ export async function POST(request: Request) {
       const pgCode = (drizzleErr as { cause?: { code?: string } })?.cause?.code;
       if (pgCode === '23505') {
         // Unique constraint violation on email — an orphaned profile with the
-        // same email but a different id exists.  Remove the orphan and retry.
+        // same email but a different id exists.  Preserve the orphan's role,
+        // remove it, and re-insert with the correct auth user id.
+        const orphan = await db
+          .select({ role: profiles.role })
+          .from(profiles)
+          .where(and(eq(profiles.email, email), ne(profiles.id, user.id)))
+          .limit(1);
+        const preservedRole = orphan[0]?.role ?? role;
         await db
           .delete(profiles)
           .where(and(eq(profiles.email, email), ne(profiles.id, user.id)));
@@ -160,7 +166,7 @@ export async function POST(request: Request) {
             fullName: full_name,
             firstName,
             lastName,
-            role: role as any,
+            role: preservedRole as any,
             assignedTrainerId: assignedTrainerId ?? undefined,
             isActive: true,
           })
@@ -171,7 +177,6 @@ export async function POST(request: Request) {
               fullName: full_name,
               firstName,
               lastName,
-              role: role as any,
               isActive: true,
             },
           });
