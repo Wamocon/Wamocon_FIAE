@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
 import { profiles } from '@/db/migrations/schemas/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 
 function getAdminClient() {
   const url =
@@ -146,7 +146,36 @@ export async function POST(request: Request) {
         });
     } catch (drizzleErr: unknown) {
       const pgCode = (drizzleErr as { cause?: { code?: string } })?.cause?.code;
-      if (pgCode === '23503') {
+      if (pgCode === '23505') {
+        // Unique constraint violation on email — an orphaned profile with the
+        // same email but a different id exists.  Remove the orphan and retry.
+        await db
+          .delete(profiles)
+          .where(and(eq(profiles.email, email), ne(profiles.id, user.id)));
+        await db
+          .insert(profiles)
+          .values({
+            id: user.id,
+            email,
+            fullName: full_name,
+            firstName,
+            lastName,
+            role: role as any,
+            assignedTrainerId: assignedTrainerId ?? undefined,
+            isActive: true,
+          })
+          .onConflictDoUpdate({
+            target: profiles.id,
+            set: {
+              email,
+              fullName: full_name,
+              firstName,
+              lastName,
+              role: role as any,
+              isActive: true,
+            },
+          });
+      } else if (pgCode === '23503') {
         // FK violation — pooler can't see auth.users; fall back to admin client
         const admin = getAdminClient();
         const { error: upsertErr } = await admin.from('profiles').upsert(
