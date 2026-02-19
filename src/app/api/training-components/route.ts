@@ -22,7 +22,11 @@ export async function GET() {
             createdAt: c.createdAt,
         }));
 
-        return NextResponse.json({ components: formattedComponents });
+        return NextResponse.json({ components: formattedComponents }, {
+            headers: {
+                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=59',
+            },
+        });
     } catch (error: any) {
         // If table doesn't exist yet, return empty components
         if (error?.cause?.code === '42P01') {

@@ -45,7 +45,10 @@ export type DataIntent =
     | 'progress_query'      // "Wie ist mein Fortschritt?"
     | 'calendar_query'      // "Wann habe ich Berufsschule?"
     | 'exam_query'          // "Wann ist meine naechste Pruefung?"
+    | 'exam_results_query'  // "Welche Note habe ich?" / "Habe ich bestanden?"
     | 'report_query'        // "Wie ist der Stand meiner Nachweise?"
+    | 'submission_query'    // "Was habe ich abgegeben?" / "Welche Abgaben sind offen?"
+    | 'use_case_query'      // "Welche Use Cases habe ich erledigt?"
     | 'notification_query'  // "Habe ich neue Benachrichtigungen?"
     | 'review_query'        // Trainer: "Was muss ich bewerten?"
     | 'trainee_overview'    // Trainer: "Wie stehen meine Azubis?"
@@ -104,11 +107,38 @@ export interface NotificationInfo {
     recentTitles: string[];
 }
 
+export interface ExamResultInfo {
+    subject: string;
+    examDate: Date;
+    grade: string | null;
+    points: number | null;
+    percentage: number | null;
+    passed: boolean | null;
+}
+
+export interface SubmissionInfo {
+    type: 'enabler' | 'use_case';
+    title: string;
+    status: string;
+    submittedAt: Date;
+    trainerFeedback: string | null;
+}
+
+export interface UseCaseProgress {
+    courseTitle: string;
+    totalUseCases: number;
+    completedUseCases: number;
+    pendingUseCases: number;
+    progressPercent: number;
+}
+
 export interface TrainerPendingReviews {
     pendingEnablerSubmissions: number;
     pendingUseCaseSubmissions: number;
     pendingQuizReviews: number;
     pendingReportReviews: number;
+    /** Names of trainees with pending submissions */
+    pendingTraineeNames: string[];
 }
 
 export interface TrainerTraineeInfo {
@@ -172,7 +202,18 @@ export function classifyDataIntent(message: string, userRole: UserRole): DataInt
         return 'calendar_query';
     }
 
-    // Exam keywords
+    // Exam result keywords (must be checked BEFORE general exam keywords)
+    const examResultKeywords = [
+        'note', 'noten', 'bestanden', 'durchgefallen', 'ergebnis',
+        'punkte', 'prozent', 'wie habe ich abgeschnitten',
+        'klausurergebnis', 'pruefungsergebnis', 'zeugnis',
+        'welche note', 'meine noten',
+    ];
+    if (examResultKeywords.some(k => lower.includes(k))) {
+        return 'exam_results_query';
+    }
+
+    // Exam keywords (upcoming exams / scheduling)
     const examKeywords = [
         'pruefung', 'klausur', 'ihk', 'abschlusspruefung',
         'test', 'examen', 'naechste pruefung', 'wann schreibe ich',
@@ -180,6 +221,26 @@ export function classifyDataIntent(message: string, userRole: UserRole): DataInt
     ];
     if (examKeywords.some(k => lower.includes(k))) {
         return 'exam_query';
+    }
+
+    // Submission keywords
+    const submissionKeywords = [
+        'abgabe', 'abgaben', 'eingereicht', 'einreichung',
+        'submission', 'abgegeben', 'was habe ich abgegeben',
+        'feedback', 'bewertung meiner', 'rueckmeldung',
+        'meine loesung', 'meine abgabe',
+    ];
+    if (submissionKeywords.some(k => lower.includes(k))) {
+        return 'submission_query';
+    }
+
+    // Use case keywords
+    const useCaseKeywords = [
+        'use case', 'use-case', 'usecase', 'fallstudie',
+        'praktische aufgabe', 'praxisaufgabe',
+    ];
+    if (useCaseKeywords.some(k => lower.includes(k))) {
+        return 'use_case_query';
     }
 
     // Report keywords
@@ -559,6 +620,146 @@ export async function fetchNotifications(userId: string): Promise<NotificationIn
 }
 
 // ============================================================================
+// TRAINEE FETCHERS — EXAM RESULTS, SUBMISSIONS, USE CASE PROGRESS
+// ============================================================================
+
+/**
+ * Fetch exam results (grades) for the trainee.
+ */
+export async function fetchExamResults(userId: string): Promise<ExamResultInfo[]> {
+    try {
+        const results = await db.execute(sql`
+            SELECT
+                se.subject,
+                se.exam_date,
+                ser.grade,
+                ser.points,
+                ser.percentage,
+                ser.passed
+            FROM school_exam_results ser
+            JOIN school_exams se ON se.id = ser.exam_id
+            WHERE ser.trainee_id = ${userId}
+            ORDER BY se.exam_date DESC
+            LIMIT 10
+        `);
+
+        return (results as any[]).map(row => ({
+            subject: row.subject,
+            examDate: new Date(row.exam_date),
+            grade: row.grade,
+            points: row.points,
+            percentage: row.percentage != null ? Number(row.percentage) : null,
+            passed: row.passed,
+        }));
+    } catch (error) {
+        console.error('HAI.ai DataContext: Error fetching exam results:', error);
+        return [];
+    }
+}
+
+/**
+ * Fetch trainee's recent submissions (enabler + use case) with status and feedback.
+ */
+export async function fetchTraineeSubmissions(userId: string): Promise<SubmissionInfo[]> {
+    try {
+        // Enabler submissions
+        const enablerSubs = await db.execute(sql`
+            SELECT
+                e.title,
+                es.status,
+                es.submitted_at,
+                es.trainer_feedback
+            FROM enabler_submissions es
+            JOIN enablers e ON e.id = es.enabler_id
+            WHERE es.trainee_id = ${userId}
+            ORDER BY es.submitted_at DESC
+            LIMIT 5
+        `);
+
+        // Use case submissions
+        const ucSubs = await db.execute(sql`
+            SELECT
+                uc.title,
+                ucs.status,
+                ucs.submitted_at,
+                ucs.trainer_feedback
+            FROM use_case_submissions ucs
+            JOIN use_cases uc ON uc.id = ucs.use_case_id
+            WHERE ucs.trainee_id = ${userId}
+            ORDER BY ucs.submitted_at DESC
+            LIMIT 5
+        `);
+
+        const submissions: SubmissionInfo[] = [];
+
+        for (const row of enablerSubs as any[]) {
+            submissions.push({
+                type: 'enabler',
+                title: row.title,
+                status: row.status,
+                submittedAt: new Date(row.submitted_at),
+                trainerFeedback: row.trainer_feedback,
+            });
+        }
+
+        for (const row of ucSubs as any[]) {
+            submissions.push({
+                type: 'use_case',
+                title: row.title,
+                status: row.status,
+                submittedAt: new Date(row.submitted_at),
+                trainerFeedback: row.trainer_feedback,
+            });
+        }
+
+        // Sort by date descending
+        submissions.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
+        return submissions.slice(0, 8);
+    } catch (error) {
+        console.error('HAI.ai DataContext: Error fetching submissions:', error);
+        return [];
+    }
+}
+
+/**
+ * Fetch use-case progress per course for the trainee.
+ */
+export async function fetchUseCaseProgress(userId: string): Promise<UseCaseProgress[]> {
+    try {
+        const results = await db.execute(sql`
+            SELECT
+                c.title AS course_title,
+                COUNT(DISTINCT uc.id) AS total,
+                COUNT(DISTINCT CASE WHEN ucs.status = 'APPROVED' THEN uc.id END) AS completed,
+                COUNT(DISTINCT CASE WHEN ucs.status = 'PENDING' THEN uc.id END) AS pending
+            FROM course_members cm
+            JOIN courses c ON c.id = cm.course_id
+            JOIN use_cases uc ON uc.course_id = c.id AND uc.is_active = true
+            LEFT JOIN use_case_submissions ucs ON ucs.use_case_id = uc.id AND ucs.trainee_id = ${userId}
+            WHERE cm.user_id = ${userId}
+            GROUP BY c.id, c.title
+            HAVING COUNT(DISTINCT uc.id) > 0
+            ORDER BY c.title
+        `);
+
+        return (results as any[]).map(row => {
+            const total = Number(row.total) || 0;
+            const completed = Number(row.completed) || 0;
+            return {
+                courseTitle: row.course_title,
+                totalUseCases: total,
+                completedUseCases: completed,
+                pendingUseCases: Number(row.pending) || 0,
+                progressPercent: total > 0 ? Math.round((completed / total) * 100) : 0,
+            };
+        });
+    } catch (error) {
+        console.error('HAI.ai DataContext: Error fetching use case progress:', error);
+        return [];
+    }
+}
+
+// ============================================================================
 // TRAINER FETCHERS
 // ============================================================================
 
@@ -571,6 +772,7 @@ export async function fetchTrainerPendingReviews(trainerId: string): Promise<Tra
         pendingUseCaseSubmissions: 0,
         pendingQuizReviews: 0,
         pendingReportReviews: 0,
+        pendingTraineeNames: [],
     };
 
     try {
@@ -609,6 +811,24 @@ export async function fetchTrainerPendingReviews(trainerId: string): Promise<Tra
             WHERE ar.status = 'SUBMITTED'
         `);
         defaultResult.pendingReportReviews = Number((reportSubs as any[])[0]?.cnt) || 0;
+
+        // Get distinct trainee names with pending items (so trainer knows WHO)
+        const pendingTrainees = await db.execute(sql`
+            SELECT DISTINCT p.full_name
+            FROM profiles p
+            WHERE p.assigned_trainer_id = ${trainerId}
+              AND p.role = 'TRAINEE'
+              AND (
+                EXISTS (SELECT 1 FROM enabler_submissions es WHERE es.trainee_id = p.id AND es.status = 'PENDING')
+                OR EXISTS (SELECT 1 FROM use_case_submissions ucs WHERE ucs.trainee_id = p.id AND ucs.status = 'PENDING')
+                OR EXISTS (SELECT 1 FROM activity_reports ar WHERE ar.trainee_id = p.id AND ar.status = 'SUBMITTED')
+              )
+            ORDER BY p.full_name
+            LIMIT 10
+        `);
+        defaultResult.pendingTraineeNames = (pendingTrainees as any[])
+            .map(r => r.full_name)
+            .filter(Boolean);
 
         return defaultResult;
     } catch (error) {
@@ -796,6 +1016,66 @@ function formatNotifications(notifs: NotificationInfo): string {
     return lines.join('\n');
 }
 
+function formatExamResults(exams: ExamResultInfo[]): string {
+    if (exams.length === 0) {
+        return '**Klausurergebnisse:** Keine Ergebnisse vorhanden.';
+    }
+
+    const lines: string[] = [`**Klausurergebnisse (letzte ${exams.length}):**`];
+
+    for (const e of exams) {
+        const parts: string[] = [e.subject, formatDate(e.examDate)];
+        if (e.grade) parts.push(`Note: ${e.grade}`);
+        if (e.percentage != null) parts.push(`${e.percentage.toFixed(0)}%`);
+        if (e.passed !== null) parts.push(e.passed ? 'Bestanden' : 'Nicht bestanden');
+        lines.push(`- ${parts.join(' | ')}`);
+    }
+
+    return lines.join('\n');
+}
+
+function formatSubmissions(submissions: SubmissionInfo[]): string {
+    if (submissions.length === 0) {
+        return '**Abgaben:** Keine Abgaben vorhanden.';
+    }
+
+    const statusLabels: Record<string, string> = {
+        PENDING: 'Ausstehend',
+        APPROVED: 'Genehmigt',
+        REJECTED: 'Abgelehnt',
+    };
+
+    const lines: string[] = [`**Letzte Abgaben (${submissions.length}):**`];
+
+    for (const s of submissions) {
+        const typeLabel = s.type === 'enabler' ? 'Enabler' : 'Use Case';
+        const statusLabel = statusLabels[s.status] || s.status;
+        lines.push(`- [${typeLabel}] "${s.title}" — ${statusLabel} (${formatDate(s.submittedAt)})`);
+        if (s.trainerFeedback) {
+            lines.push(`  Feedback: "${s.trainerFeedback.substring(0, 100)}${s.trainerFeedback.length > 100 ? '...' : ''}"`);
+        }
+    }
+
+    return lines.join('\n');
+}
+
+function formatUseCaseProgress(progress: UseCaseProgress[]): string {
+    if (progress.length === 0) {
+        return '**Use-Case-Fortschritt:** Keine Use Cases zugewiesen.';
+    }
+
+    const lines: string[] = ['**Use-Case-Fortschritt:**'];
+
+    for (const p of progress) {
+        lines.push(`- **${p.courseTitle}**: ${p.completedUseCases}/${p.totalUseCases} erledigt (${p.progressPercent}%)`);
+        if (p.pendingUseCases > 0) {
+            lines.push(`  ${p.pendingUseCases} ausstehend zur Bewertung`);
+        }
+    }
+
+    return lines.join('\n');
+}
+
 function formatTrainerReviews(reviews: TrainerPendingReviews): string {
     const total = reviews.pendingEnablerSubmissions
         + reviews.pendingUseCaseSubmissions
@@ -821,6 +1101,10 @@ function formatTrainerReviews(reviews: TrainerPendingReviews): string {
     }
     if (reviews.pendingReportReviews > 0) {
         lines.push(`- Taetigkeitsnachweise: ${reviews.pendingReportReviews}`);
+    }
+
+    if (reviews.pendingTraineeNames.length > 0) {
+        lines.push(`**Betroffene Azubis:** ${reviews.pendingTraineeNames.join(', ')}`);
     }
 
     return lines.join('\n');
@@ -901,6 +1185,24 @@ export async function fetchDataContext(
                     case 'exam_query': {
                         const calendar = await fetchCalendar(userId);
                         parts.push(formatCalendar(calendar));
+                        intentTokenEstimate = 250;
+                        break;
+                    }
+                    case 'exam_results_query': {
+                        const examResults = await fetchExamResults(userId);
+                        parts.push(formatExamResults(examResults));
+                        intentTokenEstimate = 300;
+                        break;
+                    }
+                    case 'submission_query': {
+                        const submissions = await fetchTraineeSubmissions(userId);
+                        parts.push(formatSubmissions(submissions));
+                        intentTokenEstimate = 350;
+                        break;
+                    }
+                    case 'use_case_query': {
+                        const ucProgress = await fetchUseCaseProgress(userId);
+                        parts.push(formatUseCaseProgress(ucProgress));
                         intentTokenEstimate = 250;
                         break;
                     }

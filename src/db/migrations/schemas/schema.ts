@@ -178,11 +178,7 @@ export const enablers = pgTable('enablers', {
   descriptionText: text('description_text'),
   pptUrl: text('ppt_url'), // Link to Supabase Storage
   videoUrl: text('video_url'), // Link to Supabase Storage or external
-  scenarioText: text('scenario_text'),
-  hintText: text('hint_text'),
-  scenarioImageUrl: text('scenario_image_url'),
-  // Multiple scenarios with hints (new)
-  scenarios: jsonb('scenarios').$type<Array<{ text: string; hint?: string }>>(),
+  scenarioPdfUrl: text('scenario_pdf_url'), // Link to Supabase Storage (PDF)
 
   // Settings
   durationValue: integer('duration_value'),
@@ -729,7 +725,7 @@ export const haiEmbeddings = pgTable('hai_embeddings', {
   chunkIndex: integer('chunk_index').notNull().default(0),
   content: text('content').notNull(),
   contentHash: text('content_hash').notNull(),
-  embedding: vector('embedding', { dimensions: 768 }),
+  embedding: vector('embedding', { dimensions: 3072 }),
   // Enhanced metadata for PageIndex: { page?: number, documentId?: string, useCaseTitle?: string }
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),

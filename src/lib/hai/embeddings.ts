@@ -86,12 +86,11 @@ export interface EmbeddingRecord {
 /**
  * Simple token-bucket rate limiter for embedding API calls.
  *
- * Only applies to cloud providers (Gemini):
- *   - Gemini free tier: ~100 RPM (1.67 req/s) → 700ms between calls
- *
+ * Gemini paid tier: No rate limiting needed (high RPM).
+ * Gemini free tier: ~100 RPM (1.67 req/s) → 100ms safety margin.
  * Ollama (local): No rate limiting needed — runs on your machine.
  */
-const EMBEDDING_RATE_LIMIT_MS = 700; // ms between embedding calls (cloud only)
+const EMBEDDING_RATE_LIMIT_MS = 100; // ms between embedding calls (minimal for paid tier)
 let _lastEmbeddingCall = 0;
 
 /**
@@ -99,7 +98,7 @@ let _lastEmbeddingCall = 0;
  */
 function isLocalProvider(): boolean {
   const provider = (
-    process.env.HAI_EMBEDDING_PROVIDER || 'ollama'
+    process.env.HAI_EMBEDDING_PROVIDER || 'gemini'
   ).toLowerCase();
   return provider === 'ollama';
 }
@@ -303,6 +302,14 @@ export async function indexContent(
         const embeddingResult = await provider.generateEmbedding(chunk.content);
 
         // UPSERT into database (safe — no data loss on partial failure)
+        // Include embeddingModel in metadata so we can track which provider created each embedding
+        const embeddingMetadata = {
+          ...metadata,
+          title,
+          chunkMetadata: chunk.metadata,
+          embeddingModel:
+            provider.name === 'gemini' ? 'gemini-embedding-001' : `ollama`,
+        };
         await haiDb.execute(sql`
                     INSERT INTO hai_embeddings (
                         source_type,
@@ -319,7 +326,7 @@ export async function indexContent(
                         ${chunk.content},
                         ${contentHash},
                         ${JSON.stringify(embeddingResult.embedding)}::vector,
-                        ${JSON.stringify({ ...metadata, title, chunkMetadata: chunk.metadata })}::jsonb
+                        ${embeddingMetadata}::jsonb
                     )
                     ON CONFLICT (source_type, source_id, chunk_index)
                     DO UPDATE SET

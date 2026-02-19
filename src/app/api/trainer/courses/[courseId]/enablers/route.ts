@@ -83,11 +83,7 @@ export async function POST(
     const pptUrl: string | undefined = body?.pptUrl;
     const videoUrl: string | undefined = body?.videoUrl;
     const descriptionText: string | undefined = body?.descriptionText;
-    const hintText: string | undefined = body?.hintText;
-    const scenarioText: string | undefined = body?.scenarioText;
-    const scenarioImageUrl: string | undefined = body?.scenarioImageUrl;
-    const scenarios: Array<{ text: string; hint?: string }> | undefined =
-      Array.isArray(body?.scenarios) ? body.scenarios : undefined;
+    const scenarioPdfUrl: string | undefined = body?.scenarioPdfUrl;
     const isActive: boolean | undefined =
       typeof body?.isActive === 'boolean' ? body.isActive : undefined;
 
@@ -116,10 +112,7 @@ export async function POST(
         descriptionText: descriptionText as any,
         pptUrl: pptUrl as any,
         videoUrl: videoUrl as any,
-        scenarioText: scenarioText as any,
-        hintText: hintText as any,
-        scenarioImageUrl: scenarioImageUrl as any,
-        scenarios: scenarios as any,
+        scenarioPdfUrl: scenarioPdfUrl as any,
         isActive: isActive as any,
         activatedAt: activatedAt as any,
       })

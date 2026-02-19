@@ -74,22 +74,12 @@ export async function PATCH(
       'durationValue',
       'durationUnit',
       'descriptionText',
-      'hintText',
       'pptUrl',
       'videoUrl',
-      'scenarioText',
-      'scenarioImageUrl',
+      'scenarioPdfUrl',
       'isActive',
-      'scenarios',
     ]) {
       if (typeof body?.[key] !== 'undefined') updates[key] = body[key];
-    }
-
-    // Auto-migrate legacy scenarioText/hintText to scenarios array if scenarios provided
-    if (Array.isArray(body?.scenarios) && body.scenarios.length > 0) {
-      updates.scenarios = body.scenarios;
-      updates.scenarioText = null;
-      updates.hintText = null;
     }
 
     if (

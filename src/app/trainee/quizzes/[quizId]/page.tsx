@@ -29,7 +29,7 @@ export default async function QuizPage({ params }: { params: Promise<{ quizId: s
     .map((qr) => {
       const opts = optRows
         .filter((o) => String(o.questionId) === String(qr.id))
-        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+        .filter((o) => String(o.questionId) === String(qr.id));
       return {
         id: qr.id,
         question: qr.questionText,
