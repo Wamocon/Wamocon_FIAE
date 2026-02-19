@@ -1,70 +1,65 @@
 /**
  * API Response Caching Utility
- * Implements in-memory caching for API responses to reduce database load
+ *
+ * Uses Next.js Data Cache (`unstable_cache`) so cached data persists across
+ * serverless invocations, container restarts, and multiple replicas.
+ *
+ * The external API (`apiCache.getOrFetch`, `ApiCache.TTL`, `cacheHeaders`)
+ * remains unchanged — no route-level changes required.
  */
 
-interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-}
+import { unstable_cache, revalidateTag } from 'next/cache';
 
-class ApiCache {
-  private cache: Map<string, CacheEntry<any>> = new Map();
-  private readonly defaultTTL = 2 * 60 * 1000; // 2 minutes default
+export class ApiCache {
+  /** Pre-defined TTL durations (milliseconds – kept for backward compat) */
+  static readonly TTL = {
+    SHORT: 2 * 60 * 1000, // 2 minutes - for frequently changing data
+    MEDIUM: 5 * 60 * 1000, // 5 minutes - default, for dashboards
+    LONG: 15 * 60 * 1000, // 15 minutes - for rarely changing data (courses, skills)
+    EXTRA_LONG: 30 * 60 * 1000, // 30 minutes - for static lookups (lernfelder, criteria)
+  };
 
   /**
-   * Get cached data if available and not expired
+   * Derive a resource tag from a cache key.
+   * e.g. "trainee_dashboard_abc-123" → "trainee_dashboard"
+   *      "trainer_quizzes_xyz__2025" → "trainer_quizzes"
    */
-  get<T>(key: string, ttl: number = this.defaultTTL): T | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-
-    const age = Date.now() - entry.timestamp;
-    if (age > ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return entry.data;
+  private getResourceTag(key: string): string {
+    const parts = key.split('_');
+    return parts.length >= 2 ? `${parts[0]}_${parts[1]}` : key;
   }
 
   /**
-   * Store data in cache
-   */
-  set<T>(key: string, data: T): void {
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-    });
-  }
-
-  /**
-   * Clear specific key or all cache
-   */
-  clear(key?: string): void {
-    if (key) {
-      this.cache.delete(key);
-    } else {
-      this.cache.clear();
-    }
-  }
-
-  /**
-   * Get or fetch data with caching
+   * Get or fetch data with caching via Next.js Data Cache.
+   *
+   * @param key    - Unique cache key (e.g. `trainee_dashboard_${userId}`)
+   * @param fetcher - Async function that produces the data
+   * @param ttlMs  - Time-to-live in **milliseconds** (converted to seconds internally)
    */
   async getOrFetch<T>(
     key: string,
     fetcher: () => Promise<T>,
-    ttl: number = this.defaultTTL
+    ttlMs: number = ApiCache.TTL.MEDIUM
   ): Promise<T> {
-    const cached = this.get<T>(key, ttl);
-    if (cached !== null) {
-      return cached;
-    }
+    const revalidate = Math.max(1, Math.floor(ttlMs / 1000));
+    const tag = this.getResourceTag(key);
 
-    const data = await fetcher();
-    this.set(key, data);
-    return data;
+    const cachedFn = unstable_cache(fetcher, [key], {
+      revalidate,
+      tags: [tag],
+    });
+
+    return cachedFn();
+  }
+
+  /**
+   * Invalidate all cache entries that share a resource tag.
+   * Call after mutations so the next GET returns fresh data.
+   *
+   * @example apiCache.invalidate('trainer_quizzes');
+   */
+  invalidate(tag: string): void {
+    revalidateTag(tag);
   }
 }
 

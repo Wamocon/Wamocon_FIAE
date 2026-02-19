@@ -45,7 +45,12 @@ export function MainLayout({
   const pathname = usePathname();
   const hideBackButton = useMemo(() => {
     if (!pathname) return false;
-    return pathname.startsWith('/trainee/quizzes/');
+    // Hide back button on dashboard and quiz pages (no meaningful back navigation)
+    return (
+      pathname === '/trainee/dashboard' ||
+      pathname === '/trainer/dashboard' ||
+      pathname.startsWith('/trainee/quizzes/')
+    );
   }, [pathname]);
 
   // Memoize the layout structure to prevent unnecessary re-renders
@@ -53,10 +58,10 @@ export function MainLayout({
     () => (
       <div className="from-background relative flex h-screen bg-gradient-to-br via-red-900/20 to-red-800/30">
         {/* Sidebar + hover edge wrapper */}
-        <div className="relative z-40 group">
+        <div className="group relative z-40">
           {/* Hover edge to reveal sidebar when hidden (desktop only) */}
           <div
-            className="absolute left-0 top-0 hidden h-full w-2 lg:block"
+            className="absolute top-0 left-0 hidden h-full w-2 lg:block"
             aria-hidden="true"
           />
 
@@ -96,7 +101,15 @@ export function MainLayout({
         </main>
       </div>
     ),
-    [currentView, sidebarOpen, onToggleSidebar, userRole, onGoBack, children, hideBackButton]
+    [
+      currentView,
+      sidebarOpen,
+      onToggleSidebar,
+      userRole,
+      onGoBack,
+      children,
+      hideBackButton,
+    ]
   );
 
   return layoutContent;

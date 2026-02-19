@@ -6,8 +6,15 @@ import toast from 'react-hot-toast';
 import { Users, Eye, MessageSquare, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
-type TraineeItem = { id: string; full_name: string; avatar_url?: string | null; progress: number; isActive?: boolean };
+type TraineeItem = {
+  id: string;
+  full_name: string;
+  avatar_url?: string | null;
+  progress: number;
+  isActive?: boolean;
+};
 
 export default function TrainerTraineesPage() {
   const { profile, user, loading } = useAuth() as any;
@@ -23,7 +30,9 @@ export default function TrainerTraineesPage() {
         const params = new URLSearchParams();
         if (user.id) params.set('trainerAuthId', user.id);
         if (profile.id) params.set('trainerProfileId', profile.id);
-        const res = await fetch(`/api/trainer/trainees?${params.toString()}`, { cache: 'no-store' });
+        const res = await fetch(`/api/trainer/trainees?${params.toString()}`, {
+          cache: 'no-store',
+        });
         if (!res.ok) throw new Error(t('trainee.management.loadError'));
         const data = await res.json();
         setTrainees(data.trainees || []);
@@ -39,7 +48,9 @@ export default function TrainerTraineesPage() {
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">{t('trainee.management.loading')}</p>
+          <p className="text-muted-foreground">
+            {t('trainee.management.loading')}
+          </p>
         </div>
       </div>
     );
@@ -73,15 +84,13 @@ export default function TrainerTraineesPage() {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-6">
           <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <Users className="h-8 w-8 text-foreground" />
+            <Users className="text-foreground h-8 w-8" />
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
               {t('trainee.management.title')}
             </h1>
-            <p className="text-muted">
-              {t('trainee.management.description')}
-            </p>
+            <p className="text-muted">{t('trainee.management.description')}</p>
           </div>
         </div>
       </div>
@@ -96,13 +105,15 @@ export default function TrainerTraineesPage() {
             <div className="mb-4 flex items-start justify-between">
               <div className="flex items-center gap-4">
                 {trainee.avatar_url ? (
-                  <img
+                  <Image
                     src={trainee.avatar_url}
                     alt={trainee.full_name}
-                    className="border-accent/30 h-16 w-16 rounded-2xl border-2 shadow-lg object-cover"
+                    width={64}
+                    height={64}
+                    className="border-accent/30 h-16 w-16 rounded-2xl border-2 object-cover shadow-lg"
                   />
                 ) : (
-                  <div className="border-accent/30 flex h-16 w-16 items-center justify-center rounded-2xl border-2 bg-muted text-muted shadow-lg">
+                  <div className="border-accent/30 bg-muted text-muted flex h-16 w-16 items-center justify-center rounded-2xl border-2 shadow-lg">
                     <Users className="h-6 w-6" />
                   </div>
                 )}
@@ -111,8 +122,16 @@ export default function TrainerTraineesPage() {
                     {trainee.full_name}
                   </h3>
                   <div className="flex items-center gap-2">
-                    <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">{t('roles.trainee')}</span>
-                    <span className={`text-xs rounded-full px-2 py-0.5 border ${trainee.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}>{trainee.isActive ? t('common.active') : t('common.inactive')}</span>
+                    <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">
+                      {t('roles.trainee')}
+                    </span>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-xs ${trainee.isActive ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}`}
+                    >
+                      {trainee.isActive
+                        ? t('common.active')
+                        : t('common.inactive')}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -121,13 +140,19 @@ export default function TrainerTraineesPage() {
             {/* Progress */}
             <div className="mb-4">
               <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="text-muted">{t('trainee.management.overallProgress')}</span>
-                <span className="text-foreground font-medium">{trainee.progress ?? 0}%</span>
+                <span className="text-muted">
+                  {t('trainee.management.overallProgress')}
+                </span>
+                <span className="text-foreground font-medium">
+                  {trainee.progress ?? 0}%
+                </span>
               </div>
-              <div className="h-3 w-full rounded-full bg-muted/30">
+              <div className="bg-muted/30 h-3 w-full rounded-full">
                 <div
                   className="h-3 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500"
-                  style={{ width: `${Math.max(0, Math.min(100, trainee.progress ?? 0))}%` }}
+                  style={{
+                    width: `${Math.max(0, Math.min(100, trainee.progress ?? 0))}%`,
+                  }}
                 />
               </div>
             </div>
@@ -135,12 +160,16 @@ export default function TrainerTraineesPage() {
             {/* Stats */}
             <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
               <div className="bg-background/50 rounded-xl p-3 text-center">
-                <div className="text-accent text-2xl font-bold">{trainee.progress}%</div>
+                <div className="text-accent text-2xl font-bold">
+                  {trainee.progress}%
+                </div>
                 <div className="text-muted">{t('modules.progress')}</div>
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
                 <div className="text-primary text-2xl font-bold">12</div>
-                <div className="text-muted">{t('trainee.management.modules')}</div>
+                <div className="text-muted">
+                  {t('trainee.management.modules')}
+                </div>
               </div>
             </div>
 
@@ -156,11 +185,20 @@ export default function TrainerTraineesPage() {
               <button
                 onClick={async () => {
                   try {
-                    await fetch(`/api/trainer/trainees/${trainee.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trainer_id: profile?.id, isActive: !trainee.isActive }) });
+                    await fetch(`/api/trainer/trainees/${trainee.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        trainer_id: profile?.id,
+                        isActive: !trainee.isActive,
+                      }),
+                    });
                     // refresh list
                     const params = new URLSearchParams();
                     if (profile?.id) params.set('trainerProfileId', profile.id);
-                    const res = await fetch(`/api/trainer/trainees?${params.toString()}`);
+                    const res = await fetch(
+                      `/api/trainer/trainees?${params.toString()}`
+                    );
                     const data = await res.json();
                     setTrainees(data.trainees || []);
                   } catch (e) {
@@ -168,9 +206,11 @@ export default function TrainerTraineesPage() {
                     toast.error(t('trainee.management.updateError'));
                   }
                 }}
-                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'bg-green-600 text-foreground hover:bg-green-700'}`}
+                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'text-foreground bg-green-600 hover:bg-green-700'}`}
               >
-                {trainee.isActive ? t('trainee.management.deactivate') : t('trainee.management.activate')}
+                {trainee.isActive
+                  ? t('trainee.management.deactivate')
+                  : t('trainee.management.activate')}
               </button>
             </div>
           </div>
