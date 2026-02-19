@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, eq, inArray } from 'drizzle-orm';
-import { lessons, modules, progress, subLessons } from '@/db/migrations/schemas/schema';
+import { and, count, eq, inArray, sql } from 'drizzle-orm';
+import {
+  lessons,
+  modules,
+  progress,
+  subLessons,
+} from '@/db/migrations/schemas/schema';
+import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -11,62 +17,86 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Fetch lessons with module title
-    const ls = await db
-      .select({
-        id: lessons.id,
-        title: lessons.title,
-        module_id: lessons.module_id,
-      })
-      .from(lessons);
+    const data = await apiCache.getOrFetch(
+      `trainee_lessons_${userId}`,
+      async () => {
+        // Fetch lessons + modules in batch
+        const [ls, mods] = await Promise.all([
+          db
+            .select({
+              id: lessons.id,
+              title: lessons.title,
+              module_id: lessons.module_id,
+            })
+            .from(lessons),
+          db.select({ id: modules.id, title: modules.title }).from(modules),
+        ]);
 
-    const moduleMap = new Map<string, string>();
-    // Preload module titles
-    const mods = await db.select({ id: modules.id, title: modules.title }).from(modules);
-    mods.forEach(m => moduleMap.set(m.id, m.title));
+        const moduleMap = new Map<string, string>();
+        mods.forEach(m => moduleMap.set(m.id, m.title));
 
-    // For each lesson, compute completion if all sub-lessons completed by user
-    const out = [] as Array<{
-      id: string;
-      title: string;
-      moduleTitle: string;
-      moduleId: string;
-      completed: boolean;
-      type: string;
-      ref?: string | null;
-    }>;
+        if (ls.length === 0) return [];
 
-    for (const l of ls) {
-      const subs = await db
-        .select({ id: subLessons.id })
-        .from(subLessons)
-        .where(eq(subLessons.lesson_id, l.id));
-      const subIds = subs.map(s => s.id);
-      let completed = false;
-      if (subIds.length === 0) {
-        completed = false;
-      } else {
-        const [{ value = 0 } = { value: 0 }] = await db
-          .select({ value: count() })
-          .from(progress)
-          .where(and(eq(progress.user_id, userId), inArray(progress.sub_lesson_id, subIds)));
-        completed = Number(value) >= subIds.length;
-      }
-      const moduleId = String(l.module_id ?? '');
-      out.push({
-        id: l.id,
-        title: l.title,
-        moduleTitle: moduleMap.get(moduleId) || 'Unbekanntes Modul',
-        moduleId,
-        completed,
-        type: 'lesson',
-        ref: null,
-      });
-    }
+        const lessonIds = ls.map(l => l.id);
 
-    return NextResponse.json(out);
+        // Batch: get ALL sub-lessons grouped by lesson_id (single query)
+        const allSubs = await db
+          .select({ id: subLessons.id, lessonId: subLessons.lesson_id })
+          .from(subLessons)
+          .where(sql`${subLessons.lesson_id} IN ${lessonIds}`);
+
+        const subsByLesson = new Map<string, string[]>();
+        for (const s of allSubs) {
+          const lid = String(s.lessonId);
+          if (!subsByLesson.has(lid)) subsByLesson.set(lid, []);
+          subsByLesson.get(lid)!.push(String(s.id));
+        }
+
+        // Batch: get ALL progress for this user (single query)
+        const allSubIds = allSubs.map(s => s.id);
+        const userProgress =
+          allSubIds.length > 0
+            ? await db
+                .select({ subLessonId: progress.sub_lesson_id })
+                .from(progress)
+                .where(
+                  and(
+                    eq(progress.user_id, userId),
+                    sql`${progress.sub_lesson_id} IN ${allSubIds}`
+                  )
+                )
+            : [];
+        const completedSubLessons = new Set(
+          userProgress.map(p => String(p.subLessonId))
+        );
+
+        return ls.map(l => {
+          const moduleId = String(l.module_id ?? '');
+          const subs = subsByLesson.get(String(l.id)) || [];
+          const completed =
+            subs.length > 0 &&
+            subs.every(subId => completedSubLessons.has(subId));
+
+          return {
+            id: l.id,
+            title: l.title,
+            moduleTitle: moduleMap.get(moduleId) || 'Unbekanntes Modul',
+            moduleId,
+            completed,
+            type: 'lesson',
+            ref: null,
+          };
+        });
+      },
+      ApiCache.TTL.MEDIUM
+    );
+
+    return NextResponse.json(data, { headers: cacheHeaders.medium });
   } catch (e) {
     console.error('Lessons API error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }

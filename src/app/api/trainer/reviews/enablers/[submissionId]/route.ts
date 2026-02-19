@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
-import { enablers, enablerSubmissions, notifications, profiles } from '@/db/migrations/schemas/schema';
+import {
+  enablers,
+  enablerSubmissions,
+  notifications,
+} from '@/db/migrations/schemas/schema';
+import { verifyTrainer } from '@/lib/auth-helpers';
 
-async function verifyTrainer(trainerId: string): Promise<boolean> {
-  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
-  return trainer?.role === 'TRAINER';
-}
-
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ submissionId: string }> }
+) {
   try {
     const { submissionId } = await params;
     const { searchParams } = new URL(req.url);
@@ -19,27 +22,46 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ su
     }
 
     const body = await req.json();
-    const status: 'PENDING' | 'APPROVED' | 'REJECTED' | undefined = body?.status;
-    const trainerFeedback: string | null | undefined = body?.trainerFeedback ?? undefined;
-    const feedbacks: Array<{ scenarioIndex: number; feedback: string }> | undefined = body?.feedbacks;
+    const status: 'PENDING' | 'APPROVED' | 'REJECTED' | undefined =
+      body?.status;
+    const trainerFeedback: string | null | undefined =
+      body?.trainerFeedback ?? undefined;
+    const feedbacks:
+      | Array<{ scenarioIndex: number; feedback: string }>
+      | undefined = body?.feedbacks;
 
     if (!status) {
       return NextResponse.json({ error: 'Missing status' }, { status: 400 });
     }
 
-    const [sub] = await db.select().from(enablerSubmissions).where(eq(enablerSubmissions.id, submissionId));
+    const [sub] = await db
+      .select()
+      .from(enablerSubmissions)
+      .where(eq(enablerSubmissions.id, submissionId));
     if (!sub) {
-      return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Submission not found' },
+        { status: 404 }
+      );
     }
 
-    const [en] = await db.select().from(enablers).where(eq(enablers.id, sub.enablerId));
+    const [en] = await db
+      .select({ id: enablers.id })
+      .from(enablers)
+      .where(eq(enablers.id, sub.enablerId));
     if (!en) {
-      return NextResponse.json({ error: 'Invalid submission' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Invalid submission' },
+        { status: 400 }
+      );
     }
 
     // Shared curriculum: any valid trainer can review submissions
     if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
     }
 
     const [row] = await db
@@ -49,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ su
         trainerFeedback: feedbacks ? undefined : (trainerFeedback ?? null),
         feedbacks: feedbacks || undefined,
         reviewedById: trainerId,
-        reviewedAt: new Date()
+        reviewedAt: new Date(),
       })
       .where(eq(enablerSubmissions.id, submissionId))
       .returning();
@@ -74,7 +96,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ su
     return NextResponse.json({ submission: row });
   } catch (e) {
     console.error('Trainer review enabler PATCH error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
-

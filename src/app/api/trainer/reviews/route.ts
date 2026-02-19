@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { courses, courseMembers, enablers, enablerSubmissions, profiles, useCases, useCaseSubmissions } from '@/db/migrations/schemas/schema';
+import {
+  courses,
+  courseMembers,
+  enablers,
+  enablerSubmissions,
+  profiles,
+  useCases,
+  useCaseSubmissions,
+} from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,15 +17,39 @@ export async function GET(req: NextRequest) {
     const trainerId = searchParams.get('trainerId');
     const onlyPending = searchParams.get('onlyPending') === 'true';
     const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (all)
-    if (!trainerId) return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    if (!trainerId)
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
 
     // Determine courses the trainer can review: creator or member (TRAINER)
-  const created = await db.select({ id: courses.id }).from(courses).where(eq(courses.createdById, trainerId));
-  const member = await db.select({ courseId: courseMembers.courseId }).from(courseMembers).where(and(eq(courseMembers.userId, trainerId), eq(courseMembers.role, 'TRAINER')));
-    const courseIds = Array.from(new Set([...(created.map(c => String(c.id))), ...(member.map(m => String(m.courseId)))]));
-    if (!courseIds.length) return NextResponse.json({ enablerSubmissions: [], useCaseSubmissions: [] });
+    const created = await db
+      .select({ id: courses.id })
+      .from(courses)
+      .where(eq(courses.createdById, trainerId));
+    const member = await db
+      .select({ courseId: courseMembers.courseId })
+      .from(courseMembers)
+      .where(
+        and(
+          eq(courseMembers.userId, trainerId),
+          eq(courseMembers.role, 'TRAINER')
+        )
+      );
+    const courseIds = Array.from(
+      new Set([
+        ...created.map(c => String(c.id)),
+        ...member.map(m => String(m.courseId)),
+      ])
+    );
+    if (!courseIds.length)
+      return NextResponse.json({
+        enablerSubmissions: [],
+        useCaseSubmissions: [],
+      });
 
-    const statuses = onlyPending ? ['PENDING'] : undefined;
+    // Build status filter conditions for SQL WHERE
+    const statusFilter = onlyPending
+      ? eq(enablerSubmissions.status, 'PENDING')
+      : undefined;
 
     let enablerRows: Array<{
       id: string;
@@ -46,6 +78,12 @@ export async function GET(req: NextRequest) {
     }> = [];
     if (!type || type === 'enabler') {
       // Get enabler submissions for trainer's courses
+      const esWhere = statusFilter
+        ? and(
+            inArray(enablers.courseId, courseIds),
+            eq(enablerSubmissions.status, 'PENDING')
+          )
+        : inArray(enablers.courseId, courseIds);
       const es = await db
         .select({
           id: enablerSubmissions.id,
@@ -61,22 +99,47 @@ export async function GET(req: NextRequest) {
         })
         .from(enablerSubmissions)
         .leftJoin(enablers, eq(enablers.id, enablerSubmissions.enablerId))
-        .where(inArray(enablers.courseId, courseIds));
-      enablerRows = statuses ? es.filter((r) => statuses.includes(String(r.status))) : es;
+        .where(esWhere);
+      enablerRows = es;
 
       if (enablerRows.length) {
         // Load titles and trainee names
-        const enIds = Array.from(new Set(enablerRows.map(r => String(r.enablerId))));
-        const trIds = Array.from(new Set(enablerRows.map(r => String(r.traineeId))));
-  const enMapArr = await db.select({ id: enablers.id, title: enablers.title }).from(enablers).where(inArray(enablers.id, enIds));
-  const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
-        const enMap = Object.fromEntries(enMapArr.map((e) => [String(e.id), e.title]));
-        const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));
-  enablerRows = enablerRows.map(r => ({ ...r, enablerTitle: enMap[String(r.enablerId)] || 'Enabler', traineeName: trMap[String(r.traineeId)] || 'Unbekannt', attemptNumber: (r as any).attemptNumber }));
+        const enIds = Array.from(
+          new Set(enablerRows.map(r => String(r.enablerId)))
+        );
+        const trIds = Array.from(
+          new Set(enablerRows.map(r => String(r.traineeId)))
+        );
+        const enMapArr = await db
+          .select({ id: enablers.id, title: enablers.title })
+          .from(enablers)
+          .where(inArray(enablers.id, enIds));
+        const trMapArr = await db
+          .select({ id: profiles.id, fullName: profiles.fullName })
+          .from(profiles)
+          .where(inArray(profiles.id, trIds));
+        const enMap = Object.fromEntries(
+          enMapArr.map(e => [String(e.id), e.title])
+        );
+        const trMap = Object.fromEntries(
+          trMapArr.map(p => [String(p.id), p.fullName])
+        );
+        enablerRows = enablerRows.map(r => ({
+          ...r,
+          enablerTitle: enMap[String(r.enablerId)] || 'Enabler',
+          traineeName: trMap[String(r.traineeId)] || 'Unbekannt',
+          attemptNumber: (r as any).attemptNumber,
+        }));
       }
     }
 
     if (!type || type === 'usecase') {
+      const usWhere = onlyPending
+        ? and(
+            inArray(useCases.courseId, courseIds),
+            eq(useCaseSubmissions.status, 'PENDING')
+          )
+        : inArray(useCases.courseId, courseIds);
       const us = await db
         .select({
           id: useCaseSubmissions.id,
@@ -89,23 +152,48 @@ export async function GET(req: NextRequest) {
         })
         .from(useCaseSubmissions)
         .leftJoin(useCases, eq(useCases.id, useCaseSubmissions.useCaseId))
-        .where(inArray(useCases.courseId, courseIds));
-      useCaseRows = statuses ? us.filter((r) => statuses.includes(String(r.status))) : us;
+        .where(usWhere);
+      useCaseRows = us;
 
       if (useCaseRows.length) {
-        const ucIds = Array.from(new Set(useCaseRows.map(r => String(r.useCaseId))));
-        const trIds = Array.from(new Set(useCaseRows.map(r => String(r.traineeId))));
-  const ucMapArr = await db.select({ id: useCases.id, title: useCases.title }).from(useCases).where(inArray(useCases.id, ucIds));
-  const trMapArr = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles).where(inArray(profiles.id, trIds));
-        const ucMap = Object.fromEntries(ucMapArr.map((e) => [String(e.id), e.title]));
-        const trMap = Object.fromEntries(trMapArr.map((p) => [String(p.id), p.fullName]));
-  useCaseRows = useCaseRows.map(r => ({ ...r, useCaseTitle: ucMap[String(r.useCaseId)] || 'Use Case', traineeName: trMap[String(r.traineeId)] || 'Unbekannt', attemptNumber: (r as any).attemptNumber }));
+        const ucIds = Array.from(
+          new Set(useCaseRows.map(r => String(r.useCaseId)))
+        );
+        const trIds = Array.from(
+          new Set(useCaseRows.map(r => String(r.traineeId)))
+        );
+        const ucMapArr = await db
+          .select({ id: useCases.id, title: useCases.title })
+          .from(useCases)
+          .where(inArray(useCases.id, ucIds));
+        const trMapArr = await db
+          .select({ id: profiles.id, fullName: profiles.fullName })
+          .from(profiles)
+          .where(inArray(profiles.id, trIds));
+        const ucMap = Object.fromEntries(
+          ucMapArr.map(e => [String(e.id), e.title])
+        );
+        const trMap = Object.fromEntries(
+          trMapArr.map(p => [String(p.id), p.fullName])
+        );
+        useCaseRows = useCaseRows.map(r => ({
+          ...r,
+          useCaseTitle: ucMap[String(r.useCaseId)] || 'Use Case',
+          traineeName: trMap[String(r.traineeId)] || 'Unbekannt',
+          attemptNumber: (r as any).attemptNumber,
+        }));
       }
     }
 
-    return NextResponse.json({ enablerSubmissions: enablerRows, useCaseSubmissions: useCaseRows });
+    return NextResponse.json({
+      enablerSubmissions: enablerRows,
+      useCaseSubmissions: useCaseRows,
+    });
   } catch (e) {
     console.error('Trainer reviews GET error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }

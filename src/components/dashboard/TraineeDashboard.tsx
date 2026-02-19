@@ -13,31 +13,50 @@ import {
   Clock,
   BarChart3,
   PieChart,
+  Filter,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-} from 'recharts';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import dynamic from 'next/dynamic';
+
+// Lazy-load recharts components (~200KB) - they're not needed for initial render
+const WeeklyProgressChart = dynamic(
+  () => import('./TraineeDashboardCharts').then(mod => mod.WeeklyProgressChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[200px] items-center justify-center">
+        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+      </div>
+    ),
+  }
+);
+const SkillRadarChart = dynamic(
+  () => import('./TraineeDashboardCharts').then(mod => mod.SkillRadarChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[200px] items-center justify-center">
+        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+      </div>
+    ),
+  }
+);
+const ModuleBarChart = dynamic(
+  () => import('./TraineeDashboardCharts').then(mod => mod.ModuleBarChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[200px] items-center justify-center">
+        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+      </div>
+    ),
+  }
+);
 
 // Types for dashboard data
 type DashboardData = {
@@ -54,7 +73,7 @@ type DashboardData = {
   deadlines: any[];
 };
 
-// Cache helpers for instant dashboard loading
+// Cache helpers for instant dashboard loading (used as placeholderData)
 const TRAINEE_DASHBOARD_CACHE_KEY = 'wmc_trainee_dashboard_cache';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5)
 
@@ -65,7 +84,7 @@ const getCachedDashboard = (): DashboardData | null => {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < CACHE_TTL) return data;
     }
-  } catch (_) {}
+  } catch (_) { }
   return null;
 };
 
@@ -75,7 +94,7 @@ const setCachedDashboard = (data: DashboardData) => {
       TRAINEE_DASHBOARD_CACHE_KEY,
       JSON.stringify({ data, timestamp: Date.now() })
     );
-  } catch (_) {}
+  } catch (_) { }
 };
 
 export default function TraineeDashboard() {
@@ -84,84 +103,67 @@ export default function TraineeDashboard() {
   const { t } = useLanguage();
 
   const [mounted, setMounted] = useState(false);
-  const [fetching, setFetching] = useState(false);
-  const [dataError, setDataError] = useState<string | null>(null);
-  const [nextLesson, setNextLesson] = useState<{
-    id: string;
-    title: string;
-    module: string;
-    estimatedTime: string;
-  } | null>(null);
-  const [modules, setModules] = useState<any[]>([]);
-  const [weeklyProgress, setWeeklyProgress] = useState<any[]>([]);
-  const [skillRadar, setSkillRadar] = useState<any[]>([]);
-  const [achievements, setAchievements] = useState<any[]>([]);
-  const [deadlines, setDeadlines] = useState<any[]>([]);
+  useEffect(() => setMounted(true), []);
 
-  // Apply cached or fresh dashboard data to state
-  const applyDashboardData = (data: DashboardData) => {
-    setModules(Array.isArray(data.modules) ? data.modules : []);
-    setWeeklyProgress(
-      Array.isArray(data.weeklyProgress) ? data.weeklyProgress : []
-    );
-    setSkillRadar(Array.isArray(data.skillRadar) ? data.skillRadar : []);
-    setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
-    setDeadlines(Array.isArray(data.deadlines) ? data.deadlines : []);
-    if (data.nextItem) {
-      setNextLesson({
-        id: data.nextItem.lessonId,
-        title: data.nextItem.lessonTitle,
-        module: data.nextItem.moduleTitle,
-        estimatedTime: data.nextItem.estimatedTime,
-      });
-    } else {
-      setNextLesson(null);
-    }
-  };
-
+  // Redirect trainee without birth_date to profile completion
   useEffect(() => {
-    setMounted(true);
-    // Load cached data immediately on mount
-    const cached = getCachedDashboard();
-    if (cached) {
-      applyDashboardData(cached);
+    if (profile?.role === 'trainee' && !profile.birth_date) {
+      router.replace('/trainee/profile?required=true');
     }
-  }, []);
+  }, [profile, router]);
 
+  // ── React Query replaces manual useState + useEffect + fetch ──
+  const url = profile?.id
+    ? `/api/trainee/dashboard?userId=${profile.id}`
+    : null;
+
+  const { data, error: dataError } = useApiQuery<DashboardData>(url, {
+    usePrefetch: true,
+    placeholderData: () => getCachedDashboard() ?? undefined,
+  });
+
+  // Persist fresh data to localStorage for instant display on next visit
   useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) {
-        setFetching(false);
-        return;
-      }
-      setFetching(true);
-      setDataError(null);
-      try {
-        const res = await fetch(`/api/trainee/dashboard?userId=${profile.id}`);
-        if (!res.ok) {
-          const errText = await res.text().catch(() => 'Unknown error');
-          console.error('Dashboard API error:', res.status, errText);
-          setDataError(`${t('dashboard.error.loading')} ${res.status}`);
-          setFetching(false);
-          return;
-        }
-        const data = await res.json();
+    if (data) setCachedDashboard(data);
+  }, [data]);
 
-        // Update state and cache
-        applyDashboardData(data);
-        setCachedDashboard(data);
-      } catch (e) {
-        console.error(e);
-        setDataError(t('dashboard.error.network'));
-      } finally {
-        setFetching(false);
-      }
-    };
-    load();
-  }, [profile?.id]);
+  // Derive state from the query response
+  const modules = data?.modules ?? [];
+  const weeklyProgress = data?.weeklyProgress ?? [];
+  const skillRadar = data?.skillRadar ?? [];
+  const achievements = data?.achievements ?? [];
+  const deadlines = data?.deadlines ?? [];
+  const nextLesson = data?.nextItem
+    ? {
+      id: data.nextItem.lessonId,
+      title: data.nextItem.lessonTitle,
+      module: data.nextItem.moduleTitle,
+      estimatedTime: data.nextItem.estimatedTime,
+    }
+    : null;
+
+  // ── UI State for Module List ──
+  const [filter, setFilter] = useState<'all' | 'in_progress' | 'completed'>(
+    'all'
+  );
+  const [visibleCount, setVisibleCount] = useState(6);
+  const [visibleModuleProgressCount, setVisibleModuleProgressCount] = useState(5);
 
   // Don't render until mounted (SSR fix)
   if (!mounted) return null;
+
+
+
+  // Filter modules
+  const filteredModules = modules.filter((m: any) => {
+    if (filter === 'all') return true;
+    if (filter === 'in_progress') return m.progress > 0 && m.progress < 100;
+    if (filter === 'completed') return m.progress === 100;
+    return true;
+  });
+
+  const displayedModules = filteredModules.slice(0, visibleCount);
+  const hasMore = filteredModules.length > visibleCount;
 
   // Derived module progress for charts
 
@@ -260,45 +262,127 @@ export default function TraineeDashboard() {
 
             {/* Learning Path Section - Textual Information Above Charts */}
             <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-6 shadow-2xl">
-              <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
-                <div className="from-accent to-primary mr-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
-                  <BookOpen className="text-foreground h-5 w-5" />
-                </div>
-                {t('dashboard.myLearningPath')}
-              </h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {modules.map((module: any) => (
-                  <div
-                    key={module.id}
-                    className="from-background/80 hover:from-background/90 border-accent/20 hover:border-accent/40 group cursor-pointer rounded-xl border bg-gradient-to-br to-red-900/10 p-5 shadow-lg transition-all duration-300 hover:to-red-900/20 hover:shadow-xl"
-                    onClick={() => handleModuleClick(module.id)}
-                  >
-                    <div className="mb-3 flex items-center justify-between">
-                      <h3 className="text-foreground group-hover:text-accent text-lg font-bold transition-colors">
-                        {module.title}
-                      </h3>
-                      <ArrowRight className="text-accent/60 group-hover:text-accent h-5 w-5 transition-colors" />
-                    </div>
-                    <p className="text-muted-foreground mb-3 text-sm">
-                      {t('dashboard.progress')}
-                    </p>
-                    <div className="bg-muted/50 h-3 w-full overflow-hidden rounded-full">
-                      <div
-                        className="from-accent to-primary h-3 rounded-full bg-gradient-to-r shadow-lg transition-all duration-700"
-                        style={{ width: `${module.progress ?? 0}%` }}
-                      />
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-muted-foreground text-sm">
-                        0% → {module.progress ?? 0}%
-                      </span>
-                      <span className="text-accent text-lg font-bold">
-                        {module.progress ?? 0}%
-                      </span>
-                    </div>
+              <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <h3 className="text-foreground flex items-center text-xl font-bold">
+                  <div className="from-accent to-primary mr-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
+                    <BookOpen className="text-foreground h-5 w-5" />
                   </div>
-                ))}
+                  {t('dashboard.myLearningPath')}
+                </h3>
+
+                {/* Filter Dropdown/Tabs */}
+                <div className="bg-background/40 flex rounded-lg p-1 backdrop-blur-sm">
+                  <button
+                    onClick={() => setFilter('all')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${filter === 'all'
+                      ? 'bg-accent text-white shadow-md'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+                      }`}
+                  >
+                    {t('dashboard.filterAll') || 'Alle'}
+                  </button>
+                  <button
+                    onClick={() => setFilter('in_progress')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${filter === 'in_progress'
+                      ? 'bg-accent text-white shadow-md'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+                      }`}
+                  >
+                    {t('dashboard.filterInProgress') || 'In Bearbeitung'}
+                  </button>
+                  <button
+                    onClick={() => setFilter('completed')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${filter === 'completed'
+                      ? 'bg-green-600 text-white shadow-md'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+                      }`}
+                  >
+                    {t('dashboard.filterCompleted') || 'Abgeschlossen'}
+                  </button>
+                </div>
               </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <AnimatePresence mode="popLayout">
+                  {displayedModules.map((module: any) => (
+                    <motion.div
+                      key={module.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.2 }}
+                      className="from-background/80 hover:from-background/90 border-accent/20 hover:border-accent/40 group cursor-pointer rounded-xl border bg-gradient-to-br to-red-900/10 p-5 shadow-lg transition-all duration-300 hover:to-red-900/20 hover:shadow-xl"
+                      onClick={() => handleModuleClick(module.id)}
+                    >
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-foreground group-hover:text-accent text-lg font-bold transition-colors">
+                          {module.title}
+                        </h3>
+                        <ArrowRight className="text-accent/60 group-hover:text-accent h-5 w-5 transition-colors" />
+                      </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-muted-foreground text-sm">
+                          {t('dashboard.progress')}
+                        </p>
+                        {module.progress === 100 && (
+                          <span className="text-xs font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
+                            Completed
+                          </span>
+                        )}
+                      </div>
+                      <div className="bg-muted/50 h-3 w-full overflow-hidden rounded-full">
+                        <div
+                          className={`h-3 rounded-full shadow-lg transition-all duration-700 ${module.progress === 100
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                            : 'bg-gradient-to-r from-accent to-primary'
+                            }`}
+                          style={{ width: `${module.progress ?? 0}%` }}
+                        />
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="text-muted-foreground text-sm">
+                          0% → {module.progress ?? 0}%
+                        </span>
+                        <span className={`text-lg font-bold ${module.progress === 100 ? 'text-green-500' : 'text-accent'}`}>
+                          {module.progress ?? 0}%
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+
+              {/* Show More / Show Less Button */}
+              {filteredModules.length > 6 && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => setVisibleCount(hasMore ? filteredModules.length : 6)}
+                    className="group bg-accent/10 hover:bg-accent/20 border-accent/30 text-accent flex items-center gap-2 rounded-full border px-6 py-2.5 text-sm font-bold transition-all hover:scale-105 active:scale-95"
+                  >
+                    {hasMore ? (
+                      <>
+                        {t('dashboard.showMore') || 'Mehr anzeigen'} ({filteredModules.length - visibleCount})
+                        <ChevronDown className="h-4 w-4 transition-transform group-hover:translate-y-0.5" />
+                      </>
+                    ) : (
+                      <>
+                        {t('dashboard.showLess') || 'Weniger anzeigen'}
+                        <ChevronUp className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {filteredModules.length === 0 && (
+                <div className="py-12 text-center text-muted-foreground">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/20">
+                    <Filter className="h-6 w-6 opacity-50" />
+                  </div>
+                  <p>No modules found for this filter.</p>
+                </div>
+              )}
             </div>
 
             {/* Recent Achievements Section - Textual Information Above Charts */}
@@ -380,52 +464,7 @@ export default function TraineeDashboard() {
                 </div>
                 {t('dashboard.weeklyProgress')}
               </h3>
-              <ResponsiveContainer
-                width="100%"
-                height={200}
-                className="from-background/40 rounded-xl bg-gradient-to-br to-red-900/10 p-2"
-              >
-                <LineChart data={weeklyProgress}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#6b7280"
-                    strokeOpacity={0.2}
-                  />
-                  <XAxis
-                    dataKey="week"
-                    stroke="currentColor"
-                    fontSize={12}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <YAxis
-                    stroke="currentColor"
-                    fontSize={12}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e1423',
-                      border: '2px solid #ff1a1a',
-                      borderRadius: '12px',
-                      color: 'currentColor',
-                      boxShadow: '0 8px 24px rgba(255, 26, 26, 0.3)',
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="progress"
-                    stroke="#ff1a1a"
-                    strokeWidth={4}
-                    dot={{
-                      fill: '#ff1a1a',
-                      strokeWidth: 3,
-                      r: 6,
-                      stroke: 'currentColor',
-                    }}
-                    activeDot={{ r: 8, stroke: 'currentColor', strokeWidth: 2 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <WeeklyProgressChart data={weeklyProgress} />
               {/* Compact data display */}
               <div className="mt-4 grid grid-cols-3 gap-2">
                 {weeklyProgress.map((item: any, index: number) => (
@@ -452,35 +491,7 @@ export default function TraineeDashboard() {
                 </div>
                 {t('dashboard.skills')}
               </h3>
-              <ResponsiveContainer
-                width="100%"
-                height={200}
-                className="from-background/40 rounded-xl bg-gradient-to-br to-green-900/10 p-2"
-              >
-                <RadarChart data={skillRadar}>
-                  <PolarGrid stroke="#6b7280" strokeOpacity={0.2} />
-                  <PolarAngleAxis
-                    dataKey="skill"
-                    stroke="currentColor"
-                    fontSize={11}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <PolarRadiusAxis
-                    stroke="currentColor"
-                    fontSize={10}
-                    tick={{ fill: 'currentColor' }}
-                    axisLine={false}
-                  />
-                  <Radar
-                    name="Skills"
-                    dataKey="value"
-                    stroke="#ff1a1a"
-                    fill="#ff1a1a"
-                    fillOpacity={0.3}
-                    strokeWidth={3}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
+              <SkillRadarChart data={skillRadar} />
               {/* Compact skills display */}
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {skillRadar.map((item: any, index: number) => (
@@ -507,72 +518,54 @@ export default function TraineeDashboard() {
                 </div>
                 {t('dashboard.moduleProgress')}
               </h3>
-              <ResponsiveContainer
-                width="100%"
-                height={200}
-                className="from-background/40 rounded-xl bg-gradient-to-br to-blue-900/10 p-2"
-              >
-                <BarChart data={moduleProgress}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#6b7280"
-                    strokeOpacity={0.2}
-                  />
-                  <XAxis
-                    dataKey="name"
-                    stroke="currentColor"
-                    fontSize={10}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <YAxis
-                    stroke="currentColor"
-                    fontSize={10}
-                    tick={{ fill: 'currentColor' }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e1423',
-                      border: '2px solid #ff1a1a',
-                      borderRadius: '12px',
-                      color: 'currentColor',
-                      boxShadow: '0 8px 24px rgba(255, 26, 26, 0.3)',
-                    }}
-                  />
-                  <Bar
-                    dataKey="progress"
-                    fill="#ff1a1a"
-                    radius={[4, 4, 0, 0]}
-                    stroke="currentColor"
-                    strokeWidth={1}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <ModuleBarChart data={moduleProgress} />
               {/* Compact module progress display */}
               <div className="mt-4 space-y-2">
-                {moduleProgress.map((item: any, index: number) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-2"
-                  >
-                    <span className="text-foreground mr-2 flex-1 truncate text-xs font-medium">
-                      {item.name}
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <div className="h-2 w-16 rounded-full bg-blue-500/30">
-                        <div
-                          className="from-accent to-primary h-2 rounded-full bg-gradient-to-r shadow-lg"
-                          style={{ width: `${item.progress}%` }}
-                        />
-                      </div>
-                      <span className="text-accent min-w-[2.5rem] text-right text-sm font-bold">
-                        {item.progress}%
+                <AnimatePresence mode="popLayout">
+                  {moduleProgress.slice(0, visibleModuleProgressCount).map((item: any, index: number) => (
+                    <motion.div
+                      key={item.name || index}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-2"
+                    >
+                      <span className="text-foreground mr-2 flex-1 truncate text-xs font-medium">
+                        {item.name}
                       </span>
-                    </div>
-                  </div>
-                ))}
+                      <div className="flex items-center space-x-2">
+                        <div className="h-2 w-16 rounded-full bg-blue-500/30">
+                          <div
+                            className="from-accent to-primary h-2 rounded-full bg-gradient-to-r shadow-lg transition-all duration-500"
+                            style={{ width: `${item.progress}%` }}
+                          />
+                        </div>
+                        <span className="text-accent min-w-[2.5rem] text-right text-sm font-bold">
+                          {item.progress}%
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                {moduleProgress.length > 5 && (
+                  <button
+                    onClick={() => setVisibleModuleProgressCount(
+                      visibleModuleProgressCount > 5 ? 5 : moduleProgress.length
+                    )}
+                    className="text-accent hover:text-accent/80 flex w-full items-center justify-center gap-1 py-1 text-xs font-bold transition-colors"
+                  >
+                    {visibleModuleProgressCount > 5 ? (
+                      <>
+                        {t('dashboard.showLess')} <ChevronUp className="h-3 w-3" />
+                      </>
+                    ) : (
+                      <>
+                        {t('dashboard.showMore')} ({moduleProgress.length - 5}) <ChevronDown className="h-3 w-3" />
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>

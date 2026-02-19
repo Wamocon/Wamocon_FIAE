@@ -303,7 +303,11 @@ export function QuizManagement() {
   const openEdit = async (id: string) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/trainer/quizzes/${id}`);
+      // Fetch quiz details and members in parallel instead of sequentially
+      const [res, memRes] = await Promise.all([
+        fetch(`/api/trainer/quizzes/${id}`),
+        fetch(`/api/trainer/quiz-members?quizId=${id}`),
+      ]);
       if (!res.ok) throw new Error(t('quiz.managementLoadQuizError'));
       const data = await res.json();
       setEditMode(true);
@@ -328,17 +332,14 @@ export function QuizManagement() {
           ? data.assigned_trainee_ids
           : []
       );
-      // Load current quiz collaborators
-      try {
-        const memRes = await fetch(`/api/trainer/quiz-members?quizId=${id}`);
-        if (memRes.ok) {
-          const mem = await memRes.json();
-          const ids: string[] = Array.isArray(mem.members)
-            ? mem.members.map((m: any) => String(m.trainerId))
-            : [];
-          setCollaborators(ids);
-        }
-      } catch {}
+      // Process quiz members from parallel fetch
+      if (memRes.ok) {
+        const mem = await memRes.json();
+        const ids: string[] = Array.isArray(mem.members)
+          ? mem.members.map((m: any) => String(m.trainerId))
+          : [];
+        setCollaborators(ids);
+      }
       setOpen(true);
     } catch (e) {
       console.error(e);

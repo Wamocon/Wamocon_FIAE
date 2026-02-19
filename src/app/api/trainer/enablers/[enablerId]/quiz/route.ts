@@ -5,96 +5,159 @@ import {
   enablers,
   enablerQuizzes,
   options,
-  profiles,
   questions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
-
-async function verifyTrainer(trainerId: string): Promise<boolean> {
-  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
-  return trainer?.role === 'TRAINER';
-}
+import { verifyTrainer } from '@/lib/auth-helpers';
 
 // GET quiz for an enabler (trainer editing)
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ enablerId: string }> }
+) {
   try {
     const { enablerId } = await params;
-    const [link] = await db.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId as any));
+    const [link] = await db
+      .select()
+      .from(enablerQuizzes)
+      .where(eq(enablerQuizzes.enablerId, enablerId as any));
     if (!link) return NextResponse.json({ quiz: null });
-    const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, link.quizId));
+    const [quiz] = await db
+      .select()
+      .from(quizzes)
+      .where(eq(quizzes.id, link.quizId));
     if (!quiz) return NextResponse.json({ quiz: null });
-    const qs = await db.select().from(questions).where(eq(questions.quizId, quiz.id)).orderBy(questions.orderIndex);
-    const qIds = qs.map((q) => q.id);
-    const opts = qIds.length ? await db.select().from(options).where(inArray(options.questionId, qIds)) : [];
+    const qs = await db
+      .select()
+      .from(questions)
+      .where(eq(questions.quizId, quiz.id))
+      .orderBy(questions.orderIndex);
+    const qIds = qs.map(q => q.id);
+    const opts = qIds.length
+      ? await db.select().from(options).where(inArray(options.questionId, qIds))
+      : [];
     const out = {
       id: quiz.id,
       title: quiz.title,
-      questions: qs.map((q) => ({
+      questions: qs.map(q => ({
         id: q.id,
         questionText: q.questionText,
         orderIndex: q.orderIndex,
-        options: opts.filter((o) => o.questionId === q.id).map((o) => ({ id: o.id, optionText: o.optionText, isCorrect: o.isCorrect })),
+        options: opts
+          .filter(o => o.questionId === q.id)
+          .map(o => ({
+            id: o.id,
+            optionText: o.optionText,
+            isCorrect: o.isCorrect,
+          })),
       })),
     };
     return NextResponse.json({ quiz: out });
   } catch (e) {
     console.error('Get enabler quiz error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
 
 // POST create/replace quiz for enabler
 // Body: { title: string, createdById: string, questions: [{ questionText, options: [string, string, string, string], correctIndex }] }
-export async function POST(req: NextRequest, { params }: { params: Promise<{ enablerId: string }> }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ enablerId: string }> }
+) {
   try {
     const { enablerId } = await params;
     const body = await req.json();
     const title: string | undefined = body?.title;
     const createdById: string | undefined = body?.createdById;
-    const items: Array<{ questionText: string; options: string[]; correctIndex: number }> = Array.isArray(body?.questions) ? body.questions : [];
+    const items: Array<{
+      questionText: string;
+      options: string[];
+      correctIndex: number;
+    }> = Array.isArray(body?.questions) ? body.questions : [];
 
     if (!title || !createdById || items.length === 0) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
     // Verify enabler exists
-    const [enabler] = await db.select().from(enablers).where(eq(enablers.id, enablerId as any));
+    const [enabler] = await db
+      .select({ id: enablers.id })
+      .from(enablers)
+      .where(eq(enablers.id, enablerId as any));
     if (!enabler) {
       return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
     }
 
     // Shared curriculum: any valid trainer can create quizzes
     if (!(await verifyTrainer(createdById))) {
-      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
     }
 
-    const out = await db.transaction(async (tx) => {
+    const out = await db.transaction(async tx => {
       // Remove existing quiz if any
-      const [existingLink] = await tx.select().from(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId as any));
+      const [existingLink] = await tx
+        .select()
+        .from(enablerQuizzes)
+        .where(eq(enablerQuizzes.enablerId, enablerId as any));
       if (existingLink) {
-        const qs = await tx.select().from(questions).where(eq(questions.quizId, existingLink.quizId));
-        const qIds = qs.map((q) => q.id);
-        if (qIds.length) await tx.delete(options).where(inArray(options.questionId, qIds as any));
-        await tx.delete(questions).where(eq(questions.quizId, existingLink.quizId));
+        const qs = await tx
+          .select()
+          .from(questions)
+          .where(eq(questions.quizId, existingLink.quizId));
+        const qIds = qs.map(q => q.id);
+        if (qIds.length)
+          await tx
+            .delete(options)
+            .where(inArray(options.questionId, qIds as any));
+        await tx
+          .delete(questions)
+          .where(eq(questions.quizId, existingLink.quizId));
         await tx.delete(quizzes).where(eq(quizzes.id, existingLink.quizId));
-        await tx.delete(enablerQuizzes).where(eq(enablerQuizzes.enablerId, enablerId as any));
+        await tx
+          .delete(enablerQuizzes)
+          .where(eq(enablerQuizzes.enablerId, enablerId as any));
       }
 
       // Create quiz
-      const [quiz] = await tx.insert(quizzes).values({ title, quizType: 'LESSON' as any, createdById, isActive: true }).returning();
-      await tx.insert(enablerQuizzes).values({ enablerId: enablerId as any, quizId: quiz.id });
+      const [quiz] = await tx
+        .insert(quizzes)
+        .values({
+          title,
+          quizType: 'LESSON' as any,
+          createdById,
+          isActive: true,
+        })
+        .returning();
+      await tx
+        .insert(enablerQuizzes)
+        .values({ enablerId: enablerId as any, quizId: quiz.id });
 
       // Insert questions and options
       for (let i = 0; i < items.length; i++) {
         const q = items[i];
         const [qRow] = await tx
           .insert(questions)
-          .values({ quizId: quiz.id, questionText: q.questionText, orderIndex: i + 1 })
+          .values({
+            quizId: quiz.id,
+            questionText: q.questionText,
+            orderIndex: i + 1,
+          })
           .returning();
         for (let j = 0; j < 4; j++) {
           const optText = q.options[j];
           if (!optText) continue;
-          await tx.insert(options).values({ questionId: qRow.id, optionText: optText, isCorrect: j === q.correctIndex });
+          await tx.insert(options).values({
+            questionId: qRow.id,
+            optionText: optText,
+            isCorrect: j === q.correctIndex,
+          });
         }
       }
 
@@ -104,7 +167,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ena
     return NextResponse.json({ ok: true, quizId: out.id });
   } catch (e) {
     console.error('Create/replace enabler quiz error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
-

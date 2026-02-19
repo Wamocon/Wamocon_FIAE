@@ -7,8 +7,16 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { BreadcrumbProvider } from '@/contexts/BreadcrumbContext';
 import { Analytics } from '@vercel/analytics/react';
+import dynamic from 'next/dynamic';
+import QueryProvider from '@/components/QueryProvider';
 
-import { HaiWrapper } from '@/components/hai';
+// Lazy-load HAI chat widget - it's not needed for initial page render
+// Import directly instead of through barrel to avoid pulling in all HAI modules
+const HaiWrapper = dynamic(() =>
+  import('@/components/hai/HaiWrapper').then(mod => ({
+    default: mod.HaiWrapper,
+  }))
+);
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -30,15 +38,15 @@ export default function RootLayout({
     >
       <body suppressHydrationWarning>
         <AuthProvider>
-          <LanguageProvider>
-            <ThemeProvider>
-              <BreadcrumbProvider>
-                <HaiWrapper>
-                  {children}
-                </HaiWrapper>
-              </BreadcrumbProvider>
-            </ThemeProvider>
-          </LanguageProvider>
+          <QueryProvider>
+            <LanguageProvider>
+              <ThemeProvider>
+                <BreadcrumbProvider>
+                  <HaiWrapper>{children}</HaiWrapper>
+                </BreadcrumbProvider>
+              </ThemeProvider>
+            </LanguageProvider>
+          </QueryProvider>
         </AuthProvider>
         <Toaster containerStyle={{ zIndex: 9999 }} />
         <Analytics />

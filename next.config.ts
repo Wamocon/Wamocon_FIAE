@@ -12,8 +12,23 @@ const nextConfig: NextConfig = {
     // Temporarily ignore ESLint errors during schema migration
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    // Tree-shake specific heavy packages — only bundles the imports actually used
+    optimizePackageImports: [
+      'lucide-react',
+      'recharts',
+      'framer-motion',
+      'date-fns',
+      'react-hot-toast',
+      '@supabase/supabase-js',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tabs',
+    ],
+  },
   // Webpack configuration for react-pdf
-  webpack: (config) => {
+  webpack: config => {
     config.resolve.alias.canvas = false;
     return config;
   },

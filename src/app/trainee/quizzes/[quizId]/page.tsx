@@ -27,13 +27,13 @@ export default async function QuizPage({ params }: { params: Promise<{ quizId: s
   const outQuestions = qRows
     .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
     .map((qr) => {
-      const opts = optRows.filter((o) => String(o.questionId) === String(qr.id));
-      const correctIndex = Math.max(0, opts.findIndex((o) => o.isCorrect));
+      const opts = optRows
+        .filter((o) => String(o.questionId) === String(qr.id))
+        .filter((o) => String(o.questionId) === String(qr.id));
       return {
         id: qr.id,
         question: qr.questionText,
-        options: opts.map((o) => o.optionText),
-        correctIndex,
+        options: opts.map((o) => ({ id: o.id, text: o.optionText })),
         order_index: qr.orderIndex ?? 0,
       };
     });

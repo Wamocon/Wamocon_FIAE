@@ -1,29 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, max } from 'drizzle-orm';
-import { enablers, courses, profiles, courseMembers, notifications } from '@/db/migrations/schemas/schema';
+import {
+  enablers,
+  courses,
+  courseMembers,
+  notifications,
+} from '@/db/migrations/schemas/schema';
+import { verifyTrainer } from '@/lib/auth-helpers';
 
-async function verifyTrainer(trainerId: string): Promise<boolean> {
-  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
-  return trainer?.role === 'TRAINER';
-}
-
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ courseId: string }> }
+) {
   try {
     const { courseId } = await params;
     const list = await db
-      .select({ id: enablers.id, title: enablers.title, orderIndex: enablers.orderIndex, isActive: enablers.isActive })
+      .select({
+        id: enablers.id,
+        title: enablers.title,
+        orderIndex: enablers.orderIndex,
+        isActive: enablers.isActive,
+      })
       .from(enablers)
       .where(eq(enablers.courseId, courseId as any))
       .orderBy(enablers.orderIndex);
     return NextResponse.json({ enablers: list });
   } catch (e) {
     console.error('List enablers error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ courseId: string }> }
+) {
   try {
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
@@ -34,14 +49,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
     }
 
     // Verify course exists
-    const [courseRow] = await db.select().from(courses).where(eq(courses.id, courseId as any));
+    const [courseRow] = await db
+      .select()
+      .from(courses)
+      .where(eq(courses.id, courseId as any));
     if (!courseRow) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
     // Shared curriculum: any valid trainer can create enablers
     if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();
@@ -50,21 +71,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
       return NextResponse.json({ error: 'Missing title' }, { status: 400 });
     }
 
-    const orderIndex: number | undefined = body?.orderIndex ? Number(body.orderIndex) : undefined;
-    const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
-    const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit || (typeof durationValue === 'number' ? 'DAYS' : undefined);
+    const orderIndex: number | undefined = body?.orderIndex
+      ? Number(body.orderIndex)
+      : undefined;
+    const durationValue: number | undefined = body?.durationValue
+      ? Number(body.durationValue)
+      : undefined;
+    const durationUnitVal: 'DAYS' | 'WEEKS' | undefined =
+      body?.durationUnit ||
+      (typeof durationValue === 'number' ? 'DAYS' : undefined);
     const pptUrl: string | undefined = body?.pptUrl;
     const videoUrl: string | undefined = body?.videoUrl;
     const descriptionText: string | undefined = body?.descriptionText;
-    const hintText: string | undefined = body?.hintText;
-    const scenarioText: string | undefined = body?.scenarioText;
-    const scenarioImageUrl: string | undefined = body?.scenarioImageUrl;
-    const scenarios: Array<{ text: string; hint?: string }> | undefined = Array.isArray(body?.scenarios) ? body.scenarios : undefined;
-    const isActive: boolean | undefined = typeof body?.isActive === 'boolean' ? body.isActive : undefined;
+    const scenarioPdfUrl: string | undefined = body?.scenarioPdfUrl;
+    const isActive: boolean | undefined =
+      typeof body?.isActive === 'boolean' ? body.isActive : undefined;
 
     // Determine next order index if not provided
     let finalOrderIndex = orderIndex;
-    if (typeof finalOrderIndex === 'undefined' || Number.isNaN(finalOrderIndex)) {
+    if (
+      typeof finalOrderIndex === 'undefined' ||
+      Number.isNaN(finalOrderIndex)
+    ) {
       const [m] = await db
         .select({ m: max(enablers.orderIndex) })
         .from(enablers)
@@ -84,10 +112,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
         descriptionText: descriptionText as any,
         pptUrl: pptUrl as any,
         videoUrl: videoUrl as any,
-        scenarioText: scenarioText as any,
-        hintText: hintText as any,
-        scenarioImageUrl: scenarioImageUrl as any,
-        scenarios: scenarios as any,
+        scenarioPdfUrl: scenarioPdfUrl as any,
         isActive: isActive as any,
         activatedAt: activatedAt as any,
       })
@@ -99,9 +124,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
         const traineeMembers = await db
           .select({ userId: courseMembers.userId })
           .from(courseMembers)
-          .where(and(eq(courseMembers.courseId, courseId as any), eq(courseMembers.role, 'TRAINEE')));
+          .where(
+            and(
+              eq(courseMembers.courseId, courseId as any),
+              eq(courseMembers.role, 'TRAINEE')
+            )
+          );
         if (traineeMembers.length > 0) {
-          const notifValues = traineeMembers.map((m) => ({
+          const notifValues = traineeMembers.map(m => ({
             userId: String(m.userId),
             actorId: trainerId,
             type: 'ENABLER_CREATED',
@@ -113,14 +143,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
           await db.insert(notifications).values(notifValues);
         }
       } catch (notifyErr) {
-        console.warn('Failed to notify trainees for enabler creation', notifyErr);
+        console.warn(
+          'Failed to notify trainees for enabler creation',
+          notifyErr
+        );
       }
     }
 
     return NextResponse.json({ enabler: inserted });
   } catch (e) {
     console.error('Create enabler error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
-

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { activityReports, profiles, activityReportUseCaseEntries } from '@/db/migrations/schemas/schema';
 
 // GET: List activity reports for the current user
@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const userId = searchParams.get('userId');
+        const includeOverbooking = searchParams.get('includeOverbooking') !== 'false'; // default true
 
         if (!userId) {
             return NextResponse.json({ error: 'Missing userId parameter' }, { status: 400 });
@@ -40,6 +41,25 @@ export async function GET(req: NextRequest) {
                 .orderBy(activityReports.createdAt);
         }
 
+        // Get overbooking status for all reports in one query
+        let overbookingMap = new Map<string, boolean>();
+        if (includeOverbooking && reports.length > 0) {
+            const reportIds = reports.map(r => String(r.id));
+            const overbookedEntries = await db
+                .select({
+                    reportId: activityReportUseCaseEntries.reportId,
+                })
+                .from(activityReportUseCaseEntries)
+                .where(and(
+                    inArray(activityReportUseCaseEntries.reportId, reportIds as any),
+                    eq(activityReportUseCaseEntries.isOverbooked, true)
+                ));
+
+            overbookedEntries.forEach(e => {
+                overbookingMap.set(String(e.reportId), true);
+            });
+        }
+
         // Transform to camelCase
         const formattedReports = reports.map(r => ({
             id: r.id,
@@ -61,9 +81,14 @@ export async function GET(req: NextRequest) {
             pdfGeneratedAt: r.pdfGeneratedAt,
             createdAt: r.createdAt,
             updatedAt: r.updatedAt,
+            hasOverbooking: overbookingMap.get(String(r.id)) || false,
         }));
 
-        return NextResponse.json({ reports: formattedReports });
+        return NextResponse.json({ reports: formattedReports }, {
+            headers: {
+                'Cache-Control': 'private, max-age=10, stale-while-revalidate=59',
+            },
+        });
     } catch (error: any) {
         console.error('Error in activity-reports GET:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

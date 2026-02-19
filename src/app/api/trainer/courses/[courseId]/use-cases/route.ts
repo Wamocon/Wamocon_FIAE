@@ -1,30 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, max } from 'drizzle-orm';
-import { profiles, courses, courseMembers, notifications } from '@/db/migrations/schemas/schema';
+import {
+  courses,
+  courseMembers,
+  notifications,
+} from '@/db/migrations/schemas/schema';
+import { verifyTrainer } from '@/lib/auth-helpers';
 
-async function verifyTrainer(trainerId: string): Promise<boolean> {
-  const [trainer] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any));
-  return trainer?.role === 'TRAINER';
-}
-
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ courseId: string }> }
+) {
   try {
     const { useCases } = await import('@/db/migrations/schemas/schema');
     const { courseId } = await params;
     const list = await db
-      .select({ id: useCases.id, title: useCases.title, orderIndex: useCases.orderIndex, isActive: useCases.isActive })
+      .select({
+        id: useCases.id,
+        title: useCases.title,
+        orderIndex: useCases.orderIndex,
+        isActive: useCases.isActive,
+      })
       .from(useCases)
       .where(eq(useCases.courseId, courseId as any))
       .orderBy(useCases.orderIndex);
     return NextResponse.json({ useCases: list });
   } catch (e) {
     console.error('List use-cases error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ courseId: string }> }
+) {
   try {
     const { useCases } = await import('@/db/migrations/schemas/schema');
     const { courseId } = await params;
@@ -36,14 +50,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
     }
 
     // Verify course exists
-    const [courseRow] = await db.select().from(courses).where(eq(courses.id, courseId as any));
+    const [courseRow] = await db
+      .select()
+      .from(courses)
+      .where(eq(courses.id, courseId as any));
     if (!courseRow) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
     // Shared curriculum: any valid trainer can create use cases
     if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();
@@ -52,15 +72,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
       return NextResponse.json({ error: 'Missing title' }, { status: 400 });
     }
 
-    const orderIndex: number | undefined = body?.orderIndex ? Number(body.orderIndex) : undefined;
-    const durationValue: number | undefined = body?.durationValue ? Number(body.durationValue) : undefined;
-    const durationUnitVal: 'DAYS' | 'WEEKS' | undefined = body?.durationUnit || (typeof durationValue === 'number' ? 'DAYS' : undefined);
+    const orderIndex: number | undefined = body?.orderIndex
+      ? Number(body.orderIndex)
+      : undefined;
+    const durationValue: number | undefined = body?.durationValue
+      ? Number(body.durationValue)
+      : undefined;
+    const durationUnitVal: 'DAYS' | 'WEEKS' | undefined =
+      body?.durationUnit ||
+      (typeof durationValue === 'number' ? 'DAYS' : undefined);
     const descriptionText: string | undefined = body?.descriptionText;
-    const isActive: boolean | undefined = typeof body?.isActive === 'boolean' ? body.isActive : undefined;
+    const isActive: boolean | undefined =
+      typeof body?.isActive === 'boolean' ? body.isActive : undefined;
 
     // Determine next order index if not provided
     let finalOrderIndex = orderIndex;
-    if (typeof finalOrderIndex === 'undefined' || Number.isNaN(finalOrderIndex)) {
+    if (
+      typeof finalOrderIndex === 'undefined' ||
+      Number.isNaN(finalOrderIndex)
+    ) {
       const [m] = await db
         .select({ m: max(useCases.orderIndex) })
         .from(useCases)
@@ -69,8 +99,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
     }
 
     const year: number | undefined = body?.year ? Number(body.year) : undefined;
-    const trainingStage: number | undefined = body?.trainingStage ? Number(body.trainingStage) : undefined;
-    const lernfelder: string[] | undefined = Array.isArray(body?.lernfelder) ? body.lernfelder : undefined;
+    const trainingStage: number | undefined = body?.trainingStage
+      ? Number(body.trainingStage)
+      : undefined;
+    const lernfelder: string[] | undefined = Array.isArray(body?.lernfelder)
+      ? body.lernfelder
+      : undefined;
 
     const activatedAt = isActive ? new Date() : null;
     const [inserted] = await db
@@ -96,9 +130,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
         const traineeMembers = await db
           .select({ userId: courseMembers.userId })
           .from(courseMembers)
-          .where(and(eq(courseMembers.courseId, courseId as any), eq(courseMembers.role, 'TRAINEE')));
+          .where(
+            and(
+              eq(courseMembers.courseId, courseId as any),
+              eq(courseMembers.role, 'TRAINEE')
+            )
+          );
         if (traineeMembers.length > 0) {
-          const notifValues = traineeMembers.map((m) => ({
+          const notifValues = traineeMembers.map(m => ({
             userId: String(m.userId),
             actorId: trainerId,
             type: 'USE_CASE_CREATED',
@@ -110,14 +149,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cou
           await db.insert(notifications).values(notifValues);
         }
       } catch (notifyErr) {
-        console.warn('Failed to notify trainees for use case creation', notifyErr);
+        console.warn(
+          'Failed to notify trainees for use case creation',
+          notifyErr
+        );
       }
     }
 
     return NextResponse.json({ useCase: inserted });
   } catch (e) {
     console.error('Create use-case error', e);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
-

@@ -16,6 +16,10 @@
 # production
 /build
 
+# scenarios
+/Scenarios/
+/Szenarien/
+
 # misc
 .DS_Store
 *.pem
@@ -40,11 +44,16 @@ next-env.d.ts
 .vscode/
 .idea/
 
+# Claude Code
+.claude/
+.mcp.json
+
 # OS
 Thumbs.db
 
 # Logs
 *.log
+logs/
 
 # Runtime data
 pids
