@@ -725,7 +725,7 @@ export const haiEmbeddings = pgTable('hai_embeddings', {
   chunkIndex: integer('chunk_index').notNull().default(0),
   content: text('content').notNull(),
   contentHash: text('content_hash').notNull(),
-  embedding: vector('embedding', { dimensions: 768 }),
+  embedding: vector('embedding', { dimensions: 3072 }),
   // Enhanced metadata for PageIndex: { page?: number, documentId?: string, useCaseTitle?: string }
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),

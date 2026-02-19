@@ -471,26 +471,24 @@ export async function processMessage(
     let retrievedContext = '';
 
     if (intent !== 'quiz_answer' && !enableWebSearch) {
-      const searchContext = await searchWithContext(
-        userMessage,
-        {
-          currentEnablerId: context.currentEnablerId,
-          currentCourseId: context.currentCourseId,
-        },
-        { topK: 5, minSimilarity: 0.3, userId: context.userId }
-      );
-
-      searchResults = searchContext.results;
-
-      // Fallback: If no relevant local context found for a question, enable web search
-      if (
-        searchResults.length === 0 &&
-        (intent === 'question' || intent === 'explanation')
-      ) {
-        console.log(
-          'HAI.ai: No local context found. Enabling Web Search fallback.'
+      // Step 3: Vector search — may return empty if embedding provider differs from indexing provider
+      try {
+        const searchContext = await searchWithContext(
+          userMessage,
+          {
+            currentEnablerId: context.currentEnablerId,
+            currentCourseId: context.currentCourseId,
+          },
+          { topK: 5, minSimilarity: 0.3, userId: context.userId }
         );
-        enableWebSearch = true;
+
+        searchResults = searchContext.results;
+      } catch (vectorError) {
+        console.warn(
+          'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
+          vectorError
+        );
+        searchResults = [];
       }
 
       retrievedContext = buildRetrievedContext(
@@ -764,25 +762,23 @@ export async function processMessageStream(
     let retrievedContext = '';
 
     if (intent !== 'quiz_answer' && !enableWebSearch) {
-      const searchContext = await searchWithContext(
-        userMessage,
-        {
-          currentEnablerId: context.currentEnablerId,
-          currentCourseId: context.currentCourseId,
-        },
-        { topK: 5, minSimilarity: 0.3, userId: context.userId }
-      );
-      searchResults = searchContext.results;
-
-      // Fallback: If no relevant local context found for a question, enable web search
-      if (
-        searchResults.length === 0 &&
-        (intent === 'question' || intent === 'explanation')
-      ) {
-        console.log(
-          'HAI.ai: No local context found. Enabling Web Search fallback.'
+      // Step 3: Vector search — may return empty if embedding provider differs from indexing provider
+      try {
+        const searchContext = await searchWithContext(
+          userMessage,
+          {
+            currentEnablerId: context.currentEnablerId,
+            currentCourseId: context.currentCourseId,
+          },
+          { topK: 5, minSimilarity: 0.3, userId: context.userId }
         );
-        enableWebSearch = true;
+        searchResults = searchContext.results;
+      } catch (vectorError) {
+        console.warn(
+          'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
+          vectorError
+        );
+        searchResults = [];
       }
 
       retrievedContext = buildRetrievedContext(
