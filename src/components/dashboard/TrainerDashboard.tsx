@@ -13,7 +13,6 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
-import HaiAdminWidget from '@/components/hai/HaiAdminWidget';
 
 // Dynamically import chart components with SSR disabled
 const ProgressTrendChart = dynamic(
@@ -273,8 +272,6 @@ export default function TrainerDashboard() {
               </div>
             </div>
 
-            {/* HAI Admin Section */}
-            <HaiAdminWidget />
           </div>
 
           {/* Right Sidebar - Charts */}
