@@ -17,7 +17,7 @@ import { createHash } from 'crypto';
 import { getEmbeddingProvider } from './providers';
 import { extractTextByPage, PerPageExtractionResult } from './pdfExtractor';
 import { chunkDocument } from './chunker';
-import db from '@/db';
+import haiDb from '@/db/haiDb';
 import {
   haiEmbeddings,
   contentDocuments,
@@ -94,7 +94,7 @@ async function pageChunkExists(
   contentHash: string
 ): Promise<boolean> {
   try {
-    const result = await db.execute(sql`
+    const result = await haiDb.execute(sql`
             SELECT 1 FROM hai_embeddings 
             WHERE source_type = 'use_case'
               AND source_id = ${sourceId}::uuid
@@ -138,8 +138,8 @@ export async function ingestUseCaseDocument(
   };
 
   try {
-    // 1. Fetch document and use case info
-    const [docRow] = await db
+    // 1. Fetch document and use case info (always from production via haiDb)
+    const [docRow] = await haiDb
       .select({
         id: contentDocuments.id,
         title: contentDocuments.title,
@@ -162,7 +162,7 @@ export async function ingestUseCaseDocument(
       return result;
     }
 
-    const [useCaseRow] = await db
+    const [useCaseRow] = await haiDb
       .select({ title: useCases.title })
       .from(useCases)
       .where(eq(useCases.id, useCaseId as any))
@@ -257,7 +257,7 @@ export async function ingestUseCaseDocument(
           };
 
           // Upsert embedding
-          await db.execute(sql`
+          await haiDb.execute(sql`
                         INSERT INTO hai_embeddings (
                             source_type, source_id, chunk_index, content, content_hash, embedding, metadata
                         ) VALUES (
@@ -297,8 +297,8 @@ export async function ingestUseCaseDocument(
       );
     }
 
-    // 5. Update document status
-    await db
+    // 5. Update document status (production DB)
+    await haiDb
       .update(contentDocuments)
       .set({
         isIndexedByHai: true,
@@ -335,8 +335,8 @@ export async function ingestAllUseCases(
   };
 
   try {
-    // Find all TRAINER_SOLUTION documents linked to use cases
-    const docs = await db
+    // Find all TRAINER_SOLUTION documents linked to use cases (always from production)
+    const docs = await haiDb
       .select({
         useCaseId: contentDocuments.useCaseId,
         useCaseTitle: useCases.title,
@@ -407,7 +407,7 @@ export async function deleteUseCaseEmbeddings(
   useCaseId: string
 ): Promise<{ deleted: number }> {
   try {
-    const result = await db.execute(sql`
+    const result = await haiDb.execute(sql`
             DELETE FROM hai_embeddings 
             WHERE source_type = 'use_case' AND source_id = ${useCaseId}::uuid
         `);
@@ -429,7 +429,7 @@ export async function getUseCaseIngestionStatus(useCaseId: string): Promise<{
   lastUpdated: Date | null;
 }> {
   try {
-    const result = await db.execute(sql`
+    const result = await haiDb.execute(sql`
             SELECT 
                 COUNT(*) as chunks_count,
                 COUNT(DISTINCT (metadata->>'page')::int) as pages_count,

@@ -148,8 +148,8 @@ export interface ProviderConfig {
  *   - 'claude' → Anthropic Claude, for production
  *
  * HAI_EMBEDDING_PROVIDER controls which embedding backend is used:
- *   - 'ollama' (default) → Local Ollama, no rate limits
- *   - 'gemini' → Google Gemini API (rate limited)
+ *   - 'gemini' (default) → Google Gemini API (production standard)
+ *   - 'ollama' → Local Ollama, for local dev only (768 dims — incompatible with production)
  */
 export function loadProviderConfig(): ProviderConfig {
   const chatProvider = (process.env.HAI_CHAT_PROVIDER ||
@@ -162,9 +162,9 @@ export function loadProviderConfig(): ProviderConfig {
     );
   }
 
-  // Determine embedding provider
+  // Determine embedding provider — defaults to Gemini (production standard)
   const embeddingProvider = (process.env.HAI_EMBEDDING_PROVIDER ||
-    'ollama') as EmbeddingProviderType;
+    'gemini') as EmbeddingProviderType;
 
   const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
@@ -188,7 +188,7 @@ export function loadProviderConfig(): ProviderConfig {
 
   return {
     chatProvider: chatProvider === 'claude' ? 'claude' : 'openrouter',
-    embeddingProvider: embeddingProvider === 'gemini' ? 'gemini' : 'ollama',
+    embeddingProvider: embeddingProvider === 'ollama' ? 'ollama' : 'gemini',
 
     gemini: {
       apiKey: process.env.GEMINI_API_KEY,

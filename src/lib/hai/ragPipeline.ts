@@ -479,7 +479,7 @@ export async function processMessage(
             currentEnablerId: context.currentEnablerId,
             currentCourseId: context.currentCourseId,
           },
-          { topK: 5, minSimilarity: 0.3, userId: context.userId }
+          { topK: 5, minSimilarity: 0.45, userId: context.userId }
         );
 
         searchResults = searchContext.results;
@@ -770,7 +770,7 @@ export async function processMessageStream(
             currentEnablerId: context.currentEnablerId,
             currentCourseId: context.currentCourseId,
           },
-          { topK: 5, minSimilarity: 0.3, userId: context.userId }
+          { topK: 5, minSimilarity: 0.45, userId: context.userId }
         );
         searchResults = searchContext.results;
       } catch (vectorError) {

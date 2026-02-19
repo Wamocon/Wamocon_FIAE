@@ -9,8 +9,8 @@
  *     - 'openrouter' (default) → Free Llama models for QA/testing
  *     - 'claude' → Anthropic Claude for production
  *   - EMBEDDINGS: Environment-based routing via HAI_EMBEDDING_PROVIDER
- *     - 'ollama' (default) → Local Ollama, no rate limits
- *     - 'gemini' → Google Gemini API (rate limited)
+ *     - 'gemini' (default) → Google Gemini API (production standard, 3072 dims)
+ *     - 'ollama' → Local Ollama (local dev only, 768 dims — incompatible with production)
  *
  * @module lib/hai/providers
  */
