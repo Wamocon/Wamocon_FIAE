@@ -98,7 +98,7 @@ let _lastEmbeddingCall = 0;
  */
 function isLocalProvider(): boolean {
   const provider = (
-    process.env.HAI_EMBEDDING_PROVIDER || 'ollama'
+    process.env.HAI_EMBEDDING_PROVIDER || 'gemini'
   ).toLowerCase();
   return provider === 'ollama';
 }

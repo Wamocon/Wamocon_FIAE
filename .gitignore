@@ -44,6 +44,10 @@ next-env.d.ts
 .vscode/
 .idea/
 
+# Claude Code
+.claude/
+.mcp.json
+
 # OS
 Thumbs.db
 

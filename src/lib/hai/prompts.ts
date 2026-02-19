@@ -290,8 +290,13 @@ ${context.retrievedContext}
   } else {
     parts.push(`
 ## Hinweis zur Wissensdatenbank
-Aktuell wurde kein spezifischer Kontext zu dieser Frage in der Datenbank gefunden.
-Antworte bestmöglich basierend auf deinem allgemeinen IT-Wissen, aber weise darauf hin, dass du keine spezifischen Kursunterlagen dazu gefunden hast.`);
+Zu dieser Frage wurde KEIN spezifischer Kontext in der Wissensdatenbank gefunden.
+
+**Dein Verhalten in diesem Fall:**
+1. Wenn die Frage sich auf einen konkreten Enabler, Use Case oder Kursinhalt bezieht: Sage klar "Dazu habe ich keine Informationen in meinen Unterlagen. Bitte schaue in den entsprechenden Enabler oder frage deinen Trainer."
+2. Wenn die Frage ein allgemeines FIAE-Thema betrifft (z.B. "Was ist eine Datenbank?"): Antworte kurz basierend auf deinem IT-Fachwissen, aber weise darauf hin dass du keine kursinternen Unterlagen dazu gefunden hast.
+3. Halte die Antwort KUERZER als sonst — maximal 2-3 Saetze. Biete an, bei spezifischeren Fragen nochmal zu suchen.
+4. Erfinde KEINE Details die nicht in deinem Wissen sind.`);
   }
 
   // Add quiz topic if in quiz mode

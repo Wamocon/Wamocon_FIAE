@@ -58,28 +58,34 @@ export interface SearchContext {
 // ============================================================================
 
 /**
- * Search for similar content using vector similarity
+ * Search for similar content using vector similarity.
  *
- * @param query - The search query
+ * @param query - The search query text
  * @param options - Search options
+ * @param precomputedEmbedding - Optional pre-computed embedding vector (avoids redundant API calls)
  * @returns Array of similar content chunks with similarity scores
  */
 export async function searchSimilar(
   query: string,
-  options: SearchOptions = {}
+  options: SearchOptions = {},
+  precomputedEmbedding?: string
 ): Promise<SearchResult[]> {
   const { topK = 5, minSimilarity = 0.3, sourceType, sourceIds } = options;
 
-  const embeddingProvider = getEmbeddingProvider();
-  if (!embeddingProvider.isInitialized()) {
-    console.error('HAI.ai: Embedding provider not initialized for search');
-    return [];
-  }
-
   try {
-    // Generate embedding for the query via provider
-    const queryEmbedding = await embeddingProvider.generateEmbedding(query);
-    const embeddingVector = JSON.stringify(queryEmbedding.embedding);
+    // Use pre-computed embedding if available, otherwise generate one
+    let embeddingVector: string;
+    if (precomputedEmbedding) {
+      embeddingVector = precomputedEmbedding;
+    } else {
+      const embeddingProvider = getEmbeddingProvider();
+      if (!embeddingProvider.isInitialized()) {
+        console.error('HAI.ai: Embedding provider not initialized for search');
+        return [];
+      }
+      const queryEmbedding = await embeddingProvider.generateEmbedding(query);
+      embeddingVector = JSON.stringify(queryEmbedding.embedding);
+    }
 
     // Build the SQL query with filters
     let whereClause = sql`1=1`;
@@ -170,6 +176,17 @@ export async function searchWithContext(
   const results: SearchResult[] = [];
 
   try {
+    // Pre-compute the query embedding ONCE to avoid redundant Gemini API calls.
+    // searchWithContext makes up to 3 searchSimilar calls — without this cache,
+    // each call would generate a separate embedding (3x API cost per query).
+    const embeddingProvider = getEmbeddingProvider();
+    if (!embeddingProvider.isInitialized()) {
+      console.error('HAI.ai: Embedding provider not initialized for search');
+      return { results: [], query, totalResults: 0 };
+    }
+    const queryEmbedding = await embeddingProvider.generateEmbedding(query);
+    const cachedEmbeddingVector = JSON.stringify(queryEmbedding.embedding);
+
     // Step 1: Search in current enabler context first (highest priority)
     if (context.currentEnablerId) {
       const contextResults = await searchSimilar(query, {
@@ -178,13 +195,12 @@ export async function searchWithContext(
         sourceType: 'enabler',
         sourceIds: [context.currentEnablerId],
         userId: options.userId,
-      });
+      }, cachedEmbeddingVector);
 
-      // Boost similarity for context results
+      // Mark as current context (no artificial boost — trust semantic similarity)
       results.push(
         ...contextResults.map(r => ({
           ...r,
-          similarity: Math.min(1, r.similarity + 0.1), // Boost by 0.1
           metadata: { ...r.metadata, isCurrentContext: true },
         }))
       );
@@ -196,8 +212,7 @@ export async function searchWithContext(
         ...options,
         topK: topK - results.length,
         sourceType: 'enabler',
-        // Would need to filter by course - for now search all enablers
-      });
+      }, cachedEmbeddingVector);
 
       // Add non-duplicate results
       for (const r of courseResults) {
@@ -212,7 +227,7 @@ export async function searchWithContext(
       const globalResults = await searchSimilar(query, {
         ...options,
         topK: topK - results.length,
-      });
+      }, cachedEmbeddingVector);
 
       for (const r of globalResults) {
         if (!results.find(existing => existing.id === r.id)) {
