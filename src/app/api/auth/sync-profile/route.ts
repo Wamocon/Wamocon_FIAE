@@ -62,20 +62,32 @@ export async function POST(request: Request) {
       );
     }
 
-    // Determine role via allowlist (preferred) or user metadata fallback
-    const allowlistCsv = (
-      process.env.ALLOWED_TRAINER_EMAILS ||
-      process.env.NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS ||
-      ''
-    ).trim();
-    const allowedList = allowlistCsv
-      ? allowlistCsv.split(',').map((s: string) => s.trim().toLowerCase())
-      : [];
-    const role = allowedList.includes(email)
-      ? 'TRAINER'
-      : user.user_metadata?.role?.toUpperCase?.() === 'TRAINER'
+    // Check if profile already exists — preserve its role instead of guessing
+    const existingProfile = await db
+      .select({ id: profiles.id, role: profiles.role })
+      .from(profiles)
+      .where(eq(profiles.email, email))
+      .limit(1);
+
+    // Determine role: existing DB role > allowlist > user metadata > default TRAINEE
+    let role: string;
+    if (existingProfile[0]?.role) {
+      role = existingProfile[0].role;
+    } else {
+      const allowlistCsv = (
+        process.env.ALLOWED_TRAINER_EMAILS ||
+        process.env.NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS ||
+        ''
+      ).trim();
+      const allowedList = allowlistCsv
+        ? allowlistCsv.split(',').map((s: string) => s.trim().toLowerCase())
+        : [];
+      role = allowedList.includes(email)
         ? 'TRAINER'
-        : 'TRAINEE';
+        : user.user_metadata?.role?.toUpperCase?.() === 'TRAINER'
+          ? 'TRAINER'
+          : 'TRAINEE';
+    }
     const full_name =
       typeof user.user_metadata?.full_name === 'string' &&
       user.user_metadata.full_name
