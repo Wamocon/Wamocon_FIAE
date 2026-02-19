@@ -103,7 +103,7 @@ export interface EmbeddingProvider {
 // PROVIDER CONFIGURATION
 // ============================================================================
 
-export type ChatProviderType = 'openrouter' | 'claude';
+export type ChatProviderType = 'gemini' | 'openrouter' | 'claude';
 export type EmbeddingProviderType = 'gemini' | 'ollama';
 
 export interface ProviderConfig {
@@ -113,9 +113,10 @@ export interface ProviderConfig {
   /** Which provider to use for embeddings ('ollama' or 'gemini') */
   embeddingProvider: EmbeddingProviderType;
 
-  /** Gemini-specific config (embeddings — fallback) */
+  /** Gemini-specific config (chat + embeddings — production standard) */
   gemini: {
     apiKey: string | undefined;
+    chatModel: string;
     embeddingModel: string;
     embeddingDimensions: number;
   };
@@ -144,21 +145,26 @@ export interface ProviderConfig {
  * Load provider configuration from environment variables.
  *
  * HAI_CHAT_PROVIDER controls which chat backend is used:
- *   - 'openrouter' (default) → Free models, for QA/testing
- *   - 'claude' → Anthropic Claude, for production
+ *   - 'gemini' (default) → Google Gemini Flash, fast & affordable (production)
+ *   - 'openrouter' → Free models, for QA/testing
+ *   - 'claude' → Anthropic Claude, premium quality
  *
  * HAI_EMBEDDING_PROVIDER controls which embedding backend is used:
  *   - 'gemini' (default) → Google Gemini API (production standard)
  *   - 'ollama' → Local Ollama, for local dev only (768 dims — incompatible with production)
  */
 export function loadProviderConfig(): ProviderConfig {
-  const chatProvider = (process.env.HAI_CHAT_PROVIDER ||
-    'openrouter') as ChatProviderType;
+  const rawChatProvider = (process.env.HAI_CHAT_PROVIDER || 'gemini') as string;
 
-  // Validate
-  if (chatProvider !== 'openrouter' && chatProvider !== 'claude') {
+  // Validate chat provider
+  const validChatProviders: ChatProviderType[] = ['gemini', 'openrouter', 'claude'];
+  const chatProvider: ChatProviderType = validChatProviders.includes(rawChatProvider as ChatProviderType)
+    ? (rawChatProvider as ChatProviderType)
+    : 'gemini';
+
+  if (!validChatProviders.includes(rawChatProvider as ChatProviderType)) {
     console.warn(
-      `HAI.ai: Unknown HAI_CHAT_PROVIDER "${chatProvider}". Falling back to "openrouter".`
+      `HAI.ai: Unknown HAI_CHAT_PROVIDER "${rawChatProvider}". Falling back to "gemini".`
     );
   }
 
@@ -187,11 +193,12 @@ export function loadProviderConfig(): ProviderConfig {
   }
 
   return {
-    chatProvider: chatProvider === 'claude' ? 'claude' : 'openrouter',
+    chatProvider,
     embeddingProvider: embeddingProvider === 'ollama' ? 'ollama' : 'gemini',
 
     gemini: {
       apiKey: process.env.GEMINI_API_KEY,
+      chatModel: process.env.HAI_GEMINI_CHAT_MODEL || 'gemini-2.5-flash',
       embeddingModel:
         process.env.HAI_GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
       embeddingDimensions: parseInt(
