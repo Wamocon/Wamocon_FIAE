@@ -6,8 +6,9 @@
  *
  * Architecture:
  *   - CHAT: Environment-based routing via HAI_CHAT_PROVIDER
- *     - 'openrouter' (default) → Free Llama models for QA/testing
- *     - 'claude' → Anthropic Claude for production
+ *     - 'gemini' (default) → Google Gemini Flash, fast & affordable (production)
+ *     - 'openrouter' → Free Llama models for QA/testing
+ *     - 'claude' → Anthropic Claude, premium quality
  *   - EMBEDDINGS: Environment-based routing via HAI_EMBEDDING_PROVIDER
  *     - 'gemini' (default) → Google Gemini API (production standard, 3072 dims)
  *     - 'ollama' → Local Ollama (local dev only, 768 dims — incompatible with production)
@@ -16,7 +17,7 @@
  */
 
 import { ClaudeChatProvider } from './claude';
-import { GeminiEmbeddingProvider } from './gemini';
+import { GeminiChatProvider, GeminiEmbeddingProvider } from './gemini';
 import { OllamaEmbeddingProvider } from './ollama';
 import { OpenRouterChatProvider } from './openrouter';
 import {
@@ -72,7 +73,12 @@ function ensureInitialized(): void {
   }
 
   // --- CHAT PROVIDER (environment-based) ---
-  if (config.chatProvider === 'claude') {
+  if (config.chatProvider === 'gemini') {
+    _chatProvider = new GeminiChatProvider(
+      config.gemini.apiKey,
+      config.gemini.chatModel
+    );
+  } else if (config.chatProvider === 'claude') {
     _chatProvider = new ClaudeChatProvider(
       config.claude.apiKey,
       config.claude.model
@@ -114,10 +120,12 @@ export function getChatProvider(): ChatProvider {
 
   if (!_chatProvider || !_chatProvider.isInitialized()) {
     const config = loadProviderConfig();
-    const keyHint =
-      config.chatProvider === 'claude'
-        ? 'ANTHROPIC_API_KEY'
-        : 'OPENROUTER_API_KEY';
+    const keyHints: Record<string, string> = {
+      gemini: 'GEMINI_API_KEY',
+      claude: 'ANTHROPIC_API_KEY',
+      openrouter: 'OPENROUTER_API_KEY',
+    };
+    const keyHint = keyHints[config.chatProvider] || 'API key';
     throw new Error(
       `HAI.ai: Chat provider (${config.chatProvider}) not available. Check ${keyHint}.`
     );
