@@ -116,7 +116,7 @@ export async function createReindexJob(
   // Create job record
   const result = await haiDb.execute(sql`
         INSERT INTO hai_reindex_jobs (status, force_reindex, progress)
-        VALUES ('pending', ${forceReindex}, ${JSON.stringify(initialProgress)}::jsonb)
+        VALUES ('pending', ${forceReindex}, ${initialProgress}::jsonb)
         RETURNING id
     `);
 
@@ -273,7 +273,7 @@ export async function updateJobProgress(
     await haiDb.execute(sql`
             UPDATE hai_reindex_jobs
             SET
-                progress = progress || ${JSON.stringify(progress)}::jsonb,
+                progress = progress || ${progress}::jsonb,
                 updated_at = NOW()
             WHERE id = ${jobId}::uuid
         `);
@@ -309,7 +309,7 @@ export async function markJobCompleted(
             UPDATE hai_reindex_jobs
             SET
                 status = 'completed',
-                progress = ${JSON.stringify(progress)}::jsonb,
+                progress = ${progress}::jsonb,
                 completed_at = NOW(),
                 updated_at = NOW()
             WHERE id = ${jobId}::uuid
@@ -334,7 +334,7 @@ export async function markJobFailed(
             SET
                 status = 'failed',
                 error = ${error},
-                progress = ${JSON.stringify(progress)}::jsonb,
+                progress = ${progress}::jsonb,
                 completed_at = NOW(),
                 updated_at = NOW()
             WHERE id = ${jobId}::uuid
@@ -357,7 +357,7 @@ export async function markJobCancelled(
             UPDATE hai_reindex_jobs
             SET
                 status = 'cancelled',
-                progress = ${JSON.stringify(progress)}::jsonb,
+                progress = ${progress}::jsonb,
                 completed_at = NOW(),
                 updated_at = NOW()
             WHERE id = ${jobId}::uuid

@@ -16,7 +16,9 @@ import {
   Calendar,
   ClipboardList,
   FolderEdit,
+
 } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback } from 'react';
 
@@ -267,12 +269,13 @@ export function Sidebar({
               : currentView === item.id;
 
             return (
-              <button
+
+              <Link
                 key={item.id}
-                onClick={() => handleNavigation(item.id)}
+                href={item.href}
                 className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${isActive
-                    ? 'bg-accent/20 text-accent border-accent/30 border'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
+                  ? 'bg-accent/20 text-accent border-accent/30 border'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
                   }`}
               >
                 {item.id === 'profile' ? (
@@ -295,8 +298,9 @@ export function Sidebar({
                   />
                 )}
                 <span className="font-medium">{item.label}</span>
-              </button>
+              </Link>
             );
+
           })}
         </nav>
 

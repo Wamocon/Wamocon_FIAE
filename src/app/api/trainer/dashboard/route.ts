@@ -54,21 +54,21 @@ async function fetchTrainerDashboardData(trainerId: string) {
     // Fetch only trainees enrolled in this trainer's courses (was: ALL trainees)
     const traineeRows = courseIds.length
       ? await db
-          .selectDistinct({
-            id: profiles.id,
-            fullName: profiles.fullName,
-            avatarUrl: profiles.avatarUrl,
-            isActive: profiles.isActive,
-          })
-          .from(profiles)
-          .innerJoin(courseMembers, eq(courseMembers.userId, profiles.id))
-          .where(
-            and(
-              eq(profiles.role, 'TRAINEE'),
-              eq(courseMembers.role, 'TRAINEE'),
-              inArray(courseMembers.courseId, courseIds as any)
-            )
+        .selectDistinct({
+          id: profiles.id,
+          fullName: profiles.fullName,
+          avatarUrl: profiles.avatarUrl,
+          isActive: profiles.isActive,
+        })
+        .from(profiles)
+        .innerJoin(courseMembers, eq(courseMembers.userId, profiles.id))
+        .where(
+          and(
+            eq(profiles.role, 'TRAINEE'),
+            eq(courseMembers.role, 'TRAINEE'),
+            inArray(courseMembers.courseId, courseIds as any)
           )
+        )
       : [];
     const traineeIds = traineeRows.map(t => String(t.id));
     const hasTrainees = traineeIds.length > 0;
@@ -77,29 +77,29 @@ async function fetchTrainerDashboardData(trainerId: string) {
     const [trainerEnablers, useCaseRows] = await Promise.all([
       courseIds.length
         ? db
-            .select({
-              id: enablers.id,
-              courseId: enablers.courseId,
-              scenarios: enablers.scenarios,
-            })
-            .from(enablers)
-            .where(
-              and(
-                inArray(enablers.courseId, courseIds as any),
-                eq(enablers.isActive, true)
-              )
+          .select({
+            id: enablers.id,
+            courseId: enablers.courseId,
+            scenarioPdfUrl: enablers.scenarioPdfUrl,
+          })
+          .from(enablers)
+          .where(
+            and(
+              inArray(enablers.courseId, courseIds as any),
+              eq(enablers.isActive, true)
             )
+          )
         : Promise.resolve([]),
       courseIds.length
         ? db
-            .select({ id: useCases.id, courseId: useCases.courseId })
-            .from(useCases)
-            .where(
-              and(
-                inArray(useCases.courseId, courseIds as any),
-                eq(useCases.isActive, true)
-              )
+          .select({ id: useCases.id, courseId: useCases.courseId })
+          .from(useCases)
+          .where(
+            and(
+              inArray(useCases.courseId, courseIds as any),
+              eq(useCases.isActive, true)
             )
+          )
         : Promise.resolve([]),
     ]);
 
@@ -139,124 +139,124 @@ async function fetchTrainerDashboardData(trainerId: string) {
     ] = await Promise.all([
       hasEnablers
         ? db
-            .select({
-              enablerId: enablerQuizLinks.enablerId,
-              quizId: enablerQuizLinks.quizId,
-            })
-            .from(enablerQuizLinks)
-            .where(inArray(enablerQuizLinks.enablerId, enablerIds as any))
+          .select({
+            enablerId: enablerQuizLinks.enablerId,
+            quizId: enablerQuizLinks.quizId,
+          })
+          .from(enablerQuizLinks)
+          .where(inArray(enablerQuizLinks.enablerId, enablerIds as any))
         : Promise.resolve([]),
       // Merged: quiz scores + timestamps (was quizSubRows + trendSubRows)
       hasTrainees
         ? db
-            .select({
-              traineeId: quizSubmissions.traineeId,
-              quizId: quizSubmissions.quizId,
-              score: quizSubmissions.score,
-              submittedAt: quizSubmissions.submittedAt,
-            })
-            .from(quizSubmissions)
-            .where(inArray(quizSubmissions.traineeId, traineeIds))
+          .select({
+            traineeId: quizSubmissions.traineeId,
+            quizId: quizSubmissions.quizId,
+            score: quizSubmissions.score,
+            submittedAt: quizSubmissions.submittedAt,
+          })
+          .from(quizSubmissions)
+          .where(inArray(quizSubmissions.traineeId, traineeIds))
         : Promise.resolve([]),
       hasTrainees && hasEnablers
         ? db
-            .select({
-              traineeId: enablerSubmissions.traineeId,
-              enablerId: enablerSubmissions.enablerId,
-            })
-            .from(enablerSubmissions)
-            .where(
-              and(
-                inArray(enablerSubmissions.traineeId, traineeIds as any),
-                inArray(enablerSubmissions.enablerId, enablerIds as any),
-                eq(enablerSubmissions.status, 'APPROVED')
-              )
+          .select({
+            traineeId: enablerSubmissions.traineeId,
+            enablerId: enablerSubmissions.enablerId,
+          })
+          .from(enablerSubmissions)
+          .where(
+            and(
+              inArray(enablerSubmissions.traineeId, traineeIds as any),
+              inArray(enablerSubmissions.enablerId, enablerIds as any),
+              eq(enablerSubmissions.status, 'APPROVED')
             )
+          )
         : Promise.resolve([]),
       hasTrainees && useCaseIds.length > 0
         ? db
-            .select({
-              traineeId: useCaseSubmissions.traineeId,
-              useCaseId: useCaseSubmissions.useCaseId,
-            })
-            .from(useCaseSubmissions)
-            .where(
-              and(
-                inArray(useCaseSubmissions.traineeId, traineeIds as any),
-                inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
-                eq(useCaseSubmissions.status, 'APPROVED')
-              )
+          .select({
+            traineeId: useCaseSubmissions.traineeId,
+            useCaseId: useCaseSubmissions.useCaseId,
+          })
+          .from(useCaseSubmissions)
+          .where(
+            and(
+              inArray(useCaseSubmissions.traineeId, traineeIds as any),
+              inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
+              eq(useCaseSubmissions.status, 'APPROVED')
             )
+          )
         : Promise.resolve([]),
       hasTrainees
         ? db
-            .select({ c: count() })
-            .from(quizSubmissions)
-            .where(
-              and(
-                eq(quizSubmissions.isReviewed, false),
-                inArray(quizSubmissions.traineeId, traineeIds)
-              )
+          .select({ c: count() })
+          .from(quizSubmissions)
+          .where(
+            and(
+              eq(quizSubmissions.isReviewed, false),
+              inArray(quizSubmissions.traineeId, traineeIds)
             )
+          )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-            .select({ c: count() })
-            .from(quizSubmissions)
-            .innerJoin(
-              enablerQuizLinks,
-              eq(quizSubmissions.quizId, enablerQuizLinks.quizId)
+          .select({ c: count() })
+          .from(quizSubmissions)
+          .innerJoin(
+            enablerQuizLinks,
+            eq(quizSubmissions.quizId, enablerQuizLinks.quizId)
+          )
+          .where(
+            and(
+              eq(quizSubmissions.isReviewed, false),
+              inArray(quizSubmissions.traineeId, traineeIds)
             )
-            .where(
-              and(
-                eq(quizSubmissions.isReviewed, false),
-                inArray(quizSubmissions.traineeId, traineeIds)
-              )
-            )
+          )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-            .select({ c: count() })
-            .from(useCaseSubmissions)
-            .where(
-              and(
-                eq(useCaseSubmissions.status, 'PENDING'),
-                inArray(useCaseSubmissions.traineeId, traineeIds)
-              )
+          .select({ c: count() })
+          .from(useCaseSubmissions)
+          .where(
+            and(
+              eq(useCaseSubmissions.status, 'PENDING'),
+              inArray(useCaseSubmissions.traineeId, traineeIds)
             )
+          )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-            .select({ c: count() })
-            .from(enablerSubmissions)
-            .where(
-              and(
-                eq(enablerSubmissions.status, 'PENDING'),
-                inArray(enablerSubmissions.traineeId, traineeIds)
-              )
+          .select({ c: count() })
+          .from(enablerSubmissions)
+          .where(
+            and(
+              eq(enablerSubmissions.status, 'PENDING'),
+              inArray(enablerSubmissions.traineeId, traineeIds)
             )
+          )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-            .select({ c: count() })
-            .from(activityReports)
-            .where(
-              and(
-                eq(activityReports.status, 'SUBMITTED'),
-                inArray(activityReports.traineeId, traineeIds)
-              )
+          .select({ c: count() })
+          .from(activityReports)
+          .where(
+            and(
+              eq(activityReports.status, 'SUBMITTED'),
+              inArray(activityReports.traineeId, traineeIds)
             )
+          )
         : Promise.resolve([{ c: 0 }]),
       // Merged: enabler completions for trend + module chart (was trendCompRows + compByCourseRows)
       hasTrainees
         ? db
-            .select({
-              traineeId: enablerCompletions.traineeId,
-              enablerId: enablerCompletions.enablerId,
-              completedAt: enablerCompletions.completedAt,
-            })
-            .from(enablerCompletions)
-            .where(inArray(enablerCompletions.traineeId, traineeIds))
+          .select({
+            traineeId: enablerCompletions.traineeId,
+            enablerId: enablerCompletions.enablerId,
+            completedAt: enablerCompletions.completedAt,
+          })
+          .from(enablerCompletions)
+          .where(inArray(enablerCompletions.traineeId, traineeIds))
         : Promise.resolve([]),
     ]);
 
@@ -305,10 +305,7 @@ async function fetchTrainerDashboardData(trainerId: string) {
             }
           }
 
-          const hasScenarios =
-            enabler.scenarios &&
-            Array.isArray(enabler.scenarios) &&
-            enabler.scenarios.length > 0;
+          const hasScenarios = !!enabler.scenarioPdfUrl;
           let scenariosApproved = true;
           if (hasScenarios) {
             scenariosApproved = approvedEnablerSubs.has(enablerId);

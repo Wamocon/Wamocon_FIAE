@@ -316,12 +316,8 @@ export async function POST(request: NextRequest) {
               .set({
                 orderIndex: firstRow.order_index,
                 descriptionText: firstRow.description_text?.trim() || null,
-                scenarios: scenarios.length > 0 ? scenarios : null,
-                scenarioText: null, // Clear legacy field
-                hintText: null, // Clear legacy field
                 pptUrl: firstRow.ppt_url?.trim() || null,
                 videoUrl: firstRow.video_url?.trim() || null,
-                scenarioImageUrl: firstRow.scenario_image_url?.trim() || null,
                 durationValue: firstRow.duration_value || null,
                 durationUnit: durationUnit,
                 isActive: parseBoolean(firstRow.is_active),
@@ -336,10 +332,8 @@ export async function POST(request: NextRequest) {
                 title: firstRow.title.trim(),
                 orderIndex: firstRow.order_index,
                 descriptionText: firstRow.description_text?.trim() || null,
-                scenarios: scenarios.length > 0 ? scenarios : null,
                 pptUrl: firstRow.ppt_url?.trim() || null,
                 videoUrl: firstRow.video_url?.trim() || null,
-                scenarioImageUrl: firstRow.scenario_image_url?.trim() || null,
                 durationValue: firstRow.duration_value || null,
                 durationUnit: durationUnit,
                 isActive: parseBoolean(firstRow.is_active),
@@ -674,15 +668,15 @@ export async function POST(request: NextRequest) {
           const enablerId = enablerRes[0].id;
 
           // 3. Update Enabler Scenarios
+          // 3. Update Enabler Scenarios - SKIPPED (Legacy text scenarios removed from schema)
+          /*
           await db
             .update(enablers)
             .set({
-              scenarios: scenarios,
-              // Update legacy fields for compatibility if first scenario
-              scenarioText: scenarios.length > 0 ? scenarios[0].text : null,
-              hintText: scenarios.length > 0 ? scenarios[0].hint : null,
+               // No fields remaining to update
             })
             .where(eq(enablers.id, enablerId));
+          */
 
           result.stats.enablersCreated++; // Using this stat reusing existing field
         } catch (err: any) {

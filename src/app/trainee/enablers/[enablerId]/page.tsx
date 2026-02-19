@@ -18,8 +18,7 @@ import {
   FlipbookViewer,
   useFlipbookViewer,
 } from '@/components/ui/FlipbookViewer';
-import { ScenarioViewer } from '@/components/learning/ScenarioViewer';
-import { BookOpen, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { BookOpen, CheckCircle, Clock, AlertCircle, FileText, Plus, X, Trash2 } from 'lucide-react';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -129,26 +128,9 @@ export default function TraineeEnablerPage() {
 
           setEnabler(enablerData);
 
-          // Initialize solutions from submission if available, else empty
-          if (
-            enablerData &&
-            Array.isArray(enablerData.scenarios) &&
-            enablerData.scenarios.length > 0
-          ) {
-            const initialSolutions = enablerData.scenarios.map(
-              (_: any, idx: number) => {
-                const existing = submissionData?.solutions?.find(
-                  (s: any) => s.scenarioIndex === idx
-                );
-                return { scenarioIndex: idx, text: existing?.text || '' };
-              }
-            );
-            setSolutions(initialSolutions);
-          } else if (enablerData?.scenarioText) {
-            setSolutions([
-              { scenarioIndex: 0, text: submissionData?.solutionText || '' },
-            ]);
-          }
+          // Initialize solutions from submission if available, else empty default
+          // If no submission yet, start with 1 empty solution block
+          setSolutions([{ scenarioIndex: 0, text: '' }]);
         }
 
         // Fetch trainee submission status (with feedback for rejected submissions)
@@ -430,22 +412,24 @@ export default function TraineeEnablerPage() {
           )}
         </div>
         <div className="mt-3 flex flex-wrap gap-3">
+
+
           {/* PDF Documents from content_documents table */}
           {documents.map(doc => (
             <button
               key={doc.id}
               onClick={() => flipbook.openPdf(doc.title, doc.storageUrl)}
-              className="max-w bg-primary text-primary-foreground hover:bg-primary/90 flex rounded-md px-2 py-2"
+              className="max-w bg-primary text-primary-foreground hover:bg-primary/90 flex rounded-md px-3 py-2 shadow-sm transition-colors"
             >
-              <div className="max-w flex px-2 py-1">
+              <div className="max-w flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
+                <span>{doc.title}</span>
               </div>
-              <div> {doc.title}</div>
             </button>
           ))}
           {enabler.videoUrl && (
             <a
-              className="border-accent/30 hover:bg-background/60 rounded-xl border px-3 py-1.5 text-sm"
+              className="border-accent/30 hover:bg-background/60 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
               href={enabler.videoUrl}
               target="_blank"
               rel="noreferrer"
@@ -455,7 +439,7 @@ export default function TraineeEnablerPage() {
           )}
           {enabler.pptUrl && (
             <a
-              className="border-accent/30 hover:bg-background/60 rounded-xl border px-3 py-1.5 text-sm"
+              className="border-accent/30 hover:bg-background/60 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
               href={enabler.pptUrl}
               target="_blank"
               rel="noreferrer"
@@ -473,102 +457,108 @@ export default function TraineeEnablerPage() {
           onClose={flipbook.closePdf}
         />
 
-        {/* Scenarios Section - Redesigned with structured sections */}
-        {profile?.id &&
-          enablerId &&
-          ((Array.isArray(enabler.scenarios) && enabler.scenarios.length > 0) ||
-            enabler.scenarioText) && (
-            <div className="mt-4">
-              <ScenarioViewer
-                scenarios={enabler.scenarios || []}
-                currentIndex={currentScenarioIndex}
-                onIndexChange={setCurrentScenarioIndex}
-                scenarioText={enabler.scenarioText}
-                hintText={enabler.hintText}
-                initialAnswers={solutions}
-                traineeId={profile.id}
-                enablerId={enablerId}
-              />
-            </div>
-          )}
       </div>
 
+      {/* Scenario Section (Dedicated) */}
+      {enabler.scenarioPdfUrl && (
+        <div className="border-accent/30 bg-background rounded-3xl border p-5">
+          <div className="mb-4 text-lg font-semibold">
+            {t('enablerPage.scenarioSection')}
+          </div>
+          <button
+            onClick={() => flipbook.openPdf(t('trainer.content.scenarios'), enabler.scenarioPdfUrl)}
+            className="max-w bg-amber-600 text-white hover:bg-amber-700 flex w-full items-center justify-center rounded-xl px-4 py-4 shadow-sm transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              <span className="text-lg font-medium">{t('enablerPage.openScenario')}</span>
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Status Banner */}
-      {submission?.status === 'APPROVED' && (
-        <div className="flex items-start gap-3 rounded-2xl border border-green-500/40 bg-green-500/10 p-4">
-          <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
-          <div>
-            <div className="font-semibold text-green-600 dark:text-green-400">
-              {t('enablerPage.approved')}
-            </div>
-            <div className="text-sm text-green-600/80 dark:text-green-400/80">
-              {t('enablerPage.approvedDesc')}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {submission?.status === 'PENDING' && (
-        <div className="flex items-start gap-3 rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-4">
-          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />
-          <div>
-            <div className="font-semibold text-yellow-600 dark:text-yellow-400">
-              {t('enablerPage.pending')}
-            </div>
-            <div className="text-sm text-yellow-600/80 dark:text-yellow-400/80">
-              {t('enablerPage.pendingDesc')}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {submission?.status === 'REJECTED' && (
-        <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
-          <div className="flex-1">
-            <div className="font-semibold text-red-600 dark:text-red-400">
-              {t('enablerPage.rejected')}
-            </div>
-            <div className="mb-2 text-sm text-red-600/80 dark:text-red-400/80">
-              {t('enablerPage.rejectedDesc')}
-            </div>
-            {/* Show general trainer feedback */}
-            {submission.trainerFeedback && (
-              <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
-                <div className="mb-1 text-xs font-medium text-red-600/70 dark:text-red-400/70">
-                  {t('enablerPage.trainerFeedback')}
-                </div>
-                <p className="text-foreground text-sm whitespace-pre-line">
-                  {submission.trainerFeedback}
-                </p>
+      {
+        submission?.status === 'APPROVED' && (
+          <div className="flex items-start gap-3 rounded-2xl border border-green-500/40 bg-green-500/10 p-4">
+            <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
+            <div>
+              <div className="font-semibold text-green-600 dark:text-green-400">
+                {t('enablerPage.approved')}
               </div>
-            )}
-            {/* Show per-scenario feedbacks */}
-            {submission.feedbacks && submission.feedbacks.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {submission.feedbacks.map((fb, idx) => (
-                  <div
-                    key={idx}
-                    className="rounded-xl border border-red-500/20 bg-red-500/5 p-3"
-                  >
-                    <div className="mb-1 text-xs font-medium text-red-600/70 dark:text-red-400/70">
-                      {t('enablerPage.feedbackForScenario').replace(
-                        '{number}',
-                        String(fb.scenarioIndex + 1)
-                      )}
-                    </div>
-                    <p className="text-foreground text-sm whitespace-pre-line">
-                      {fb.feedback}
-                    </p>
+              <div className="text-sm text-green-600/80 dark:text-green-400/80">
+                {t('enablerPage.approvedDesc')}
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        submission?.status === 'PENDING' && (
+          <div className="flex items-start gap-3 rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-4">
+            <Clock className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />
+            <div>
+              <div className="font-semibold text-yellow-600 dark:text-yellow-400">
+                {t('enablerPage.pending')}
+              </div>
+              <div className="text-sm text-yellow-600/80 dark:text-yellow-400/80">
+                {t('enablerPage.pendingDesc')}
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        submission?.status === 'REJECTED' && (
+          <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 p-4">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+            <div className="flex-1">
+              <div className="font-semibold text-red-600 dark:text-red-400">
+                {t('enablerPage.rejected')}
+              </div>
+              <div className="mb-2 text-sm text-red-600/80 dark:text-red-400/80">
+                {t('enablerPage.rejectedDesc')}
+              </div>
+              {/* Show general trainer feedback */}
+              {submission.trainerFeedback && (
+                <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                  <div className="mb-1 text-xs font-medium text-red-600/70 dark:text-red-400/70">
+                    {t('enablerPage.trainerFeedback')}
                   </div>
-                ))}
-              </div>
-            )}
+                  <p className="text-foreground text-sm whitespace-pre-line">
+                    {submission.trainerFeedback}
+                  </p>
+                </div>
+              )}
+              {/* Show per-scenario feedbacks */}
+              {submission.feedbacks && submission.feedbacks.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {submission.feedbacks.map((fb, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-xl border border-red-500/20 bg-red-500/5 p-3"
+                    >
+                      <div className="mb-1 text-xs font-medium text-red-600/70 dark:text-red-400/70">
+                        {t('enablerPage.feedbackForScenario').replace(
+                          '{number}',
+                          String(fb.scenarioIndex + 1)
+                        )}
+                      </div>
+                      <p className="text-foreground text-sm whitespace-pre-line">
+                        {fb.feedback}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
-      {/* Solution Slider */}
+      {/* Summary/Reflection Section */}
       <div className="border-accent/30 bg-background space-y-4 rounded-3xl border p-5">
         {saveSuccess && (
           <div className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-300">
@@ -577,105 +567,25 @@ export default function TraineeEnablerPage() {
         )}
 
         <div className="mb-2 text-lg font-semibold">
-          {t('enablerPage.yourSolutions')}
+          {t('enablerPage.summaryLabel')}
         </div>
 
-        {solutions.length > 0 && (
-          <>
-            {/* Counter */}
-            {solutions.length > 1 && (
-              <div className="mb-3 text-center">
-                <span className="text-foreground text-sm font-medium">
-                  {t('enablerPage.solutionCounter')
-                    .replace('{current}', String(currentScenarioIndex + 1))
-                    .replace('{total}', String(solutions.length))}
-                </span>
-              </div>
-            )}
-
-            {/* Solution Slider */}
-            <div className="border-accent/20 relative overflow-hidden rounded-xl border bg-black/20 p-4">
-              <div
-                className="flex transition-transform duration-300 ease-in-out"
-                style={{
-                  transform: `translateX(-${currentScenarioIndex * 100}%)`,
-                }}
-              >
-                {solutions.map((sol, idx) => (
-                  <div key={idx} className="w-full flex-shrink-0 px-2">
-                    <label className="mb-1 block text-sm font-medium">
-                      {t('enablerPage.yourSolutionFor').replace(
-                        '{number}',
-                        String(idx + 1)
-                      )}
-                    </label>
-                    <textarea
-                      value={sol.text}
-                      onChange={e => {
-                        if (!canEdit) return;
-                        const newSolutions = [...solutions];
-                        newSolutions[idx] = {
-                          ...newSolutions[idx],
-                          text: e.target.value,
-                        };
-                        setSolutions(newSolutions);
-                      }}
-                      className={`border-accent/30 w-full rounded-xl border bg-black/30 px-3 py-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
-                      rows={6}
-                      placeholder={t('enablerPage.describeSolution')}
-                      disabled={!canEdit}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Navigation for multiple solutions */}
-            {solutions.length > 1 && (
-              <div className="mt-3 flex items-center justify-between">
-                <button
-                  type="button"
-                  disabled={currentScenarioIndex === 0}
-                  onClick={() =>
-                    setCurrentScenarioIndex(i => Math.max(0, i - 1))
-                  }
-                  className="border-accent/30 hover:bg-accent/10 rounded-md border px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {t('enablerPage.back')}
-                </button>
-
-                <div className="flex items-center gap-2">
-                  {solutions.map((_, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setCurrentScenarioIndex(idx)}
-                      className={`h-2 rounded-full transition-all ${
-                        idx === currentScenarioIndex
-                          ? 'bg-primary w-6'
-                          : 'bg-accent/30 hover:bg-accent/50 w-2'
-                      }`}
-                      aria-label={`Go to solution ${idx + 1}`}
-                    />
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={currentScenarioIndex === solutions.length - 1}
-                  onClick={() =>
-                    setCurrentScenarioIndex(i =>
-                      Math.min(solutions.length - 1, i + 1)
-                    )
-                  }
-                  className="border-accent/30 hover:bg-accent/10 rounded-md border px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {t('enablerPage.next')}
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        <div className="border-accent/20 bg-background/30 relative rounded-xl border p-4">
+          <textarea
+            value={solutions[0]?.text || ''}
+            onChange={e => {
+              if (!canEdit) return;
+              const newSolutions = [...solutions];
+              if (!newSolutions[0]) newSolutions[0] = { scenarioIndex: 0, text: '' };
+              newSolutions[0].text = e.target.value;
+              setSolutions(newSolutions);
+            }}
+            className={`border-accent/30 w-full rounded-xl border bg-black/30 px-3 py-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
+            rows={10}
+            placeholder={t('enablerPage.describeSolution')}
+            disabled={!canEdit}
+          />
+        </div>
 
         {canEdit && (
           <div className="flex justify-end">
@@ -767,7 +677,7 @@ export default function TraineeEnablerPage() {
                     </MarkdownText>
                     <div className="space-y-2">
                       {currentQuestion.questionType === 'TEXT' ||
-                      currentQuestion.options.length === 0 ? (
+                        currentQuestion.options.length === 0 ? (
                         <div>
                           <textarea
                             className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
@@ -823,8 +733,8 @@ export default function TraineeEnablerPage() {
                           disabled={
                             currentQuestion.questionType === 'TEXT'
                               ? !String(
-                                  answers[currentQuestion.id] || ''
-                                ).trim()
+                                answers[currentQuestion.id] || ''
+                              ).trim()
                               : !answers[currentQuestion.id]
                           }
                         >
@@ -882,8 +792,8 @@ export default function TraineeEnablerPage() {
                           {q.questionType === 'TEXT' || q.options.length === 0
                             ? fb?.selectedText || chosen || '-'
                             : q.options.find(
-                                o => String(o.id) === String(chosen)
-                              )?.optionText || '-'}
+                              o => String(o.id) === String(chosen)
+                            )?.optionText || '-'}
                         </div>
                         {q.questionType !== 'TEXT' && !fb?.correct && (
                           <div className="mt-1 text-sm text-green-400">
@@ -935,6 +845,6 @@ export default function TraineeEnablerPage() {
           {t('enablerPage.backToModules')}
         </Link>
       </div>
-    </div>
+    </div >
   );
 }
