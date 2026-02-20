@@ -15,9 +15,9 @@ import Link from 'next/link';
 export default async function QuizSubmissionReviewPage({
   params,
 }: {
-  params: { submissionId: string };
+  params: Promise<{ submissionId: string }>;
 }) {
-  const { submissionId } = params;
+  const { submissionId } = await params;
 
   // Load submission with quiz and trainee
   const [sub] = await db
@@ -140,7 +140,7 @@ export default async function QuizSubmissionReviewPage({
               </span>
             </>
           )}
-          {enabler?.title && <> • Lessson: {enabler.title}</>}
+          {enabler?.title && <> • Lesson: {enabler.title}</>}
         </div>
       </div>
 

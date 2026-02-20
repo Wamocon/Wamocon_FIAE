@@ -85,6 +85,7 @@ export default function TraineeUseCaseDetailPage() {
     if (!profile?.id) return setError(t('useCase.profileMissing'));
     setSaving(true);
     setSuccess(null);
+    setError(null);
     try {
       const body = {
         traineeId: profile.id,
@@ -94,6 +95,23 @@ export default function TraineeUseCaseDetailPage() {
       const r = await fetch(`/api/trainee/use-cases/${useCaseId}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error(t('useCase.submitFailed'));
       setSuccess(t('useCase.submitSuccess'));
+
+      // Re-fetch submission status so the UI reflects the new PENDING state
+      try {
+        const refreshRes = await fetch(`/api/trainee/use-cases/${useCaseId}?traineeId=${profile.id}`, { cache: 'no-store' });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          if (refreshData.submission) {
+            setSubmission(refreshData.submission);
+            setSubmissionText(refreshData.submission.submissionText || '');
+            const mapped = (refreshData.submission.links || []).map((l: any) => ({ url: l.url as string, description: (l.description as string) || '' }));
+            setLinks(mapped.length ? mapped : [{ url: '', description: '' }]);
+          }
+        }
+      } catch {
+        // If refresh fails, at least update local state to show PENDING
+        setSubmission(prev => prev ? { ...prev, status: 'PENDING', trainerFeedback: null } : { id: '', status: 'PENDING', submissionText, links: links.filter(l => l.url?.trim()) });
+      }
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
     } finally {

@@ -66,7 +66,9 @@ export async function GET(req: NextRequest) {
       .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
       .leftJoin(enablerQuizLinks, eq(enablerQuizLinks.quizId, quizSubmissions.quizId))
       .leftJoin(enablers, eq(enablers.id, enablerQuizLinks.enablerId))
-  .where(and(inArray(quizSubmissions.traineeId, traineeIds as any), onlyPending ? eq(quizSubmissions.isReviewed, false as any) : eq(quizSubmissions.isReviewed, quizSubmissions.isReviewed)))
+  .where(onlyPending
+        ? and(inArray(quizSubmissions.traineeId, traineeIds as any), eq(quizSubmissions.isReviewed, false as any))
+        : inArray(quizSubmissions.traineeId, traineeIds as any))
       .orderBy(desc(quizSubmissions.submittedAt))
       .limit(200);
 

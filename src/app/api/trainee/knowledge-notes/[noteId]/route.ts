@@ -42,12 +42,9 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ noteId:
     const traineeId = url.searchParams.get('traineeId');
     const { noteId } = await ctx.params;
     if (!noteId) return NextResponse.json({ error: 'Missing noteId' }, { status: 400 });
+    if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
-    if (traineeId) {
-      await db.delete(knowledgeNotes).where(and(eq(knowledgeNotes.id, noteId as any), eq(knowledgeNotes.traineeId, traineeId as any)));
-    } else {
-      await db.delete(knowledgeNotes).where(eq(knowledgeNotes.id, noteId as any));
-    }
+    await db.delete(knowledgeNotes).where(and(eq(knowledgeNotes.id, noteId as any), eq(knowledgeNotes.traineeId, traineeId as any)));
 
     return NextResponse.json({ ok: true });
   } catch (e) {
@@ -64,17 +61,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ noteId: s
     if (!noteId) return NextResponse.json({ error: 'Missing noteId' }, { status: 400 });
     const body = await req.json();
     const trainee_id = body?.trainee_id as string | undefined;
+    if (!trainee_id) return NextResponse.json({ error: 'Missing trainee_id' }, { status: 400 });
+
     const updates: any = {};
     if (body?.title !== undefined) updates.title = String(body.title);
     if (body?.content !== undefined) updates.content = String(body.content);
     if (body?.one_drive_link !== undefined) updates.oneDriveLink = body.one_drive_link ? String(body.one_drive_link) : null;
 
-    // If trainee_id provided, scope update to that trainee to prevent cross-editing
-    if (trainee_id) {
-      await db.update(knowledgeNotes).set(updates).where(and(eq(knowledgeNotes.id, noteId as any), eq(knowledgeNotes.traineeId, trainee_id as any)));
-    } else {
-      await db.update(knowledgeNotes).set(updates).where(eq(knowledgeNotes.id, noteId as any));
-    }
+    // Scope update to the trainee to prevent cross-editing
+    await db.update(knowledgeNotes).set(updates).where(and(eq(knowledgeNotes.id, noteId as any), eq(knowledgeNotes.traineeId, trainee_id as any)));
 
     return NextResponse.json({ ok: true });
   } catch (e) {

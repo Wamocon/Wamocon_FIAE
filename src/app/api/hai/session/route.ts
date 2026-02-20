@@ -221,19 +221,31 @@ export async function GET(req: NextRequest) {
 
     const totalCount = Number(countResult[0]?.count || 0);
 
-    // Get message count for each session
-    const sessionsWithCount = await Promise.all(
-      sessions.map(async s => {
-        const msgCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(haiChatMessages)
-          .where(eq(haiChatMessages.sessionId, s.id));
-        return {
-          ...s,
-          messageCount: Number(msgCount[0]?.count || 0),
-        };
-      })
+    // Get message counts for all sessions in a single query
+    const sessionIds = sessions.map(s => s.id);
+    const msgCounts =
+      sessionIds.length > 0
+        ? await db
+            .select({
+              sessionId: haiChatMessages.sessionId,
+              count: sql<number>`count(*)`,
+            })
+            .from(haiChatMessages)
+            .where(
+              sql`${haiChatMessages.sessionId} IN (${sql.join(
+                sessionIds.map(id => sql`${id}`),
+                sql`, `
+              )})`
+            )
+            .groupBy(haiChatMessages.sessionId)
+        : [];
+    const countMap = new Map(
+      msgCounts.map(r => [r.sessionId, Number(r.count)])
     );
+    const sessionsWithCount = sessions.map(s => ({
+      ...s,
+      messageCount: countMap.get(s.id) || 0,
+    }));
 
     return NextResponse.json({
       success: true,
