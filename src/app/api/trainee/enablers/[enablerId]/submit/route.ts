@@ -123,7 +123,7 @@ export async function POST(
           type: 'ENABLER_SUBMITTED',
           title: 'Szenario eingereicht',
           message: `Ein Trainee hat ein Enabler-Szenario eingereicht: ${e.title}`,
-          linkUrl: '/trainer/reviews?type=enabler',
+          linkUrl: '/trainer/reviews?view=enablers&onlyPending=true',
           context: { enablerId, courseId: e.courseId },
         }));
         await db.insert(notifications).values(values);
