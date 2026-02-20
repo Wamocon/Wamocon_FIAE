@@ -116,53 +116,37 @@ export default function TraineeEnablerPage() {
       setLoading(true);
       setError(null);
       try {
-        // Enabler details (use trainee-facing GET which includes submission info)
+        // Enabler details + submission status (single fetch)
         const er = await fetch(
           `/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`,
           { cache: 'no-store' }
         );
         if (er.ok) {
           const ej = await er.json();
-          const enablerData = ej.enabler || null;
-          const submissionData = ej.submission || null;
+          setEnabler(ej.enabler || null);
 
-          setEnabler(enablerData);
-
-          // Initialize solutions from submission if available, else empty default
-          // If no submission yet, start with 1 empty solution block
-          setSolutions([{ scenarioIndex: 0, text: '' }]);
-        }
-
-        // Fetch trainee submission status (with feedback for rejected submissions)
-        try {
-          const subRes = await fetch(
-            `/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`,
-            { cache: 'no-store' }
-          );
-          if (subRes.ok) {
-            const subData = await subRes.json();
-            if (subData.submission) {
-              setSubmission({
-                id: subData.submission.id,
-                status: subData.submission.status,
-                trainerFeedback: subData.submission.trainerFeedback,
-                feedbacks: subData.submission.feedbacks,
-              });
-              // Pre-fill solutions from existing submission
-              if (
-                subData.submission.solutions &&
-                Array.isArray(subData.submission.solutions)
-              ) {
-                setSolutions(subData.submission.solutions);
-              } else if (subData.submission.solutionText) {
-                setSolutions([
-                  { scenarioIndex: 0, text: subData.submission.solutionText },
-                ]);
-              }
+          if (ej.submission) {
+            setSubmission({
+              id: ej.submission.id,
+              status: ej.submission.status,
+              trainerFeedback: ej.submission.trainerFeedback,
+              feedbacks: ej.submission.feedbacks,
+            });
+            // Pre-fill solutions from existing submission
+            if (
+              ej.submission.solutions &&
+              Array.isArray(ej.submission.solutions)
+            ) {
+              setSolutions(ej.submission.solutions);
+            } else if (ej.submission.solutionText) {
+              setSolutions([
+                { scenarioIndex: 0, text: ej.submission.solutionText },
+              ]);
             }
+          } else {
+            // No submission yet, start with 1 empty solution block
+            setSolutions([{ scenarioIndex: 0, text: '' }]);
           }
-        } catch {
-          /* ignore */
         }
 
         // Gated quiz list
@@ -246,6 +230,7 @@ export default function TraineeEnablerPage() {
   const handleTileClick = async (g: GatedQuizInfo) => {
     if (!g.quizId) return;
     setReviewMode(!!g.completed);
+    setQuizLocked(!!g.completed);
     await loadQuizContent(g.difficulty);
     // If already completed, fetch stored submission for review-only mode
     if (g.completed && profile?.id) {
@@ -278,6 +263,8 @@ export default function TraineeEnablerPage() {
     }
   };
 
+  const [quizLocked, setQuizLocked] = useState(false);
+
   const submitQuiz = async () => {
     if (!profile?.id || !quizContent?.quizId)
       return setError(t('enablerPage.missingProfile'));
@@ -305,6 +292,23 @@ export default function TraineeEnablerPage() {
       );
       if (!r.ok) throw new Error(t('enablerPage.submissionFailed'));
       const data = await r.json();
+
+      // Handle locked response (quiz already submitted, single-attempt)
+      if (data.locked) {
+        setQuizLocked(true);
+        // Map the stored selectedOptionId into answers for display
+        if (Array.isArray(data.feedback)) {
+          const storedAnswers: Record<string, string> = {};
+          data.feedback.forEach((f: any) => {
+            if (f.selectedOptionId)
+              storedAnswers[String(f.questionId)] = String(f.selectedOptionId);
+            if (!f.selectedOptionId && f.selectedText)
+              storedAnswers[String(f.questionId)] = String(f.selectedText);
+          });
+          setAnswers(storedAnswers);
+        }
+      }
+
       setResult({
         score: Number(data.score || 0),
         feedback: (data.feedback || []) as QuizFeedback[],
@@ -339,10 +343,14 @@ export default function TraineeEnablerPage() {
     }
   };
 
+  const [savingSolution, setSavingSolution] = useState(false);
+
   const submitSolution = async () => {
-    if (!profile?.id || !enablerId)
+    if (!profile?.id || !enablerId || savingSolution)
       return setError(t('enablerPage.profileMissing'));
+    setSavingSolution(true);
     setSaveSuccess(null);
+    setError(null);
     try {
       // Filter out empty solutions and send only filled ones
       const filledSolutions = solutions.filter(s => s.text.trim().length > 0);
@@ -358,8 +366,34 @@ export default function TraineeEnablerPage() {
       });
       if (!r.ok) throw new Error(t('enablerPage.submissionFailed'));
       setSaveSuccess(t('enablerPage.solutionSaved'));
+
+      // Re-fetch submission status so the UI reflects the new PENDING state
+      try {
+        const refreshRes = await fetch(
+          `/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`,
+          { cache: 'no-store' }
+        );
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          if (refreshData.submission) {
+            setSubmission({
+              id: refreshData.submission.id,
+              status: refreshData.submission.status,
+              trainerFeedback: refreshData.submission.trainerFeedback,
+              feedbacks: refreshData.submission.feedbacks,
+            });
+          }
+        }
+      } catch {
+        // Fallback: update local state to PENDING
+        setSubmission(prev => prev
+          ? { ...prev, status: 'PENDING', trainerFeedback: null, feedbacks: null }
+          : { id: '', status: 'PENDING' });
+      }
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
+    } finally {
+      setSavingSolution(false);
     }
   };
 
@@ -591,7 +625,8 @@ export default function TraineeEnablerPage() {
           <div className="flex justify-end">
             <button
               onClick={submitSolution}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2"
+              disabled={savingSolution}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-50"
             >
               {submission?.status === 'REJECTED'
                 ? t('enablerPage.resubmit')
@@ -763,6 +798,11 @@ export default function TraineeEnablerPage() {
               </div>
             ) : (
               <div className="space-y-3">
+                {(quizLocked || reviewMode) && (
+                  <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-600 dark:text-yellow-400">
+                    {t('enablerPage.quizAlreadySubmitted')}
+                  </div>
+                )}
                 <div className="font-medium">
                   {t('enablerPage.score')} {result?.score ?? 0}%
                 </div>
@@ -812,27 +852,16 @@ export default function TraineeEnablerPage() {
                 </ul>
                 <button
                   className="border-accent/30 hover:bg-background/60 rounded-md border px-4 py-2"
-                  onClick={async () => {
-                    if (!quizContent?.quizId || !profile?.id) return;
-                    try {
-                      setReviewMode(true);
-                      const vr = await fetch(
-                        `/api/trainee/quizzes/${quizContent.quizId}/submit?traineeId=${profile.id}`,
-                        { cache: 'no-store' }
-                      );
-                      if (vr.ok) {
-                        const vj = await vr.json();
-                        setResult({
-                          score: Number(vj.score || 0),
-                          feedback: (vj.feedback || []) as QuizFeedback[],
-                        });
-                      }
-                    } catch {
-                      // ignore
-                    }
+                  onClick={() => {
+                    setQuizContent(null);
+                    setResult(null);
+                    setReviewMode(false);
+                    setQuizLocked(false);
+                    setAnswers({});
+                    setSelectedDifficulty(null);
                   }}
                 >
-                  {t('enablerPage.viewOnly')}
+                  {t('enablerPage.backToQuizzes')}
                 </button>
               </div>
             )}

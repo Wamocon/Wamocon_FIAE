@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -36,6 +36,9 @@ export default function TrainerReviewsPage() {
   const [pendingFilter, setPendingFilter] = useState<'pending' | 'all'>('pending');
   const [quizTypeFilter, setQuizTypeFilter] = useState<'all' | 'LESSON' | 'GLOBAL'>('all');
 
+  // Double-click protection: track IDs currently being processed
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+
   // Solution document state for use cases (TRAINER_SOLUTION PDFs)
   const [solutionDocsMap, setSolutionDocsMap] = useState<Record<string, SolutionDocInfo | null>>({});
   const [flipbookState, setFlipbookState] = useState<{ isOpen: boolean; url: string; title: string }>({ isOpen: false, url: '', title: '' });
@@ -49,8 +52,11 @@ export default function TrainerReviewsPage() {
   }), [quizzes, pendingFilter, quizTypeFilter]);
 
   // Fetch solution document (TRAINER_SOLUTION) for a use case
+  // Use a ref to track which IDs are already fetched/loading to avoid re-triggering
+  const fetchedDocIdsRef = useRef<Set<string>>(new Set());
   const fetchSolutionDoc = useCallback(async (useCaseId: string) => {
-    if (solutionDocsMap[useCaseId] !== undefined) return; // Already fetched or loading
+    if (fetchedDocIdsRef.current.has(useCaseId)) return;
+    fetchedDocIdsRef.current.add(useCaseId);
     try {
       const res = await fetch(`/api/trainer/use-cases/${useCaseId}/documents`);
       if (!res.ok) {
@@ -67,7 +73,7 @@ export default function TrainerReviewsPage() {
     } catch {
       setSolutionDocsMap(prev => ({ ...prev, [useCaseId]: null }));
     }
-  }, [solutionDocsMap]);
+  }, []);
 
   // Load solution documents when use case submissions change
   useEffect(() => {
@@ -140,43 +146,63 @@ export default function TrainerReviewsPage() {
   }, [profile?.id, activeTab, pendingFilter]);
 
   const reviewItem = async (kind: 'enabler' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
-    if (!profile?.id) return;
-    const feedback = feedbackMap[id] || '';
-    const feedbacks = feedbacksMap[id] || [];
-    const url = kind === 'enabler'
-      ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
-      : `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`;
-    const body = kind === 'enabler' && feedbacks.length > 0
-      ? { status, feedbacks: feedbacks.filter(f => f.feedback.trim().length > 0) }
-      : { status, trainerFeedback: feedback };
-    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) {
+    if (!profile?.id || busyIds.has(id)) return;
+    setBusyIds(prev => new Set(prev).add(id));
+    try {
+      const feedback = feedbackMap[id] || '';
+      const feedbacks = feedbacksMap[id] || [];
+      const url = kind === 'enabler'
+        ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
+        : `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`;
+      const body = kind === 'enabler' && feedbacks.length > 0
+        ? { status, feedbacks: feedbacks.filter(f => f.feedback.trim().length > 0) }
+        : { status, trainerFeedback: feedback };
+      const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) {
+        toast.error(t('trainer.reviews.saveError'));
+        return;
+      }
+      toast.success(status === 'APPROVED' ? t('trainer.reviews.approved') : t('trainer.reviews.rejected'));
+      // Refresh the list with same filter
+      const onlyPending = statusFilter === 'pending';
+      const rr = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
+      const data = await rr.json();
+      setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+      setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+      setFeedbackMap(prev => ({ ...prev, [id]: '' }));
+      setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
+    } catch {
       toast.error(t('trainer.reviews.saveError'));
-      return;
+    } finally {
+      setBusyIds(prev => { const n = new Set(prev); n.delete(id); return n; });
     }
-    // Refresh the list with same filter
-    const onlyPending = statusFilter === 'pending';
-    const rr = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
-    const data = await rr.json();
-    setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-    setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-    setFeedbackMap(prev => ({ ...prev, [id]: '' }));
-    setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
   };
 
   const toggleSubmissionReviewed = async (id: string, current: boolean) => {
-    await fetch(`/api/trainer/quiz-submissions/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_reviewed: !current }),
-    });
-    // reload
-    const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`);
-    const data = await res.json();
-    setQuizzes(data.submissions || []);
+    if (busyIds.has(id)) return;
+    setBusyIds(prev => new Set(prev).add(id));
+    try {
+      const r = await fetch(`/api/trainer/quiz-submissions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_reviewed: !current, reviewer_id: profile?.id }),
+      });
+      if (!r.ok) {
+        const errData = await r.json().catch(() => ({}));
+        toast.error(errData?.error || t('trainer.reviews.saveError'));
+        return;
+      }
+      toast.success(!current ? t('trainer.reviews.markedReviewed') : t('trainer.reviews.unmarkedReviewed'));
+      // reload
+      const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`);
+      const data = await res.json();
+      setQuizzes(data.submissions || []);
+    } catch {
+      toast.error(t('trainer.reviews.saveError'));
+    } finally {
+      setBusyIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+    }
   };
-
-  const forcedView = viewParam === 'enablers' || viewParam === 'usecases' || viewParam === 'quizzes';
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -185,17 +211,9 @@ export default function TrainerReviewsPage() {
           <h1 className="text-foreground text-xl font-bold">{t('trainer.reviews.title')}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!forcedView ? (
-            <>
               <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'enablers' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>{t('trainer.reviews.lesson')}</button>
               <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'usecases' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>{t('trainer.reviews.useCases')}</button>
               <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'quizzes' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>{t('trainer.reviews.quizzes')}</button>
-            </>
-          ) : (
-            <div className="rounded-xl border border-accent/30 bg-muted px-3 py-1.5 text-sm">
-              {activeTab === 'enablers' ? t('trainer.reviews.lesson') : activeTab === 'usecases' ? t('trainer.reviews.useCases') : t('trainer.reviews.quizzes')}
-            </div>
-          )}
           <div className="ml-auto flex items-center gap-2 text-sm">
             {activeTab === 'enablers' || activeTab === 'usecases' ? (
               <>
@@ -365,8 +383,8 @@ export default function TrainerReviewsPage() {
                 </div>
               )}
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={() => reviewItem('enabler', it.id, 'REJECTED')}>{t('trainer.reviews.reject')}</button>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={() => reviewItem('enabler', it.id, 'APPROVED')}>{t('trainer.reviews.approve')}</button>
+                <button disabled={busyIds.has(it.id)} className="rounded-md border border-accent/30 px-3 py-2 disabled:opacity-50" onClick={() => reviewItem('enabler', it.id, 'REJECTED')}>{t('trainer.reviews.reject')}</button>
+                <button disabled={busyIds.has(it.id)} className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2 disabled:opacity-50" onClick={() => reviewItem('enabler', it.id, 'APPROVED')}>{t('trainer.reviews.approve')}</button>
               </div>
             </div>
           ))}
@@ -413,8 +431,8 @@ export default function TrainerReviewsPage() {
                 <textarea className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={() => reviewItem('usecase', it.id, 'REJECTED')}>{t('trainer.reviews.reject')}</button>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={() => reviewItem('usecase', it.id, 'APPROVED')}>{t('trainer.reviews.approve')}</button>
+                <button disabled={busyIds.has(it.id)} className="rounded-md border border-accent/30 px-3 py-2 disabled:opacity-50" onClick={() => reviewItem('usecase', it.id, 'REJECTED')}>{t('trainer.reviews.reject')}</button>
+                <button disabled={busyIds.has(it.id)} className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2 disabled:opacity-50" onClick={() => reviewItem('usecase', it.id, 'APPROVED')}>{t('trainer.reviews.approve')}</button>
               </div>
             </div>
           ))}
@@ -442,7 +460,7 @@ export default function TrainerReviewsPage() {
                     <span className={`text-xs rounded-full px-2.5 py-1 ${s.difficulty === 'LOW' ? 'bg-green-500/20 text-green-600 dark:text-green-400' : s.difficulty === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400' : 'bg-red-500/20 text-red-600 dark:text-red-400'}`}>{s.difficulty}</span>
                   )}
                   <a href={`/trainer/reviews/quizzes/${s.id}`} className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60">{t('trainer.reviews.details')}</a>
-                  <button onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
+                  <button disabled={busyIds.has(s.id)} onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50 ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
                     {s.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> {t('trainer.reviews.reviewed')}</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4" /> {t('trainer.reviews.markAsReviewed')}</span>)}
                   </button>
                 </div>
@@ -480,19 +498,28 @@ export default function TrainerReviewsPage() {
                 />
                 <div className="mt-2 flex justify-end">
                   <button
+                    disabled={busyIds.has(s.id)}
                     onClick={async () => {
+                      if (busyIds.has(s.id)) return;
                       const feedback = feedbackMap[s.id] || '';
-                      await fetch(`/api/trainer/quiz-submissions/${s.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ trainer_feedback: feedback, reviewer_id: profile?.id }),
-                      });
-                      // Optionally refresh list
-                      const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`);
-                      const data = await res.json();
-                      setQuizzes(data.submissions || []);
+                      if (!feedback.trim()) { toast.error(t('trainer.reviews.feedbackEmpty')); return; }
+                      setBusyIds(prev => new Set(prev).add(s.id));
+                      try {
+                        const r = await fetch(`/api/trainer/quiz-submissions/${s.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ trainer_feedback: feedback, reviewer_id: profile?.id }),
+                        });
+                        if (!r.ok) { toast.error(t('trainer.reviews.saveError')); return; }
+                        toast.success(t('trainer.reviews.feedbackSaved'));
+                        setFeedbackMap(prev => ({ ...prev, [s.id]: '' }));
+                        const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`);
+                        const data = await res.json();
+                        setQuizzes(data.submissions || []);
+                      } catch { toast.error(t('trainer.reviews.saveError')); }
+                      finally { setBusyIds(prev => { const n = new Set(prev); n.delete(s.id); return n; }); }
                     }}
-                    className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60"
+                    className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60 disabled:opacity-50"
                   >
                     {t('trainer.reviews.saveFeedback')}
                   </button>

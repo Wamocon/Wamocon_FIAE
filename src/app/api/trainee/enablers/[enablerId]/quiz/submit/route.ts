@@ -144,7 +144,7 @@ export async function POST(
           type: 'ENABLER_QUIZ_SUBMITTED',
           title: 'Mini-Quiz eingereicht',
           message: `Ein Trainee hat ein Mini-Quiz abgegeben: ${enabler.title}`,
-          linkUrl: '/trainer/quiz-management',
+          linkUrl: '/trainer/reviews?view=quizzes&onlyPending=true',
           context: { enablerId, quizId: quiz.id, submissionId: sub.id },
         }));
         await db.insert(notifications).values(values);

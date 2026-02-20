@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -16,12 +17,25 @@ import {
   PolarRadiusAxis,
   Radar,
 } from 'recharts';
+import { useTheme } from '@/contexts/ThemeContext';
+
+function useTooltipStyle() {
+  const { theme } = useTheme();
+  return useMemo(() => ({
+    backgroundColor: theme === 'dark' ? '#1e1423' : '#ffffff',
+    border: '2px solid #ff1a1a',
+    borderRadius: '12px',
+    color: theme === 'dark' ? '#ffffff' : '#1f2937',
+    boxShadow: theme === 'dark' ? '0 8px 24px rgba(255,26,26,0.3)' : '0 4px 12px rgba(0,0,0,0.15)',
+  }), [theme]);
+}
 
 interface WeeklyProgressChartProps {
   data: any[];
 }
 
 export function WeeklyProgressChart({ data }: WeeklyProgressChartProps) {
+  const tooltipStyle = useTooltipStyle();
   return (
     <ResponsiveContainer
       width="100%"
@@ -45,15 +59,7 @@ export function WeeklyProgressChart({ data }: WeeklyProgressChartProps) {
           fontSize={12}
           tick={{ fill: 'currentColor' }}
         />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: '#1e1423',
-            border: '2px solid #ff1a1a',
-            borderRadius: '12px',
-            color: 'currentColor',
-            boxShadow: '0 8px 24px rgba(255, 26, 26, 0.3)',
-          }}
-        />
+        <Tooltip contentStyle={tooltipStyle} />
         <Line
           type="monotone"
           dataKey="progress"
@@ -115,6 +121,7 @@ interface ModuleBarChartProps {
 }
 
 export function ModuleBarChart({ data }: ModuleBarChartProps) {
+  const tooltipStyle = useTooltipStyle();
   return (
     <ResponsiveContainer
       width="100%"
@@ -141,15 +148,7 @@ export function ModuleBarChart({ data }: ModuleBarChartProps) {
           fontSize={10}
           tick={{ fill: 'currentColor' }}
         />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: '#1e1423',
-            border: '2px solid #ff1a1a',
-            borderRadius: '12px',
-            color: 'currentColor',
-            boxShadow: '0 8px 24px rgba(255, 26, 26, 0.3)',
-          }}
-        />
+        <Tooltip contentStyle={tooltipStyle} />
         <Bar
           dataKey="progress"
           fill="#ff1a1a"
