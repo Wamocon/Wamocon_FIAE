@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     const trainerProfileId = searchParams.get('trainerProfileId');
     const q = searchParams.get('q')?.trim();
     const year = searchParams.get('year');
+    const examPart = searchParams.get('examPart');
     if (!trainerProfileId) {
       return NextResponse.json(
         { error: 'Missing trainerProfileId' },
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const cacheKey = `trainer_courses_${trainerProfileId}_${q || ''}_${year || ''}`;
+    const cacheKey = `trainer_courses_${trainerProfileId}_${q || ''}_${year || ''}_${examPart || ''}`;
     const data = await apiCache.getOrFetch(
       cacheKey,
       async () => {
@@ -37,6 +38,8 @@ export async function GET(req: NextRequest) {
         if (q) whereConditions.push(ilike(courses.title, `%${q}%`));
         if (year && year !== 'all')
           whereConditions.push(eq(courses.year, Number(year)));
+        if (examPart && examPart !== 'all')
+          whereConditions.push(eq(courses.examPart, Number(examPart)));
 
         // Fetch all courses with optional search/year filters
         const list = await db
@@ -45,6 +48,7 @@ export async function GET(req: NextRequest) {
             title: courses.title,
             year: courses.year,
             chapter: courses.chapter,
+            examPart: courses.examPart,
           })
           .from(courses)
           .where(
@@ -102,6 +106,7 @@ export async function GET(req: NextRequest) {
           title: c.title,
           year: c.year,
           chapter: c.chapter,
+          examPart: c.examPart,
           enablersCount: enMap.get(String(c.id)) || 0,
           useCasesCount: ucMap.get(String(c.id)) || 0,
           trainersCount: trainerCountMap.get(String(c.id)) || 0,
@@ -133,6 +138,9 @@ export async function POST(req: NextRequest) {
     const chapter: number | undefined = body?.chapter
       ? Number(body.chapter)
       : undefined;
+    const examPart: number | undefined = body?.examPart
+      ? Number(body.examPart)
+      : undefined;
     const createdById: string | undefined = body?.createdById;
     const skillNames: string[] = Array.isArray(body?.skills) ? body.skills : [];
     if (!title || !createdById) {
@@ -149,6 +157,7 @@ export async function POST(req: NextRequest) {
           title,
           year: year as any,
           chapter: chapter as any,
+          examPart: examPart as any,
           createdById,
         })
         .returning();

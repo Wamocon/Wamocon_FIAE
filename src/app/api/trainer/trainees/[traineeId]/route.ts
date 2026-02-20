@@ -7,6 +7,7 @@ import {
   courses,
   enablerCompletions,
 } from '@/db/migrations/schemas/schema';
+import { apiCache } from '@/lib/api-cache';
 
 export async function GET(
   _req: NextRequest,
@@ -154,6 +155,9 @@ export async function PATCH(
         startOfTrainingDate: profiles.startOfTrainingDate,
         assignedTrainerId: profiles.assignedTrainerId,
       });
+
+    // Invalidate the trainees list cache so the next GET returns fresh data
+    apiCache.invalidate('trainer_trainees');
 
     return NextResponse.json({
       trainee: {

@@ -229,7 +229,7 @@ export default function TrainerDashboard() {
                 <div
                   role="button"
                   onClick={() => router.push('/trainer/trainees')}
-                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
+                  className="bg-background/50 border-border/50 hover:bg-accent/10 hover:ring-1 hover:ring-accent hover:scale-[1.02] cursor-pointer rounded-xl border p-6 text-center transition-all duration-200"
                 >
                   <Users className="text-accent mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">
@@ -241,9 +241,7 @@ export default function TrainerDashboard() {
                 </div>
 
                 <div
-                  role="button"
-                  onClick={() => router.push('/trainer/analytics')}
-                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
+                  className="bg-background/50 border-border/50 hover:bg-accent/10 hover:ring-1 hover:ring-accent hover:scale-[1.02] rounded-xl border p-6 text-center transition-all duration-200"
                 >
                   <TrendingUp className="text-primary mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">
@@ -259,7 +257,7 @@ export default function TrainerDashboard() {
                   onClick={() =>
                     router.push('/trainer/reviews?onlyPending=true')
                   }
-                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
+                  className="bg-background/50 border-border/50 hover:bg-accent/10 hover:ring-1 hover:ring-accent hover:scale-[1.02] cursor-pointer rounded-xl border p-6 text-center transition-all duration-200"
                 >
                   <Clock className="text-accent mx-auto mb-3 h-8 w-8" />
                   <p className="text-muted-foreground text-sm">
@@ -283,12 +281,6 @@ export default function TrainerDashboard() {
                   <TrendingUp className="text-accent mr-3 h-6 w-6" />
                   {t('dashboard.overallProgress')}
                 </h3>
-                <button
-                  onClick={() => router.push('/trainer/analytics')}
-                  className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
-                >
-                  {t('common.view')}
-                </button>
               </div>
               <ProgressTrendChart
                 data={progressTrendSafe}
@@ -303,12 +295,6 @@ export default function TrainerDashboard() {
                   <BarChart3 className="text-accent mr-3 h-6 w-6" />
                   {t('dashboard.individualProgress')}
                 </h3>
-                <button
-                  onClick={() => router.push('/trainer/analytics')}
-                  className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
-                >
-                  {t('common.view')}
-                </button>
               </div>
               <ModuleProgressChart
                 data={moduleProgressSafe}
