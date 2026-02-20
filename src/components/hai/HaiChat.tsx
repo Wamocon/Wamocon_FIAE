@@ -98,6 +98,7 @@ function ChatWidget() {
           <button
             onClick={() => setViewMode('full')}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label={t('hai.actions.maximize')}
             title={t('hai.actions.maximize')}
           >
             <Maximize2 className="h-5 w-5" />
@@ -105,6 +106,7 @@ function ChatWidget() {
           <button
             onClick={() => setViewMode('hidden')}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label={t('common.close')}
             title={t('common.close')}
           >
             <X className="h-5 w-5" />
@@ -154,6 +156,7 @@ function ChatWidget() {
           <button
             onClick={handleSend}
             disabled={!inputValue.trim() || isLoading}
+            aria-label={t('hai.actions.send')}
             className="absolute top-1.5 right-1.5 bottom-1.5 flex aspect-square items-center justify-center rounded-lg bg-cyan-600 text-white shadow-lg shadow-cyan-900/20 transition-all hover:bg-cyan-500 disabled:bg-transparent disabled:text-gray-600 disabled:opacity-50"
             style={{ display: isLoading ? 'none' : 'flex' }}
           >
@@ -163,6 +166,7 @@ function ChatWidget() {
             <button
               onClick={stopGeneration}
               className="absolute top-1.5 right-1.5 bottom-1.5 flex aspect-square items-center justify-center rounded-lg bg-red-500/80 text-white shadow-lg shadow-red-900/20 transition-all hover:bg-red-500"
+              aria-label={t('hai.actions.stop')}
               title={t('hai.actions.stop')}
             >
               <Square className="h-4 w-4" />
@@ -247,6 +251,7 @@ function ChatFull() {
                 </span>
                 <button
                   onClick={() => setShowSidebar(false)}
+                  aria-label={t('hai.actions.hideSidebar')}
                   className="text-muted-foreground hover:text-foreground rounded-md p-1 transition-colors hover:bg-white/5"
                 >
                   <PanelLeftClose className="h-4 w-4" />
@@ -267,6 +272,7 @@ function ChatFull() {
               {!showSidebar && (
                 <button
                   onClick={() => setShowSidebar(true)}
+                  aria-label={t('hai.actions.showSidebar')}
                   className="text-muted-foreground hidden rounded-lg p-2 hover:bg-white/5 md:block"
                 >
                   <PanelLeftOpen className="h-5 w-5" />
@@ -296,6 +302,7 @@ function ChatFull() {
               <button
                 onClick={() => setViewMode('widget')}
                 className="text-muted-foreground hover:text-foreground rounded-lg p-2 hover:bg-white/5"
+                aria-label={t('hai.actions.minimize')}
                 title={t('hai.actions.minimize')}
               >
                 <Minimize2 className="h-5 w-5" />
@@ -303,6 +310,7 @@ function ChatFull() {
               <button
                 onClick={() => setViewMode('hidden')}
                 className="text-muted-foreground hover:text-foreground rounded-lg p-2 hover:bg-white/5"
+                aria-label={t('common.close')}
                 title={t('common.close')}
               >
                 <X className="h-5 w-5" />
@@ -397,6 +405,7 @@ function ChatFull() {
                 <button
                   onClick={handleSend}
                   disabled={!inputValue.trim() || isLoading}
+                  aria-label={t('hai.actions.send')}
                   className="absolute right-3 bottom-3 rounded-xl bg-cyan-500 p-2 text-white transition-all hover:bg-cyan-600 disabled:pointer-events-none disabled:opacity-0"
                   style={{ display: isLoading ? 'none' : 'block' }}
                 >
@@ -406,6 +415,7 @@ function ChatFull() {
                   <button
                     onClick={stopGeneration}
                     className="absolute right-3 bottom-3 rounded-xl bg-red-500/80 p-2 text-white transition-all hover:bg-red-500"
+                    aria-label={t('hai.actions.stop')}
                     title={t('hai.actions.stop')}
                   >
                     <Square className="h-5 w-5" />

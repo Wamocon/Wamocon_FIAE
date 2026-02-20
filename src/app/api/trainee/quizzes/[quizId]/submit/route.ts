@@ -213,7 +213,13 @@ export async function POST(
         const given = (a as any).textAnswer
           ? String((a as any).textAnswer).trim()
           : '';
-        if (given.length > 0) correctCount++; // treat any non-empty text as correct
+        const expected = ((q as any)?.expectedAnswer || '') as string;
+        // If expectedAnswer exists, compare case-insensitively; otherwise non-empty = correct (free-text for manual review)
+        if (expected) {
+          if (given.toLowerCase() === expected.trim().toLowerCase()) correctCount++;
+        } else {
+          if (given.length > 0) correctCount++;
+        }
       } else {
         const opt = a.selectedOptionId
           ? optMap.get(String(a.selectedOptionId))
@@ -261,7 +267,10 @@ export async function POST(
           chosen && (chosen as any).textAnswer
             ? String((chosen as any).textAnswer)
             : '';
-        const correct = given.trim().length > 0;
+        const expected = ((q as any).expectedAnswer || '') as string;
+        const correct = expected
+          ? given.trim().toLowerCase() === expected.trim().toLowerCase()
+          : given.trim().length > 0;
         return {
           questionId: q.id,
           correct,
@@ -415,9 +424,12 @@ export async function GET(
       const qType = (q as any).questionType || 'MCQ';
       if (qType === 'TEXT') {
         const given = (storedAnswerMapText.get(String(q.id)) || '') as string;
+        const expected = ((q as any).expectedAnswer || '') as string;
         return {
           questionId: q.id,
-          correct: given.trim().length > 0,
+          correct: expected
+            ? given.trim().toLowerCase() === expected.trim().toLowerCase()
+            : given.trim().length > 0,
           correctOptionId: null,
           explanation: null,
           selectedOptionId: null,

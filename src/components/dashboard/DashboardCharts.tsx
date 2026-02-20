@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
   AreaChart,
   Area,
@@ -12,7 +13,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
 
 interface ProgressTrendChartProps {
@@ -22,7 +22,15 @@ interface ProgressTrendChartProps {
 
 export function ProgressTrendChart({ data, loading = false }: ProgressTrendChartProps) {
   const { t } = useLanguage();
+  const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const tooltipStyle = useMemo(() => ({
+    backgroundColor: theme === 'dark' ? '#1e1423' : '#ffffff',
+    border: '1px solid #ef4444',
+    borderRadius: '8px',
+    color: theme === 'dark' ? '#ffffff' : '#1f2937',
+    boxShadow: theme === 'dark' ? '0 4px 12px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.15)',
+  }), [theme]);
 
   useEffect(() => {
     setMounted(true);
@@ -67,13 +75,7 @@ export function ProgressTrendChart({ data, loading = false }: ProgressTrendChart
         <XAxis dataKey="week" stroke="currentColor" fontSize={12} tick={{ fill: 'currentColor' }} />
         <YAxis stroke="currentColor" fontSize={12} tick={{ fill: 'currentColor' }} />
         <Tooltip
-          contentStyle={{
-            backgroundColor: '#1e1423',
-            border: '1px solid #ef4444',
-            borderRadius: '8px',
-            color: '#ffffff',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-          }}
+          contentStyle={tooltipStyle}
           formatter={(value: number) => [`${value} ${t('charts.activities')}`, t('charts.progress')]}
         />
         <Area type="monotone" dataKey="progress" stroke="#ef4444" fill="#ef4444" fillOpacity={0.4} strokeWidth={3} />
@@ -89,7 +91,15 @@ interface ModuleProgressChartProps {
 
 export function ModuleProgressChart({ data, loading = false }: ModuleProgressChartProps) {
   const { t } = useLanguage();
+  const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const tooltipStyle = useMemo(() => ({
+    backgroundColor: theme === 'dark' ? '#1e1423' : '#ffffff',
+    border: '1px solid #ef4444',
+    borderRadius: '8px',
+    color: theme === 'dark' ? '#ffffff' : '#1f2937',
+    boxShadow: theme === 'dark' ? '0 4px 12px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.15)',
+  }), [theme]);
 
   useEffect(() => {
     setMounted(true);
@@ -139,13 +149,7 @@ export function ModuleProgressChart({ data, loading = false }: ModuleProgressCha
         <XAxis dataKey="name" stroke="currentColor" fontSize={10} angle={-45} textAnchor="end" height={60} tick={{ fill: 'currentColor' }} />
         <YAxis stroke="currentColor" fontSize={12} tick={{ fill: 'currentColor' }} />
         <Tooltip
-          contentStyle={{
-            backgroundColor: '#1e1423',
-            border: '1px solid #ef4444',
-            borderRadius: '8px',
-            color: '#ffffff',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-          }}
+          contentStyle={tooltipStyle}
         />
         <Bar dataKey="completed" stackId="a" fill="#ef4444" />
         <Bar dataKey="inProgress" stackId="a" fill="#dc2626" />
