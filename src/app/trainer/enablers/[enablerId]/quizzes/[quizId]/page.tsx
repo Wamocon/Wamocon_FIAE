@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 const MarkdownText = dynamic(
@@ -33,6 +34,7 @@ export default function EditEnablerQuizPage() {
   const enablerId = params?.enablerId as string;
   const quizId = params?.quizId as string;
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ export default function EditEnablerQuizPage() {
         const r = await fetch(
           `/api/trainer/enablers/${enablerId}/quizzes/${quizId}`
         );
-        if (!r.ok) throw new Error('Quiz nicht gefunden');
+        if (!r.ok) throw new Error(t('common.notFound'));
         const data = await r.json();
         const qz = data.quiz;
         setTitle(qz.title);
@@ -87,7 +89,7 @@ export default function EditEnablerQuizPage() {
           }))
         );
       } catch (e: any) {
-        setError(e?.message || 'Unbekannter Fehler');
+        setError(e?.message || t('common.unknownError'));
       } finally {
         setLoading(false);
       }
@@ -95,45 +97,45 @@ export default function EditEnablerQuizPage() {
     if (enablerId && quizId) load();
   }, [enablerId, quizId]);
 
-  if (loading) return <div className="p-6">Lade…</div>;
+  if (loading) return <div className="p-6">{t('common.loading')}</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
     <div className="bg-background border-accent/20 mx-auto mt-6 max-w-7xl space-y-6 rounded-2xl border p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Lesson-Quiz</h1>
+        <h1 className="text-xl font-bold">{t('trainer.enablerQuiz.title')}</h1>
         <div className="flex items-center gap-2">
           {editing && (
             <button
               className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600"
               onClick={async () => {
-                if (!confirm('Dieses Quiz wirklich löschen?')) return;
+                if (!confirm(t('trainer.enablerQuiz.deleteConfirm'))) return;
                 try {
                   const r = await fetch(
                     `/api/trainer/enablers/${enablerId}/quizzes/${quizId}`,
                     { method: 'DELETE' }
                   );
-                  if (!r.ok) throw new Error('Löschen fehlgeschlagen');
+                  if (!r.ok) throw new Error(t('trainer.enablerQuiz.deleteFailed'));
                   router.back();
                 } catch (e: any) {
-                  toast.error(e?.message || 'Unbekannter Fehler');
+                  toast.error(e?.message || t('common.unknownError'));
                 }
               }}
             >
-              Löschen
+              {t('common.delete')}
             </button>
           )}
           <button
             className="border-accent/30 rounded-md border px-3 py-1.5 text-sm"
             onClick={() => setEditing(!editing)}
           >
-            {editing ? 'Ansicht' : 'Bearbeiten'}
+            {editing ? t('trainer.enablerQuiz.viewMode') : t('trainer.enablerQuiz.editMode')}
           </button>
           <button
             className="border-accent/30 rounded-md border px-3 py-1.5 text-sm"
             onClick={() => router.back()}
           >
-            Zurück
+            {t('common.back')}
           </button>
         </div>
       </div>
@@ -142,7 +144,7 @@ export default function EditEnablerQuizPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
             <label className="mb-1 block text-sm font-medium">
-              Schwierigkeit
+              {t('trainer.enablerQuiz.difficulty')}
             </label>
             {editing ? (
               <select
@@ -159,7 +161,7 @@ export default function EditEnablerQuizPage() {
             )}
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Quiz-Titel</label>
+            <label className="mb-1 block text-sm font-medium">{t('trainer.enablerQuiz.quizTitle')}</label>
             {editing ? (
               <input
                 value={title}
@@ -178,11 +180,11 @@ export default function EditEnablerQuizPage() {
             disabled={!editing}
             onChange={e => setIsActive(e.target.checked)}
           />
-          <span>Aktiv</span>
+          <span>{t('common.active')}</span>
         </label>
 
         <div>
-          <div className="mb-2 text-sm font-semibold">Fragen</div>
+          <div className="mb-2 text-sm font-semibold">{t('trainer.enablerQuiz.questions')}</div>
           <div className="space-y-4">
             {questions.map((q, qi) => {
               const correctIndex = q.options.findIndex(o => o.isCorrect) ?? 0;
@@ -194,7 +196,7 @@ export default function EditEnablerQuizPage() {
                   className="border-accent/20 bg-background/40 rounded-lg border p-3"
                 >
                   <div className="mb-2 flex items-center justify-between">
-                    <div className="font-medium">Frage {qi + 1}</div>
+                    <div className="font-medium">{t('trainer.enablerQuiz.questionNumber').replace('{n}', String(qi + 1))}</div>
                     {editing && (
                       <button
                         type="button"
@@ -203,7 +205,7 @@ export default function EditEnablerQuizPage() {
                           setQuestions(prev => prev.filter((_, i) => i !== qi))
                         }
                       >
-                        Entfernen
+                        {t('common.remove')}
                       </button>
                     )}
                   </div>
@@ -256,7 +258,7 @@ export default function EditEnablerQuizPage() {
                             )
                           }
                         />{' '}
-                        Multiple Choice
+                        {t('trainer.enablerQuiz.multipleChoice')}
                       </label>
                       <label className="inline-flex items-center gap-1">
                         <input
@@ -278,7 +280,7 @@ export default function EditEnablerQuizPage() {
                             )
                           }
                         />{' '}
-                        Textantwort
+                        {t('trainer.enablerQuiz.textAnswer')}
                       </label>
                     </div>
                   )}
@@ -286,13 +288,13 @@ export default function EditEnablerQuizPage() {
                     {q.questionType === 'TEXT' ? (
                       <div className="col-span-2 space-y-2">
                         <div className="text-xs tracking-wide uppercase">
-                          Textantwort
+                          {t('trainer.enablerQuiz.textAnswer')}
                         </div>
                         {editing ? (
                           <textarea
                             rows={2}
                             className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                            placeholder="Erwartete korrekte Antwort (optional für automatische Bewertung)"
+                            placeholder={t('trainer.enablerQuiz.expectedAnswerHint')}
                             value={q.expectedAnswer || ''}
                             onChange={e =>
                               setQuestions(prev =>
@@ -306,7 +308,7 @@ export default function EditEnablerQuizPage() {
                           />
                         ) : (
                           <div className="text-muted-foreground text-sm">
-                            Erwartete Antwort: {q.expectedAnswer || '–'}
+                            {t('trainer.enablerQuiz.expectedAnswerLabel')}: {q.expectedAnswer || '–'}
                           </div>
                         )}
                       </div>
@@ -318,7 +320,7 @@ export default function EditEnablerQuizPage() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="text-xs tracking-wide uppercase">
-                              {o.isCorrect ? 'Richtig' : 'Option'}
+                              {o.isCorrect ? t('trainer.enablerQuiz.correctOption') : t('trainer.enablerQuiz.option')}
                             </div>
                             {editing && (
                               <label className="flex items-center gap-1 text-xs">
@@ -362,7 +364,7 @@ export default function EditEnablerQuizPage() {
                                     );
                                   }}
                                 />
-                                <span>Als richtig markieren</span>
+                                <span>{t('trainer.enablerQuiz.markCorrect')}</span>
                               </label>
                             )}
                           </div>
@@ -402,7 +404,7 @@ export default function EditEnablerQuizPage() {
                   {q.questionType !== 'TEXT' && (
                     <div className="mt-3">
                       <label className="mb-1 block text-xs font-medium">
-                        Erklärung (für die richtige Antwort)
+                        {t('trainer.enablerQuiz.explanation')}
                       </label>
                       {editing ? (
                         <textarea
@@ -448,7 +450,7 @@ export default function EditEnablerQuizPage() {
                   setQuestions(prev => [...prev, newBlankQuestion('MCQ')])
                 }
               >
-                + MCQ Frage
+                {t('trainer.enablerQuiz.addMcq')}
               </button>
               <button
                 type="button"
@@ -457,7 +459,7 @@ export default function EditEnablerQuizPage() {
                   setQuestions(prev => [...prev, newBlankQuestion('TEXT')])
                 }
               >
-                + Textfrage
+                {t('trainer.enablerQuiz.addText')}
               </button>
             </div>
           )}
@@ -470,7 +472,7 @@ export default function EditEnablerQuizPage() {
               disabled={saving}
               onClick={async () => {
                 if (!profile?.id) {
-                  toast.error('Kein Trainerprofil');
+                  toast.error(t('trainer.enablerQuiz.noTrainerProfile'));
                   return;
                 }
                 setSaving(true);
@@ -506,16 +508,16 @@ export default function EditEnablerQuizPage() {
                       body: JSON.stringify(payload),
                     }
                   );
-                  if (!r.ok) throw new Error('Speichern fehlgeschlagen');
+                  if (!r.ok) throw new Error(t('trainer.enablerQuiz.saveFailed'));
                   setEditing(false);
                 } catch (e: any) {
-                  toast.error(e?.message || 'Unbekannter Fehler');
+                  toast.error(e?.message || t('common.unknownError'));
                 } finally {
                   setSaving(false);
                 }
               }}
             >
-              Speichern
+              {t('common.save')}
             </button>
           </div>
         )}

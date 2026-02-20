@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, CheckCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
@@ -113,12 +113,35 @@ export default function NotificationsBell() {
     } catch {}
   };
 
+  const markAllAsRead = async () => {
+    if (!profile?.id) return;
+    const unreadItems = items.filter(i => !i.isRead);
+    if (unreadItems.length === 0) return;
+    // Optimistic update
+    setItems(prev => prev.map(i => ({ ...i, isRead: true, readAt: i.readAt || new Date().toISOString() })));
+    try {
+      const res = await fetch(`/api/notifications/mark-all-read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: profile.id }),
+      });
+      if (!res.ok) throw new Error('Failed');
+    } catch {
+      // Revert on failure by re-fetching
+      try {
+        const res = await fetch(`/api/notifications?userId=${profile.id}&limit=30`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          setItems(data.notifications || []);
+        }
+      } catch {}
+    }
+  };
+
   const onItemClick = async (n: UINotification) => {
     try {
       if (!n.isRead) await markAsRead(n.id);
     } finally {
-      // Remove clicked notification from the dropdown so it doesn't linger
-      setItems(prev => prev.filter(i => i.id !== n.id));
       if (n.linkUrl) router.push(n.linkUrl);
       setOpen(false);
     }
@@ -143,7 +166,19 @@ export default function NotificationsBell() {
 
       {open && (
         <div className="bg-card border-border absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border shadow-xl">
-          <div className="border-border bg-muted/40 border-b px-4 py-2 text-sm font-semibold">{t('notifications.title')}</div>
+          <div className="border-border bg-muted/40 border-b px-4 py-2 flex items-center justify-between">
+            <span className="text-sm font-semibold">{t('notifications.title')}</span>
+            {unread > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
+                title={t('notifications.markAllRead')}
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                {t('notifications.markAllRead')}
+              </button>
+            )}
+          </div>
           <div className="max-h-96 overflow-y-auto">
             {loading && (
               <div className="text-muted-foreground p-4 text-center text-sm">{t('notifications.loading')}</div>
@@ -151,17 +186,30 @@ export default function NotificationsBell() {
             {!loading && items.length === 0 && (
               <div className="text-muted-foreground p-4 text-center text-sm">{t('notifications.none')}</div>
             )}
-            {items.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => onItemClick(n)}
-                className={`w-full px-4 py-3 text-left text-sm hover:bg-muted ${n.isRead ? 'opacity-80' : 'bg-accent/10'}`}
-              >
-                <div className="text-foreground line-clamp-1 font-medium">{n.title}</div>
-                {n.message && <div className="text-muted-foreground line-clamp-2 text-xs">{n.message}</div>}
-                <div className="text-muted-foreground mt-1 text-[10px]">{new Date(n.createdAt).toLocaleString()}</div>
-              </button>
-            ))}
+            {(() => {
+              const unreadItems = items.filter(i => !i.isRead);
+              const readItems = items.filter(i => i.isRead);
+              const visible = [...unreadItems, ...readItems.slice(0, 5)];
+
+              return visible.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => onItemClick(n)}
+                  className={`w-full border-b border-border/30 px-4 py-3 text-left text-sm transition-colors hover:bg-muted ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
+                >
+                  <div className="flex items-start gap-2">
+                    {!n.isRead && (
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-foreground line-clamp-1">{n.title}</div>
+                      {n.message && <div className="text-muted-foreground line-clamp-2 text-xs font-normal">{n.message}</div>}
+                      <div className="text-muted-foreground mt-1 text-[10px] font-normal">{new Date(n.createdAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                </button>
+              ));
+            })()}
           </div>
         </div>
       )}

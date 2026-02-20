@@ -586,10 +586,10 @@ export function QuizManagement() {
             <tbody className="divide-border divide-y">
               {quizzes.map(q => (
                 <tr key={q.id} className="hover:bg-accent/10 transition-colors">
-                  <td className="text-foreground px-4 py-3 text-sm font-medium">
+                  <td className="text-foreground max-w-[250px] px-4 py-3 text-sm font-medium">
                     <a
                       href={`/trainer/quiz-management/${q.id}`}
-                      className="hover:text-primary underline"
+                      className="hover:text-primary block truncate underline"
                     >
                       {q.title}
                     </a>

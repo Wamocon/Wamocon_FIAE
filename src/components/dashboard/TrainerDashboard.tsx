@@ -6,7 +6,6 @@ import dynamic from 'next/dynamic';
 import {
   Users,
   TrendingUp,
-  Clock,
   AlertTriangle,
   BarChart3,
 } from 'lucide-react';
@@ -121,7 +120,6 @@ export default function TrainerDashboard() {
   // Derive state from the query response
   const trainees = data?.trainees ?? [];
   const pendingReviews = data?.counts?.pendingReviews ?? 0;
-  const pendingQuiz = data?.counts?.pendingQuiz ?? 0;
   const pendingActivityReports = data?.counts?.pendingActivityReports ?? 0;
   const progressTrend = data?.charts?.progressTrend ?? [];
   const moduleProgress = data?.charts?.moduleProgress ?? [];
@@ -167,21 +165,21 @@ export default function TrainerDashboard() {
             <div className="glass-effect rounded-2xl p-6 shadow-lg">
               <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
                 <AlertTriangle className="text-primary mr-3 h-6 w-6" />
-                Aktion erforderlich
+                {t('dashboard.actionRequired')}
               </h3>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* Pending Reports Card */}
                 <div className="bg-background/50 border-border/50 rounded-xl border p-6">
                   <div className="mb-4 flex items-center justify-between">
                     <h4 className="text-foreground font-semibold">
-                      Ausstehende Nachweise
+                      {t('dashboard.pendingProofs')}
                     </h4>
                     <span className="text-primary text-2xl font-bold">
                       {pendingActivityReports}
                     </span>
                   </div>
                   <p className="text-muted-foreground text-sm">
-                    Warten auf Genehmigung
+                    {t('dashboard.waitingApproval')}
                   </p>
                   <button
                     onClick={() =>
@@ -189,31 +187,31 @@ export default function TrainerDashboard() {
                     }
                     className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 w-full rounded-xl px-4 py-2 text-sm transition-colors"
                   >
-                    Prüfen
+                    {t('dashboard.reviewNow')}
                   </button>
                 </div>
 
                 <div className="bg-background/50 border-border/50 rounded-xl border p-6">
                   <div className="mb-4 flex items-center justify-between">
                     <h4 className="text-foreground font-semibold">
-                      Quiz-Reviews
+                      {t('dashboard.pendingReviews')}
                     </h4>
                     <span className="text-primary text-2xl font-bold">
-                      {pendingQuiz}
+                      {pendingReviews}
                     </span>
                   </div>
                   <p className="text-muted-foreground text-sm">
-                    Warten auf Bewertung
+                    {t('dashboard.pendingReviewsDesc')}
                   </p>
                   <button
                     onClick={() =>
                       router.push(
-                        '/trainer/reviews?view=quizzes&onlyPending=true'
+                        '/trainer/reviews?onlyPending=true'
                       )
                     }
                     className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 w-full rounded-xl px-4 py-2 text-sm transition-colors"
                   >
-                    Jetzt bewerten
+                    {t('dashboard.reviewNow')}
                   </button>
                 </div>
               </div>
@@ -225,7 +223,7 @@ export default function TrainerDashboard() {
                 <Users className="text-accent mr-3 h-6 w-6" />
                 {t('dashboard.traineesOverview')}
               </h3>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div
                   role="button"
                   onClick={() => router.push('/trainer/trainees')}
@@ -251,22 +249,6 @@ export default function TrainerDashboard() {
                   </p>
                   <p className="text-foreground text-2xl font-bold">
                     {avgProgress}%
-                  </p>
-                </div>
-
-                <div
-                  role="button"
-                  onClick={() =>
-                    router.push('/trainer/reviews?onlyPending=true')
-                  }
-                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
-                >
-                  <Clock className="text-accent mx-auto mb-3 h-8 w-8" />
-                  <p className="text-muted-foreground text-sm">
-                    {t('dashboard.pendingReviews')}
-                  </p>
-                  <p className="text-foreground text-2xl font-bold">
-                    {pendingReviews}
                   </p>
                 </div>
               </div>

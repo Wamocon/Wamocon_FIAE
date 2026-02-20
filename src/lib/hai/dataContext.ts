@@ -18,7 +18,7 @@
  */
 
 import db from '@/db';
-import { sql, eq, and, desc, gte, lte, count, inArray } from 'drizzle-orm';
+import { sql, eq, and, desc, gte, lte, count, inArray, or, ilike } from 'drizzle-orm';
 import {
     profiles,
     courses,
@@ -52,6 +52,7 @@ export type DataIntent =
     | 'notification_query'  // "Habe ich neue Benachrichtigungen?"
     | 'review_query'        // Trainer: "Was muss ich bewerten?"
     | 'trainee_overview'    // Trainer: "Wie stehen meine Azubis?"
+    | 'trainee_detail_query' // Trainer: "Wie steht [Name]?" / "Noten von [Name]"
     | 'none';               // No data intent detected
 
 export interface LiveDataContext {
@@ -150,6 +151,62 @@ export interface TrainerTraineeInfo {
 // DATA INTENT CLASSIFIER
 // ============================================================================
 
+// Broadened keyword sets for intent classification (natural German phrasing)
+const KW_PROGRESS = ['fortschritt', 'wie weit', 'status', 'abgeschlossen', 'erledigt', 'progress', 'geschafft', 'wie viel', 'noch offen', 'wie stehe ich', 'mein stand', 'schaffe ich', 'bin ich fertig', 'komme ich voran', 'was fehlt noch'];
+const KW_CALENDAR = ['kalender', 'woche', 'berufsschule', 'schulblock', 'betrieb', 'urlaub', 'ferien', 'wann habe ich', 'naechste woche', 'diese woche', 'block', 'zeitplan', 'stundenplan', 'schultag', 'frei', 'wann bin ich'];
+const KW_EXAM_RESULTS = ['note', 'noten', 'bestanden', 'durchgefallen', 'ergebnis', 'punkte', 'prozent', 'wie habe ich abgeschnitten', 'klausurergebnis', 'pruefungsergebnis', 'zeugnis', 'welche note', 'meine noten', 'notenspiegel', 'notenuebersicht', 'schnitt'];
+const KW_EXAM = ['pruefung', 'klausur', 'ihk', 'abschlusspruefung', 'examen', 'naechste pruefung', 'wann schreibe ich', 'ap1', 'ap2', 'teil 1', 'teil 2', 'zwischenpruefung', 'pruefungstermin'];
+const KW_SUBMISSION = ['abgabe', 'abgaben', 'eingereicht', 'einreichung', 'submission', 'abgegeben', 'was habe ich abgegeben', 'feedback', 'bewertung meiner', 'rueckmeldung', 'meine loesung', 'meine abgabe', 'korrektur', 'bewertet'];
+const KW_USE_CASE = ['use case', 'use-case', 'usecase', 'fallstudie', 'praktische aufgabe', 'praxisaufgabe'];
+const KW_REPORT = ['nachweis', 'taetigkeitsnachweis', 'bericht', 'berichtsheft', 'wochenbericht', 'activity report', 'nachweise', 'ausbildungsnachweis', 'wie viele berichte', 'taetigkeit'];
+const KW_NOTIFICATION = ['benachrichtigung', 'neuigkeiten', 'notification', 'neue nachrichten', 'was gibt es neues', 'updates', 'ungelesen', 'inbox'];
+const KW_REVIEW = ['bewerten', 'ausstehend', 'korrigieren', 'review', 'eingereicht', 'submissions', 'pruefe', 'zu bewerten', 'offene abgaben', 'pending', 'was muss ich'];
+const KW_OVERVIEW = ['ueberblick', 'meine azubis', 'wie stehen', 'fortschritt meiner', 'alle azubis', 'azubi-uebersicht', 'meine auszubildenden'];
+
+// ============================================================================
+// NAME EXTRACTION (for trainer → trainee queries)
+// ============================================================================
+
+/** Common German words that look like names but aren't */
+const NOT_NAMES = new Set([
+    'wie', 'was', 'wer', 'hat', 'von', 'der', 'die', 'das', 'ist', 'bei',
+    'mit', 'nach', 'stand', 'note', 'noten', 'use', 'case', 'progress',
+    'enabler', 'quiz', 'klausur', 'schulblock', 'block', 'alle', 'meine',
+    'sich', 'und', 'oder', 'nicht', 'auch', 'noch', 'schon', 'mal',
+    'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer',
+    'kann', 'hat', 'habe', 'haben', 'wird', 'sind', 'sein', 'seine',
+    'fortschritt', 'abgaben', 'berichte', 'noten', 'ergebnis',
+]);
+
+/**
+ * Extract a potential trainee name from a trainer's message.
+ * Matches patterns like "von Max", "fuer Max Mustermann", "Wie steht Max?"
+ */
+function extractPotentialTraineeName(message: string): string | null {
+    // Pattern 1: "von [Name]" / "fuer [Name]" / "zu [Name]" / "ueber [Name]"
+    const prepMatch = message.match(/\b(?:von|fuer|für|zu|ueber|über)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)?)/);
+    if (prepMatch) {
+        const candidate = prepMatch[1].trim();
+        if (!NOT_NAMES.has(candidate.toLowerCase())) return candidate;
+    }
+
+    // Pattern 2: Capitalized words that aren't at sentence start and aren't keywords
+    const words = message.split(/\s+/);
+    for (let i = 1; i < words.length; i++) {
+        const w = words[i].replace(/[?!.,;:]$/, '');
+        if (/^[A-ZÄÖÜ][a-zäöüß]{2,}$/.test(w) && !NOT_NAMES.has(w.toLowerCase())) {
+            // Check if next word is also capitalized (full name)
+            const next = words[i + 1]?.replace(/[?!.,;:]$/, '');
+            if (next && /^[A-ZÄÖÜ][a-zäöüß]{2,}$/.test(next) && !NOT_NAMES.has(next.toLowerCase())) {
+                return `${w} ${next}`;
+            }
+            return w;
+        }
+    }
+
+    return null;
+}
+
 /**
  * Classify the data intent from a user message.
  * Uses German keyword matching to detect when the user asks about live data.
@@ -163,105 +220,27 @@ export function classifyDataIntent(message: string, userRole: UserRole): DataInt
 
     // Trainer-only intents first (more specific)
     if (userRole === 'TRAINER') {
-        const reviewKeywords = [
-            'bewerten', 'ausstehend', 'korrigieren', 'review', 'abgaben',
-            'eingereicht', 'submissions', 'pruefe', 'zu bewerten',
-            'offene abgaben', 'pending', 'was muss ich',
-        ];
-        if (reviewKeywords.some(k => lower.includes(k))) {
-            return 'review_query';
-        }
+        if (KW_REVIEW.some(k => lower.includes(k))) return 'review_query';
 
-        const overviewKeywords = [
-            'azubi', 'ueberblick', 'meine azubis', 'trainee',
-            'wie stehen', 'fortschritt meiner', 'alle azubis',
-            'azubi-uebersicht', 'meine auszubildenden',
-        ];
-        if (overviewKeywords.some(k => lower.includes(k))) {
+        // Trainee detail query: trainer mentions a specific trainee name
+        const nameCandidate = extractPotentialTraineeName(message);
+        if (nameCandidate) return 'trainee_detail_query';
+
+        // "azubi" without a specific name → overview
+        if (KW_OVERVIEW.some(k => lower.includes(k)) || lower.includes('azubi') || lower.includes('trainee')) {
             return 'trainee_overview';
         }
     }
 
-    // Progress keywords
-    const progressKeywords = [
-        'fortschritt', 'wie weit', 'status', 'abgeschlossen',
-        'erledigt', 'progress', 'geschafft', 'wie viel',
-        'noch offen', 'wie stehe ich', 'mein stand',
-    ];
-    if (progressKeywords.some(k => lower.includes(k))) {
-        return 'progress_query';
-    }
-
-    // Calendar keywords
-    const calendarKeywords = [
-        'kalender', 'woche', 'berufsschule', 'schulblock',
-        'betrieb', 'urlaub', 'ferien', 'wann habe ich',
-        'naechste woche', 'diese woche', 'block', 'zeitplan',
-    ];
-    if (calendarKeywords.some(k => lower.includes(k))) {
-        return 'calendar_query';
-    }
-
-    // Exam result keywords (must be checked BEFORE general exam keywords)
-    const examResultKeywords = [
-        'note', 'noten', 'bestanden', 'durchgefallen', 'ergebnis',
-        'punkte', 'prozent', 'wie habe ich abgeschnitten',
-        'klausurergebnis', 'pruefungsergebnis', 'zeugnis',
-        'welche note', 'meine noten',
-    ];
-    if (examResultKeywords.some(k => lower.includes(k))) {
-        return 'exam_results_query';
-    }
-
-    // Exam keywords (upcoming exams / scheduling)
-    const examKeywords = [
-        'pruefung', 'klausur', 'ihk', 'abschlusspruefung',
-        'test', 'examen', 'naechste pruefung', 'wann schreibe ich',
-        'ap1', 'ap2', 'teil 1', 'teil 2',
-    ];
-    if (examKeywords.some(k => lower.includes(k))) {
-        return 'exam_query';
-    }
-
-    // Submission keywords
-    const submissionKeywords = [
-        'abgabe', 'abgaben', 'eingereicht', 'einreichung',
-        'submission', 'abgegeben', 'was habe ich abgegeben',
-        'feedback', 'bewertung meiner', 'rueckmeldung',
-        'meine loesung', 'meine abgabe',
-    ];
-    if (submissionKeywords.some(k => lower.includes(k))) {
-        return 'submission_query';
-    }
-
-    // Use case keywords
-    const useCaseKeywords = [
-        'use case', 'use-case', 'usecase', 'fallstudie',
-        'praktische aufgabe', 'praxisaufgabe',
-    ];
-    if (useCaseKeywords.some(k => lower.includes(k))) {
-        return 'use_case_query';
-    }
-
-    // Report keywords
-    const reportKeywords = [
-        'nachweis', 'taetigkeitsnachweis', 'bericht', 'berichtsheft',
-        'wochenbericht', 'activity report', 'nachweise',
-        'ausbildungsnachweis', 'wie viele berichte',
-    ];
-    if (reportKeywords.some(k => lower.includes(k))) {
-        return 'report_query';
-    }
-
-    // Notification keywords
-    const notificationKeywords = [
-        'benachrichtigung', 'neuigkeiten', 'notification',
-        'neue nachrichten', 'was gibt es neues', 'updates',
-        'ungelesen', 'inbox',
-    ];
-    if (notificationKeywords.some(k => lower.includes(k))) {
-        return 'notification_query';
-    }
+    // Shared intents (both roles)
+    if (KW_PROGRESS.some(k => lower.includes(k))) return 'progress_query';
+    if (KW_CALENDAR.some(k => lower.includes(k))) return 'calendar_query';
+    if (KW_EXAM_RESULTS.some(k => lower.includes(k))) return 'exam_results_query';
+    if (KW_EXAM.some(k => lower.includes(k))) return 'exam_query';
+    if (KW_SUBMISSION.some(k => lower.includes(k))) return 'submission_query';
+    if (KW_USE_CASE.some(k => lower.includes(k))) return 'use_case_query';
+    if (KW_REPORT.some(k => lower.includes(k))) return 'report_query';
+    if (KW_NOTIFICATION.some(k => lower.includes(k))) return 'notification_query';
 
     return 'none';
 }
@@ -893,6 +872,173 @@ export async function fetchTrainerTraineeOverview(trainerId: string): Promise<Tr
 }
 
 // ============================================================================
+// TRAINER → TRAINEE DETAIL QUERY
+// ============================================================================
+
+/**
+ * Find a trainee by name who is assigned to this trainer.
+ * Uses ilike for case-insensitive partial matching on fullName, firstName, lastName.
+ */
+async function findTraineeByName(
+    trainerId: string,
+    nameQuery: string
+): Promise<{ id: string; fullName: string } | null> {
+    try {
+        const pattern = `%${nameQuery}%`;
+        const results = await db
+            .select({
+                id: profiles.id,
+                fullName: profiles.fullName,
+                firstName: profiles.firstName,
+                lastName: profiles.lastName,
+            })
+            .from(profiles)
+            .where(and(
+                eq(profiles.assignedTrainerId, trainerId),
+                eq(profiles.role, 'TRAINEE'),
+                eq(profiles.isActive, true),
+                or(
+                    ilike(profiles.fullName, pattern),
+                    ilike(profiles.firstName, pattern),
+                    ilike(profiles.lastName, pattern),
+                ),
+            ))
+            .limit(1);
+
+        if (results.length === 0) return null;
+
+        const r = results[0];
+        return {
+            id: r.id,
+            fullName: r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Unbekannt',
+        };
+    } catch (error) {
+        console.error('HAI.ai DataContext: Error finding trainee by name:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch detailed data for a specific trainee (called by trainer).
+ * Returns a formatted German summary with progress, submissions, exam results, reports.
+ */
+async function fetchTraineeDetailForTrainer(
+    trainerId: string,
+    nameQuery: string
+): Promise<string> {
+    const trainee = await findTraineeByName(trainerId, nameQuery);
+    if (!trainee) {
+        return `**Azubi-Suche:** Kein Azubi mit dem Namen "${nameQuery}" gefunden. Bitte den vollstaendigen Namen verwenden.`;
+    }
+
+    const parts: string[] = [`**Azubi-Detail: ${trainee.fullName}**`];
+
+    try {
+        // 1. Overall progress
+        const progressResult = await db.execute(sql`
+            SELECT
+                c.title as course_title,
+                COUNT(DISTINCT e.id) AS total,
+                COUNT(DISTINCT ec.enabler_id) AS completed
+            FROM course_members cm
+            JOIN courses c ON c.id = cm.course_id
+            JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
+            LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = ${trainee.id}
+            WHERE cm.user_id = ${trainee.id}
+            GROUP BY c.id, c.title
+        `);
+
+        if ((progressResult as any[]).length > 0) {
+            parts.push('**Kursfortschritt:**');
+            for (const row of progressResult as any[]) {
+                const pct = Number(row.total) > 0 ? Math.round((Number(row.completed) / Number(row.total)) * 100) : 0;
+                parts.push(`- ${row.course_title}: ${row.completed}/${row.total} Enabler (${pct}%)`);
+            }
+        }
+
+        // 2. Recent submissions (last 10)
+        const submissions = await db.execute(sql`
+            (
+                SELECT 'enabler' as type, e.title, es.status, es.created_at as submitted_at, es.trainer_feedback
+                FROM enabler_submissions es
+                JOIN enablers e ON e.id = es.enabler_id
+                WHERE es.trainee_id = ${trainee.id}
+                ORDER BY es.created_at DESC LIMIT 5
+            )
+            UNION ALL
+            (
+                SELECT 'use_case' as type, uc.title, ucs.status, ucs.created_at as submitted_at, ucs.trainer_feedback
+                FROM use_case_submissions ucs
+                JOIN use_cases uc ON uc.id = ucs.use_case_id
+                WHERE ucs.trainee_id = ${trainee.id}
+                ORDER BY ucs.created_at DESC LIMIT 5
+            )
+            ORDER BY submitted_at DESC LIMIT 10
+        `);
+
+        const statusLabels: Record<string, string> = {
+            PENDING: 'Ausstehend', APPROVED: 'Genehmigt', REJECTED: 'Abgelehnt',
+        };
+
+        if ((submissions as any[]).length > 0) {
+            parts.push('**Letzte Abgaben:**');
+            for (const s of submissions as any[]) {
+                const typeLabel = s.type === 'enabler' ? 'Enabler' : 'Use Case';
+                const statusLabel = statusLabels[s.status] || s.status;
+                parts.push(`- [${typeLabel}] "${s.title}" — ${statusLabel}`);
+            }
+        }
+
+        // 3. Exam results
+        const exams = await db.execute(sql`
+            SELECT se.subject, ser.grade, ser.percentage, ser.passed, se.exam_date
+            FROM school_exam_results ser
+            JOIN school_exams se ON se.id = ser.school_exam_id
+            WHERE ser.trainee_id = ${trainee.id}
+            ORDER BY se.exam_date DESC LIMIT 5
+        `);
+
+        if ((exams as any[]).length > 0) {
+            parts.push('**Klausurergebnisse:**');
+            for (const e of exams as any[]) {
+                const examParts: string[] = [e.subject];
+                if (e.grade) examParts.push(`Note: ${e.grade}`);
+                if (e.percentage != null) examParts.push(`${Number(e.percentage).toFixed(0)}%`);
+                if (e.passed !== null) examParts.push(e.passed ? 'Bestanden' : 'Nicht bestanden');
+                parts.push(`- ${examParts.join(' | ')}`);
+            }
+        }
+
+        // 4. Report status
+        const reports = await db.execute(sql`
+            SELECT status, COUNT(*) as cnt
+            FROM activity_reports
+            WHERE trainee_id = ${trainee.id}
+            GROUP BY status
+        `);
+
+        if ((reports as any[]).length > 0) {
+            const reportMap: Record<string, number> = {};
+            for (const r of reports as any[]) {
+                reportMap[r.status] = Number(r.cnt);
+            }
+            const reportLabels: Record<string, string> = {
+                DRAFT: 'Entwurf', SUBMITTED: 'Eingereicht', APPROVED: 'Genehmigt', REVISION_NEEDED: 'Korrektur noetig',
+            };
+            const reportParts = Object.entries(reportMap)
+                .map(([status, cnt]) => `${reportLabels[status] || status}: ${cnt}`)
+                .join(', ');
+            parts.push(`**Nachweise:** ${reportParts}`);
+        }
+    } catch (error) {
+        console.error('HAI.ai DataContext: Error fetching trainee detail:', error);
+        parts.push('(Einige Daten konnten nicht geladen werden.)');
+    }
+
+    return parts.join('\n');
+}
+
+// ============================================================================
 // GERMAN FORMATTERS
 // ============================================================================
 
@@ -1231,6 +1377,17 @@ export async function fetchDataContext(
                             const overview = await fetchTrainerTraineeOverview(userId);
                             parts.push(formatTraineeOverview(overview));
                             intentTokenEstimate = 200 + overview.length * 20;
+                        }
+                        break;
+                    }
+                    case 'trainee_detail_query': {
+                        if (userRole === 'TRAINER') {
+                            const nameCandidate = extractPotentialTraineeName(message);
+                            if (nameCandidate) {
+                                const detail = await fetchTraineeDetailForTrainer(userId, nameCandidate);
+                                parts.push(detail);
+                                intentTokenEstimate = 400;
+                            }
                         }
                         break;
                     }

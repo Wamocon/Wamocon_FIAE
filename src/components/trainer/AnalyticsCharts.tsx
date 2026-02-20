@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -12,6 +13,7 @@ import {
   Area,
 } from 'recharts';
 import { TrendingUp, Target } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface AnalyticsChartsProps {
   progressTrend: Array<{ week: string; progress: number }>;
@@ -32,6 +34,17 @@ export function AnalyticsCharts({
   moduleProgress,
   labels,
 }: AnalyticsChartsProps) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#ffffff' : '#374151';
+  const tooltipStyle = useMemo(() => ({
+    backgroundColor: isDark ? '#1e1423' : '#ffffff',
+    border: '1px solid #ef4444',
+    borderRadius: '8px',
+    color: isDark ? '#ffffff' : '#1f2937',
+    boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.15)',
+  }), [isDark]);
+
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       {/* Progress Over Time */}
@@ -49,20 +62,12 @@ export function AnalyticsCharts({
             />
             <XAxis
               dataKey="week"
-              stroke="#ffffff"
+              stroke={axisColor}
               fontSize={12}
-              tick={{ fill: '#ffffff' }}
+              tick={{ fill: axisColor }}
             />
-            <YAxis stroke="#ffffff" fontSize={12} tick={{ fill: '#ffffff' }} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#1e1423',
-                border: '1px solid #ef4444',
-                borderRadius: '8px',
-                color: '#ffffff',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
-              }}
-            />
+            <YAxis stroke={axisColor} fontSize={12} tick={{ fill: axisColor }} />
+            <Tooltip contentStyle={tooltipStyle} />
             <Area
               type="monotone"
               dataKey="progress"
@@ -89,23 +94,15 @@ export function AnalyticsCharts({
             />
             <XAxis
               dataKey="name"
-              stroke="#ffffff"
+              stroke={axisColor}
               fontSize={10}
               angle={-45}
               textAnchor="end"
               height={60}
-              tick={{ fill: '#ffffff' }}
+              tick={{ fill: axisColor }}
             />
-            <YAxis stroke="#ffffff" fontSize={12} tick={{ fill: '#ffffff' }} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#1e1423',
-                border: '1px solid #ef4444',
-                borderRadius: '8px',
-                color: '#ffffff',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
-              }}
-            />
+            <YAxis stroke={axisColor} fontSize={12} tick={{ fill: axisColor }} />
+            <Tooltip contentStyle={tooltipStyle} />
             <Bar
               dataKey="completed"
               stackId="a"

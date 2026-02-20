@@ -307,8 +307,8 @@ export default function Quiz({ quiz }: QuizProps) {
           >
             <ArrowLeft className="h-6 w-6" />
           </button>
-          <div className="flex-1">
-            <h1 className="text-foreground text-3xl font-bold">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-foreground truncate text-3xl font-bold">
               {quizData.title}
             </h1>
             <p className="text-muted mt-1">{quizData.description}</p>
