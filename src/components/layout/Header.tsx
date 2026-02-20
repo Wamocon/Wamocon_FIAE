@@ -27,7 +27,6 @@ export function Header({
   const { t } = useLanguage();
   const { breadcrumbs } = useBreadcrumbs();
 
-  const hasNotifications = profile?.role === 'trainer';
   const canGoBack =
     breadcrumbs && Array.isArray(breadcrumbs) && breadcrumbs.length > 1;
   const currentBreadcrumb =
@@ -55,6 +54,7 @@ export function Header({
         {canGoBack && !hideBackButton && (
           <button
             onClick={onGoBack}
+            aria-label={t('common.back')}
             className="text-muted hover:text-foreground hover:bg-muted rounded-lg p-2 transition-all duration-200"
           >
             <ChevronLeft className="h-4 w-4" />

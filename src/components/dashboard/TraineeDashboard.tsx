@@ -316,7 +316,7 @@ export default function TraineeDashboard() {
                       onClick={() => handleModuleClick(module.id)}
                     >
                       <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-foreground group-hover:text-accent text-lg font-bold transition-colors">
+                        <h3 className="text-foreground group-hover:text-accent min-w-0 truncate text-lg font-bold transition-colors">
                           {module.title}
                         </h3>
                         <ArrowRight className="text-accent/60 group-hover:text-accent h-5 w-5 transition-colors" />

@@ -482,8 +482,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                           key={e.id}
                           className="border-accent/30 rounded-2xl border p-4"
                         >
-                          <div className="mb-2 flex items-center justify-between">
-                            <div className="text-foreground font-semibold">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="text-foreground min-w-0 truncate font-semibold">
                               {e.title}
                             </div>
                             <div className="flex items-center gap-2">
@@ -607,8 +607,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                           key={u.id}
                           className="border-accent/30 rounded-2xl border p-4"
                         >
-                          <div className="mb-2 flex items-center justify-between">
-                            <div className="text-foreground font-semibold">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="text-foreground min-w-0 truncate font-semibold">
                               {u.title}
                             </div>
                             <div className="flex items-center gap-2">

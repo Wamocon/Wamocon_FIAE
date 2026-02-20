@@ -96,6 +96,14 @@ export default function TrainerTraineesPage() {
       </div>
 
       {/* Trainees Grid */}
+      {error && <div className="text-red-500 text-sm">{error}</div>}
+      {!error && trainees.length === 0 && (
+        <div className="border-accent/30 rounded-3xl border p-12 text-center">
+          <Users className="text-muted mx-auto mb-4 h-12 w-12" />
+          <h3 className="text-foreground text-lg font-semibold">{t('trainee.management.noTrainees')}</h3>
+          <p className="text-muted mt-1 text-sm">{t('trainee.management.noTraineesDesc')}</p>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {trainees.map(trainee => (
           <div
