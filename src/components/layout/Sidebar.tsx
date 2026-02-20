@@ -10,7 +10,6 @@ import {
   LogOut,
   GraduationCap,
   HelpCircle,
-  BarChart3,
   Upload,
   School,
   Calendar,
@@ -71,9 +70,6 @@ export function Sidebar({
           break;
         case 'trainees':
           router.push('/trainer/trainees');
-          break;
-        case 'analytics':
-          router.push('/trainer/analytics');
           break;
         case 'modules':
           router.push('/trainee/modules');
@@ -177,12 +173,6 @@ export function Sidebar({
             icon: Users,
             href: '/trainer/trainees',
           },
-          {
-            id: 'analytics',
-            label: t('nav.analytics'),
-            icon: BarChart3,
-            href: '/trainer/analytics',
-          },
         ]
         : [
           {
@@ -279,7 +269,7 @@ export function Sidebar({
                 href={item.href}
                 className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${isActive
                   ? 'bg-accent/20 text-accent border-accent/30 border'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent'
                   }`}
               >
                 {item.id === 'profile' ? (
@@ -313,7 +303,7 @@ export function Sidebar({
           <div className="px-4 pb-2">
             <button
               onClick={() => setHaiAdminOpen(true)}
-              className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-accent/10"
+              className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent"
             >
               <span className="text-lg">🦈</span>
               <span className="font-medium">HAI Admin</span>
@@ -359,7 +349,7 @@ export function Sidebar({
           <button
             onClick={handleSignOut}
             disabled={loading}
-            className={`mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${loading ? 'cursor-not-allowed opacity-60' : 'text-muted-foreground hover:text-foreground hover:bg-accent/10'}`}
+            className={`mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${loading ? 'cursor-not-allowed opacity-60' : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent'}`}
           >
             <LogOut className={`h-5 w-5 ${loading ? 'animate-pulse' : ''}`} />
             <span className="font-medium">

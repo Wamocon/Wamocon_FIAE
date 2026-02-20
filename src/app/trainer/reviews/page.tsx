@@ -39,6 +39,7 @@ export default function TrainerReviewsPage() {
   // Solution document state for use cases (TRAINER_SOLUTION PDFs)
   const [solutionDocsMap, setSolutionDocsMap] = useState<Record<string, SolutionDocInfo | null>>({});
   const [flipbookState, setFlipbookState] = useState<{ isOpen: boolean; url: string; title: string }>({ isOpen: false, url: '', title: '' });
+  const [loadingActions, setLoadingActions] = useState<Record<string, 'APPROVED' | 'REJECTED' | null>>({});
 
   const filteredEnablers = useMemo(() => enablerSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [enablerSubs, statusFilter]);
   const filteredUseCases = useMemo(() => useCaseSubs.filter(s => statusFilter === 'all' ? true : s.status.toLowerCase() === statusFilter), [useCaseSubs, statusFilter]);
@@ -141,27 +142,32 @@ export default function TrainerReviewsPage() {
 
   const reviewItem = async (kind: 'enabler' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
     if (!profile?.id) return;
-    const feedback = feedbackMap[id] || '';
-    const feedbacks = feedbacksMap[id] || [];
-    const url = kind === 'enabler'
-      ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
-      : `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`;
-    const body = kind === 'enabler' && feedbacks.length > 0
-      ? { status, feedbacks: feedbacks.filter(f => f.feedback.trim().length > 0) }
-      : { status, trainerFeedback: feedback };
-    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) {
-      toast.error(t('trainer.reviews.saveError'));
-      return;
+    setLoadingActions(prev => ({ ...prev, [id]: status }));
+    try {
+      const feedback = feedbackMap[id] || '';
+      const feedbacks = feedbacksMap[id] || [];
+      const url = kind === 'enabler'
+        ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
+        : `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`;
+      const body = kind === 'enabler' && feedbacks.length > 0
+        ? { status, feedbacks: feedbacks.filter(f => f.feedback.trim().length > 0) }
+        : { status, trainerFeedback: feedback };
+      const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) {
+        toast.error(t('trainer.reviews.saveError'));
+        return;
+      }
+      // Refresh the list with same filter
+      const onlyPending = statusFilter === 'pending';
+      const rr = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
+      const data = await rr.json();
+      setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+      setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+      setFeedbackMap(prev => ({ ...prev, [id]: '' }));
+      setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
+    } finally {
+      setLoadingActions(prev => ({ ...prev, [id]: null }));
     }
-    // Refresh the list with same filter
-    const onlyPending = statusFilter === 'pending';
-    const rr = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
-    const data = await rr.json();
-    setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-    setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-    setFeedbackMap(prev => ({ ...prev, [id]: '' }));
-    setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
   };
 
   const toggleSubmissionReviewed = async (id: string, current: boolean) => {
@@ -365,8 +371,26 @@ export default function TrainerReviewsPage() {
                 </div>
               )}
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={() => reviewItem('enabler', it.id, 'REJECTED')}>{t('trainer.reviews.reject')}</button>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={() => reviewItem('enabler', it.id, 'APPROVED')}>{t('trainer.reviews.approve')}</button>
+                <button
+                  disabled={!!loadingActions[it.id]}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 px-3 py-2 disabled:opacity-60"
+                  onClick={() => reviewItem('enabler', it.id, 'REJECTED')}
+                >
+                  {loadingActions[it.id] === 'REJECTED'
+                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
+                    : null}
+                  {t('trainer.reviews.reject')}
+                </button>
+                <button
+                  disabled={!!loadingActions[it.id]}
+                  className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2 disabled:opacity-60"
+                  onClick={() => reviewItem('enabler', it.id, 'APPROVED')}
+                >
+                  {loadingActions[it.id] === 'APPROVED'
+                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    : null}
+                  {t('trainer.reviews.approve')}
+                </button>
               </div>
             </div>
           ))}
@@ -413,8 +437,26 @@ export default function TrainerReviewsPage() {
                 <textarea className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <button className="rounded-md border border-accent/30 px-3 py-2" onClick={() => reviewItem('usecase', it.id, 'REJECTED')}>{t('trainer.reviews.reject')}</button>
-                <button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2" onClick={() => reviewItem('usecase', it.id, 'APPROVED')}>{t('trainer.reviews.approve')}</button>
+                <button
+                  disabled={!!loadingActions[it.id]}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 px-3 py-2 disabled:opacity-60"
+                  onClick={() => reviewItem('usecase', it.id, 'REJECTED')}
+                >
+                  {loadingActions[it.id] === 'REJECTED'
+                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
+                    : null}
+                  {t('trainer.reviews.reject')}
+                </button>
+                <button
+                  disabled={!!loadingActions[it.id]}
+                  className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2 disabled:opacity-60"
+                  onClick={() => reviewItem('usecase', it.id, 'APPROVED')}
+                >
+                  {loadingActions[it.id] === 'APPROVED'
+                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    : null}
+                  {t('trainer.reviews.approve')}
+                </button>
               </div>
             </div>
           ))}
