@@ -13,6 +13,7 @@ export default function NewCoursePage() {
   const [title, setTitle] = useState('');
   const [year, setYear] = useState<'1' | '2' | '3' | ''>('');
   const [chapter, setChapter] = useState<string>('');
+  const [examPart, setExamPart] = useState<'1' | '2' | ''>('');
   const [skills, setSkills] = useState<string>(''); // comma-separated
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export default function NewCoursePage() {
         title: title.trim(),
         year: Number(year),
         chapter: chapter ? Number(chapter) : undefined,
+        examPart: examPart ? Number(examPart) : undefined,
         createdById: profile?.id,
         skills: skills
           .split(',')
@@ -100,6 +102,19 @@ export default function NewCoursePage() {
               placeholder={t('course.form.modulePlaceholder')}
               inputMode="numeric"
             />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">{t('course.form.examPartLabel')}</label>
+            <select
+              value={examPart}
+              onChange={e => setExamPart(e.target.value as any)}
+              className="w-full rounded-xl border border-accent/30 bg-background/60 px-3 py-2"
+            >
+              <option value="">{t('course.form.examPartSelect')}</option>
+              <option value="1">{t('course.form.examPartOption').replace('{part}', '1')}</option>
+              <option value="2">{t('course.form.examPartOption').replace('{part}', '2')}</option>
+            </select>
           </div>
 
           <div className="md:col-span-2">

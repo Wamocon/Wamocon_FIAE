@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { verifyTrainer } from '@/lib/auth-helpers';
+import { apiCache } from '@/lib/api-cache';
 import {
   courses,
   courseMembers,
@@ -120,6 +121,8 @@ export async function PATCH(
     if (typeof body?.year !== 'undefined') updates.year = Number(body.year);
     if (typeof body?.chapter !== 'undefined')
       updates.chapter = Number(body.chapter);
+    if (typeof body?.examPart !== 'undefined')
+      updates.examPart = body.examPart === null ? null : Number(body.examPart);
     const skillsArr: string[] | undefined = Array.isArray(body?.skills)
       ? body.skills
       : undefined;
@@ -194,6 +197,9 @@ export async function PATCH(
     } catch (notifyErr) {
       console.warn('Failed to notify members for course update', notifyErr);
     }
+
+    // Invalidate course cache so filters show updated data
+    apiCache.invalidate('trainer_courses');
 
     return NextResponse.json({ course: out });
   } catch (e) {

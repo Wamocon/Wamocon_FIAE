@@ -22,6 +22,7 @@ export default function TrainerTraineesPage() {
   const router = useRouter();
   const [trainees, setTrainees] = useState<TraineeItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const load = async () => {
@@ -191,34 +192,72 @@ export default function TrainerTraineesPage() {
                 {t('trainee.management.details')}
               </button>
               <button
+                disabled={togglingIds.has(trainee.id)}
                 onClick={async () => {
+                  const previousState = trainee.isActive;
+                  // Optimistic update
+                  setTrainees(prev =>
+                    prev.map(t =>
+                      t.id === trainee.id ? { ...t, isActive: !t.isActive } : t
+                    )
+                  );
+                  setTogglingIds(prev => new Set(prev).add(trainee.id));
                   try {
-                    await fetch(`/api/trainer/trainees/${trainee.id}`, {
+                    const res = await fetch(`/api/trainer/trainees/${trainee.id}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         trainer_id: profile?.id,
-                        isActive: !trainee.isActive,
+                        isActive: !previousState,
                       }),
                     });
-                    // refresh list
+                    if (!res.ok) throw new Error(await res.text());
+                    // Refresh list (cache was invalidated server-side)
                     const params = new URLSearchParams();
+                    if (user?.id) params.set('trainerAuthId', user.id);
                     if (profile?.id) params.set('trainerProfileId', profile.id);
-                    const res = await fetch(
-                      `/api/trainer/trainees?${params.toString()}`
+                    const listRes = await fetch(
+                      `/api/trainer/trainees?${params.toString()}`,
+                      { cache: 'no-store' }
                     );
-                    const data = await res.json();
+                    const data = await listRes.json();
                     setTrainees(data.trainees || []);
+                    toast.success(
+                      !previousState
+                        ? t('trainee.management.activated')
+                        : t('trainee.management.deactivated')
+                    );
                   } catch (e) {
                     console.error(e);
+                    // Revert optimistic update
+                    setTrainees(prev =>
+                      prev.map(t =>
+                        t.id === trainee.id ? { ...t, isActive: previousState } : t
+                      )
+                    );
                     toast.error(t('trainee.management.updateError'));
+                  } finally {
+                    setTogglingIds(prev => {
+                      const next = new Set(prev);
+                      next.delete(trainee.id);
+                      return next;
+                    });
                   }
                 }}
-                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'text-foreground bg-green-600 hover:bg-green-700'}`}
+                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'text-foreground bg-green-600 hover:bg-green-700'}`}
               >
-                {trainee.isActive
-                  ? t('trainee.management.deactivate')
-                  : t('trainee.management.activate')}
+                {togglingIds.has(trainee.id) ? (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    {trainee.isActive
+                      ? t('trainee.management.deactivate')
+                      : t('trainee.management.activate')}
+                  </span>
+                ) : trainee.isActive ? (
+                  t('trainee.management.deactivate')
+                ) : (
+                  t('trainee.management.activate')
+                )}
               </button>
             </div>
           </div>
