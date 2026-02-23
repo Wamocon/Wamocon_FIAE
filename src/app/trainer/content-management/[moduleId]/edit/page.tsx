@@ -14,8 +14,10 @@ import {
   FolderEdit,
   FileText,
   Trash2,
+  Eye,
 } from 'lucide-react';
 import { PdfUploader } from '@/components/trainer/PdfUploader';
+import { FlipbookViewer } from '@/components/ui/FlipbookViewer';
 
 export default function EditCoursePage() {
   const router = useRouter();
@@ -53,6 +55,7 @@ export default function EditCoursePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewPdf, setPreviewPdf] = useState<{ title: string; url: string } | null>(null);
 
   // UI: Add Enabler Modal state
   const [showAddEnabler, setShowAddEnabler] = useState(false);
@@ -82,6 +85,9 @@ export default function EditCoursePage() {
   const [pendingEnablerPdfs, setPendingEnablerPdfs] = useState<PendingPdf[]>(
     []
   );
+  const [pendingScenarioPdfs, setPendingScenarioPdfs] = useState<PendingPdf[]>(
+    []
+  );
   // Edit Enabler state
   const [showEditEnabler, setShowEditEnabler] = useState(false);
   const [editingEnablerId, setEditingEnablerId] = useState<string | null>(null);
@@ -96,7 +102,7 @@ export default function EditCoursePage() {
   >([]);
   // PDF documents for enabler
   const [enablerDocuments, setEnablerDocuments] = useState<
-    Array<{ id: string; title: string; storageUrl: string; fileName: string }>
+    Array<{ id: string; title: string; storageUrl: string; fileName: string; documentType?: string }>
   >([]);
 
   // UI: Add Use Case Modal state
@@ -129,7 +135,7 @@ export default function EditCoursePage() {
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
   // PDF documents for use case (edit mode)
   const [useCaseDocuments, setUseCaseDocuments] = useState<
-    Array<{ id: string; title: string; storageUrl: string; fileName: string }>
+    Array<{ id: string; title: string; storageUrl: string; fileName: string; documentType?: string }>
   >([]);
 
   useEffect(() => {
@@ -257,13 +263,12 @@ export default function EditCoursePage() {
     e.preventDefault();
     setError(null);
     if (!title.trim()) return setError(t('trainer.content.errorTitle'));
-    if (!year) return setError(t('trainer.content.errorYear'));
 
     try {
       setSaving(true);
       const payload: any = {
         title: title.trim(),
-        year: Number(year),
+        year: year ? Number(year) : null,
         chapter: chapter ? Number(chapter) : undefined,
         examPart: examPart ? Number(examPart) : null,
         skills: skills
@@ -356,6 +361,7 @@ export default function EditCoursePage() {
                     onChange={e => setYear(e.target.value as any)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
                   >
+                    <option value="">{t('trainer.content.examPartNone')}</option>
                     <option value="1">{t('common.year1')}</option>
                     <option value="2">{t('common.year2')}</option>
                     <option value="3">{t('common.year3')}</option>
@@ -365,13 +371,29 @@ export default function EditCoursePage() {
                   <label className="mb-1 block text-sm font-medium">
                     {t('trainer.content.chapter')}
                   </label>
-                  <input
-                    value={chapter}
-                    onChange={e => setChapter(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                    placeholder={t('trainer.content.chapterPlaceholder')}
-                    inputMode="numeric"
-                  />
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setChapter(prev => String(Math.max(1, (parseInt(prev) || 0) - 1)))}
+                      className="border-accent/20 bg-background/60 cursor-pointer rounded-l-xl border px-3 py-2 text-sm font-bold transition-colors hover:bg-accent/10"
+                    >
+                      −
+                    </button>
+                    <input
+                      value={chapter}
+                      onChange={e => setChapter(e.target.value.replace(/\D/g, ''))}
+                      className="border-accent/20 bg-background/60 w-full border-y px-3 py-2 text-center"
+                      placeholder={t('trainer.content.chapterPlaceholder')}
+                      inputMode="numeric"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setChapter(prev => String((parseInt(prev) || 0) + 1))}
+                      className="border-accent/20 bg-background/60 cursor-pointer rounded-r-xl border px-3 py-2 text-sm font-bold transition-colors hover:bg-accent/10"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">
@@ -422,8 +444,10 @@ export default function EditCoursePage() {
                         </span>
                         <button
                           type="button"
-                          className="border-accent/30 rounded-md border px-2 py-1 text-xs"
+                          className="border-accent/30 cursor-pointer rounded-md border px-2 py-1 text-xs transition-colors hover:border-red-400 hover:text-red-400"
                           onClick={async () => {
+                            const ok = window.confirm(t('trainer.content.confirmRemoveMember'));
+                            if (!ok) return;
                             await fetch(
                               `/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`,
                               { method: 'DELETE' }
@@ -502,8 +526,10 @@ export default function EditCoursePage() {
                         </span>
                         <button
                           type="button"
-                          className="border-accent/30 rounded-md border px-2 py-1 text-xs"
+                          className="border-accent/30 cursor-pointer rounded-md border px-2 py-1 text-xs transition-colors hover:border-red-400 hover:text-red-400"
                           onClick={async () => {
+                            const ok = window.confirm(t('trainer.content.confirmRemoveMember'));
+                            if (!ok) return;
                             await fetch(
                               `/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`,
                               { method: 'DELETE' }
@@ -971,11 +997,11 @@ export default function EditCoursePage() {
                 </div>
               </div>
 
-              {/* PDF Documents Section for Add Lesson */}
+              {/* Theory PDFs Section for Add Lesson */}
               <div className="border-accent/20 bg-background/30 rounded-xl border p-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-red-500" />
-                  <span className="text-sm font-medium">PDFs</span>
+                  <FileText className="h-4 w-4 text-blue-500" />
+                  <span className="text-sm font-medium">{t('trainer.content.theoryPdfs')}</span>
                   {pendingEnablerPdfs.length > 0 && (
                     <span className="text-muted text-xs">
                       ({pendingEnablerPdfs.length})
@@ -983,15 +1009,15 @@ export default function EditCoursePage() {
                   )}
                 </div>
 
-                {/* Pending PDFs - inline pills */}
+                {/* Pending theory PDFs - inline pills */}
                 {pendingEnablerPdfs.length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-2">
                     {pendingEnablerPdfs.map(pdf => (
                       <div
                         key={pdf.id}
-                        className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1"
+                        className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2 py-1"
                       >
-                        <FileText className="h-3 w-3 flex-shrink-0 text-green-500" />
+                        <FileText className="h-3 w-3 flex-shrink-0 text-blue-500" />
                         <span className="max-w-[150px] truncate text-xs font-medium">
                           {pdf.title}
                         </span>
@@ -1030,32 +1056,64 @@ export default function EditCoursePage() {
                 />
               </div>
 
+              {/* Scenario PDFs Section (Add Modal) */}
               <div className="border-accent/20 bg-background/30 rounded-xl border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-red-500" />
-                  <span className="text-sm font-medium">
-                    {t('trainer.content.scenarios')} (PDF)
-                  </span>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-amber-500" />
+                    <span className="text-sm font-medium">{t('trainer.content.scenarioPdfs')}</span>
+                    {pendingScenarioPdfs.length > 0 && (
+                      <span className="text-muted text-xs">
+                        ({pendingScenarioPdfs.length})
+                      </span>
+                    )}
+                  </div>
                 </div>
+
+                {/* Pending scenario PDFs - inline pills */}
+                {pendingScenarioPdfs.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {pendingScenarioPdfs.map(pdf => (
+                      <div
+                        key={pdf.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1"
+                      >
+                        <FileText className="h-3 w-3 flex-shrink-0 text-amber-500" />
+                        <span className="max-w-[150px] truncate text-xs font-medium">
+                          {pdf.title}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPendingScenarioPdfs(prev =>
+                              prev.filter(p => p.id !== pdf.id)
+                            )
+                          }
+                          className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                          title={t('common.remove')}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <PdfUploader
                   compact
                   userId={trainerId || ''}
-                  onUpload={url => setEnablerScenarioPdf(url)}
+                  onUpload={url => {
+                    const fileName = url.split('/').pop() || 'scenario.pdf';
+                    const title = fileName
+                      .replace(/^\d+_/, '')
+                      .replace(/\.pdf$/i, '');
+                    setPendingScenarioPdfs(prev => [
+                      ...prev,
+                      { id: crypto.randomUUID(), url, fileName, title },
+                    ]);
+                  }}
                   disabled={!trainerId}
                 />
-                {enablerScenarioPdf && (
-                  <div className="mt-2 flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1">
-                    <FileText className="h-4 w-4 text-green-500" />
-                    <span className="text-xs truncate max-w-[200px]">{enablerScenarioPdf.split('/').pop()}</span>
-                    <button
-                      type="button"
-                      onClick={() => setEnablerScenarioPdf('')}
-                      className="text-muted hover:text-red-500"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
               </div>
               {/* Legacy inline Quiz-Fragen removed from Add Lesson modal. Create the lesson first, then add quizzes in the edit modal using the multi-difficulty section. */}
               <div className="flex justify-end gap-2">
@@ -1110,7 +1168,7 @@ export default function EditCoursePage() {
                         | string
                         | undefined;
 
-                      // 2) Save pending PDFs if any
+                      // 2) Save pending theory PDFs if any
                       if (newEnablerId && pendingEnablerPdfs.length > 0) {
                         for (const pdf of pendingEnablerPdfs) {
                           try {
@@ -1124,6 +1182,29 @@ export default function EditCoursePage() {
                                   fileName: pdf.fileName,
                                   storageUrl: pdf.url,
                                   documentType: 'THEORY',
+                                }),
+                              }
+                            );
+                          } catch {
+                            /* ignore individual PDF save errors */
+                          }
+                        }
+                      }
+
+                      // 2b) Save pending scenario PDFs if any
+                      if (newEnablerId && pendingScenarioPdfs.length > 0) {
+                        for (const pdf of pendingScenarioPdfs) {
+                          try {
+                            await fetch(
+                              `/api/trainer/enablers/${newEnablerId}/documents?trainerId=${trainerId}`,
+                              {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  title: pdf.title,
+                                  fileName: pdf.fileName,
+                                  storageUrl: pdf.url,
+                                  documentType: 'EXERCISE',
                                 }),
                               }
                             );
@@ -1153,6 +1234,8 @@ export default function EditCoursePage() {
                       setEnablerTitle('');
                       setEnablerDescription('');
                       setEnablerScenarioPdf('');
+                      setPendingEnablerPdfs([]);
+                      setPendingScenarioPdfs([]);
                     } catch (e: any) {
                       alert(e?.message || t('common.unknownError'));
                     } finally {
@@ -1688,32 +1771,42 @@ export default function EditCoursePage() {
                 </div>
               </div>
 
-              {/* PDF Documents Section - Compact */}
+              {/* Theory PDFs Section */}
               <div className="border-accent/20 bg-background/30 rounded-xl border p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-red-500" />
-                    <span className="text-sm font-medium">PDFs</span>
-                    {enablerDocuments.length > 0 && (
+                    <FileText className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-medium">{t('trainer.content.theoryPdfs')}</span>
+                    {enablerDocuments.filter(d => d.documentType === 'THEORY' || !d.documentType).length > 0 && (
                       <span className="text-muted text-xs">
-                        ({enablerDocuments.length})
+                        ({enablerDocuments.filter(d => d.documentType === 'THEORY' || !d.documentType).length})
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Uploaded documents - inline pills */}
-                {enablerDocuments.length > 0 && (
+                {/* Theory documents - inline pills */}
+                {enablerDocuments.filter(d => d.documentType === 'THEORY' || !d.documentType).length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-2">
-                    {enablerDocuments.map(doc => (
+                    {enablerDocuments.filter(d => d.documentType === 'THEORY' || !d.documentType).map(doc => (
                       <div
                         key={doc.id}
-                        className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1"
+                        className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2 py-1"
                       >
-                        <FileText className="h-3 w-3 flex-shrink-0 text-green-500" />
+                        <FileText className="h-3 w-3 flex-shrink-0 text-blue-500" />
                         <span className="max-w-[150px] truncate text-xs font-medium">
                           {doc.title}
                         </span>
+                        {doc.storageUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewPdf({ title: doc.title, url: doc.storageUrl })}
+                            className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-blue-500/20 hover:text-blue-400"
+                            title={t('trainer.content.previewPdf')}
+                          >
+                            <Eye className="h-3 w-3" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={async () => {
@@ -1744,7 +1837,7 @@ export default function EditCoursePage() {
                   </div>
                 )}
 
-                {/* Compact PDF Upload */}
+                {/* Upload Theory PDF */}
                 <PdfUploader
                   compact
                   userId={trainerId || ''}
@@ -1804,32 +1897,129 @@ export default function EditCoursePage() {
                   </label>
                 </div>
               </div>
+              {/* Scenario PDFs Section */}
               <div className="border-accent/20 bg-background/30 rounded-xl border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-red-500" />
-                  <span className="text-sm font-medium">
-                    {t('trainer.content.scenarios')} (PDF)
-                  </span>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-amber-500" />
+                    <span className="text-sm font-medium">{t('trainer.content.scenarioPdfs')}</span>
+                    {enablerDocuments.filter(d => d.documentType === 'EXERCISE').length > 0 && (
+                      <span className="text-muted text-xs">
+                        ({enablerDocuments.filter(d => d.documentType === 'EXERCISE').length})
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <PdfUploader
-                  compact
-                  userId={trainerId || ''}
-                  onUpload={url => setEnablerScenarioPdf(url)}
-                  disabled={!trainerId}
-                />
+
+                {/* Scenario documents - inline pills */}
+                {enablerDocuments.filter(d => d.documentType === 'EXERCISE').length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {enablerDocuments.filter(d => d.documentType === 'EXERCISE').map(doc => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1"
+                      >
+                        <FileText className="h-3 w-3 flex-shrink-0 text-amber-500" />
+                        <span className="max-w-[150px] truncate text-xs font-medium">
+                          {doc.title}
+                        </span>
+                        {doc.storageUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewPdf({ title: doc.title, url: doc.storageUrl })}
+                            className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-amber-500/20 hover:text-amber-400"
+                            title={t('trainer.content.previewPdf')}
+                          >
+                            <Eye className="h-3 w-3" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!trainerId || !editingEnablerId) return;
+                            const ok = window.confirm(
+                              t('trainer.content.confirmDeleteDoc')
+                            );
+                            if (!ok) return;
+                            try {
+                              await fetch(
+                                `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                { method: 'DELETE' }
+                              );
+                              setEnablerDocuments(prev =>
+                                prev.filter(d => d.id !== doc.id)
+                              );
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                          title={t('common.remove')}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Legacy single scenario PDF */}
                 {enablerScenarioPdf && (
-                  <div className="mt-2 flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1">
-                    <FileText className="h-4 w-4 text-green-500" />
+                  <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1">
+                    <FileText className="h-3 w-3 text-green-500" />
                     <span className="text-xs truncate max-w-[200px]">{enablerScenarioPdf.split('/').pop()}</span>
                     <button
                       type="button"
+                      onClick={() => setPreviewPdf({ title: 'Scenario', url: enablerScenarioPdf })}
+                      className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-green-500/20 hover:text-green-400"
+                      title={t('trainer.content.previewPdf')}
+                    >
+                      <Eye className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setEnablerScenarioPdf('')}
-                      className="text-muted hover:text-red-500"
+                      className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
                     >
                       <X className="h-3 w-3" />
                     </button>
                   </div>
                 )}
+
+                {/* Upload Scenario PDF */}
+                <PdfUploader
+                  compact
+                  userId={trainerId || ''}
+                  onUpload={async url => {
+                    if (!trainerId || !editingEnablerId) return;
+                    const fileName = url.split('/').pop() || 'scenario.pdf';
+                    const title = fileName
+                      .replace(/^\d+_/, '')
+                      .replace(/\.pdf$/i, '');
+                    try {
+                      const res = await fetch(
+                        `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}`,
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            title,
+                            fileName,
+                            storageUrl: url,
+                            documentType: 'EXERCISE',
+                          }),
+                        }
+                      );
+                      if (res.ok) {
+                        const data = await res.json();
+                        setEnablerDocuments(prev => [...prev, data.document]);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                  disabled={!editingEnablerId}
+                />
               </div>
 
               {/* Legacy inline Quiz-Fragen removed. Use the multi-difficulty section above to manage quizzes. */}
@@ -2065,6 +2255,25 @@ export default function EditCoursePage() {
                         <span className="max-w-[150px] truncate text-xs font-medium">
                           {doc.title}
                         </span>
+                        {doc.documentType && (
+                          <span className={`rounded px-1 py-0.5 text-[10px] font-medium leading-none ${
+                            doc.documentType === 'THEORY' ? 'bg-blue-500/20 text-blue-400'
+                            : doc.documentType === 'EXERCISE' ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-amber-500/20 text-amber-400'
+                          }`}>
+                            {doc.documentType === 'THEORY' ? 'T' : doc.documentType === 'EXERCISE' ? 'E' : 'S'}
+                          </span>
+                        )}
+                        {doc.storageUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewPdf({ title: doc.title, url: doc.storageUrl })}
+                            className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-blue-500/20 hover:text-blue-400"
+                            title={t('trainer.content.previewPdf')}
+                          >
+                            <Eye className="h-3 w-3" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={async () => {
@@ -2209,6 +2418,15 @@ export default function EditCoursePage() {
             </div>
           </div>
         </div>
+      )}
+      {/* PDF Preview Modal */}
+      {previewPdf && (
+        <FlipbookViewer
+          pdfUrl={previewPdf.url}
+          title={previewPdf.title}
+          isOpen={!!previewPdf}
+          onClose={() => setPreviewPdf(null)}
+        />
       )}
     </div>
   );
