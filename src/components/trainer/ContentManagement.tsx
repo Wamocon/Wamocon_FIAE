@@ -26,6 +26,7 @@ type CourseCard = {
   title: string;
   year: number | null;
   chapter: number | null;
+  examPart: number | null;
   enablersCount: number;
   useCasesCount: number;
   trainersCount?: number;
@@ -38,6 +39,7 @@ export function ContentManagement() {
   const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
+  const [selectedExamPart, setSelectedExamPart] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const [courses, setCourses] = useState<CourseCard[]>([]);
@@ -88,6 +90,7 @@ export function ContentManagement() {
       if (!profile?.id) return;
       if (searchTerm.trim()) params.set('q', searchTerm.trim());
       if (selectedYear) params.set('year', selectedYear);
+      if (selectedExamPart) params.set('examPart', selectedExamPart);
       params.set('trainerProfileId', profile.id);
       const res = await fetch(`/api/trainer/courses?${params.toString()}`, {
         cache: 'no-store',
@@ -100,7 +103,7 @@ export function ContentManagement() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id, searchTerm, selectedYear]);
+  }, [profile?.id, searchTerm, selectedYear, selectedExamPart]);
 
   useEffect(() => {
     loadCourses();
@@ -259,6 +262,16 @@ export function ContentManagement() {
               <option value="3">
                 {t('content.yearNumber').replace('{number}', '3')}
               </option>
+            </select>
+
+            <select
+              value={selectedExamPart}
+              onChange={e => setSelectedExamPart(e.target.value)}
+              className="bg-background/50 border-accent/30 focus:ring-accent text-foreground rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
+            >
+              <option value="all">{t('content.allExamParts')}</option>
+              <option value="1">{t('content.examPartNumber').replace('{number}', '1')}</option>
+              <option value="2">{t('content.examPartNumber').replace('{number}', '2')}</option>
             </select>
           </div>
 
