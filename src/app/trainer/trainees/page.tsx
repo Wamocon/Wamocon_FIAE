@@ -3,7 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import toast from 'react-hot-toast';
-import { Users, Eye, MessageSquare, TrendingUp } from 'lucide-react';
+import { Users, Eye } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -13,6 +13,7 @@ type TraineeItem = {
   full_name: string;
   avatar_url?: string | null;
   progress: number;
+  coursesCount?: number;
   isActive?: boolean;
 };
 
@@ -22,6 +23,7 @@ export default function TrainerTraineesPage() {
   const router = useRouter();
   const [trainees, setTrainees] = useState<TraineeItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const load = async () => {
@@ -174,7 +176,7 @@ export default function TrainerTraineesPage() {
                 <div className="text-muted">{t('modules.progress')}</div>
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
-                <div className="text-primary text-2xl font-bold">12</div>
+                <div className="text-primary text-2xl font-bold">{trainee.coursesCount ?? 0}</div>
                 <div className="text-muted">
                   {t('trainee.management.modules')}
                 </div>
@@ -191,34 +193,64 @@ export default function TrainerTraineesPage() {
                 {t('trainee.management.details')}
               </button>
               <button
+                disabled={togglingIds.has(trainee.id)}
                 onClick={async () => {
+                  const previousState = trainee.isActive;
+                  // Optimistic update
+                  setTrainees(prev =>
+                    prev.map(t =>
+                      t.id === trainee.id ? { ...t, isActive: !t.isActive } : t
+                    )
+                  );
+                  setTogglingIds(prev => new Set(prev).add(trainee.id));
                   try {
-                    await fetch(`/api/trainer/trainees/${trainee.id}`, {
+                    const res = await fetch(`/api/trainer/trainees/${trainee.id}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         trainer_id: profile?.id,
-                        isActive: !trainee.isActive,
+                        isActive: !previousState,
                       }),
                     });
-                    // refresh list
-                    const params = new URLSearchParams();
-                    if (profile?.id) params.set('trainerProfileId', profile.id);
-                    const res = await fetch(
-                      `/api/trainer/trainees?${params.toString()}`
+                    if (!res.ok) throw new Error(await res.text());
+                    // Optimistic update already applied — don't re-fetch
+                    // (server cache may still be stale for a moment)
+                    toast.success(
+                      !previousState
+                        ? t('trainee.management.activated')
+                        : t('trainee.management.deactivated')
                     );
-                    const data = await res.json();
-                    setTrainees(data.trainees || []);
                   } catch (e) {
                     console.error(e);
+                    // Revert optimistic update
+                    setTrainees(prev =>
+                      prev.map(t =>
+                        t.id === trainee.id ? { ...t, isActive: previousState } : t
+                      )
+                    );
                     toast.error(t('trainee.management.updateError'));
+                  } finally {
+                    setTogglingIds(prev => {
+                      const next = new Set(prev);
+                      next.delete(trainee.id);
+                      return next;
+                    });
                   }
                 }}
-                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'text-foreground bg-green-600 hover:bg-green-700'}`}
+                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'text-foreground bg-green-600 hover:bg-green-700'}`}
               >
-                {trainee.isActive
-                  ? t('trainee.management.deactivate')
-                  : t('trainee.management.activate')}
+                {togglingIds.has(trainee.id) ? (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    {trainee.isActive
+                      ? t('trainee.management.deactivate')
+                      : t('trainee.management.activate')}
+                  </span>
+                ) : trainee.isActive ? (
+                  t('trainee.management.deactivate')
+                ) : (
+                  t('trainee.management.activate')
+                )}
               </button>
             </div>
           </div>

@@ -260,10 +260,11 @@ function ReviewModal({
     reportId: string,
     action: 'approve' | 'reject',
     feedback?: string
-  ) => void;
+  ) => Promise<void>;
 }) {
   const [feedback, setFeedback] = useState('');
   const [action, setAction] = useState<'approve' | 'reject' | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [entries, setEntries] = useState<any[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
 
@@ -302,13 +303,18 @@ function ReviewModal({
     }
   }, [report.id, report.status]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!action) return;
     if (action === 'reject' && !feedback.trim()) {
       toast.error('Bitte geben Sie einen Grund für die Ablehnung an.');
       return;
     }
-    onReview(report.id, action, feedback || undefined);
+    setSubmitting(true);
+    try {
+      await onReview(report.id, action, feedback || undefined);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Helper to refresh entries after save
@@ -409,8 +415,16 @@ function ReviewModal({
           {action && (
             <button
               onClick={handleSubmit}
-              className="btn-accent w-full rounded-xl px-4 py-3 font-medium"
+              disabled={submitting}
+              className="btn-accent inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium disabled:opacity-70"
             >
+              {submitting && (
+                <div className={`h-4 w-4 animate-spin rounded-full border-2 ${
+                  action === 'reject'
+                    ? 'border-destructive/30 border-t-destructive'
+                    : 'border-white/30 border-t-white'
+                }`} />
+              )}
               Bestätigen
             </button>
           )}

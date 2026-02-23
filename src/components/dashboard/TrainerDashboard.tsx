@@ -219,39 +219,56 @@ export default function TrainerDashboard() {
 
             {/* Trainee Overview Section */}
             <div className="glass-effect rounded-2xl p-6 shadow-lg">
-              <h3 className="text-foreground mb-6 flex items-center text-xl font-bold">
-                <Users className="text-accent mr-3 h-6 w-6" />
-                {t('dashboard.traineesOverview')}
-              </h3>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div
-                  role="button"
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="text-foreground flex items-center text-xl font-bold">
+                  <Users className="text-accent mr-3 h-6 w-6" />
+                  {t('dashboard.traineesOverview')}
+                  <span className="text-muted-foreground ml-2 text-base font-normal">
+                    ({trainees.length})
+                  </span>
+                </h3>
+                <button
                   onClick={() => router.push('/trainer/trainees')}
-                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
+                  className="text-accent hover:text-accent/80 text-sm font-medium transition-colors"
                 >
-                  <Users className="text-accent mx-auto mb-3 h-8 w-8" />
-                  <p className="text-muted-foreground text-sm">
-                    {t('dashboard.activeTrainees')}
-                  </p>
-                  <p className="text-foreground text-2xl font-bold">
-                    {trainees.length}
-                  </p>
-                </div>
-
-                <div
-                  role="button"
-                  onClick={() => router.push('/trainer/analytics')}
-                  className="bg-background/50 border-border/50 hover:bg-background/70 cursor-pointer rounded-xl border p-6 text-center transition-colors"
-                >
-                  <TrendingUp className="text-primary mx-auto mb-3 h-8 w-8" />
-                  <p className="text-muted-foreground text-sm">
-                    {t('dashboard.averageProgress')}
-                  </p>
-                  <p className="text-foreground text-2xl font-bold">
-                    {avgProgress}%
-                  </p>
-                </div>
+                  {t('common.viewAll')}
+                </button>
               </div>
+              {trainees.length === 0 ? (
+                <p className="text-muted-foreground text-sm">{t('trainee.management.noTrainees')}</p>
+              ) : (
+                <div className="space-y-3">
+                  {trainees.map((trainee) => (
+                    <div
+                      key={trainee.id}
+                      role="button"
+                      onClick={() => router.push(`/trainer/trainees/${trainee.id}`)}
+                      className="bg-background/50 border-border/50 hover:bg-accent/10 hover:ring-1 hover:ring-accent cursor-pointer rounded-xl border p-4 transition-all duration-200"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-foreground font-medium text-sm">
+                          {trainee.full_name}
+                        </span>
+                        <span className="text-foreground text-sm font-bold">
+                          {trainee.progress || 0}%
+                        </span>
+                      </div>
+                      <div className="bg-muted/30 h-2 w-full rounded-full">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-500 ${
+                            (trainee.progress || 0) >= 70
+                              ? 'bg-green-500'
+                              : (trainee.progress || 0) >= 30
+                                ? 'bg-amber-500'
+                                : 'bg-primary'
+                          }`}
+                          style={{ width: `${Math.max(0, Math.min(100, trainee.progress || 0))}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
           </div>
@@ -265,12 +282,6 @@ export default function TrainerDashboard() {
                   <TrendingUp className="text-accent mr-3 h-6 w-6" />
                   {t('dashboard.overallProgress')}
                 </h3>
-                <button
-                  onClick={() => router.push('/trainer/analytics')}
-                  className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
-                >
-                  {t('common.view')}
-                </button>
               </div>
               <ProgressTrendChart
                 data={progressTrendSafe}
@@ -285,12 +296,6 @@ export default function TrainerDashboard() {
                   <BarChart3 className="text-accent mr-3 h-6 w-6" />
                   {t('dashboard.individualProgress')}
                 </h3>
-                <button
-                  onClick={() => router.push('/trainer/analytics')}
-                  className="border-accent/30 text-foreground hover:bg-background/60 rounded-xl border px-3 py-1 text-xs"
-                >
-                  {t('common.view')}
-                </button>
               </div>
               <ModuleProgressChart
                 data={moduleProgressSafe}

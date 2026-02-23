@@ -28,6 +28,7 @@ export default function EditCoursePage() {
   const [title, setTitle] = useState('');
   const [year, setYear] = useState<'1' | '2' | '3' | ''>('');
   const [chapter, setChapter] = useState<string>('');
+  const [examPart, setExamPart] = useState<'1' | '2' | ''>('');
   const [skills, setSkills] = useState<string>('');
   const [enablers, setEnablers] = useState<
     Array<{ id: string; title: string; isActive: boolean }>
@@ -145,6 +146,7 @@ export default function EditCoursePage() {
         setTitle(data.course.title);
         setYear(String(data.course.year ?? '') as any);
         setChapter(String(data.course.chapter ?? ''));
+        setExamPart(String(data.course.examPart ?? '') as any);
         setSkills((data.skills || []).join(', '));
         setEnablers(
           (data.enablers || []).map((e: any) => ({
@@ -263,6 +265,7 @@ export default function EditCoursePage() {
         title: title.trim(),
         year: Number(year),
         chapter: chapter ? Number(chapter) : undefined,
+        examPart: examPart ? Number(examPart) : null,
         skills: skills
           .split(',')
           .map(s => s.trim())
@@ -369,6 +372,20 @@ export default function EditCoursePage() {
                     placeholder={t('trainer.content.chapterPlaceholder')}
                     inputMode="numeric"
                   />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    {t('trainer.content.examPart')}
+                  </label>
+                  <select
+                    value={examPart}
+                    onChange={e => setExamPart(e.target.value as any)}
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                  >
+                    <option value="">{t('trainer.content.examPartNone')}</option>
+                    <option value="1">{t('trainer.content.examPart1')}</option>
+                    <option value="2">{t('trainer.content.examPart2')}</option>
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">
