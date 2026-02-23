@@ -118,11 +118,12 @@ export async function PATCH(
     if (typeof body?.title === 'string') updates.title = body.title;
     if (typeof body?.description === 'string')
       updates.description = body.description;
-    if (typeof body?.year !== 'undefined') updates.year = Number(body.year);
+    if (typeof body?.year !== 'undefined') updates.year = body.year === null ? null : Number(body.year);
     if (typeof body?.chapter !== 'undefined')
       updates.chapter = Number(body.chapter);
     if (typeof body?.examPart !== 'undefined')
       updates.examPart = body.examPart === null ? null : Number(body.examPart);
+    if (Array.isArray(body?.lernfelder)) updates.lernfelder = body.lernfelder;
     const skillsArr: string[] | undefined = Array.isArray(body?.skills)
       ? body.skills
       : undefined;
