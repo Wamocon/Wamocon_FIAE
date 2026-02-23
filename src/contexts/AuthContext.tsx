@@ -276,8 +276,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Sync profile in background (non-blocking)
-  const syncProfileBackground = (token: string) => {
+  // Sync profile in background (non-blocking).
+  // Accepts optional expiresAt (unix seconds) to skip calls with stale tokens.
+  const syncProfileBackground = (token: string, expiresAt?: number) => {
+    // Skip if the token is already expired or expires within 30 seconds —
+    // the SDK will auto-refresh and onAuthStateChange will call us again.
+    if (expiresAt && expiresAt * 1000 < Date.now() + 30_000) return;
     fetch('/api/auth/sync-profile', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -369,7 +373,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Background refresh
             if (!isPublicPath) {
               if (session.access_token)
-                syncProfileBackground(session.access_token);
+                syncProfileBackground(session.access_token, session.expires_at);
               loadProfileFast(u.id, u.email).then(loaded => {
                 if (loaded) setCachedAuth(u, loaded);
               });
@@ -378,7 +382,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else if (!isPublicPath) {
             // No cache, need to load profile
             if (session.access_token)
-              syncProfileBackground(session.access_token);
+              syncProfileBackground(session.access_token, session.expires_at);
             const loaded = await loadProfileFast(u.id, u.email, 2000);
             if (!loaded) {
               // Retry once more
@@ -416,7 +420,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (!isPublicPath) {
             if (session.access_token)
-              syncProfileBackground(session.access_token);
+              syncProfileBackground(session.access_token, session.expires_at);
             loadProfileFast(u.id, u.email);
             setupRealtime(u.id);
           }
@@ -568,7 +572,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Sync profile in background
       const { data: sessionRes } = await supabase.auth.getSession();
       if (sessionRes.session?.access_token) {
-        syncProfileBackground(sessionRes.session.access_token);
+        syncProfileBackground(sessionRes.session.access_token, sessionRes.session.expires_at);
       }
 
       await waitForProfile(userId);

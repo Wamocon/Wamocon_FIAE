@@ -18,7 +18,7 @@ import {
   FlipbookViewer,
   useFlipbookViewer,
 } from '@/components/ui/FlipbookViewer';
-import { BookOpen, CheckCircle, Clock, AlertCircle, FileText, Plus, X, Trash2 } from 'lucide-react';
+import { BookOpen, CheckCircle, Clock, AlertCircle, FileText, Layers } from 'lucide-react';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -404,6 +404,39 @@ export default function TraineeEnablerPage() {
         ? t('enablerPage.difficultyMedium')
         : t('enablerPage.difficultyHigh');
 
+  // Split documents into theory and scenario
+  const theoryDocs = useMemo(
+    () => documents.filter(d => d.documentType !== 'EXERCISE'),
+    [documents]
+  );
+  const scenarioDocs = useMemo(
+    () => documents.filter(d => d.documentType === 'EXERCISE'),
+    [documents]
+  );
+
+  /** Clean up scenario document title for display */
+  const formatScenarioLabel = (title: string): { part: number | null; label: string } => {
+    let cleaned = title
+      .replace(/^Szenario:\s*/i, '')       // Remove "Szenario: " prefix
+      .replace(/_/g, ' ')                   // Replace underscores with spaces
+      .replace(/\s*KORRIGIERT\s*/gi, '')    // Remove "KORRIGIERT"
+      .replace(/\s*REVIEW\d*\s*/gi, '')     // Remove "REVIEW2" etc.
+      .replace(/\s*\(\d+\)\s*/g, '')        // Remove "(1)" duplicates
+      .replace(/\s{2,}/g, ' ')              // Collapse multiple spaces
+      .trim();
+
+    // Extract part number: "Part1 Name" or "Part 1 Name"
+    const partMatch = cleaned.match(/^Part\s*(\d+)\s*(.*)$/i);
+    if (partMatch) {
+      const partNum = parseInt(partMatch[1], 10);
+      let label = partMatch[2].replace(/^[\s\-_:]+/, '').trim();
+      // Clean up remaining rough edges
+      label = label.replace(/\s{2,}/g, ' ').trim();
+      return { part: partNum, label: label || `Teil ${partNum}` };
+    }
+    return { part: null, label: cleaned };
+  };
+
   if (!profile)
     return <div className="p-6">{t('enablerPage.pleaseLogin')}</div>;
   if (loading) return <div className="p-6">{t('common.loading')}</div>;
@@ -445,43 +478,41 @@ export default function TraineeEnablerPage() {
             />
           )}
         </div>
-        <div className="mt-3 flex flex-wrap gap-3">
-
-
-          {/* PDF Documents from content_documents table */}
-          {documents.map(doc => (
-            <button
-              key={doc.id}
-              onClick={() => flipbook.openPdf(doc.title, doc.storageUrl)}
-              className="max-w bg-primary text-primary-foreground hover:bg-primary/90 flex rounded-md px-3 py-2 shadow-sm transition-colors"
-            >
-              <div className="max-w flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
+        {/* Theory materials */}
+        {(theoryDocs.length > 0 || enabler.videoUrl || enabler.pptUrl) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {theoryDocs.map(doc => (
+              <button
+                key={doc.id}
+                onClick={() => flipbook.openPdf(doc.title, doc.storageUrl)}
+                className="border-accent/30 hover:bg-accent/15 hover:border-accent/60 flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]"
+              >
+                <BookOpen className="h-4 w-4 shrink-0" />
                 <span>{doc.title}</span>
-              </div>
-            </button>
-          ))}
-          {enabler.videoUrl && (
-            <a
-              className="border-accent/30 hover:bg-background/60 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
-              href={enabler.videoUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t('enablerPage.watchVideo')}
-            </a>
-          )}
-          {enabler.pptUrl && (
-            <a
-              className="border-accent/30 hover:bg-background/60 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
-              href={enabler.pptUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t('enablerPage.openPpt')}
-            </a>
-          )}
-        </div>
+              </button>
+            ))}
+            {enabler.videoUrl && (
+              <a
+                className="border-accent/30 hover:bg-accent/15 hover:border-accent/60 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
+                href={enabler.videoUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t('enablerPage.watchVideo')}
+              </a>
+            )}
+            {enabler.pptUrl && (
+              <a
+                className="border-accent/30 hover:bg-accent/15 hover:border-accent/60 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
+                href={enabler.pptUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t('enablerPage.openPpt')}
+              </a>
+            )}
+          </div>
+        )}
 
         {/* PDF Flipbook Viewer Modal */}
         <FlipbookViewer
@@ -493,21 +524,62 @@ export default function TraineeEnablerPage() {
 
       </div>
 
-      {/* Scenario Section (Dedicated) */}
-      {enabler.scenarioPdfUrl && (
+      {/* Scenario Section */}
+      {(scenarioDocs.length > 0 || enabler.scenarioPdfUrl) && (
         <div className="border-accent/30 bg-background rounded-3xl border p-5">
-          <div className="mb-4 text-lg font-semibold">
-            {t('enablerPage.scenarioSection')}
+          <div className="mb-4 flex items-center gap-2">
+            <Layers className="text-amber-500 h-5 w-5" />
+            <h2 className="text-lg font-semibold">{t('enablerPage.scenarioSection')}</h2>
+            {scenarioDocs.length > 0 && (
+              <span className="text-muted-foreground ml-1 text-sm">
+                ({scenarioDocs.length === 1
+                  ? t('enablerPage.scenarioPartSingular')
+                  : t('enablerPage.scenarioParts').replace('{count}', String(scenarioDocs.length))})
+              </span>
+            )}
           </div>
-          <button
-            onClick={() => flipbook.openPdf(t('trainer.content.scenarios'), enabler.scenarioPdfUrl)}
-            className="max-w bg-amber-600 text-white hover:bg-amber-700 flex w-full items-center justify-center rounded-xl px-4 py-4 shadow-sm transition-colors"
-          >
-            <div className="flex items-center gap-2">
+
+          {/* Legacy single scenario PDF */}
+          {enabler.scenarioPdfUrl && scenarioDocs.length === 0 && (
+            <button
+              onClick={() => flipbook.openPdf(t('trainer.content.scenarios'), enabler.scenarioPdfUrl)}
+              className="bg-amber-600 hover:bg-amber-700 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-white shadow-sm transition-colors"
+            >
               <FileText className="h-5 w-5" />
-              <span className="text-lg font-medium">{t('enablerPage.openScenario')}</span>
+              <span className="font-medium">{t('enablerPage.openScenario')}</span>
+            </button>
+          )}
+
+          {/* Scenario parts grid */}
+          {scenarioDocs.length > 0 && (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {scenarioDocs.map((doc) => {
+                const { part, label } = formatScenarioLabel(doc.title);
+                return (
+                  <button
+                    key={doc.id}
+                    onClick={() => flipbook.openPdf(label, doc.storageUrl)}
+                    className="border-accent/20 hover:border-amber-500/50 hover:bg-amber-500/10 group flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-amber-500/10 active:scale-[0.98]"
+                  >
+                    {part !== null && (
+                      <span className="bg-amber-500/15 text-amber-500 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold">
+                        {part}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-foreground truncate text-sm font-medium group-hover:text-amber-500 transition-colors">
+                        {label}
+                      </div>
+                      <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+                        <FileText className="h-3 w-3" />
+                        PDF
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-          </button>
+          )}
         </div>
       )}
 
@@ -641,6 +713,15 @@ export default function TraineeEnablerPage() {
         <div className="mb-4 text-lg font-semibold">
           {t('enablerPage.gatedQuiz')}
         </div>
+
+        {/* Show message when no quizzes are available */}
+        {gated.every(g => !g.quizId) ? (
+          <div className="border-accent/10 rounded-2xl border bg-black/10 p-6 text-center">
+            <div className="text-muted-foreground text-sm">
+              {t('enablerPage.noQuizzesYet')}
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {gated.map(g => {
             const disabled = !g.unlocked || !g.isActive || !g.quizId;
@@ -681,6 +762,7 @@ export default function TraineeEnablerPage() {
             );
           })}
         </div>
+        )}
 
         {/* Active quiz runner */}
         {quizContent && (
