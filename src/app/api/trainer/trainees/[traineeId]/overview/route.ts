@@ -149,6 +149,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tra
       if (!latestGlobalQuizById.has(key)) latestGlobalQuizById.set(key, s);
     }
 
+    // Lookup maps for titles
+    const enablerTitleMap = new Map(enablerRows.map((e) => [String(e.id), e.title]));
+    const courseRows = courseIds.length
+      ? await db
+        .select({ id: courses.id, title: courses.title })
+        .from(courses)
+        .where(inArray(courses.id, courseIds as any))
+      : [];
+    const courseTitleMap = new Map(courseRows.map((c) => [String(c.id), c.title]));
+
     // Pending counts
     const pendingUseCases = Array.from(latestUseCaseById.values()).filter((s) => s.status === 'PENDING').length;
     const pendingQuizReviews = Array.from(latestQuizSubByQuizId.values()).concat(Array.from(latestGlobalQuizById.values())).filter((s) => s && !s.isReviewed).length;
@@ -186,6 +196,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tra
             id: e.id,
             title: e.title,
             courseId: e.courseId,
+            courseTitle: courseTitleMap.get(String(e.courseId)) || '',
             isActive: effectiveActive,
             orderIndex: e.orderIndex,
             completed: completedSet.has(String(e.id)),
@@ -221,6 +232,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tra
         const latest = latestQuizSubByQuizId.get(String(r.quizId));
         return {
           enablerId: r.enablerId,
+          enablerTitle: enablerTitleMap.get(String(r.enablerId)) || '',
           quizId: r.quizId,
           difficulty: r.difficulty,
           lastScore: latest?.score ?? null,

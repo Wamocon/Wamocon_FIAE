@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,15 +9,12 @@ import toast from 'react-hot-toast';
 import {
   FileCheck2,
   TrendingUp,
-  Calendar,
   Award,
   BookOpen,
-  Eye,
-  MessageSquare,
   Download,
   Share2,
-  MoreVertical,
   ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 
 interface TraineeDetailProps {
@@ -59,6 +56,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     enablers: Array<{
       id: string;
       title: string;
+      courseId: string;
+      courseTitle: string;
       completed: boolean;
       isActive: boolean;
       link: string;
@@ -73,6 +72,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     }>;
     enablerQuizzes: Array<{
       enablerId: string;
+      enablerTitle: string;
       quizId: string;
       difficulty: string;
       lastScore: number | null;
@@ -287,6 +287,42 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
+  const [enablerFilter, setEnablerFilter] = useState<'all' | 'completed' | 'active' | 'inactive'>('all');
+  const [openCourses, setOpenCourses] = useState<Set<string> | null>(null);
+
+  const toggleCourse = (courseTitle: string) => {
+    setOpenCourses(prev => {
+      const base = prev ?? new Set<string>();
+      const next = new Set(base);
+      if (next.has(courseTitle)) next.delete(courseTitle);
+      else next.add(courseTitle);
+      return next;
+    });
+  };
+
+  const groupedEnablers = useMemo(() => {
+    if (!overview?.enablers) return {};
+    const filtered = overview.enablers.filter(e => {
+      if (enablerFilter === 'completed') return e.completed;
+      if (enablerFilter === 'active') return e.isActive && !e.completed;
+      if (enablerFilter === 'inactive') return !e.isActive;
+      return true;
+    });
+    return filtered.reduce<Record<string, typeof filtered>>((acc, e) => {
+      const key = e.courseTitle || t('trainee.detail.unknownCourse');
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(e);
+      return acc;
+    }, {});
+  }, [overview?.enablers, enablerFilter, t]);
+
+  // Default: all courses expanded on first load
+  useEffect(() => {
+    if (openCourses === null && Object.keys(groupedEnablers).length > 0) {
+      setOpenCourses(new Set(Object.keys(groupedEnablers)));
+    }
+  }, [groupedEnablers, openCourses]);
+
   // Helpers
   const toggleItem = async (
     itemType: 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ',
@@ -311,6 +347,33 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       setOverview(oData);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-8 p-6">
+        {/* Skeleton header */}
+        <div className="glass-effect border-accent/30 animate-pulse rounded-3xl border p-8 shadow-lg">
+          <div className="flex items-center gap-6">
+            <div className="bg-muted h-24 w-24 rounded-3xl" />
+            <div className="space-y-3">
+              <div className="bg-muted h-8 w-48 rounded-lg" />
+              <div className="bg-muted h-4 w-32 rounded-lg" />
+            </div>
+          </div>
+        </div>
+        {/* Skeleton sections */}
+        <div className="glass-effect border-accent/30 animate-pulse rounded-3xl border p-6 shadow-lg">
+          <div className="space-y-4 p-8">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="border-accent/20 rounded-2xl border p-4">
+                <div className="bg-muted h-6 w-40 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -450,21 +513,30 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
 
           {/* Redesigned third row content */}
           <div className="space-y-4">
-            {/* Enablers (Modules) */}
+            {/* Enablers (Modules) — grouped by course */}
             <section className="border-accent/20 rounded-2xl border p-4">
               <button
                 type="button"
                 onClick={() => toggleSection('modules')}
-                className="flex w-full items-center justify-between gap-4"
+                className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors hover:bg-accent/5"
               >
                 <div className="bg-background text-foreground flex flex-1 items-center justify-between">
                   <h3 className="text-foreground text-xl font-bold">
                     {t('trainee.detail.modules')}
                   </h3>
-                  <div className="text-foreground text-sm">
-                    {t('trainee.detail.completed')}{' '}
-                    {overview?.stats.completedEnablers ?? 0} /{' '}
-                    {overview?.stats.totalEnablers ?? 0}
+                  <div className="flex items-center gap-3">
+                    {/* Overall progress bar */}
+                    <div className="flex items-center gap-2">
+                      <div className="bg-muted h-2 w-24 overflow-hidden rounded-full">
+                        <div
+                          className="h-full rounded-full bg-green-500 transition-all"
+                          style={{ width: `${overview?.stats.progressPct ?? 0}%` }}
+                        />
+                      </div>
+                      <span className="text-foreground text-sm font-medium">
+                        {overview?.stats.completedEnablers ?? 0}/{overview?.stats.totalEnablers ?? 0}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <ChevronDown
@@ -475,54 +547,112 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               </button>
               {openSections.modules && (
                 <div className="mt-4">
-                  {overview?.enablers?.length ? (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {overview.enablers.map(e => (
-                        <div
-                          key={e.id}
-                          className="border-accent/30 rounded-2xl border p-4"
-                        >
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <div className="text-foreground min-w-0 truncate font-semibold">
-                              {e.title}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-xs ${e.completed ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
-                              >
-                                {e.completed
-                                  ? t('trainee.detail.participated')
-                                  : t('trainee.detail.notParticipated')}
-                              </span>
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-xs ${e.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
-                              >
-                                {e.isActive
-                                  ? t('trainee.detail.active')
-                                  : t('trainee.detail.inactive')}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {profile?.role === 'trainer' && (
-                              <button
-                                onClick={() =>
-                                  toggleItem('ENABLER', e.id, !e.isActive)
-                                }
-                                className={`rounded-md border px-2 py-1 text-sm ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
-                              >
-                                {e.isActive
-                                  ? t('trainee.detail.deactivate')
-                                  : t('trainee.detail.activate')}
-                              </button>
+                  {/* Filter controls */}
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {(['all', 'completed', 'active', 'inactive'] as const).map(f => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setEnablerFilter(f)}
+                        className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                          enablerFilter === f
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {f === 'all' ? t('trainee.detail.filterAll')
+                          : f === 'completed' ? t('trainee.detail.filterCompleted')
+                          : f === 'active' ? t('trainee.detail.filterActive')
+                          : t('trainee.detail.filterInactive')}
+                      </button>
+                    ))}
+                  </div>
+
+                  {Object.keys(groupedEnablers).length ? (
+                    <div className="space-y-3">
+                      {Object.entries(groupedEnablers).map(([courseTitle, courseEnablers]) => {
+                        const completedInCourse = courseEnablers.filter(e => e.completed).length;
+                        const totalInCourse = courseEnablers.length;
+                        const coursePct = totalInCourse > 0 ? Math.round((completedInCourse / totalInCourse) * 100) : 0;
+                        const isOpen = openCourses === null || openCourses.has(courseTitle);
+                        return (
+                          <div key={courseTitle} className="border-accent/20 rounded-xl border">
+                            <button
+                              type="button"
+                              onClick={() => toggleCourse(courseTitle)}
+                              className="flex w-full cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-accent/5"
+                            >
+                              <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                              <div className="flex flex-1 items-center justify-between gap-2">
+                                <span className="text-foreground text-sm font-semibold">{courseTitle}</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="bg-muted h-1.5 w-16 overflow-hidden rounded-full">
+                                    <div
+                                      className="h-full rounded-full bg-green-500 transition-all"
+                                      style={{ width: `${coursePct}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-muted-foreground text-xs">
+                                    {completedInCourse}/{totalInCourse}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                            {isOpen && (
+                              <div className="grid grid-cols-1 gap-3 px-3 pb-3 md:grid-cols-2">
+                                {courseEnablers.map(e => (
+                                  <div
+                                    key={e.id}
+                                    className="border-accent/30 rounded-2xl border p-4 transition-all hover:border-accent/50 hover:shadow-md"
+                                  >
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+                                      <div className="text-foreground min-w-0 truncate font-semibold">
+                                        {e.title}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span
+                                          className={`rounded-full border px-2 py-0.5 text-xs ${e.completed ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
+                                        >
+                                          {e.completed
+                                            ? t('trainee.detail.participated')
+                                            : t('trainee.detail.notParticipated')}
+                                        </span>
+                                        <span
+                                          className={`rounded-full border px-2 py-0.5 text-xs ${e.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
+                                        >
+                                          {e.isActive
+                                            ? t('trainee.detail.active')
+                                            : t('trainee.detail.inactive')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {profile?.role === 'trainer' && (
+                                        <button
+                                          onClick={() =>
+                                            toggleItem('ENABLER', e.id, !e.isActive)
+                                          }
+                                          className={`cursor-pointer rounded-md border px-2 py-1 text-sm transition-opacity hover:opacity-80 ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
+                                        >
+                                          {e.isActive
+                                            ? t('trainee.detail.deactivate')
+                                            : t('trainee.detail.activate')}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
-                    <div className="text-foreground text-sm">
-                      {t('trainee.detail.noEnablers')}
+                    <div className="text-muted-foreground py-4 text-center text-sm">
+                      {enablerFilter !== 'all'
+                        ? t('trainee.detail.noFilterResults')
+                        : t('trainee.detail.noEnablers')}
                     </div>
                   )}
                 </div>
@@ -534,7 +664,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <button
                 type="button"
                 onClick={() => toggleSection('lessonQuizzes')}
-                className="flex w-full items-center justify-between gap-4"
+                className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors hover:bg-accent/5"
               >
                 <h3 className="text-foreground text-xl font-bold">
                   {t('trainee.detail.lessonQuizzes')}
@@ -552,11 +682,11 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       {overview.enablerQuizzes.map(q => (
                         <div
                           key={`${q.enablerId}-${q.quizId}`}
-                          className="border-accent/30 flex items-center justify-between rounded-2xl border p-4"
+                          className="border-accent/30 flex items-center justify-between rounded-2xl border p-4 transition-all hover:border-accent/50 hover:shadow-md"
                         >
                           <div>
                             <div className="text-foreground font-medium">
-                              {t('trainee.detail.difficulty')} {q.difficulty}
+                              {q.enablerTitle} — {q.difficulty}
                             </div>
                             <div className="text-foreground text-sm">
                               {t('trainee.detail.attempts')}{' '}
@@ -574,7 +704,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-foreground text-sm">
+                    <div className="text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm">
+                      <BookOpen className="h-8 w-8 opacity-30" />
                       {t('trainee.detail.noEnablerQuizzes')}
                     </div>
                   )}
@@ -587,7 +718,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <button
                 type="button"
                 onClick={() => toggleSection('useCases')}
-                className="flex w-full items-center justify-between gap-4"
+                className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors hover:bg-accent/5"
               >
                 <h3 className="text-foreground text-xl font-bold">
                   {t('trainee.detail.useCases')}
@@ -605,7 +736,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       {overview.useCases.map(u => (
                         <div
                           key={u.id}
-                          className="border-accent/30 rounded-2xl border p-4"
+                          className="border-accent/30 rounded-2xl border p-4 transition-all hover:border-accent/50 hover:shadow-md"
                         >
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="text-foreground min-w-0 truncate font-semibold">
@@ -633,7 +764,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                 onClick={() =>
                                   toggleItem('USE_CASE', u.id, !u.isActive)
                                 }
-                                className={`rounded-md border px-2 py-1 text-sm ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
+                                className={`cursor-pointer rounded-md border px-2 py-1 text-sm transition-opacity hover:opacity-80 ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
                               >
                                 {u.isActive
                                   ? t('trainee.detail.deactivate')
@@ -645,7 +776,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-foreground text-sm">
+                    <div className="text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm">
+                      <FileCheck2 className="h-8 w-8 opacity-30" />
                       {t('trainee.detail.noUseCases')}
                     </div>
                   )}
@@ -658,7 +790,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <button
                 type="button"
                 onClick={() => toggleSection('globalQuizzes')}
-                className="flex w-full items-center justify-between gap-4"
+                className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors hover:bg-accent/5"
               >
                 <h3 className="text-foreground text-xl font-bold">
                   {t('trainee.detail.globalQuizzes')}
@@ -676,7 +808,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       {overview.globalQuizzes.map(q => (
                         <div
                           key={q.quizId}
-                          className="border-accent/30 flex items-center justify-between rounded-2xl border p-4"
+                          className="border-accent/30 flex items-center justify-between rounded-2xl border p-4 transition-all hover:border-accent/50 hover:shadow-md"
                         >
                           <div>
                             <div className="text-foreground font-medium">
@@ -700,7 +832,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                 onClick={() =>
                                   toggleItem('GLOBAL_QUIZ', q.quizId, false)
                                 }
-                                className="rounded-md border border-yellow-500 px-2 py-1 text-sm text-yellow-500"
+                                className="cursor-pointer rounded-md border border-yellow-500 px-2 py-1 text-sm text-yellow-500 transition-opacity hover:opacity-80"
                               >
                                 {t('trainee.detail.remove')}
                               </button>
@@ -710,7 +842,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-foreground text-sm">
+                    <div className="text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm">
+                      <Award className="h-8 w-8 opacity-30" />
                       {t('trainee.detail.noGlobalQuizzes')}
                     </div>
                   )}
