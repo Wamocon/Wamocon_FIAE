@@ -3,7 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import toast from 'react-hot-toast';
-import { Users, Eye, MessageSquare, TrendingUp } from 'lucide-react';
+import { Users, Eye } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -13,6 +13,7 @@ type TraineeItem = {
   full_name: string;
   avatar_url?: string | null;
   progress: number;
+  coursesCount?: number;
   isActive?: boolean;
 };
 
@@ -175,7 +176,7 @@ export default function TrainerTraineesPage() {
                 <div className="text-muted">{t('modules.progress')}</div>
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
-                <div className="text-primary text-2xl font-bold">12</div>
+                <div className="text-primary text-2xl font-bold">{trainee.coursesCount ?? 0}</div>
                 <div className="text-muted">
                   {t('trainee.management.modules')}
                 </div>
@@ -212,16 +213,8 @@ export default function TrainerTraineesPage() {
                       }),
                     });
                     if (!res.ok) throw new Error(await res.text());
-                    // Refresh list (cache was invalidated server-side)
-                    const params = new URLSearchParams();
-                    if (user?.id) params.set('trainerAuthId', user.id);
-                    if (profile?.id) params.set('trainerProfileId', profile.id);
-                    const listRes = await fetch(
-                      `/api/trainer/trainees?${params.toString()}`,
-                      { cache: 'no-store' }
-                    );
-                    const data = await listRes.json();
-                    setTrainees(data.trainees || []);
+                    // Optimistic update already applied — don't re-fetch
+                    // (server cache may still be stale for a moment)
                     toast.success(
                       !previousState
                         ? t('trainee.management.activated')

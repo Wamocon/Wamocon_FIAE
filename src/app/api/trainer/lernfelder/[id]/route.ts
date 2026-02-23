@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lernfelderSchema, useCases } from '@/db/migrations/schemas/schema';
 import { eq, arrayContains } from 'drizzle-orm';
+import { verifyTrainer } from '@/lib/auth-helpers';
 
 /**
  * GET /api/trainer/lernfelder/[id]
@@ -61,6 +62,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const trainerId = req.nextUrl.searchParams.get('trainerId');
+    if (!trainerId || !(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
     const body = await req.json();
     const { title, description, label } = body; // All optional
 
@@ -90,11 +95,15 @@ export async function PATCH(
  * Delete a Lernfeld.
  */
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const trainerId = req.nextUrl.searchParams.get('trainerId');
+    if (!trainerId || !(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
     await db.delete(lernfelderSchema).where(eq(lernfelderSchema.id, id));
     return NextResponse.json({ success: true });
   } catch (e) {
