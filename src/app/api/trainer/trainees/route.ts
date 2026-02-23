@@ -120,6 +120,7 @@ export async function GET(req: NextRequest) {
               full_name: t.fullName,
               avatar_url: t.avatarUrl,
               progress: pct,
+              coursesCount: courseIdsForTrainee.length,
               isActive: Boolean(t.isActive),
             };
           }),

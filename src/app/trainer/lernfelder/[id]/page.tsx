@@ -3,15 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { 
-  ArrowLeft, 
-  Layers, 
-  BookOpen, 
-  Clock, 
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  ArrowLeft,
+  Layers,
+  BookOpen,
+  Clock,
   ChevronRight,
   Edit2,
   Trash2,
-  Plus
 } from 'lucide-react';
 import { use } from 'react';
 
@@ -46,6 +46,7 @@ export default function LernfeldDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { t } = useLanguage();
+  const { profile } = useAuth();
   const [lernfeld, setLernfeld] = useState<Lernfeld | null>(null);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,7 +82,7 @@ export default function LernfeldDetailPage({
     if (!editTitle || !lernfeld) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/trainer/lernfelder/${id}`, {
+      const res = await fetch(`/api/trainer/lernfelder/${id}?trainerId=${profile?.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: editTitle, description: editDescription })
@@ -101,7 +102,7 @@ export default function LernfeldDetailPage({
   const handleDelete = async () => {
     if (!confirm(t('lernfelder.deleteConfirm'))) return;
     try {
-      const res = await fetch(`/api/trainer/lernfelder/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/trainer/lernfelder/${id}?trainerId=${profile?.id}`, { method: 'DELETE' });
       if (res.ok) {
         router.push('/trainer/school');
       }
