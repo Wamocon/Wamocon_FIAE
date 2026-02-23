@@ -67,29 +67,39 @@ export class ApiCache {
 export const apiCache = new ApiCache();
 
 /**
- * Cache control headers for API responses
+ * Cache control headers for API responses.
+ *
+ * IMPORTANT: `unstable_cache` (server-side Data Cache) is the primary caching
+ * layer – it supports on-demand invalidation via `revalidateTag`. The HTTP
+ * `Cache-Control` header controls CDN / edge caching, which is a **separate**
+ * layer that `revalidateTag` cannot purge. For endpoints whose data can change
+ * via mutations, use `short` or `medium` (private, no CDN) so the CDN always
+ * forwards to the origin and gets the up-to-date Data Cache result.
  */
 export const cacheHeaders = {
   /**
-   * Cache for 2 minutes, allow stale for 5 minutes while revalidating
+   * No CDN caching – every request reaches the server (which may still serve
+   * from its own Data Cache). Use for frequently-mutated resources.
    */
   short: {
-    'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
+    'Cache-Control': 'private, no-cache',
   },
   /**
-   * Cache for 5 minutes, allow stale for 10 minutes while revalidating
+   * No CDN caching – same as short at the HTTP level. The difference between
+   * short and medium lives in the `unstable_cache` TTL, not the HTTP header.
    */
   medium: {
-    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+    'Cache-Control': 'private, no-cache',
   },
   /**
-   * Cache for 15 minutes, allow stale for 30 minutes while revalidating
+   * CDN may cache for 1 minute, stale-while-revalidate for 2 minutes.
+   * Use only for rarely-mutated / static-ish data (e.g. Lernfelder definitions).
    */
   long: {
-    'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
+    'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
   },
   /**
-   * No caching (for mutations or sensitive data)
+   * No caching at all (for mutations or sensitive data)
    */
   none: {
     'Cache-Control': 'no-store, no-cache, must-revalidate',

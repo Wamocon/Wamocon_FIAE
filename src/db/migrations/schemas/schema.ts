@@ -107,6 +107,7 @@ export const courses = pgTable('courses', {
   description: text('description'),
   year: integer('year'), // 1, 2, or 3
   chapter: integer('chapter'), // For "capital 1 to n"
+  examPart: integer('exam_part'), // 1 = Abschlussprüfung Teil 1, 2 = Abschlussprüfung Teil 2
 
   // The main trainer who created the course
   createdById: uuid('created_by_id')
