@@ -338,7 +338,7 @@ export default function TrainerReviewsPage() {
                             type="button"
                             disabled={(solutionIndexMap[it.id] || 0) === 0}
                             onClick={() => setSolutionIndexMap(prev => ({ ...prev, [it.id]: Math.max(0, (prev[it.id] || 0) - 1) }))}
-                            className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="cursor-pointer rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {t('trainer.reviews.back')}
                           </button>
@@ -349,7 +349,7 @@ export default function TrainerReviewsPage() {
                                 key={idx}
                                 type="button"
                                 onClick={() => setSolutionIndexMap(prev => ({ ...prev, [it.id]: idx }))}
-                                className={`h-2 rounded-full transition-all ${idx === (solutionIndexMap[it.id] || 0)
+                                className={`h-2 cursor-pointer rounded-full transition-all ${idx === (solutionIndexMap[it.id] || 0)
                                   ? 'w-6 bg-primary'
                                   : 'w-2 bg-accent/30 hover:bg-accent/50'
                                   }`}
@@ -362,7 +362,7 @@ export default function TrainerReviewsPage() {
                             type="button"
                             disabled={(solutionIndexMap[it.id] || 0) === it.solutions.length - 1}
                             onClick={() => setSolutionIndexMap(prev => ({ ...prev, [it.id]: Math.min(it.solutions!.length - 1, (prev[it.id] || 0) + 1) }))}
-                            className="rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="cursor-pointer rounded-md border border-accent/30 px-3 py-1 text-xs hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {t('trainer.reviews.next')}
                           </button>
