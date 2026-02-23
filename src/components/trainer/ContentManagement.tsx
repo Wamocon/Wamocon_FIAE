@@ -212,7 +212,7 @@ export function ContentManagement() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowAssign(true)}
-              className="border-accent/30 text-foreground hover:bg-accent/10 inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5"
+              className="border-accent/30 text-foreground hover:bg-accent/10 cursor-pointer inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5"
             >
               <UserPlus className="h-5 w-5" />
               {t('content.assignCourses')}
@@ -222,7 +222,7 @@ export function ContentManagement() {
                 // Navigate to new module page with form
                 router.push('/trainer/content-management/new');
               }}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground cursor-pointer flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
             >
               <Plus className="h-5 w-5" />
               {t('content.newCourse')}
@@ -279,7 +279,7 @@ export function ContentManagement() {
           <div className="bg-muted/30 flex rounded-2xl p-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 viewMode === 'grid'
                   ? 'bg-accent text-foreground shadow-sm'
                   : 'text-muted hover:text-foreground'
@@ -289,7 +289,7 @@ export function ContentManagement() {
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 viewMode === 'list'
                   ? 'bg-accent text-foreground shadow-sm'
                   : 'text-muted hover:text-foreground'
@@ -341,7 +341,7 @@ export function ContentManagement() {
                 {course.title}
               </h3>
 
-              <div className="text-muted mb-3 flex items-center gap-2 text-sm">
+              <div className="text-muted mb-3 flex flex-wrap items-center gap-2 text-sm">
                 <span className="bg-accent text-foreground rounded-full px-3 py-1 font-medium">
                   {t('content.yearNumber').replace(
                     '{number}',
@@ -354,6 +354,14 @@ export function ContentManagement() {
                     String(course.chapter ?? '-')
                   )}
                 </span>
+                {course.examPart && (
+                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
+                    {t('content.examPartNumber').replace(
+                      '{number}',
+                      String(course.examPart)
+                    )}
+                  </span>
+                )}
               </div>
 
               <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
@@ -436,7 +444,7 @@ export function ContentManagement() {
                       `/trainer/content-management/${course.id}/edit`
                     );
                   }}
-                  className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold"
+                  className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 cursor-pointer inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
                 >
                   <Edit className="h-4 w-4" />
                   {t('content.edit')}
@@ -457,7 +465,7 @@ export function ContentManagement() {
                       toast.error(e?.message || t('content.unknownError'));
                     }
                   }}
-                  className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/20"
+                  className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/20 transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
                   {t('content.deleteCourse')}
@@ -509,6 +517,14 @@ export function ContentManagement() {
                           String(course.chapter ?? '-')
                         )}
                       </span>
+                      {course.examPart && (
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
+                          {t('content.examPartNumber').replace(
+                            '{number}',
+                            String(course.examPart)
+                          )}
+                        </span>
+                      )}
                       <span className="bg-muted/30 text-muted rounded-full px-3 py-1 text-xs">
                         ID {course.id.slice(0, 8)}…
                       </span>
@@ -539,7 +555,7 @@ export function ContentManagement() {
                         `/trainer/content-management/${course.id}/edit`
                       );
                     }}
-                    className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold"
+                    className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 cursor-pointer inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors"
                   >
                     {t('content.edit')}
                   </button>
@@ -561,7 +577,7 @@ export function ContentManagement() {
                         toast.error(e?.message || t('content.unknownError'));
                       }
                     }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/20"
+                    className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/20 transition-colors"
                     aria-label={t('content.deleteCourse')}
                   >
                     <Trash2 className="h-4 w-4" />

@@ -237,7 +237,7 @@ export default function TrainerTraineesPage() {
                     });
                   }
                 }}
-                className={`ml-2 rounded-xl px-3 py-2 text-sm font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${trainee.isActive ? 'border border-yellow-400 text-yellow-500' : 'text-foreground bg-green-600 hover:bg-green-700'}`}
+                className={`ml-2 cursor-pointer rounded-xl px-3 py-2 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${trainee.isActive ? 'border border-yellow-400 text-yellow-500 hover:bg-yellow-500/10' : 'text-foreground bg-green-600 hover:bg-green-700'}`}
               >
                 {togglingIds.has(trainee.id) ? (
                   <span className="flex items-center gap-1">
