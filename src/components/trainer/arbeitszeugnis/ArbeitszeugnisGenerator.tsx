@@ -24,7 +24,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import { generateArbeitszeugnisPDF } from '@/lib/arbeitszeugnis/pdfGenerator';
+
 import { SkillRadarChart, renderRadarChartForPDF } from './SkillRadarChart';
 import { EvidenceSection } from './EvidenceSection';
 
@@ -370,6 +370,7 @@ export function ArbeitszeugnisGenerator() {
         console.error('Error loading logo:', e);
       }
 
+      const { generateArbeitszeugnisPDF } = await import('@/lib/arbeitszeugnis/pdfGenerator');
       const pdfBlob = await generateArbeitszeugnisPDF({
         traineeName: aggregatedData.traineeName,
         traineeBirthDate: selectedTraineeData?.birth_date,

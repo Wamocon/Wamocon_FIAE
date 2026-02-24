@@ -1570,5 +1570,60 @@
   "trainer.enablerQuiz.addText": "+ Text Question",
   "trainer.enablerQuiz.multipleChoice": "Multiple Choice",
   "trainer.enablerQuiz.saveFailed": "Save failed",
-  "trainer.enablerQuiz.noTrainerProfile": "No trainer profile"
+  "trainer.enablerQuiz.noTrainerProfile": "No trainer profile",
+
+  "onboarding.skip": "Skip",
+  "onboarding.back": "Back",
+  "onboarding.next": "Next",
+  "onboarding.finish": "Finish",
+
+  "onboarding.welcome.title": "Welcome to the FIAE Platform!",
+  "onboarding.welcome.desc": "Let's take a quick tour so you can discover all the key features.",
+
+  "onboarding.dashboard.title": "Dashboard",
+  "onboarding.trainee.dashboard.desc": "Your central overview — see your progress, upcoming tasks, and recent notifications at a glance.",
+  "onboarding.trainer.dashboard.desc": "Your central overview — see pending reviews, trainee progress, and key statistics at a glance.",
+
+  "onboarding.courses.title": "Courses",
+  "onboarding.courses.desc": "Browse your assigned courses, open modules, and work through lessons and use cases.",
+
+  "onboarding.quizzes.title": "Quizzes",
+  "onboarding.trainee.quizzes.desc": "Test your knowledge with quizzes for your lessons. Find your results and feedback here.",
+
+  "onboarding.activityReports.title": "Activity Reports",
+  "onboarding.trainee.activityReports.desc": "Create and manage your weekly training reports. Submit them for approval.",
+  "onboarding.trainer.activityReports.desc": "Review and approve your trainees' weekly activity reports.",
+
+  "onboarding.trainerFeedback.title": "Trainer Feedback",
+  "onboarding.trainerFeedback.desc": "View feedback from your trainer on your submissions and track your learning progress.",
+
+  "onboarding.contentManagement.title": "Content Management",
+  "onboarding.contentManagement.desc": "Create and manage courses, modules, enablers, and use cases for your trainees.",
+
+  "onboarding.quizManagement.title": "Quiz Management",
+  "onboarding.quizManagement.desc": "Create global quizzes, assign them to trainees, and manage question pools.",
+
+  "onboarding.trainees.title": "Trainees",
+  "onboarding.trainees.desc": "Manage your trainees, view their progress, and review their performance.",
+
+  "onboarding.bulkImport.title": "Bulk Import",
+  "onboarding.bulkImport.desc": "Import course content, use cases, and documents via bulk upload.",
+
+  "onboarding.notifications.title": "Notifications",
+  "onboarding.notifications.desc": "All important notifications appear here — new reviews, feedback, and status changes.",
+
+  "onboarding.settings.title": "Settings",
+  "onboarding.settings.desc": "Switch between languages (German/English) and customize the theme (Light/Dark).",
+
+  "onboarding.hai.intro.title": "Meet HAI — Your AI Assistant",
+  "onboarding.trainee.hai.intro.desc": "HAI is your personal learning assistant. Click here to open the chat and ask questions.",
+  "onboarding.trainer.hai.intro.desc": "HAI is your intelligent assistant. Click here to open the chat and get support with management tasks.",
+
+  "onboarding.hai.features.title": "What can HAI do for you?",
+  "onboarding.trainee.hai.features.desc": "Ask HAI about your learning progress, exam dates, course details, or get help with tasks — all in natural language.",
+  "onboarding.trainer.hai.features.desc": "Ask HAI about trainee overviews, pending reviews, course statistics, or get help creating content.",
+
+  "onboarding.restartTour.title": "Platform Tour",
+  "onboarding.restartTour.desc": "Want to see the introductory tour again? Click here to restart it.",
+  "onboarding.restartTour.button": "Restart Tour"
 }

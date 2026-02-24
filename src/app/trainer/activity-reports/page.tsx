@@ -709,7 +709,7 @@ export default function TrainerActivityReportsPage() {
                 <button
                   key={report.id}
                   onClick={() => handleSelectReport(report)}
-                  className="hover:bg-muted/50 w-full p-4 text-left transition-colors"
+                  className="hover:bg-muted/50 w-full rounded-xl p-4 text-left transition-all duration-200 hover:shadow-md hover:scale-[1.005]"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">

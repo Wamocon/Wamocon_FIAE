@@ -65,10 +65,12 @@ export function Header({
         </h2>
       </div>
       {/* Right side - Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" data-tour="header-settings">
         <LanguageToggle variant="icon" />
         <ThemeToggle variant="icon" />
-        <NotificationsBell />
+        <div data-tour="header-notifications">
+          <NotificationsBell />
+        </div>
       </div>
     </header>
   );

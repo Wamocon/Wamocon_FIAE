@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import LinkifyText from '@/components/ui/LinkifyText';
 import dynamic from 'next/dynamic';
 const MarkdownText = dynamic(
@@ -58,14 +60,35 @@ export default function TraineeEnablerPage() {
   const params = useParams();
   const enablerId = params?.enablerId as string | undefined;
 
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [enabler, setEnabler] = useState<any | null>(null);
-  const [solutionText, setSolutionText] = useState('');
+
+  // API URLs
+  const enablerUrl = profile?.id && enablerId ? `/api/trainee/enablers/${enablerId}?traineeId=${profile.id}` : null;
+  const quizzesUrl = profile?.id && enablerId ? `/api/trainee/enablers/${enablerId}/quizzes?traineeId=${profile.id}` : null;
+  const docsUrl = enablerId ? `/api/trainer/enablers/${enablerId}/documents` : null;
+
+  // Data fetching via React Query
+  type EnablerResponse = { enabler: any | null; submission: any | null };
+  type QuizzesResponse = { quizzes: GatedQuizInfo[] };
+  type DocsResponse = { documents: Array<{ id: string; title: string; storageUrl: string; documentType: string }> };
+
+  const { data: enablerData, isLoading: loading, error: enablerError } = useApiQuery<EnablerResponse>(enablerUrl);
+  const { data: quizzesData } = useApiQuery<QuizzesResponse>(quizzesUrl);
+  const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
+
+  const enabler = enablerData?.enabler || null;
+  const documents = docsData?.documents || [];
+  const gated = useMemo(() => {
+    const list = quizzesData?.quizzes || [];
+    const order: Difficulty[] = ['LOW', 'MEDIUM', 'HIGH'];
+    return order.map(d => list.find(x => x.difficulty === d) || { difficulty: d, unlocked: false });
+  }, [quizzesData]);
+
+  // Form state
   const [solutions, setSolutions] = useState<
     Array<{ scenarioIndex: number; text: string }>
   >([]);
-  const [currentScenarioIndex, setCurrentScenarioIndex] = useState(0);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
   // Submission state for edit/status tracking
@@ -82,17 +105,6 @@ export default function TraineeEnablerPage() {
   // PDF flipbook viewer
   const flipbook = useFlipbookViewer();
 
-  // Content documents (PDFs)
-  const [documents, setDocuments] = useState<
-    Array<{
-      id: string;
-      title: string;
-      storageUrl: string;
-      documentType: string;
-    }>
-  >([]);
-
-  const [gated, setGated] = useState<GatedQuizInfo[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] =
     useState<Difficulty | null>(null);
   const [quizContent, setQuizContent] = useState<QuizContent | null>(null);
@@ -109,89 +121,25 @@ export default function TraineeEnablerPage() {
     [quizContent, currentIndex]
   );
 
-  // Initial load: enabler details + gated quizzes list + submission status
+  // Sync form state (submission + solutions) from server data
   useEffect(() => {
-    if (!profile?.id || !enablerId) return;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Enabler details + submission status (single fetch)
-        const er = await fetch(
-          `/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`,
-          { cache: 'no-store' }
-        );
-        if (er.ok) {
-          const ej = await er.json();
-          setEnabler(ej.enabler || null);
-
-          if (ej.submission) {
-            setSubmission({
-              id: ej.submission.id,
-              status: ej.submission.status,
-              trainerFeedback: ej.submission.trainerFeedback,
-              feedbacks: ej.submission.feedbacks,
-            });
-            // Pre-fill solutions from existing submission
-            if (
-              ej.submission.solutions &&
-              Array.isArray(ej.submission.solutions)
-            ) {
-              setSolutions(ej.submission.solutions);
-            } else if (ej.submission.solutionText) {
-              setSolutions([
-                { scenarioIndex: 0, text: ej.submission.solutionText },
-              ]);
-            }
-          } else {
-            // No submission yet, start with 1 empty solution block
-            setSolutions([{ scenarioIndex: 0, text: '' }]);
-          }
-        }
-
-        // Gated quiz list
-        const qr = await fetch(
-          `/api/trainee/enablers/${enablerId}/quizzes?traineeId=${profile.id}`,
-          { cache: 'no-store' }
-        );
-        if (qr.ok) {
-          const qj = await qr.json();
-          const list: GatedQuizInfo[] = (qj.quizzes || []) as GatedQuizInfo[];
-          const order: Difficulty[] = ['LOW', 'MEDIUM', 'HIGH'];
-          setGated(
-            order.map(
-              d =>
-                list.find(x => x.difficulty === d) || {
-                  difficulty: d,
-                  unlocked: false,
-                }
-            )
-          );
-        } else {
-          setGated([]);
-        }
-
-        // Fetch content documents (PDFs)
-        try {
-          const dr = await fetch(
-            `/api/trainer/enablers/${enablerId}/documents`,
-            { cache: 'no-store' }
-          );
-          if (dr.ok) {
-            const dj = await dr.json();
-            setDocuments(dj.documents || []);
-          }
-        } catch {
-          /* ignore document errors */
-        }
-      } catch (e: any) {
-        setError(e?.message || t('enablerPage.loadError'));
-      } finally {
-        setLoading(false);
+    if (!enablerData) return;
+    if (enablerData.submission) {
+      setSubmission({
+        id: enablerData.submission.id,
+        status: enablerData.submission.status,
+        trainerFeedback: enablerData.submission.trainerFeedback,
+        feedbacks: enablerData.submission.feedbacks,
+      });
+      if (enablerData.submission.solutions && Array.isArray(enablerData.submission.solutions)) {
+        setSolutions(enablerData.submission.solutions);
+      } else if (enablerData.submission.solutionText) {
+        setSolutions([{ scenarioIndex: 0, text: enablerData.submission.solutionText }]);
       }
-    };
-    load();
-  }, [profile?.id, enablerId, t]);
+    } else {
+      setSolutions([{ scenarioIndex: 0, text: '' }]);
+    }
+  }, [enablerData]);
 
   const loadQuizContent = async (difficulty: Difficulty) => {
     if (!profile?.id || !enablerId) return;
@@ -264,10 +212,13 @@ export default function TraineeEnablerPage() {
   };
 
   const [quizLocked, setQuizLocked] = useState(false);
+  const [submittingQuiz, setSubmittingQuiz] = useState(false);
 
   const submitQuiz = async () => {
+    if (submittingQuiz) return;
     if (!profile?.id || !quizContent?.quizId)
       return setError(t('enablerPage.missingProfile'));
+    setSubmittingQuiz(true);
     // Build answers payload including text answers
     const payloadAnswers = quizContent.questions.map(q => {
       const val = answers[q.id];
@@ -314,32 +265,11 @@ export default function TraineeEnablerPage() {
         feedback: (data.feedback || []) as QuizFeedback[],
       });
       // Refresh gated list to reflect unlocking next level
-      try {
-        const gr2 = await fetch(
-          `/api/trainee/enablers/${enablerId}/quizzes?traineeId=${profile.id}`,
-          { cache: 'no-store' }
-        );
-        if (gr2.ok) {
-          const gj2 = await gr2.json();
-          const list2: GatedQuizInfo[] = (gj2.quizzes ||
-            gj2.list ||
-            []) as GatedQuizInfo[];
-          const order: Difficulty[] = ['LOW', 'MEDIUM', 'HIGH'];
-          setGated(
-            order.map(
-              d =>
-                list2.find(x => x.difficulty === d) || {
-                  difficulty: d,
-                  unlocked: false,
-                }
-            )
-          );
-        }
-      } catch {
-        // ignore refresh errors
-      }
+      if (quizzesUrl) queryClient.invalidateQueries({ queryKey: [quizzesUrl] });
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
+    } finally {
+      setSubmittingQuiz(false);
     }
   };
 
@@ -367,29 +297,11 @@ export default function TraineeEnablerPage() {
       if (!r.ok) throw new Error(t('enablerPage.submissionFailed'));
       setSaveSuccess(t('enablerPage.solutionSaved'));
 
-      // Re-fetch submission status so the UI reflects the new PENDING state
-      try {
-        const refreshRes = await fetch(
-          `/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`,
-          { cache: 'no-store' }
-        );
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          if (refreshData.submission) {
-            setSubmission({
-              id: refreshData.submission.id,
-              status: refreshData.submission.status,
-              trainerFeedback: refreshData.submission.trainerFeedback,
-              feedbacks: refreshData.submission.feedbacks,
-            });
-          }
-        }
-      } catch {
-        // Fallback: update local state to PENDING
-        setSubmission(prev => prev
-          ? { ...prev, status: 'PENDING', trainerFeedback: null, feedbacks: null }
-          : { id: '', status: 'PENDING' });
-      }
+      // Optimistically update to PENDING, then refetch from server
+      setSubmission(prev => prev
+        ? { ...prev, status: 'PENDING', trainerFeedback: null, feedbacks: null }
+        : { id: '', status: 'PENDING' });
+      if (enablerUrl) queryClient.invalidateQueries({ queryKey: [enablerUrl] });
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
     } finally {
@@ -410,7 +322,17 @@ export default function TraineeEnablerPage() {
     [documents]
   );
   const scenarioDocs = useMemo(
-    () => documents.filter(d => d.documentType === 'EXERCISE'),
+    () => {
+      const exercises = documents.filter(d => d.documentType === 'EXERCISE');
+      // Sort by extracted part number so display order is Part 1, 2, 3... regardless of upload order
+      return exercises.sort((a, b) => {
+        const partA = a.title.match(/Part\s*(\d+)/i);
+        const partB = b.title.match(/Part\s*(\d+)/i);
+        const numA = partA ? parseInt(partA[1], 10) : 9999;
+        const numB = partB ? parseInt(partB[1], 10) : 9999;
+        return numA - numB;
+      });
+    },
     [documents]
   );
 
@@ -418,21 +340,61 @@ export default function TraineeEnablerPage() {
   const formatScenarioLabel = (title: string): { part: number | null; label: string } => {
     let cleaned = title
       .replace(/^Szenario:\s*/i, '')       // Remove "Szenario: " prefix
+      .replace(/^Szenarien[\s_]*/i, '')    // Remove "Szenarien_" prefix
+      .replace(/^\d{10,}_/, '')             // Remove leading timestamp "1771857633602_"
       .replace(/_/g, ' ')                   // Replace underscores with spaces
-      .replace(/\s*KORRIGIERT\s*/gi, '')    // Remove "KORRIGIERT"
-      .replace(/\s*REVIEW\d*\s*/gi, '')     // Remove "REVIEW2" etc.
+      .replace(/\s*\bKORRIGIERT\b\s*/gi, '')
+      .replace(/\s*\bKORR\b\s*/gi, '')
+      .replace(/\s*\bBEARBEITET\b\s*/gi, '')
+      .replace(/\s*\bNEU\b\s*/gi, '')
+      .replace(/\s*\bREVIEW\d*\b\s*/gi, '')
+      .replace(/\s*\bREV\d*\b\s*/gi, '')
+      .replace(/\s*\bPASST\b\s*/gi, '')
+      .replace(/\s*\bsortiert\b\s*/gi, '')
       .replace(/\s*\(\d+\)\s*/g, '')        // Remove "(1)" duplicates
-      .replace(/\s{2,}/g, ' ')              // Collapse multiple spaces
+      .replace(/\s*\bFR-\d+\b\s*/gi, '')    // Remove "FR-732" references
+      .replace(/\s{2,}/g, ' ')
       .trim();
 
-    // Extract part number: "Part1 Name" or "Part 1 Name"
-    const partMatch = cleaned.match(/^Part\s*(\d+)\s*(.*)$/i);
+    // Replace encoded German characters
+    const fixGermanEncoding = (s: string) => s
+      .replace(/\bKuenstliche\b/g, 'Künstliche')
+      .replace(/\bkuenstliche\b/g, 'künstliche')
+      .replace(/\bfuer\b/gi, 'für')
+      .replace(/\bueber\b/gi, 'über')
+      .replace(/\bmassnahm/gi, 'maßnahm')
+      .replace(/\bae\b/g, 'ä')
+      .replace(/\boe\b/g, 'ö')
+      .replace(/\bue\b/g, 'ü');
+
+    cleaned = fixGermanEncoding(cleaned);
+
+    // Extract part number: "Part1 Name" or "Part 1 Name" or "Part5a Name"
+    const partMatch = cleaned.match(/^Part\s*(\d+)\s*([a-z]?)\s*(.*)$/i);
     if (partMatch) {
       const partNum = parseInt(partMatch[1], 10);
-      let label = partMatch[2].replace(/^[\s\-_:]+/, '').trim();
-      // Clean up remaining rough edges
+      const subPart = partMatch[2] || '';
+      let label = partMatch[3].replace(/^[\s\-_:]+/, '').trim();
+
+      // Remove truncated final word (from PDF filename length limits)
+      // Known valid short German/IT words that should NOT be stripped
+      const validShortWords = new Set([
+        'und', 'der', 'die', 'das', 'von', 'mit', 'für', 'bei', 'zur', 'zum',
+        'Web', 'Code', 'SQL', 'OOP', 'DMZ', 'VPN', 'Test', 'Recht', 'Teil',
+        'Schutz', 'Markt', 'Daten', 'Netz', 'Agil', 'Cloud', 'Tools', 'Audit',
+        'Praxis', 'Rahmen', 'Module', 'Normen', 'Maven', 'Virus', 'Büro',
+        'Git', 'LAN', 'DSL', 'QM', 'DB', 'IO', 'SCM', 'PHP', 'CSS', 'HTML',
+        'MQTT', 'RISC', 'CISC', 'ISMS', 'P2P', 'CSV', 'XML', 'JSON', 'HTTP',
+      ]);
+      // Detect truncated ending: last word 1-6 chars, starts uppercase, preceded by longer word
+      const truncMatch = label.match(/^(.+\s\S{4,})\s+([A-ZÄÖÜ]\S{0,5})$/);
+      if (truncMatch && !validShortWords.has(truncMatch[2])) {
+        label = truncMatch[1];
+      }
+
       label = label.replace(/\s{2,}/g, ' ').trim();
-      return { part: partNum, label: label || `Teil ${partNum}` };
+      const partLabel = subPart ? `Teil ${partNum}${subPart}` : `Teil ${partNum}`;
+      return { part: partNum, label: label || partLabel };
     }
     return { part: null, label: cleaned };
   };
@@ -440,7 +402,7 @@ export default function TraineeEnablerPage() {
   if (!profile)
     return <div className="p-6">{t('enablerPage.pleaseLogin')}</div>;
   if (loading) return <div className="p-6">{t('common.loading')}</div>;
-  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (enablerError || error) return <div className="p-6 text-red-500">{enablerError?.message || error}</div>;
   if (!enabler) return <div className="p-6">{t('enablerPage.notFound')}</div>;
 
   return (
@@ -667,7 +629,7 @@ export default function TraineeEnablerPage() {
       {/* Summary/Reflection Section */}
       <div className="border-accent/30 bg-background space-y-4 rounded-3xl border p-5">
         {saveSuccess && (
-          <div className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-300">
+          <div className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-600 dark:text-green-400">
             {saveSuccess}
           </div>
         )}
@@ -686,7 +648,7 @@ export default function TraineeEnablerPage() {
               newSolutions[0].text = e.target.value;
               setSolutions(newSolutions);
             }}
-            className={`border-accent/30 w-full rounded-xl border bg-black/30 px-3 py-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
+            className={`border-accent/30 w-full rounded-xl border bg-muted/30 px-3 py-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
             rows={10}
             placeholder={t('enablerPage.describeSolution')}
             disabled={!canEdit}
@@ -716,7 +678,7 @@ export default function TraineeEnablerPage() {
 
         {/* Show message when no quizzes are available */}
         {gated.every(g => !g.quizId) ? (
-          <div className="border-accent/10 rounded-2xl border bg-black/10 p-6 text-center">
+          <div className="border-accent/10 rounded-2xl border bg-muted/10 p-6 text-center">
             <div className="text-muted-foreground text-sm">
               {t('enablerPage.noQuizzesYet')}
             </div>
@@ -729,7 +691,7 @@ export default function TraineeEnablerPage() {
               <button
                 key={g.difficulty}
                 onClick={() => !disabled && handleTileClick(g)}
-                className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 cursor-not-allowed bg-black/20 opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 cursor-pointer bg-black/30 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
+                className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 cursor-not-allowed bg-muted/20 opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 cursor-pointer bg-muted/30 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
                 disabled={disabled}
               >
                 <div className="text-muted-foreground text-sm">
@@ -745,7 +707,7 @@ export default function TraineeEnablerPage() {
                 )}
                 <div className="mt-2 text-xs">
                   {g.completed ? (
-                    <span className="rounded bg-green-600/20 px-2 py-0.5 text-green-300">
+                    <span className="rounded bg-green-600/20 px-2 py-0.5 text-green-600 dark:text-green-400">
                       {t('enablerPage.completed')}
                     </span>
                   ) : disabled ? (
@@ -753,7 +715,7 @@ export default function TraineeEnablerPage() {
                       {t('enablerPage.locked')}
                     </span>
                   ) : (
-                    <span className="rounded bg-blue-600/20 px-2 py-0.5 text-blue-300">
+                    <span className="rounded bg-blue-600/20 px-2 py-0.5 text-blue-600 dark:text-blue-400">
                       {t('enablerPage.available')}
                     </span>
                   )}
@@ -766,7 +728,7 @@ export default function TraineeEnablerPage() {
 
         {/* Active quiz runner */}
         {quizContent && (
-          <div className="border-accent/20 mt-6 space-y-4 rounded-2xl border bg-black/20 p-4">
+          <div className="border-accent/20 mt-6 space-y-4 rounded-2xl border bg-muted/20 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-muted-foreground text-sm">
@@ -859,14 +821,15 @@ export default function TraineeEnablerPage() {
                         </button>
                       ) : (
                         <button
-                          className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60"
+                          className="inline-flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60"
                           onClick={submitQuiz}
-                          disabled={quizContent.questions.some(q =>
+                          disabled={submittingQuiz || quizContent.questions.some(q =>
                             q.questionType === 'TEXT'
                               ? !String(answers[q.id] || '').trim()
                               : !answers[q.id]
                           )}
                         >
+                          {submittingQuiz && <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />}
                           {t('enablerPage.submitQuiz')}
                         </button>
                       )}
@@ -924,7 +887,7 @@ export default function TraineeEnablerPage() {
                           </div>
                         )}
                         {explanation && (
-                          <div className="border-accent/20 text-muted-foreground mt-2 rounded-md border bg-black/30 p-2 text-xs">
+                          <div className="border-accent/20 text-muted-foreground mt-2 rounded-md border bg-muted/30 p-2 text-xs">
                             {t('enablerPage.explanationLabel')} {explanation}
                           </div>
                         )}

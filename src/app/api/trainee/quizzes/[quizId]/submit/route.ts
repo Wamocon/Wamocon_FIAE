@@ -14,6 +14,7 @@ import {
   courses,
   notifications,
 } from '@/db/migrations/schemas/schema';
+import { apiCache } from '@/lib/api-cache';
 
 // POST: submit answers for a quiz attempt
 // Body: { traineeId: string, answers: [{ questionId, selectedOptionId? , textAnswer? }] }
@@ -306,6 +307,9 @@ export async function POST(
     try {
       if (isGlobal) {
         // No trainer notification for global quizzes (trainee can attempt multiple times)
+        apiCache.invalidate('trainee_quizzes');
+        apiCache.invalidate('trainer_reviews');
+        apiCache.invalidate('trainer_dashboard');
         return NextResponse.json({
           submissionId: submission.id,
           score,
@@ -350,6 +354,10 @@ export async function POST(
     } catch (notifyErr) {
       console.warn('Notify trainers lesson quiz failed', notifyErr);
     }
+
+    apiCache.invalidate('trainee_quizzes');
+    apiCache.invalidate('trainer_reviews');
+    apiCache.invalidate('trainer_dashboard');
 
     return NextResponse.json({
       submissionId: submission.id,

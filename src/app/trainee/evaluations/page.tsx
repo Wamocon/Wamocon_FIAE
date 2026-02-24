@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -34,8 +36,7 @@ function getCurrentWeek(): number {
 
 export default function TraineeEvaluationsPage() {
     const { profile, loading: authLoading } = useAuth();
-    const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
     const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [showNewForm, setShowNewForm] = useState(false);
@@ -53,37 +54,14 @@ export default function TraineeEvaluationsPage() {
         return Math.min(Math.max(yearDiff, 1), 3);
     };
 
-    useEffect(() => {
-        if (!profile?.id) return;
-
-        async function fetchEvaluations() {
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/trainee/evaluations?userId=${profile?.id}&year=${selectedYear}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setEvaluations(data.evaluations || []);
-                }
-            } catch (error) {
-                console.error('Error fetching evaluations:', error);
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        fetchEvaluations();
-    }, [profile?.id, selectedYear]);
+    const evalUrl = profile?.id ? `/api/trainee/evaluations?userId=${profile.id}&year=${selectedYear}` : null;
+    const { data: evalData, isLoading: loading } = useApiQuery<{ evaluations: Evaluation[] }>(evalUrl);
+    const evaluations = evalData?.evaluations || [];
 
     const handleRefresh = () => {
         setSelectedWeek(null);
         setShowNewForm(false);
-        if (profile?.id) {
-            setLoading(true);
-            fetch(`/api/trainee/evaluations?userId=${profile.id}&year=${selectedYear}`)
-                .then(res => res.json())
-                .then(data => setEvaluations(data.evaluations || []))
-                .finally(() => setLoading(false));
-        }
+        if (evalUrl) queryClient.invalidateQueries({ queryKey: [evalUrl] });
     };
 
     const getStatusIcon = (status: string) => {
@@ -91,7 +69,7 @@ export default function TraineeEvaluationsPage() {
             case 'APPROVED': return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
             case 'REJECTED': return <XCircle className="h-4 w-4 text-red-400" />;
             case 'SUBMITTED': return <Clock className="h-4 w-4 text-blue-400" />;
-            default: return <div className="h-4 w-4 rounded-full border-2 border-white/30" />;
+            default: return <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />;
         }
     };
 
@@ -109,7 +87,7 @@ export default function TraineeEvaluationsPage() {
             case 'APPROVED': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
             case 'REJECTED': return 'bg-red-500/15 text-red-400 border-red-500/30';
             case 'SUBMITTED': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-            default: return 'bg-white/5 text-white/50 border-white/20';
+            default: return 'bg-muted/30 text-muted-foreground border-border/60';
         }
     };
 
@@ -124,7 +102,7 @@ export default function TraineeEvaluationsPage() {
     if (authLoading) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
-                <Loader2 className="h-8 w-8 animate-spin text-white/50" />
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
         );
     }
@@ -138,8 +116,8 @@ export default function TraineeEvaluationsPage() {
                         <Award className="h-7 w-7 text-primary" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Azubi-Abschlusszeugnis</h1>
-                        <p className="text-white/60 mt-0.5">
+                        <h1 className="text-2xl font-bold text-foreground">Azubi-Abschlusszeugnis</h1>
+                        <p className="text-muted-foreground mt-0.5">
                             Wöchentliche Leistungsbewertungen für dein Arbeitszeugnis
                         </p>
                     </div>
@@ -159,10 +137,10 @@ export default function TraineeEvaluationsPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-4 gap-4">
-                <Card className="bg-[#1a1a1a] border-white/10">
+                <Card className="bg-card border-border">
                     <CardContent className="py-4 text-center">
-                        <div className="text-2xl font-bold text-white">{stats.total}</div>
-                        <div className="text-xs text-white/50 mt-1">Gesamt</div>
+                        <div className="text-2xl font-bold text-foreground">{stats.total}</div>
+                        <div className="text-xs text-muted-foreground mt-1">Gesamt</div>
                     </CardContent>
                 </Card>
                 <Card className="bg-emerald-500/10 border-emerald-500/20">
@@ -187,7 +165,7 @@ export default function TraineeEvaluationsPage() {
 
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="w-full grid grid-cols-2 bg-[#1a1a1a] border border-white/10">
+                <TabsList className="w-full grid grid-cols-2 bg-card border border-border">
                     <TabsTrigger value="weekly" className="flex items-center gap-2 data-[state=active]:bg-primary/20">
                         <FileText className="h-4 w-4" />
                         Wöchentliche Bewertungen
@@ -201,25 +179,25 @@ export default function TraineeEvaluationsPage() {
                 {/* Weekly Tab */}
                 <TabsContent value="weekly" className="space-y-6 mt-6">
                     {/* Year Navigation */}
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-[#1a1a1a] border border-white/10 w-fit">
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border w-fit">
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => setSelectedYear(prev => prev - 1)}
-                            className="h-8 w-8 hover:bg-white/10"
+                            className="h-8 w-8 hover:bg-muted"
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <div className="flex items-center gap-2 px-3">
-                            <Calendar className="h-4 w-4 text-white/50" />
-                            <span className="font-semibold text-lg text-white">{selectedYear}</span>
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-semibold text-lg text-foreground">{selectedYear}</span>
                         </div>
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => setSelectedYear(prev => prev + 1)}
                             disabled={selectedYear >= currentYear}
-                            className="h-8 w-8 hover:bg-white/10"
+                            className="h-8 w-8 hover:bg-muted"
                         >
                             <ChevronRight className="h-4 w-4" />
                         </Button>
@@ -239,18 +217,18 @@ export default function TraineeEvaluationsPage() {
                     {/* Evaluations List */}
                     {loading ? (
                         <div className="flex items-center justify-center py-16">
-                            <Loader2 className="h-6 w-6 animate-spin text-white/50" />
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                         </div>
                     ) : evaluations.length === 0 && !showNewForm ? (
-                        <Card className="border-dashed border-2 border-white/10 bg-[#1a1a1a]/50">
+                        <Card className="border-dashed border-2 border-border bg-card/50">
                             <CardContent className="flex flex-col items-center justify-center py-16">
-                                <div className="p-4 rounded-2xl bg-white/5 mb-4">
-                                    <Calendar className="h-10 w-10 text-white/40" />
+                                <div className="p-4 rounded-2xl bg-muted/30 mb-4">
+                                    <Calendar className="h-10 w-10 text-muted-foreground" />
                                 </div>
-                                <p className="text-white/60 text-center">
+                                <p className="text-muted-foreground text-center">
                                     Keine Bewertungen für {selectedYear} gefunden.
                                 </p>
-                                <p className="text-white/40 text-center text-sm mt-1">
+                                <p className="text-muted-foreground text-center text-sm mt-1">
                                     Erstelle deine erste wöchentliche Bewertung!
                                 </p>
                             </CardContent>
@@ -260,9 +238,9 @@ export default function TraineeEvaluationsPage() {
                             {evaluations.map((item) => (
                                 <Card
                                     key={item.id}
-                                    className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${selectedWeek === item.weekNumber
-                                        ? 'ring-2 ring-primary/50 border-primary/30 bg-[#1a1a1a]'
-                                        : 'bg-[#1a1a1a]/80 border-white/10 hover:border-white/20'
+                                    className={`cursor-pointer transition-all duration-200 hover:scale-[1.005] hover:shadow-lg ${selectedWeek === item.weekNumber
+                                        ? 'ring-2 ring-primary/50 border-primary/30 bg-card shadow-primary/5'
+                                        : 'bg-card/80 border-border hover:border-border/60 hover:shadow-accent/5'
                                         }`}
                                     onClick={() => setSelectedWeek(selectedWeek === item.weekNumber ? null : item.weekNumber)}
                                 >
@@ -271,24 +249,24 @@ export default function TraineeEvaluationsPage() {
                                             <div className="flex items-center gap-4">
                                                 <div className="text-center min-w-[60px]">
                                                     <div className="text-2xl font-bold text-primary">KW {item.weekNumber}</div>
-                                                    <div className="text-xs text-white/40">{item.year}</div>
+                                                    <div className="text-xs text-muted-foreground">{item.year}</div>
                                                 </div>
-                                                <div className="h-10 w-px bg-white/10" />
+                                                <div className="h-10 w-px bg-border" />
                                                 <div>
-                                                    <CardTitle className="text-base flex items-center gap-2 text-white/90">
+                                                    <CardTitle className="text-base flex items-center gap-2 text-foreground">
                                                         {item.ausbildungsjahr}. Ausbildungsjahr
                                                     </CardTitle>
                                                     <CardDescription className="flex items-center gap-3 mt-1">
                                                         {item.selfRating && (
                                                             <span className="flex items-center gap-1.5">
-                                                                <span className="text-xs text-white/40">Selbst:</span>
-                                                                <span className="font-medium text-white/80">Note {item.selfRating}</span>
+                                                                <span className="text-xs text-muted-foreground">Selbst:</span>
+                                                                <span className="font-medium text-foreground/80">Note {item.selfRating}</span>
                                                             </span>
                                                         )}
                                                         {item.trainerRating && (
-                                                            <span className="flex items-center gap-1.5 pl-3 border-l border-white/10">
-                                                                <span className="text-xs text-white/40">Trainer:</span>
-                                                                <span className="font-medium text-white/80">Note {item.trainerRating}</span>
+                                                            <span className="flex items-center gap-1.5 pl-3 border-l border-border">
+                                                                <span className="text-xs text-muted-foreground">Trainer:</span>
+                                                                <span className="font-medium text-foreground/80">Note {item.trainerRating}</span>
                                                             </span>
                                                         )}
                                                     </CardDescription>

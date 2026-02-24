@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, notifications, courses } from '@/db/migrations/schemas/schema';
+import { apiCache } from '@/lib/api-cache';
 
 // POST submit or update a use-case submission
 // Body: { traineeId: string, submissionText?: string, links?: Array<{ url: string, description?: string }> }
@@ -82,6 +83,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     } catch (notifyErr) {
       console.warn('Failed to notify trainers for use-case submission', notifyErr);
     }
+
+    apiCache.invalidate('trainer_reviews');
+    apiCache.invalidate('trainee_dashboard');
+    apiCache.invalidate('trainer_dashboard');
 
     return NextResponse.json({ ok: true, submissionId: result });
   } catch (e) {
