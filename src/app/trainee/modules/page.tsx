@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { ChevronRight } from 'lucide-react';
 
 type CourseItem = {
   id: string;
@@ -15,40 +16,15 @@ type CourseItem = {
 export default function TraineeModulesPage() {
   const { profile } = useAuth();
   const { t } = useLanguage();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [courses, setCourses] = useState<CourseItem[]>([]);
 
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch(`/api/trainee/courses?traineeId=${profile.id}`, {
-          cache: 'no-store',
-        });
-        if (!r.ok) throw new Error(t('courses.loadError'));
-        const data = await r.json();
-        const list: CourseItem[] = (data.courses || []).map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          year: c.year,
-          chapter: c.chapter,
-        }));
-        setCourses(list);
-      } catch (e: any) {
-        setError(e?.message || t('error.unknown'));
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [profile?.id]);
+  const { data, isLoading: loading, error } = useApiQuery<{ courses: CourseItem[] }>(
+    profile?.id ? `/api/trainee/courses?traineeId=${profile.id}` : null
+  );
+  const courses = data?.courses || [];
 
   if (!profile) return <div className="p-6">{t('courses.loginPrompt')}</div>;
   if (loading) return <div className="p-6">{t('common.loading')}</div>;
-  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (error) return <div className="p-6 text-red-500">{error.message}</div>;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
@@ -60,27 +36,24 @@ export default function TraineeModulesPage() {
       ) : (
         <ul className="space-y-3">
           {courses.map(c => (
-            <li
-              key={c.id}
-              className="border-accent/30 hover:border-accent/40 flex items-center justify-between rounded-3xl border bg-black/30 p-5 transition-all hover:shadow-md"
-            >
-              <div>
-                <div className="font-semibold">{c.title}</div>
-                <div className="text-muted-foreground text-sm">
-                  {c.year
-                    ? t('courses.year').replace('{year}', String(c.year))
-                    : '—'}{' '}
-                  {c.chapter
-                    ? `• ${t('courses.chapter').replace('{chapter}', String(c.chapter))}`
-                    : ''}
-                </div>
-              </div>
+            <li key={c.id}>
               <Link
                 prefetch={false}
-                className="border-accent/30 hover:bg-background/60 rounded-xl border px-3 py-1.5 text-sm"
                 href={`/trainee/modules/${c.id}`}
+                className="group flex items-center justify-between rounded-3xl border border-accent/30 bg-black/30 p-5 transition-all duration-200 hover:scale-[1.01] hover:border-accent/50 hover:shadow-lg hover:shadow-accent/5"
               >
-                {t('common.open')}
+                <div>
+                  <div className="font-semibold transition-colors duration-200 group-hover:text-accent">{c.title}</div>
+                  <div className="text-muted-foreground text-sm">
+                    {c.year
+                      ? t('courses.year').replace('{year}', String(c.year))
+                      : '—'}{' '}
+                    {c.chapter
+                      ? `• ${t('courses.chapter').replace('{chapter}', String(c.chapter))}`
+                      : ''}
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-accent" />
               </Link>
             </li>
           ))}

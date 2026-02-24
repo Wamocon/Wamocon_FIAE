@@ -39,7 +39,7 @@ const SelectScrollUpButton = React.forwardRef<
     <SelectPrimitive.ScrollUpButton
         ref={ref}
         className={cn(
-            "flex cursor-default items-center justify-center py-1 bg-[#1c1c1c]",
+            "flex cursor-default items-center justify-center py-1 bg-popover",
             className
         )}
         {...props}
@@ -56,7 +56,7 @@ const SelectScrollDownButton = React.forwardRef<
     <SelectPrimitive.ScrollDownButton
         ref={ref}
         className={cn(
-            "flex cursor-default items-center justify-center py-1 bg-[#1c1c1c]",
+            "flex cursor-default items-center justify-center py-1 bg-popover",
             className
         )}
         {...props}
@@ -75,11 +75,8 @@ const SelectContent = React.forwardRef<
         <SelectPrimitive.Content
             ref={ref}
             className={cn(
-                // Solid background color - dark theme
                 "relative z-[9999] max-h-[300px] min-w-[8rem] overflow-hidden rounded-lg",
-                "border border-white/10 shadow-2xl",
-                // Force solid dark background
-                "bg-[#1c1c1c]",
+                "border border-border bg-popover shadow-2xl",
                 // Animations
                 "data-[state=open]:animate-in data-[state=closed]:animate-out",
                 "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -95,7 +92,7 @@ const SelectContent = React.forwardRef<
             <SelectScrollUpButton />
             <SelectPrimitive.Viewport
                 className={cn(
-                    "p-1.5 max-h-[280px] overflow-y-auto bg-[#1c1c1c]",
+                    "p-1.5 max-h-[280px] overflow-y-auto bg-popover",
                     position === "popper" && "w-full min-w-[var(--radix-select-trigger-width)]"
                 )}
             >
@@ -113,7 +110,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <SelectPrimitive.Label
         ref={ref}
-        className={cn("py-1.5 pl-8 pr-2 text-sm font-semibold text-white/70", className)}
+        className={cn("py-1.5 pl-8 pr-2 text-sm font-semibold text-muted-foreground", className)}
         {...props}
     />
 ))
@@ -126,9 +123,9 @@ const SelectItem = React.forwardRef<
     <SelectPrimitive.Item
         ref={ref}
         className={cn(
-            "relative flex w-full cursor-pointer select-none items-center rounded-md py-2.5 pl-9 pr-3 text-sm text-white/90 outline-none",
+            "relative flex w-full cursor-pointer select-none items-center rounded-md py-2.5 pl-9 pr-3 text-sm text-popover-foreground outline-none",
             "transition-colors duration-150",
-            "hover:bg-white/10 focus:bg-white/10",
+            "hover:bg-accent focus:bg-accent",
             "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
             className
         )}
@@ -151,7 +148,7 @@ const SelectSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <SelectPrimitive.Separator
         ref={ref}
-        className={cn("-mx-1 my-1 h-px bg-white/10", className)}
+        className={cn("-mx-1 my-1 h-px bg-border", className)}
         {...props}
     />
 ))

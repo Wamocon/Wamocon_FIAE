@@ -7,6 +7,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { verifyTrainer } from '@/lib/auth-helpers';
+import { apiCache } from '@/lib/api-cache';
 
 export async function PATCH(
   req: NextRequest,
@@ -92,6 +93,10 @@ export async function PATCH(
     } catch (notifyErr) {
       console.warn('Failed to notify trainee for enabler feedback', notifyErr);
     }
+
+    apiCache.invalidate('trainer_reviews');
+    apiCache.invalidate('trainee_dashboard');
+    apiCache.invalidate('trainer_dashboard');
 
     return NextResponse.json({ submission: row });
   } catch (e) {
