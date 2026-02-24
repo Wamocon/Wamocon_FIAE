@@ -222,11 +222,11 @@
   },
   {
     "componentName": "Berufsbildung, Arbeits- und Tarifrecht (§ 4 Abs. 7 Nr. 1)",
-    "enablerName": "05_Grundsätze des Individual - und Kollektivarbeitsrechtes",
-    "quizTitle": "Quiz: 05_Grundsätze des Individual - und Kollektivarbeitsrechtes",
+    "enablerName": "05_Grundsätze des Individual- und Kollektivarbeitsrechtes",
+    "quizTitle": "Quiz: 05_Grundsätze des Individual- und Kollektivarbeitsrechtes",
     "questions": [
       {
-        "questionText": "Beispielfrage für 05_Grundsätze des Individual - und Kollektivarbeitsrechtes",
+        "questionText": "Beispielfrage für 05_Grundsätze des Individual- und Kollektivarbeitsrechtes",
         "options": [
           "Option A",
           "Option B",
@@ -511,11 +511,11 @@
   },
   {
     "componentName": "Betreiben von IT-Systemen (Vertiefung) (§ 4 Abs. 2 Nr. 8  J2)",
-    "enablerName": "08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
-    "quizTitle": "Quiz: 08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+    "enablerName": "08_Anforderungen an Verfügbarkeit von Anwendungsdiensten beurteilen können",
+    "quizTitle": "Quiz: 08_Anforderungen an Verfügbarkeit von Anwendungsdiensten beurteilen können",
     "questions": [
       {
-        "questionText": "Beispielfrage für 08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+        "questionText": "Beispielfrage für 08_Anforderungen an Verfügbarkeit von Anwendungsdiensten beurteilen können",
         "options": [
           "Option A",
           "Option B",
@@ -732,11 +732,11 @@
   },
   {
     "componentName": "Betreiben von IT-Systemen (§4 Abs. 2 Nr.8)",
-    "enablerName": "08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
-    "quizTitle": "Quiz: 08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+    "enablerName": "08_Anforderungen an Verfügbarkeit von Anwendungsdiensten beurteilen können",
+    "quizTitle": "Quiz: 08_Anforderungen an Verfügbarkeit von Anwendungsdiensten beurteilen können",
     "questions": [
       {
-        "questionText": "Beispielfrage für 08_Anforderungen an Verfügbarkeit von Anwen- dungsdiensten beurteilen können",
+        "questionText": "Beispielfrage für 08_Anforderungen an Verfügbarkeit von Anwendungsdiensten beurteilen können",
         "options": [
           "Option A",
           "Option B",
@@ -1089,11 +1089,11 @@
   },
   {
     "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
-    "enablerName": "01_IT-Systeme unter Berücksichtigung des IT- Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
-    "quizTitle": "Quiz: 01_IT-Systeme unter Berücksichtigung des IT- Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
+    "enablerName": "01_IT-Systeme unter Berücksichtigung des IT-Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
+    "quizTitle": "Quiz: 01_IT-Systeme unter Berücksichtigung des IT-Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
     "questions": [
       {
-        "questionText": "Beispielfrage für 01_IT-Systeme unter Berücksichtigung des IT- Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
+        "questionText": "Beispielfrage für 01_IT-Systeme unter Berücksichtigung des IT-Umfeldes konzeptionieren, konfigurieren, testen und dokumentieren können",
         "options": [
           "Option A",
           "Option B",
@@ -1106,11 +1106,11 @@
   },
   {
     "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
-    "enablerName": "02_Bedarfsgerechte Auswahl von Hardware vor- nehmen und begründen können",
-    "quizTitle": "Quiz: 02_Bedarfsgerechte Auswahl von Hardware vor- nehmen und begründen können",
+    "enablerName": "02_Bedarfsgerechte Auswahl von Hardware vornehmen und begründen können",
+    "quizTitle": "Quiz: 02_Bedarfsgerechte Auswahl von Hardware vornehmen und begründen können",
     "questions": [
       {
-        "questionText": "Beispielfrage für 02_Bedarfsgerechte Auswahl von Hardware vor- nehmen und begründen können",
+        "questionText": "Beispielfrage für 02_Bedarfsgerechte Auswahl von Hardware vornehmen und begründen können",
         "options": [
           "Option A",
           "Option B",
@@ -1123,11 +1123,11 @@
   },
   {
     "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
-    "enablerName": "03_Bedarfsgerechte Auswahl von Software vorneh- men und begründen können",
-    "quizTitle": "Quiz: 03_Bedarfsgerechte Auswahl von Software vorneh- men und begründen können",
+    "enablerName": "03_Bedarfsgerechte Auswahl von Software vornehmen und begründen können",
+    "quizTitle": "Quiz: 03_Bedarfsgerechte Auswahl von Software vornehmen und begründen können",
     "questions": [
       {
-        "questionText": "Beispielfrage für 03_Bedarfsgerechte Auswahl von Software vorneh- men und begründen können",
+        "questionText": "Beispielfrage für 03_Bedarfsgerechte Auswahl von Software vornehmen und begründen können",
         "options": [
           "Option A",
           "Option B",
@@ -1157,11 +1157,11 @@
   },
   {
     "componentName": "Entwickeln, Erstellen und Betreuen von IT-Lösungen (§ 4 Abs. 2 Nr. 4)",
-    "enablerName": "05_Aktivitäten bei Installationen und Konfigurati- onen kennen und beurteilen",
-    "quizTitle": "Quiz: 05_Aktivitäten bei Installationen und Konfigurati- onen kennen und beurteilen",
+    "enablerName": "05_Aktivitäten bei Installationen und Konfigurationen kennen und beurteilen",
+    "quizTitle": "Quiz: 05_Aktivitäten bei Installationen und Konfigurationen kennen und beurteilen",
     "questions": [
       {
-        "questionText": "Beispielfrage für 05_Aktivitäten bei Installationen und Konfigurati- onen kennen und beurteilen",
+        "questionText": "Beispielfrage für 05_Aktivitäten bei Installationen und Konfigurationen kennen und beurteilen",
         "options": [
           "Option A",
           "Option B",
@@ -1463,11 +1463,11 @@
   },
   {
     "componentName": "Informieren und Beraten von Kunden (§ 4 Abs. 2 Nr. 2)",
-    "enablerName": "02_Zielgruppengerechte Bedarfsanalyse durch- führen können",
-    "quizTitle": "Quiz: 02_Zielgruppengerechte Bedarfsanalyse durch- führen können",
+    "enablerName": "02_Zielgruppengerechte Bedarfsanalyse durchführen können",
+    "quizTitle": "Quiz: 02_Zielgruppengerechte Bedarfsanalyse durchführen können",
     "questions": [
       {
-        "questionText": "Beispielfrage für 02_Zielgruppengerechte Bedarfsanalyse durch- führen können",
+        "questionText": "Beispielfrage für 02_Zielgruppengerechte Bedarfsanalyse durchführen können",
         "options": [
           "Option A",
           "Option B",
@@ -1990,11 +1990,11 @@
   },
   {
     "componentName": "Konzipieren und Umsetzen von Softwareanwendungen (§ 4 Abs. 3 Nr. 1)",
-    "enablerName": "22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
-    "quizTitle": "Quiz: 22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+    "enablerName": "22_Datenbankabfrage, Datenpflege mit SQL erstellen können Verweis auf Belegsatz",
+    "quizTitle": "Quiz: 22_Datenbankabfrage, Datenpflege mit SQL erstellen können Verweis auf Belegsatz",
     "questions": [
       {
-        "questionText": "Beispielfrage für 22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+        "questionText": "Beispielfrage für 22_Datenbankabfrage, Datenpflege mit SQL erstellen können Verweis auf Belegsatz",
         "options": [
           "Option A",
           "Option B",
@@ -2364,11 +2364,11 @@
   },
   {
     "componentName": "Konzipieren von Softwareanwendungen (Vertiefung) (§ 4 Abs. 3 Nr. 1  J2)",
-    "enablerName": "22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
-    "quizTitle": "Quiz: 22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+    "enablerName": "22_Datenbankabfrage, Datenpflege mit SQL erstellen können Verweis auf Belegsatz",
+    "quizTitle": "Quiz: 22_Datenbankabfrage, Datenpflege mit SQL erstellen können Verweis auf Belegsatz",
     "questions": [
       {
-        "questionText": "Beispielfrage für 22_Datenbankabfrage, Datenpflege mit SQL erstel- len können Verweis auf Belegsatz",
+        "questionText": "Beispielfrage für 22_Datenbankabfrage, Datenpflege mit SQL erstellen können Verweis auf Belegsatz",
         "options": [
           "Option A",
           "Option B",
@@ -2466,11 +2466,11 @@
   },
   {
     "componentName": "Planen, Vorbereiten und Durchführen von Arbeitsaufgaben (§ 4 Abs. 2 Nr. 1)",
-    "enablerName": "02_Machbarkeit und Wirtschaftlichkeit von Pro- jekten beurteilen können",
-    "quizTitle": "Quiz: 02_Machbarkeit und Wirtschaftlichkeit von Pro- jekten beurteilen können",
+    "enablerName": "02_Machbarkeit und Wirtschaftlichkeit von Projekten beurteilen können",
+    "quizTitle": "Quiz: 02_Machbarkeit und Wirtschaftlichkeit von Projekten beurteilen können",
     "questions": [
       {
-        "questionText": "Beispielfrage für 02_Machbarkeit und Wirtschaftlichkeit von Pro- jekten beurteilen können",
+        "questionText": "Beispielfrage für 02_Machbarkeit und Wirtschaftlichkeit von Projekten beurteilen können",
         "options": [
           "Option A",
           "Option B",

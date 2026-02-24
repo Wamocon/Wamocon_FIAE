@@ -224,8 +224,8 @@ export function ExamManager() {
                             <div
                                 key={exam.id}
                                 className={`
-                                    p-4 rounded-xl glass-effect transition-colors
-                                    ${isUrgent ? 'border-2 border-destructive/40' : ''}
+                                    p-4 rounded-xl glass-effect glass-static transition-all duration-200 hover:shadow-md hover:scale-[1.005]
+                                    ${isUrgent ? 'border-2 border-destructive/40 hover:border-destructive/60' : 'hover:border-accent/40'}
                                 `}
                             >
                                 <div className="flex items-start justify-between gap-4">

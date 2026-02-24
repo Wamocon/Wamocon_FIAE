@@ -237,7 +237,7 @@ export function Sidebar({
     >
       <div className="flex h-full flex-col">
         {/* Logo Section */}
-        <div className="border-border/50 flex h-16 items-center justify-start border-b px-5">
+        <div className="border-border/50 flex h-16 items-center justify-start border-b px-5" data-tour="sidebar-logo">
           <div className="flex min-w-0 items-center gap-3">
             <div className="from-primary to-primary/80 flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br shadow-md ring-1 ring-white/10">
               <GraduationCap className="text-foreground h-6 w-6" />
@@ -254,7 +254,7 @@ export function Sidebar({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-2 px-4 py-6">
+        <nav className="flex-1 space-y-2 px-4 py-6" data-tour="sidebar-nav">
           {navigationItems.map(item => {
             const Icon = item.icon;
             // Prefer URL-based active detection to avoid stale props
@@ -267,6 +267,7 @@ export function Sidebar({
               <Link
                 key={item.id}
                 href={item.href}
+                data-tour={`sidebar-${item.id}`}
                 className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${isActive
                   ? 'bg-accent/20 text-accent border-accent/30 border'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent'
@@ -303,6 +304,7 @@ export function Sidebar({
           <div className="px-4 pb-2">
             <button
               onClick={() => setHaiAdminOpen(true)}
+              data-tour="sidebar-hai-admin"
               className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent"
             >
               <span className="text-lg">🦈</span>
