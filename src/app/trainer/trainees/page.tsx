@@ -110,7 +110,7 @@ export default function TrainerTraineesPage() {
         {trainees.map(trainee => (
           <div
             key={trainee.id}
-            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl"
+            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-200 hover:scale-[1.02] hover:border-accent/50 hover:shadow-xl hover:shadow-accent/5"
           >
             <div className="mb-4 flex items-start justify-between">
               <div className="flex items-center gap-4">

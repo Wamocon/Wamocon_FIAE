@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { BookOpen, ArrowRight, Play, CheckCircle2 } from 'lucide-react';
 
 type CourseItem = {
@@ -19,31 +19,11 @@ type CourseItem = {
 export default function TraineeCoursesPage() {
   const { profile } = useAuth();
   const { t } = useLanguage();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [courses, setCourses] = useState<CourseItem[]>([]);
 
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch(`/api/trainee/courses?traineeId=${profile.id}`, {
-          cache: 'no-store',
-        });
-        if (!r.ok) throw new Error(t('courses.loadError'));
-        const data = await r.json();
-        setCourses(data.courses || []);
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : t('error.unknown');
-        setError(message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [profile?.id]);
+  const { data, isLoading: loading, error } = useApiQuery<{ courses: CourseItem[] }>(
+    profile?.id ? `/api/trainee/courses?traineeId=${profile.id}` : null
+  );
+  const courses = data?.courses || [];
 
   if (!profile) {
     return (
@@ -76,7 +56,7 @@ export default function TraineeCoursesPage() {
     return (
       <div className="mx-auto max-w-7xl space-y-8 p-6">
         <div className="glass-effect border-destructive/30 rounded-3xl border p-8 shadow-lg">
-          <h1 className="text-foreground text-2xl font-bold">{error}</h1>
+          <h1 className="text-foreground text-2xl font-bold">{error.message}</h1>
         </div>
       </div>
     );

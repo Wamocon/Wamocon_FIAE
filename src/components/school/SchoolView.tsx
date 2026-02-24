@@ -105,11 +105,27 @@ export function SchoolView() {
                 );
                 const reportsData = reportsRes.ok ? await reportsRes.json() : { meta: {} };
 
+                // Fetch current block
+                const now = new Date();
+                const blocksRes = await fetch(
+                    `/api/trainee/school/blocks?traineeId=${profile.id}&year=${now.getFullYear()}`
+                );
+                const blocksData = blocksRes.ok ? await blocksRes.json() : { blocks: [] };
+                const today = now.getTime();
+                const activeBlock = (blocksData.blocks || []).find((b: any) => {
+                    const start = new Date(b.startDate).getTime();
+                    const end = new Date(b.endDate).getTime();
+                    return today >= start && today <= end;
+                });
+                const blockLabel = activeBlock
+                    ? activeBlock.title || activeBlock.blockType
+                    : null;
+
                 setStats({
                     upcomingExams: examsData.exams?.length || 0,
                     pendingReports: reportsData.meta?.stats?.draft || 0,
-                    currentBlock: null, // TODO: Get from blocks API
-                    averageGrade: null, // TODO: Calculate from results
+                    currentBlock: blockLabel,
+                    averageGrade: null,
                 });
             } catch (e) {
                 console.error('Failed to load stats:', e);
@@ -151,7 +167,7 @@ export function SchoolView() {
 
             {/* Quick Stats Cards */}
             <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
-                <div className="glass-effect rounded-xl p-4">
+                <div className="glass-effect rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-md">
                     <div className="flex items-center gap-3">
                         <div className="rounded-lg bg-accent/20 p-2">
                             <FileText className="h-5 w-5 text-accent" />
@@ -165,7 +181,7 @@ export function SchoolView() {
                     </div>
                 </div>
 
-                <div className="glass-effect rounded-xl p-4">
+                <div className="glass-effect rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-md">
                     <div className="flex items-center gap-3">
                         <div className="rounded-lg bg-amber-500/20 p-2">
                             <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
@@ -179,7 +195,7 @@ export function SchoolView() {
                     </div>
                 </div>
 
-                <div className="glass-effect rounded-xl p-4">
+                <div className="glass-effect rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-md">
                     <div className="flex items-center gap-3">
                         <div className="rounded-lg bg-green-500/20 p-2">
                             <Calendar className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -187,7 +203,7 @@ export function SchoolView() {
                         <div>
                             <p className="text-xs text-muted-foreground">{t('school.stats.currentBlock')}</p>
                             <p className="text-lg font-bold text-foreground">
-                                {loading ? '...' : stats.currentBlock || 'WMC'}
+                                {loading ? '...' : stats.currentBlock || '—'}
                             </p>
                         </div>
                     </div>
@@ -223,7 +239,7 @@ export function SchoolView() {
             </div>
 
             {/* Tab Content */}
-            <div className="glass-effect rounded-2xl p-4 md:p-6">
+            <div className="glass-effect overflow-visible rounded-2xl p-4 md:p-6">
                 {renderTabContent()}
             </div>
         </div>

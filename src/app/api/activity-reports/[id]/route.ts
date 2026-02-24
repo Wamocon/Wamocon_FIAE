@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { activityReports, profiles, activityReportUseCaseEntries } from '@/db/migrations/schemas/schema';
+import { apiCache } from '@/lib/api-cache';
 
 // GET: Get a single activity report
 export async function GET(
@@ -68,6 +69,10 @@ export async function DELETE(
         if (!deleted) {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
+
+        apiCache.invalidate('activity_reports');
+        apiCache.invalidate('trainee_dashboard');
+        apiCache.invalidate('trainer_dashboard');
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
@@ -139,6 +144,10 @@ export async function PUT(
             );
         }
 
+        apiCache.invalidate('activity_reports');
+        apiCache.invalidate('trainee_dashboard');
+        apiCache.invalidate('trainer_dashboard');
+
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Error in activity-reports PUT [id]:', error);
@@ -206,6 +215,10 @@ export async function PATCH(
         if (!updated) {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
+
+        apiCache.invalidate('activity_reports');
+        apiCache.invalidate('trainee_dashboard');
+        apiCache.invalidate('trainer_dashboard');
 
         return NextResponse.json({
             success: true,

@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
-import { schoolExams, schoolExamResults } from '@/db/migrations/schemas/schema';
+import { schoolExams, schoolExamResults, ausbildungBlocks } from '@/db/migrations/schemas/schema';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -107,25 +107,39 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 }
 
 // DELETE /api/trainee/school/exams/[id]
+// Handles both school_exams and ausbildung_blocks (EXAM type) sources
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
     try {
         const { id } = await params;
 
-        const [existing] = await db
+        // Try school_exams first
+        const [existingExam] = await db
             .select({ id: schoolExams.id })
             .from(schoolExams)
             .where(eq(schoolExams.id, id as any));
 
-        if (!existing) {
-            return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+        if (existingExam) {
+            // Delete from school_exams (cascades to results)
+            await db
+                .delete(schoolExams)
+                .where(eq(schoolExams.id, id as any));
+            return NextResponse.json({ success: true, deleted: id });
         }
 
-        // Delete will cascade to results
-        await db
-            .delete(schoolExams)
-            .where(eq(schoolExams.id, id as any));
+        // Fallback: try ausbildung_blocks (calendar-sourced EXAM entries)
+        const [existingBlock] = await db
+            .select({ id: ausbildungBlocks.id, blockType: ausbildungBlocks.blockType })
+            .from(ausbildungBlocks)
+            .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.blockType, 'EXAM')));
 
-        return NextResponse.json({ success: true, deleted: id });
+        if (existingBlock) {
+            await db
+                .delete(ausbildungBlocks)
+                .where(eq(ausbildungBlocks.id, id as any));
+            return NextResponse.json({ success: true, deleted: id });
+        }
+
+        return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
     } catch (e) {
         console.error('Delete exam error:', e);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

@@ -86,7 +86,7 @@ export default function AnnualPerformanceOverview({
     }, [traineeId, year]);
 
     const getGradeColor = (grade: number | null): string => {
-        if (grade === null) return 'text-white/50';
+        if (grade === null) return 'text-muted-foreground';
         if (grade <= 1.5) return 'text-emerald-400';
         if (grade <= 2.5) return 'text-green-400';
         if (grade <= 3.5) return 'text-yellow-400';
@@ -95,7 +95,7 @@ export default function AnnualPerformanceOverview({
     };
 
     const getGradeBg = (grade: number | null): string => {
-        if (grade === null) return 'bg-white/5';
+        if (grade === null) return 'bg-muted/20';
         if (grade <= 1.5) return 'bg-emerald-500/20';
         if (grade <= 2.5) return 'bg-green-500/20';
         if (grade <= 3.5) return 'bg-yellow-500/20';
@@ -125,7 +125,7 @@ export default function AnnualPerformanceOverview({
     if (loading) {
         return (
             <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-white/50" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
         );
     }
@@ -142,8 +142,8 @@ export default function AnnualPerformanceOverview({
 
     if (!summary) {
         return (
-            <Card className="border-white/10 bg-[#1a1a1a]">
-                <CardContent className="py-12 text-center text-white/50">
+            <Card className="border-border bg-card">
+                <CardContent className="py-12 text-center text-muted-foreground">
                     Keine Daten verfügbar
                 </CardContent>
             </Card>
@@ -153,7 +153,7 @@ export default function AnnualPerformanceOverview({
     return (
         <div className="space-y-6">
             {/* Header Card with Overall Stats */}
-            <Card className="border-white/10 bg-gradient-to-br from-[#1a1a1a] to-[#252525] shadow-xl">
+            <Card className="border-border bg-gradient-to-br from-[#1a1a1a] to-card/80 shadow-xl">
                 <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -163,7 +163,7 @@ export default function AnnualPerformanceOverview({
                             <div>
                                 <CardTitle className="text-lg flex items-center gap-2">
                                     Jahresübersicht {year}
-                                    {traineeName && <span className="text-white/60 font-normal">– {traineeName}</span>}
+                                    {traineeName && <span className="text-muted-foreground font-normal">– {traineeName}</span>}
                                 </CardTitle>
                                 <CardDescription>
                                     {summary.totalEvaluations} genehmigte Bewertungen
@@ -200,24 +200,24 @@ export default function AnnualPerformanceOverview({
                     {/* Main Stats Grid */}
                     <div className="grid grid-cols-3 gap-4">
                         {/* Overall Average */}
-                        <div className={`p-4 rounded-xl ${getGradeBg(summary.overallAverage)} border border-white/10`}>
-                            <p className="text-xs text-white/50 uppercase tracking-wide">Gesamtdurchschnitt</p>
+                        <div className={`p-4 rounded-xl ${getGradeBg(summary.overallAverage)} border border-border`}>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">Gesamtdurchschnitt</p>
                             <p className={`text-3xl font-bold mt-1 ${getGradeColor(summary.overallAverage)}`}>
                                 {summary.overallAverage?.toFixed(2) || '–'}
                             </p>
                         </div>
 
                         {/* Self Average */}
-                        <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                            <p className="text-xs text-white/50 uppercase tracking-wide">Selbsteinschätzung</p>
+                        <div className="p-4 rounded-xl bg-muted/20 border border-border">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">Selbsteinschätzung</p>
                             <p className={`text-3xl font-bold mt-1 ${getGradeColor(summary.selfAverage)}`}>
                                 {summary.selfAverage?.toFixed(2) || '–'}
                             </p>
                         </div>
 
                         {/* Trainer Average */}
-                        <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                            <p className="text-xs text-white/50 uppercase tracking-wide">Trainerbewertung</p>
+                        <div className="p-4 rounded-xl bg-muted/20 border border-border">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">Trainerbewertung</p>
                             <p className={`text-3xl font-bold mt-1 ${getGradeColor(summary.trainerAverage)}`}>
                                 {summary.trainerAverage?.toFixed(2) || '–'}
                             </p>
@@ -227,23 +227,23 @@ export default function AnnualPerformanceOverview({
                     {/* Grade Distribution */}
                     {showDetails && (
                         <div className="mt-6">
-                            <p className="text-sm font-medium text-white/70 mb-3">Notenverteilung</p>
+                            <p className="text-sm font-medium text-foreground/70 mb-3">Notenverteilung</p>
                             <div className="flex gap-2">
                                 {Object.entries(summary.gradeDistribution).map(([grade, count]) => {
                                     const total = Object.values(summary.gradeDistribution).reduce((a, b) => a + b, 0);
                                     const percentage = total > 0 ? (count / total) * 100 : 0;
                                     return (
                                         <div key={grade} className="flex-1">
-                                            <div className="h-24 bg-white/5 rounded-lg relative overflow-hidden">
+                                            <div className="h-24 bg-muted/20 rounded-lg relative overflow-hidden">
                                                 <div
                                                     className={`absolute bottom-0 left-0 right-0 ${GRADE_LABELS[grade].color} transition-all duration-500`}
                                                     style={{ height: `${percentage}%` }}
                                                 />
                                                 <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
-                                                    <span className="text-lg font-bold text-white">{count}</span>
+                                                    <span className="text-lg font-bold text-foreground">{count}</span>
                                                 </div>
                                             </div>
-                                            <p className="text-center text-xs mt-1 text-white/50">Note {grade}</p>
+                                            <p className="text-center text-xs mt-1 text-muted-foreground">Note {grade}</p>
                                         </div>
                                     );
                                 })}
@@ -254,22 +254,22 @@ export default function AnnualPerformanceOverview({
                     {/* By Ausbildungsjahr */}
                     {showDetails && Object.keys(summary.byAusbildungsjahr).length > 0 && (
                         <div className="mt-6">
-                            <p className="text-sm font-medium text-white/70 mb-3">Nach Ausbildungsjahr</p>
+                            <p className="text-sm font-medium text-foreground/70 mb-3">Nach Ausbildungsjahr</p>
                             <div className="space-y-2">
                                 {Object.entries(summary.byAusbildungsjahr)
                                     .sort(([a], [b]) => parseInt(a) - parseInt(b))
                                     .map(([aj, data]) => (
                                         <div
                                             key={aj}
-                                            className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10"
+                                            className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border"
                                         >
                                             <div className="flex items-center gap-3">
                                                 <Badge variant="secondary">{aj}. Jahr</Badge>
-                                                <span className="text-sm text-white/50">{data.count} Bewertungen</span>
+                                                <span className="text-sm text-muted-foreground">{data.count} Bewertungen</span>
                                             </div>
                                             <div className="flex items-center gap-4">
                                                 <div className="text-right">
-                                                    <span className="text-xs text-white/40">Trainer: </span>
+                                                    <span className="text-xs text-muted-foreground">Trainer: </span>
                                                     <span className={`font-semibold ${getGradeColor(data.trainerAverage)}`}>
                                                         {data.trainerAverage?.toFixed(2) || '–'}
                                                     </span>
@@ -284,7 +284,7 @@ export default function AnnualPerformanceOverview({
                     {/* Mini Trend Chart */}
                     {showDetails && summary.trend.length > 0 && (
                         <div className="mt-6">
-                            <p className="text-sm font-medium text-white/70 mb-3">Letzte 8 Wochen</p>
+                            <p className="text-sm font-medium text-foreground/70 mb-3">Letzte 8 Wochen</p>
                             <div className="flex items-end gap-1 h-16">
                                 {summary.trend.map((t, idx) => {
                                     const rating = t.trainerRating || t.selfRating || 3;
@@ -306,7 +306,7 @@ export default function AnnualPerformanceOverview({
                                     );
                                 })}
                             </div>
-                            <div className="flex justify-between text-xs text-white/30 mt-1">
+                            <div className="flex justify-between text-xs text-muted-foreground/50 mt-1">
                                 <span>KW{summary.trend[0]?.week}</span>
                                 <span>KW{summary.trend[summary.trend.length - 1]?.week}</span>
                             </div>

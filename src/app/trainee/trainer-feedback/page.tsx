@@ -2,8 +2,9 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { MessageSquare, Award } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState, useMemo } from 'react';
 
 type EnablerResult = { id: string; enablerId: string; enablerTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; feedbacks?: Array<{ scenarioIndex: number; feedback: string }>|null; solutionText?: string|null; solutions?: Array<{ scenarioIndex: number; text: string }>|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
 type UseCaseResult = { id: string; useCaseId: string; useCaseTitle: string; status: 'PENDING'|'APPROVED'|'REJECTED'; trainerFeedback?: string|null; submittedAt: string; reviewedAt?: string|null; attemptNumber?: number|null };
@@ -11,56 +12,38 @@ type EnablerQuizResult = { id: string; enablerId: string; enablerTitle: string; 
 type GlobalQuizResult = { id: string; quizId: string; quizTitle: string; score: number|null; submittedAt: string; trainerFeedback?: string|null; attemptNumber?: number|null };
 
 export default function TraineeFeedbackPage() {
-  const { profile, loading } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const { t } = useLanguage();
-  const [enablers, setEnablers] = useState<EnablerResult[]>([]);
-  const [useCases, setUseCases] = useState<UseCaseResult[]>([]);
-  const [quizzes, setQuizzes] = useState<EnablerQuizResult[]>([]);
-  const [globalQuizzes, setGlobalQuizzes] = useState<GlobalQuizResult[]>([]);
   const [solutionIndexMap, setSolutionIndexMap] = useState<Record<string, number>>({});
 
-  // Hooks must be declared before any conditional return
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) return;
-      try {
-        const res = await fetch(`/api/trainee/feedback?traineeId=${profile.id}`, { cache: 'no-store' });
-        const data = await res.json();
-  setEnablers(data.enablerResults || []);
-  setUseCases(data.useCaseResults || []);
-        const quizResults = (data.enablerQuizResults || []) as EnablerQuizResult[];
-        setQuizzes(
-          quizResults.map((q) => ({
-            id: q.id,
-            enablerId: q.enablerId,
-            enablerTitle: q.enablerTitle,
-            quizId: q.quizId,
-            quizTitle: q.quizTitle,
-            score: q.score,
-            submittedAt: q.submittedAt,
-            trainerFeedback: (q as any).trainerFeedback ?? null,
-            attemptNumber: (q as any).attemptNumber ?? null,
-          }))
-        );
-        const globalResults = (data.globalQuizResults || []) as GlobalQuizResult[];
-        setGlobalQuizzes(globalResults.map((g) => ({
-          id: g.id,
-          quizId: g.quizId,
-          quizTitle: g.quizTitle,
-          score: g.score,
-          submittedAt: g.submittedAt,
-          trainerFeedback: (g as any).trainerFeedback ?? null,
-          attemptNumber: (g as any).attemptNumber ?? null,
-        })));
-      } catch (e) {
-        console.error(e);
-        setEnablers([]); setUseCases([]); setQuizzes([]);
-      } finally {
-        // no-op
-      }
-    };
-    load();
-  }, [profile?.id]);
+  type FeedbackResponse = {
+    enablerResults: EnablerResult[];
+    useCaseResults: UseCaseResult[];
+    enablerQuizResults: EnablerQuizResult[];
+    globalQuizResults: GlobalQuizResult[];
+  };
+
+  const { data, isLoading: dataLoading } = useApiQuery<FeedbackResponse>(
+    profile?.id ? `/api/trainee/feedback?traineeId=${profile.id}` : null
+  );
+
+  const enablers = data?.enablerResults || [];
+  const useCases = data?.useCaseResults || [];
+  const quizzes = useMemo(() =>
+    (data?.enablerQuizResults || []).map((q) => ({
+      ...q,
+      trainerFeedback: (q as any).trainerFeedback ?? null,
+      attemptNumber: (q as any).attemptNumber ?? null,
+    })), [data?.enablerQuizResults]);
+  const globalQuizzes = useMemo(() =>
+    (data?.globalQuizResults || []).map((g) => ({
+      ...g,
+      trainerFeedback: (g as any).trainerFeedback ?? null,
+      attemptNumber: (g as any).attemptNumber ?? null,
+    })), [data?.globalQuizResults]);
+
+  const loading = authLoading || dataLoading;
+
   if (loading) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">

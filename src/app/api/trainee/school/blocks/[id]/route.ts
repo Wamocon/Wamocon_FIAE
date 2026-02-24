@@ -61,7 +61,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (body.startDate !== undefined) updateData.startDate = new Date(body.startDate);
         if (body.endDate !== undefined) updateData.endDate = new Date(body.endDate);
         if (body.blockType !== undefined) {
-            if (!['SCHOOL', 'COMPANY', 'HOLIDAY', 'EXAM', 'PERSONAL'].includes(body.blockType)) {
+            if (!['SCHOOL', 'COMPANY', 'HOLIDAY', 'EXAM', 'PERSONAL', 'SONSTIGES', 'TRAINER_BLOCKER'].includes(body.blockType)) {
                 return NextResponse.json({ error: 'Invalid blockType' }, { status: 400 });
             }
             updateData.blockType = body.blockType;
