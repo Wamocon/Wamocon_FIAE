@@ -174,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       '/reset-password',
     ]);
     const p = pathname || '';
-    return publicPaths.has(p) || p.startsWith('/verify');
+    return publicPaths.has(p) || p.startsWith('/verify') || p.startsWith('/demo');
   }, [pathname]);
 
   // Auto logout after 4 hours
