@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 
 export default function TraineeUseCaseDetailPage() {
@@ -12,74 +14,51 @@ export default function TraineeUseCaseDetailPage() {
   const useCaseId = params?.useCaseId as string;
   const { profile } = useAuth();
   const { t } = useLanguage();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [useCase, setUseCase] = useState<{
-    id: string;
-    title: string;
-    descriptionText: string;
-    isActive?: boolean;
-    durationValue?: number | null;
-    durationUnit?: 'DAYS' | 'WEEKS' | null;
-    activatedAt?: string | null;
-    courseId?: string;
-    courseTitle?: string;
-  } | null>(null);
-  const [submission, setSubmission] = useState<{
-    id: string;
-    submissionText?: string | null;
-    status: 'PENDING' | 'APPROVED' | 'REJECTED';
-    trainerFeedback?: string | null;
-    links?: Array<{ url: string; description?: string | null }>;
-  } | null>(null);
+  const queryClient = useQueryClient();
+
+  type UseCaseResponse = {
+    useCase: {
+      id: string; title: string; descriptionText: string; isActive?: boolean;
+      durationValue?: number | null; durationUnit?: 'DAYS' | 'WEEKS' | null;
+      activatedAt?: string | null; courseId?: string; courseTitle?: string;
+    } | null;
+    submission: {
+      id: string; submissionText?: string | null; status: 'PENDING' | 'APPROVED' | 'REJECTED';
+      trainerFeedback?: string | null; links?: Array<{ url: string; description?: string | null }>;
+    } | null;
+  };
+  type DocsResponse = { documents: Array<{ id: string; title: string; storageUrl: string; documentType: string }> };
+
+  const ucUrl = profile?.id && useCaseId ? `/api/trainee/use-cases/${useCaseId}?traineeId=${profile.id}` : null;
+  const docsUrl = profile?.id && useCaseId ? `/api/trainee/use-cases/${useCaseId}/documents?traineeId=${profile.id}` : null;
+
+  const { data: ucData, isLoading: loading, error: queryError } = useApiQuery<UseCaseResponse>(ucUrl);
+  const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
+
+  const useCase = ucData?.useCase || null;
+  const submission = ucData?.submission || null;
+  const documents = docsData?.documents || [];
+
+  // Form state — synced from server data on load, editable by user
   const [submissionText, setSubmissionText] = useState('');
   const [links, setLinks] = useState<Array<{ url: string; description?: string }>>([{ url: '', description: '' }]);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
-
-  const [documents, setDocuments] = useState<Array<{ id: string; title: string; storageUrl: string; documentType: string }>>([]);
+  const [error, setError] = useState<string | null>(null);
   const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
+
+  // Sync form fields when server data loads/changes
+  useEffect(() => {
+    const sub = ucData?.submission;
+    if (sub) {
+      setSubmissionText(sub.submissionText || '');
+      const mapped = (sub.links || []).map((l: any) => ({ url: l.url as string, description: (l.description as string) || '' }));
+      setLinks(mapped.length ? mapped : [{ url: '', description: '' }]);
+    }
+  }, [ucData]);
 
   // Determine if editing is allowed
   const canEdit = !submission || submission.status === 'REJECTED';
-
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id || !useCaseId) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch(`/api/trainee/use-cases/${useCaseId}?traineeId=${profile.id}`, { cache: 'no-store' });
-        if (!r.ok) throw new Error(t('useCase.loadError'));
-        const data = await r.json();
-        setUseCase(data.useCase);
-        if (data.submission) {
-          setSubmission(data.submission);
-          setSubmissionText(data.submission.submissionText || '');
-          const mapped = (data.submission.links || []).map((l: any) => ({ url: l.url as string, description: (l.description as string) || '' }));
-          setLinks(mapped.length ? mapped : [{ url: '', description: '' }]);
-        }
-
-        // Fetch documents - use trainee-specific endpoint for visibility filtering
-        // This ensures trainees only see questions, not solutions
-        try {
-          const dr = await fetch(`/api/trainee/use-cases/${useCaseId}/documents?traineeId=${profile.id}`, { cache: 'no-store' });
-          if (dr.ok) {
-            const dj = await dr.json();
-            setDocuments(dj.documents || []);
-          }
-        } catch (e) {
-          console.error('Error fetching documents', e);
-        }
-
-      } catch (e: any) {
-        setError(e?.message || t('error.unknown'));
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [profile?.id, useCaseId]);
 
   const submit = async () => {
     if (!profile?.id) return setError(t('useCase.profileMissing'));
@@ -96,22 +75,8 @@ export default function TraineeUseCaseDetailPage() {
       if (!r.ok) throw new Error(t('useCase.submitFailed'));
       setSuccess(t('useCase.submitSuccess'));
 
-      // Re-fetch submission status so the UI reflects the new PENDING state
-      try {
-        const refreshRes = await fetch(`/api/trainee/use-cases/${useCaseId}?traineeId=${profile.id}`, { cache: 'no-store' });
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          if (refreshData.submission) {
-            setSubmission(refreshData.submission);
-            setSubmissionText(refreshData.submission.submissionText || '');
-            const mapped = (refreshData.submission.links || []).map((l: any) => ({ url: l.url as string, description: (l.description as string) || '' }));
-            setLinks(mapped.length ? mapped : [{ url: '', description: '' }]);
-          }
-        }
-      } catch {
-        // If refresh fails, at least update local state to show PENDING
-        setSubmission(prev => prev ? { ...prev, status: 'PENDING', trainerFeedback: null } : { id: '', status: 'PENDING', submissionText, links: links.filter(l => l.url?.trim()) });
-      }
+      // Invalidate query to refetch fresh submission state
+      if (ucUrl) queryClient.invalidateQueries({ queryKey: [ucUrl] });
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
     } finally {
@@ -121,7 +86,7 @@ export default function TraineeUseCaseDetailPage() {
 
   if (!profile) return <div className="p-6">{t('courses.loginPrompt')}</div>;
   if (loading) return <div className="p-6">{t('common.loading')}</div>;
-  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (queryError) return <div className="p-6 text-red-500">{queryError.message}</div>;
   if (!useCase) return <div className="p-6">{t('common.notFound')}</div>;
 
   return (
@@ -132,17 +97,15 @@ export default function TraineeUseCaseDetailPage() {
 
         {/* PDF Documents List */}
         {documents.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap gap-2">
             {documents.map((doc) => (
               <button
                 key={doc.id}
                 onClick={() => setSelectedPdfUrl(prev => prev === doc.storageUrl ? null : doc.storageUrl)}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${selectedPdfUrl === doc.storageUrl ? 'bg-background text-foreground hover:bg-accent/30' : 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105'}`}
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 max-w-full ${selectedPdfUrl === doc.storageUrl ? 'bg-accent/15 text-accent border border-accent/40' : 'bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:shadow-lg hover:scale-[1.02]'}`}
               >
-                <div className="flex items-center gap-2">
-                  {selectedPdfUrl === doc.storageUrl ? <ChevronLeft className="h-4 w-4 rotate-[-90deg]" /> : <ChevronLeft className="h-4 w-4 rotate-90" />}
-                  <span>{doc.title}</span>
-                </div>
+                <ChevronLeft className={`h-4 w-4 shrink-0 transition-transform duration-200 ${selectedPdfUrl === doc.storageUrl ? 'rotate-[-90deg]' : 'rotate-90'}`} />
+                <span className="truncate">{doc.title}</span>
               </button>
             ))}
           </div>
@@ -177,6 +140,7 @@ export default function TraineeUseCaseDetailPage() {
       </div>
 
       {success && <div className="rounded-md border border-green-500/40 bg-green-500/10 p-3 text-green-300">{success}</div>}
+      {error && <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-red-300">{error}</div>}
 
       {/* Status Banner */}
       {submission?.status === 'APPROVED' && (

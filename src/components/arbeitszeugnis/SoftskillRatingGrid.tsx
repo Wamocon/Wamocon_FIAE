@@ -99,7 +99,7 @@ export default function SoftskillRatingGrid({
                     return (
                         <div
                             key={criterion.id}
-                            className={`p-4 rounded-xl border border-white/5 bg-[#1a1a1a] hover:border-white/10 transition-all ${showTrainerRatings ? getDeviationColor(selfRating, trainerRating) : ''}`}
+                            className={`p-4 rounded-xl border border-border/50 bg-card hover:border-border transition-all ${showTrainerRatings ? getDeviationColor(selfRating, trainerRating) : ''}`}
                         >
                             {/* Header */}
                             <div className="flex items-start justify-between mb-4">
@@ -107,23 +107,23 @@ export default function SoftskillRatingGrid({
                                     <Badge className={`${colorClass} mb-2 border-0`}>
                                         {COMPETENCY_LABELS[area]?.label || area}
                                     </Badge>
-                                    <h4 className="font-medium text-white/90">{criterion.name}</h4>
-                                    <p className="text-xs text-white/50 mt-1 line-clamp-2" title={criterion.description}>
+                                    <h4 className="font-medium text-foreground">{criterion.name}</h4>
+                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2" title={criterion.description}>
                                         {criterion.description}
                                     </p>
                                 </div>
                             </div>
 
                             {/* Ratings */}
-                            <div className="space-y-3 pt-3 border-t border-white/5">
+                            <div className="space-y-3 pt-3 border-t border-border/50">
                                 {/* Self Rating */}
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs font-medium text-white/70">
+                                    <span className="text-xs font-medium text-foreground/70">
                                         {isTrainer ? 'Azubi-Note:' : 'Deine Note:'}
                                     </span>
                                     {isTrainer ? (
                                         <div className="flex items-center gap-2">
-                                            <span className={`text-lg font-bold ${selfRating ? GRADE_OPTIONS.find(g => g.value === selfRating)?.color.split(' ')[1] : 'text-white/20'}`}>
+                                            <span className={`text-lg font-bold ${selfRating ? GRADE_OPTIONS.find(g => g.value === selfRating)?.color.split(' ')[1] : 'text-muted-foreground/30'}`}>
                                                 {selfRating || '-'}
                                             </span>
                                         </div>
@@ -133,7 +133,7 @@ export default function SoftskillRatingGrid({
                                             onValueChange={(val) => onChange(criterion.id, val)}
                                             disabled={readOnly}
                                         >
-                                            <SelectTrigger className="w-[120px] h-9 bg-white/5 border-white/10">
+                                            <SelectTrigger className="w-[120px] h-9 bg-muted/20 border-border">
                                                 <SelectValue placeholder="Note..." />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -177,7 +177,7 @@ export default function SoftskillRatingGrid({
                                                 </SelectContent>
                                             </Select>
                                         ) : (
-                                            <span className={`text-lg font-bold ${trainerRating ? GRADE_OPTIONS.find(g => g.value === trainerRating)?.color.split(' ')[1] : 'text-white/20'}`}>
+                                            <span className={`text-lg font-bold ${trainerRating ? GRADE_OPTIONS.find(g => g.value === trainerRating)?.color.split(' ')[1] : 'text-muted-foreground/30'}`}>
                                                 {trainerRating || '-'}
                                             </span>
                                         )}

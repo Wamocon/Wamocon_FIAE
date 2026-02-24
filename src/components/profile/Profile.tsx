@@ -23,6 +23,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { FILE_UPLOAD } from '@/lib/constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useOnboarding } from '@/contexts/OnboardingContext';
 
 type TrainerStats = {
   trainees: number;
@@ -48,6 +49,7 @@ type ActivityItem = {
 export function Profile() {
   const { profile, updateProfile, changePassword } = useAuth();
   const { t } = useLanguage();
+  const { restartTour } = useOnboarding();
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -720,6 +722,22 @@ export function Profile() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Restart Tour */}
+      <div className="bg-card border-border mt-6 rounded-3xl border p-6 shadow-lg">
+        <h2 className="text-foreground mb-3 text-lg font-bold">
+          {t('onboarding.restartTour.title')}
+        </h2>
+        <p className="text-muted-foreground mb-4 text-sm">
+          {t('onboarding.restartTour.desc')}
+        </p>
+        <button
+          onClick={() => restartTour('main')}
+          className="rounded-xl border border-accent/30 px-5 py-2.5 text-sm font-medium transition-colors hover:bg-accent/10"
+        >
+          {t('onboarding.restartTour.button')}
+        </button>
       </div>
     </div>
   );

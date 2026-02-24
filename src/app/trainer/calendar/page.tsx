@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import {
     Calendar,
     ChevronLeft,
@@ -80,7 +82,12 @@ function isDateInBlock(date: Date, block: Block): boolean {
 export default function TrainerCalendarPage() {
     const { profile } = useAuth();
     const { t } = useLanguage();
-    const [trainees, setTrainees] = useState<Trainee[]>([]);
+    const queryClient = useQueryClient();
+
+    // Data fetching via React Query
+    const traineesUrl = profile?.id ? `/api/trainer/trainees?trainerProfileId=${profile.id}` : null;
+    const { data: traineesData } = useApiQuery<{ trainees: Trainee[] }>(traineesUrl);
+    const trainees = traineesData?.trainees || [];
 
     // Create translated versions
     const WEEKDAYS = useMemo(() => WEEKDAY_KEYS.map(key => t(key)), [t]);
@@ -93,8 +100,6 @@ export default function TrainerCalendarPage() {
         return config;
     }, [t]);
     const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
-    const [blocks, setBlocks] = useState<Block[]>([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const [currentDate] = useState(new Date());
@@ -102,52 +107,16 @@ export default function TrainerCalendarPage() {
     const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
     const [showAddModal, setShowAddModal] = useState(false);
 
-    // Load trainees
+    const blocksUrl = selectedTraineeId ? `/api/trainer/blocks?traineeId=${selectedTraineeId}&year=${selectedYear}` : null;
+    const { data: blocksData, isLoading: loading } = useApiQuery<{ blocks: Block[] }>(blocksUrl);
+    const blocks = blocksData?.blocks || [];
+
+    // Auto-select first trainee when data loads
     useEffect(() => {
-        if (!profile?.id) return;
-
-        async function loadTrainees() {
-            try {
-                const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile?.id}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setTrainees(data.trainees || []);
-                    if (data.trainees?.length > 0) {
-                        setSelectedTraineeId(data.trainees[0].id);
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to load trainees:', e);
-            }
+        if (trainees.length > 0 && !selectedTraineeId) {
+            setSelectedTraineeId(trainees[0].id);
         }
-        loadTrainees();
-    }, [profile?.id]);
-
-    // Load blocks for selected trainee
-    useEffect(() => {
-        if (!selectedTraineeId) {
-            setBlocks([]);
-            setLoading(false);
-            return;
-        }
-
-        async function loadBlocks() {
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/trainer/blocks?traineeId=${selectedTraineeId}&year=${selectedYear}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setBlocks(data.blocks || []);
-                }
-            } catch (e) {
-                console.error('Failed to load blocks:', e);
-                setError(t('trainer.calendar.loadError'));
-            } finally {
-                setLoading(false);
-            }
-        }
-        loadBlocks();
-    }, [selectedTraineeId, selectedYear]);
+    }, [trainees, selectedTraineeId]);
 
     // Generate calendar grid
     const calendarDays = (() => {
@@ -198,8 +167,7 @@ export default function TrainerCalendarPage() {
             });
 
             if (!res.ok) throw new Error(t('trainer.calendar.createError'));
-            const data = await res.json();
-            setBlocks(prev => [...prev, data.block]);
+            if (blocksUrl) queryClient.invalidateQueries({ queryKey: [blocksUrl] });
             setShowAddModal(false);
         } catch (e: any) {
             setError(e.message);

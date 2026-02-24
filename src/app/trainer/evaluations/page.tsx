@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -48,66 +50,29 @@ type TabType = 'pending' | 'reviewed' | 'all' | 'annual';
 
 export default function TrainerEvaluationsPage() {
     const { profile, loading: authLoading } = useAuth();
-    const [evaluations, setEvaluations] = useState<EvaluationItem[]>([]);
-    const [traineeSummaries, setTraineeSummaries] = useState<TraineeSummary[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<TabType>('pending');
     const [selectedEvaluation, setSelectedEvaluation] = useState<string | null>(null);
     const [selectedTrainee, setSelectedTrainee] = useState<string | null>(null);
-    const [pendingCount, setPendingCount] = useState(0);
-    const [totals, setTotals] = useState({ trainees: 0, pendingReviews: 0, warningsCount: 0 });
 
-    useEffect(() => {
-        if (!profile?.id) return;
+    // Data fetching via React Query — only the active tab's URL is non-null
+    const evalStatus = activeTab === 'pending' ? 'SUBMITTED' : activeTab === 'reviewed' ? 'APPROVED' : '';
+    const evalUrl = profile?.id && activeTab !== 'annual' ? `/api/trainer/evaluations?trainerId=${profile.id}&status=${evalStatus}` : null;
+    const annualUrl = profile?.id && activeTab === 'annual' ? `/api/trainer/annual-overview?trainerId=${profile.id}` : null;
 
-        if (activeTab === 'annual') {
-            fetchAnnualOverview();
-        } else {
-            fetchEvaluations();
-        }
-    }, [profile?.id, activeTab]);
+    const { data: evalData, isLoading: evalLoading } = useApiQuery<{ evaluations: EvaluationItem[]; pendingCount: number }>(evalUrl);
+    const { data: annualData, isLoading: annualLoading } = useApiQuery<{ summaries: TraineeSummary[]; totals: { trainees: number; pendingReviews: number; warningsCount: number } }>(annualUrl);
 
-    const fetchEvaluations = async () => {
-        setLoading(true);
-        try {
-            const status = activeTab === 'pending' ? 'SUBMITTED' :
-                activeTab === 'reviewed' ? 'APPROVED' : '';
-            const res = await fetch(`/api/trainer/evaluations?trainerId=${profile?.id}&status=${status}`);
-            if (res.ok) {
-                const data = await res.json();
-                setEvaluations(data.evaluations || []);
-                setPendingCount(data.pendingCount || 0);
-            }
-        } catch (error) {
-            console.error('Error fetching evaluations:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchAnnualOverview = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch(`/api/trainer/annual-overview?trainerId=${profile?.id}`);
-            if (res.ok) {
-                const data = await res.json();
-                setTraineeSummaries(data.summaries || []);
-                setTotals(data.totals || { trainees: 0, pendingReviews: 0, warningsCount: 0 });
-            }
-        } catch (error) {
-            console.error('Error fetching annual overview:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const evaluations = evalData?.evaluations || [];
+    const pendingCount = evalData?.pendingCount || 0;
+    const traineeSummaries = annualData?.summaries || [];
+    const totals = annualData?.totals || { trainees: 0, pendingReviews: 0, warningsCount: 0 };
+    const loading = evalLoading || annualLoading;
 
     const handleRefresh = () => {
         setSelectedEvaluation(null);
-        if (activeTab === 'annual') {
-            fetchAnnualOverview();
-        } else {
-            fetchEvaluations();
-        }
+        if (evalUrl) queryClient.invalidateQueries({ queryKey: [evalUrl] });
+        if (annualUrl) queryClient.invalidateQueries({ queryKey: [annualUrl] });
     };
 
     const getStatusIcon = (status: string) => {
@@ -138,7 +103,7 @@ export default function TrainerEvaluationsPage() {
     };
 
     const getGradeColor = (grade: number | null): string => {
-        if (grade === null) return 'text-white/50';
+        if (grade === null) return 'text-muted-foreground';
         if (grade <= 1.5) return 'text-emerald-400';
         if (grade <= 2.5) return 'text-green-400';
         if (grade <= 3.5) return 'text-yellow-400';
@@ -171,10 +136,10 @@ export default function TrainerEvaluationsPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-4 gap-4">
-                <Card className="bg-[#1a1a1a] border-white/10">
+                <Card className="bg-card border-border">
                     <CardContent className="py-4 text-center">
-                        <div className="text-2xl font-bold text-white">{totals.trainees || traineeSummaries.length}</div>
-                        <div className="text-xs text-white/50 mt-1">Azubis</div>
+                        <div className="text-2xl font-bold text-foreground">{totals.trainees || traineeSummaries.length}</div>
+                        <div className="text-xs text-muted-foreground mt-1">Azubis</div>
                     </CardContent>
                 </Card>
                 <Card className="bg-amber-500/10 border-amber-500/20">
@@ -199,7 +164,7 @@ export default function TrainerEvaluationsPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full">
-                <TabsList className="w-full grid grid-cols-4 bg-[#1a1a1a] border border-white/10">
+                <TabsList className="w-full grid grid-cols-4 bg-card border border-border">
                     <TabsTrigger value="pending" className="flex items-center gap-2 data-[state=active]:bg-primary/20">
                         <Clock className="h-4 w-4" />
                         Offen
@@ -317,8 +282,8 @@ export default function TrainerEvaluationsPage() {
                     ) : traineeSummaries.length === 0 ? (
                         <Card className="border-dashed border-2 border-border/30 bg-card/30">
                             <CardContent className="flex flex-col items-center justify-center py-16">
-                                <div className="p-4 rounded-2xl bg-white/5 mb-4">
-                                    <BarChart3 className="h-10 w-10 text-white/40" />
+                                <div className="p-4 rounded-2xl bg-muted/20 mb-4">
+                                    <BarChart3 className="h-10 w-10 text-muted-foreground" />
                                 </div>
                                 <p className="text-muted-foreground text-center">
                                     Keine Azubi-Daten verfügbar.
@@ -332,7 +297,7 @@ export default function TrainerEvaluationsPage() {
                                     key={trainee.traineeId}
                                     className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${trainee.warnings.length > 0
                                             ? 'border-red-500/30 bg-red-500/5'
-                                            : 'bg-[#1a1a1a] border-white/10 hover:border-white/20'
+                                            : 'bg-card border-border hover:border-border/60'
                                         } ${selectedTrainee === trainee.traineeId ? 'ring-2 ring-primary/50' : ''}`}
                                     onClick={() => setSelectedTrainee(
                                         selectedTrainee === trainee.traineeId ? null : trainee.traineeId
@@ -382,7 +347,7 @@ export default function TrainerEvaluationsPage() {
                                                                 <div className={`text-lg font-bold ${getGradeColor(data.average)}`}>
                                                                     {data.average?.toFixed(1) || '–'}
                                                                 </div>
-                                                                <div className="text-xs text-white/40">{aj}. Jahr</div>
+                                                                <div className="text-xs text-muted-foreground">{aj}. Jahr</div>
                                                             </div>
                                                         );
                                                     })}
@@ -391,12 +356,12 @@ export default function TrainerEvaluationsPage() {
                                                 {/* Overall Average */}
                                                 <div className={`px-4 py-2 rounded-xl border ${trainee.trainerAverage && trainee.trainerAverage > 3.5
                                                         ? 'bg-red-500/20 border-red-500/30'
-                                                        : 'bg-white/5 border-white/10'
+                                                        : 'bg-muted/20 border-border'
                                                     }`}>
                                                     <div className={`text-xl font-bold ${getGradeColor(trainee.trainerAverage)}`}>
                                                         {trainee.trainerAverage?.toFixed(2) || '–'}
                                                     </div>
-                                                    <div className="text-xs text-white/40">Gesamt</div>
+                                                    <div className="text-xs text-muted-foreground">Gesamt</div>
                                                 </div>
                                             </div>
                                         </div>

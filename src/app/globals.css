@@ -377,6 +377,10 @@
     transform: translateY(-2px);
   }
 
+  .glass-effect.glass-static:hover {
+    transform: none;
+  }
+
   .dark .glass-effect:hover {
     border-color: rgba(255, 26, 26, 0.3) !important;
     box-shadow:

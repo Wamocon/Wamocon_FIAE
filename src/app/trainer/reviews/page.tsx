@@ -38,6 +38,8 @@ export default function TrainerReviewsPage() {
 
   // Double-click protection: track IDs currently being processed
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  // IDs that are fading out after optimistic update (visual transition before removal)
+  const [fadingOutIds, setFadingOutIds] = useState<Set<string>>(new Set());
 
   // Solution document state for use cases (TRAINER_SOLUTION PDFs)
   const [solutionDocsMap, setSolutionDocsMap] = useState<Record<string, SolutionDocInfo | null>>({});
@@ -149,6 +151,19 @@ export default function TrainerReviewsPage() {
   const reviewItem = async (kind: 'enabler' | 'usecase', id: string, status: 'APPROVED' | 'REJECTED') => {
     if (!profile?.id) return;
     setLoadingActions(prev => ({ ...prev, [id]: status }));
+
+    // Save previous state for rollback
+    const prevEnablers = enablerSubs;
+    const prevUseCases = useCaseSubs;
+
+    // Optimistic: immediately update status + start fade-out
+    if (kind === 'enabler') {
+      setEnablerSubs(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+    } else {
+      setUseCaseSubs(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+    }
+    setFadingOutIds(prev => new Set(prev).add(id));
+
     try {
       const feedback = feedbackMap[id] || '';
       const feedbacks = feedbacksMap[id] || [];
@@ -160,19 +175,34 @@ export default function TrainerReviewsPage() {
         : { status, trainerFeedback: feedback };
       const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!r.ok) {
+        // Rollback on failure
+        setEnablerSubs(prevEnablers);
+        setUseCaseSubs(prevUseCases);
+        setFadingOutIds(prev => { const n = new Set(prev); n.delete(id); return n; });
         toast.error(t('trainer.reviews.saveError'));
         return;
       }
       toast.success(status === 'APPROVED' ? t('trainer.reviews.approved') : t('trainer.reviews.rejected'));
-      // Refresh the list with same filter
-      const onlyPending = statusFilter === 'pending';
-      const rr = await fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' });
-      const data = await rr.json();
-      setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
-      setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
       setFeedbackMap(prev => ({ ...prev, [id]: '' }));
       setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
+
+      // Background refresh (non-blocking) to sync with server
+      const onlyPending = statusFilter === 'pending';
+      fetch(`/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`, { cache: 'no-store' })
+        .then(rr => rr.json())
+        .then(data => {
+          setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+          setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+          setFadingOutIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+        })
+        .catch(() => {
+          setFadingOutIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+        });
     } catch {
+      // Rollback on network error
+      setEnablerSubs(prevEnablers);
+      setUseCaseSubs(prevUseCases);
+      setFadingOutIds(prev => { const n = new Set(prev); n.delete(id); return n; });
       toast.error(t('trainer.reviews.saveError'));
     } finally {
       setLoadingActions(prev => ({ ...prev, [id]: null }));
@@ -182,6 +212,16 @@ export default function TrainerReviewsPage() {
   const toggleSubmissionReviewed = async (id: string, current: boolean) => {
     if (busyIds.has(id)) return;
     setBusyIds(prev => new Set(prev).add(id));
+
+    // Save previous state for rollback
+    const prevQuizzes = quizzes;
+
+    // Optimistic: immediately toggle + fade-out if marking reviewed in pending filter
+    setQuizzes(prev => prev.map(q => q.id === id ? { ...q, isReviewed: !current } : q));
+    if (!current && pendingFilter === 'pending') {
+      setFadingOutIds(prev => new Set(prev).add(id));
+    }
+
     try {
       const r = await fetch(`/api/trainer/quiz-submissions/${id}`, {
         method: 'PATCH',
@@ -189,16 +229,29 @@ export default function TrainerReviewsPage() {
         body: JSON.stringify({ is_reviewed: !current, reviewer_id: profile?.id }),
       });
       if (!r.ok) {
+        // Rollback
+        setQuizzes(prevQuizzes);
+        setFadingOutIds(prev => { const n = new Set(prev); n.delete(id); return n; });
         const errData = await r.json().catch(() => ({}));
         toast.error(errData?.error || t('trainer.reviews.saveError'));
         return;
       }
       toast.success(!current ? t('trainer.reviews.markedReviewed') : t('trainer.reviews.unmarkedReviewed'));
-      // reload
-      const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`);
-      const data = await res.json();
-      setQuizzes(data.submissions || []);
+
+      // Background refresh (non-blocking)
+      fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`)
+        .then(res => res.json())
+        .then(data => {
+          setQuizzes(data.submissions || []);
+          setFadingOutIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+        })
+        .catch(() => {
+          setFadingOutIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+        });
     } catch {
+      // Rollback
+      setQuizzes(prevQuizzes);
+      setFadingOutIds(prev => { const n = new Set(prev); n.delete(id); return n; });
       toast.error(t('trainer.reviews.saveError'));
     } finally {
       setBusyIds(prev => { const n = new Set(prev); n.delete(id); return n; });
@@ -256,7 +309,7 @@ export default function TrainerReviewsPage() {
         <div className="space-y-4">
           {filteredEnablers.length === 0 && <div className="text-sm text-muted-foreground">{t('trainer.reviews.noSubmissions')}</div>}
           {filteredEnablers.map(it => (
-            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-card p-5 transition-all hover:border-accent/40 hover:shadow-md">
+            <div key={it.id} className={`group rounded-3xl border border-accent/30 bg-card p-5 transition-all duration-200 hover:scale-[1.005] hover:border-accent/50 hover:shadow-lg hover:shadow-accent/5 ${fadingOutIds.has(it.id) ? 'opacity-40 scale-[0.98] pointer-events-none' : ''}`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
@@ -414,7 +467,7 @@ export default function TrainerReviewsPage() {
         <div className="space-y-4">
           {filteredUseCases.length === 0 && <div className="text-sm text-muted-foreground">{t('trainer.reviews.noSubmissions')}</div>}
           {filteredUseCases.map(it => (
-            <div key={it.id} className="group rounded-3xl border border-accent/30 bg-card p-5 transition-all hover:border-accent/40 hover:shadow-md">
+            <div key={it.id} className={`group rounded-3xl border border-accent/30 bg-card p-5 transition-all duration-200 hover:scale-[1.005] hover:border-accent/50 hover:shadow-lg hover:shadow-accent/5 ${fadingOutIds.has(it.id) ? 'opacity-40 scale-[0.98] pointer-events-none' : ''}`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
@@ -480,7 +533,7 @@ export default function TrainerReviewsPage() {
         <div className="space-y-4">
           {quizzesFiltered.length === 0 && <div className="text-sm text-muted-foreground">{t('trainer.reviews.noQuizSubmissions')}</div>}
           {quizzesFiltered.map(s => (
-            <div key={s.id} className="group rounded-3xl border border-accent/30 bg-card p-5 transition-all hover:border-accent/40 hover:shadow-md">
+            <div key={s.id} className={`group rounded-3xl border border-accent/30 bg-card p-5 transition-all duration-200 hover:scale-[1.005] hover:border-accent/50 hover:shadow-lg hover:shadow-accent/5 ${fadingOutIds.has(s.id) ? 'opacity-40 scale-[0.98] pointer-events-none' : ''}`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="from-accent to-primary flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-foreground">
@@ -496,7 +549,7 @@ export default function TrainerReviewsPage() {
                   {s.quizType === 'LESSON' && s.difficulty && (
                     <span className={`text-xs rounded-full px-2.5 py-1 ${s.difficulty === 'LOW' ? 'bg-green-500/20 text-green-600 dark:text-green-400' : s.difficulty === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400' : 'bg-red-500/20 text-red-600 dark:text-red-400'}`}>{s.difficulty}</span>
                   )}
-                  <a href={`/trainer/reviews/quizzes/${s.id}`} className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60">{t('trainer.reviews.details')}</a>
+                  <a href={`/trainer/reviews/quizzes/${s.id}`} className="rounded-md border border-accent/30 px-3 py-2 text-sm transition-all duration-200 hover:border-accent/60 hover:bg-accent/10 hover:text-accent">{t('trainer.reviews.details')}</a>
                   <button disabled={busyIds.has(s.id)} onClick={() => toggleSubmissionReviewed(s.id, s.isReviewed)} className={`rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50 ${s.isReviewed ? 'border border-green-600/40 text-green-600' : 'border border-accent/30 hover:bg-background/60'}`}>
                     {s.isReviewed ? (<span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> {t('trainer.reviews.reviewed')}</span>) : (<span className="inline-flex items-center gap-1"><Circle className="h-4 w-4" /> {t('trainer.reviews.markAsReviewed')}</span>)}
                   </button>

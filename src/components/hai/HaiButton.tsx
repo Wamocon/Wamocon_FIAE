@@ -23,7 +23,7 @@ export function HaiButton() {
     const hasMessages = messages.length > 0;
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2" data-tour="hai-button">
             {/* Minimized Indicator */}
             <AnimatePresence>
                 {viewMode === 'minimized' && hasMessages && (
