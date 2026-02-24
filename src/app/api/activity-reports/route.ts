@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { activityReports, profiles, activityReportUseCaseEntries } from '@/db/migrations/schemas/schema';
+import { apiCache } from '@/lib/api-cache';
 
 // GET: List activity reports for the current user
 export async function GET(req: NextRequest) {
@@ -168,6 +169,10 @@ export async function POST(req: NextRequest) {
                 }))
             );
         }
+
+        apiCache.invalidate('activity_reports');
+        apiCache.invalidate('trainee_dashboard');
+        apiCache.invalidate('trainer_dashboard');
 
         return NextResponse.json({
             success: true,

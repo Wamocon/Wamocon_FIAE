@@ -9,6 +9,8 @@ import { BreadcrumbProvider } from '@/contexts/BreadcrumbContext';
 import { Analytics } from '@vercel/analytics/react';
 import dynamic from 'next/dynamic';
 import QueryProvider from '@/components/QueryProvider';
+import { OnboardingProvider } from '@/contexts/OnboardingContext';
+import { TourOverlay } from '@/components/onboarding/TourOverlay';
 
 // Lazy-load HAI chat widget - it's not needed for initial page render
 // Import directly instead of through barrel to avoid pulling in all HAI modules
@@ -42,7 +44,10 @@ export default function RootLayout({
             <LanguageProvider>
               <ThemeProvider>
                 <BreadcrumbProvider>
-                  <HaiWrapper>{children}</HaiWrapper>
+                  <OnboardingProvider>
+                    <HaiWrapper>{children}</HaiWrapper>
+                    <TourOverlay />
+                  </OnboardingProvider>
                 </BreadcrumbProvider>
               </ThemeProvider>
             </LanguageProvider>

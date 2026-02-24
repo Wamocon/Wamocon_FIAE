@@ -192,8 +192,8 @@ export default function WeeklyEvaluationForm({
     const selectedUseCase = arpUseCases.find(uc => uc.id === arpUseCaseId);
 
     return (
-        <Card className="border-white/10 bg-[#1a1a1a]/90 backdrop-blur-xl shadow-xl">
-            <CardHeader className="border-b border-white/10 pb-4">
+        <Card className="border-border bg-card/90 backdrop-blur-xl shadow-xl">
+            <CardHeader className="border-b border-border pb-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20">
@@ -219,20 +219,20 @@ export default function WeeklyEvaluationForm({
                         <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
                         <div>
                             <p className="font-medium text-red-400">Korrektur erforderlich</p>
-                            <p className="text-sm text-white/60 mt-1">{existingEvaluation.rejectionReason}</p>
+                            <p className="text-sm text-muted-foreground mt-1">{existingEvaluation.rejectionReason}</p>
                         </div>
                     </div>
                 )}
 
                 {/* ARP Theme Selection */}
                 <div className="space-y-3">
-                    <label className="text-sm font-medium text-white/90 flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                         ARP-Thema (Ausbildungsrahmenplan)
                     </label>
 
                     <Select value={arpUseCaseId} onValueChange={setArpUseCaseId} disabled={isReadOnly}>
-                        <SelectTrigger className="h-11 text-base bg-[#252525] border-white/10 hover:border-white/20 transition-colors">
+                        <SelectTrigger className="h-11 text-base bg-muted border-border hover:border-border/80 transition-colors">
                             <SelectValue placeholder="Thema aus ARP auswählen...">
                                 {selectedUseCase && (
                                     <span className="flex items-center gap-2 text-sm">
@@ -246,13 +246,13 @@ export default function WeeklyEvaluationForm({
                         </SelectTrigger>
                         <SelectContent className="max-w-[700px] max-h-[400px]">
                             {groupedUseCases.length === 0 ? (
-                                <div className="p-4 text-center text-white/50 text-sm">
+                                <div className="p-4 text-center text-muted-foreground text-sm">
                                     Keine Themen verfügbar
                                 </div>
                             ) : (
                                 groupedUseCases.map((group) => (
                                     <SelectGroup key={group.code}>
-                                        <SelectLabel className="px-3 py-2 text-xs font-bold text-primary/80 bg-white/5 border-b border-white/10">
+                                        <SelectLabel className="px-3 py-2 text-xs font-bold text-primary/80 bg-muted/30 border-b border-border">
                                             [{group.code}] {group.title}
                                         </SelectLabel>
                                         {group.useCases.map((useCase) => (
@@ -265,7 +265,7 @@ export default function WeeklyEvaluationForm({
                                                     <span className="font-bold text-primary shrink-0 min-w-[20px]">
                                                         {useCase.letter})
                                                     </span>
-                                                    <span className="text-white/90 leading-relaxed text-sm">
+                                                    <span className="text-foreground leading-relaxed text-sm">
                                                         {useCase.description}
                                                     </span>
                                                 </div>
@@ -278,36 +278,36 @@ export default function WeeklyEvaluationForm({
                     </Select>
 
                     <div className="relative">
-                        <span className="absolute left-3 top-3 text-xs text-white/40">oder</span>
+                        <span className="absolute left-3 top-3 text-xs text-muted-foreground">oder</span>
                         <Textarea
                             placeholder="Eigenes Thema manuell eingeben..."
                             value={arpThemeText}
                             onChange={(e) => setArpThemeText(e.target.value)}
                             disabled={isReadOnly || !!arpUseCaseId}
-                            className="bg-[#252525] border-white/10 min-h-[48px] pl-12 resize-none hover:border-white/20 transition-colors"
+                            className="bg-muted border-border min-h-[48px] pl-12 resize-none hover:border-border/80 transition-colors"
                         />
                     </div>
                 </div>
 
                 {/* Divider */}
-                <div className="border-t border-white/10" />
+                <div className="border-t border-border" />
 
                 {/* Overall Self-Rating */}
                 <div className="space-y-3">
-                    <label className="text-sm font-medium text-white/90 flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                         Selbsteinschätzung – Gesamtnote dieser Woche
                     </label>
 
                     <Select value={selfRating} onValueChange={setSelfRating} disabled={isReadOnly}>
-                        <SelectTrigger className="h-11 text-base bg-[#252525] border-white/10 hover:border-white/20 transition-colors">
+                        <SelectTrigger className="h-11 text-base bg-muted border-border hover:border-border/80 transition-colors">
                             <SelectValue placeholder="Note auswählen...">
                                 {selfRating && (
                                     <span className="flex items-center gap-3">
                                         <span className={`font-bold text-lg ${GRADE_OPTIONS.find(g => g.value === selfRating)?.color}`}>
                                             {selfRating}
                                         </span>
-                                        <span className="text-white/90">
+                                        <span className="text-foreground">
                                             {GRADE_OPTIONS.find(g => g.value === selfRating)?.label}
                                         </span>
                                     </span>
@@ -319,8 +319,8 @@ export default function WeeklyEvaluationForm({
                                 <SelectItem key={grade.value} value={grade.value} className="py-3">
                                     <div className="flex items-center gap-3">
                                         <span className={`font-bold text-xl w-8 ${grade.color}`}>{grade.value}</span>
-                                        <span className="text-white/90 font-medium">{grade.label}</span>
-                                        <span className="text-white/40 text-sm">({grade.sublabel})</span>
+                                        <span className="text-foreground font-medium">{grade.label}</span>
+                                        <span className="text-muted-foreground text-sm">({grade.sublabel})</span>
                                     </div>
                                 </SelectItem>
                             ))}
@@ -331,11 +331,11 @@ export default function WeeklyEvaluationForm({
                 {/* Self Comment */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-white/90 flex items-center gap-2">
+                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                             Kommentar zur Woche
                         </label>
-                        <span className="text-xs text-white/40">
+                        <span className="text-xs text-muted-foreground">
                             {selfComment.length}/500 Zeichen
                         </span>
                     </div>
@@ -345,33 +345,33 @@ export default function WeeklyEvaluationForm({
                         value={selfComment}
                         onChange={(e) => setSelfComment(e.target.value.substring(0, 500))}
                         disabled={isReadOnly}
-                        className="bg-[#252525] border-white/10 min-h-[120px] resize-none hover:border-white/20 transition-colors"
+                        className="bg-muted border-border min-h-[120px] resize-none hover:border-border/80 transition-colors"
                     />
                 </div>
 
                 {/* Divider */}
-                <div className="border-t border-white/10" />
+                <div className="border-t border-border" />
 
                 {/* Softskills Section */}
                 <div className="space-y-4">
                     <button
                         type="button"
                         onClick={() => setShowSoftskills(!showSoftskills)}
-                        className="flex items-center justify-between w-full p-3 rounded-lg bg-[#252525] border border-white/10 hover:border-white/20 transition-all group"
+                        className="flex items-center justify-between w-full p-3 rounded-lg bg-muted border border-border hover:border-border/80 transition-all group"
                     >
                         <div className="flex items-center gap-3">
                             <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
-                            <span className="text-sm font-medium text-white/90">MES Softskill-Bewertung</span>
-                            <span className="text-xs text-white/40">(19 Kriterien)</span>
+                            <span className="text-sm font-medium text-foreground">MES Softskill-Bewertung</span>
+                            <span className="text-xs text-muted-foreground">(19 Kriterien)</span>
                         </div>
-                        <div className="flex items-center gap-2 text-white/40 group-hover:text-white/70 transition-colors">
+                        <div className="flex items-center gap-2 text-muted-foreground group-hover:text-foreground/70 transition-colors">
                             <span className="text-xs">{showSoftskills ? 'Ausblenden' : 'Anzeigen'}</span>
                             {showSoftskills ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </div>
                     </button>
 
                     {showSoftskills && (
-                        <div className="p-4 rounded-lg bg-[#1f1f1f] border border-white/5">
+                        <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
                             <SoftskillRatingGrid
                                 ratings={softskillRatings}
                                 onChange={handleSoftskillChange}
@@ -390,15 +390,15 @@ export default function WeeklyEvaluationForm({
                             Trainer-Bewertung
                         </p>
                         <div className="flex items-center gap-4">
-                            <span className="text-sm text-white/60">Gesamtnote:</span>
+                            <span className="text-sm text-muted-foreground">Gesamtnote:</span>
                             <Badge variant="secondary" className="text-lg px-3 py-1">
                                 {GRADE_OPTIONS.find(g => g.value === existingEvaluation.trainerRating)?.label || existingEvaluation.trainerRating}
                             </Badge>
                         </div>
                         {existingEvaluation.trainerComment && (
-                            <div className="pt-2 border-t border-white/10">
-                                <span className="text-sm text-white/60">Kommentar:</span>
-                                <p className="mt-1 text-sm text-white/90">{existingEvaluation.trainerComment}</p>
+                            <div className="pt-2 border-t border-border">
+                                <span className="text-sm text-muted-foreground">Kommentar:</span>
+                                <p className="mt-1 text-sm text-foreground">{existingEvaluation.trainerComment}</p>
                             </div>
                         )}
                     </div>
@@ -406,12 +406,12 @@ export default function WeeklyEvaluationForm({
 
                 {/* Action Buttons */}
                 {!isReadOnly && (
-                    <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                    <div className="flex justify-end gap-3 pt-4 border-t border-border">
                         <Button
                             variant="outline"
                             onClick={() => handleSave(false)}
                             disabled={saving || submitting}
-                            className="min-w-[140px] border-white/20 hover:bg-white/5"
+                            className="min-w-[140px] border-border/60 hover:bg-muted"
                         >
                             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                             Entwurf speichern

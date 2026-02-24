@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, asc, desc, eq, gte, lt, sql } from 'drizzle-orm';
-import { schoolExams, schoolExamResults, profiles } from '@/db/migrations/schemas/schema';
+import { schoolExams, schoolExamResults, profiles, ausbildungBlocks } from '@/db/migrations/schemas/schema';
 
 // Helper to get current Schuljahr
 function getCurrentSchuljahr(): string {
@@ -68,15 +68,89 @@ export async function GET(req: NextRequest) {
             .orderBy(upcoming ? asc(schoolExams.examDate) : desc(schoolExams.examDate))
             .limit(limit);
 
+        // Also fetch EXAM-type blocks from ausbildungBlocks (calendar)
+        const blockConditions = [
+            eq(ausbildungBlocks.traineeId, traineeId as any),
+            eq(ausbildungBlocks.blockType, 'EXAM'),
+        ];
+        if (upcoming) {
+            const now2 = new Date();
+            blockConditions.push(gte(ausbildungBlocks.startDate, now2));
+        }
+
+        const examBlocks = await db
+            .select()
+            .from(ausbildungBlocks)
+            .where(and(...blockConditions))
+            .orderBy(upcoming ? asc(ausbildungBlocks.startDate) : desc(ausbildungBlocks.startDate))
+            .limit(limit);
+
+        // Collect school_exams dates to avoid duplicate entries
+        const schoolExamDates = new Set(
+            rows.map(({ exam }) => new Date(exam.examDate).toISOString().split('T')[0])
+        );
+
+        // Convert EXAM blocks to the same shape, skip if a school_exam already covers that date
+        const examSubTypeLabels: Record<string, string> = {
+            IHK_ABSCHLUSSPRUEFUNG_T1: 'IHK Abschlussprüfung Teil 1',
+            IHK_ABSCHLUSSPRUEFUNG_T2: 'IHK Abschlussprüfung Teil 2',
+            KLAUSUR_WMC: 'Klausur WMC',
+            KLAUSUR_ALLGEMEIN: 'Klausur',
+            PRAKTISCHE_PRUEFUNG: 'Praktische Prüfung',
+            MUENDLICHE_PRUEFUNG: 'Mündliche Prüfung',
+            PROJEKTARBEIT: 'Projektarbeit',
+            ANDERE: 'Prüfung',
+        };
+
+        const blockExams = examBlocks
+            .filter(block => {
+                const blockDate = new Date(block.startDate).toISOString().split('T')[0];
+                return !schoolExamDates.has(blockDate);
+            })
+            .map(block => ({
+                id: block.id,
+                traineeId: block.traineeId,
+                schuljahr: block.schuljahr,
+                ausbildungsjahr: block.ausbildungsjahr,
+                examDate: block.startDate,
+                dayOfWeek: null,
+                period: null,
+                teacher: null,
+                subject: block.title || (block.examSubType ? examSubTypeLabels[block.examSubType] || 'Prüfung' : 'Prüfung'),
+                examTypeValue: null,
+                lernfeldCode: null,
+                notes: block.notes || block.description || null,
+                isPersonal: block.isPersonal ?? false,
+                importedFrom: block.importedFrom,
+                createdAt: block.createdAt,
+                updatedAt: block.updatedAt,
+                _source: 'calendar' as const,
+            }));
+
         // Format response with countdown for upcoming exams
         const now = new Date();
-        const examsWithMeta = rows.map(({ exam, result }) => {
+        const allExams = [
+            ...rows.map(({ exam, result }) => ({
+                ...exam,
+                result: result || null,
+                _source: 'exams' as const,
+            })),
+            ...blockExams.map(e => ({ ...e, result: null })),
+        ];
+
+        // Sort combined list
+        allExams.sort((a, b) => {
+            const dateA = new Date(a.examDate).getTime();
+            const dateB = new Date(b.examDate).getTime();
+            return upcoming ? dateA - dateB : dateB - dateA;
+        });
+
+        const examsWithMeta = allExams.map((exam) => {
             const examDate = new Date(exam.examDate);
             const daysUntil = Math.ceil((examDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
             return {
                 ...exam,
-                result: result || null,
                 meta: {
                     daysUntil,
                     isPast: daysUntil < 0,
@@ -90,7 +164,7 @@ export async function GET(req: NextRequest) {
             exams: examsWithMeta,
             meta: {
                 currentSchuljahr: getCurrentSchuljahr(),
-                total: rows.length,
+                total: examsWithMeta.length,
             }
         });
     } catch (e) {

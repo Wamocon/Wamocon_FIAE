@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
   ClipboardList,
@@ -82,12 +84,27 @@ export default function TraineeActivityReportsPage() {
   const { t } = useLanguage();
   const router = useRouter();
 
+  const queryClient = useQueryClient();
+
+  // Redirect non-trainee users
+  useEffect(() => {
+    if (!profile || authLoading) return;
+    if (profile.role !== 'trainee') router.push('/trainer/activity-reports');
+  }, [profile?.id, authLoading, router]);
+
+  // Data fetching via React Query (cached, deduped, auto-refresh on focus)
+  const reportsUrl = profile?.id ? `/api/activity-reports?userId=${profile.id}` : null;
+  const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>('/api/training-components');
+  const { data: ucData } = useApiQuery<{ useCases: TrainingUseCase[] }>('/api/training-use-cases');
+  const { data: reportData, isLoading: reportsLoading, error: reportsError } = useApiQuery<{ reports: ActivityReport[] }>(reportsUrl);
+
+  const components = compData?.components || [];
+  const useCases = ucData?.useCases || [];
+  const reports = reportData?.reports || [];
+  const loading = reportsLoading;
+  const error = reportsError?.message || null;
+
   // State
-  const [reports, setReports] = useState<ActivityReport[]>([]);
-  const [components, setComponents] = useState<TrainingComponent[]>([]);
-  const [useCases, setUseCases] = useState<TrainingUseCase[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<
     'ALL' | 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED'
   >('ALL');
@@ -107,49 +124,8 @@ export default function TraineeActivityReportsPage() {
     []
   );
 
-  // Load data
-  useEffect(() => {
-    if (!profile || authLoading) return;
-
-    if (profile.role !== 'trainee') {
-      router.push('/trainer/activity-reports');
-      return;
-    }
-
-    loadData();
-  }, [profile?.id, authLoading, router]);
-
-  const loadData = async () => {
-    if (!profile) return;
-
-    try {
-      setLoading(true);
-
-      // Load components, use cases, and reports in parallel
-      const [componentsRes, useCasesRes, reportsRes] = await Promise.all([
-        fetch('/api/training-components'),
-        fetch('/api/training-use-cases'),
-        fetch(`/api/activity-reports?userId=${profile.id}`),
-      ]);
-
-      if (!componentsRes.ok || !useCasesRes.ok || !reportsRes.ok) {
-        throw new Error(t('reports.error.loadData'));
-      }
-
-      const [componentsData, useCasesData, reportsData] = await Promise.all([
-        componentsRes.json(),
-        useCasesRes.json(),
-        reportsRes.json(),
-      ]);
-
-      setComponents(componentsData.components || []);
-      setUseCases(useCasesData.useCases || []);
-      setReports(reportsData.reports || []);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+  const loadData = () => {
+    if (reportsUrl) queryClient.invalidateQueries({ queryKey: [reportsUrl] });
   };
 
   // Group use cases by component
@@ -219,7 +195,7 @@ export default function TraineeActivityReportsPage() {
 
       if (!res.ok) throw new Error(t('reports.error.delete'));
 
-      setReports(reports.filter(r => r.id !== reportId));
+      loadData();
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -501,7 +477,7 @@ export default function TraineeActivityReportsPage() {
                 <div
                   key={report.id}
                   onClick={() => setSelectedReport(report)}
-                  className="hover:bg-muted/50 cursor-pointer p-4 transition-colors"
+                  className="hover:bg-muted/50 cursor-pointer rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.005]"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
