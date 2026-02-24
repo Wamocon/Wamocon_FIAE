@@ -153,7 +153,7 @@ export default function AnnualPerformanceOverview({
     return (
         <div className="space-y-6">
             {/* Header Card with Overall Stats */}
-            <Card className="border-border bg-gradient-to-br from-[#1a1a1a] to-card/80 shadow-xl">
+            <Card className="border-border bg-gradient-to-br from-card to-card/80 shadow-xl">
                 <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">

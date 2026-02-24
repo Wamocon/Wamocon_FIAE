@@ -251,7 +251,7 @@ export default function TraineeEvaluationsPage() {
                                                     <div className="text-2xl font-bold text-primary">KW {item.weekNumber}</div>
                                                     <div className="text-xs text-muted-foreground">{item.year}</div>
                                                 </div>
-                                                <div className="h-10 w-px bg-white/10" />
+                                                <div className="h-10 w-px bg-border" />
                                                 <div>
                                                     <CardTitle className="text-base flex items-center gap-2 text-foreground">
                                                         {item.ausbildungsjahr}. Ausbildungsjahr
