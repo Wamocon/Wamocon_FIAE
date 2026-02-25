@@ -22,7 +22,7 @@ export function TrainerLernfelderTab() {
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        fetch('/api/trainer/lernfelder')
+        fetch('/api/trainer/lernfelder', { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
                 setLernfelder(data.lernfelder || []);

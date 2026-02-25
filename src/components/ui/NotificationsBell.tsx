@@ -91,7 +91,7 @@ export default function NotificationsBell() {
 
     return () => {
       mounted = false;
-      try { channel.unsubscribe(); } catch {}
+      try { channel.unsubscribe(); } catch { }
     };
   }, [profile?.id]);
 
@@ -105,12 +105,15 @@ export default function NotificationsBell() {
   }, [open]);
 
   const markAsRead = async (id: string) => {
+    const prevItems = items;
+    // Optimistic update
+    setItems(prev => prev.map(i => i.id === id ? { ...i, isRead: true, readAt: new Date().toISOString() } : i));
     try {
       const res = await fetch(`/api/notifications/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isRead: true }) });
-      if (res.ok) {
-        setItems(prev => prev.map(i => i.id === id ? { ...i, isRead: true, readAt: new Date().toISOString() } : i));
-      }
-    } catch {}
+      if (!res.ok) throw new Error('Failed');
+    } catch {
+      setItems(prevItems);
+    }
   };
 
   const markAllAsRead = async () => {
@@ -134,7 +137,7 @@ export default function NotificationsBell() {
           const data = await res.json();
           setItems(data.notifications || []);
         }
-      } catch {}
+      } catch { }
     }
   };
 

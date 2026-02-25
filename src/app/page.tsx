@@ -11,6 +11,7 @@ import {
   GraduationCap,
   ArrowRight,
   Shield,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -142,7 +143,7 @@ export default function LandingPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-red-600 to-red-800">
               <BookOpen className="text-foreground h-6 w-6" />
             </div>
-            <span className="text-foreground text-xl font-bold">FIAE</span>
+            <span className="text-foreground text-xl font-bold">LFA</span>
           </div>
           <div className="flex items-center space-x-3">
             <LanguageToggle variant="icon" />
@@ -173,14 +174,25 @@ export default function LandingPage() {
           <p className="text-muted mx-auto mb-6 max-w-2xl text-lg md:text-xl">
             {t('landing.description')}
           </p>
-          <Button
-            onClick={handleGetStarted}
-            size="lg"
-            className="text-foreground bg-red-600 px-8 py-4 text-lg hover:bg-red-700"
-          >
-            {t('landing.getStarted')}
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </Button>
+          <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <Button
+              onClick={handleGetStarted}
+              size="lg"
+              className="text-foreground bg-red-600 px-8 py-4 text-lg hover:bg-red-700"
+            >
+              {t('landing.getStarted')}
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+            <Button
+              onClick={() => router.push('/demo')}
+              size="lg"
+              variant="outline"
+              className="border-foreground/30 text-foreground hover:bg-foreground/10 px-8 py-4 text-lg"
+            >
+              <Eye className="mr-2 h-5 w-5" />
+              Demo ansehen
+            </Button>
+          </div>
         </motion.section>
 
         <motion.section

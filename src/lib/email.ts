@@ -11,7 +11,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Default sender email (use onboarding@resend.dev for testing)
 const FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev';
-const FROM_NAME = 'FIAE Ausbildungsplattform';
+const FROM_NAME = 'LFA Ausbildungsplattform';
 
 interface BlockInviteData {
     blockId: string;

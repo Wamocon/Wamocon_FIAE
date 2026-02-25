@@ -4,7 +4,7 @@ import { trainingComponents, trainingUseCases } from '../db/migrations/schemas/s
 import { eq } from 'drizzle-orm';
 
 /**
- * FIAE Training Data Seed
+ * LFA Training Data Seed
  * Based on user-provided "Betrieblicher Ausbildungsrahmenplan" text.
  * 
  * PHASES (mapped to trainingYear for grouping):
@@ -410,7 +410,7 @@ const useCasesMap: Record<string, { letter: string; description: string; planned
 
 async function main() {
     console.log('========================================');
-    console.log('FIAE Training Data Seeder V3');
+    console.log('LFA Training Data Seeder V3');
     console.log('========================================\n');
 
     console.log('Deleting existing data...');

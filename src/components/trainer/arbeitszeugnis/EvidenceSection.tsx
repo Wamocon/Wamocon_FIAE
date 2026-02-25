@@ -27,7 +27,7 @@ export function EvidenceSection({ traineeId, query = '', onCopy }: EvidenceSecti
         async function loadEvidence() {
             setLoading(true);
             try {
-                const res = await fetch(`/api/trainer/arbeitszeugnis/evidence/${traineeId}${query}`);
+                const res = await fetch(`/api/trainer/arbeitszeugnis/evidence/${traineeId}${query}`, { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     setEvidence(data.highlights || []);

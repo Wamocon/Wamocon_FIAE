@@ -120,6 +120,17 @@ const BLOCK_CONFIG = {
     },
 };
 
+const EXAM_SUBTYPE_LABELS: Record<string, string> = {
+    'IHK_ABSCHLUSSPRUEFUNG_T1': 'IHK Abschlussprüfung Teil 1',
+    'IHK_ABSCHLUSSPRUEFUNG_T2': 'IHK Abschlussprüfung Teil 2',
+    'KLAUSUR_WMC': 'Klausur WMC',
+    'KLAUSUR_ALLGEMEIN': 'Klausur (Allgemein)',
+    'PRAKTISCHE_PRUEFUNG': 'Praktische Prüfung',
+    'MUENDLICHE_PRUEFUNG': 'Mündliche Prüfung',
+    'PROJEKTARBEIT': 'Projektarbeit',
+    'ANDERE': 'Andere Prüfung'
+};
+
 // Weekday keys for translation
 const WEEKDAY_KEYS = [
     'time.weekdays.mo', 'time.weekdays.tu', 'time.weekdays.we', 'time.weekdays.th',
@@ -214,8 +225,8 @@ export function BlockCalendar() {
             try {
                 // Fetch blocks and exams in parallel
                 const [blocksRes, examsRes] = await Promise.all([
-                    fetch(`/api/trainee/school/blocks?traineeId=${profile.id}&year=${selectedYear}`),
-                    fetch(`/api/trainee/school/exams?traineeId=${profile.id}`)
+                    fetch(`/api/trainee/school/blocks?traineeId=${profile.id}&year=${selectedYear}`, { cache: 'no-store' }),
+                    fetch(`/api/trainee/school/exams?traineeId=${profile.id}`, { cache: 'no-store' })
                 ]);
 
                 if (!blocksRes.ok) throw new Error(t('calendar.error.loadBlocks'));
@@ -225,7 +236,10 @@ export function BlockCalendar() {
 
                 if (examsRes.ok) {
                     const examsData = await examsRes.json();
-                    setExams(examsData.exams || []);
+                    // Filter out exams that are actually sourced from blocks to avoid duplicates
+                    // since we already render blocks separately.
+                    const realExams = (examsData.exams || []).filter((e: any) => e._source !== 'calendar');
+                    setExams(realExams);
                 }
             } catch (e: any) {
                 setError(e.message);
@@ -593,19 +607,15 @@ export function BlockCalendar() {
                             const primaryBlock = dayData.blocks[0];
 
                             return (
-                                <button
+                                <div
                                     key={index}
                                     onClick={() => {
-                                        if (hasBlocks) {
-                                            setSelectedBlock(primaryBlock);
-                                        } else {
-                                            setSelectedDate(dayData.date);
-                                            setShowAddModal(true);
-                                        }
+                                        setSelectedDate(dayData.date);
+                                        setShowAddModal(true);
                                     }}
                                     className={`
-                                        relative min-h-[80px] md:min-h-[100px] p-2 border-b border-r border-border
-                                        transition-all hover:bg-muted/50 cursor-pointer text-left
+                                        relative h-[120px] p-1.5 border-b border-r border-border
+                                        transition-all hover:bg-muted/30 cursor-pointer overflow-hidden
                                         ${!dayData.isCurrentMonth ? 'opacity-40' : ''}
                                         ${dayData.isToday ? 'bg-accent/5' : ''}
                                         ${isWeekend && dayData.isCurrentMonth ? 'bg-muted/30' : ''}
@@ -613,12 +623,12 @@ export function BlockCalendar() {
                                 >
                                     {/* Date Number */}
                                     <div className={`
-                                        inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-medium mb-1
+                                        inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-medium mb-1
                                         ${dayData.isToday
                                             ? 'bg-accent text-accent-foreground'
                                             : isWeekend
                                                 ? 'text-muted-foreground'
-                                                : 'text-foreground'
+                                                : 'text-foreground font-semibold'
                                         }
                                     `}>
                                         {dayData.date.getDate()}
@@ -630,18 +640,23 @@ export function BlockCalendar() {
                                             {dayData.blocks.slice(0, 2).map((block, bi) => {
                                                 const blockConfig = BLOCK_CONFIG[block.blockType];
                                                 return (
-                                                    <div
+                                                    <button
                                                         key={block.id + bi}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedBlock(block);
+                                                        }}
                                                         className={`
-                                                            flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium
+                                                            w-full flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium
                                                             ${blockConfig.lightBg} ${blockConfig.text} ${blockConfig.border} border
+                                                            hover:brightness-95 transition-all
                                                         `}
                                                     >
                                                         <blockConfig.Icon className="h-3 w-3 flex-shrink-0" />
-                                                        <span className="truncate hidden md:block">
-                                                            {block.title || block.description || t(blockConfig.labelKey)}
+                                                        <span className="truncate">
+                                                            {block.title || (block.blockType === 'EXAM' && block.examSubType ? EXAM_SUBTYPE_LABELS[block.examSubType] : (block.description || t(blockConfig.labelKey)))}
                                                         </span>
-                                                    </div>
+                                                    </button>
                                                 );
                                             })}
                                             {dayData.blocks.length > 2 && (
@@ -659,13 +674,13 @@ export function BlockCalendar() {
                                     {/* Exam Indicators */}
                                     {dayData.exams.length > 0 && (
                                         <div className="mt-1 space-y-1">
-                                            {dayData.exams.slice(0, 2).map((exam) => (
+                                            {dayData.exams.slice(0, (dayData.blocks.length > 2 ? 0 : 2 - dayData.blocks.length) || 1).map((exam) => (
                                                 <div
                                                     key={exam.id}
                                                     className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30"
                                                 >
                                                     <FileText className="h-3 w-3 flex-shrink-0" />
-                                                    <span className="truncate hidden md:block">
+                                                    <span className="truncate">
                                                         {exam.subject}
                                                     </span>
                                                 </div>
@@ -681,7 +696,7 @@ export function BlockCalendar() {
                                             )}
                                         </div>
                                     )}
-                                </button>
+                                </div>
                             );
                         })
                         : weekDays.map((dayData, index) => {
@@ -718,7 +733,7 @@ export function BlockCalendar() {
                                                     <div className="flex items-start gap-2 mb-1">
                                                         <blockConfig.Icon className="h-4 w-4 mt-0.5 flex-shrink-0" />
                                                         <span className="font-semibold text-xs leading-tight">
-                                                            {block.title || t(blockConfig.labelKey)}
+                                                            {block.title || (block.blockType === 'EXAM' && block.examSubType ? EXAM_SUBTYPE_LABELS[block.examSubType] : t(blockConfig.labelKey))}
                                                         </span>
                                                     </div>
                                                     {block.description && (
@@ -726,12 +741,6 @@ export function BlockCalendar() {
                                                             {block.description}
                                                         </p>
                                                     )}
-                                                    <div className="mt-1.5 flex items-center gap-1 text-[10px] opacity-70">
-                                                        <Clock className="h-3 w-3" />
-                                                        {new Date(block.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                        -
-                                                        {new Date(block.endDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </div>
                                                 </button>
                                             );
                                         })}
@@ -769,100 +778,112 @@ export function BlockCalendar() {
             </div>
 
             {/* Quick Stats */}
-            {stats.total > 0 && (
-                <div className="grid grid-cols-3 gap-3">
-                    <div className="p-4 rounded-xl glass-effect border border-accent/20">
-                        <div className="flex items-center gap-3">
-                            <School className="h-5 w-5 text-accent" />
-                            <div>
-                                <p className="text-xl font-bold text-foreground">{stats.schoolBlocks}</p>
-                                <p className="text-xs text-accent">{t('calendar.schoolBlocks')}</p>
+            {
+                stats.total > 0 && (
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="p-4 rounded-xl glass-effect border border-accent/20">
+                            <div className="flex items-center gap-3">
+                                <School className="h-5 w-5 text-accent" />
+                                <div>
+                                    <p className="text-xl font-bold text-foreground">{stats.schoolBlocks}</p>
+                                    <p className="text-xs text-accent">{t('calendar.schoolBlocks')}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 rounded-xl glass-effect border border-green-500/20">
+                            <div className="flex items-center gap-3">
+                                <Building2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                <div>
+                                    <p className="text-xl font-bold text-foreground">{stats.companyBlocks}</p>
+                                    <p className="text-xs text-green-600 dark:text-green-400">{t('calendar.companyPhases')}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 rounded-xl glass-effect border border-amber-500/20">
+                            <div className="flex items-center gap-3">
+                                <Palmtree className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                                <div>
+                                    <p className="text-xl font-bold text-foreground">{stats.holidayBlocks}</p>
+                                    <p className="text-xs text-amber-600 dark:text-amber-400">{t('calendar.holidayWeeks')}</p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div className="p-4 rounded-xl glass-effect border border-green-500/20">
-                        <div className="flex items-center gap-3">
-                            <Building2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                            <div>
-                                <p className="text-xl font-bold text-foreground">{stats.companyBlocks}</p>
-                                <p className="text-xs text-green-600 dark:text-green-400">{t('calendar.companyPhases')}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="p-4 rounded-xl glass-effect border border-amber-500/20">
-                        <div className="flex items-center gap-3">
-                            <Palmtree className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                            <div>
-                                <p className="text-xl font-bold text-foreground">{stats.holidayBlocks}</p>
-                                <p className="text-xs text-amber-600 dark:text-amber-400">{t('calendar.holidayWeeks')}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Empty State */}
-            {blocks.length === 0 && !loading && (
-                <div className="text-center py-8 px-6">
-                    <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-accent/10 flex items-center justify-center">
-                        <Sparkles className="h-7 w-7 text-accent" />
+            {
+                blocks.length === 0 && !loading && (
+                    <div className="text-center py-8 px-6">
+                        <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-accent/10 flex items-center justify-center">
+                            <Sparkles className="h-7 w-7 text-accent" />
+                        </div>
+                        <h3 className="text-lg font-bold text-foreground mb-2">
+                            {t('calendar.emptyState.title')}
+                        </h3>
+                        <p className="text-muted-foreground max-w-sm mx-auto mb-4 text-sm">
+                            {t('calendar.emptyState.description')}
+                        </p>
                     </div>
-                    <h3 className="text-lg font-bold text-foreground mb-2">
-                        {t('calendar.emptyState.title')}
-                    </h3>
-                    <p className="text-muted-foreground max-w-sm mx-auto mb-4 text-sm">
-                        {t('calendar.emptyState.description')}
-                    </p>
-                </div>
-            )}
+                )
+            }
 
             {/* Error State */}
-            {error && (
-                <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20">
-                    <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-                    <p className="text-sm text-destructive">{error}</p>
-                    <button
-                        onClick={() => setError(null)}
-                        className="ml-auto p-1 hover:bg-destructive/10 rounded"
-                    >
-                        <X className="h-4 w-4 text-destructive" />
-                    </button>
-                </div>
-            )}
+            {
+                error && (
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20">
+                        <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                        <p className="text-sm text-destructive">{error}</p>
+                        <button
+                            onClick={() => setError(null)}
+                            className="ml-auto p-1 hover:bg-destructive/10 rounded"
+                        >
+                            <X className="h-4 w-4 text-destructive" />
+                        </button>
+                    </div>
+                )
+            }
 
             {/* Block Detail Modal */}
-            {selectedBlock && (
-                <BlockDetailModal
-                    block={selectedBlock}
-                    onClose={() => setSelectedBlock(null)}
-                    onDelete={handleDeleteBlock}
-                />
-            )}
+            {
+                selectedBlock && (
+                    <BlockDetailModal
+                        block={selectedBlock}
+                        onClose={() => setSelectedBlock(null)}
+                        onDelete={handleDeleteBlock}
+                    />
+                )
+            }
 
             {/* Add Block Modal */}
-            {showAddModal && (
-                <AddBlockModal
-                    onClose={() => {
-                        setShowAddModal(false);
-                        setSelectedDate(null);
-                    }}
-                    onAdd={handleAddBlock}
-                    initialDate={selectedDate}
-                />
-            )}
+            {
+                showAddModal && (
+                    <AddBlockModal
+                        onClose={() => {
+                            setShowAddModal(false);
+                            setSelectedDate(null);
+                        }}
+                        onAdd={handleAddBlock}
+                        initialDate={selectedDate}
+                    />
+                )
+            }
 
             {/* Import Modal */}
-            {showImportModal && (
-                <ImportBlocksModal
-                    onClose={() => setShowImportModal(false)}
-                    traineeId={profile?.id || ''}
-                    onSuccess={() => {
-                        setShowImportModal(false);
-                        window.location.reload();
-                    }}
-                />
-            )}
-        </div>
+            {
+                showImportModal && (
+                    <ImportBlocksModal
+                        onClose={() => setShowImportModal(false)}
+                        traineeId={profile?.id || ''}
+                        onSuccess={() => {
+                            setShowImportModal(false);
+                            window.location.reload();
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 }
 

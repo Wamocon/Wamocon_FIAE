@@ -59,7 +59,7 @@ export default function LernfeldDetailPage({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/trainer/lernfelder/${id}`)
+    fetch(`/api/trainer/lernfelder/${id}`, { cache: 'no-store' })
       .then(res => {
         if (!res.ok) throw new Error('Not found');
         return res.json();

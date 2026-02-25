@@ -1,7 +1,7 @@
 # Final Test Report
 
 ## 1. Executive Summary
-This report details the verification status of the `Wamocon_FIAE` application. We have successfully implemented and executed a comprehensive testing strategy covering Unit and Integration layers for key components.
+This report details the verification status of the `Wamocon_LFA` application. We have successfully implemented and executed a comprehensive testing strategy covering Unit and Integration layers for key components.
 
 **Total Tests Verified:** 66
 **Passed:** 64

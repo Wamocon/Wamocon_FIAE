@@ -73,7 +73,7 @@ export function generateICS(event: ICSEvent): string {
     const lines: string[] = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
-        'PRODID:-//FIAE Platform//Block Calendar//DE',
+        'PRODID:-//LFA Platform//Block Calendar//DE',
         'CALSCALE:GREGORIAN',
         'METHOD:REQUEST',
         'BEGIN:VEVENT',
@@ -114,7 +114,7 @@ export function generateICS(event: ICSEvent): string {
  * Generate a unique ID for calendar events
  */
 export function generateEventUID(blockId: string): string {
-    return `${blockId}@fiae-platform`;
+    return `${blockId}@lfa-platform`;
 }
 
 /**

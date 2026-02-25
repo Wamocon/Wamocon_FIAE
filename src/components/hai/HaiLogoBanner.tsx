@@ -11,6 +11,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface HaiLogoBannerProps {
     size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -32,6 +33,7 @@ export function HaiLogoBanner({
     className = '',
     hideSpeechBubble = false,
 }: HaiLogoBannerProps) {
+    const { t } = useLanguage();
     const { container: containerSize, text: textClass, bubble: bubbleClass } = sizeMap[size];
     const [showBubble, setShowBubble] = useState(false);
 
@@ -63,7 +65,7 @@ export function HaiLogoBanner({
                     {/* Animated Shark Image (GIF) */}
                     <Image
                         src="/images/shark-new.gif"
-                        alt="HAI Shark Animation"
+                        alt={t('hai.logo.alt')}
                         fill
                         className="object-cover opacity-90 hover:opacity-100 transition-opacity duration-300 scale-110"
                         priority
@@ -89,6 +91,7 @@ export function HaiLogoBanner({
                         <div className="relative">
                             {/* Pointer Arrow */}
                             <div className="absolute -bottom-2 -left-2 w-4 h-4 bg-white/10 border-b border-l border-cyan-500/30 transform -rotate-45" style={{ backdropFilter: 'blur(12px)' }}></div>
+                            {t('hai.welcome.greeting')}
                         </div>
                     </motion.div>
                 )}
@@ -108,7 +111,7 @@ export function HaiLogoBanner({
                         </span>
                     </h1>
                     <p className="text-muted-foreground text-sm mt-1 font-medium">
-                        AI Learning Coach
+                        {t('hai.tagline')}
                     </p>
                 </motion.div>
             )}

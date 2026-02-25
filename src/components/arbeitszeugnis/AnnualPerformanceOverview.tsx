@@ -67,7 +67,7 @@ export default function AnnualPerformanceOverview({
             setLoading(true);
             setError(null);
             try {
-                const res = await fetch(`/api/trainee/annual-summary?traineeId=${traineeId}&year=${year}`);
+                const res = await fetch(`/api/trainee/annual-summary?traineeId=${traineeId}&year=${year}`, { cache: 'no-store' });
                 if (!res.ok) {
                     throw new Error('Failed to fetch summary');
                 }
@@ -185,8 +185,8 @@ export default function AnnualPerformanceOverview({
                                     <div
                                         key={idx}
                                         className={`flex items-center gap-3 p-3 rounded-lg border ${info.severity === 'critical'
-                                                ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                                                : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                                            ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                                            : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
                                             }`}
                                     >
                                         <AlertTriangle className="h-4 w-4 shrink-0" />
