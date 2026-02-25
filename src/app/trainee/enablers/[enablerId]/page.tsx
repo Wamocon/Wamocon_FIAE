@@ -557,6 +557,41 @@ export default function TraineeEnablerPage() {
               <div className="text-sm text-green-600/80 dark:text-green-400/80">
                 {t('enablerPage.approvedDesc')}
               </div>
+              {/* Show trainer feedback even when approved */}
+              {(submission.trainerFeedback || (submission.feedbacks && submission.feedbacks.length > 0)) && (
+                <div className="mt-3 space-y-2 border-t border-green-500/20 pt-3">
+                  {submission.trainerFeedback && (
+                    <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
+                      <div className="mb-1 text-xs font-medium text-green-600/70 dark:text-green-400/70">
+                        {t('enablerPage.trainerFeedback')}
+                      </div>
+                      <p className="text-foreground text-sm whitespace-pre-line">
+                        {submission.trainerFeedback}
+                      </p>
+                    </div>
+                  )}
+                  {submission.feedbacks && submission.feedbacks.length > 0 && (
+                    <div className="space-y-2">
+                      {submission.feedbacks.map((fb, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-xl border border-green-500/20 bg-green-500/5 p-3"
+                        >
+                          <div className="mb-1 text-xs font-medium text-green-600/70 dark:text-green-400/70">
+                            {t('enablerPage.feedbackForScenario').replace(
+                              '{number}',
+                              String(fb.scenarioIndex + 1)
+                            )}
+                          </div>
+                          <p className="text-foreground text-sm whitespace-pre-line">
+                            {fb.feedback}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )
@@ -684,46 +719,46 @@ export default function TraineeEnablerPage() {
             </div>
           </div>
         ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {gated.map(g => {
-            const disabled = !g.unlocked || !g.isActive || !g.quizId;
-            return (
-              <button
-                key={g.difficulty}
-                onClick={() => !disabled && handleTileClick(g)}
-                className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 cursor-not-allowed bg-muted/20 opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 cursor-pointer bg-muted/30 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
-                disabled={disabled}
-              >
-                <div className="text-muted-foreground text-sm">
-                  {t('enablerPage.difficulty')}
-                </div>
-                <div className="text-foreground text-xl font-bold">
-                  {difficultyLabel(g.difficulty)}
-                </div>
-                {g.title && (
-                  <div className="text-muted-foreground mt-1 truncate text-xs">
-                    {t('enablerPage.quizTitle')} {g.title}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {gated.map(g => {
+              const disabled = !g.unlocked || !g.isActive || !g.quizId;
+              return (
+                <button
+                  key={g.difficulty}
+                  onClick={() => !disabled && handleTileClick(g)}
+                  className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 cursor-not-allowed bg-muted/20 opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 cursor-pointer bg-muted/30 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
+                  disabled={disabled}
+                >
+                  <div className="text-muted-foreground text-sm">
+                    {t('enablerPage.difficulty')}
                   </div>
-                )}
-                <div className="mt-2 text-xs">
-                  {g.completed ? (
-                    <span className="rounded bg-green-600/20 px-2 py-0.5 text-green-600 dark:text-green-400">
-                      {t('enablerPage.completed')}
-                    </span>
-                  ) : disabled ? (
-                    <span className="bg-muted/30 rounded px-2 py-0.5">
-                      {t('enablerPage.locked')}
-                    </span>
-                  ) : (
-                    <span className="rounded bg-blue-600/20 px-2 py-0.5 text-blue-600 dark:text-blue-400">
-                      {t('enablerPage.available')}
-                    </span>
+                  <div className="text-foreground text-xl font-bold">
+                    {difficultyLabel(g.difficulty)}
+                  </div>
+                  {g.title && (
+                    <div className="text-muted-foreground mt-1 truncate text-xs">
+                      {t('enablerPage.quizTitle')} {g.title}
+                    </div>
                   )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                  <div className="mt-2 text-xs">
+                    {g.completed ? (
+                      <span className="rounded bg-green-600/20 px-2 py-0.5 text-green-600 dark:text-green-400">
+                        {t('enablerPage.completed')}
+                      </span>
+                    ) : disabled ? (
+                      <span className="bg-muted/30 rounded px-2 py-0.5">
+                        {t('enablerPage.locked')}
+                      </span>
+                    ) : (
+                      <span className="rounded bg-blue-600/20 px-2 py-0.5 text-blue-600 dark:text-blue-400">
+                        {t('enablerPage.available')}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         )}
 
         {/* Active quiz runner */}
