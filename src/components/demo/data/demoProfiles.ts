@@ -1,6 +1,6 @@
 export const demoTraineeProfile = {
   id: 'demo-trainee-001',
-  email: 'max.mueller@demo.fiae.de',
+  email: 'max.mueller@demo.lfa.de',
   full_name: 'Max M\u00fcller',
   role: 'trainee' as const,
   avatar: null,
@@ -9,7 +9,7 @@ export const demoTraineeProfile = {
   company: 'TechSolutions GmbH',
   department: 'Softwareentwicklung',
   phone: '+49 170 1234567',
-  bio: 'Auszubildender im 1. Lehrjahr FIAE. Interessiert an Webentwicklung und Cloud-Technologien.',
+  bio: 'Auszubildender im 1. Lehrjahr LFA. Interessiert an Webentwicklung und Cloud-Technologien.',
   skills: ['JavaScript', 'TypeScript', 'React', 'Node.js', 'SQL', 'Git'],
   certifications: [
     { name: 'AWS Cloud Practitioner', date: '2026-01-15', status: 'completed' },
@@ -19,7 +19,7 @@ export const demoTraineeProfile = {
 
 export const demoTrainerProfile = {
   id: 'demo-trainer-001',
-  email: 'anna.schmidt@demo.fiae.de',
+  email: 'anna.schmidt@demo.lfa.de',
   full_name: 'Anna Schmidt',
   role: 'trainer' as const,
   avatar: null,
@@ -28,14 +28,14 @@ export const demoTrainerProfile = {
   company: 'TechSolutions GmbH',
   department: 'Ausbildungsleitung IT',
   phone: '+49 170 9876543',
-  bio: 'Senior Ausbilderin f\u00fcr Fachinformatiker Anwendungsentwicklung. 8 Jahre Erfahrung in der IT-Ausbildung.',
+  bio: 'Senior Ausbilderin für Fachinformatiker Anwendungsentwicklung (FIAE). 8 Jahre Erfahrung in der IT-Ausbildung.',
 };
 
 export const demoTrainees = [
   {
     id: 'demo-trainee-001',
-    full_name: 'Max M\u00fcller',
-    email: 'max.mueller@demo.fiae.de',
+    full_name: 'Max Müller',
+    email: 'max.mueller@demo.lfa.de',
     avatar: null,
     training_start_date: '2025-09-01',
     progress: 72,
@@ -49,7 +49,7 @@ export const demoTrainees = [
   {
     id: 'demo-trainee-002',
     full_name: 'Lisa Weber',
-    email: 'lisa.weber@demo.fiae.de',
+    email: 'lisa.weber@demo.lfa.de',
     avatar: null,
     training_start_date: '2025-09-01',
     progress: 88,
@@ -63,7 +63,7 @@ export const demoTrainees = [
   {
     id: 'demo-trainee-003',
     full_name: 'Tom Becker',
-    email: 'tom.becker@demo.fiae.de',
+    email: 'tom.becker@demo.lfa.de',
     avatar: null,
     training_start_date: '2025-09-01',
     progress: 45,
@@ -77,7 +77,7 @@ export const demoTrainees = [
   {
     id: 'demo-trainee-004',
     full_name: 'Sarah Klein',
-    email: 'sarah.klein@demo.fiae.de',
+    email: 'sarah.klein@demo.lfa.de',
     avatar: null,
     training_start_date: '2024-09-01',
     progress: 95,
@@ -91,7 +91,7 @@ export const demoTrainees = [
   {
     id: 'demo-trainee-005',
     full_name: 'Finn Hoffmann',
-    email: 'finn.hoffmann@demo.fiae.de',
+    email: 'finn.hoffmann@demo.lfa.de',
     avatar: null,
     training_start_date: '2025-09-01',
     progress: 31,
@@ -105,7 +105,7 @@ export const demoTrainees = [
   {
     id: 'demo-trainee-006',
     full_name: 'Emma Schulz',
-    email: 'emma.schulz@demo.fiae.de',
+    email: 'emma.schulz@demo.lfa.de',
     avatar: null,
     training_start_date: '2025-09-01',
     progress: 62,
