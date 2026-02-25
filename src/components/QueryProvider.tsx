@@ -13,8 +13,8 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 5 * 60 * 1000, // 5 min – matches server-side Data Cache TTL
-            gcTime: 10 * 60 * 1000, // 10 min – keep in memory for back-navigation
+            staleTime: 30 * 1000, // 30 s – short so mutations reflect quickly
+            gcTime: 5 * 60 * 1000, // 5 min – keep in memory for back-navigation
             refetchOnWindowFocus: true, // auto-refresh when user returns to tab
             retry: 1,
           },

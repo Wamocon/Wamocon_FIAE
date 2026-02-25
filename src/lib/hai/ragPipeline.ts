@@ -296,7 +296,7 @@ function classifyIntent(message: string, quizState?: QuizState): IntentType {
   ];
   if (offTopicKeywords.some(k => lowerMessage.includes(k))) {
     // Exception: Don't flag IT-related terms that overlap (e.g., "film" in "Filmsequenz")
-    // Also don't flag if the message clearly references FIAE/Enabler/LF context
+    // Also don't flag if the message clearly references LFA/Enabler/LF context
     const itContextIndicators = [
       'enabler',
       'lernfeld',

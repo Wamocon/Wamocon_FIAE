@@ -330,21 +330,53 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     isActive: boolean
   ) => {
     if (!trainee?.id) return;
-    const payload: any = { itemType, itemId, isActive };
-    if (profile?.role === 'trainer' && profile?.id)
-      payload.trainerId = profile.id;
-    await fetch(`/api/trainer/trainees/${trainee.id}/activate`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+
+    // Optimistic update
+    setOverview(prev => {
+      if (!prev) return prev;
+      const next = { ...prev };
+      if (itemType === 'ENABLER') {
+        next.enablers = next.enablers.map(e => (e.id === itemId ? { ...e, isActive } : e));
+      } else if (itemType === 'USE_CASE') {
+        next.useCases = next.useCases.map(u => (u.id === itemId ? { ...u, isActive } : u));
+      } else if (itemType === 'GLOBAL_QUIZ') {
+        next.globalQuizzes = next.globalQuizzes.map(q => (q.quizId === itemId ? { ...q, isActive } : q));
+      }
+      return next;
     });
-    // refresh overview
-    const oRes = await fetch(`/api/trainer/trainees/${trainee.id}/overview`, {
-      cache: 'no-store',
-    });
-    if (oRes.ok) {
-      const oData = await oRes.json();
-      setOverview(oData);
+
+    try {
+      const payload: any = { itemType, itemId, isActive };
+      if (profile?.role === 'trainer' && profile?.id)
+        payload.trainerId = profile.id;
+
+      const res = await fetch(`/api/trainer/trainees/${trainee.id}/activate`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error('Failed to toggle active state');
+
+      // Background refresh to ensure consistency
+      const oRes = await fetch(`/api/trainer/trainees/${trainee.id}/overview`, {
+        cache: 'no-store',
+      });
+      if (oRes.ok) {
+        const oData = await oRes.json();
+        setOverview(oData);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error(t('error.unknown'));
+      // Revert: full reload on error
+      const oRes = await fetch(`/api/trainer/trainees/${trainee.id}/overview`, {
+        cache: 'no-store',
+      });
+      if (oRes.ok) {
+        const oData = await oRes.json();
+        setOverview(oData);
+      }
     }
   };
 
@@ -540,9 +572,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   </div>
                 </div>
                 <ChevronDown
-                  className={`h-5 w-5 text-muted-foreground transition-transform ${
-                    openSections.modules ? 'rotate-180' : ''
-                  }`}
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${openSections.modules ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
               {openSections.modules && (
@@ -554,16 +585,15 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                         key={f}
                         type="button"
                         onClick={() => setEnablerFilter(f)}
-                        className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                          enablerFilter === f
+                        className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all ${enablerFilter === f
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                        }`}
+                          }`}
                       >
                         {f === 'all' ? t('trainee.detail.filterAll')
                           : f === 'completed' ? t('trainee.detail.filterCompleted')
-                          : f === 'active' ? t('trainee.detail.filterActive')
-                          : t('trainee.detail.filterInactive')}
+                            : f === 'active' ? t('trainee.detail.filterActive')
+                              : t('trainee.detail.filterInactive')}
                       </button>
                     ))}
                   </div>
@@ -670,9 +700,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   {t('trainee.detail.lessonQuizzes')}
                 </h3>
                 <ChevronDown
-                  className={`h-5 w-5 text-muted-foreground transition-transform ${
-                    openSections.lessonQuizzes ? 'rotate-180' : ''
-                  }`}
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${openSections.lessonQuizzes ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
               {openSections.lessonQuizzes && (
@@ -724,9 +753,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   {t('trainee.detail.useCases')}
                 </h3>
                 <ChevronDown
-                  className={`h-5 w-5 text-muted-foreground transition-transform ${
-                    openSections.useCases ? 'rotate-180' : ''
-                  }`}
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${openSections.useCases ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
               {openSections.useCases && (
@@ -796,9 +824,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                   {t('trainee.detail.globalQuizzes')}
                 </h3>
                 <ChevronDown
-                  className={`h-5 w-5 text-muted-foreground transition-transform ${
-                    openSections.globalQuizzes ? 'rotate-180' : ''
-                  }`}
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${openSections.globalQuizzes ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
               {openSections.globalQuizzes && (

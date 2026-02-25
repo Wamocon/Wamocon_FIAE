@@ -94,7 +94,7 @@ export default function WeeklyEvaluationForm({
     useEffect(() => {
         async function fetchArpUseCases() {
             try {
-                const res = await fetch('/api/training-use-cases');
+                const res = await fetch('/api/training-use-cases', { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     setArpUseCases(data.useCases || []);

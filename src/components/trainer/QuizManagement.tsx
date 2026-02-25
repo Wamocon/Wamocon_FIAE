@@ -305,8 +305,8 @@ export function QuizManagement() {
       setLoading(true);
       // Fetch quiz details and members in parallel instead of sequentially
       const [res, memRes] = await Promise.all([
-        fetch(`/api/trainer/quizzes/${id}`),
-        fetch(`/api/trainer/quiz-members?quizId=${id}`),
+        fetch(`/api/trainer/quizzes/${id}`, { cache: 'no-store' }),
+        fetch(`/api/trainer/quiz-members?quizId=${id}`, { cache: 'no-store' }),
       ]);
       if (!res.ok) throw new Error(t('quiz.managementLoadQuizError'));
       const data = await res.json();
@@ -317,14 +317,14 @@ export function QuizManagement() {
       setIsActive(Boolean(data.is_active));
       const mappedQs: QuestionDraft[] = Array.isArray(data.questions)
         ? data.questions.map((qq: any) => ({
-            id: crypto.randomUUID(),
-            text: String(qq.question_text || ''),
-            options: (qq.options || ['', '', '', ''])
-              .slice(0, 4)
-              .concat(['', '', '', ''])
-              .slice(0, 4) as [string, string, string, string],
-            correctIndex: Number(qq.correct_index ?? 0) as 0 | 1 | 2 | 3,
-          }))
+          id: crypto.randomUUID(),
+          text: String(qq.question_text || ''),
+          options: (qq.options || ['', '', '', ''])
+            .slice(0, 4)
+            .concat(['', '', '', ''])
+            .slice(0, 4) as [string, string, string, string],
+          correctIndex: Number(qq.correct_index ?? 0) as 0 | 1 | 2 | 3,
+        }))
         : [blankQuestion()];
       setQuestions(mappedQs.length ? mappedQs : [blankQuestion()]);
       setAssigned(
@@ -358,9 +358,9 @@ export function QuizManagement() {
       qs.map(q =>
         q.id === id
           ? {
-              ...q,
-              options: q.options.map((o, i) => (i === idx ? val : o)) as any,
-            }
+            ...q,
+            options: q.options.map((o, i) => (i === idx ? val : o)) as any,
+          }
           : q
       )
     );
@@ -429,14 +429,19 @@ export function QuizManagement() {
   };
 
   const onDelete = async (id: string) => {
+    // Optimistic: remove from list immediately
+    setQuizzes(prev => prev.filter(q => q.id !== id));
     try {
       const res = await fetch(`/api/trainer/quizzes/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error(t('quiz.managementDeleteError'));
-      await loadQuizzes();
+      // Background refresh
+      loadQuizzes();
     } catch (e) {
       console.error(e);
+      // Revert on error
+      loadQuizzes();
     }
   };
 
@@ -444,7 +449,7 @@ export function QuizManagement() {
     if (!profile) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/trainer/quizzes?trainerId=${profile.id}`);
+      const res = await fetch(`/api/trainer/quizzes?trainerId=${profile.id}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(t('quiz.managementLoadQuizzesError'));
       const data = await res.json();
       const items: QuizListItem[] = (data.quizzes || []).filter(
@@ -462,7 +467,8 @@ export function QuizManagement() {
     if (!profile) return;
     try {
       const res = await fetch(
-        `/api/trainer/trainees?trainerProfileId=${profile.id}`
+        `/api/trainer/trainees?trainerProfileId=${profile.id}`,
+        { cache: 'no-store' }
       );
       if (!res.ok) return;
       const data = await res.json();
@@ -478,7 +484,7 @@ export function QuizManagement() {
   const loadTrainers = async () => {
     if (!profile) return;
     try {
-      const res = await fetch(`/api/trainer/trainers?excludeId=${profile.id}`);
+      const res = await fetch(`/api/trainer/trainers?excludeId=${profile.id}`, { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
       const opts: ComboOption[] = (data.trainers || []).map((t: any) => ({
@@ -497,7 +503,7 @@ export function QuizManagement() {
     addedById: string
   ) {
     try {
-      const curRes = await fetch(`/api/trainer/quiz-members?quizId=${quizId}`);
+      const curRes = await fetch(`/api/trainer/quiz-members?quizId=${quizId}`, { cache: 'no-store' });
       const cur = curRes.ok ? await curRes.json() : { members: [] };
       const currentIds: string[] = Array.isArray(cur.members)
         ? cur.members.map((m: any) => String(m.trainerId))

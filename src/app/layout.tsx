@@ -23,8 +23,8 @@ const HaiWrapper = dynamic(() =>
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'FIAE Plattform',
-  description: 'Eine moderne Lernplattform für FIAE-Auszubildende',
+  title: 'LFA Plattform',
+  description: 'Eine moderne Lernplattform für LFA-Auszubildende',
 };
 
 export default function RootLayout({

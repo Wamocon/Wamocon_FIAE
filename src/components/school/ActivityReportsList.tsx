@@ -107,7 +107,7 @@ export function ActivityReportsList() {
                 url += `&status=${filterStatus}`;
             }
 
-            const res = await fetch(url);
+            const res = await fetch(url, { cache: 'no-store' });
             if (!res.ok) throw new Error(t('reports.error.load'));
             const data = await res.json();
 
@@ -217,8 +217,8 @@ export function ActivityReportsList() {
                     </div>
                     <div
                         className={`p-3 rounded-xl cursor-pointer transition-colors border ${filterStatus === 'DRAFT'
-                                ? 'bg-accent/20 border-accent'
-                                : 'glass-effect'
+                            ? 'bg-accent/20 border-accent'
+                            : 'glass-effect'
                             }`}
                         onClick={() => setFilterStatus(filterStatus === 'DRAFT' ? 'all' : 'DRAFT')}
                     >
@@ -227,8 +227,8 @@ export function ActivityReportsList() {
                     </div>
                     <div
                         className={`p-3 rounded-xl cursor-pointer transition-colors border ${filterStatus === 'SUBMITTED'
-                                ? 'bg-accent/20 border-accent'
-                                : 'glass-effect'
+                            ? 'bg-accent/20 border-accent'
+                            : 'glass-effect'
                             }`}
                         onClick={() => setFilterStatus(filterStatus === 'SUBMITTED' ? 'all' : 'SUBMITTED')}
                     >
@@ -237,8 +237,8 @@ export function ActivityReportsList() {
                     </div>
                     <div
                         className={`p-3 rounded-xl cursor-pointer transition-colors border ${filterStatus === 'APPROVED'
-                                ? 'bg-accent/20 border-accent'
-                                : 'glass-effect'
+                            ? 'bg-accent/20 border-accent'
+                            : 'glass-effect'
                             }`}
                         onClick={() => setFilterStatus(filterStatus === 'APPROVED' ? 'all' : 'APPROVED')}
                     >
@@ -247,8 +247,8 @@ export function ActivityReportsList() {
                     </div>
                     <div
                         className={`p-3 rounded-xl cursor-pointer transition-colors border ${filterStatus === 'REJECTED'
-                                ? 'bg-accent/20 border-accent'
-                                : 'glass-effect'
+                            ? 'bg-accent/20 border-accent'
+                            : 'glass-effect'
                             }`}
                         onClick={() => setFilterStatus(filterStatus === 'REJECTED' ? 'all' : 'REJECTED')}
                     >
@@ -381,7 +381,7 @@ function ActivityReportDetail({
     const loadReport = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/trainee/school/reports/${reportId}`);
+            const res = await fetch(`/api/trainee/school/reports/${reportId}`, { cache: 'no-store' });
             if (!res.ok) throw new Error(t('reports.error.load'));
             const data = await res.json();
 

@@ -68,8 +68,8 @@ export function LernfeldNotes() {
             setError(null);
             try {
                 const [lfRes, notesRes] = await Promise.all([
-                    fetch('/api/trainee/school/lernfelder'),
-                    fetch(`/api/trainee/knowledge-notes?traineeId=${profile.id}`)
+                    fetch('/api/trainee/school/lernfelder', { cache: 'no-store' }),
+                    fetch(`/api/trainee/knowledge-notes?traineeId=${profile.id}`, { cache: 'no-store' })
                 ]);
 
                 if (!lfRes.ok) throw new Error(t('notes.error.loadFields'));

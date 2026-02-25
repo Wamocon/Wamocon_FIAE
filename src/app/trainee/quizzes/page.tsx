@@ -26,7 +26,7 @@ export default function TraineeQuizzesPage() {
     const load = async () => {
       if (!profile?.id) return;
       try {
-        const res = await fetch(`/api/trainee/quizzes?userId=${profile.id}`);
+        const res = await fetch(`/api/trainee/quizzes?userId=${profile.id}`, { cache: 'no-store' });
         const data = (await res.json()) as QuizCard[];
         setQuizzes(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -70,7 +70,7 @@ export default function TraineeQuizzesPage() {
     );
   }
 
-  
+
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
