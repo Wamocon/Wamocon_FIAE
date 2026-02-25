@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
             notes,
             description,
             sendInvitation = true,
+            examSubType,
         } = body;
 
         // Validation
@@ -156,6 +157,26 @@ export async function POST(req: NextRequest) {
                 const start = new Date(startDate);
                 const end = new Date(endDate);
 
+                // Check for duplicates if it's an EXAM block with a subtype
+                if (blockType === 'EXAM' && examSubType) {
+                    const existing = await db
+                        .select()
+                        .from(ausbildungBlocks)
+                        .where(
+                            and(
+                                eq(ausbildungBlocks.traineeId, tid as any),
+                                eq(ausbildungBlocks.blockType, 'EXAM'),
+                                eq(ausbildungBlocks.examSubType, examSubType)
+                            )
+                        )
+                        .limit(1);
+
+                    if (existing.length > 0) {
+                        errors.push(`Duplicate exam block for trainee ${tid}: ${examSubType} already exists.`);
+                        continue;
+                    }
+                }
+
                 // Calculate week and year
                 const calendarWeek = getISOWeek(start);
                 const year = start.getFullYear();
@@ -179,6 +200,7 @@ export async function POST(req: NextRequest) {
                         title: title || null,
                         notes: notes || null,
                         description: description || null,
+                        examSubType: examSubType || null,
                         isPersonal: false,
                         createdByTrainerId: trainerId,
                         inviteeEmails: trainee.email,

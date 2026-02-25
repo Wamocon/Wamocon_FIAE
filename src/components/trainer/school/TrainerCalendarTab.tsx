@@ -35,6 +35,7 @@ interface Block {
     description: string | null;
     createdByTrainerId: string | null;
     isPersonal: boolean;
+    examSubType?: 'IHK_ABSCHLUSSPRUEFUNG_T1' | 'IHK_ABSCHLUSSPRUEFUNG_T2' | 'KLAUSUR_WMC' | 'KLAUSUR_ALLGEMEIN' | 'PRAKTISCHE_PRUEFUNG' | 'MUENDLICHE_PRUEFUNG' | 'PROJEKTARBEIT' | 'ANDERE' | null;
 }
 
 interface Trainee {
@@ -50,6 +51,17 @@ const BLOCK_CONFIG: Record<string, { label: string; Icon: any; color: string; li
     HOLIDAY: { label: 'Urlaub', Icon: Palmtree, color: 'bg-amber-500', lightBg: 'bg-amber-500/20', border: 'border-amber-500/50', text: 'text-amber-600 dark:text-amber-400' },
     EXAM: { label: 'Prüfung', Icon: FileText, color: 'bg-rose-500', lightBg: 'bg-rose-500/20', border: 'border-rose-500/50', text: 'text-rose-600 dark:text-rose-400' },
     TRAINER_BLOCKER: { label: 'Trainer', Icon: User, color: 'bg-indigo-500', lightBg: 'bg-indigo-500/20', border: 'border-indigo-500/50', text: 'text-indigo-600 dark:text-indigo-400' },
+};
+
+const EXAM_SUBTYPE_LABELS: Record<string, string> = {
+    'IHK_ABSCHLUSSPRUEFUNG_T1': 'IHK Abschlussprüfung Teil 1',
+    'IHK_ABSCHLUSSPRUEFUNG_T2': 'IHK Abschlussprüfung Teil 2',
+    'KLAUSUR_WMC': 'Klausur WMC',
+    'KLAUSUR_ALLGEMEIN': 'Klausur (Allgemein)',
+    'PRAKTISCHE_PRUEFUNG': 'Praktische Prüfung',
+    'MUENDLICHE_PRUEFUNG': 'Mündliche Prüfung',
+    'PROJEKTARBEIT': 'Projektarbeit',
+    'ANDERE': 'Sonstige Prüfung'
 };
 
 const WEEKDAYS_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -87,6 +99,7 @@ export function TrainerCalendarTab() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
     const [editingBlock, setEditingBlock] = useState<Block | null>(null);
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
     useEffect(() => {
         if (!profile?.id) return;
@@ -447,9 +460,13 @@ export function TrainerCalendarTab() {
                                         return (
                                             <div
                                                 key={index}
-                                                className={`relative min-h-[80px] p-2 border-b border-r border-border ${!dayData.isCurrentMonth ? 'opacity-40' : ''} ${dayData.isToday ? 'bg-accent/5' : ''} ${isWeekend && dayData.isCurrentMonth ? 'bg-muted/30' : ''}`}
+                                                onClick={() => {
+                                                    setSelectedDate(dayData.date);
+                                                    setShowAddModal(true);
+                                                }}
+                                                className={`relative h-[120px] p-1.5 border-b border-r border-border cursor-pointer hover:bg-muted/30 transition-all overflow-hidden ${!dayData.isCurrentMonth ? 'opacity-40' : ''} ${dayData.isToday ? 'bg-accent/5' : ''} ${isWeekend && dayData.isCurrentMonth ? 'bg-muted/30' : ''}`}
                                             >
-                                                <div className={`inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-medium ${dayData.isToday ? 'bg-accent text-accent-foreground' : isWeekend ? 'text-muted-foreground' : 'text-foreground'}`}>
+                                                <div className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-medium mb-1 ${dayData.isToday ? 'bg-accent text-accent-foreground' : isWeekend ? 'text-muted-foreground' : 'text-foreground font-semibold'}`}>
                                                     {dayData.date.getDate()}
                                                 </div>
                                                 {hasBlocks && (
@@ -459,12 +476,15 @@ export function TrainerCalendarTab() {
                                                             return (
                                                                 <button
                                                                     key={block.id + bi}
-                                                                    onClick={() => setSelectedBlock(block)}
-                                                                    className={`w-full flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${blockConfig.lightBg} ${blockConfig.text} ${blockConfig.border} border hover:opacity-80 transition-opacity cursor-pointer text-left`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedBlock(block);
+                                                                    }}
+                                                                    className={`w-full flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${blockConfig.lightBg} ${blockConfig.text} ${blockConfig.border} border hover:brightness-95 transition-all text-left`}
                                                                 >
                                                                     <blockConfig.Icon className="h-3 w-3 flex-shrink-0" />
                                                                     <span className="truncate hidden md:block">
-                                                                        {block.title || block.description || blockConfig.label}
+                                                                        {block.title || (block.blockType === 'EXAM' && block.examSubType ? EXAM_SUBTYPE_LABELS[block.examSubType] : (block.description || blockConfig.label))}
                                                                     </span>
                                                                 </button>
                                                             );
@@ -513,7 +533,7 @@ export function TrainerCalendarTab() {
                                                                 <div className="flex items-start gap-2 mb-1">
                                                                     <blockConfig.Icon className="h-4 w-4 mt-0.5 flex-shrink-0" />
                                                                     <span className="font-semibold text-xs leading-tight">
-                                                                        {block.title || blockConfig.label}
+                                                                        {block.title || (block.blockType === 'EXAM' && block.examSubType ? EXAM_SUBTYPE_LABELS[block.examSubType] : blockConfig.label)}
                                                                     </span>
                                                                 </div>
                                                                 {block.description && (
@@ -521,12 +541,6 @@ export function TrainerCalendarTab() {
                                                                         {block.description}
                                                                     </p>
                                                                 )}
-                                                                <div className="mt-1.5 flex items-center gap-1 text-[10px] opacity-70">
-                                                                    <Clock className="h-3 w-3" />
-                                                                    {new Date(block.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                    -
-                                                                    {new Date(block.endDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                </div>
                                                             </button>
                                                         );
                                                     })}
@@ -561,7 +575,11 @@ export function TrainerCalendarTab() {
                 <AddBlockerModal
                     trainees={trainees}
                     initialTraineeId={selectedTraineeId}
-                    onClose={() => setShowAddModal(false)}
+                    initialDate={selectedDate}
+                    onClose={() => {
+                        setShowAddModal(false);
+                        setSelectedDate(null);
+                    }}
                     onAdd={handleAddBlock}
                 />
             )}
@@ -590,20 +608,27 @@ export function TrainerCalendarTab() {
     );
 }
 
-function AddBlockerModal({ trainees, initialTraineeId, onClose, onAdd }: {
+function AddBlockerModal({ trainees, initialTraineeId, initialDate, onClose, onAdd }: {
     trainees: Trainee[];
     initialTraineeId: string;
+    initialDate?: Date | null;
     onClose: () => void;
     onAdd: (data: any) => void;
 }) {
     const { t } = useLanguage();
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const [startDate, setStartDate] = useState(
+        initialDate ? initialDate.toISOString().split('T')[0] : ''
+    );
+    const [endDate, setEndDate] = useState(
+        initialDate ? initialDate.toISOString().split('T')[0] : ''
+    );
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [sendInvitation, setSendInvitation] = useState(true);
     const [selectedTraineeIds, setSelectedTraineeIds] = useState<string[]>([initialTraineeId]);
     const [selectionMode, setSelectionMode] = useState<'single' | 'all' | 'custom'>('single');
+    const [blockType, setBlockType] = useState<string>('TRAINER_BLOCKER');
+    const [examSubType, setExamSubType] = useState<string>('');
 
     const handleSelectionModeChange = (mode: 'single' | 'all' | 'custom') => {
         setSelectionMode(mode);
@@ -617,7 +642,8 @@ function AddBlockerModal({ trainees, initialTraineeId, onClose, onAdd }: {
         onAdd({
             startDate: new Date(startDate).toISOString(),
             endDate: new Date(endDate).toISOString(),
-            blockType: 'TRAINER_BLOCKER',
+            blockType,
+            examSubType: blockType === 'EXAM' ? examSubType : null,
             title: title || null,
             description: description || null,
             sendInvitation,
@@ -668,6 +694,50 @@ function AddBlockerModal({ trainees, initialTraineeId, onClose, onAdd }: {
                                         <span className="text-sm">{t.firstName} {t.lastName}</span>
                                     </label>
                                 ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Block-Typ</label>
+                            <select
+                                value={blockType}
+                                onChange={e => {
+                                    setBlockType(e.target.value);
+                                    if (e.target.value !== 'EXAM') setExamSubType('');
+                                }}
+                                className="w-full px-4 py-3 rounded-xl bg-muted border border-border focus:ring-2 focus:ring-accent/50 outline-none"
+                            >
+                                {Object.entries(BLOCK_CONFIG).map(([type, config]) => (
+                                    <option key={type} value={type}>{config.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        {blockType === 'EXAM' ? (
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Prüfungs-Art</label>
+                                <select
+                                    value={examSubType}
+                                    onChange={e => setExamSubType(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl bg-muted border border-border focus:ring-2 focus:ring-accent/50 outline-none"
+                                    required
+                                >
+                                    <option value="">Auswählen...</option>
+                                    <option value="IHK_ABSCHLUSSPRUEFUNG_T1">IHK Abschlussprüfung Teil 1</option>
+                                    <option value="IHK_ABSCHLUSSPRUEFUNG_T2">IHK Abschlussprüfung Teil 2</option>
+                                    <option value="KLAUSUR_WMC">Klausur WMC</option>
+                                    <option value="KLAUSUR_ALLGEMEIN">Klausur (Allgemein)</option>
+                                    <option value="PRAKTISCHE_PRUEFUNG">Praktische Prüfung</option>
+                                    <option value="MUENDLICHE_PRUEFUNG">Mündliche Prüfung</option>
+                                    <option value="PROJEKTARBEIT">Projektarbeit</option>
+                                    <option value="ANDERE">Sonstige</option>
+                                </select>
+                            </div>
+                        ) : (
+                            <div className="opacity-50 pointer-events-none">
+                                <label className="block text-sm font-medium mb-2">Prüfungs-Art</label>
+                                <div className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-muted-foreground">N/A</div>
                             </div>
                         )}
                     </div>
