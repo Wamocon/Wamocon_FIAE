@@ -144,7 +144,8 @@ export function BreadcrumbProvider({
         if (!label) {
           try {
             const res = await fetch(
-              `/api/breadcrumb/label?entity=${entity}&id=${segment}`
+              `/api/breadcrumb/label?entity=${entity}&id=${segment}`,
+              { cache: 'no-store' }
             );
             if (res.ok) {
               const data = await res.json();

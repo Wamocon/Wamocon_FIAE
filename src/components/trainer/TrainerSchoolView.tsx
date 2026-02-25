@@ -66,7 +66,7 @@ export function TrainerSchoolView() {
 
         async function loadStats() {
             try {
-                const res = await fetch(`/api/trainer/school/stats?trainerId=${trainerId}`);
+                const res = await fetch(`/api/trainer/school/stats?trainerId=${trainerId}`, { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     setStats(data);

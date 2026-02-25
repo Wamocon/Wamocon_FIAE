@@ -61,7 +61,7 @@ export default function TrainerReviewsPage() {
     if (fetchedDocIdsRef.current.has(useCaseId)) return;
     fetchedDocIdsRef.current.add(useCaseId);
     try {
-      const res = await fetch(`/api/trainer/use-cases/${useCaseId}/documents`);
+      const res = await fetch(`/api/trainer/use-cases/${useCaseId}/documents`, { cache: 'no-store' });
       if (!res.ok) {
         setSolutionDocsMap(prev => ({ ...prev, [useCaseId]: null }));
         return;
@@ -134,7 +134,7 @@ export default function TrainerReviewsPage() {
       setError(null);
       try {
         if (activeTab === 'quizzes') {
-          const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${pendingFilter === 'pending'}`);
+          const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${pendingFilter === 'pending'}`, { cache: 'no-store' });
           if (!res.ok) throw new Error(t('trainer.reviews.quizLoadError'));
           const data = await res.json();
           setQuizzes((data.submissions || []).map((x: any) => ({ ...x, attemptNumber: x.attemptNumber, difficulty: x.difficulty || null, enablerTitle: x.enablerTitle || null })));
@@ -239,7 +239,7 @@ export default function TrainerReviewsPage() {
       toast.success(!current ? t('trainer.reviews.markedReviewed') : t('trainer.reviews.unmarkedReviewed'));
 
       // Background refresh (non-blocking)
-      fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`)
+      fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`, { cache: 'no-store' })
         .then(res => res.json())
         .then(data => {
           setQuizzes(data.submissions || []);
@@ -265,9 +265,9 @@ export default function TrainerReviewsPage() {
           <h1 className="text-foreground text-xl font-bold">{t('trainer.reviews.title')}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-              <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'enablers' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>{t('trainer.reviews.lesson')}</button>
-              <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'usecases' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>{t('trainer.reviews.useCases')}</button>
-              <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'quizzes' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>{t('trainer.reviews.quizzes')}</button>
+          <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'enablers' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('enablers')}>{t('trainer.reviews.lesson')}</button>
+          <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'usecases' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('usecases')}>{t('trainer.reviews.useCases')}</button>
+          <button className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${activeTab === 'quizzes' ? 'bg-primary text-primary-foreground' : 'border-accent/30 bg-background/60 hover:bg-background/80'}`} onClick={() => setActiveTab('quizzes')}>{t('trainer.reviews.quizzes')}</button>
           <div className="ml-auto flex items-center gap-2 text-sm">
             {activeTab === 'enablers' || activeTab === 'usecases' ? (
               <>
@@ -603,7 +603,7 @@ export default function TrainerReviewsPage() {
                         if (!r.ok) { toast.error(t('trainer.reviews.saveError')); return; }
                         toast.success(t('trainer.reviews.feedbackSaved'));
                         setFeedbackMap(prev => ({ ...prev, [s.id]: '' }));
-                        const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`);
+                        const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`, { cache: 'no-store' });
                         const data = await res.json();
                         setQuizzes(data.submissions || []);
                       } catch { toast.error(t('trainer.reviews.saveError')); }

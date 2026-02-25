@@ -214,8 +214,8 @@ export function BlockCalendar() {
             try {
                 // Fetch blocks and exams in parallel
                 const [blocksRes, examsRes] = await Promise.all([
-                    fetch(`/api/trainee/school/blocks?traineeId=${profile.id}&year=${selectedYear}`),
-                    fetch(`/api/trainee/school/exams?traineeId=${profile.id}`)
+                    fetch(`/api/trainee/school/blocks?traineeId=${profile.id}&year=${selectedYear}`, { cache: 'no-store' }),
+                    fetch(`/api/trainee/school/exams?traineeId=${profile.id}`, { cache: 'no-store' })
                 ]);
 
                 if (!blocksRes.ok) throw new Error(t('calendar.error.loadBlocks'));

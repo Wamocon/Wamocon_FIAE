@@ -57,7 +57,7 @@ export default function SoftskillRatingGrid({
     useEffect(() => {
         async function fetchCriteria() {
             try {
-                const res = await fetch('/api/trainee/evaluations/softskills');
+                const res = await fetch('/api/trainee/evaluations/softskills', { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     setCriteria(data.criteria || []);

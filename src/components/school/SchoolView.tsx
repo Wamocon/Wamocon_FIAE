@@ -95,20 +95,23 @@ export function SchoolView() {
             try {
                 // Fetch upcoming exams
                 const examsRes = await fetch(
-                    `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=true&limit=5`
+                    `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=true&limit=5`,
+                    { cache: 'no-store' }
                 );
                 const examsData = examsRes.ok ? await examsRes.json() : { exams: [] };
 
                 // Fetch pending reports
                 const reportsRes = await fetch(
-                    `/api/trainee/school/reports?traineeId=${profile.id}`
+                    `/api/trainee/school/reports?traineeId=${profile.id}`,
+                    { cache: 'no-store' }
                 );
                 const reportsData = reportsRes.ok ? await reportsRes.json() : { meta: {} };
 
                 // Fetch current block
                 const now = new Date();
                 const blocksRes = await fetch(
-                    `/api/trainee/school/blocks?traineeId=${profile.id}&year=${now.getFullYear()}`
+                    `/api/trainee/school/blocks?traineeId=${profile.id}&year=${now.getFullYear()}`,
+                    { cache: 'no-store' }
                 );
                 const blocksData = blocksRes.ok ? await blocksRes.json() : { blocks: [] };
                 const today = now.getTime();

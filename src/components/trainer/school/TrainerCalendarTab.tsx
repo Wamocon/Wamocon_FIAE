@@ -92,7 +92,7 @@ export function TrainerCalendarTab() {
         if (!profile?.id) return;
         async function loadTrainees() {
             try {
-                const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile?.id}`);
+                const res = await fetch(`/api/trainer/trainees?trainerProfileId=${profile?.id}`, { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     setTrainees(data.trainees || []);
@@ -130,7 +130,7 @@ export function TrainerCalendarTab() {
         async function loadBlocks() {
             setLoading(true);
             try {
-                const res = await fetch(`/api/trainer/blocks?traineeId=${selectedTraineeId}&year=${selectedYear}`);
+                const res = await fetch(`/api/trainer/blocks?traineeId=${selectedTraineeId}&year=${selectedYear}`, { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     setBlocks(data.blocks || []);
