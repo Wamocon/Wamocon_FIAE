@@ -36,7 +36,7 @@ export function useApiQuery<T>(
         if (prefetched) return prefetched;
       }
 
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`API ${res.status}: ${text}`);

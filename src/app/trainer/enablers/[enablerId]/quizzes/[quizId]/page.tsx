@@ -57,11 +57,11 @@ export default function EditEnablerQuizPage() {
     options:
       type === 'MCQ'
         ? [0, 1, 2, 3].map(i => ({
-            id: '',
-            optionText: '',
-            isCorrect: i === 0,
-            explanation: '',
-          }))
+          id: '',
+          optionText: '',
+          isCorrect: i === 0,
+          explanation: '',
+        }))
         : [],
   });
 
@@ -70,7 +70,8 @@ export default function EditEnablerQuizPage() {
       try {
         setLoading(true);
         const r = await fetch(
-          `/api/trainer/enablers/${enablerId}/quizzes/${quizId}`
+          `/api/trainer/enablers/${enablerId}/quizzes/${quizId}`,
+          { cache: 'no-store' }
         );
         if (!r.ok) throw new Error(t('common.notFound'));
         const data = await r.json();
@@ -240,19 +241,19 @@ export default function EditEnablerQuizPage() {
                               prev.map((x, i) =>
                                 i === qi
                                   ? {
-                                      ...x,
-                                      questionType: 'MCQ',
-                                      expectedAnswer: null,
-                                      options:
-                                        x.options && x.options.length
-                                          ? x.options
-                                          : [0, 1, 2, 3].map(j => ({
-                                              id: '',
-                                              optionText: '',
-                                              isCorrect: j === 0,
-                                              explanation: '',
-                                            })),
-                                    }
+                                    ...x,
+                                    questionType: 'MCQ',
+                                    expectedAnswer: null,
+                                    options:
+                                      x.options && x.options.length
+                                        ? x.options
+                                        : [0, 1, 2, 3].map(j => ({
+                                          id: '',
+                                          optionText: '',
+                                          isCorrect: j === 0,
+                                          explanation: '',
+                                        })),
+                                  }
                                   : x
                               )
                             )
@@ -270,11 +271,11 @@ export default function EditEnablerQuizPage() {
                               prev.map((x, i) =>
                                 i === qi
                                   ? {
-                                      ...x,
-                                      questionType: 'TEXT',
-                                      expectedAnswer: x.expectedAnswer ?? '',
-                                      options: [],
-                                    }
+                                    ...x,
+                                    questionType: 'TEXT',
+                                    expectedAnswer: x.expectedAnswer ?? '',
+                                    options: [],
+                                  }
                                   : x
                               )
                             )
@@ -338,7 +339,7 @@ export default function EditEnablerQuizPage() {
                                         const prevExpl =
                                           prevCorrect >= 0
                                             ? x.options[prevCorrect]
-                                                .explanation || ''
+                                              .explanation || ''
                                             : '';
                                         return {
                                           ...x,
@@ -377,16 +378,16 @@ export default function EditEnablerQuizPage() {
                                   prev.map((x, i) =>
                                     i === qi
                                       ? {
-                                          ...x,
-                                          options: x.options.map((oo, j) =>
-                                            j === oi
-                                              ? {
-                                                  ...oo,
-                                                  optionText: e.target.value,
-                                                }
-                                              : oo
-                                          ),
-                                        }
+                                        ...x,
+                                        options: x.options.map((oo, j) =>
+                                          j === oi
+                                            ? {
+                                              ...oo,
+                                              optionText: e.target.value,
+                                            }
+                                            : oo
+                                        ),
+                                      }
                                       : x
                                   )
                                 )
@@ -485,19 +486,19 @@ export default function EditEnablerQuizPage() {
                     questions: questions.map(q =>
                       q.questionType === 'TEXT'
                         ? {
-                            questionText: q.questionText,
-                            questionType: 'TEXT',
-                            expectedAnswer: q.expectedAnswer,
-                          }
+                          questionText: q.questionText,
+                          questionType: 'TEXT',
+                          expectedAnswer: q.expectedAnswer,
+                        }
                         : {
-                            questionText: q.questionText,
-                            questionType: 'MCQ',
-                            options: q.options.map(o => ({
-                              optionText: o.optionText,
-                              isCorrect: o.isCorrect,
-                              explanation: (o.explanation ?? '') || null,
-                            })),
-                          }
+                          questionText: q.questionText,
+                          questionType: 'MCQ',
+                          options: q.options.map(o => ({
+                            optionText: o.optionText,
+                            isCorrect: o.isCorrect,
+                            explanation: (o.explanation ?? '') || null,
+                          })),
+                        }
                     ),
                   };
                   const r = await fetch(

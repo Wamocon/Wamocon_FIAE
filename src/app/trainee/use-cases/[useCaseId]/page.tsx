@@ -75,8 +75,23 @@ export default function TraineeUseCaseDetailPage() {
       if (!r.ok) throw new Error(t('useCase.submitFailed'));
       setSuccess(t('useCase.submitSuccess'));
 
-      // Invalidate query to refetch fresh submission state
-      if (ucUrl) queryClient.invalidateQueries({ queryKey: [ucUrl] });
+      // Optimistically update query data
+      if (ucUrl) {
+        queryClient.setQueryData<UseCaseResponse>([ucUrl], (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            submission: {
+              id: old.submission?.id || 'temp-id',
+              status: 'PENDING',
+              submissionText: submissionText,
+              links: links.filter((l) => l.url && l.url.trim()),
+              trainerFeedback: null,
+            }
+          };
+        });
+        queryClient.invalidateQueries({ queryKey: [ucUrl] });
+      }
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
     } finally {
@@ -183,9 +198,9 @@ export default function TraineeUseCaseDetailPage() {
 
         <div>
           <label className="mb-1 block text-sm font-medium">{t('useCase.submission')}</label>
-          <textarea 
-            value={submissionText} 
-            onChange={(e) => setSubmissionText(e.target.value)} 
+          <textarea
+            value={submissionText}
+            onChange={(e) => setSubmissionText(e.target.value)}
             className={`w-full rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
             rows={6}
             disabled={!canEdit}
@@ -195,17 +210,17 @@ export default function TraineeUseCaseDetailPage() {
           <div className="text-sm font-medium">{t('useCase.links')}</div>
           {links.map((l, i) => (
             <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <input 
+              <input
                 className={`rounded-xl border border-accent/30 bg-muted px-3 py-2 md:col-span-2 text-foreground ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
-                placeholder={t('useCase.linkPlaceholder')} 
-                value={l.url} 
+                placeholder={t('useCase.linkPlaceholder')}
+                value={l.url}
                 onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))}
                 disabled={!canEdit}
               />
-              <input 
+              <input
                 className={`rounded-xl border border-accent/30 bg-muted px-3 py-2 text-foreground ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
-                placeholder={t('useCase.descriptionPlaceholder')} 
-                value={l.description || ''} 
+                placeholder={t('useCase.descriptionPlaceholder')}
+                value={l.description || ''}
                 onChange={(e) => setLinks((prev) => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))}
                 disabled={!canEdit}
               />

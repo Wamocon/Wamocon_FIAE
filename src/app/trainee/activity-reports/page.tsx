@@ -208,7 +208,7 @@ export default function TraineeActivityReportsPage() {
     e.stopPropagation();
     try {
       // Fetch entries for this report
-      const res = await fetch(`/api/activity-reports/${report.id}/entries`);
+      const res = await fetch(`/api/activity-reports/${report.id}/entries`, { cache: 'no-store' });
       if (!res.ok) throw new Error(t('reports.error.loadEntries'));
 
       const data = await res.json();
@@ -230,7 +230,8 @@ export default function TraineeActivityReportsPage() {
 
       // 1. Get all evaluations to find the ID
       const resLists = await fetch(
-        `/api/trainee/evaluations?userId=${profile.id}`
+        `/api/trainee/evaluations?userId=${profile.id}`,
+        { cache: 'no-store' }
       );
       if (!resLists.ok) return null;
       const { evaluations } = await resLists.json();
@@ -244,7 +245,8 @@ export default function TraineeActivityReportsPage() {
       // 2. Get full details including Soft Skills
       // Trainee can see their own evaluation details
       const resDetails = await fetch(
-        `/api/trainee/evaluations/${evaluation.id}`
+        `/api/trainee/evaluations/${evaluation.id}`,
+        { cache: 'no-store' }
       );
       if (!resDetails.ok) return null;
       return await resDetails.json();
@@ -262,7 +264,8 @@ export default function TraineeActivityReportsPage() {
     try {
       // Fetch entries for this report
       const entriesRes = await fetch(
-        `/api/activity-reports/${report.id}/entries`
+        `/api/activity-reports/${report.id}/entries`,
+        { cache: 'no-store' }
       );
       if (!entriesRes.ok) throw new Error(t('reports.error.loadEntries'));
       const entriesData = await entriesRes.json();
@@ -365,9 +368,8 @@ export default function TraineeActivityReportsPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <button
           onClick={() => setFilterStatus('ALL')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
-            filterStatus === 'ALL' ? 'ring-primary bg-primary/5 ring-2' : ''
-          }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'ALL' ? 'ring-primary bg-primary/5 ring-2' : ''
+            }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
@@ -386,11 +388,10 @@ export default function TraineeActivityReportsPage() {
 
         <button
           onClick={() => setFilterStatus('SUBMITTED')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
-            filterStatus === 'SUBMITTED'
-              ? 'bg-blue-400/5 ring-2 ring-blue-400'
-              : ''
-          }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'SUBMITTED'
+            ? 'bg-blue-400/5 ring-2 ring-blue-400'
+            : ''
+            }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
@@ -409,11 +410,10 @@ export default function TraineeActivityReportsPage() {
 
         <button
           onClick={() => setFilterStatus('APPROVED')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
-            filterStatus === 'APPROVED'
-              ? 'bg-green-400/5 ring-2 ring-green-400'
-              : ''
-          }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'APPROVED'
+            ? 'bg-green-400/5 ring-2 ring-green-400'
+            : ''
+            }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
@@ -503,25 +503,25 @@ export default function TraineeActivityReportsPage() {
                   {/* Actions for Drafts */}
                   {(report.status === 'DRAFT' ||
                     report.status === 'REJECTED') && (
-                    <div className="border-border/50 mt-3 flex items-center gap-2 border-t pt-3">
-                      <button
-                        onClick={e => handleEditReport(e, report)}
-                        className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                      >
-                        <Edit3 className="h-3 w-3" />
-                        {report.status === 'REJECTED'
-                          ? t('reports.resubmit')
-                          : t('common.edit')}
-                      </button>
-                      <button
-                        onClick={e => handleDeleteReport(e, report.id)}
-                        className="bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        {t('common.delete')}
-                      </button>
-                    </div>
-                  )}
+                      <div className="border-border/50 mt-3 flex items-center gap-2 border-t pt-3">
+                        <button
+                          onClick={e => handleEditReport(e, report)}
+                          className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          {report.status === 'REJECTED'
+                            ? t('reports.resubmit')
+                            : t('common.edit')}
+                        </button>
+                        <button
+                          onClick={e => handleDeleteReport(e, report.id)}
+                          className="bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          {t('common.delete')}
+                        </button>
+                      </div>
+                    )}
 
                   {/* Download Button for Approved Reports */}
                   {report.status === 'APPROVED' && (
@@ -666,7 +666,8 @@ function CreateReportModal({
           ? `&excludeReportId=${initialReport.id}`
           : '';
         const res = await fetch(
-          `/api/trainee/use-case-hours?traineeId=${userId}${excludeParam}`
+          `/api/trainee/use-case-hours?traineeId=${userId}${excludeParam}`,
+          { cache: 'no-store' }
         );
         if (res.ok) {
           const data = await res.json();
@@ -1003,9 +1004,8 @@ function CreateReportModal({
                               Number(e.target.value)
                             )
                           }
-                          className={`bg-background text-foreground w-full rounded border px-3 py-1.5 ${
-                            isOverbooked ? 'border-yellow-500' : 'border-border'
-                          }`}
+                          className={`bg-background text-foreground w-full rounded border px-3 py-1.5 ${isOverbooked ? 'border-yellow-500' : 'border-border'
+                            }`}
                         />
                       </div>
                       <div className="col-span-2">
@@ -1218,7 +1218,7 @@ function ReportDetailModal({
 
   const loadEntries = async () => {
     try {
-      const res = await fetch(`/api/activity-reports/${report.id}/entries`);
+      const res = await fetch(`/api/activity-reports/${report.id}/entries`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setEntries(data.entries || []);
@@ -1320,13 +1320,12 @@ function ReportDetailModal({
                               {t('reports.trainerGrade')}
                             </span>
                             <span
-                              className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${
-                                entry.trainerGrade <= 2
-                                  ? 'bg-green-500'
-                                  : entry.trainerGrade <= 4
-                                    ? 'bg-yellow-500'
-                                    : 'bg-red-500'
-                              }`}
+                              className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${entry.trainerGrade <= 2
+                                ? 'bg-green-500'
+                                : entry.trainerGrade <= 4
+                                  ? 'bg-yellow-500'
+                                  : 'bg-red-500'
+                                }`}
                             >
                               {entry.trainerGrade}
                             </span>
@@ -1441,13 +1440,12 @@ function ComponentItem({
                     !isSelected && !isExhausted && onAddEntry(useCase)
                   }
                   disabled={isSelected || isExhausted}
-                  className={`w-full rounded p-2 text-left text-sm transition-colors ${
-                    isSelected
-                      ? 'bg-accent/20 text-accent cursor-not-allowed'
-                      : isExhausted
-                        ? 'bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60'
-                        : 'hover:bg-muted/50 text-foreground'
-                  }`}
+                  className={`w-full rounded p-2 text-left text-sm transition-colors ${isSelected
+                    ? 'bg-accent/20 text-accent cursor-not-allowed'
+                    : isExhausted
+                      ? 'bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60'
+                      : 'hover:bg-muted/50 text-foreground'
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <span>

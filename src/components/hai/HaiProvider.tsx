@@ -193,7 +193,8 @@ export function HaiProvider({
   const refreshSessions = useCallback(async () => {
     try {
       const response = await fetch(
-        `/api/hai/session?userId=${userId}&includeArchived=true&limit=50`
+        `/api/hai/session?userId=${userId}&includeArchived=true&limit=50`,
+        { cache: 'no-store' }
       );
       if (response.ok) {
         const data = await response.json();
@@ -209,7 +210,8 @@ export function HaiProvider({
       if (!query || query.trim().length < 2) return [];
       try {
         const response = await fetch(
-          `/api/hai/session?userId=${userId}&search=${encodeURIComponent(query.trim())}&limit=20`
+          `/api/hai/session?userId=${userId}&search=${encodeURIComponent(query.trim())}&limit=20`,
+          { cache: 'no-store' }
         );
         if (response.ok) {
           const data = await response.json();
@@ -234,7 +236,8 @@ export function HaiProvider({
       setIsLoading(true);
       try {
         const response = await fetch(
-          `/api/hai/session?userId=${userId}&sessionId=${sessionId}`
+          `/api/hai/session?userId=${userId}&sessionId=${sessionId}`,
+          { cache: 'no-store' }
         );
         if (response.ok) {
           const data = await response.json();
@@ -259,10 +262,10 @@ export function HaiProvider({
             // Reconstruct versions from metadata if present
             const storedVersions = Array.isArray(meta.versions)
               ? (meta.versions as Array<{
-                  content: string;
-                  citations?: unknown[];
-                  createdAt: string;
-                }>)
+                content: string;
+                citations?: unknown[];
+                createdAt: string;
+              }>)
               : undefined;
 
             // Determine active version index
@@ -293,10 +296,10 @@ export function HaiProvider({
               createdAt: m.createdAt,
               versions: storedVersions
                 ? storedVersions.map(v => ({
-                    content: v.content,
-                    citations: v.citations as HaiMessage['citations'],
-                    createdAt: v.createdAt,
-                  }))
+                  content: v.content,
+                  citations: v.citations as HaiMessage['citations'],
+                  createdAt: v.createdAt,
+                }))
                 : undefined,
               activeVersionIndex: storedVersions ? activeIdx : undefined,
               baseUserMessageId,
@@ -559,12 +562,12 @@ export function HaiProvider({
           const userVersions = userMsg.versions
             ? [...userMsg.versions]
             : [
-                {
-                  content: userMsg.content,
-                  citations: userMsg.citations,
-                  createdAt: userMsg.createdAt,
-                },
-              ];
+              {
+                content: userMsg.content,
+                citations: userMsg.citations,
+                createdAt: userMsg.createdAt,
+              },
+            ];
           // Only add a new version if the content actually changed
           const lastUserVersion = userVersions[userVersions.length - 1];
           if (lastUserVersion.content !== newContent.trim()) {
@@ -589,12 +592,12 @@ export function HaiProvider({
           const versions = current.versions
             ? [...current.versions]
             : [
-                {
-                  content: current.content,
-                  citations: current.citations,
-                  createdAt: current.createdAt,
-                },
-              ];
+              {
+                content: current.content,
+                citations: current.citations,
+                createdAt: current.createdAt,
+              },
+            ];
           versions.push({ content: '', citations: [], createdAt: now });
           const newIndex = versions.length - 1;
           updated[aIdx] = {
@@ -681,16 +684,16 @@ export function HaiProvider({
                     prev.map(m =>
                       m.id === assistantId
                         ? {
-                            ...m,
-                            content: fullText,
-                            versions: m.versions
-                              ? m.versions.map((v, idx) =>
-                                  idx === (m.activeVersionIndex ?? 0)
-                                    ? { ...v, content: fullText }
-                                    : v
-                                )
-                              : m.versions,
-                          }
+                          ...m,
+                          content: fullText,
+                          versions: m.versions
+                            ? m.versions.map((v, idx) =>
+                              idx === (m.activeVersionIndex ?? 0)
+                                ? { ...v, content: fullText }
+                                : v
+                            )
+                            : m.versions,
+                        }
                         : m
                     )
                   );
@@ -705,16 +708,16 @@ export function HaiProvider({
                       prev.map(m =>
                         m.id === assistantId
                           ? {
-                              ...m,
-                              citations: event.citations,
-                              versions: m.versions
-                                ? m.versions.map((v, idx) =>
-                                    idx === (m.activeVersionIndex ?? 0)
-                                      ? { ...v, citations: event.citations }
-                                      : v
-                                  )
-                                : m.versions,
-                            }
+                            ...m,
+                            citations: event.citations,
+                            versions: m.versions
+                              ? m.versions.map((v, idx) =>
+                                idx === (m.activeVersionIndex ?? 0)
+                                  ? { ...v, citations: event.citations }
+                                  : v
+                              )
+                              : m.versions,
+                          }
                           : m
                       )
                     );
@@ -747,21 +750,21 @@ export function HaiProvider({
             prev.map(m =>
               m.id === assistantId
                 ? {
-                    ...m,
-                    content: data.response,
-                    citations: data.citations,
-                    versions: m.versions
-                      ? m.versions.map((v, idx) =>
-                          idx === (m.activeVersionIndex ?? 0)
-                            ? {
-                                ...v,
-                                content: data.response,
-                                citations: data.citations,
-                              }
-                            : v
-                        )
-                      : m.versions,
-                  }
+                  ...m,
+                  content: data.response,
+                  citations: data.citations,
+                  versions: m.versions
+                    ? m.versions.map((v, idx) =>
+                      idx === (m.activeVersionIndex ?? 0)
+                        ? {
+                          ...v,
+                          content: data.response,
+                          citations: data.citations,
+                        }
+                        : v
+                    )
+                    : m.versions,
+                }
                 : m
             )
           );
@@ -773,16 +776,16 @@ export function HaiProvider({
             prev.map(m =>
               m.id === assistantId
                 ? {
-                    ...m,
-                    content: t('hai.error.somethingWrong'),
-                    versions: m.versions
-                      ? m.versions.map((v, idx) =>
-                          idx === (m.activeVersionIndex ?? 0)
-                            ? { ...v, content: t('hai.error.somethingWrong') }
-                            : v
-                        )
-                      : m.versions,
-                  }
+                  ...m,
+                  content: t('hai.error.somethingWrong'),
+                  versions: m.versions
+                    ? m.versions.map((v, idx) =>
+                      idx === (m.activeVersionIndex ?? 0)
+                        ? { ...v, content: t('hai.error.somethingWrong') }
+                        : v
+                    )
+                    : m.versions,
+                }
                 : m
             )
           );
@@ -797,16 +800,16 @@ export function HaiProvider({
           prev.map(m =>
             m.id === assistantId
               ? {
-                  ...m,
-                  content: t('hai.error.connectionError'),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.connectionError') }
-                          : v
-                      )
-                    : m.versions,
-                }
+                ...m,
+                content: t('hai.error.connectionError'),
+                versions: m.versions
+                  ? m.versions.map((v, idx) =>
+                    idx === (m.activeVersionIndex ?? 0)
+                      ? { ...v, content: t('hai.error.connectionError') }
+                      : v
+                  )
+                  : m.versions,
+              }
               : m
           )
         );
@@ -923,16 +926,16 @@ export function HaiProvider({
                     prev.map(m =>
                       m.id === assistantId
                         ? {
-                            ...m,
-                            content: fullText,
-                            versions: m.versions
-                              ? m.versions.map((v, idx) =>
-                                  idx === (m.activeVersionIndex ?? 0)
-                                    ? { ...v, content: fullText }
-                                    : v
-                                )
-                              : m.versions,
-                          }
+                          ...m,
+                          content: fullText,
+                          versions: m.versions
+                            ? m.versions.map((v, idx) =>
+                              idx === (m.activeVersionIndex ?? 0)
+                                ? { ...v, content: fullText }
+                                : v
+                            )
+                            : m.versions,
+                        }
                         : m
                     )
                   );
@@ -948,16 +951,16 @@ export function HaiProvider({
                       prev.map(m =>
                         m.id === assistantId
                           ? {
-                              ...m,
-                              citations: event.citations,
-                              versions: m.versions
-                                ? m.versions.map((v, idx) =>
-                                    idx === (m.activeVersionIndex ?? 0)
-                                      ? { ...v, citations: event.citations }
-                                      : v
-                                  )
-                                : m.versions,
-                            }
+                            ...m,
+                            citations: event.citations,
+                            versions: m.versions
+                              ? m.versions.map((v, idx) =>
+                                idx === (m.activeVersionIndex ?? 0)
+                                  ? { ...v, citations: event.citations }
+                                  : v
+                              )
+                              : m.versions,
+                          }
                           : m
                       )
                     );
@@ -992,21 +995,21 @@ export function HaiProvider({
             prev.map(m =>
               m.id === assistantId
                 ? {
-                    ...m,
-                    content: data.response,
-                    citations: data.citations,
-                    versions: m.versions
-                      ? m.versions.map((v, idx) =>
-                          idx === (m.activeVersionIndex ?? 0)
-                            ? {
-                                ...v,
-                                content: data.response,
-                                citations: data.citations,
-                              }
-                            : v
-                        )
-                      : m.versions,
-                  }
+                  ...m,
+                  content: data.response,
+                  citations: data.citations,
+                  versions: m.versions
+                    ? m.versions.map((v, idx) =>
+                      idx === (m.activeVersionIndex ?? 0)
+                        ? {
+                          ...v,
+                          content: data.response,
+                          citations: data.citations,
+                        }
+                        : v
+                    )
+                    : m.versions,
+                }
                 : m
             )
           );
@@ -1020,16 +1023,16 @@ export function HaiProvider({
             prev.map(m =>
               m.id === assistantId
                 ? {
-                    ...m,
-                    content: t('hai.error.somethingWrong'),
-                    versions: m.versions
-                      ? m.versions.map((v, idx) =>
-                          idx === (m.activeVersionIndex ?? 0)
-                            ? { ...v, content: t('hai.error.somethingWrong') }
-                            : v
-                        )
-                      : m.versions,
-                  }
+                  ...m,
+                  content: t('hai.error.somethingWrong'),
+                  versions: m.versions
+                    ? m.versions.map((v, idx) =>
+                      idx === (m.activeVersionIndex ?? 0)
+                        ? { ...v, content: t('hai.error.somethingWrong') }
+                        : v
+                    )
+                    : m.versions,
+                }
                 : m
             )
           );
@@ -1045,16 +1048,16 @@ export function HaiProvider({
           prev.map(m =>
             m.id === assistantId
               ? {
-                  ...m,
-                  content: t('hai.error.connectionError'),
-                  versions: m.versions
-                    ? m.versions.map((v, idx) =>
-                        idx === (m.activeVersionIndex ?? 0)
-                          ? { ...v, content: t('hai.error.connectionError') }
-                          : v
-                      )
-                    : m.versions,
-                }
+                ...m,
+                content: t('hai.error.connectionError'),
+                versions: m.versions
+                  ? m.versions.map((v, idx) =>
+                    idx === (m.activeVersionIndex ?? 0)
+                      ? { ...v, content: t('hai.error.connectionError') }
+                      : v
+                  )
+                  : m.versions,
+              }
               : m
           )
         );
