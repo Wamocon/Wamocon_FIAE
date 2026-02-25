@@ -139,41 +139,45 @@ export async function fetchPageIndexContext(
 
     // Step 2: Extract pages from candidate PDFs (with caching)
     const pdfResults: PageIndexResult[] = [];
+    const candidatesToScan = candidatePDFs.slice(0, MAX_PDFS_PER_QUERY);
 
-    for (const pdf of candidatePDFs.slice(0, MAX_PDFS_PER_QUERY)) {
-      try {
-        const pages = await extractPDFPages(pdf.storageUrl);
-        if (pages && pages.success && pages.pages.length > 0) {
-          // Step 3: Score pages by relevance
-          const scoredPages = scorePagesByRelevance(
-            pages.pages.map(p => ({
-              pageNumber: p.page,
-              text: p.text,
-              charCount: p.charCount,
-            })),
-            userQuery,
-            vectorResults
+    // Scan PDFs in parallel to reduce total latency
+    await Promise.all(
+      candidatesToScan.map(async pdf => {
+        try {
+          const pages = await extractPDFPages(pdf.storageUrl);
+          if (pages && pages.success && pages.pages.length > 0) {
+            // Step 3: Score pages by relevance
+            const scoredPages = scorePagesByRelevance(
+              pages.pages.map(p => ({
+                pageNumber: p.page,
+                text: p.text,
+                charCount: p.charCount,
+              })),
+              userQuery,
+              vectorResults
+            );
+
+            pdfResults.push({
+              documentId: pdf.id,
+              documentTitle: pdf.title,
+              fileName: pdf.fileName,
+              storageUrl: pdf.storageUrl,
+              parentType: pdf.parentType,
+              parentId: pdf.parentId,
+              parentTitle: pdf.parentTitle,
+              pages: scoredPages,
+              totalPages: pages.totalPages,
+            });
+          }
+        } catch (err) {
+          console.warn(
+            `HAI.ai PageIndex: Failed to extract ${pdf.fileName}:`,
+            err
           );
-
-          pdfResults.push({
-            documentId: pdf.id,
-            documentTitle: pdf.title,
-            fileName: pdf.fileName,
-            storageUrl: pdf.storageUrl,
-            parentType: pdf.parentType,
-            parentId: pdf.parentId,
-            parentTitle: pdf.parentTitle,
-            pages: scoredPages,
-            totalPages: pages.totalPages,
-          });
         }
-      } catch (err) {
-        console.warn(
-          `HAI.ai PageIndex: Failed to extract ${pdf.fileName}:`,
-          err
-        );
-      }
-    }
+      })
+    );
 
     // Step 4: Collect best pages across all PDFs
     const allPages: (PageContent & {
@@ -293,7 +297,7 @@ async function findCandidatePDFs(
           cd.enabler_id, e.title AS enabler_title
         FROM content_documents cd
         LEFT JOIN enablers e ON cd.enabler_id = e.id
-        WHERE cd.enabler_id = ANY(${enablerIdArray}::uuid[])
+        WHERE cd.enabler_id IN (${sql.join(enablerIdArray.map(id => sql`${id}::uuid`), sql`, `)})
           AND cd.storage_url IS NOT NULL
           AND cd.mime_type = 'application/pdf'
         ORDER BY cd.order_index
@@ -329,7 +333,7 @@ async function findCandidatePDFs(
           cd.use_case_id, uc.title AS use_case_title
         FROM content_documents cd
         JOIN use_cases uc ON cd.use_case_id = uc.id
-        WHERE uc.course_id = ANY(${courseIdArray}::uuid[])
+        WHERE uc.course_id IN (${sql.join(courseIdArray.map(id => sql`${id}::uuid`), sql`, `)})
           AND cd.document_type = 'TRAINER_SOLUTION'
           AND cd.storage_url IS NOT NULL
         ORDER BY uc.order_index

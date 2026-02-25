@@ -134,7 +134,7 @@ export function HaiProvider({
   userId,
   initialContext,
 }: HaiProviderProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   // UI State
   const [viewMode, setViewModeState] = useState<ViewMode>('hidden');
@@ -632,10 +632,18 @@ export function HaiProvider({
 
       setStreamingMessageId(assistantId);
 
+      // Add a timeout to the fetch request (60 seconds)
+      const timeoutId = setTimeout(() => {
+        abortController.abort('TIMEOUT');
+      }, 60000);
+
       try {
         const response = await fetch(`/api/hai/chat?userId=${userId}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-language': language,
+          },
           body: JSON.stringify({
             message: newContent.trim(),
             sessionId: currentSessionId,
@@ -650,20 +658,55 @@ export function HaiProvider({
           signal: abortController.signal,
         });
 
+        // Clear timeout once response headers arrive
+        clearTimeout(timeoutId);
+
         if (response.ok && response.body) {
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
           let fullText = '';
+          let hasReceivedFirstChunk = false;
+
+          // Thinking message if it takes more than 3 seconds to get first chunk
+          const thinkingTimeoutId = setTimeout(() => {
+            if (!hasReceivedFirstChunk && activeStreamSessionRef.current === streamSessionId) {
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId && m.content === ''
+                    ? { ...m, content: t('hai.loading.thinking') || 'Thinking...' }
+                    : m
+                )
+              );
+            }
+          }, 3000);
 
           while (true) {
             if (activeStreamSessionRef.current !== streamSessionId) {
               reader.cancel();
+              clearTimeout(thinkingTimeoutId);
               break;
             }
 
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done) {
+              clearTimeout(thinkingTimeoutId);
+              break;
+            }
+
+            if (!hasReceivedFirstChunk) {
+              hasReceivedFirstChunk = true;
+              clearTimeout(thinkingTimeoutId);
+              // Clear 'Thinking...' text if present before first chunk
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId &&
+                    m.content === (t('hai.loading.thinking') || 'Thinking...')
+                    ? { ...m, content: '' }
+                    : m
+                )
+              );
+            }
 
             buffer += decoder.decode(value, { stream: true });
 
@@ -726,11 +769,13 @@ export function HaiProvider({
                 }
 
                 if (event.error) {
+                  const errorMsg = t(event.error) || event.error;
                   setMessages(prev =>
                     prev.map(m =>
-                      m.id === assistantId ? { ...m, content: event.error } : m
+                      m.id === assistantId ? { ...m, content: errorMsg } : m
                     )
                   );
+                  setStreamingMessageId(null);
                 }
               } catch {
                 // Skip malformed JSON
@@ -791,10 +836,28 @@ export function HaiProvider({
           );
           setStreamingMessageId(null);
         }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+      } catch (error: any) {
+        if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
+          console.log('HAI.ai: Stream aborted or timed out');
+          // If it was a timeout, show the timeout error message
+          if (error.message === 'TIMEOUT' || (abortController.signal.aborted && !activeStreamSessionRef.current)) {
+            setMessages(prev =>
+              prev.map(m =>
+                m.id === assistantId
+                  ? {
+                    ...m,
+                    content: t('hai.error.timeout'),
+                    versions: m.versions?.map((v, idx) =>
+                      idx === (m.activeVersionIndex ?? 0) ? { ...v, content: t('hai.error.timeout') } : v
+                    )
+                  }
+                  : m
+              )
+            );
+          }
           return;
         }
+
         console.error('Failed to regenerate message:', error);
         setMessages(prev =>
           prev.map(m =>
@@ -815,6 +878,7 @@ export function HaiProvider({
         );
         setStreamingMessageId(null);
       } finally {
+        clearTimeout(timeoutId);
         if (activeStreamSessionRef.current === streamSessionId) {
           setIsLoading(false);
         }
@@ -872,10 +936,18 @@ export function HaiProvider({
       setMessages(prev => [...prev, assistantMessage]);
       setStreamingMessageId(assistantId);
 
+      // Add a timeout to the fetch request (60 seconds)
+      const timeoutId = setTimeout(() => {
+        abortController.abort('TIMEOUT');
+      }, 60000);
+
       try {
         const response = await fetch(`/api/hai/chat?userId=${userId}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-language': language
+          },
           body: JSON.stringify({
             message,
             sessionId: currentSessionId,
@@ -894,16 +966,41 @@ export function HaiProvider({
           const decoder = new TextDecoder();
           let buffer = '';
           let fullText = '';
+          let hasReceivedFirstChunk = false;
+
+          // Thinking message if it takes more than 3 seconds to get first chunk
+          const thinkingTimeoutId = setTimeout(() => {
+            if (!hasReceivedFirstChunk && activeStreamSessionRef.current === streamSessionId) {
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId && m.content === ''
+                    ? { ...m, content: t('hai.loading.thinking') || 'Thinking...' }
+                    : m
+                )
+              );
+            }
+          }, 3000);
 
           while (true) {
             // Guard: if session changed mid-stream, stop processing
             if (activeStreamSessionRef.current !== streamSessionId) {
               reader.cancel();
+              clearTimeout(thinkingTimeoutId);
               break;
             }
 
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done) {
+              clearTimeout(thinkingTimeoutId);
+              break;
+            }
+
+            if (!hasReceivedFirstChunk) {
+              hasReceivedFirstChunk = true;
+              clearTimeout(thinkingTimeoutId);
+              // Clear 'Thinking...' text if present before first chunk
+              setMessages(prev => prev.map(m => m.id === assistantId && m.content === (t('hai.loading.thinking') || 'Thinking...') ? { ...m, content: '' } : m));
+            }
 
             buffer += decoder.decode(value, { stream: true });
 
@@ -969,11 +1066,13 @@ export function HaiProvider({
                 }
 
                 if (event.error) {
+                  const errorMsg = t(event.error) || event.error;
                   setMessages(prev =>
                     prev.map(m =>
-                      m.id === assistantId ? { ...m, content: event.error } : m
+                      m.id === assistantId ? { ...m, content: errorMsg } : m
                     )
                   );
+                  setStreamingMessageId(null);
                 }
               } catch {
                 // Skip malformed JSON
@@ -1038,11 +1137,28 @@ export function HaiProvider({
           );
           setStreamingMessageId(null);
         }
-      } catch (error) {
-        // Ignore abort errors (user switched sessions)
-        if (error instanceof DOMException && error.name === 'AbortError') {
+      } catch (error: any) {
+        // Handle stop/abort or timeout
+        if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
+          console.log('HAI.ai: Stream aborted or timed out');
+          if (error.message === 'TIMEOUT' || (abortController.signal.aborted && !activeStreamSessionRef.current)) {
+            setMessages(prev =>
+              prev.map(m =>
+                m.id === assistantId
+                  ? {
+                    ...m,
+                    content: t('hai.error.timeout'),
+                    versions: m.versions?.map((v, idx) =>
+                      idx === (m.activeVersionIndex ?? 0) ? { ...v, content: t('hai.error.timeout') } : v
+                    )
+                  }
+                  : m
+              )
+            );
+          }
           return;
         }
+
         console.error('Failed to send message:', error);
         setMessages(prev =>
           prev.map(m =>
@@ -1063,6 +1179,7 @@ export function HaiProvider({
         );
         setStreamingMessageId(null);
       } finally {
+        clearTimeout(timeoutId);
         // Only clear loading if this is still the active stream
         if (activeStreamSessionRef.current === streamSessionId) {
           setIsLoading(false);

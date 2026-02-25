@@ -128,7 +128,7 @@ const EXAM_SUBTYPE_LABELS: Record<string, string> = {
     'PRAKTISCHE_PRUEFUNG': 'Praktische Prüfung',
     'MUENDLICHE_PRUEFUNG': 'Mündliche Prüfung',
     'PROJEKTARBEIT': 'Projektarbeit',
-    'ANDERE': 'Sonstige Prüfung'
+    'ANDERE': 'Andere Prüfung'
 };
 
 // Weekday keys for translation
