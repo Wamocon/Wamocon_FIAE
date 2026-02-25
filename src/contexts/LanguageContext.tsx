@@ -24,7 +24,7 @@ type TranslationMap = Record<string, string>;
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, data?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(
@@ -63,7 +63,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const strings = TRANSLATIONS[language];
 
   const t = useCallback(
-    (key: string): string => strings[key] || key,
+    (key: string, data?: Record<string, string | number>): string => {
+      let text = strings[key] || key;
+      if (data) {
+        Object.entries(data).forEach(([k, v]) => {
+          text = text.replace(`{${k}}`, String(v));
+        });
+      }
+      return text;
+    },
     [strings]
   );
 
