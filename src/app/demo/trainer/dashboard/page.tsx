@@ -114,7 +114,7 @@ export default function DemoTrainerDashboard() {
               <p className="text-foreground text-2xl font-bold">
                 {trainerStats.avgProgress}%
               </p>
-              <p className="text-muted-foreground text-xs">\u00d8 Fortschritt</p>
+              <p className="text-muted-foreground text-xs">Ø Fortschritt</p>
             </div>
           </CardContent>
         </Card>
@@ -127,7 +127,7 @@ export default function DemoTrainerDashboard() {
               <p className="text-foreground text-2xl font-bold">
                 {trainerStats.avgQuizScore}%
               </p>
-              <p className="text-muted-foreground text-xs">\u00d8 Quiz-Score</p>
+              <p className="text-muted-foreground text-xs">Ø Quiz-Score</p>
             </div>
           </CardContent>
         </Card>
@@ -148,7 +148,7 @@ export default function DemoTrainerDashboard() {
               <div
                 key={item.id}
                 className="bg-background/50 flex items-center justify-between rounded-xl p-3 transition-all hover:bg-background/80 cursor-pointer"
-                onClick={() => showDemoToast('\u00d6ffnen')}
+                onClick={() => showDemoToast('öffnen')}
               >
                 <div className="flex items-center gap-3">
                   {item.type === 'report' ? (
@@ -176,7 +176,7 @@ export default function DemoTrainerDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="h-5 w-5 text-blue-500" />
-              Azubi-\u00dcbersicht
+              Azubi-Übersicht
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -254,7 +254,7 @@ export default function DemoTrainerDashboard() {
         {/* Component Progress */}
         <Card className="glass-effect border-border/40">
           <CardHeader>
-            <CardTitle className="text-lg">\u00d8 Fortschritt je Komponente</CardTitle>
+            <CardTitle className="text-lg">Ø Fortschritt je Komponente</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
@@ -268,7 +268,7 @@ export default function DemoTrainerDashboard() {
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px',
                   }}
-                  formatter={(value: number) => [`${value}%`, '\u00d8 Fortschritt']}
+                  formatter={(value: number) => [`${value}%`, 'Ø Fortschritt']}
                 />
                 <Bar
                   dataKey="avgProgress"

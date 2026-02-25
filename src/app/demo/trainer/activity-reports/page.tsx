@@ -76,7 +76,7 @@ export default function DemoTrainerActivityReports() {
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-foreground text-2xl font-bold">T\u00e4tigkeitsnachweise</h1>
+          <h1 className="text-foreground text-2xl font-bold">Tätigkeitsnachweise</h1>
           <p className="text-muted-foreground mt-1">
             {totals.submitted} ausstehend &middot; {totals.approved} genehmigt
           </p>

@@ -86,7 +86,7 @@ export default function DemoTrainerTrainees() {
               )}
               %
             </p>
-            <p className="text-muted-foreground text-xs">\u00d8 Fortschritt</p>
+            <p className="text-muted-foreground text-xs">Ø Fortschritt</p>
           </CardContent>
         </Card>
         <Card className="glass-effect border-border/40">
@@ -97,7 +97,7 @@ export default function DemoTrainerTrainees() {
               )}
               %
             </p>
-            <p className="text-muted-foreground text-xs">\u00d8 Quiz-Score</p>
+            <p className="text-muted-foreground text-xs">Ø Quiz-Score</p>
           </CardContent>
         </Card>
         <Card className="glass-effect border-border/40">

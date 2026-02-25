@@ -52,7 +52,7 @@ export default function DemoTraineeDashboard() {
           <CardContent className="flex items-center gap-6 p-6">
             <div className="flex-1">
               <h2 className="text-foreground text-2xl font-bold">
-                Willkommen zur\u00fcck, Max! \ud83d\udc4b
+                Willkommen zurück, Max! 👋
               </h2>
               <p className="text-muted-foreground mt-1">
                 Du hast eine {traineeStats.streak}-Tage-Serie! Weiter so!
@@ -178,7 +178,7 @@ export default function DemoTraineeDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <TrendingUp className="h-5 w-5 text-blue-500" />
-              Wochenaktivit\u00e4t
+              Wochenaktivität
             </CardTitle>
           </CardHeader>
           <CardContent>
