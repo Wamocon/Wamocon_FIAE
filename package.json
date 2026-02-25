@@ -1,5 +1,5 @@
 {
-  "name": "fiae-platform",
+  "name": "LFA-platform",
   "version": "1.0.0",
   "private": true,
   "description": "Professional learning platform for application developers",
@@ -12,7 +12,7 @@
     "learning-platform",
     "education"
   ],
-  "author": "FIAE Team",
+  "author": "LFA Team",
   "license": "MIT",
   "scripts": {
     "dev": "next dev",
