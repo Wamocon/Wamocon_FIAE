@@ -40,6 +40,8 @@ export default function TrainerReviewsPage() {
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   // IDs that are fading out after optimistic update (visual transition before removal)
   const [fadingOutIds, setFadingOutIds] = useState<Set<string>>(new Set());
+  // Tracks which already-reviewed items are currently being edited
+  const [editingIds, setEditingIds] = useState<Set<string>>(new Set());
 
   // Solution document state for use cases (TRAINER_SOLUTION PDFs)
   const [solutionDocsMap, setSolutionDocsMap] = useState<Record<string, SolutionDocInfo | null>>({});
@@ -117,6 +119,16 @@ export default function TrainerReviewsPage() {
         const data = await r.json();
         setEnablerSubs((data.enablerSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
         setUseCaseSubs((data.useCaseSubmissions || []).map((x: any) => ({ ...x, status: x.status, attemptNumber: x.attemptNumber })));
+
+        // Pre-fill feedback maps
+        const newFeedback: Record<string, string> = {};
+        const newFeedbacks: Record<string, any[]> = {};
+        [...(data.enablerSubmissions || []), ...(data.useCaseSubmissions || [])].forEach(s => {
+          if (s.trainerFeedback) newFeedback[s.id] = s.trainerFeedback;
+          if (s.feedbacks) newFeedbacks[s.id] = s.feedbacks;
+        });
+        setFeedbackMap(prev => ({ ...prev, ...newFeedback }));
+        setFeedbacksMap(prev => ({ ...prev, ...newFeedbacks }));
       } catch (e: any) {
         setError(e?.message || t('trainer.reviews.unknownError'));
       } finally {
@@ -137,7 +149,15 @@ export default function TrainerReviewsPage() {
           const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${pendingFilter === 'pending'}`, { cache: 'no-store' });
           if (!res.ok) throw new Error(t('trainer.reviews.quizLoadError'));
           const data = await res.json();
-          setQuizzes((data.submissions || []).map((x: any) => ({ ...x, attemptNumber: x.attemptNumber, difficulty: x.difficulty || null, enablerTitle: x.enablerTitle || null })));
+          const subs = (data.submissions || []).map((x: any) => ({ ...x, attemptNumber: x.attemptNumber, difficulty: x.difficulty || null, enablerTitle: x.enablerTitle || null }));
+          setQuizzes(subs);
+
+          // Pre-fill quiz feedback
+          const quizFeedback: Record<string, string> = {};
+          subs.forEach((s: any) => {
+            if (s.trainerFeedback) quizFeedback[s.id] = s.trainerFeedback;
+          });
+          setFeedbackMap(prev => ({ ...prev, ...quizFeedback }));
         }
       } catch (e: any) {
         setError(e.message || t('trainer.reviews.unknownError'));
@@ -183,8 +203,8 @@ export default function TrainerReviewsPage() {
         return;
       }
       toast.success(status === 'APPROVED' ? t('trainer.reviews.approved') : t('trainer.reviews.rejected'));
-      setFeedbackMap(prev => ({ ...prev, [id]: '' }));
-      setFeedbacksMap(prev => ({ ...prev, [id]: [] }));
+      // Remove from editing mode on success
+      setEditingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
 
       // Background refresh (non-blocking) to sync with server
       const onlyPending = statusFilter === 'pending';
@@ -361,8 +381,9 @@ export default function TrainerReviewsPage() {
                                     : t('trainer.reviews.feedback')}
                                 </label>
                                 <textarea
-                                  className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2"
+                                  className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2 disabled:opacity-80"
                                   rows={3}
+                                  disabled={it.status !== 'PENDING' && !editingIds.has(it.id)}
                                   value={feedbacksMap[it.id]?.find(f => f.scenarioIndex === sol.scenarioIndex)?.feedback || ''}
                                   onChange={e => {
                                     const newFeedbacks = [...(feedbacksMap[it.id] || [])];
@@ -430,33 +451,58 @@ export default function TrainerReviewsPage() {
                       </div>
                       <div className="mt-3">
                         <label className="mb-1 block text-sm font-medium">{t('trainer.reviews.feedback')}</label>
-                        <textarea className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+                        <textarea
+                          className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2 disabled:opacity-80"
+                          rows={3}
+                          disabled={it.status !== 'PENDING' && !editingIds.has(it.id)}
+                          value={feedbackMap[it.id] || ''}
+                          onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))}
+                        />
                       </div>
                     </>
                   ) : null}
                 </div>
               )}
               <div className="mt-3 flex justify-end gap-2">
-                <button
-                  disabled={!!loadingActions[it.id]}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 px-3 py-2 disabled:opacity-60"
-                  onClick={() => reviewItem('enabler', it.id, 'REJECTED')}
-                >
-                  {loadingActions[it.id] === 'REJECTED'
-                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
-                    : null}
-                  {t('trainer.reviews.reject')}
-                </button>
-                <button
-                  disabled={!!loadingActions[it.id]}
-                  className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2 disabled:opacity-60"
-                  onClick={() => reviewItem('enabler', it.id, 'APPROVED')}
-                >
-                  {loadingActions[it.id] === 'APPROVED'
-                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    : null}
-                  {t('trainer.reviews.approve')}
-                </button>
+                {it.status !== 'PENDING' && !editingIds.has(it.id) ? (
+                  <button
+                    onClick={() => setEditingIds(prev => new Set(prev).add(it.id))}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 px-4 py-2 hover:bg-accent/10 transition-colors text-sm font-medium"
+                  >
+                    {t('common.edit') || 'Update Feedback'}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      disabled={!!loadingActions[it.id]}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 px-3 py-2 disabled:opacity-60"
+                      onClick={() => reviewItem('enabler', it.id, 'REJECTED')}
+                    >
+                      {loadingActions[it.id] === 'REJECTED'
+                        ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
+                        : null}
+                      {t('trainer.reviews.reject')}
+                    </button>
+                    <button
+                      disabled={!!loadingActions[it.id]}
+                      className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2 disabled:opacity-60"
+                      onClick={() => reviewItem('enabler', it.id, 'APPROVED')}
+                    >
+                      {loadingActions[it.id] === 'APPROVED'
+                        ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        : null}
+                      {t('trainer.reviews.approve')}
+                    </button>
+                    {it.status !== 'PENDING' && (
+                      <button
+                        onClick={() => setEditingIds(prev => { const n = new Set(prev); n.delete(it.id); return n; })}
+                        className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                      >
+                        {t('common.cancel')}
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -500,29 +546,54 @@ export default function TrainerReviewsPage() {
               )}
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">{t('trainer.reviews.feedback')}</label>
-                <textarea className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2" rows={3} value={feedbackMap[it.id] || ''} onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))} />
+                <textarea
+                  className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2 disabled:opacity-80"
+                  rows={3}
+                  disabled={it.status !== 'PENDING' && !editingIds.has(it.id)}
+                  value={feedbackMap[it.id] || ''}
+                  onChange={e => setFeedbackMap(prev => ({ ...prev, [it.id]: e.target.value }))}
+                />
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <button
-                  disabled={!!loadingActions[it.id]}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 px-3 py-2 disabled:opacity-60"
-                  onClick={() => reviewItem('usecase', it.id, 'REJECTED')}
-                >
-                  {loadingActions[it.id] === 'REJECTED'
-                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
-                    : null}
-                  {t('trainer.reviews.reject')}
-                </button>
-                <button
-                  disabled={!!loadingActions[it.id]}
-                  className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2 disabled:opacity-60"
-                  onClick={() => reviewItem('usecase', it.id, 'APPROVED')}
-                >
-                  {loadingActions[it.id] === 'APPROVED'
-                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    : null}
-                  {t('trainer.reviews.approve')}
-                </button>
+                {it.status !== 'PENDING' && !editingIds.has(it.id) ? (
+                  <button
+                    onClick={() => setEditingIds(prev => new Set(prev).add(it.id))}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 px-4 py-2 hover:bg-accent/10 transition-colors text-sm font-medium"
+                  >
+                    {t('common.edit') || 'Update Feedback'}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      disabled={!!loadingActions[it.id]}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 px-3 py-2 disabled:opacity-60"
+                      onClick={() => reviewItem('usecase', it.id, 'REJECTED')}
+                    >
+                      {loadingActions[it.id] === 'REJECTED'
+                        ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
+                        : null}
+                      {t('trainer.reviews.reject')}
+                    </button>
+                    <button
+                      disabled={!!loadingActions[it.id]}
+                      className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-2 disabled:opacity-60"
+                      onClick={() => reviewItem('usecase', it.id, 'APPROVED')}
+                    >
+                      {loadingActions[it.id] === 'APPROVED'
+                        ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        : null}
+                      {t('trainer.reviews.approve')}
+                    </button>
+                    {it.status !== 'PENDING' && (
+                      <button
+                        onClick={() => setEditingIds(prev => { const n = new Set(prev); n.delete(it.id); return n; })}
+                        className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                      >
+                        {t('common.cancel')}
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -580,39 +651,60 @@ export default function TrainerReviewsPage() {
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">{t('trainer.reviews.feedback')}</label>
                 <textarea
-                  className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2"
+                  className="w-full rounded-xl border border-accent/30 bg-muted/50 px-3 py-2 disabled:opacity-80"
                   rows={3}
+                  disabled={s.isReviewed && !editingIds.has(s.id)}
                   value={feedbackMap[s.id] || ''}
                   onChange={(e) => setFeedbackMap(prev => ({ ...prev, [s.id]: e.target.value }))}
                   placeholder={t('trainer.reviews.feedbackPlaceholder')}
                 />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    disabled={busyIds.has(s.id)}
-                    onClick={async () => {
-                      if (busyIds.has(s.id)) return;
-                      const feedback = feedbackMap[s.id] || '';
-                      if (!feedback.trim()) { toast.error(t('trainer.reviews.feedbackEmpty')); return; }
-                      setBusyIds(prev => new Set(prev).add(s.id));
-                      try {
-                        const r = await fetch(`/api/trainer/quiz-submissions/${s.id}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ trainer_feedback: feedback, reviewer_id: profile?.id }),
-                        });
-                        if (!r.ok) { toast.error(t('trainer.reviews.saveError')); return; }
-                        toast.success(t('trainer.reviews.feedbackSaved'));
-                        setFeedbackMap(prev => ({ ...prev, [s.id]: '' }));
-                        const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`, { cache: 'no-store' });
-                        const data = await res.json();
-                        setQuizzes(data.submissions || []);
-                      } catch { toast.error(t('trainer.reviews.saveError')); }
-                      finally { setBusyIds(prev => { const n = new Set(prev); n.delete(s.id); return n; }); }
-                    }}
-                    className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60 disabled:opacity-50"
-                  >
-                    {t('trainer.reviews.saveFeedback')}
-                  </button>
+                <div className="mt-2 flex justify-end gap-2">
+                  {s.isReviewed && !editingIds.has(s.id) ? (
+                    <button
+                      onClick={() => setEditingIds(prev => new Set(prev).add(s.id))}
+                      className="rounded-md border border-accent/30 px-4 py-2 text-sm hover:bg-accent/10 transition-colors font-medium text-foreground"
+                    >
+                      {t('common.edit') || 'Update Feedback'}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        disabled={busyIds.has(s.id)}
+                        onClick={async () => {
+                          if (busyIds.has(s.id)) return;
+                          const feedback = feedbackMap[s.id] || '';
+                          if (!feedback.trim()) { toast.error(t('trainer.reviews.feedbackEmpty')); return; }
+                          setBusyIds(prev => new Set(prev).add(s.id));
+                          try {
+                            const r = await fetch(`/api/trainer/quiz-submissions/${s.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ trainer_feedback: feedback, reviewer_id: profile?.id }),
+                            });
+                            if (!r.ok) { toast.error(t('trainer.reviews.saveError')); return; }
+                            toast.success(t('trainer.reviews.feedbackSaved'));
+                            // Remove from editing mode on success
+                            setEditingIds(prev => { const n = new Set(prev); n.delete(s.id); return n; });
+                            const res = await fetch(`/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`, { cache: 'no-store' });
+                            const data = await res.json();
+                            setQuizzes(data.submissions || []);
+                          } catch { toast.error(t('trainer.reviews.saveError')); }
+                          finally { setBusyIds(prev => { const n = new Set(prev); n.delete(s.id); return n; }); }
+                        }}
+                        className="rounded-md border border-accent/30 px-3 py-2 text-sm hover:bg-background/60 disabled:opacity-50"
+                      >
+                        {t('trainer.reviews.saveFeedback')}
+                      </button>
+                      {s.isReviewed && (
+                        <button
+                          onClick={() => setEditingIds(prev => { const n = new Set(prev); n.delete(s.id); return n; })}
+                          className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>

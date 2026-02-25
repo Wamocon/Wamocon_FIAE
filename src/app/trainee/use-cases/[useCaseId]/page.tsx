@@ -164,6 +164,12 @@ export default function TraineeUseCaseDetailPage() {
           <div>
             <div className="font-semibold text-green-600 dark:text-green-400">{t('useCase.approved')}</div>
             <div className="text-sm text-green-600/80 dark:text-green-400/80">{t('useCase.approvedDesc')}</div>
+            {submission.trainerFeedback && (
+              <div className="mt-3 rounded-xl border border-green-500/20 bg-green-500/10 p-3">
+                <div className="text-xs font-medium text-green-600/70 dark:text-green-400/70 mb-1">{t('useCase.trainerFeedback')}</div>
+                <p className="text-sm text-foreground whitespace-pre-line">{submission.trainerFeedback}</p>
+              </div>
+            )}
           </div>
         </div>
       )}

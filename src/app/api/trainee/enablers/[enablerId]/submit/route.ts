@@ -67,6 +67,11 @@ export async function POST(
           new Date(b.submittedAt || '').getTime() -
           new Date(a.submittedAt || '').getTime()
       )[0];
+
+      if (latest.status === 'PENDING') {
+        return NextResponse.json({ error: 'Submission already pending review' }, { status: 400 });
+      }
+
       const [row] = await db
         .update(enablerSubmissions)
         .set({
