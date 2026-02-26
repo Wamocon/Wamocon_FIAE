@@ -123,7 +123,7 @@ export default function DemoTrainerTrainees() {
             <Card
               key={trainee.id}
               className="glass-effect border-border/40 cursor-pointer transition-all duration-200 hover:ring-1 hover:ring-accent/30"
-              onClick={() => showDemoToast('Azubi-Profil \u00f6ffnen')}
+              onClick={() => showDemoToast('Azubi-Profil öffnen')}
             >
               <CardContent className="p-6">
                 <div className="mb-4 flex items-start justify-between">
@@ -159,7 +159,7 @@ export default function DemoTrainerTrainees() {
                     <p className="text-foreground text-sm font-bold">
                       {trainee.quizAvg}%
                     </p>
-                    <p className="text-muted-foreground text-[10px]">Quiz-\u00d8</p>
+                    <p className="text-muted-foreground text-[10px]">Quiz</p>
                   </div>
                   <div className="bg-background/50 rounded-lg p-2 text-center">
                     <BookOpen className="mx-auto mb-1 h-4 w-4 text-blue-500" />

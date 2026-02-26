@@ -207,8 +207,8 @@ export const useCases = pgTable('use_cases', {
   durationUnit: durationUnit('duration_unit'),
   isActive: boolean('is_active').default(false),
   activatedAt: timestamp('activated_at'),
-  year: integer('year'),
-  trainingStage: integer('training_stage'),
+  year: integer('year').array(),
+  trainingStage: integer('training_stage').array(),
   lernfelder: text('lernfelder').array(),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
