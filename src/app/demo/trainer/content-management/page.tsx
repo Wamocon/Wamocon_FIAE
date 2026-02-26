@@ -47,7 +47,7 @@ export default function DemoTrainerContentManagement() {
         return (
           <Badge className="bg-green-500/20 text-green-400">
             <CheckCircle className="mr-1 h-3 w-3" />
-            Ver\u00f6ffentlicht
+            Veröffentlicht
           </Badge>
         );
       case 'draft':
@@ -119,7 +119,7 @@ export default function DemoTrainerContentManagement() {
               {f === 'all'
                 ? `Alle (${demoContentItems.length})`
                 : f === 'published'
-                  ? `Ver\u00f6ffentlicht (${totals.published})`
+                  ? `Veröffentlicht (${totals.published})`
                   : f === 'draft'
                     ? `Entwurf (${totals.draft})`
                     : `Archiviert (${totals.archived})`}

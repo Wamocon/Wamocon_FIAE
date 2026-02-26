@@ -110,8 +110,8 @@ export default function EditCoursePage() {
   const [useCaseTitle, setUseCaseTitle] = useState('');
   const [useCaseDesc, setUseCaseDesc] = useState('');
   const [useCaseDuration, setUseCaseDuration] = useState<string>('');
-  const [useCaseYear, setUseCaseYear] = useState<'1' | '2' | '3' | ''>('');
-  const [useCaseStage, setUseCaseStage] = useState<'1' | '2' | ''>('');
+  const [useCaseYear, setUseCaseYear] = useState<string[]>([]);
+  const [useCaseStage, setUseCaseStage] = useState<string[]>([]);
   const [useCaseLernfelder, setUseCaseLernfelder] = useState<string[]>([]);
   const [useCaseActive, setUseCaseActive] = useState<boolean>(false);
   const [useCaseSubmitting, setUseCaseSubmitting] = useState(false);
@@ -125,10 +125,8 @@ export default function EditCoursePage() {
   const [useCaseEditTitle, setUseCaseEditTitle] = useState('');
   const [useCaseEditDesc, setUseCaseEditDesc] = useState('');
   const [useCaseEditDuration, setUseCaseEditDuration] = useState<string>('');
-  const [useCaseEditYear, setUseCaseEditYear] = useState<'1' | '2' | '3' | ''>(
-    ''
-  );
-  const [useCaseEditStage, setUseCaseEditStage] = useState<'1' | '2' | ''>('');
+  const [useCaseEditYear, setUseCaseEditYear] = useState<string[]>([]);
+  const [useCaseEditStage, setUseCaseEditStage] = useState<string[]>([]);
   const [useCaseEditLernfelder, setUseCaseEditLernfelder] = useState<string[]>(
     []
   );
@@ -816,12 +814,18 @@ export default function EditCoursePage() {
                               uc.durationValue ? String(uc.durationValue) : ''
                             );
                             setUseCaseEditYear(
-                              uc.year ? String(uc.year) : ('' as any)
+                              Array.isArray(uc.year)
+                                ? uc.year.map(String)
+                                : uc.year
+                                  ? [String(uc.year)]
+                                  : []
                             );
                             setUseCaseEditStage(
-                              uc.trainingStage
-                                ? String(uc.trainingStage)
-                                : ('' as any)
+                              Array.isArray(uc.trainingStage)
+                                ? uc.trainingStage.map(String)
+                                : uc.trainingStage
+                                  ? [String(uc.trainingStage)]
+                                  : []
                             );
                             setUseCaseEditLernfelder(uc.lernfelder || []);
                             setUseCaseEditActive(!!uc.isActive);
@@ -829,8 +833,8 @@ export default function EditCoursePage() {
                             setUseCaseEditTitle(u.title);
                             setUseCaseEditDesc('');
                             setUseCaseEditDuration('');
-                            setUseCaseEditYear('');
-                            setUseCaseEditStage('');
+                            setUseCaseEditYear([]);
+                            setUseCaseEditStage([]);
                             setUseCaseEditLernfelder([]);
                             setUseCaseEditActive(false);
                           }
@@ -1304,33 +1308,56 @@ export default function EditCoursePage() {
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">
+                  <label className="mb-2 block text-sm font-medium">
                     {t('trainer.content.trainingYear')}
                   </label>
-                  <select
-                    value={useCaseYear}
-                    onChange={e => setUseCaseYear(e.target.value as any)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                  >
-                    <option value="">{t('common.select')}</option>
-                    <option value="1">{t('common.year1')}</option>
-                    <option value="2">{t('common.year2')}</option>
-                    <option value="3">{t('common.year3')}</option>
-                  </select>
+                  <div className="flex gap-3">
+                    {(['1', '2', '3'] as const).map(yr => (
+                      <label
+                        key={yr}
+                        className="border-accent/20 bg-background/40 hover:bg-background/60 flex cursor-pointer items-center gap-2 rounded-lg border p-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={useCaseYear.includes(yr)}
+                          onChange={e => {
+                            if (e.target.checked)
+                              setUseCaseYear(prev => [...prev, yr]);
+                            else
+                              setUseCaseYear(prev => prev.filter(x => x !== yr));
+                          }}
+                          className="border-accent/30 bg-background/50 rounded"
+                        />
+                        <span className="text-xs font-medium">{t(`common.year${yr}`)}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">
+                  <label className="mb-2 block text-sm font-medium">
                     {t('trainer.content.trainingStage')}
                   </label>
-                  <select
-                    value={useCaseStage}
-                    onChange={e => setUseCaseStage(e.target.value as any)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                  >
-                    <option value="">{t('common.select')}</option>
-                    <option value="1">{t('trainer.content.stage1')}</option>
-                    <option value="2">{t('trainer.content.stage2')}</option>
-                  </select>
+                  <div className="flex gap-3">
+                    {(['1', '2'] as const).map(stage => (
+                      <label
+                        key={stage}
+                        className="border-accent/20 bg-background/40 hover:bg-background/60 flex cursor-pointer items-center gap-2 rounded-lg border p-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={useCaseStage.includes(stage)}
+                          onChange={e => {
+                            if (e.target.checked)
+                              setUseCaseStage(prev => [...prev, stage]);
+                            else
+                              setUseCaseStage(prev => prev.filter(x => x !== stage));
+                          }}
+                          className="border-accent/30 bg-background/50 rounded"
+                        />
+                        <span className="text-xs font-medium">{t(`trainer.content.stage${stage}`)}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1339,7 +1366,7 @@ export default function EditCoursePage() {
                   {t('common.lernfelder')}
                 </label>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`).map(
+                  {[...Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`), 'WISO', 'betrieblich'].map(
                     lf => (
                       <label
                         key={lf}
@@ -1492,8 +1519,8 @@ export default function EditCoursePage() {
                               : undefined,
                             durationUnit: useCaseDuration ? 'DAYS' : undefined,
                             isActive: useCaseActive,
-                            year: useCaseYear || undefined,
-                            trainingStage: useCaseStage || undefined,
+                            year: useCaseYear.length > 0 ? useCaseYear.map(Number) : undefined,
+                            trainingStage: useCaseStage.length > 0 ? useCaseStage.map(Number) : undefined,
                             lernfelder:
                               useCaseLernfelder.length > 0
                                 ? useCaseLernfelder
@@ -2156,33 +2183,56 @@ export default function EditCoursePage() {
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">
+                  <label className="mb-2 block text-sm font-medium">
                     {t('trainer.content.trainingYear')}
                   </label>
-                  <select
-                    value={useCaseEditYear}
-                    onChange={e => setUseCaseEditYear(e.target.value as any)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                  >
-                    <option value="">{t('common.select')}</option>
-                    <option value="1">{t('common.year1')}</option>
-                    <option value="2">{t('common.year2')}</option>
-                    <option value="3">{t('common.year3')}</option>
-                  </select>
+                  <div className="flex gap-3">
+                    {(['1', '2', '3'] as const).map(yr => (
+                      <label
+                        key={yr}
+                        className="border-accent/20 bg-background/40 hover:bg-background/60 flex cursor-pointer items-center gap-2 rounded-lg border p-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={useCaseEditYear.includes(yr)}
+                          onChange={e => {
+                            if (e.target.checked)
+                              setUseCaseEditYear(prev => [...prev, yr]);
+                            else
+                              setUseCaseEditYear(prev => prev.filter(x => x !== yr));
+                          }}
+                          className="border-accent/30 bg-background/50 rounded"
+                        />
+                        <span className="text-xs font-medium">{t(`common.year${yr}`)}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">
+                  <label className="mb-2 block text-sm font-medium">
                     {t('trainer.content.trainingStage')}
                   </label>
-                  <select
-                    value={useCaseEditStage}
-                    onChange={e => setUseCaseEditStage(e.target.value as any)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                  >
-                    <option value="">{t('common.select')}</option>
-                    <option value="1">{t('trainer.content.stage1')}</option>
-                    <option value="2">{t('trainer.content.stage2')}</option>
-                  </select>
+                  <div className="flex gap-3">
+                    {(['1', '2'] as const).map(stage => (
+                      <label
+                        key={stage}
+                        className="border-accent/20 bg-background/40 hover:bg-background/60 flex cursor-pointer items-center gap-2 rounded-lg border p-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={useCaseEditStage.includes(stage)}
+                          onChange={e => {
+                            if (e.target.checked)
+                              setUseCaseEditStage(prev => [...prev, stage]);
+                            else
+                              setUseCaseEditStage(prev => prev.filter(x => x !== stage));
+                          }}
+                          className="border-accent/30 bg-background/50 rounded"
+                        />
+                        <span className="text-xs font-medium">{t(`trainer.content.stage${stage}`)}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -2191,7 +2241,7 @@ export default function EditCoursePage() {
                   {t('common.lernfelder')}
                 </label>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`).map(
+                  {[...Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`), 'WISO', 'betrieblich'].map(
                     lf => (
                       <label
                         key={lf}
@@ -2394,8 +2444,8 @@ export default function EditCoursePage() {
                               : null,
                             durationUnit: useCaseEditDuration ? 'DAYS' : null,
                             isActive: useCaseEditActive,
-                            year: useCaseEditYear || null,
-                            trainingStage: useCaseEditStage || null,
+                            year: useCaseEditYear.length > 0 ? useCaseEditYear.map(Number) : null,
+                            trainingStage: useCaseEditStage.length > 0 ? useCaseEditStage.map(Number) : null,
                             lernfelder:
                               useCaseEditLernfelder.length > 0
                                 ? useCaseEditLernfelder

@@ -22,7 +22,7 @@ export const demoContentItems: DemoContentItem[] = [
     quizCount: 24,
     status: 'published',
     lastUpdated: '2026-02-10',
-    description: 'Betriebliche Strukturen und Gesch\u00e4ftsprozesse',
+    description: 'Betriebliche Strukturen und Geschäftsprozesse',
   },
   {
     id: 'cm2',
@@ -34,7 +34,7 @@ export const demoContentItems: DemoContentItem[] = [
     quizCount: 21,
     status: 'published',
     lastUpdated: '2026-02-08',
-    description: 'IT-Arbeitspl\u00e4tze planen und konfigurieren',
+    description: 'IT-Arbeitsplätze planen und konfigurieren',
   },
   {
     id: 'cm3',
@@ -50,7 +50,7 @@ export const demoContentItems: DemoContentItem[] = [
   },
   {
     id: 'cm4',
-    title: 'Schutzbedarfsanalyse durchf\u00fchren',
+    title: 'Schutzbedarfsanalyse durchführen',
     component: 'Komponente 4',
     componentOrder: 4,
     type: 'course',
@@ -86,7 +86,7 @@ export const demoContentItems: DemoContentItem[] = [
   },
   {
     id: 'cm7',
-    title: 'Cyber-physische Systeme erg\u00e4nzen',
+    title: 'Cyber-physische Systeme ergänzen',
     component: 'Komponente 7',
     componentOrder: 7,
     type: 'course',
@@ -98,7 +98,7 @@ export const demoContentItems: DemoContentItem[] = [
   },
   {
     id: 'cm8',
-    title: 'Daten system\u00fcbergreifend bereitstellen',
+    title: 'Daten systemübergreifend bereitstellen',
     component: 'Komponente 8',
     componentOrder: 8,
     type: 'course',

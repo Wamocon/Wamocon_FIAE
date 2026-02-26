@@ -61,7 +61,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       const toast = document.createElement('div');
       toast.className =
         'fixed top-20 right-6 z-[9999] bg-amber-600 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium animate-in fade-in slide-in-from-top-2 duration-300';
-      toast.textContent = `Demo Modus \u2014 ${action} ist deaktiviert.`;
+      toast.textContent = `Demo Modus — ${action} ist deaktiviert.`;
       document.body.appendChild(toast);
       setTimeout(() => {
         toast.style.opacity = '0';

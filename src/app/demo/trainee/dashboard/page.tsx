@@ -97,7 +97,7 @@ export default function DemoTraineeDashboard() {
               <Trophy className="h-6 w-6 text-green-500" />
             </div>
             <div>
-              <p className="text-muted-foreground text-sm">Quiz-\u00d8</p>
+              <p className="text-muted-foreground text-sm">Quiz</p>
               <p className="text-foreground text-2xl font-bold">
                 {traineeStats.quizAverage}%
               </p>
@@ -132,7 +132,7 @@ export default function DemoTraineeDashboard() {
             <div>
               <p className="text-muted-foreground text-xs">Platzierung</p>
               <p className="text-foreground font-bold">
-                #{traineeStats.rank} von {traineeStats.totalTrainees}
+                {traineeStats.rank} von {traineeStats.totalTrainees}
               </p>
             </div>
           </CardContent>
@@ -141,7 +141,7 @@ export default function DemoTraineeDashboard() {
           <CardContent className="flex items-center gap-3 p-4">
             <Zap className="h-5 w-5 text-yellow-500" />
             <div>
-              <p className="text-muted-foreground text-xs">N\u00e4chste Lektion</p>
+              <p className="text-muted-foreground text-xs">Nächste Lektion</p>
               <p className="text-foreground truncate text-sm font-bold">
                 {nextLesson.estimatedTime}
               </p>
@@ -154,7 +154,7 @@ export default function DemoTraineeDashboard() {
       <Card className="glass-effect border-accent/30 border">
         <CardContent className="flex items-center justify-between p-6">
           <div>
-            <p className="text-accent text-sm font-medium">N\u00e4chste Lektion</p>
+            <p className="text-accent text-sm font-medium">Nächste Lektion</p>
             <h3 className="text-foreground mt-1 text-lg font-semibold">
               {nextLesson.title}
             </h3>
@@ -256,7 +256,7 @@ export default function DemoTraineeDashboard() {
         {/* Recent Activity */}
         <Card className="glass-effect border-border/40">
           <CardHeader>
-            <CardTitle className="text-lg">Letzte Aktivit\u00e4ten</CardTitle>
+            <CardTitle className="text-lg">Letzte Aktivitäten</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
