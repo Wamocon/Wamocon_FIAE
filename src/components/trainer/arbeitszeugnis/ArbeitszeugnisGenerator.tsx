@@ -162,7 +162,8 @@ export function ArbeitszeugnisGenerator() {
       try {
         // Use batch endpoint to get trainees WITH stats in one call
         const res = await fetch(
-          `/api/trainer/trainees/with-stats?trainerProfileId=${profile?.id}`
+          `/api/trainer/trainees/with-stats?trainerProfileId=${profile?.id}`,
+          { cache: 'no-store' }
         );
         if (res.ok) {
           const data = await res.json();
@@ -197,10 +198,12 @@ export function ArbeitszeugnisGenerator() {
 
         const [aggRes, radarRes] = await Promise.all([
           fetch(
-            `/api/trainer/arbeitszeugnis/aggregate/${selectedTrainee}${query}`
+            `/api/trainer/arbeitszeugnis/aggregate/${selectedTrainee}${query}`,
+            { cache: 'no-store' }
           ),
           fetch(
-            `/api/trainer/arbeitszeugnis/skill-radar/${selectedTrainee}${query}`
+            `/api/trainer/arbeitszeugnis/skill-radar/${selectedTrainee}${query}`,
+            { cache: 'no-store' }
           ),
         ]);
 
@@ -225,7 +228,8 @@ export function ArbeitszeugnisGenerator() {
         // Fetch existing certificates for this trainee/period
         try {
           const certRes = await fetch(
-            `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${ausbildungsjahr}`
+            `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${ausbildungsjahr}`,
+            { cache: 'no-store' }
           );
           if (certRes.ok) {
             const certData = await certRes.json();
@@ -325,9 +329,9 @@ export function ArbeitszeugnisGenerator() {
             traineeBirthDate: selectedTraineeData?.birth_date || null,
             softSkills: aggregatedData.softSkills
               ? {
-                  averages: aggregatedData.softSkills.averages,
-                  overallAverage: aggregatedData.softSkills.overallAverage,
-                }
+                averages: aggregatedData.softSkills.averages,
+                overallAverage: aggregatedData.softSkills.overallAverage,
+              }
               : null,
           }),
         }
@@ -393,9 +397,9 @@ export function ArbeitszeugnisGenerator() {
         logoImage: logoImageBase64,
         softSkills: aggregatedData.softSkills
           ? {
-              averages: aggregatedData.softSkills.averages,
-              overallAverage: aggregatedData.softSkills.overallAverage,
-            }
+            averages: aggregatedData.softSkills.averages,
+            overallAverage: aggregatedData.softSkills.overallAverage,
+          }
           : undefined,
       });
 
@@ -690,22 +694,20 @@ export function ArbeitszeugnisGenerator() {
           <div className="bg-muted flex rounded-xl p-1">
             <button
               onClick={() => setMode('YEAR')}
-              className={`flex-1 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
-                mode === 'YEAR'
+              className={`flex-1 rounded-lg px-4 py-3 text-sm font-medium transition-all ${mode === 'YEAR'
                   ? 'bg-background text-foreground shadow-md'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               <GraduationCap className="mr-2 inline h-4 w-4" />
               {t('arbeitszeugnis.byYear')}
             </button>
             <button
               onClick={() => setMode('CUSTOM')}
-              className={`flex-1 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
-                mode === 'CUSTOM'
+              className={`flex-1 rounded-lg px-4 py-3 text-sm font-medium transition-all ${mode === 'CUSTOM'
                   ? 'bg-background text-foreground shadow-md'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               <Calendar className="mr-2 inline h-4 w-4" />
               {t('arbeitszeugnis.custom')}
@@ -718,11 +720,10 @@ export function ArbeitszeugnisGenerator() {
                 <button
                   key={year}
                   onClick={() => setAusbildungsjahr(year)}
-                  className={`rounded-xl border-2 p-4 transition-all ${
-                    ausbildungsjahr === year
+                  className={`rounded-xl border-2 p-4 transition-all ${ausbildungsjahr === year
                       ? 'border-amber-500 bg-amber-500/10 text-amber-600'
                       : 'border-border hover:border-accent bg-background'
-                  }`}
+                    }`}
                 >
                   <p className="text-2xl font-bold">{year}.</p>
                   <p className="text-sm">{t('arbeitszeugnis.trainingYear')}</p>
@@ -764,11 +765,10 @@ export function ArbeitszeugnisGenerator() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setCertificateType('INTERIM')}
-                className={`rounded-xl border-2 p-4 text-left transition-all ${
-                  certificateType === 'INTERIM'
+                className={`rounded-xl border-2 p-4 text-left transition-all ${certificateType === 'INTERIM'
                     ? 'border-amber-500 bg-amber-500/10'
                     : 'border-border hover:border-accent'
-                }`}
+                  }`}
               >
                 <FileCheck className="mb-2 h-5 w-5 text-amber-500" />
                 <p className="font-semibold">{t('arbeitszeugnis.interim')}</p>
@@ -778,11 +778,10 @@ export function ArbeitszeugnisGenerator() {
               </button>
               <button
                 onClick={() => setCertificateType('FINAL')}
-                className={`rounded-xl border-2 p-4 text-left transition-all ${
-                  certificateType === 'FINAL'
+                className={`rounded-xl border-2 p-4 text-left transition-all ${certificateType === 'FINAL'
                     ? 'border-amber-500 bg-amber-500/10'
                     : 'border-border hover:border-accent'
-                }`}
+                  }`}
               >
                 <Award className="mb-2 h-5 w-5 text-amber-500" />
                 <p className="font-semibold">{t('arbeitszeugnis.final')}</p>
@@ -1017,7 +1016,7 @@ export function ArbeitszeugnisGenerator() {
                   ].map(({ key, label }) => {
                     const avg =
                       aggregatedData.softSkills?.averages[
-                        key as keyof typeof aggregatedData.softSkills.averages
+                      key as keyof typeof aggregatedData.softSkills.averages
                       ];
                     return (
                       <div
@@ -1103,11 +1102,10 @@ export function ArbeitszeugnisGenerator() {
                     <button
                       key={g}
                       onClick={() => setGender(g)}
-                      className={`flex-1 rounded-xl py-3 font-medium transition-all ${
-                        gender === g
+                      className={`flex-1 rounded-xl py-3 font-medium transition-all ${gender === g
                           ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg'
                           : 'bg-background border-border border hover:border-amber-500'
-                      }`}
+                        }`}
                     >
                       {g === 'male'
                         ? t('arbeitszeugnis.male')

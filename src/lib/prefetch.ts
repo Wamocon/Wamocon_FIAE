@@ -25,7 +25,7 @@ const inflight = new Map<string, Promise<unknown>>();
 export function prefetch(url: string): void {
   if (inflight.has(url)) return;
 
-  const promise = fetch(url)
+  const promise = fetch(url, { cache: 'no-store' })
     .then(r => (r.ok ? r.json() : null))
     .catch(() => null);
 

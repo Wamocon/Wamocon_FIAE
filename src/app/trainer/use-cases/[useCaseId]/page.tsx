@@ -66,7 +66,9 @@ export default function TrainerUseCaseDetailPage() {
       if (!useCaseId) return;
       setLoading(true);
       try {
-        const res = await fetch(`/api/trainer/use-cases/${useCaseId}`);
+        const res = await fetch(`/api/trainer/use-cases/${useCaseId}`, {
+          cache: 'no-store',
+        });
         if (!res.ok) throw new Error('Not found');
         const data = await res.json();
         setUseCase(data.useCase);
@@ -82,7 +84,10 @@ export default function TrainerUseCaseDetailPage() {
 
         // Fetch documents
         try {
-          const docRes = await fetch(`/api/trainer/use-cases/${useCaseId}/documents`);
+          const docRes = await fetch(
+            `/api/trainer/use-cases/${useCaseId}/documents`,
+            { cache: 'no-store' }
+          );
           if (docRes.ok) {
             const docData = await docRes.json();
             setDocuments(docData.documents || []);
@@ -186,11 +191,10 @@ export default function TrainerUseCaseDetailPage() {
 
               {/* Status Badge */}
               <div className="flex items-center gap-2 mt-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  useCase.isActive
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${useCase.isActive
                     ? 'bg-green-500/20 text-green-500'
                     : 'bg-muted/20 text-muted'
-                }`}>
+                  }`}>
                   {useCase.isActive ? t('useCase.active') || 'Aktiv' : t('useCase.inactive') || 'Inaktiv'}
                 </span>
                 {useCase.year && (

@@ -42,7 +42,8 @@ export function ExamResultsOverview() {
             setLoading(true);
             try {
                 const res = await fetch(
-                    `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=false`
+                    `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=false`,
+                    { cache: 'no-store' }
                 );
                 if (!res.ok) throw new Error(t('exams.results.loading'));
                 const data = await res.json();
@@ -231,8 +232,8 @@ export function ExamResultsOverview() {
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className="text-xs text-muted-foreground">{data.total} {t('exams.results.exams')}</span>
                                             <span className={`text-xs ${data.passed === data.total
-                                                    ? 'text-green-600 dark:text-green-400'
-                                                    : 'text-amber-600 dark:text-amber-400'
+                                                ? 'text-green-600 dark:text-green-400'
+                                                : 'text-amber-600 dark:text-amber-400'
                                                 }`}>
                                                 {Math.round((data.passed / data.total) * 100)}% {t('exams.results.passedLower')}
                                             </span>

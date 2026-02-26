@@ -938,7 +938,7 @@ export const schoolExamResults = pgTable('school_exam_results', {
 });
 
 // === LERNFELDER (Master Data) ===
-// Pre-seeded reference data for FIAE Lernfelder LF1-LF12a
+// Pre-seeded reference data for LFA Lernfelder LF1-LF12a
 export const lernfelder = pgTable('lernfelder', {
   id: uuid('id').primaryKey().defaultRandom(),
   code: text('code').notNull().unique(), // "LF1", "LF10a", etc.
@@ -948,7 +948,7 @@ export const lernfelder = pgTable('lernfelder', {
   // Curriculum info
   trainingYear: integer('training_year'), // 1, 2, or 3
   hoursBudget: integer('hours_budget'), // Zeitrichtwert in Stunden
-  isCommon: boolean('is_common').default(true), // true = all IT, false = FIAE-only (LF10a-12a)
+  isCommon: boolean('is_common').default(true), // true = all IT, false = LFA-only (LF10a-12a)
 
   // Ordering
   orderIndex: integer('order_index'),
@@ -1049,7 +1049,7 @@ export const activityReportEntries = pgTable('activity_report_entries', {
     .$onUpdate(() => new Date()),
 });
 
-// === TRAINING COMPONENTS (FIAE Curriculum) ===
+// === TRAINING COMPONENTS (LFA Curriculum) ===
 // Master data for Ausbildungsrahmenplan components (§4 Absatz 2, 3, 7)
 export const trainingComponents = pgTable('training_components', {
   id: uuid('id').primaryKey().defaultRandom(),

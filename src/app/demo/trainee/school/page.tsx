@@ -36,7 +36,7 @@ export default function DemoTraineeSchool() {
       <div>
         <h1 className="text-foreground text-2xl font-bold">Berufsschule</h1>
         <p className="text-muted-foreground mt-1">
-          Lernfelder, Pr\u00fcfungen, Kalender und Notizen
+          Lernfelder, Prüfungen, Kalender und Notizen
         </p>
       </div>
 
@@ -61,7 +61,7 @@ export default function DemoTraineeSchool() {
               <p className={`font-bold ${gradeColor(avgGrade)}`}>
                 {avgGrade.toFixed(1)}
               </p>
-              <p className="text-muted-foreground text-xs">\u00d8 Note</p>
+              <p className="text-muted-foreground text-xs">Ø Note</p>
             </div>
           </CardContent>
         </Card>
@@ -72,7 +72,7 @@ export default function DemoTraineeSchool() {
               <p className="text-foreground font-bold">
                 {demoExams.filter(e => e.status === 'upcoming').length}
               </p>
-              <p className="text-muted-foreground text-xs">Anstehende Pr\u00fcfungen</p>
+              <p className="text-muted-foreground text-xs">Anstehende Prüfungen</p>
             </div>
           </CardContent>
         </Card>
@@ -91,7 +91,7 @@ export default function DemoTraineeSchool() {
       <Tabs defaultValue="lernfelder">
         <TabsList className="w-full md:w-auto">
           <TabsTrigger value="lernfelder">Lernfelder</TabsTrigger>
-          <TabsTrigger value="exams">Pr\u00fcfungen</TabsTrigger>
+          <TabsTrigger value="exams">Prüfungen</TabsTrigger>
           <TabsTrigger value="calendar">Kalender</TabsTrigger>
           <TabsTrigger value="notes">Notizen</TabsTrigger>
         </TabsList>

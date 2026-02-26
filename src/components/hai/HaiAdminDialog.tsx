@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { X, Lock, ShieldCheck } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import HaiAdminWidget from './HaiAdminWidget';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface HaiAdminDialogProps {
   open: boolean;
@@ -11,6 +12,7 @@ interface HaiAdminDialogProps {
 }
 
 export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
+  const { t } = useLanguage();
   const [pin, setPin] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [error, setError] = useState('');
@@ -56,11 +58,11 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
         setAuthenticated(true);
         setPin('');
       } else {
-        setError('Falscher PIN. Bitte versuchen Sie es erneut.');
+        setError(t('hai.admin.invalidPin') || 'Invalid PIN. Please try again.');
         setPin('');
       }
     } catch {
-      setError('Verbindungsfehler. Bitte versuchen Sie es erneut.');
+      setError(t('hai.error.connectionError') || 'Connection error. Please try again.');
     } finally {
       setVerifying(false);
     }
@@ -82,7 +84,7 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
           <h2 className="text-white text-lg font-bold flex items-center gap-2">
             <span className="text-xl">🦈</span>
-            HAI Admin
+            {t('hai.admin.dialogTitle')}
           </h2>
           <button
             onClick={onClose}
@@ -103,11 +105,10 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
 
               <div className="text-center space-y-2">
                 <h3 className="text-white text-lg font-semibold">
-                  Zugriff geschützt
+                  {t('hai.admin.gateTitle')}
                 </h3>
                 <p className="text-gray-400 text-sm max-w-xs">
-                  Bitte geben Sie den Admin-PIN ein, um auf die
-                  HAI-Verwaltung zuzugreifen.
+                  {t('hai.admin.gateDescription')}
                 </p>
               </div>
 
@@ -122,7 +123,7 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') verifyPin();
                   }}
-                  placeholder="Admin-PIN eingeben"
+                  placeholder={t('hai.admin.pinPlaceholder') || 'Enter Admin PIN'}
                   className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white placeholder-gray-500 text-center text-lg tracking-widest focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
                   autoFocus
                   disabled={verifying}
@@ -135,14 +136,13 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
                 <button
                   onClick={verifyPin}
                   disabled={verifying || !pin.trim()}
-                  className={`w-full px-4 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
-                    verifying || !pin.trim()
-                      ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                      : 'bg-cyan-500 hover:bg-cyan-400 text-black'
-                  }`}
+                  className={`w-full px-4 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${verifying || !pin.trim()
+                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                    : 'bg-cyan-500 hover:bg-cyan-400 text-black'
+                    }`}
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  {verifying ? 'Überprüfe...' : 'Zugriff bestätigen'}
+                  {verifying ? t('hai.admin.verifying') : t('hai.admin.confirmAccess')}
                 </button>
               </div>
             </div>

@@ -627,7 +627,8 @@ export default function EditCoursePage() {
                           }
                         );
                         const r = await fetch(
-                          `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`
+                          `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                          { cache: 'no-store' }
                         );
                         const data = await r.json();
                         setEnablers(
@@ -652,7 +653,8 @@ export default function EditCoursePage() {
                           setEditingEnablerId(e.id);
                           // Load enabler fields
                           const er = await fetch(
-                            `/api/trainer/enablers/${e.id}`
+                            `/api/trainer/enablers/${e.id}`,
+                            { cache: 'no-store' }
                           );
                           if (er.ok) {
                             const ej = await er.json();
@@ -663,7 +665,8 @@ export default function EditCoursePage() {
                           }
                           // Load multi-difficulty quiz list
                           const ql = await fetch(
-                            `/api/trainer/enablers/${e.id}/quizzes`
+                            `/api/trainer/enablers/${e.id}/quizzes`,
+                            { cache: 'no-store' }
                           );
                           if (ql.ok) {
                             const qlj = await ql.json();
@@ -674,7 +677,8 @@ export default function EditCoursePage() {
                           // Load documents
                           try {
                             const dr = await fetch(
-                              `/api/trainer/enablers/${e.id}/documents`
+                              `/api/trainer/enablers/${e.id}/documents`,
+                              { cache: 'no-store' }
                             );
                             if (dr.ok) {
                               const dj = await dr.json();
@@ -716,7 +720,8 @@ export default function EditCoursePage() {
                               t('trainer.content.errorDeleteFailed')
                             );
                           const r = await fetch(
-                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`
+                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                            { cache: 'no-store' }
                           );
                           const data = await r.json();
                           setEnablers(
@@ -775,7 +780,8 @@ export default function EditCoursePage() {
                           }
                         );
                         const r = await fetch(
-                          `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`
+                          `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                          { cache: 'no-store' }
                         );
                         const data = await r.json();
                         setUseCases(
@@ -798,7 +804,8 @@ export default function EditCoursePage() {
                         try {
                           setEditingUseCaseId(u.id);
                           const ur = await fetch(
-                            `/api/trainer/use-cases/${u.id}`
+                            `/api/trainer/use-cases/${u.id}`,
+                            { cache: 'no-store' }
                           );
                           if (ur.ok) {
                             const uj = await ur.json();
@@ -830,7 +837,8 @@ export default function EditCoursePage() {
                           // Fetch documents for this use case
                           try {
                             const docRes = await fetch(
-                              `/api/trainer/use-cases/${u.id}/documents`
+                              `/api/trainer/use-cases/${u.id}/documents`,
+                              { cache: 'no-store' }
                             );
                             if (docRes.ok) {
                               const docData = await docRes.json();
@@ -871,7 +879,8 @@ export default function EditCoursePage() {
                               t('trainer.content.errorDeleteFailed')
                             );
                           const r = await fetch(
-                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`
+                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                            { cache: 'no-store' }
                           );
                           const data = await r.json();
                           setUseCases(
@@ -1216,7 +1225,8 @@ export default function EditCoursePage() {
 
                       // 3) Refresh and close
                       const r = await fetch(
-                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`
+                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                        { cache: 'no-store' }
                       );
                       const fresh = await r.json();
                       setEnablers(
@@ -1522,7 +1532,8 @@ export default function EditCoursePage() {
                       }
 
                       const r = await fetch(
-                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`
+                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                        { cache: 'no-store' }
                       );
                       const fresh = await r.json();
                       setUseCases(
@@ -1654,7 +1665,8 @@ export default function EditCoursePage() {
                                       }
                                     );
                                     const ql = await fetch(
-                                      `/api/trainer/enablers/${editingEnablerId}/quizzes`
+                                      `/api/trainer/enablers/${editingEnablerId}/quizzes`,
+                                      { cache: 'no-store' }
                                     );
                                     const qlj = await ql.json();
                                     setEnablerQuizList(qlj.quizzes || []);
@@ -1682,7 +1694,8 @@ export default function EditCoursePage() {
                                       { method: 'DELETE' }
                                     );
                                     const ql = await fetch(
-                                      `/api/trainer/enablers/${editingEnablerId}/quizzes`
+                                      `/api/trainer/enablers/${editingEnablerId}/quizzes`,
+                                      { cache: 'no-store' }
                                     );
                                     const qlj = await ql.json();
                                     setEnablerQuizList(qlj.quizzes || []);
@@ -2074,7 +2087,8 @@ export default function EditCoursePage() {
 
                       // Refresh and close
                       const r = await fetch(
-                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`
+                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                        { cache: 'no-store' }
                       );
                       const fresh = await r.json();
                       setEnablers(
@@ -2256,11 +2270,10 @@ export default function EditCoursePage() {
                           {doc.title}
                         </span>
                         {doc.documentType && (
-                          <span className={`rounded px-1 py-0.5 text-[10px] font-medium leading-none ${
-                            doc.documentType === 'THEORY' ? 'bg-blue-500/20 text-blue-400'
+                          <span className={`rounded px-1 py-0.5 text-[10px] font-medium leading-none ${doc.documentType === 'THEORY' ? 'bg-blue-500/20 text-blue-400'
                             : doc.documentType === 'EXERCISE' ? 'bg-purple-500/20 text-purple-400'
-                            : 'bg-amber-500/20 text-amber-400'
-                          }`}>
+                              : 'bg-amber-500/20 text-amber-400'
+                            }`}>
                             {doc.documentType === 'THEORY' ? 'T' : doc.documentType === 'EXERCISE' ? 'E' : 'S'}
                           </span>
                         )}
@@ -2395,7 +2408,8 @@ export default function EditCoursePage() {
                           t('trainer.content.errorUseCaseUpdateFailed')
                         );
                       const r = await fetch(
-                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`
+                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                        { cache: 'no-store' }
                       );
                       const fresh = await r.json();
                       setUseCases(

@@ -143,7 +143,7 @@ export default function LandingPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-red-600 to-red-800">
               <BookOpen className="text-foreground h-6 w-6" />
             </div>
-            <span className="text-foreground text-xl font-bold">FIAE</span>
+            <span className="text-foreground text-xl font-bold">LFA</span>
           </div>
           <div className="flex items-center space-x-3">
             <LanguageToggle variant="icon" />

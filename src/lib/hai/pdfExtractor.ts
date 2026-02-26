@@ -81,7 +81,7 @@ export async function extractTextFromPDF(
     // Check if it's a remote URL or local file path
     if (url.startsWith('http')) {
       // Fetch remote PDF
-      const response = await fetch(url);
+      const response = await fetch(url, { cache: 'no-store' });
 
       if (!response.ok) {
         return {
@@ -276,7 +276,7 @@ export async function extractTextByPage(
 
     // Check if it's a remote URL or local file path
     if (url.startsWith('http')) {
-      const response = await fetch(url);
+      const response = await fetch(url, { cache: 'no-store' });
 
       if (!response.ok) {
         return {

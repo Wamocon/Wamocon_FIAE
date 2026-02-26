@@ -11,6 +11,7 @@
 
 import React from 'react';
 import { HaiMessage as MessageType, useHai } from './HaiProvider';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { MarkdownText } from '@/components/ui/MarkdownText';
 import { motion } from 'framer-motion';
 import {
@@ -28,6 +29,7 @@ interface HaiMessageProps {
 }
 
 export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
+  const { t } = useLanguage();
   const { updateMessage, regenerateFromEdit, setActiveVersion } = useHai();
   const isUser = message.role === 'user';
   const hasCitations = message.citations && message.citations.length > 0;
@@ -82,11 +84,10 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
         className={`flex max-w-[85%] flex-col gap-1 ${isUser ? 'items-end' : 'items-start'} `}
       >
         <div
-          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-            isUser
-              ? 'rounded-tr-sm bg-[#1f2937] text-gray-100'
-              : 'bg-transparent pt-1 pl-0 text-gray-200 shadow-none'
-          } `}
+          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${isUser
+            ? 'rounded-tr-sm bg-[#1f2937] text-gray-100'
+            : 'bg-transparent pt-1 pl-0 text-gray-200 shadow-none'
+            } `}
         >
           {isThinking ? (
             <ThinkingAnimation />
@@ -115,14 +116,14 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
                       className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-gray-300 transition-colors hover:bg-white/10"
                     >
                       <X className="h-3 w-3" />
-                      Abbrechen
+                      {t('hai.actions.cancel')}
                     </button>
                     <button
                       onClick={handleSave}
                       className="inline-flex items-center gap-1 rounded-md bg-cyan-600 px-2 py-1 text-xs text-white transition-colors hover:bg-cyan-500"
                     >
                       <Check className="h-3 w-3" />
-                      Speichern
+                      {t('hai.actions.save')}
                     </button>
                   </div>
                 </div>
@@ -142,10 +143,10 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
             <button
               onClick={() => setIsEditing(true)}
               className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[10px] text-gray-400 transition-colors hover:bg-white/10 hover:text-gray-200"
-              title="Nachricht bearbeiten"
+              title={t('hai.actions.edit')}
             >
               <Pencil className="h-3 w-3" />
-              Bearbeiten
+              {t('hai.actions.edit')}
             </button>
             {hasVersions && (
               <div className="flex items-center gap-1 text-[10px] text-gray-400">
@@ -153,7 +154,7 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
                   onClick={() => setActiveVersion(message.id, activeIndex - 1)}
                   disabled={activeIndex <= 0}
                   className="inline-flex items-center rounded-md border border-white/10 px-1.5 py-0.5 transition-colors hover:bg-white/10 disabled:opacity-40"
-                  title="Vorherige Frage"
+                  title={t('hai.message.previousQuestion')}
                 >
                   <ChevronLeft className="h-3 w-3" />
                 </button>
@@ -164,7 +165,7 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
                   onClick={() => setActiveVersion(message.id, activeIndex + 1)}
                   disabled={activeIndex >= (message.versions?.length || 1) - 1}
                   className="inline-flex items-center rounded-md border border-white/10 px-1.5 py-0.5 transition-colors hover:bg-white/10 disabled:opacity-40"
-                  title="Naechste Frage"
+                  title={t('hai.message.nextQuestion')}
                 >
                   <ChevronRight className="h-3 w-3" />
                 </button>
@@ -180,7 +181,7 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
               onClick={() => setActiveVersion(message.id, activeIndex - 1)}
               disabled={activeIndex <= 0}
               className="inline-flex items-center rounded-md border border-white/10 px-1.5 py-0.5 transition-colors hover:bg-white/10 disabled:opacity-40"
-              title="Vorherige Antwort"
+              title={t('hai.message.previousAnswer')}
             >
               <ChevronLeft className="h-3 w-3" />
             </button>
@@ -191,7 +192,7 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
               onClick={() => setActiveVersion(message.id, activeIndex + 1)}
               disabled={activeIndex >= (message.versions?.length || 1) - 1}
               className="inline-flex items-center rounded-md border border-white/10 px-1.5 py-0.5 transition-colors hover:bg-white/10 disabled:opacity-40"
-              title="Naechste Antwort"
+              title={t('hai.message.nextAnswer')}
             >
               <ChevronRight className="h-3 w-3" />
             </button>
@@ -209,7 +210,7 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex cursor-pointer items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-400 transition-colors hover:bg-cyan-500/20 hover:text-cyan-300"
-                  title="PDF öffnen"
+                  title={t('hai.message.openPdf')}
                 >
                   📚 {citation.title} ↗
                 </a>
@@ -217,7 +218,7 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
                 <div
                   key={idx}
                   className="cursor-help rounded-md border border-cyan-500/10 bg-cyan-500/5 px-2 py-1 text-[10px] text-cyan-600/80 transition-colors hover:bg-cyan-500/10"
-                  title="Quelle aus der Wissensdatenbank"
+                  title={t('hai.message.kbSource')}
                 >
                   📚 {citation.title}
                 </div>
@@ -239,7 +240,12 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
  * Shows a playful orbiting bubble and a bobbing shark.
  */
 function ThinkingAnimation() {
-  const phrases = ['Denkt nach', 'Sortiert Wissen', 'Formuliert Antwort'];
+  const { t } = useLanguage();
+  const phrases = [
+    t('hai.loading.thinking1') || 'Thinking',
+    t('hai.loading.thinking2') || 'Sorting knowledge',
+    t('hai.loading.thinking3') || 'Formulating answer',
+  ];
   const [phraseIndex, setPhraseIndex] = React.useState(0);
 
   React.useEffect(() => {

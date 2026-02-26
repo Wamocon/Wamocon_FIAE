@@ -13,7 +13,7 @@ export function LernfelderTab() {
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        fetch('/api/trainee/lernfelder')
+        fetch('/api/trainee/lernfelder', { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
                 setLernfelder(data.lernfelder || []);

@@ -45,7 +45,9 @@ export default function VerificationPage({
   const [downloading, setDownloading] = useState(false);
 
   const downloadPdf = async (verificationCode: string) => {
-    const res = await fetch(`/api/verify/${verificationCode}/download`);
+    const res = await fetch(`/api/verify/${verificationCode}/download`, {
+      cache: 'no-store',
+    });
     if (!res.ok) throw new Error('Download failed');
 
     const blob = await res.blob();
@@ -63,7 +65,9 @@ export default function VerificationPage({
     if (!code || downloading) return;
     setDownloading(true);
     try {
-      const verifyRes = await fetch(`/api/verify/${code}`);
+      const verifyRes = await fetch(`/api/verify/${code}`, {
+        cache: 'no-store',
+      });
       if (!verifyRes.ok) {
         const errorPayload = await verifyRes.json().catch(() => null);
         setResult({
@@ -196,9 +200,9 @@ export default function VerificationPage({
                 <p className="text-lg font-bold text-gray-900">
                   {result.certificate?.issueDate
                     ? format(
-                        new Date(result.certificate.issueDate),
-                        'dd.MM.yyyy'
-                      )
+                      new Date(result.certificate.issueDate),
+                      'dd.MM.yyyy'
+                    )
                     : '-'}
                 </p>
               </div>
