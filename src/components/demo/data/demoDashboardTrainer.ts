@@ -22,15 +22,15 @@ export const pendingItems = [
   {
     id: '1',
     type: 'report' as const,
-    title: 'T\u00e4tigkeitsnachweis KW 8',
-    trainee: 'Max M\u00fcller',
+    title: 'Tätigkeitsnachweis KW 8',
+    trainee: 'Max Mülle',
     date: '2026-02-21',
     priority: 'high' as const,
   },
   {
     id: '2',
     type: 'report' as const,
-    title: 'T\u00e4tigkeitsnachweis KW 8',
+    title: 'Tätigkeitsnachweis KW 8',
     trainee: 'Tom Becker',
     date: '2026-02-21',
     priority: 'high' as const,
@@ -38,7 +38,7 @@ export const pendingItems = [
   {
     id: '3',
     type: 'report' as const,
-    title: 'T\u00e4tigkeitsnachweis KW 8',
+    title: 'Tätigkeitsnachweis KW 8',
     trainee: 'Emma Schulz',
     date: '2026-02-22',
     priority: 'medium' as const,

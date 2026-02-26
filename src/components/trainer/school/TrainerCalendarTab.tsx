@@ -172,14 +172,14 @@ export function TrainerCalendarTab() {
         for (let i = firstDay - 1; i >= 0; i--) {
             const day = daysInPrevMonth - i;
             const date = new Date(prevYear, prevMonth, day);
-            days.push({ date, isCurrentMonth: false, isToday: false, blocks: blocks.filter(b => isDateInBlock(date, b)) });
+            days.push({ date, isCurrentMonth: false, isToday: false, blocks: blocks.filter(b => isDateInBlock(date, b)).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()) });
         }
 
         const today = new Date();
         for (let day = 1; day <= daysInMonth; day++) {
             const date = new Date(selectedYear, selectedMonth, day);
             const isToday = date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-            days.push({ date, isCurrentMonth: true, isToday, blocks: blocks.filter(b => isDateInBlock(date, b)) });
+            days.push({ date, isCurrentMonth: true, isToday, blocks: blocks.filter(b => isDateInBlock(date, b)).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()) });
         }
 
         const remainingDays = 42 - days.length;
@@ -187,7 +187,7 @@ export function TrainerCalendarTab() {
         const nextYear = selectedMonth === 11 ? selectedYear + 1 : selectedYear;
         for (let day = 1; day <= remainingDays; day++) {
             const date = new Date(nextYear, nextMonth, day);
-            days.push({ date, isCurrentMonth: false, isToday: false, blocks: blocks.filter(b => isDateInBlock(date, b)) });
+            days.push({ date, isCurrentMonth: false, isToday: false, blocks: blocks.filter(b => isDateInBlock(date, b)).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()) });
         }
 
         return days;
@@ -209,7 +209,7 @@ export function TrainerCalendarTab() {
             days.push({
                 date,
                 isToday,
-                blocks: blocks.filter(b => isDateInBlock(date, b))
+                blocks: blocks.filter(b => isDateInBlock(date, b)).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
             });
         }
         return days;
@@ -484,7 +484,7 @@ export function TrainerCalendarTab() {
                                                                 >
                                                                     <blockConfig.Icon className="h-3 w-3 flex-shrink-0" />
                                                                     <span className="truncate hidden md:block">
-                                                                        {block.title || (block.blockType === 'EXAM' && block.examSubType ? EXAM_SUBTYPE_LABELS[block.examSubType] : (block.description || blockConfig.label))}
+                                                                        {new Date(block.startDate).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} {block.title || (block.blockType === 'EXAM' && block.examSubType ? EXAM_SUBTYPE_LABELS[block.examSubType] : (block.description || blockConfig.label))}
                                                                     </span>
                                                                 </button>
                                                             );
@@ -622,6 +622,8 @@ function AddBlockerModal({ trainees, initialTraineeId, initialDate, onClose, onA
     const [endDate, setEndDate] = useState(
         initialDate ? initialDate.toISOString().split('T')[0] : ''
     );
+    const [startTime, setStartTime] = useState('08:00');
+    const [endTime, setEndTime] = useState('17:00');
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [sendInvitation, setSendInvitation] = useState(true);
@@ -640,8 +642,8 @@ function AddBlockerModal({ trainees, initialTraineeId, initialDate, onClose, onA
         e.preventDefault();
         if (!startDate || !endDate || selectedTraineeIds.length === 0) return;
         onAdd({
-            startDate: new Date(startDate).toISOString(),
-            endDate: new Date(endDate).toISOString(),
+            startDate: new Date(`${startDate}T${startTime}:00`).toISOString(),
+            endDate: new Date(`${endDate}T${endTime}:00`).toISOString(),
             blockType,
             examSubType: blockType === 'EXAM' ? examSubType : null,
             title: title || null,
@@ -753,6 +755,17 @@ function AddBlockerModal({ trainees, initialTraineeId, initialDate, onClose, onA
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Startzeit</label>
+                            <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Endzeit</label>
+                            <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" required />
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium mb-2">Titel</label>
                         <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-muted border border-border" placeholder="z.B. Besprechung..." />
@@ -858,8 +871,8 @@ function BlockDetailModal({
                             <Clock className="h-3 w-3" />
                             Zeitraum
                         </p>
-                        <p className="text-foreground font-medium">{formatDate(block.startDate)}</p>
-                        <p className="text-foreground">bis {formatDate(block.endDate)}</p>
+                        <p className="text-foreground font-medium">{formatDate(block.startDate)} • {formatTime(block.startDate)}</p>
+                        <p className="text-foreground">bis {formatDate(block.endDate)} • {formatTime(block.endDate)}</p>
                     </div>
 
                     {/* Description */}
@@ -963,6 +976,8 @@ function EditBlockModal({
     const [description, setDescription] = useState(block.description || '');
     const [startDate, setStartDate] = useState(block.startDate.split('T')[0]);
     const [endDate, setEndDate] = useState(block.endDate.split('T')[0]);
+    const [startTime, setStartTime] = useState(() => { const d = new Date(block.startDate); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; });
+    const [endTime, setEndTime] = useState(() => { const d = new Date(block.endDate); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; });
     const [saving, setSaving] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -971,8 +986,8 @@ function EditBlockModal({
         await onSave({
             title: title || null,
             description: description || null,
-            startDate: new Date(startDate).toISOString(),
-            endDate: new Date(endDate).toISOString(),
+            startDate: new Date(`${startDate}T${startTime}:00`).toISOString(),
+            endDate: new Date(`${endDate}T${endTime}:00`).toISOString(),
         });
         setSaving(false);
     };
@@ -1010,6 +1025,29 @@ function EditBlockModal({
                                 type="date"
                                 value={endDate}
                                 onChange={e => setEndDate(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl bg-muted border border-border"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Startzeit</label>
+                            <input
+                                type="time"
+                                value={startTime}
+                                onChange={e => setStartTime(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl bg-muted border border-border"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Endzeit</label>
+                            <input
+                                type="time"
+                                value={endTime}
+                                onChange={e => setEndTime(e.target.value)}
                                 className="w-full px-4 py-3 rounded-xl bg-muted border border-border"
                                 required
                             />

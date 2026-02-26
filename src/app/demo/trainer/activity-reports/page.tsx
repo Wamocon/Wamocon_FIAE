@@ -163,7 +163,7 @@ export default function DemoTrainerActivityReports() {
           <Card
             key={report.id}
             className="glass-effect border-border/40 cursor-pointer transition-all duration-200 hover:ring-1 hover:ring-accent/30"
-            onClick={() => showDemoToast('Bericht \u00f6ffnen')}
+            onClick={() => showDemoToast('Bericht öffnen')}
           >
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
