@@ -95,7 +95,7 @@ export default function DemoTraineeCourses() {
           <Card
             key={course.id}
             className="glass-effect border-border/40 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:ring-1 hover:ring-accent/30"
-            onClick={() => showDemoToast('Kurs \u00f6ffnen')}
+            onClick={() => showDemoToast('Kurs öffnen')}
           >
             <CardContent className="p-6">
               <div className="mb-4 flex items-start justify-between">

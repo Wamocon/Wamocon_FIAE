@@ -274,7 +274,7 @@ export function BlockCalendar() {
                 date,
                 isCurrentMonth: false,
                 isToday: false,
-                blocks: blocks.filter(b => isDateInBlock(date, b)),
+                blocks: blocks.filter(b => isDateInBlock(date, b)).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()),
                 exams: exams.filter(e => {
                     const examDate = new Date(e.examDate);
                     return examDate.getDate() === date.getDate() &&
@@ -297,7 +297,7 @@ export function BlockCalendar() {
                 date,
                 isCurrentMonth: true,
                 isToday,
-                blocks: blocks.filter(b => isDateInBlock(date, b)),
+                blocks: blocks.filter(b => isDateInBlock(date, b)).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()),
                 exams: exams.filter(e => {
                     const examDate = new Date(e.examDate);
                     return examDate.getDate() === date.getDate() &&
@@ -318,7 +318,7 @@ export function BlockCalendar() {
                 date,
                 isCurrentMonth: false,
                 isToday: false,
-                blocks: blocks.filter(b => isDateInBlock(date, b)),
+                blocks: blocks.filter(b => isDateInBlock(date, b)).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()),
                 exams: exams.filter(e => {
                     const examDate = new Date(e.examDate);
                     return examDate.getDate() === date.getDate() &&
@@ -347,7 +347,7 @@ export function BlockCalendar() {
             days.push({
                 date,
                 isToday,
-                blocks: blocks.filter(b => isDateInBlock(date, b)),
+                blocks: blocks.filter(b => isDateInBlock(date, b)).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()),
                 exams: exams.filter(e => {
                     const examDate = new Date(e.examDate);
                     return examDate.getDate() === date.getDate() &&
@@ -654,7 +654,7 @@ export function BlockCalendar() {
                                                     >
                                                         <blockConfig.Icon className="h-3 w-3 flex-shrink-0" />
                                                         <span className="truncate">
-                                                            {block.title || (block.blockType === 'EXAM' && block.examSubType ? EXAM_SUBTYPE_LABELS[block.examSubType] : (block.description || t(blockConfig.labelKey)))}
+                                                            {new Date(block.startDate).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} {block.title || (block.blockType === 'EXAM' && block.examSubType ? EXAM_SUBTYPE_LABELS[block.examSubType] : (block.description || t(blockConfig.labelKey)))}
                                                         </span>
                                                     </button>
                                                 );
@@ -912,6 +912,11 @@ function BlockDetailModal({
         });
     };
 
+    const formatTime = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    };
+
     const handleDelete = async () => {
         setDeleting(true);
         await onDelete(block.id);
@@ -948,8 +953,8 @@ function BlockDetailModal({
                             <Clock className="h-3 w-3" />
                             {t('calendar.block.period')}
                         </p>
-                        <p className="text-foreground font-medium">{formatDate(block.startDate)}</p>
-                        <p className="text-foreground">{t('calendar.block.until').replace('{date}', formatDate(block.endDate))}</p>
+                        <p className="text-foreground font-medium">{formatDate(block.startDate)} • {formatTime(block.startDate)}</p>
+                        <p className="text-foreground">{t('calendar.block.until').replace('{date}', formatDate(block.endDate))} • {formatTime(block.endDate)}</p>
                     </div>
 
                     {/* Description (for trainer blockers or sonstiges) */}
@@ -1046,6 +1051,8 @@ function AddBlockModal({
     const [endDate, setEndDate] = useState(
         initialDate ? `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}` : ''
     );
+    const [startTime, setStartTime] = useState('08:00');
+    const [endTime, setEndTime] = useState('17:00');
     const [blockType, setBlockType] = useState<Block['blockType']>('SCHOOL');
     const [blockNumber, setBlockNumber] = useState('');
     const [notes, setNotes] = useState('');
@@ -1078,8 +1085,8 @@ function AddBlockModal({
 
         if (!startDate || !endDate) return;
 
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const start = new Date(`${startDate}T${startTime}:00`);
+        const end = new Date(`${endDate}T${endTime}:00`);
 
         onAdd({
             calendarWeek: getCalendarWeek(startDate),
@@ -1133,6 +1140,28 @@ function AddBlockModal({
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
+                                required
+                            />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.startTime') || 'Startzeit'}</label>
+                            <input
+                                type="time"
+                                value={startTime}
+                                onChange={(e) => setStartTime(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-foreground mb-2">{t('calendar.modal.endTime') || 'Endzeit'}</label>
+                            <input
+                                type="time"
+                                value={endTime}
+                                onChange={(e) => setEndTime(e.target.value)}
                                 className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground"
                                 required
                             />

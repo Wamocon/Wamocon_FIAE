@@ -69,7 +69,7 @@ export default function DemoTrainerDashboard() {
       {/* Welcome */}
       <div>
         <h1 className="text-foreground text-2xl font-bold">
-          Guten Tag, Anna! \ud83d\udc4b
+          Guten Tag, Anna! 👋
         </h1>
         <p className="text-muted-foreground mt-1">
           {trainerStats.pendingReviews} Bewertungen und{' '}

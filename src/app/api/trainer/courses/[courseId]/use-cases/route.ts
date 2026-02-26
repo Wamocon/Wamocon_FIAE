@@ -98,10 +98,16 @@ export async function POST(
       finalOrderIndex = (Number(m?.m ?? 0) || 0) + 1;
     }
 
-    const year: number | undefined = body?.year ? Number(body.year) : undefined;
-    const trainingStage: number | undefined = body?.trainingStage
-      ? Number(body.trainingStage)
-      : undefined;
+    const year: number[] | undefined = Array.isArray(body?.year)
+      ? body.year.map(Number)
+      : body?.year
+        ? [Number(body.year)]
+        : undefined;
+    const trainingStage: number[] | undefined = Array.isArray(body?.trainingStage)
+      ? body.trainingStage.map(Number)
+      : body?.trainingStage
+        ? [Number(body.trainingStage)]
+        : undefined;
     const lernfelder: string[] | undefined = Array.isArray(body?.lernfelder)
       ? body.lernfelder
       : undefined;

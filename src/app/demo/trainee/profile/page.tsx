@@ -113,7 +113,7 @@ export default function DemoTraineeProfile() {
                 <p className="text-foreground text-2xl font-bold">
                   {traineeStats.quizAverage}%
                 </p>
-                <p className="text-muted-foreground text-xs">Quiz-\u00d8</p>
+                <p className="text-muted-foreground text-xs">Quiz</p>
               </CardContent>
             </Card>
             <Card className="glass-effect border-border/40">
