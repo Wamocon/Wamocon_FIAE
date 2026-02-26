@@ -14,17 +14,17 @@ export interface DemoProfile {
 
 const traineeProfile: DemoProfile = {
   id: 'demo-trainee-001',
-  email: 'max.mueller@demo.fiae.de',
-  full_name: 'Max M\u00fcller',
-  role: 'trainee',
-  avatar: null,
-  training_start_date: '2025-09-01',
+  email: 'max.mueller@demo.lfa.de',
+  full_name: 'Max Müller',
+  role: 'trainee', // Keeping 'trainee' to match DemoProfile type
+  avatar: null, // Keeping 'avatar' to match DemoProfile type
+  training_start_date: '2024-09-01', // Changed date, keeping field name
   trainer_id: 'demo-trainer-001',
 };
 
 const trainerProfile: DemoProfile = {
   id: 'demo-trainer-001',
-  email: 'anna.schmidt@demo.fiae.de',
+  email: 'anna.schmidt@demo.lfa.de',
   full_name: 'Anna Schmidt',
   role: 'trainer',
   avatar: null,

@@ -91,8 +91,8 @@ export function TrainerExamsTab() {
             setLoading(true);
             try {
                 const [examsRes, traineesRes] = await Promise.all([
-                    fetch(`/api/trainer/school/exams?trainerId=${trainerId}${traineeFilter ? `&traineeId=${traineeFilter}` : ''}`),
-                    fetch(`/api/trainer/trainees?trainerProfileId=${trainerId}`)
+                    fetch(`/api/trainer/school/exams?trainerId=${trainerId}${traineeFilter ? `&traineeId=${traineeFilter}` : ''}`, { cache: 'no-store' }),
+                    fetch(`/api/trainer/trainees?trainerProfileId=${trainerId}`, { cache: 'no-store' })
                 ]);
                 if (examsRes.ok) {
                     const data = await examsRes.json();

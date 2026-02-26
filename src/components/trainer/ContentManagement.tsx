@@ -121,7 +121,7 @@ export function ContentManagement() {
       try {
         const res = await fetch(
           `/api/trainer/profiles?role=TRAINEE&q=${encodeURIComponent(q)}`,
-          { signal: controller.signal }
+          { signal: controller.signal, cache: 'no-store' }
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -279,21 +279,19 @@ export function ContentManagement() {
           <div className="bg-muted/30 flex rounded-2xl p-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                viewMode === 'grid'
-                  ? 'bg-accent text-foreground shadow-sm'
-                  : 'text-muted hover:text-foreground'
-              }`}
+              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${viewMode === 'grid'
+                ? 'bg-accent text-foreground shadow-sm'
+                : 'text-muted hover:text-foreground'
+                }`}
             >
               {t('content.gridView')}
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                viewMode === 'list'
-                  ? 'bg-accent text-foreground shadow-sm'
-                  : 'text-muted hover:text-foreground'
-              }`}
+              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${viewMode === 'list'
+                ? 'bg-accent text-foreground shadow-sm'
+                : 'text-muted hover:text-foreground'
+                }`}
             >
               {t('content.listView')}
             </button>
@@ -454,14 +452,16 @@ export function ContentManagement() {
                     e.stopPropagation();
                     if (!window.confirm(t('content.deleteModuleConfirm')))
                       return;
+                    const prevCourses = courses;
+                    setCourses(prev => prev.filter(c => c.id !== course.id));
                     try {
                       const res = await fetch(
                         `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
                         { method: 'DELETE' }
                       );
                       if (!res.ok) throw new Error(t('content.error.delete'));
-                      setCourses(prev => prev.filter(c => c.id !== course.id));
                     } catch (e: any) {
+                      setCourses(prevCourses);
                       toast.error(e?.message || t('content.unknownError'));
                     }
                   }}
@@ -564,16 +564,18 @@ export function ContentManagement() {
                       e.stopPropagation();
                       if (!window.confirm(t('content.deleteModuleConfirm')))
                         return;
+                      const prevCourses = courses;
+                      setCourses(prev =>
+                        prev.filter(c => c.id !== course.id)
+                      );
                       try {
                         const res = await fetch(
                           `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
                           { method: 'DELETE' }
                         );
                         if (!res.ok) throw new Error(t('content.error.delete'));
-                        setCourses(prev =>
-                          prev.filter(c => c.id !== course.id)
-                        );
                       } catch (e: any) {
+                        setCourses(prevCourses);
                         toast.error(e?.message || t('content.unknownError'));
                       }
                     }}
@@ -693,11 +695,10 @@ export function ContentManagement() {
                   {filteredCurriculum.map(course => (
                     <label
                       key={course.id}
-                      className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2 transition ${
-                        assignCourseIds.includes(course.id)
-                          ? 'border-accent/40 bg-accent/10'
-                          : 'border-accent/10 hover:border-accent/30 hover:bg-accent/5'
-                      } ${assignAllCourses ? 'cursor-not-allowed opacity-60' : ''}`}
+                      className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2 transition ${assignCourseIds.includes(course.id)
+                        ? 'border-accent/40 bg-accent/10'
+                        : 'border-accent/10 hover:border-accent/30 hover:bg-accent/5'
+                        } ${assignAllCourses ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">
@@ -1016,11 +1017,11 @@ export function ContentManagement() {
                                   prev.map((x, i) =>
                                     i === qi
                                       ? {
-                                          ...x,
-                                          options: x.options.map((o, j) =>
-                                            j === oi ? e.target.value : o
-                                          ) as [string, string, string, string],
-                                        }
+                                        ...x,
+                                        options: x.options.map((o, j) =>
+                                          j === oi ? e.target.value : o
+                                        ) as [string, string, string, string],
+                                      }
                                       : x
                                   )
                                 )

@@ -1,4 +1,4 @@
-# 🎓 FIAE - Fachinformatiker Anwendungsentwicklung Learning Platform
+# 🎓 LFA - Lernzentrum für Auszubildende Learning Platform
 
 A comprehensive, role-based learning management system designed for German vocational training in software development. Built with modern web technologies and following enterprise-grade development standards.
 
@@ -325,8 +325,7 @@ NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
 
 This setup uses the Supabase CLI running on your host machine for the database and auth. The Docker container only runs the Next.js app, waits for the DB, applies Drizzle migrations, and starts.
 
-1) Start local Supabase (host). In a separate terminal at the repo root:
-
+1. Start local Supabase (host). In a separate terminal at the repo root:
    - Install the Supabase CLI if you don't have it yet: https://supabase.com/docs/guides/cli
    - Start services:
      - PowerShell: `supabase start`
@@ -334,7 +333,7 @@ This setup uses the Supabase CLI running on your host machine for the database a
      - REST/Auth/Realtime: http://127.0.0.1:54321
      - Postgres: 127.0.0.1:54322 (user postgres / password postgres / db postgres)
 
-2) Configure env (optional). `.env` is already present with defaults for the CLI on Windows. If needed, verify:
+2. Configure env (optional). `.env` is already present with defaults for the CLI on Windows. If needed, verify:
 
    ```properties
    NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
@@ -344,12 +343,10 @@ This setup uses the Supabase CLI running on your host machine for the database a
 
    Note: Inside Docker, these automatically map to `host.docker.internal` so you don't need to change them for containers.
 
-3) Build and start the app container:
-
+3. Build and start the app container:
    - PowerShell: `docker compose up --build`
 
-4) Open the app:
-
+4. Open the app:
    - http://localhost:3000
 
 What happens under the hood:

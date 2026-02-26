@@ -72,7 +72,8 @@ export function TrainerActivityReportsTab() {
       setLoading(true);
       try {
         const res = await fetch(
-          `/api/trainer/school/activity-reports?trainerId=${trainerId}&status=${statusFilter}`
+          `/api/trainer/school/activity-reports?trainerId=${trainerId}&status=${statusFilter}`,
+          { cache: 'no-store' }
         );
         if (res.ok) {
           const data = await res.json();
@@ -273,7 +274,8 @@ function ReviewModal({
       setLoadingEntries(true);
       try {
         const res = await fetch(
-          `/api/trainer/arbeitszeugnis/grade?reportId=${report.id}`
+          `/api/trainer/arbeitszeugnis/grade?reportId=${report.id}`,
+          { cache: 'no-store' }
         );
         if (res.ok) {
           const data = await res.json();
@@ -419,11 +421,10 @@ function ReviewModal({
               className="btn-accent inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium disabled:opacity-70"
             >
               {submitting && (
-                <div className={`h-4 w-4 animate-spin rounded-full border-2 ${
-                  action === 'reject'
+                <div className={`h-4 w-4 animate-spin rounded-full border-2 ${action === 'reject'
                     ? 'border-destructive/30 border-t-destructive'
                     : 'border-white/30 border-t-white'
-                }`} />
+                  }`} />
               )}
               Bestätigen
             </button>

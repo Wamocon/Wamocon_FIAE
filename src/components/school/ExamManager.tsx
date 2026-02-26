@@ -67,7 +67,8 @@ export function ExamManager() {
 
         try {
             const res = await fetch(
-                `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=${activeView === 'upcoming'}`
+                `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=${activeView === 'upcoming'}`,
+                { cache: 'no-store' }
             );
             if (!res.ok) throw new Error(t('exams.error.load'));
             const data = await res.json();
@@ -95,8 +96,14 @@ export function ExamManager() {
 
             if (!res.ok) throw new Error(t('exams.error.add'));
 
-            await loadExams();
+            const data = await res.json();
+            // Optimistic: add the new exam to state immediately
+            if (data.exam) {
+                setExams(prev => [...prev, data.exam]);
+            }
             setShowAddModal(false);
+            // Background refresh to ensure data consistency
+            loadExams();
         } catch (e: any) {
             setError(e.message);
         }
@@ -105,14 +112,20 @@ export function ExamManager() {
     const handleDeleteExam = async (examId: string) => {
         if (!confirm(t('exams.deleteConfirm'))) return;
 
+        // Optimistic: remove from state immediately
+        setExams(prev => prev.filter(e => e.id !== examId));
+
         try {
             const res = await fetch(`/api/trainee/school/exams/${examId}`, {
                 method: 'DELETE',
             });
             if (!res.ok) throw new Error(t('exams.error.delete'));
-            await loadExams();
+            // Background refresh
+            loadExams();
         } catch (e: any) {
             setError(e.message);
+            // Revert on error — re-fetch the full list
+            loadExams();
         }
     };
 

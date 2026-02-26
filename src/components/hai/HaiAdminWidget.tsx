@@ -264,10 +264,10 @@ export default function HaiAdminWidget() {
                         <div className="flex items-center justify-between text-sm">
                             <span className="text-cyan-400 flex items-center gap-2">
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                {activeJob.progress.currentSource || 'Starte...'}
+                                {activeJob.progress.currentSource || (t('common.loading') || 'Loading...')}
                             </span>
                             <span className="text-gray-400">
-                                {activeJob.progress.processedSources}/{activeJob.progress.totalSources} Quellen
+                                {activeJob.progress.processedSources}/{activeJob.progress.totalSources} {t('hai.admin.sources')}
                                 ({progressPercent}%)
                             </span>
                         </div>
@@ -280,10 +280,10 @@ export default function HaiAdminWidget() {
                         </div>
 
                         <div className="flex gap-4 text-xs text-gray-500">
-                            <span>{activeJob.progress.totalChunksIndexed} Chunks indexiert</span>
-                            <span>{activeJob.progress.totalChunksSkipped} übersprungen</span>
+                            <span>{activeJob.progress.totalChunksIndexed} {t('hai.admin.chunksIndexed')}</span>
+                            <span>{activeJob.progress.totalChunksSkipped} {t('hai.admin.skipped')}</span>
                             {activeJob.progress.failedSources > 0 && (
-                                <span className="text-red-400">{activeJob.progress.failedSources} Fehler</span>
+                                <span className="text-red-400">{activeJob.progress.failedSources} {t('hai.admin.errors')}</span>
                             )}
                         </div>
                     </div>
@@ -294,9 +294,12 @@ export default function HaiAdminWidget() {
                     <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-3 text-green-400 text-sm animate-in fade-in">
                         <CheckCircle className="w-5 h-5 flex-shrink-0" />
                         <span>
-                            Erfolgreich: {activeJob.progress.totalChunksIndexed} Chunks indexiert,{' '}
-                            {activeJob.progress.totalChunksSkipped} übersprungen.
-                            ({activeJob.progress.enablersProcessed} Enablers, {activeJob.progress.documentsProcessed} Dokumente)
+                            {t('hai.admin.successDetail', {
+                                chunks: activeJob.progress.totalChunksIndexed,
+                                skipped: activeJob.progress.totalChunksSkipped,
+                                enablers: activeJob.progress.enablersProcessed,
+                                docs: activeJob.progress.documentsProcessed
+                            })}
                         </span>
                     </div>
                 )}
@@ -306,12 +309,15 @@ export default function HaiAdminWidget() {
                     <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm animate-in fade-in">
                         <div className="flex items-center gap-3">
                             <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                            <span>Fehler: {activeJob.error || 'Unbekannter Fehler'}</span>
+                            <span>{t('hai.admin.errorPrefix')} {activeJob.error || (t('common.unknownError') || 'Unknown error')}</span>
                         </div>
                         {activeJob.progress.totalChunksIndexed > 0 && (
                             <div className="mt-2 ml-8 text-gray-400">
-                                Vor dem Fehler: {activeJob.progress.totalChunksIndexed} Chunks indexiert,{' '}
-                                {activeJob.progress.processedSources}/{activeJob.progress.totalSources} Quellen verarbeitet.
+                                {t('hai.admin.errorDetail', {
+                                    chunks: activeJob.progress.totalChunksIndexed,
+                                    processed: activeJob.progress.processedSources,
+                                    total: activeJob.progress.totalSources
+                                })}
                             </div>
                         )}
                     </div>
@@ -322,8 +328,11 @@ export default function HaiAdminWidget() {
                     <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-3 text-yellow-400 text-sm animate-in fade-in">
                         <XCircle className="w-5 h-5 flex-shrink-0" />
                         <span>
-                            Abgebrochen. {activeJob.progress.totalChunksIndexed} Chunks wurden bis zum Abbruch indexiert.
-                            ({activeJob.progress.processedSources}/{activeJob.progress.totalSources} Quellen)
+                            {t('hai.admin.cancelledDetail', {
+                                chunks: activeJob.progress.totalChunksIndexed,
+                                processed: activeJob.progress.processedSources,
+                                total: activeJob.progress.totalSources
+                            })}
                         </span>
                     </div>
                 )}

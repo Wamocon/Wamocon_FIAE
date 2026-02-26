@@ -3,7 +3,7 @@
  *
  * Wraps Google Gemini API for both chat and embedding generation.
  * Embeddings: gemini-embedding-001 (upgraded from deprecated text-embedding-004)
- * Chat: gemini-2.5-flash (used as fallback when Claude is unavailable)
+ * Chat: gemini-flash-latest (latest stable Flash model)
  *
  * @module lib/hai/providers/gemini
  */
@@ -28,7 +28,7 @@ export class GeminiChatProvider implements ChatProvider {
 
   constructor(
     apiKey: string | undefined,
-    modelName: string = 'gemini-2.5-flash'
+    modelName: string = 'gemini-flash-latest'
   ) {
     if (apiKey) {
       const genAI = new GoogleGenerativeAI(apiKey);

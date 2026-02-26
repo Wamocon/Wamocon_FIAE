@@ -20,7 +20,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
     const load = async () => {
       if (!profile?.id || !data?.lesson.id || !data?.id) return;
       try {
-        const res = await fetch(`/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`);
+        const res = await fetch(`/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`, { cache: 'no-store' });
         const j = await res.json();
         const set: string[] = j.completedIds || [];
         setCompleted(set.includes(data.id));
@@ -42,7 +42,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
     );
   }
 
-  
+
 
   const toggle = async (next: boolean) => {
     if (!profile?.id) return;

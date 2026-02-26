@@ -149,7 +149,7 @@ export function HaiSessionList({ className = '' }: HaiSessionListProps) {
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                     <input
                         type="text"
-                        placeholder="Suchen..."
+                        placeholder={t('hai.history.searchPlaceholder') || 'Search...'}
                         value={searchQuery}
                         onChange={(e) => handleSearchChange(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-8 py-1.5 text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50"
@@ -171,16 +171,16 @@ export function HaiSessionList({ className = '' }: HaiSessionListProps) {
                 {isSearchActive ? (
                     isSearching ? (
                         <div className="text-center py-4 text-gray-500 text-xs">
-                            <p>Suche...</p>
+                            <p>{t('hai.history.searching') || 'Searching...'}</p>
                         </div>
                     ) : searchResults.length === 0 ? (
                         <div className="text-center py-4 text-gray-500 text-xs">
-                            <p>Keine Ergebnisse</p>
+                            <p>{t('hai.history.noResults') || 'No results'}</p>
                         </div>
                     ) : (
                         <div className="space-y-0.5">
                             <p className="px-3 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                {searchResults.length} Ergebnis{searchResults.length !== 1 ? 'se' : ''}
+                                {searchResults.length} {searchResults.length === 1 ? t('hai.history.result') : t('hai.history.results')}
                             </p>
                             {searchResults.map(session => (
                                 <div

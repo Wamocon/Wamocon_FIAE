@@ -1,8 +1,8 @@
 // App Configuration
 export const APP_CONFIG = {
-  name: 'FIAE-Lernplattform',
+  name: 'LFA-Lernplattform',
   version: '1.0.0',
-  description: 'Professional Learning Platform for FIAE',
+  description: 'Professional Learning Platform for LFA',
   defaultLanguage: 'de',
   supportedLanguages: ['de', 'en'],
   defaultTheme: 'dark',

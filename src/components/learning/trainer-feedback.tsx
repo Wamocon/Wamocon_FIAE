@@ -23,7 +23,8 @@ export default function Lesson({ data }: LessonProps) {
       if (!data?.lesson.id || !profile?.id) return;
       try {
         const res = await fetch(
-          `/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`
+          `/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`,
+          { cache: 'no-store' }
         );
         const j = await res.json();
         const set = new Set<string>(j.completedIds || []);

@@ -5,9 +5,9 @@ import type { NextRequest } from 'next/server';
  * Cache-Control tiers for API GET responses.
  * Values are aligned with src/lib/api-cache.ts `cacheHeaders`.
  * ===================================================================== */
-const CC_LONG = 'public, s-maxage=900, stale-while-revalidate=1800'; // 15 min
-const CC_MEDIUM = 'public, s-maxage=300, stale-while-revalidate=600'; // 5 min
-const CC_SHORT = 'public, s-maxage=120, stale-while-revalidate=300'; // 2 min
+const CC_LONG = 'public, s-maxage=900, stale-while-revalidate=1800'; // 15 min – only for truly static data
+const CC_MEDIUM = 'private, no-cache';  // mutable data – always reach origin
+const CC_SHORT = 'private, no-cache';  // mutable data – always reach origin
 
 /** Static / reference data — rarely or never changes */
 const LONG_RE =
