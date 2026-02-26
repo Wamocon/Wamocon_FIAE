@@ -1576,8 +1576,8 @@ export default function EditCoursePage() {
                       setUseCaseDuration('');
                       setUseCaseActive(false);
                       setPendingUseCasePdfs([]);
-                      setUseCaseYear('');
-                      setUseCaseStage('');
+                      setUseCaseYear([]);
+                      setUseCaseStage([]);
                       setUseCaseLernfelder([]);
                     } catch (e: any) {
                       alert(e?.message || t('common.unknownError'));
@@ -2147,7 +2147,7 @@ export default function EditCoursePage() {
             className="absolute inset-0 bg-black/50"
             onClick={() => setShowEditUseCase(false)}
           />
-          <div className="glass-effect border-accent/30 bg-background relative z-10 w-full max-w-xl rounded-3xl border p-6 shadow-xl">
+          <div className="glass-effect border-accent/30 bg-background relative z-10 max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl border p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">
                 {t('trainer.content.editUseCase')}
