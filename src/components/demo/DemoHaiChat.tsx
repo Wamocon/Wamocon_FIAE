@@ -65,7 +65,7 @@ export function DemoHaiChat() {
         <button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 z-[70] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-2xl shadow-2xl transition-all duration-200 hover:scale-110 hover:shadow-blue-500/30"
-          aria-label="HAI Chat \u00f6ffnen"
+          aria-label="HAI Chat öffnen"
         >
           🦈
         </button>

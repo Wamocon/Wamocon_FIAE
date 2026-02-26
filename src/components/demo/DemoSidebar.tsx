@@ -175,7 +175,7 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
                 <button
                   key={item.id}
                   onClick={() => showDemoToast('Diese Seite')}
-                  className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left text-muted-foreground/50 transition-all duration-200 hover:text-muted-foreground"
+                  className="text-muted-foreground flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 cursor-not-allowed"
                 >
                   <Icon className="h-5 w-5" />
                   <span className="font-medium">{item.label}</span>
@@ -190,7 +190,7 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
                 className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${
                   isActive
                     ? 'bg-accent/20 text-accent border-accent/30 border'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent'
+                    : 'text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent'
                 }`}
               >
                 {item.id === 'profile' ? (
