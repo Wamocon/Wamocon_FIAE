@@ -43,7 +43,7 @@ export const recentActivity = [
   {
     id: '1',
     type: 'quiz' as const,
-    title: 'Netzwerktechnik Quiz \u2014 Schwer',
+    title: 'Netzwerktechnik Quiz — Schwer',
     date: '2026-02-24',
     score: 92,
     description: '11 von 12 Fragen richtig',
@@ -58,7 +58,7 @@ export const recentActivity = [
   {
     id: '3',
     type: 'quiz' as const,
-    title: 'IT-Sicherheit Quiz \u2014 Mittel',
+    title: 'IT-Sicherheit Quiz — Mittel',
     date: '2026-02-22',
     score: 78,
     description: '7 von 9 Fragen richtig',
@@ -66,7 +66,7 @@ export const recentActivity = [
   {
     id: '4',
     type: 'report' as const,
-    title: 'T\u00e4tigkeitsnachweis KW 8 eingereicht',
+    title: 'Tätigkeitsnachweis KW 8 eingereicht',
     date: '2026-02-21',
     description: 'Wochenbericht erfolgreich eingereicht',
   },
@@ -80,12 +80,12 @@ export const recentActivity = [
 ];
 
 export const achievements = [
-  { id: '1', title: 'Erste Schritte', icon: '\ud83c\udf1f', unlocked: true, description: 'Erstes Modul abgeschlossen' },
-  { id: '2', title: 'Quiz-Meister', icon: '\ud83c\udfc6', unlocked: true, description: '10 Quizze bestanden' },
-  { id: '3', title: 'Streak-K\u00f6nig', icon: '\ud83d\udd25', unlocked: true, description: '7 Tage in Folge aktiv' },
-  { id: '4', title: 'Halbzeit', icon: '\u23f3', unlocked: true, description: '50% Fortschritt erreicht' },
-  { id: '5', title: 'Perfektionist', icon: '\ud83d\udc8e', unlocked: false, description: 'Alle Quizze mit 100%' },
-  { id: '6', title: 'Absolvent', icon: '\ud83c\udf93', unlocked: false, description: 'Alle Module abgeschlossen' },
+  { id: '1', title: 'Erste Schritte', icon: '🌟', unlocked: true, description: 'Erstes Modul abgeschlossen' },
+  { id: '2', title: 'Quiz-Meister', icon: '🏆', unlocked: true, description: '10 Quizze bestanden' },
+  { id: '3', title: 'Streak-König', icon: '🔥', unlocked: true, description: '7 Tage in Folge aktiv' },
+  { id: '4', title: 'Halbzeit', icon: '⏳', unlocked: true, description: '50% Fortschritt erreicht' },
+  { id: '5', title: 'Perfektionist', icon: '💎', unlocked: false, description: 'Alle Quizze mit 100%' },
+  { id: '6', title: 'Absolvent', icon: '🎓', unlocked: false, description: 'Alle Module abgeschlossen' },
 ];
 
 export const nextLesson = {

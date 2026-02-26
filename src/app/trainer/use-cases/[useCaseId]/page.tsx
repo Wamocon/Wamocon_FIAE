@@ -56,8 +56,8 @@ export default function TrainerUseCaseDetailPage() {
   const [editDescription, setEditDescription] = useState('');
   const [editDurationValue, setEditDurationValue] = useState<string>('');
   const [editDurationUnit, setEditDurationUnit] = useState<string>('DAYS');
-  const [editYear, setEditYear] = useState<string>('');
-  const [editTrainingStage, setEditTrainingStage] = useState<string>('');
+  const [editYear, setEditYear] = useState<string[]>([]);
+  const [editTrainingStage, setEditTrainingStage] = useState<string[]>([]);
   const [editIsActive, setEditIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -78,8 +78,8 @@ export default function TrainerUseCaseDetailPage() {
         setEditDescription(data.useCase.descriptionText || '');
         setEditDurationValue(data.useCase.durationValue?.toString() || '');
         setEditDurationUnit(data.useCase.durationUnit || 'DAYS');
-        setEditYear(data.useCase.year?.toString() || '');
-        setEditTrainingStage(data.useCase.trainingStage || '');
+        setEditYear(Array.isArray(data.useCase.year) ? data.useCase.year.map(String) : data.useCase.year ? [String(data.useCase.year)] : []);
+        setEditTrainingStage(Array.isArray(data.useCase.trainingStage) ? data.useCase.trainingStage.map(String) : data.useCase.trainingStage ? [String(data.useCase.trainingStage)] : []);
         setEditIsActive(data.useCase.isActive ?? true);
 
         // Fetch documents
@@ -117,8 +117,8 @@ export default function TrainerUseCaseDetailPage() {
           descriptionText: editDescription,
           durationValue: editDurationValue ? parseInt(editDurationValue) : null,
           durationUnit: editDurationUnit || null,
-          year: editYear ? parseInt(editYear) : null,
-          trainingStage: editTrainingStage || null,
+          year: editYear.length > 0 ? editYear.map(Number) : null,
+          trainingStage: editTrainingStage.length > 0 ? editTrainingStage.map(Number) : null,
           isActive: editIsActive,
         }),
       });
@@ -197,12 +197,22 @@ export default function TrainerUseCaseDetailPage() {
                   }`}>
                   {useCase.isActive ? t('useCase.active') || 'Aktiv' : t('useCase.inactive') || 'Inaktiv'}
                 </span>
-                {useCase.year && (
+                {Array.isArray(useCase.year) && useCase.year.length > 0 && useCase.year.map(y => (
+                  <span key={y} className="bg-accent/20 px-3 py-1 rounded-full text-xs font-medium text-accent">
+                    {t('content.year')} {y}
+                  </span>
+                ))}
+                {!Array.isArray(useCase.year) && useCase.year && (
                   <span className="bg-accent/20 px-3 py-1 rounded-full text-xs font-medium text-accent">
                     {t('content.year')} {useCase.year}
                   </span>
                 )}
-                {useCase.trainingStage && (
+                {Array.isArray(useCase.trainingStage) && useCase.trainingStage.length > 0 && useCase.trainingStage.map(s => (
+                  <span key={s} className="bg-primary/20 px-3 py-1 rounded-full text-xs font-medium text-primary">
+                    {t('trainer.content.stage' + s) || `Abschnitt ${s}`}
+                  </span>
+                ))}
+                {!Array.isArray(useCase.trainingStage) && useCase.trainingStage && (
                   <span className="bg-primary/20 px-3 py-1 rounded-full text-xs font-medium text-primary">
                     {useCase.trainingStage}
                   </span>
@@ -305,19 +315,29 @@ export default function TrainerUseCaseDetailPage() {
               <span className="text-sm font-medium">{t('content.year') || 'Lehrjahr'}</span>
             </div>
             {isEditing ? (
-              <select
-                value={editYear}
-                onChange={(e) => setEditYear(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-background/50 border border-accent/30 text-foreground text-sm"
-              >
-                <option value="">{t('content.allYears') || 'Alle Jahre'}</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-              </select>
+              <div className="flex gap-3 flex-wrap">
+                {(['1', '2', '3'] as const).map(yr => (
+                  <label key={yr} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editYear.includes(yr)}
+                      onChange={e => {
+                        if (e.target.checked) setEditYear(prev => [...prev, yr]);
+                        else setEditYear(prev => prev.filter(x => x !== yr));
+                      }}
+                      className="rounded border-accent/30 text-accent"
+                    />
+                    <span className="text-sm">{t('content.year') || 'Jahr'} {yr}</span>
+                  </label>
+                ))}
+              </div>
             ) : (
               <p className="text-foreground font-medium">
-                {useCase.year ? `${t('content.year')} ${useCase.year}` : '-'}
+                {Array.isArray(useCase.year) && useCase.year.length > 0
+                  ? useCase.year.map(y => `${t('content.year') || 'Jahr'} ${y}`).join(', ')
+                  : useCase.year
+                    ? `${t('content.year') || 'Jahr'} ${useCase.year}`
+                    : '-'}
               </p>
             )}
           </div>
