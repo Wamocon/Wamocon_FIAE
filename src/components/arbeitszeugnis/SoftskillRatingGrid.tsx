@@ -18,10 +18,13 @@ interface SoftskillCriterion {
 interface SoftskillRatingGridProps {
     ratings: Record<string, string>;
     trainerRatings?: Record<string, string>;
+    releaseRatings?: Record<string, string>;
     onChange: (criterionId: string, rating: string) => void;
     onTrainerChange?: (criterionId: string, rating: string) => void;
+    onReleaseChange?: (criterionId: string, rating: string) => void;
     readOnly?: boolean;
     showTrainerRatings?: boolean;
+    showReleaseRatings?: boolean;
     isTrainer?: boolean;
 }
 
@@ -44,10 +47,13 @@ const COMPETENCY_LABELS: Record<string, { label: string; color: string }> = {
 export default function SoftskillRatingGrid({
     ratings,
     trainerRatings = {},
+    releaseRatings = {},
     onChange,
     onTrainerChange,
+    onReleaseChange,
     readOnly = false,
     showTrainerRatings = false,
+    showReleaseRatings = false,
     isTrainer = false,
 }: SoftskillRatingGridProps) {
     const [criteria, setCriteria] = useState<SoftskillCriterion[]>([]);
@@ -94,6 +100,7 @@ export default function SoftskillRatingGrid({
                 areaCriteria.map((criterion) => {
                     const selfRating = ratings[criterion.id] || '';
                     const trainerRating = trainerRatings[criterion.id] || '';
+                    const releaseRating = releaseRatings[criterion.id] || '';
                     const colorClass = COMPETENCY_LABELS[area]?.color || 'bg-gray-500/20 text-gray-400';
 
                     return (
@@ -179,6 +186,39 @@ export default function SoftskillRatingGrid({
                                         ) : (
                                             <span className={`text-lg font-bold ${trainerRating ? GRADE_OPTIONS.find(g => g.value === trainerRating)?.color.split(' ')[1] : 'text-muted-foreground/30'}`}>
                                                 {trainerRating || '-'}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Release Rating */}
+                                {(showReleaseRatings || isTrainer) && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-medium text-amber-400">
+                                            Freigabe-Note:
+                                        </span>
+                                        {isTrainer && onReleaseChange ? (
+                                            <Select
+                                                value={releaseRating}
+                                                onValueChange={(val) => onReleaseChange(criterion.id, val)}
+                                            >
+                                                <SelectTrigger className="w-[120px] h-9 bg-amber-500/10 border-amber-500/20 text-amber-400">
+                                                    <SelectValue placeholder="Note..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {GRADE_OPTIONS.map((grade) => (
+                                                        <SelectItem key={grade.value} value={grade.value}>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold w-4">{grade.value}</span>
+                                                                <span className="text-muted-foreground text-xs hidden sm:inline">{grade.label.split(' ')[0]}</span>
+                                                            </div>
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <span className={`text-lg font-bold ${releaseRating ? GRADE_OPTIONS.find(g => g.value === releaseRating)?.color.split(' ')[1] : 'text-muted-foreground/30'}`}>
+                                                {releaseRating || '-'}
                                             </span>
                                         )}
                                     </div>

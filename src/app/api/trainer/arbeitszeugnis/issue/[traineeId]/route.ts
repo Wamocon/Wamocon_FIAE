@@ -87,11 +87,13 @@ export async function POST(
       yearEnd.setDate(yearEnd.getDate() - 1);
     }
 
-    // Fetch all graded use case entries for snapshot
+    // Fetch all graded use case entries for snapshot (includes all 3 grade columns)
     const gradedEntries = await db
       .select({
         entryId: activityReportUseCaseEntries.id,
+        traineeGrade: activityReportUseCaseEntries.traineeGrade,
         trainerGrade: activityReportUseCaseEntries.trainerGrade,
+        releaseGrade: activityReportUseCaseEntries.releaseGrade,
         actualHours: activityReportUseCaseEntries.actualHours,
         useCaseLetter: trainingUseCases.letter,
         useCaseDescription: trainingUseCases.description,
@@ -123,6 +125,7 @@ export async function POST(
       .orderBy(trainingComponents.orderIndex, trainingUseCases.orderIndex);
 
     // Build snapshot data (frozen at issue time)
+    // Uses effective grade: releaseGrade ?? trainerGrade for calculations
     const componentMap = new Map<
       string,
       {
@@ -132,7 +135,10 @@ export async function POST(
         useCases: Array<{
           letter: string;
           description: string;
-          grade: string | null;
+          traineeGrade: string | null;
+          trainerGrade: string | null;
+          releaseGrade: string | null;
+          effectiveGrade: string | null;
           hours: number;
         }>;
         gradeSum: number;
@@ -155,16 +161,21 @@ export async function POST(
       }
 
       const comp = componentMap.get(key)!;
+      const effectiveGrade = entry.releaseGrade || entry.trainerGrade;
+      
       comp.useCases.push({
         letter: entry.useCaseLetter,
         description: entry.useCaseDescription,
-        grade: entry.trainerGrade,
+        traineeGrade: entry.traineeGrade,
+        trainerGrade: entry.trainerGrade,
+        releaseGrade: entry.releaseGrade,
+        effectiveGrade,
         hours: entry.actualHours,
       });
 
-      if (entry.trainerGrade) {
+      if (effectiveGrade) {
         comp.gradedCount++;
-        comp.gradeSum += parseInt(entry.trainerGrade);
+        comp.gradeSum += parseInt(effectiveGrade);
       }
     }
 

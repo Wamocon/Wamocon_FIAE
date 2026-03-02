@@ -72,10 +72,13 @@ export async function GET(
         }
 
         // Fetch all graded use case entries for the trainee within the date range
+        // Now includes traineeGrade, trainerGrade, and releaseGrade for 3-column grading
         const gradedEntries = await db
             .select({
                 entryId: activityReportUseCaseEntries.id,
+                traineeGrade: activityReportUseCaseEntries.traineeGrade,
                 trainerGrade: activityReportUseCaseEntries.trainerGrade,
+                releaseGrade: activityReportUseCaseEntries.releaseGrade,
                 actualHours: activityReportUseCaseEntries.actualHours,
                 isGradeApproved: activityReportUseCaseEntries.isGradeApproved,
                 useCaseId: trainingUseCases.id,
@@ -111,7 +114,10 @@ export async function GET(
                 useCaseId: string;
                 letter: string;
                 description: string;
-                grade: string | null;
+                traineeGrade: string | null;
+                trainerGrade: string | null;
+                releaseGrade: string | null;
+                effectiveGrade: string | null; // releaseGrade ?? trainerGrade (for calculation)
                 hours: number;
                 isApproved: boolean;
             }>;
@@ -137,20 +143,26 @@ export async function GET(
             }
 
             const comp = componentMap.get(key)!;
+            // Effective grade: prefer releaseGrade, fall back to trainerGrade
+            const effectiveGrade = entry.releaseGrade || entry.trainerGrade;
+
             comp.useCases.push({
                 useCaseId: entry.useCaseId,
                 letter: entry.useCaseLetter,
                 description: entry.useCaseDescription,
-                grade: entry.trainerGrade,
+                traineeGrade: entry.traineeGrade,
+                trainerGrade: entry.trainerGrade,
+                releaseGrade: entry.releaseGrade,
+                effectiveGrade,
                 hours: entry.actualHours,
                 isApproved: entry.isGradeApproved ?? false,
             });
 
             comp.totalHours += entry.actualHours;
 
-            if (entry.trainerGrade) {
+            if (effectiveGrade) {
                 comp.gradedCount++;
-                comp.gradeSum += parseInt(entry.trainerGrade);
+                comp.gradeSum += parseInt(effectiveGrade);
             }
         }
 
@@ -192,6 +204,7 @@ export async function GET(
         
         try {
             // Get soft skills from weeklyEvaluations linked to this trainee
+            // Now includes releaseRating for 3-column grading
             const directRatings = await db
                 .select({
                     criterionId: mesSoftskillCriteria.id,
@@ -200,6 +213,7 @@ export async function GET(
                     competencyArea: mesSoftskillCriteria.competencyArea,
                     kLevel: mesSoftskillCriteria.kLevel,
                     trainerRating: weeklySoftskillRatings.trainerRating,
+                    releaseRating: weeklySoftskillRatings.releaseRating,
                     selfRating: weeklySoftskillRatings.selfRating,
                     weekNumber: weeklyEvaluations.weekNumber,
                     year: weeklyEvaluations.year,
@@ -225,6 +239,7 @@ export async function GET(
                     competencyArea: mesSoftskillCriteria.competencyArea,
                     kLevel: mesSoftskillCriteria.kLevel,
                     trainerRating: weeklySoftskillRatings.trainerRating,
+                    releaseRating: weeklySoftskillRatings.releaseRating,
                 })
                 .from(weeklySoftskillRatings)
                 .innerJoin(weeklyEvaluations, eq(weeklySoftskillRatings.weeklyEvaluationId, weeklyEvaluations.id))
@@ -287,7 +302,9 @@ export async function GET(
         }>();
 
         for (const rating of softSkillRatings) {
-            const numRating = ratingToNumber(rating.trainerRating);
+            // Use effective rating: prefer releaseRating, fall back to trainerRating
+            const effectiveRatingStr = (rating as any).releaseRating || rating.trainerRating;
+            const numRating = ratingToNumber(effectiveRatingStr);
             if (numRating !== null && rating.competencyArea) {
                 softSkillsByArea[rating.competencyArea]?.ratings.push(numRating);
                 softSkillsByArea[rating.competencyArea]?.criteria.add(rating.criterionId);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, and } from 'drizzle-orm';
-import { activityReports, profiles, activityReportUseCaseEntries } from '@/db/migrations/schemas/schema';
+import { eq, and, ne, sql, inArray } from 'drizzle-orm';
+import { activityReports, profiles, activityReportUseCaseEntries, trainingUseCases } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 
 // GET: Get a single activity report
@@ -42,7 +42,7 @@ export async function GET(
         });
     } catch (error: any) {
         console.error('Error in activity-reports GET [id]:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }
 
@@ -77,7 +77,7 @@ export async function DELETE(
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Error in activity-reports DELETE [id]:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }
 
@@ -100,6 +100,63 @@ export async function PUT(
         if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         if (report.status !== 'DRAFT' && report.status !== 'REJECTED') {
             return NextResponse.json({ error: 'Cannot edit submitted or approved reports' }, { status: 403 });
+        }
+
+        // === Server-side hours validation ===
+        let plannedMap = new Map<string, number>();
+        if (entries && entries.length > 0) {
+            const entryUseCaseIds = entries.map((e: any) => e.useCaseId);
+
+            // Get planned hours from master data
+            const masterUseCases = await db
+                .select({ id: trainingUseCases.id, plannedHours: trainingUseCases.plannedHours })
+                .from(trainingUseCases)
+                .where(inArray(trainingUseCases.id, entryUseCaseIds as any));
+            plannedMap = new Map(masterUseCases.map((uc: any) => [uc.id, uc.plannedHours]));
+
+            // Get already-used hours from all non-rejected reports EXCLUDING this one
+            const otherReports = await db
+                .select({ id: activityReports.id })
+                .from(activityReports)
+                .where(and(
+                    eq(activityReports.traineeId, report.traineeId as any),
+                    ne(activityReports.status, 'REJECTED'),
+                    ne(activityReports.id, id as any)
+                ));
+            const otherReportIds = otherReports.map(r => r.id);
+
+            let usedMap = new Map<string, number>();
+            if (otherReportIds.length > 0) {
+                const usedRows = await db
+                    .select({
+                        useCaseId: activityReportUseCaseEntries.useCaseId,
+                        totalUsed: sql<number>`COALESCE(SUM(${activityReportUseCaseEntries.actualHours}), 0)`.as('total_used'),
+                    })
+                    .from(activityReportUseCaseEntries)
+                    .where(inArray(activityReportUseCaseEntries.reportId, otherReportIds as any))
+                    .groupBy(activityReportUseCaseEntries.useCaseId);
+
+                usedRows.forEach(row => usedMap.set(row.useCaseId, Number(row.totalUsed) || 0));
+            }
+
+            // Validate each entry
+            const violations: string[] = [];
+            for (const entry of entries) {
+                const totalHours = plannedMap.get(entry.useCaseId) ?? 0;
+                const usedHours = usedMap.get(entry.useCaseId) ?? 0;
+                const remaining = totalHours - usedHours;
+                if (entry.actualHours > remaining) {
+                    violations.push(
+                        `Tätigkeit überschreitet verfügbare Stunden: ${entry.actualHours} Std. eingetragen, aber nur ${remaining.toFixed(1)} Std. von ${totalHours} Std. verfügbar.`
+                    );
+                }
+            }
+            if (violations.length > 0) {
+                return NextResponse.json({
+                    error: violations[0],
+                    violations,
+                }, { status: 400 });
+            }
         }
 
         // Build update data - clear previous reviewer data if resubmitting a rejected report
@@ -136,10 +193,21 @@ export async function PUT(
                 entries.map((e: any) => ({
                     reportId: id,
                     useCaseId: e.useCaseId,
-                    plannedHours: e.plannedHours,
+                    plannedHours: plannedMap.get(e.useCaseId) ?? e.plannedHours ?? 0,
                     actualHours: e.actualHours,
                     isOverbooked: e.isOverbooked,
                     notes: e.notes || null,
+                    // Grade columns - traineeGrade can be set by trainee, others null until trainer grades
+                    traineeGrade: e.traineeGrade ? (String(e.traineeGrade) as any) : null,
+                    trainerGrade: null,
+                    releaseGrade: null,
+                    gradeComment: null,
+                    releaseGradeComment: null,
+                    isGradeApproved: false,
+                    gradeApprovedAt: null,
+                    gradeApprovedBy: null,
+                    releaseGradeAt: null,
+                    releaseGradeBy: null,
                 }))
             );
         }
@@ -151,7 +219,10 @@ export async function PUT(
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Error in activity-reports PUT [id]:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error?.message?.includes('violates') || error?.message?.includes('Failed query')
+            ? 'Fehler beim Speichern der Einträge. Bitte versuchen Sie es erneut.'
+            : 'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
@@ -227,6 +298,6 @@ export async function PATCH(
         });
     } catch (error: any) {
         console.error('Error in activity-reports PATCH [id]:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }
