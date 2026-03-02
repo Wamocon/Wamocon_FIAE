@@ -147,3 +147,6 @@ Local Quiz/
 
 # Supabase backup folder
 supabase_backup/
+
+# Deploy logs
+deploy-logs/
