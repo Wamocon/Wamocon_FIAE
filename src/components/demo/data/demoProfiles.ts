@@ -1,7 +1,7 @@
 export const demoTraineeProfile = {
   id: 'demo-trainee-001',
   email: 'max.mueller@demo.lfa.de',
-  full_name: 'Max Mülle',
+  full_name: 'Max Müller',
   role: 'trainee' as const,
   avatar: null,
   training_start_date: '2025-09-01',

@@ -124,6 +124,7 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
     '/demo/trainee/courses',
     '/demo/trainee/profile',
     '/demo/trainee/school',
+    '/demo/trainee/activity-reports',
     '/demo/trainer/dashboard',
     '/demo/trainer/content-management',
     '/demo/trainer/trainees',
@@ -175,7 +176,7 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
                 <button
                   key={item.id}
                   onClick={() => showDemoToast('Diese Seite')}
-                  className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 cursor-not-allowed"
+                  className="flex w-full cursor-not-allowed items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200"
                   style={{ opacity: 0.35 }}
                 >
                   <Icon className="h-5 w-5" />
@@ -191,17 +192,20 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
                 className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${
                   isActive
                     ? 'bg-accent/20 text-accent border-accent/30 border'
-                    : 'hover:bg-accent/10 hover:ring-1 hover:ring-accent'
+                    : 'hover:bg-accent/10 hover:ring-accent hover:ring-1'
                 }`}
               >
                 {item.id === 'profile' ? (
                   <Avatar className="h-5 w-5">
                     <AvatarFallback>
-                      {profile.full_name?.trim()?.charAt(0)?.toUpperCase() || 'U'}
+                      {profile.full_name?.trim()?.charAt(0)?.toUpperCase() ||
+                        'U'}
                     </AvatarFallback>
                   </Avatar>
                 ) : (
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-accent' : ''}`} />
+                  <Icon
+                    className={`h-5 w-5 ${isActive ? 'text-accent' : ''}`}
+                  />
                 )}
                 <span className="font-medium">{item.label}</span>
               </Link>
@@ -228,14 +232,16 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
                 {profile.full_name}
               </p>
               <p className="text-muted-foreground text-xs capitalize">
-                {profile.role === 'trainee' ? t('roles.trainee') : t('roles.trainer')}
+                {profile.role === 'trainee'
+                  ? t('roles.trainee')
+                  : t('roles.trainer')}
               </p>
             </div>
           </div>
 
           <button
             onClick={() => showDemoToast('Abmelden')}
-            className="mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left text-muted-foreground transition-all duration-200 hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent"
+            className="text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 hover:ring-1"
           >
             <LogOut className="h-5 w-5" />
             <span className="font-medium">{t('auth.logout')}</span>
