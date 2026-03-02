@@ -55,7 +55,10 @@ export default function EditCoursePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewPdf, setPreviewPdf] = useState<{ title: string; url: string } | null>(null);
+  const [previewPdf, setPreviewPdf] = useState<{
+    title: string;
+    url: string;
+  } | null>(null);
 
   // UI: Add Enabler Modal state
   const [showAddEnabler, setShowAddEnabler] = useState(false);
@@ -102,7 +105,13 @@ export default function EditCoursePage() {
   >([]);
   // PDF documents for enabler
   const [enablerDocuments, setEnablerDocuments] = useState<
-    Array<{ id: string; title: string; storageUrl: string; fileName: string; documentType?: string }>
+    Array<{
+      id: string;
+      title: string;
+      storageUrl: string;
+      fileName: string;
+      documentType?: string;
+    }>
   >([]);
 
   // UI: Add Use Case Modal state
@@ -133,7 +142,13 @@ export default function EditCoursePage() {
   const [useCaseEditActive, setUseCaseEditActive] = useState<boolean>(false);
   // PDF documents for use case (edit mode)
   const [useCaseDocuments, setUseCaseDocuments] = useState<
-    Array<{ id: string; title: string; storageUrl: string; fileName: string; documentType?: string }>
+    Array<{
+      id: string;
+      title: string;
+      storageUrl: string;
+      fileName: string;
+      documentType?: string;
+    }>
   >([]);
 
   useEffect(() => {
@@ -359,7 +374,9 @@ export default function EditCoursePage() {
                     onChange={e => setYear(e.target.value as any)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
                   >
-                    <option value="">{t('trainer.content.examPartNone')}</option>
+                    <option value="">
+                      {t('trainer.content.examPartNone')}
+                    </option>
                     <option value="1">{t('common.year1')}</option>
                     <option value="2">{t('common.year2')}</option>
                     <option value="3">{t('common.year3')}</option>
@@ -372,22 +389,30 @@ export default function EditCoursePage() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => setChapter(prev => String(Math.max(1, (parseInt(prev) || 0) - 1)))}
-                      className="border-accent/20 bg-background/60 cursor-pointer rounded-l-xl border px-3 py-2 text-sm font-bold transition-colors hover:bg-accent/10"
+                      onClick={() =>
+                        setChapter(prev =>
+                          String(Math.max(1, (parseInt(prev) || 0) - 1))
+                        )
+                      }
+                      className="border-accent/20 bg-background/60 hover:bg-accent/10 cursor-pointer rounded-l-xl border px-3 py-2 text-sm font-bold transition-colors"
                     >
                       −
                     </button>
                     <input
                       value={chapter}
-                      onChange={e => setChapter(e.target.value.replace(/\D/g, ''))}
+                      onChange={e =>
+                        setChapter(e.target.value.replace(/\D/g, ''))
+                      }
                       className="border-accent/20 bg-background/60 w-full border-y px-3 py-2 text-center"
                       placeholder={t('trainer.content.chapterPlaceholder')}
                       inputMode="numeric"
                     />
                     <button
                       type="button"
-                      onClick={() => setChapter(prev => String((parseInt(prev) || 0) + 1))}
-                      className="border-accent/20 bg-background/60 cursor-pointer rounded-r-xl border px-3 py-2 text-sm font-bold transition-colors hover:bg-accent/10"
+                      onClick={() =>
+                        setChapter(prev => String((parseInt(prev) || 0) + 1))
+                      }
+                      className="border-accent/20 bg-background/60 hover:bg-accent/10 cursor-pointer rounded-r-xl border px-3 py-2 text-sm font-bold transition-colors"
                     >
                       +
                     </button>
@@ -402,7 +427,9 @@ export default function EditCoursePage() {
                     onChange={e => setExamPart(e.target.value as any)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
                   >
-                    <option value="">{t('trainer.content.examPartNone')}</option>
+                    <option value="">
+                      {t('trainer.content.examPartNone')}
+                    </option>
                     <option value="1">{t('trainer.content.examPart1')}</option>
                     <option value="2">{t('trainer.content.examPart2')}</option>
                   </select>
@@ -444,7 +471,9 @@ export default function EditCoursePage() {
                           type="button"
                           className="border-accent/30 cursor-pointer rounded-md border px-2 py-1 text-xs transition-colors hover:border-red-400 hover:text-red-400"
                           onClick={async () => {
-                            const ok = window.confirm(t('trainer.content.confirmRemoveMember'));
+                            const ok = window.confirm(
+                              t('trainer.content.confirmRemoveMember')
+                            );
                             if (!ok) return;
                             await fetch(
                               `/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`,
@@ -526,7 +555,9 @@ export default function EditCoursePage() {
                           type="button"
                           className="border-accent/30 cursor-pointer rounded-md border px-2 py-1 text-xs transition-colors hover:border-red-400 hover:text-red-400"
                           onClick={async () => {
-                            const ok = window.confirm(t('trainer.content.confirmRemoveMember'));
+                            const ok = window.confirm(
+                              t('trainer.content.confirmRemoveMember')
+                            );
                             if (!ok) return;
                             await fetch(
                               `/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`,
@@ -1014,7 +1045,9 @@ export default function EditCoursePage() {
               <div className="border-accent/20 bg-background/30 rounded-xl border p-3">
                 <div className="mb-2 flex items-center gap-2">
                   <FileText className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-medium">{t('trainer.content.theoryPdfs')}</span>
+                  <span className="text-sm font-medium">
+                    {t('trainer.content.theoryPdfs')}
+                  </span>
                   {pendingEnablerPdfs.length > 0 && (
                     <span className="text-muted text-xs">
                       ({pendingEnablerPdfs.length})
@@ -1074,7 +1107,9 @@ export default function EditCoursePage() {
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm font-medium">{t('trainer.content.scenarioPdfs')}</span>
+                    <span className="text-sm font-medium">
+                      {t('trainer.content.scenarioPdfs')}
+                    </span>
                     {pendingScenarioPdfs.length > 0 && (
                       <span className="text-muted text-xs">
                         ({pendingScenarioPdfs.length})
@@ -1161,7 +1196,8 @@ export default function EditCoursePage() {
                             title: enablerTitle.trim(),
                             descriptionText:
                               enablerDescription.trim() || undefined,
-                            scenarioPdfUrl: enablerScenarioPdf.trim() || undefined,
+                            scenarioPdfUrl:
+                              enablerScenarioPdf.trim() || undefined,
                             pptUrl: enablerPpt.trim() || undefined,
                             videoUrl: enablerVideo.trim() || undefined,
                             durationValue: enablerDuration
@@ -1324,11 +1360,15 @@ export default function EditCoursePage() {
                             if (e.target.checked)
                               setUseCaseYear(prev => [...prev, yr]);
                             else
-                              setUseCaseYear(prev => prev.filter(x => x !== yr));
+                              setUseCaseYear(prev =>
+                                prev.filter(x => x !== yr)
+                              );
                           }}
                           className="border-accent/30 bg-background/50 rounded"
                         />
-                        <span className="text-xs font-medium">{t(`common.year${yr}`)}</span>
+                        <span className="text-xs font-medium">
+                          {t(`common.year${yr}`)}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -1350,11 +1390,15 @@ export default function EditCoursePage() {
                             if (e.target.checked)
                               setUseCaseStage(prev => [...prev, stage]);
                             else
-                              setUseCaseStage(prev => prev.filter(x => x !== stage));
+                              setUseCaseStage(prev =>
+                                prev.filter(x => x !== stage)
+                              );
                           }}
                           className="border-accent/30 bg-background/50 rounded"
                         />
-                        <span className="text-xs font-medium">{t(`trainer.content.stage${stage}`)}</span>
+                        <span className="text-xs font-medium">
+                          {t(`trainer.content.stage${stage}`)}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -1366,29 +1410,31 @@ export default function EditCoursePage() {
                   {t('common.lernfelder')}
                 </label>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {[...Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`), 'WISO', 'betrieblich'].map(
-                    lf => (
-                      <label
-                        key={lf}
-                        className="border-accent/20 bg-background/40 hover:bg-background/60 flex cursor-pointer items-center gap-2 rounded-lg border p-2"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={useCaseLernfelder.includes(lf)}
-                          onChange={e => {
-                            if (e.target.checked)
-                              setUseCaseLernfelder(prev => [...prev, lf]);
-                            else
-                              setUseCaseLernfelder(prev =>
-                                prev.filter(x => x !== lf)
-                              );
-                          }}
-                          className="border-accent/30 bg-background/50 rounded"
-                        />
-                        <span className="text-xs font-medium">{lf}</span>
-                      </label>
-                    )
-                  )}
+                  {[
+                    ...Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`),
+                    'WISO',
+                    'betrieblich',
+                  ].map(lf => (
+                    <label
+                      key={lf}
+                      className="border-accent/20 bg-background/40 hover:bg-background/60 flex cursor-pointer items-center gap-2 rounded-lg border p-2"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={useCaseLernfelder.includes(lf)}
+                        onChange={e => {
+                          if (e.target.checked)
+                            setUseCaseLernfelder(prev => [...prev, lf]);
+                          else
+                            setUseCaseLernfelder(prev =>
+                              prev.filter(x => x !== lf)
+                            );
+                        }}
+                        className="border-accent/30 bg-background/50 rounded"
+                      />
+                      <span className="text-xs font-medium">{lf}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -1519,8 +1565,14 @@ export default function EditCoursePage() {
                               : undefined,
                             durationUnit: useCaseDuration ? 'DAYS' : undefined,
                             isActive: useCaseActive,
-                            year: useCaseYear.length > 0 ? useCaseYear.map(Number) : undefined,
-                            trainingStage: useCaseStage.length > 0 ? useCaseStage.map(Number) : undefined,
+                            year:
+                              useCaseYear.length > 0
+                                ? useCaseYear.map(Number)
+                                : undefined,
+                            trainingStage:
+                              useCaseStage.length > 0
+                                ? useCaseStage.map(Number)
+                                : undefined,
                             lernfelder:
                               useCaseLernfelder.length > 0
                                 ? useCaseLernfelder
@@ -1621,6 +1673,12 @@ export default function EditCoursePage() {
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   {(['LOW', 'MEDIUM', 'HIGH'] as const).map(level => {
+                    const difficultyLabel =
+                      level === 'LOW'
+                        ? t('enablerPage.difficultyLow')
+                        : level === 'MEDIUM'
+                          ? t('enablerPage.difficultyMedium')
+                          : t('enablerPage.difficultyHigh');
                     const item = enablerQuizList.find(
                       q => q.difficulty === level
                     );
@@ -1630,7 +1688,7 @@ export default function EditCoursePage() {
                         className="border-accent/20 bg-background/40 rounded-lg border p-3"
                       >
                         <div className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
-                          {level}
+                          {difficultyLabel}
                         </div>
                         {item ? (
                           <div className="space-y-2">
@@ -1740,7 +1798,7 @@ export default function EditCoursePage() {
                             <div className="text-muted-foreground text-sm">
                               {t('trainer.content.noQuiz').replace(
                                 '{level}',
-                                level
+                                difficultyLabel
                               )}
                             </div>
                             <button
@@ -1816,64 +1874,85 @@ export default function EditCoursePage() {
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm font-medium">{t('trainer.content.theoryPdfs')}</span>
-                    {enablerDocuments.filter(d => d.documentType === 'THEORY' || !d.documentType).length > 0 && (
+                    <span className="text-sm font-medium">
+                      {t('trainer.content.theoryPdfs')}
+                    </span>
+                    {enablerDocuments.filter(
+                      d => d.documentType === 'THEORY' || !d.documentType
+                    ).length > 0 && (
                       <span className="text-muted text-xs">
-                        ({enablerDocuments.filter(d => d.documentType === 'THEORY' || !d.documentType).length})
+                        (
+                        {
+                          enablerDocuments.filter(
+                            d => d.documentType === 'THEORY' || !d.documentType
+                          ).length
+                        }
+                        )
                       </span>
                     )}
                   </div>
                 </div>
 
                 {/* Theory documents - inline pills */}
-                {enablerDocuments.filter(d => d.documentType === 'THEORY' || !d.documentType).length > 0 && (
+                {enablerDocuments.filter(
+                  d => d.documentType === 'THEORY' || !d.documentType
+                ).length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-2">
-                    {enablerDocuments.filter(d => d.documentType === 'THEORY' || !d.documentType).map(doc => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2 py-1"
-                      >
-                        <FileText className="h-3 w-3 flex-shrink-0 text-blue-500" />
-                        <span className="max-w-[150px] truncate text-xs font-medium">
-                          {doc.title}
-                        </span>
-                        {doc.storageUrl && (
+                    {enablerDocuments
+                      .filter(
+                        d => d.documentType === 'THEORY' || !d.documentType
+                      )
+                      .map(doc => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2 py-1"
+                        >
+                          <FileText className="h-3 w-3 flex-shrink-0 text-blue-500" />
+                          <span className="max-w-[150px] truncate text-xs font-medium">
+                            {doc.title}
+                          </span>
+                          {doc.storageUrl && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewPdf({
+                                  title: doc.title,
+                                  url: doc.storageUrl,
+                                })
+                              }
+                              className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-blue-500/20 hover:text-blue-400"
+                              title={t('trainer.content.previewPdf')}
+                            >
+                              <Eye className="h-3 w-3" />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => setPreviewPdf({ title: doc.title, url: doc.storageUrl })}
-                            className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-blue-500/20 hover:text-blue-400"
-                            title={t('trainer.content.previewPdf')}
+                            onClick={async () => {
+                              if (!trainerId || !editingEnablerId) return;
+                              const ok = window.confirm(
+                                t('trainer.content.confirmDeleteDoc')
+                              );
+                              if (!ok) return;
+                              try {
+                                await fetch(
+                                  `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                  { method: 'DELETE' }
+                                );
+                                setEnablerDocuments(prev =>
+                                  prev.filter(d => d.id !== doc.id)
+                                );
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                            title={t('common.remove')}
                           >
-                            <Eye className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" />
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!trainerId || !editingEnablerId) return;
-                            const ok = window.confirm(
-                              t('trainer.content.confirmDeleteDoc')
-                            );
-                            if (!ok) return;
-                            try {
-                              await fetch(
-                                `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
-                                { method: 'DELETE' }
-                              );
-                              setEnablerDocuments(prev =>
-                                prev.filter(d => d.id !== doc.id)
-                              );
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }}
-                          className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                          title={t('common.remove')}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
                   </div>
                 )}
 
@@ -1942,64 +2021,81 @@ export default function EditCoursePage() {
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm font-medium">{t('trainer.content.scenarioPdfs')}</span>
-                    {enablerDocuments.filter(d => d.documentType === 'EXERCISE').length > 0 && (
+                    <span className="text-sm font-medium">
+                      {t('trainer.content.scenarioPdfs')}
+                    </span>
+                    {enablerDocuments.filter(d => d.documentType === 'EXERCISE')
+                      .length > 0 && (
                       <span className="text-muted text-xs">
-                        ({enablerDocuments.filter(d => d.documentType === 'EXERCISE').length})
+                        (
+                        {
+                          enablerDocuments.filter(
+                            d => d.documentType === 'EXERCISE'
+                          ).length
+                        }
+                        )
                       </span>
                     )}
                   </div>
                 </div>
 
                 {/* Scenario documents - inline pills */}
-                {enablerDocuments.filter(d => d.documentType === 'EXERCISE').length > 0 && (
+                {enablerDocuments.filter(d => d.documentType === 'EXERCISE')
+                  .length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-2">
-                    {enablerDocuments.filter(d => d.documentType === 'EXERCISE').map(doc => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1"
-                      >
-                        <FileText className="h-3 w-3 flex-shrink-0 text-amber-500" />
-                        <span className="max-w-[150px] truncate text-xs font-medium">
-                          {doc.title}
-                        </span>
-                        {doc.storageUrl && (
+                    {enablerDocuments
+                      .filter(d => d.documentType === 'EXERCISE')
+                      .map(doc => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1"
+                        >
+                          <FileText className="h-3 w-3 flex-shrink-0 text-amber-500" />
+                          <span className="max-w-[150px] truncate text-xs font-medium">
+                            {doc.title}
+                          </span>
+                          {doc.storageUrl && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewPdf({
+                                  title: doc.title,
+                                  url: doc.storageUrl,
+                                })
+                              }
+                              className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-amber-500/20 hover:text-amber-400"
+                              title={t('trainer.content.previewPdf')}
+                            >
+                              <Eye className="h-3 w-3" />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => setPreviewPdf({ title: doc.title, url: doc.storageUrl })}
-                            className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-amber-500/20 hover:text-amber-400"
-                            title={t('trainer.content.previewPdf')}
+                            onClick={async () => {
+                              if (!trainerId || !editingEnablerId) return;
+                              const ok = window.confirm(
+                                t('trainer.content.confirmDeleteDoc')
+                              );
+                              if (!ok) return;
+                              try {
+                                await fetch(
+                                  `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                  { method: 'DELETE' }
+                                );
+                                setEnablerDocuments(prev =>
+                                  prev.filter(d => d.id !== doc.id)
+                                );
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                            title={t('common.remove')}
                           >
-                            <Eye className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" />
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!trainerId || !editingEnablerId) return;
-                            const ok = window.confirm(
-                              t('trainer.content.confirmDeleteDoc')
-                            );
-                            if (!ok) return;
-                            try {
-                              await fetch(
-                                `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
-                                { method: 'DELETE' }
-                              );
-                              setEnablerDocuments(prev =>
-                                prev.filter(d => d.id !== doc.id)
-                              );
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }}
-                          className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                          title={t('common.remove')}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
                   </div>
                 )}
 
@@ -2007,10 +2103,17 @@ export default function EditCoursePage() {
                 {enablerScenarioPdf && (
                   <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1">
                     <FileText className="h-3 w-3 text-green-500" />
-                    <span className="text-xs truncate max-w-[200px]">{enablerScenarioPdf.split('/').pop()}</span>
+                    <span className="max-w-[200px] truncate text-xs">
+                      {enablerScenarioPdf.split('/').pop()}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => setPreviewPdf({ title: 'Scenario', url: enablerScenarioPdf })}
+                      onClick={() =>
+                        setPreviewPdf({
+                          title: 'Scenario',
+                          url: enablerScenarioPdf,
+                        })
+                      }
                       className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-green-500/20 hover:text-green-400"
                       title={t('trainer.content.previewPdf')}
                     >
@@ -2199,11 +2302,15 @@ export default function EditCoursePage() {
                             if (e.target.checked)
                               setUseCaseEditYear(prev => [...prev, yr]);
                             else
-                              setUseCaseEditYear(prev => prev.filter(x => x !== yr));
+                              setUseCaseEditYear(prev =>
+                                prev.filter(x => x !== yr)
+                              );
                           }}
                           className="border-accent/30 bg-background/50 rounded"
                         />
-                        <span className="text-xs font-medium">{t(`common.year${yr}`)}</span>
+                        <span className="text-xs font-medium">
+                          {t(`common.year${yr}`)}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -2225,11 +2332,15 @@ export default function EditCoursePage() {
                             if (e.target.checked)
                               setUseCaseEditStage(prev => [...prev, stage]);
                             else
-                              setUseCaseEditStage(prev => prev.filter(x => x !== stage));
+                              setUseCaseEditStage(prev =>
+                                prev.filter(x => x !== stage)
+                              );
                           }}
                           className="border-accent/30 bg-background/50 rounded"
                         />
-                        <span className="text-xs font-medium">{t(`trainer.content.stage${stage}`)}</span>
+                        <span className="text-xs font-medium">
+                          {t(`trainer.content.stage${stage}`)}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -2241,29 +2352,31 @@ export default function EditCoursePage() {
                   {t('common.lernfelder')}
                 </label>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {[...Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`), 'WISO', 'betrieblich'].map(
-                    lf => (
-                      <label
-                        key={lf}
-                        className="border-accent/20 bg-background/40 hover:bg-background/60 flex cursor-pointer items-center gap-2 rounded-lg border p-2"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={useCaseEditLernfelder.includes(lf)}
-                          onChange={e => {
-                            if (e.target.checked)
-                              setUseCaseEditLernfelder(prev => [...prev, lf]);
-                            else
-                              setUseCaseEditLernfelder(prev =>
-                                prev.filter(x => x !== lf)
-                              );
-                          }}
-                          className="border-accent/30 bg-background/50 rounded"
-                        />
-                        <span className="text-xs font-medium">{lf}</span>
-                      </label>
-                    )
-                  )}
+                  {[
+                    ...Array.from({ length: 12 }, (_, i) => `LF-${i + 1}`),
+                    'WISO',
+                    'betrieblich',
+                  ].map(lf => (
+                    <label
+                      key={lf}
+                      className="border-accent/20 bg-background/40 hover:bg-background/60 flex cursor-pointer items-center gap-2 rounded-lg border p-2"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={useCaseEditLernfelder.includes(lf)}
+                        onChange={e => {
+                          if (e.target.checked)
+                            setUseCaseEditLernfelder(prev => [...prev, lf]);
+                          else
+                            setUseCaseEditLernfelder(prev =>
+                              prev.filter(x => x !== lf)
+                            );
+                        }}
+                        className="border-accent/30 bg-background/50 rounded"
+                      />
+                      <span className="text-xs font-medium">{lf}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -2320,17 +2433,31 @@ export default function EditCoursePage() {
                           {doc.title}
                         </span>
                         {doc.documentType && (
-                          <span className={`rounded px-1 py-0.5 text-[10px] font-medium leading-none ${doc.documentType === 'THEORY' ? 'bg-blue-500/20 text-blue-400'
-                            : doc.documentType === 'EXERCISE' ? 'bg-purple-500/20 text-purple-400'
-                              : 'bg-amber-500/20 text-amber-400'
-                            }`}>
-                            {doc.documentType === 'THEORY' ? 'T' : doc.documentType === 'EXERCISE' ? 'E' : 'S'}
+                          <span
+                            className={`rounded px-1 py-0.5 text-[10px] leading-none font-medium ${
+                              doc.documentType === 'THEORY'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : doc.documentType === 'EXERCISE'
+                                  ? 'bg-purple-500/20 text-purple-400'
+                                  : 'bg-amber-500/20 text-amber-400'
+                            }`}
+                          >
+                            {doc.documentType === 'THEORY'
+                              ? 'T'
+                              : doc.documentType === 'EXERCISE'
+                                ? 'E'
+                                : 'S'}
                           </span>
                         )}
                         {doc.storageUrl && (
                           <button
                             type="button"
-                            onClick={() => setPreviewPdf({ title: doc.title, url: doc.storageUrl })}
+                            onClick={() =>
+                              setPreviewPdf({
+                                title: doc.title,
+                                url: doc.storageUrl,
+                              })
+                            }
                             className="text-muted cursor-pointer rounded p-0.5 transition-colors hover:bg-blue-500/20 hover:text-blue-400"
                             title={t('trainer.content.previewPdf')}
                           >
@@ -2444,8 +2571,14 @@ export default function EditCoursePage() {
                               : null,
                             durationUnit: useCaseEditDuration ? 'DAYS' : null,
                             isActive: useCaseEditActive,
-                            year: useCaseEditYear.length > 0 ? useCaseEditYear.map(Number) : null,
-                            trainingStage: useCaseEditStage.length > 0 ? useCaseEditStage.map(Number) : null,
+                            year:
+                              useCaseEditYear.length > 0
+                                ? useCaseEditYear.map(Number)
+                                : null,
+                            trainingStage:
+                              useCaseEditStage.length > 0
+                                ? useCaseEditStage.map(Number)
+                                : null,
                             lernfelder:
                               useCaseEditLernfelder.length > 0
                                 ? useCaseEditLernfelder
