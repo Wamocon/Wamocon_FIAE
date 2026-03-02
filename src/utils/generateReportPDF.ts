@@ -9,9 +9,12 @@ interface ReportEntry {
     actualHours: number;
     isOverbooked: boolean;
     notes: string | null;
-    // Grading fields
-    trainerGrade?: number;
+    // Grading fields - 3-column grading
+    traineeGrade?: string | number | null;
+    trainerGrade?: string | number | null;
+    releaseGrade?: string | number | null;
     gradeComment?: string | null;
+    releaseGradeComment?: string | null;
 }
 
 interface TrainingUseCase {
@@ -30,7 +33,9 @@ interface TrainingComponent {
 
 interface SoftSkillRating {
     name: string;
+    traineeRating?: string;
     trainerRating?: string;
+    releaseRating?: string;
 }
 
 interface ReportData {
@@ -55,6 +60,8 @@ interface ReportData {
     selfComment?: string;
     trainerRating?: string;
     trainerComment?: string;
+    releaseRating?: string;
+    releaseComment?: string;
     softSkills?: SoftSkillRating[];
 }
 
@@ -148,21 +155,24 @@ export async function generateActivityReportPDF(
     // --- ENTRIES TABLE ---
     yPos += 12;
 
-    // Prepare table data with trainer grades
+    // Prepare table data with 3-column grades
     const tableData = report.entries.map(entry => {
         const useCase = getUseCaseById(entry.useCaseId);
         const component = useCase ? getComponentById(useCase.componentId) : null;
-        
-        // Format grade with comment if available
-        let gradeDisplay = entry.trainerGrade ? String(entry.trainerGrade) : '-';
+
+        const traineeGradeDisplay = entry.traineeGrade ? String(entry.traineeGrade) : '-';
+        const trainerGradeDisplay = entry.trainerGrade ? String(entry.trainerGrade) : '-';
+        const releaseGradeDisplay = entry.releaseGrade ? String(entry.releaseGrade) : '-';
 
         return [
             component?.code || '-',
             `${useCase?.letter || '-'}) ${useCase?.description || 'Unbekannt'}`,
             `${entry.plannedHours} Std`,
             `${entry.actualHours} Std`,
-            gradeDisplay,
-            entry.gradeComment || entry.notes || '-'
+            traineeGradeDisplay,
+            trainerGradeDisplay,
+            releaseGradeDisplay,
+            entry.releaseGradeComment || entry.gradeComment || entry.notes || '-'
         ];
     });
 
@@ -172,42 +182,44 @@ export async function generateActivityReportPDF(
 
     autoTable(doc, {
         startY: yPos,
-        head: [['Komp.', 'Use Case / Tätigkeit', 'Plan', 'IST', 'Note', 'Anmerkungen']],
+        head: [['Komp.', 'Use Case / Tätigkeit', 'Plan', 'IST', 'Azubi', 'Ausb.', 'Freig.', 'Anmerkungen']],
         body: tableData,
-        foot: [['', 'Gesamt:', `${totalPlanned} Std`, `${totalActual} Std`, '', '']],
+        foot: [['', 'Gesamt:', `${totalPlanned} Std`, `${totalActual} Std`, '', '', '', '']],
         theme: 'striped',
         headStyles: {
             fillColor: [51, 51, 51],
             textColor: [255, 255, 255],
             fontStyle: 'bold',
-            fontSize: 9,
+            fontSize: 8,
         },
         bodyStyles: {
-            fontSize: 8,
+            fontSize: 7,
         },
         footStyles: {
             fillColor: [240, 240, 240],
             textColor: [0, 0, 0],
             fontStyle: 'bold',
-            fontSize: 9,
+            fontSize: 8,
         },
         columnStyles: {
-            0: { cellWidth: 15 },
-            1: { cellWidth: 70 },
-            2: { cellWidth: 20, halign: 'center' },
-            3: { cellWidth: 20, halign: 'center' },
-            4: { cellWidth: 15, halign: 'center' },
-            5: { cellWidth: 'auto' },
+            0: { cellWidth: 13 },
+            1: { cellWidth: 55 },
+            2: { cellWidth: 16, halign: 'center' },
+            3: { cellWidth: 16, halign: 'center' },
+            4: { cellWidth: 12, halign: 'center' },
+            5: { cellWidth: 12, halign: 'center' },
+            6: { cellWidth: 12, halign: 'center' },
+            7: { cellWidth: 'auto' },
         },
         margin: { left: 14, right: 14 },
     });
 
     // Get the Y position after the table
-    // @ts-ignore
+    // @ts-expect-error - jspdf-autotable extends jsPDF prototype
     let finalY = doc.lastAutoTable?.finalY || yPos + 50;
 
     // --- GRADING & SOFT SKILLS (New Section) ---
-    if (report.status === 'APPROVED' && report.trainerRating) {
+    if (report.status === 'APPROVED' && (report.trainerRating || report.selfRating)) {
         yPos = finalY + 15;
 
         // Ensure space for grading section
@@ -221,46 +233,48 @@ export async function generateActivityReportPDF(
         doc.text('Leistungsbewertung', 14, yPos);
         yPos += 8;
 
-        // Overall Grade Table - Only trainer rating (no Azubi self-assessment in Tätigkeitsnachweis)
+        // Overall Grade Table - 3 columns: Azubi, Ausbilder, Freigabe
         autoTable(doc, {
             startY: yPos,
-            head: [['Bewertungskriterium', 'Ausbilder-Bewertung']],
+            head: [['Bewertungskriterium', 'Azubi', 'Ausbilder', 'Freigabe']],
             body: [
-                ['Gesamtnote', report.trainerRating || '-']
+                ['Gesamtnote', report.selfRating || '-', report.trainerRating || '-', report.releaseRating || report.trainerRating || '-']
             ],
             theme: 'grid',
-            headStyles: { fillColor: [70, 70, 70], textColor: 255, fontSize: 10 },
-            bodyStyles: { fontSize: 10, fontStyle: 'bold' },
+            headStyles: { fillColor: [70, 70, 70], textColor: 255, fontSize: 9 },
+            bodyStyles: { fontSize: 9, fontStyle: 'bold' },
             margin: { left: 14, right: 14 },
         });
 
-        // @ts-ignore
+        // @ts-expect-error - jspdf-autotable extends jsPDF prototype
         yPos = doc.lastAutoTable?.finalY + 10;
 
-        // Soft Skills Table - Only trainer ratings
+        // Soft Skills Table - 3 columns: Azubi, Ausbilder, Freigabe
         if (report.softSkills && report.softSkills.length > 0) {
             const softSkillData = report.softSkills.map(s => [
                 s.name,
-                s.trainerRating || '-'
+                s.traineeRating || '-',
+                s.trainerRating || '-',
+                s.releaseRating || s.trainerRating || '-'
             ]);
 
             autoTable(doc, {
                 startY: yPos,
-                head: [['Soft Skills / Kompetenzbereich', 'Ausbilder-Bewertung']],
+                head: [['Soft Skills / Kompetenzbereich', 'Azubi', 'Ausbilder', 'Freigabe']],
                 body: softSkillData,
                 theme: 'striped',
-                headStyles: { fillColor: [90, 90, 90], textColor: 255, fontSize: 9 },
-                bodyStyles: { fontSize: 9 },
+                headStyles: { fillColor: [90, 90, 90], textColor: 255, fontSize: 8 },
+                bodyStyles: { fontSize: 8 },
                 margin: { left: 14, right: 14 },
             });
-            // @ts-ignore
+            // @ts-expect-error - jspdf-autotable extends jsPDF prototype
             yPos = doc.lastAutoTable?.finalY + 10;
         }
     }
 
     // --- COMMENTS SECTION (Trainer feedback only for Tätigkeitsnachweis) ---
     if (report.trainerComment) {
-        // @ts-ignore
+        // @ts-expect-error - jspdf-autotable extends jsPDF prototype
         yPos = Math.max(yPos, (doc.lastAutoTable?.finalY || yPos) + 10);
 
         // Ensure space
@@ -282,7 +296,7 @@ export async function generateActivityReportPDF(
     }
 
     // --- DIGITAL SIGNATURES SECTION ---
-    // @ts-ignore
+    // @ts-expect-error - jspdf-autotable extends jsPDF prototype
     finalY = Math.max(yPos, doc.lastAutoTable?.finalY + 20);
     yPos = finalY + 10;
 

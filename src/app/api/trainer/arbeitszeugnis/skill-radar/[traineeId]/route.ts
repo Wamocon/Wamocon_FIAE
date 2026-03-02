@@ -64,10 +64,11 @@ export async function GET(
             yearEnd.setDate(yearEnd.getDate() - 1);
         }
 
-        // Fetch graded entries grouped by component
+        // Fetch graded entries grouped by component (includes release grade for effective grade calculation)
         const gradedEntries = await db
             .select({
                 trainerGrade: activityReportUseCaseEntries.trainerGrade,
+                releaseGrade: activityReportUseCaseEntries.releaseGrade,
                 componentCode: trainingComponents.code,
                 componentTitle: trainingComponents.title,
                 componentOrderIndex: trainingComponents.orderIndex,
@@ -107,10 +108,12 @@ export async function GET(
                 });
             }
 
-            if (entry.trainerGrade) {
+            // Use effective grade: releaseGrade takes priority over trainerGrade
+            const effectiveGrade = entry.releaseGrade || entry.trainerGrade;
+            if (effectiveGrade) {
                 const comp = componentMap.get(key)!;
                 comp.gradedCount++;
-                comp.gradeSum += parseInt(entry.trainerGrade);
+                comp.gradeSum += parseInt(effectiveGrade);
             }
         }
 
@@ -154,6 +157,7 @@ export async function GET(
             .select({
                 competencyArea: mesSoftskillCriteria.competencyArea,
                 trainerRating: weeklySoftskillRatings.trainerRating,
+                releaseRating: weeklySoftskillRatings.releaseRating,
             })
             .from(weeklySoftskillRatings)
             .innerJoin(weeklyEvaluations, eq(weeklySoftskillRatings.weeklyEvaluationId, weeklyEvaluations.id))
@@ -170,15 +174,13 @@ export async function GET(
         };
 
         for (const rating of softSkillRatings) {
-            if (!rating.competencyArea || !rating.trainerRating) continue;
+            // Use effective rating: releaseRating takes priority over trainerRating
+            const effectiveRating = (rating as any).releaseRating || rating.trainerRating;
+            if (!rating.competencyArea || !effectiveRating) continue;
             
-            // Convert rating enum to number
-            const ratingMap: Record<string, number> = {
-                'EXCELLENT': 1, 'GOOD': 2, 'SATISFACTORY': 3,
-                'ADEQUATE': 4, 'POOR': 5, 'INSUFFICIENT': 6
-            };
-            const numRating = ratingMap[rating.trainerRating];
-            if (!numRating) continue;
+            // performanceRating enum uses numeric strings '1'-'6'
+            const numRating = parseInt(effectiveRating);
+            if (isNaN(numRating) || numRating < 1 || numRating > 6) continue;
 
             if (!softSkillMap.has(rating.competencyArea)) {
                 softSkillMap.set(rating.competencyArea, { 

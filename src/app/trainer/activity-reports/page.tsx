@@ -20,6 +20,9 @@ import {
   Download,
   Award,
   Star,
+  Pencil,
+  History,
+  Shield,
 } from 'lucide-react';
 
 interface TraineeProfile {
@@ -55,10 +58,14 @@ interface ReportUseCaseEntry {
   actualHours: number;
   isOverbooked: boolean;
   notes: string | null;
-  trainerGrade?: number;
+  traineeGrade?: string | number | null;
+  trainerGrade?: string | number | null;
+  releaseGrade?: string | number | null;
   gradeComment?: string | null;
+  releaseGradeComment?: string | null;
   isGradeApproved?: boolean;
   gradeApprovedAt?: string | null;
+  releaseGradeAt?: string | null;
 }
 
 interface SoftskillCriterion {
@@ -817,8 +824,13 @@ function ReportReviewModal({
   const [entryGrades, setEntryGrades] = useState<
     Record<string, { grade: number; comment: string }>
   >({});
+  const [releaseGrades, setReleaseGrades] = useState<
+    Record<string, { grade: number; comment: string }>
+  >({});
   const [savingGrades, setSavingGrades] = useState(false);
   const [gradesSaved, setGradesSaved] = useState(false);
+  const [isEditingGrades, setIsEditingGrades] = useState(false);
+  const [editReason, setEditReason] = useState('');
 
   // Soft skills state
   const [softskillCriteria, setSoftskillCriteria] = useState<
@@ -827,9 +839,13 @@ function ReportReviewModal({
   const [softskillRatings, setSoftskillRatings] = useState<
     Record<string, { rating: number; comment: string }>
   >({});
+  const [softskillReleaseRatings, setSoftskillReleaseRatings] = useState<
+    Record<string, { rating: number; comment: string }>
+  >({});
   const [loadingSoftskills, setLoadingSoftskills] = useState(false);
   const [savingSoftskills, setSavingSoftskills] = useState(false);
   const [softskillsSaved, setSoftskillsSaved] = useState(false);
+  const [isEditingSoftskills, setIsEditingSoftskills] = useState(false);
 
   const totalPlanned = entries.reduce((sum, e) => sum + e.plannedHours, 0);
   const totalActual = entries.reduce((sum, e) => sum + e.actualHours, 0);
@@ -863,18 +879,27 @@ function ReportReviewModal({
   useEffect(() => {
     const initialGrades: Record<string, { grade: number; comment: string }> =
       {};
+    const initialReleaseGrades: Record<string, { grade: number; comment: string }> =
+      {};
     entries.forEach(entry => {
       if (entry.trainerGrade) {
         initialGrades[entry.id] = {
-          grade: entry.trainerGrade,
+          grade: Number(entry.trainerGrade),
           comment: entry.gradeComment || '',
+        };
+      }
+      if (entry.releaseGrade) {
+        initialReleaseGrades[entry.id] = {
+          grade: Number(entry.releaseGrade),
+          comment: entry.releaseGradeComment || '',
         };
       }
     });
     setEntryGrades(initialGrades);
+    setReleaseGrades(initialReleaseGrades);
   }, [entries]);
 
-  // Load soft skill criteria when tab is opened
+  // Load soft skill criteria when tab is opened (for both SUBMITTED and APPROVED reports)
   useEffect(() => {
     if (activeTab === 'softskills' && softskillCriteria.length === 0) {
       loadSoftskillCriteria();
@@ -905,13 +930,24 @@ function ReportReviewModal({
           string,
           { rating: number; comment: string }
         > = {};
+        const existingReleaseRatings: Record<
+          string,
+          { rating: number; comment: string }
+        > = {};
         (data.softskillRatings || []).forEach((r: any) => {
           existingRatings[r.softskillCriterionId] = {
             rating: r.trainerRating,
             comment: r.trainerComment || '',
           };
+          if (r.releaseRating) {
+            existingReleaseRatings[r.softskillCriterionId] = {
+              rating: r.releaseRating,
+              comment: r.releaseComment || '',
+            };
+          }
         });
         setSoftskillRatings(existingRatings);
+        setSoftskillReleaseRatings(existingReleaseRatings);
       }
     } catch (err) {
       console.error('Error loading softskills:', err);
@@ -934,6 +970,30 @@ function ReportReviewModal({
 
   const handleGradeCommentChange = (entryId: string, comment: string) => {
     setEntryGrades(prev => ({
+      ...prev,
+      [entryId]: {
+        ...prev[entryId],
+        comment,
+        grade: prev[entryId]?.grade || 3,
+      },
+    }));
+    setGradesSaved(false);
+  };
+
+  const handleReleaseGradeChange = (entryId: string, grade: number) => {
+    setReleaseGrades(prev => ({
+      ...prev,
+      [entryId]: {
+        ...prev[entryId],
+        grade,
+        comment: prev[entryId]?.comment || '',
+      },
+    }));
+    setGradesSaved(false);
+  };
+
+  const handleReleaseGradeCommentChange = (entryId: string, comment: string) => {
+    setReleaseGrades(prev => ({
       ...prev,
       [entryId]: {
         ...prev[entryId],
@@ -969,9 +1029,32 @@ function ReportReviewModal({
     }));
   };
 
+  const handleSoftskillReleaseRatingChange = (criterionId: string, rating: number) => {
+    setSoftskillReleaseRatings(prev => ({
+      ...prev,
+      [criterionId]: {
+        ...prev[criterionId],
+        rating,
+        comment: prev[criterionId]?.comment || '',
+      },
+    }));
+  };
+
+  const handleSoftskillReleaseCommentChange = (criterionId: string, comment: string) => {
+    setSoftskillReleaseRatings(prev => ({
+      ...prev,
+      [criterionId]: {
+        ...prev[criterionId],
+        comment,
+        rating: prev[criterionId]?.rating || 3,
+      },
+    }));
+  };
+
   const saveGrades = async () => {
     setSavingGrades(true);
     try {
+      // Save trainer grades
       const gradesToSave = Object.entries(entryGrades)
         .filter(([_, val]) => val.grade)
         .map(([entryId, val]) => ({
@@ -984,16 +1067,49 @@ function ReportReviewModal({
         const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entryGrades: gradesToSave, trainerId }),
+          body: JSON.stringify({
+            entryGrades: gradesToSave,
+            trainerId,
+            editReason: isEditingGrades ? editReason : undefined,
+          }),
         });
-        if (res.ok) {
-          setGradesSaved(true);
-          reloadEntries();
-          toast.success(t('trainer.reports.modal.gradesSaved'));
-        } else {
+        if (!res.ok) {
           toast.error(t('trainer.reports.modal.gradesSaveError'));
+          return;
         }
       }
+
+      // Save release grades if any
+      const releaseGradesToSave = Object.entries(releaseGrades)
+        .filter(([_, val]) => val.grade)
+        .map(([entryId, val]) => ({
+          entryId,
+          grade: val.grade,
+          comment: val.comment,
+        }));
+
+      if (releaseGradesToSave.length > 0) {
+        const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entryGrades: releaseGradesToSave,
+            trainerId,
+            isReleaseGrade: true,
+            editReason: isEditingGrades ? editReason : undefined,
+          }),
+        });
+        if (!res.ok) {
+          toast.error(t('trainer.reports.modal.gradesSaveError'));
+          return;
+        }
+      }
+
+      setGradesSaved(true);
+      setIsEditingGrades(false);
+      setEditReason('');
+      reloadEntries();
+      toast.success(t('trainer.reports.modal.gradesSaved'));
     } catch (err) {
       console.error('Error saving grades:', err);
       toast.error(t('trainer.reports.modal.gradesSaveError'));
@@ -1005,14 +1121,18 @@ function ReportReviewModal({
   const saveSoftskills = async () => {
     setSavingSoftskills(true);
     try {
+      // Build combined ratings with both trainer and release ratings
       const ratingsToSave = Object.entries(softskillRatings)
         .filter(([_, val]) => val.rating)
         .map(([criterionId, val]) => ({
           criterionId,
           trainerRating: val.rating,
           trainerComment: val.comment,
+          releaseRating: softskillReleaseRatings[criterionId]?.rating || undefined,
+          releaseComment: softskillReleaseRatings[criterionId]?.comment || undefined,
         }));
 
+      // Save trainer ratings
       const res = await fetch('/api/weekly-evaluations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1025,15 +1145,54 @@ function ReportReviewModal({
           ausbildungsjahr: report.ausbildungsjahr,
           trainerRating: 3,
           softskillRatings: ratingsToSave,
+          softskillsOnly: true,
+          editReason: isEditingSoftskills ? editReason : undefined,
         }),
       });
 
-      if (res.ok) {
-        setSoftskillsSaved(true);
-        toast.success(t('trainer.reports.modal.softskillsSaved'));
-      } else {
+      if (!res.ok) {
         toast.error(t('trainer.reports.modal.softskillsSaveError'));
+        return;
       }
+
+      // Save release ratings if any exist
+      const releaseRatingsToSave = Object.entries(softskillReleaseRatings)
+        .filter(([_, val]) => val.rating)
+        .map(([criterionId, val]) => ({
+          criterionId,
+          releaseRating: val.rating,
+          releaseComment: val.comment,
+        }));
+
+      if (releaseRatingsToSave.length > 0) {
+        const releaseRes = await fetch('/api/weekly-evaluations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            activityReportId: report.id,
+            traineeId: report.traineeId,
+            trainerId,
+            weekNumber: report.weekNumber,
+            year: report.year,
+            ausbildungsjahr: report.ausbildungsjahr,
+            trainerRating: 3,
+            softskillRatings: releaseRatingsToSave,
+            isRelease: true,
+            softskillsOnly: true,
+            editReason: isEditingSoftskills ? editReason : undefined,
+          }),
+        });
+
+        if (!releaseRes.ok) {
+          toast.error(t('trainer.reports.modal.softskillsSaveError'));
+          return;
+        }
+      }
+
+      setSoftskillsSaved(true);
+      setIsEditingSoftskills(false);
+      setEditReason('');
+      toast.success(t('trainer.reports.modal.softskillsSaved'));
     } catch (err) {
       console.error('Error saving softskills:', err);
       toast.error(t('trainer.reports.modal.softskillsSaveError'));
@@ -1095,7 +1254,7 @@ function ReportReviewModal({
     size?: 'sm' | 'md';
   }) => {
     const grades = [1, 2, 3, 4, 5, 6];
-    const sizeClasses = size === 'sm' ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm';
+    const sizeClasses = size === 'sm' ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm';
     return (
       <div className="flex gap-1">
         {grades.map(g => (
@@ -1103,14 +1262,14 @@ function ReportReviewModal({
             key={g}
             type="button"
             onClick={() => onChange(g)}
-            className={`${sizeClasses} rounded-full font-medium transition-all ${
+            className={`${sizeClasses} rounded-lg font-semibold transition-all duration-150 ${
               value === g
                 ? g <= 2
-                  ? 'bg-green-500 text-white'
+                  ? 'bg-green-500 text-white shadow-md shadow-green-500/30 ring-2 ring-green-400/50 scale-110'
                   : g <= 4
-                    ? 'bg-yellow-500 text-white'
-                    : 'bg-red-500 text-white'
-                : 'bg-muted hover:bg-muted/80 text-foreground'
+                    ? 'bg-yellow-500 text-white shadow-md shadow-yellow-500/30 ring-2 ring-yellow-400/50 scale-110'
+                    : 'bg-red-500 text-white shadow-md shadow-red-500/30 ring-2 ring-red-400/50 scale-110'
+                : 'bg-muted hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground border border-border/50'
             }`}
           >
             {g}
@@ -1118,6 +1277,16 @@ function ReportReviewModal({
         ))}
       </div>
     );
+  };
+
+  const GradeBadge = ({ grade, size = 'lg' }: { grade: string | number | null | undefined; size?: 'sm' | 'lg' }) => {
+    const g = grade ? Number(grade) : null;
+    const sizeClass = size === 'lg' ? 'w-10 h-10 text-xl' : 'w-8 h-8 text-base';
+    if (!g) return (
+      <div className={`${sizeClass} rounded-xl bg-muted/50 flex items-center justify-center font-bold text-muted-foreground/30`}>–</div>
+    );
+    const colorClass = g <= 2 ? 'bg-green-500/15 text-green-500 ring-1 ring-green-500/20' : g <= 4 ? 'bg-yellow-500/15 text-yellow-500 ring-1 ring-yellow-500/20' : 'bg-red-500/15 text-red-500 ring-1 ring-red-500/20';
+    return <div className={`${sizeClass} rounded-xl ${colorClass} flex items-center justify-center font-bold`}>{g}</div>;
   };
 
   return (
@@ -1193,8 +1362,8 @@ function ReportReviewModal({
             </div>
           )}
 
-          {/* Tabs - Only show for SUBMITTED reports */}
-          {report.status === 'SUBMITTED' && (
+          {/* Tabs - Show for SUBMITTED and APPROVED reports (grade editing on approved) */}
+          {(report.status === 'SUBMITTED' || report.status === 'APPROVED') && (
             <div className="border-border/30 mt-4 flex gap-2 border-b">
               <button
                 onClick={() => setActiveTab('details')}
@@ -1216,6 +1385,9 @@ function ReportReviewModal({
               >
                 <Star className="h-4 w-4" />
                 {t('trainer.reports.modal.tabGrades')}
+                {report.status === 'APPROVED' && (
+                  <Pencil className="h-3 w-3 text-amber-400" />
+                )}
               </button>
               <button
                 onClick={() => setActiveTab('softskills')}
@@ -1227,6 +1399,9 @@ function ReportReviewModal({
               >
                 <Award className="h-4 w-4" />
                 {t('trainer.reports.modal.tabSoftskills')}
+                {report.status === 'APPROVED' && (
+                  <Pencil className="h-3 w-3 text-amber-400" />
+                )}
               </button>
             </div>
           )}
@@ -1321,9 +1496,9 @@ function ReportReviewModal({
                           </span>
                           <span
                             className={`font-bold ${
-                              entry.trainerGrade <= 2
+                              Number(entry.trainerGrade) <= 2
                                 ? 'text-green-500'
-                                : entry.trainerGrade <= 4
+                                : Number(entry.trainerGrade) <= 4
                                   ? 'text-yellow-500'
                                   : 'text-red-500'
                             }`}
@@ -1338,77 +1513,171 @@ function ReportReviewModal({
               </div>
             )
           ) : activeTab === 'grades' ? (
-            /* Grades Tab */
+            /* Grades Tab - 3-Column: Azubi / Ausbilder / Freigabe */
             <div className="space-y-4">
               <div className="bg-accent/10 border-accent/20 mb-4 rounded-lg border p-4">
-                <p className="text-foreground text-sm">
-                  {t('trainer.reports.modal.gradeInfo')}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-foreground text-sm">
+                    {report.status === 'APPROVED' 
+                      ? 'Bewertung abgeschlossen. Sie können Noten bearbeiten oder Freigabenoten setzen.'
+                      : t('trainer.reports.modal.gradeInfo')}
+                  </p>
+                  {report.status === 'APPROVED' && !isEditingGrades && (
+                    <button
+                      onClick={() => setIsEditingGrades(true)}
+                      className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Noten bearbeiten
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Edit reason input when editing approved grades */}
+              {isEditingGrades && (
+                <div className="bg-amber-500/10 border-amber-500/20 rounded-lg border p-3">
+                  <label className="text-foreground mb-1.5 block text-xs font-medium">
+                    Grund der Änderung (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={editReason}
+                    onChange={e => setEditReason(e.target.value)}
+                    placeholder="z.B. Nach Rücksprache mit dem Auszubildenden..."
+                    className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+
               {entries.map(entry => {
                 const useCase = getUseCaseById(entry.useCaseId);
                 const component = useCase
                   ? getComponentById(useCase.componentId)
                   : null;
                 const currentGrade = entryGrades[entry.id];
+                const currentRelease = releaseGrades[entry.id];
+                const isApproved = report.status === 'APPROVED';
+                const canEditTrainer = !isApproved || isEditingGrades;
 
                 return (
                   <div
                     key={entry.id}
-                    className="border-border bg-muted/30 rounded-lg border p-4"
+                    className="border-border bg-card rounded-xl border shadow-sm overflow-hidden"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="text-muted-foreground mb-1 text-xs">
-                          {component?.title}
-                        </p>
-                        <p className="text-foreground font-medium">
-                          {useCase?.letter}) {useCase?.description}
-                        </p>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                          {entry.actualHours} {t('trainer.reports.modal.hours')}{' '}
-                          (
-                          {entry.actualHours - entry.plannedHours >= 0
-                            ? '+'
-                            : ''}
-                          {(entry.actualHours - entry.plannedHours).toFixed(1)})
-                        </p>
-                        {entry.notes && (
-                          <p className="text-accent bg-accent/10 mt-2 rounded p-2 text-sm italic">
-                            "{entry.notes}"
-                          </p>
-                        )}
+                    {/* Activity Info */}
+                    <div className="px-5 pt-4 pb-3">
+                      <p className="text-muted-foreground text-[11px] uppercase tracking-wider font-medium">
+                        {component?.title}
+                      </p>
+                      <p className="text-foreground font-semibold text-sm mt-1 leading-snug">
+                        {useCase?.letter}) {useCase?.description}
+                      </p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="text-muted-foreground text-xs">
+                          {entry.actualHours} {t('trainer.reports.modal.hours')}
+                        </span>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          entry.actualHours - entry.plannedHours >= 0
+                            ? 'bg-green-500/10 text-green-500'
+                            : 'bg-red-500/10 text-red-500'
+                        }`}>
+                          {entry.actualHours - entry.plannedHours >= 0 ? '+' : ''}
+                          {(entry.actualHours - entry.plannedHours).toFixed(1)} h
+                        </span>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <div>
-                          <p className="text-muted-foreground mb-1 text-right text-xs">
-                            {t('trainer.reports.modal.grade')}
-                          </p>
+                      {entry.notes && (
+                        <p className="text-muted-foreground bg-muted/50 mt-2.5 rounded-lg p-2.5 text-xs italic border border-border/30">
+                          „{entry.notes}"
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Grade Sections */}
+                    <div className="grid grid-cols-3 gap-px bg-border/50">
+                      {/* Trainee Self-Assessment */}
+                      <div className="bg-card p-4 flex flex-col items-center gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
+                          <User className="h-3.5 w-3.5" />
+                          Azubi
+                        </div>
+                        <GradeBadge grade={entry.traineeGrade} />
+                        <span className="text-[10px] text-muted-foreground">Selbstbewertung</span>
+                      </div>
+
+                      {/* Trainer Grade */}
+                      <div className="bg-card p-4 flex flex-col items-center gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
+                          <Star className="h-3.5 w-3.5" />
+                          Ausbilder
+                        </div>
+                        {canEditTrainer ? (
                           <GradeSelector
                             value={currentGrade?.grade}
                             onChange={g => handleGradeChange(entry.id, g)}
+                            size="sm"
                           />
+                        ) : (
+                          <GradeBadge grade={currentGrade?.grade} />
+                        )}
+                        {canEditTrainer && currentGrade?.grade && (
+                          <input
+                            type="text"
+                            value={currentGrade?.comment || ''}
+                            onChange={e => handleGradeCommentChange(entry.id, e.target.value)}
+                            placeholder="Kommentar..."
+                            className="bg-muted/50 border-border/50 text-foreground w-full rounded-md border px-2 py-1 text-[11px] mt-1 placeholder:text-muted-foreground/50"
+                          />
+                        )}
+                      </div>
+
+                      {/* Release Grade */}
+                      <div className="bg-card p-4 flex flex-col items-center gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-400">
+                          <Shield className="h-3.5 w-3.5" />
+                          Freigabe
                         </div>
+                        <GradeSelector
+                          value={currentRelease?.grade}
+                          onChange={g => handleReleaseGradeChange(entry.id, g)}
+                          size="sm"
+                        />
+                        {currentRelease?.grade && (
+                          <input
+                            type="text"
+                            value={currentRelease?.comment || ''}
+                            onChange={e => handleReleaseGradeCommentChange(entry.id, e.target.value)}
+                            placeholder="Kommentar..."
+                            className="bg-muted/50 border-border/50 text-foreground w-full rounded-md border px-2 py-1 text-[11px] mt-1 placeholder:text-muted-foreground/50"
+                          />
+                        )}
                       </div>
                     </div>
-                    {currentGrade?.grade && (
-                      <div className="mt-3">
-                        <input
-                          type="text"
-                          value={currentGrade?.comment || ''}
-                          onChange={e =>
-                            handleGradeCommentChange(entry.id, e.target.value)
-                          }
-                          placeholder={t('trainer.reports.modal.gradeComment')}
-                          className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2 text-sm"
-                        />
+
+                    {/* Deviation indicator */}
+                    {currentGrade?.grade && entry.traineeGrade && (
+                      <div className="px-5 py-2 bg-muted/30 border-t border-border/50">
+                        {(() => {
+                          const diff = Math.abs(currentGrade.grade - Number(entry.traineeGrade));
+                          if (diff === 0) return <span className="text-xs text-green-400 flex items-center gap-1"><Check className="h-3 w-3" /> Übereinstimmung Azubi ↔ Ausbilder</span>;
+                          if (diff <= 1) return <span className="text-xs text-yellow-400">△ Geringe Abweichung ({diff} Note{diff > 1 ? 'n' : ''})</span>;
+                          return <span className="text-xs text-red-400 font-medium">⚠ Große Abweichung ({diff} Noten)</span>;
+                        })()}
                       </div>
                     )}
                   </div>
                 );
               })}
 
-              <div className="flex justify-end pt-4">
+              <div className="flex justify-end gap-3 pt-4">
+                {isEditingGrades && (
+                  <button
+                    onClick={() => { setIsEditingGrades(false); setEditReason(''); }}
+                    className="text-muted-foreground hover:text-foreground px-4 py-2 text-sm"
+                  >
+                    Abbrechen
+                  </button>
+                )}
                 <button
                   onClick={saveGrades}
                   disabled={
@@ -1432,7 +1701,7 @@ function ReportReviewModal({
               </div>
             </div>
           ) : (
-            /* Soft Skills Tab */
+            /* Soft Skills Tab - 3-Column: Azubi / Ausbilder / Freigabe */
             <div className="space-y-4">
               {loadingSoftskills ? (
                 <div className="flex items-center justify-center py-12">
@@ -1448,10 +1717,39 @@ function ReportReviewModal({
               ) : (
                 <>
                   <div className="bg-accent/10 border-accent/20 mb-4 rounded-lg border p-4">
-                    <p className="text-foreground text-sm">
-                      {t('trainer.reports.modal.softskillInfo')}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-foreground text-sm">
+                        {report.status === 'APPROVED'
+                          ? 'Bewertung abgeschlossen. Sie können Noten bearbeiten oder Freigabenoten setzen.'
+                          : t('trainer.reports.modal.softskillInfo')}
+                      </p>
+                      {report.status === 'APPROVED' && !isEditingSoftskills && (
+                        <button
+                          onClick={() => { setIsEditingSoftskills(true); loadSoftskillCriteria(); }}
+                          className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Noten bearbeiten
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Edit reason for softskill editing */}
+                  {isEditingSoftskills && (
+                    <div className="bg-amber-500/10 border-amber-500/20 rounded-lg border p-3">
+                      <label className="text-foreground mb-1.5 block text-xs font-medium">
+                        Grund der Änderung (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={editReason}
+                        onChange={e => setEditReason(e.target.value)}
+                        placeholder="z.B. Nach Rücksprache mit dem Auszubildenden..."
+                        className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2 text-sm"
+                      />
+                    </div>
+                  )}
 
                   {/* Group by competency area */}
                   {[
@@ -1483,31 +1781,71 @@ function ReportReviewModal({
                         <h4 className="text-foreground mb-3 text-sm font-semibold tracking-wide uppercase">
                           {areaLabels[area] || area}
                         </h4>
-                        <div className="space-y-3">
+
+                        {/* 3-Column Headers */}
+                        <div className="grid grid-cols-[1fr_60px_196px_196px] gap-3 px-4 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/30 mb-2">
+                          <span>Kriterium</span>
+                          <span className="text-center text-blue-400">Azubi</span>
+                          <span className="text-center text-amber-400">Ausbilder</span>
+                          <span className="text-center text-purple-400 flex items-center justify-center gap-0.5">
+                            <Shield className="h-2.5 w-2.5" />
+                            Freigabe
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5">
                           {areaCriteria.map(criterion => {
-                            const rating = softskillRatings[criterion.id];
+                            const trainerRating = softskillRatings[criterion.id];
+                            const releaseRating = softskillReleaseRatings[criterion.id];
+                            const isApproved = report.status === 'APPROVED';
+                            const canEditTrainer = !isApproved || isEditingSoftskills;
+
                             return (
                               <div
                                 key={criterion.id}
-                                className="border-border bg-muted/30 flex items-center justify-between gap-4 rounded-lg border p-3"
+                                className="border-border/50 bg-card grid grid-cols-[1fr_60px_196px_196px] items-center gap-3 rounded-xl border p-3 hover:bg-muted/20 transition-colors"
                               >
-                                <div className="flex-1">
+                                <div className="min-w-0">
                                   <p className="text-foreground text-sm font-medium">
-                                    {criterion.code} - {criterion.name}
+                                    {criterion.code} – {criterion.name}
                                   </p>
                                   {criterion.description && (
-                                    <p className="text-muted-foreground mt-0.5 text-xs">
+                                    <p className="text-muted-foreground mt-0.5 text-xs line-clamp-1">
                                       {criterion.description}
                                     </p>
                                   )}
                                 </div>
-                                <GradeSelector
-                                  value={rating?.rating}
-                                  onChange={r =>
-                                    handleSoftskillRatingChange(criterion.id, r)
-                                  }
-                                  size="sm"
-                                />
+
+                                {/* Azubi self-rating placeholder */}
+                                <div className="flex justify-center">
+                                  <GradeBadge grade={null} size="sm" />
+                                </div>
+
+                                {/* Trainer rating */}
+                                <div className="flex justify-center">
+                                  {canEditTrainer ? (
+                                    <GradeSelector
+                                      value={trainerRating?.rating}
+                                      onChange={r =>
+                                        handleSoftskillRatingChange(criterion.id, r)
+                                      }
+                                      size="sm"
+                                    />
+                                  ) : (
+                                    <GradeBadge grade={trainerRating?.rating} size="sm" />
+                                  )}
+                                </div>
+
+                                {/* Release rating */}
+                                <div className="flex justify-center">
+                                  <GradeSelector
+                                    value={releaseRating?.rating}
+                                    onChange={r =>
+                                      handleSoftskillReleaseRatingChange(criterion.id, r)
+                                    }
+                                    size="sm"
+                                  />
+                                </div>
                               </div>
                             );
                           })}
@@ -1516,10 +1854,18 @@ function ReportReviewModal({
                     );
                   })}
 
-                  <div className="flex justify-end pt-4">
+                  <div className="flex justify-end gap-3 pt-4">
+                    {isEditingSoftskills && (
+                      <button
+                        onClick={() => { setIsEditingSoftskills(false); setEditReason(''); }}
+                        className="text-muted-foreground hover:text-foreground px-4 py-2 text-sm"
+                      >
+                        Abbrechen
+                      </button>
+                    )}
                     <button
                       onClick={saveSoftskills}
-                      disabled={savingSoftskills || !allSoftskillsRated}
+                      disabled={savingSoftskills || (!allSoftskillsRated && report.status !== 'APPROVED')}
                       className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50"
                     >
                       <span className="h-4 w-4">
@@ -1626,6 +1972,20 @@ function ReportReviewModal({
                 </span>
               </div>
               <div className="flex gap-3">
+                {(activeTab === 'grades' || activeTab === 'softskills') && (isEditingGrades || isEditingSoftskills) && (
+                  <button
+                    onClick={activeTab === 'grades' ? saveGrades : saveSoftskills}
+                    disabled={savingGrades || savingSoftskills}
+                    className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2"
+                  >
+                    {savingGrades || savingSoftskills ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    Änderungen speichern
+                  </button>
+                )}
                 <button
                   onClick={onDownloadPDF}
                   className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2"

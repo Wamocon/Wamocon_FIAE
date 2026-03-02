@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
-import { activityReportUseCaseEntries } from '@/db/migrations/schemas/schema';
+import { activityReportUseCaseEntries, gradeEditHistory } from '@/db/migrations/schemas/schema';
 
 // GET: Get report entries for a specific report
 export async function GET(
@@ -25,10 +25,14 @@ export async function GET(
             actualHours: e.actualHours,
             isOverbooked: e.isOverbooked,
             notes: e.notes,
+            traineeGrade: e.traineeGrade,
             trainerGrade: e.trainerGrade,
+            releaseGrade: e.releaseGrade,
             gradeComment: e.gradeComment,
+            releaseGradeComment: e.releaseGradeComment,
             isGradeApproved: e.isGradeApproved,
             gradeApprovedAt: e.gradeApprovedAt,
+            releaseGradeAt: e.releaseGradeAt,
             createdAt: e.createdAt,
             updatedAt: e.updatedAt,
         }));
@@ -41,11 +45,11 @@ export async function GET(
             return NextResponse.json({ entries: [] });
         }
         console.error('Error in report entries GET:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }
 
-// PATCH: Update grades for report entries
+// PATCH: Update grades for report entries (supports trainer grade, release grade, and grade editing)
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -53,7 +57,7 @@ export async function PATCH(
     try {
         const { id } = await params;
         const body = await request.json();
-        const { entryGrades, trainerId } = body;
+        const { entryGrades, trainerId, isReleaseGrade, editReason } = body;
 
         // entryGrades: Array of { entryId, grade, comment }
         if (!entryGrades || !Array.isArray(entryGrades)) {
@@ -68,21 +72,71 @@ export async function PATCH(
             
             if (!entryId || !grade) continue;
 
-            const updated = await db
-                .update(activityReportUseCaseEntries)
-                .set({
-                    trainerGrade: grade,
-                    gradeComment: comment || null,
-                    isGradeApproved: true,
-                    gradeApprovedAt: now,
-                    gradeApprovedBy: trainerId || null,
-                    updatedAt: now,
-                })
-                .where(eq(activityReportUseCaseEntries.id, entryId as any))
-                .returning();
+            // Fetch existing entry for audit trail
+            const existingEntries = await db
+                .select()
+                .from(activityReportUseCaseEntries)
+                .where(eq(activityReportUseCaseEntries.id, entryId as any));
 
-            if (updated.length > 0) {
-                updatedEntries.push(updated[0]);
+            const existing = existingEntries[0];
+
+            if (isReleaseGrade) {
+                // Setting release grade (final grade after discussion)
+                // Log edit history if there was a previous release grade
+                if (existing?.releaseGrade && existing.releaseGrade !== String(grade)) {
+                    await db.insert(gradeEditHistory).values({
+                        entityType: 'USE_CASE_ENTRY',
+                        entityId: entryId,
+                        fieldName: 'releaseGrade',
+                        oldValue: existing.releaseGrade,
+                        newValue: String(grade),
+                        changedBy: trainerId,
+                        changeReason: editReason || null,
+                    });
+                }
+
+                const updated = await db
+                    .update(activityReportUseCaseEntries)
+                    .set({
+                        releaseGrade: String(grade) as any,
+                        releaseGradeComment: comment || null,
+                        releaseGradeAt: now,
+                        releaseGradeBy: trainerId || null,
+                        updatedAt: now,
+                    })
+                    .where(eq(activityReportUseCaseEntries.id, entryId as any))
+                    .returning();
+
+                if (updated.length > 0) updatedEntries.push(updated[0]);
+            } else {
+                // Setting/editing trainer grade
+                // Log edit history if grade is being changed (not first-time set)
+                if (existing?.trainerGrade && existing.trainerGrade !== String(grade)) {
+                    await db.insert(gradeEditHistory).values({
+                        entityType: 'USE_CASE_ENTRY',
+                        entityId: entryId,
+                        fieldName: 'trainerGrade',
+                        oldValue: existing.trainerGrade,
+                        newValue: String(grade),
+                        changedBy: trainerId,
+                        changeReason: editReason || null,
+                    });
+                }
+
+                const updated = await db
+                    .update(activityReportUseCaseEntries)
+                    .set({
+                        trainerGrade: String(grade) as any,
+                        gradeComment: comment || null,
+                        isGradeApproved: true,
+                        gradeApprovedAt: now,
+                        gradeApprovedBy: trainerId || null,
+                        updatedAt: now,
+                    })
+                    .where(eq(activityReportUseCaseEntries.id, entryId as any))
+                    .returning();
+
+                if (updated.length > 0) updatedEntries.push(updated[0]);
             }
         }
 
@@ -93,6 +147,6 @@ export async function PATCH(
         });
     } catch (error: any) {
         console.error('Error in report entries PATCH:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }

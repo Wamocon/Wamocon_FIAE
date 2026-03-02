@@ -11,9 +11,9 @@ export function generateCertificateText(
 ): string {
     // Gender-neutral pronouns
     const pronouns = {
-        male: { subject: 'Er', object: 'ihn', possessive: 'seine', title: 'Herr' },
-        female: { subject: 'Sie', object: 'sie', possessive: 'ihre', title: 'Frau' },
-        neutral: { subject: 'Die Person', object: 'die Person', possessive: 'die', title: '' },
+        male: { subject: 'Er', object: 'ihn', possessive: 'seiner', title: 'Herr' },
+        female: { subject: 'Sie', object: 'sie', possessive: 'ihrer', title: 'Frau' },
+        neutral: { subject: 'Die Person', object: 'die Person', possessive: 'der', title: '' },
     };
     const p = pronouns[gender as keyof typeof pronouns] || pronouns.neutral;
 

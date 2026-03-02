@@ -71,9 +71,12 @@ interface ReportUseCaseEntry {
   actualHours: number;
   isOverbooked: boolean;
   notes: string | null;
-  // Grading fields
-  trainerGrade?: number;
+  // Grading fields (3-column: trainee / trainer / release)
+  traineeGrade?: string | number | null;
+  trainerGrade?: string | number | null;
+  releaseGrade?: string | number | null;
   gradeComment?: string | null;
+  releaseGradeComment?: string | null;
   isGradeApproved?: boolean;
   useCase?: TrainingUseCase;
   component?: TrainingComponent;
@@ -635,12 +638,14 @@ function CreateReportModal({
       useCaseId: string;
       actualHours: number;
       notes: string;
+      traineeGrade: string | null;
     }[]
   >(
     initialEntries?.map(e => ({
       useCaseId: e.useCaseId,
       actualHours: e.actualHours,
       notes: e.notes || '',
+      traineeGrade: e.traineeGrade ? String(e.traineeGrade) : null,
     })) || []
   );
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(
@@ -740,14 +745,15 @@ function CreateReportModal({
         useCaseId: useCase.id,
         actualHours: 0,
         notes: '',
+        traineeGrade: null,
       },
     ]);
   };
 
   const updateEntry = (
     useCaseId: string,
-    field: 'actualHours' | 'notes',
-    value: number | string
+    field: 'actualHours' | 'notes' | 'traineeGrade',
+    value: number | string | null
   ) => {
     setEntries(
       entries.map(e =>
@@ -810,6 +816,33 @@ function CreateReportModal({
       setSaving(true);
       setError(null);
 
+      // Client-side validation with clear error messages
+      if (entries.length === 0) {
+        setError(t('reports.error.noEntries') || 'Bitte fügen Sie mindestens eine Tätigkeit hinzu.');
+        setSaving(false);
+        return;
+      }
+
+      const missingHours = entries.filter(e => !e.actualHours || e.actualHours <= 0);
+      if (missingHours.length > 0) {
+        setError(t('reports.error.missingHours') || 'Bitte tragen Sie für alle Tätigkeiten die IST-Stunden ein (> 0).');
+        setSaving(false);
+        return;
+      }
+
+      const missingNotes = entries.filter(e => !e.notes || e.notes.trim().length === 0);
+      if (submit && missingNotes.length > 0) {
+        setError(t('reports.error.missingNotes') || 'Bitte beschreiben Sie für alle Tätigkeiten, was Sie gelernt haben.');
+        setSaving(false);
+        return;
+      }
+
+      if (!periodValid) {
+        setError('Bitte geben Sie eine gültige Kalenderwoche (1-52) und Jahr an.');
+        setSaving(false);
+        return;
+      }
+
       // Calculate period start and end based on ISO week number
       // Get January 4th (always in ISO week 1)
       const jan4 = new Date(year, 0, 4);
@@ -848,6 +881,7 @@ function CreateReportModal({
             actualHours: e.actualHours,
             isOverbooked: checkOverbooked(e.useCaseId, e.actualHours),
             notes: e.notes || null,
+            traineeGrade: e.traineeGrade || null,
           })),
           submit,
         }),
@@ -987,6 +1021,31 @@ function CreateReportModal({
                         <p className="text-foreground font-medium">
                           {useCase?.plannedHours} {t('reports.hours')}
                         </p>
+                        {/* Remaining hours indicator */}
+                        {(() => {
+                          const ucHours = useCaseHours[entry.useCaseId];
+                          if (!ucHours) return null;
+                          const remaining = ucHours.remainingHours;
+                          const usedPercent = Math.min(100, ((ucHours.usedHours + entry.actualHours) / ucHours.totalHours) * 100);
+                          const wouldExceed = entry.actualHours > remaining;
+                          return (
+                            <div className="mt-1.5">
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className={`text-[10px] ${wouldExceed ? 'text-red-400 font-medium' : 'text-muted-foreground'}`}>
+                                  {remaining.toFixed(1)} {t('reports.hoursRemaining')}
+                                </span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-muted/50 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    wouldExceed ? 'bg-red-500' : usedPercent > 80 ? 'bg-yellow-500' : 'bg-green-500'
+                                  }`}
+                                  style={{ width: `${Math.min(100, usedPercent)}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div>
                         <label className="text-muted-foreground mb-1 block text-xs">
@@ -1028,6 +1087,52 @@ function CreateReportModal({
                       </div>
                     </div>
 
+                    {/* Trainee Self-Grading */}
+                    <div className="mt-3 pt-3 border-t border-border/30">
+                      <label className="text-muted-foreground text-xs mb-2 block">
+                        {t('reports.selfGrade')}
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        {(['1', '2', '3', '4', '5', '6'] as const).map(grade => {
+                          const isSelected = entry.traineeGrade === grade;
+                          return (
+                            <button
+                              key={grade}
+                              type="button"
+                              onClick={() =>
+                                updateEntry(
+                                  entry.useCaseId,
+                                  'traineeGrade',
+                                  isSelected ? null : grade
+                                )
+                              }
+                              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-all duration-150 ${
+                                isSelected
+                                  ? Number(grade) <= 2
+                                    ? 'bg-green-500 text-white ring-2 ring-green-400/50 scale-110'
+                                    : Number(grade) <= 4
+                                      ? 'bg-yellow-500 text-white ring-2 ring-yellow-400/50 scale-110'
+                                      : 'bg-red-500 text-white ring-2 ring-red-400/50 scale-110'
+                                  : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                              }`}
+                            >
+                              {grade}
+                            </button>
+                          );
+                        })}
+                        {entry.traineeGrade && (
+                          <span className="text-muted-foreground ml-2 text-xs">
+                            {entry.traineeGrade === '1' ? t('reports.gradeLabels.1') :
+                             entry.traineeGrade === '2' ? t('reports.gradeLabels.2') :
+                             entry.traineeGrade === '3' ? t('reports.gradeLabels.3') :
+                             entry.traineeGrade === '4' ? t('reports.gradeLabels.4') :
+                             entry.traineeGrade === '5' ? t('reports.gradeLabels.5') :
+                             t('reports.gradeLabels.6')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
                     {isOverbooked && (
                       <div className="mt-2 flex items-center gap-2 text-sm text-yellow-500">
                         <AlertTriangle className="h-4 w-4" />
@@ -1041,6 +1146,23 @@ function CreateReportModal({
                         </span>
                       </div>
                     )}
+
+                    {/* Exceeded remaining hours warning */}
+                    {(() => {
+                      const ucHours = useCaseHours[entry.useCaseId];
+                      if (!ucHours || entry.actualHours <= ucHours.remainingHours) return null;
+                      return (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-red-400">
+                          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                          <span>
+                            {t('reports.exceedsRemaining')
+                              .replace('{entered}', String(entry.actualHours))
+                              .replace('{remaining}', ucHours.remainingHours.toFixed(1))
+                              .replace('{total}', String(ucHours.totalHours))}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -1311,33 +1433,59 @@ function ReportDetailModal({
                       </p>
                     )}
 
-                    {/* Show trainer grade if approved */}
-                    {entry.trainerGrade && (
-                      <div className="bg-accent/10 border-accent/20 mt-3 rounded-lg border p-3">
+                    {/* Show trainee self-grade if set */}
+                    {entry.traineeGrade && (
+                      <div className="bg-muted/30 border-border/30 mt-3 rounded-lg border p-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-xs">
-                              {t('reports.trainerGrade')}
-                            </span>
-                            <span
-                              className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${entry.trainerGrade <= 2
+                          <span className="text-muted-foreground text-xs">
+                            {t('reports.selfGradeLabel')}
+                          </span>
+                          <span
+                            className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold text-white ${
+                              Number(entry.traineeGrade) <= 2
                                 ? 'bg-green-500'
-                                : entry.trainerGrade <= 4
+                                : Number(entry.traineeGrade) <= 4
                                   ? 'bg-yellow-500'
                                   : 'bg-red-500'
-                                }`}
-                            >
-                              {entry.trainerGrade}
-                            </span>
-                          </div>
-                          {entry.gradeComment && (
-                            <p className="text-foreground flex-1 text-sm italic">
-                              "{entry.gradeComment}"
-                            </p>
-                          )}
+                            }`}
+                          >
+                            {entry.traineeGrade}
+                          </span>
                         </div>
                       </div>
                     )}
+
+                    {/* Show effective grade (release > trainer) if graded */}
+                    {(entry.releaseGrade || entry.trainerGrade) && (() => {
+                      const effectiveGrade = Number(entry.releaseGrade ?? entry.trainerGrade);
+                      const effectiveComment = entry.releaseGradeComment || entry.gradeComment;
+                      return (
+                        <div className="bg-accent/10 border-accent/20 mt-3 rounded-lg border p-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground text-xs">
+                                {t('reports.trainerGrade')}
+                              </span>
+                              <span
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${effectiveGrade <= 2
+                                  ? 'bg-green-500'
+                                  : effectiveGrade <= 4
+                                    ? 'bg-yellow-500'
+                                    : 'bg-red-500'
+                                  }`}
+                              >
+                                {effectiveGrade}
+                              </span>
+                            </div>
+                            {effectiveComment && (
+                              <p className="text-foreground flex-1 text-sm italic">
+                                "{effectiveComment}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {entry.isOverbooked && (
                       <div className="mt-2 flex items-center gap-2 text-sm text-yellow-500">
@@ -1404,15 +1552,17 @@ function ComponentItem({
     <div className="border-border/50 border-b last:border-b-0">
       <button
         onClick={onToggle}
-        className="hover:bg-muted/50 flex w-full items-center gap-3 p-3 text-left transition-colors"
+        className="hover:bg-muted/50 group flex w-full items-center gap-3 p-3 text-left transition-all duration-150 cursor-pointer"
       >
-        {isExpanded ? (
-          <ChevronDown className="text-muted-foreground h-4 w-4" />
-        ) : (
-          <ChevronRight className="text-muted-foreground h-4 w-4" />
-        )}
+        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-muted/50 group-hover:bg-accent/20 transition-colors">
+          {isExpanded ? (
+            <ChevronDown className="text-muted-foreground group-hover:text-accent h-4 w-4 transition-colors" />
+          ) : (
+            <ChevronRight className="text-muted-foreground group-hover:text-accent h-4 w-4 transition-colors" />
+          )}
+        </div>
         <div className="flex-1">
-          <p className="text-foreground text-sm font-medium">
+          <p className="text-foreground text-sm font-medium group-hover:text-accent transition-colors">
             {component.title}
           </p>
           <p className="text-muted-foreground text-xs">
@@ -1422,7 +1572,7 @@ function ComponentItem({
       </button>
 
       {isExpanded && (
-        <div className="space-y-1 pb-2 pl-10">
+        <div className="space-y-1 pb-3 pl-8 pr-2">
           {useCases
             .sort((a, b) => a.orderIndex - b.orderIndex)
             .map(useCase => {
@@ -1440,31 +1590,46 @@ function ComponentItem({
                     !isSelected && !isExhausted && onAddEntry(useCase)
                   }
                   disabled={isSelected || isExhausted}
-                  className={`w-full rounded p-2 text-left text-sm transition-colors ${isSelected
-                    ? 'bg-accent/20 text-accent cursor-not-allowed'
+                  className={`group/item w-full rounded-lg px-3 py-2.5 text-left text-sm transition-all duration-150 ${isSelected
+                    ? 'bg-accent/15 text-accent border border-accent/30 cursor-default'
                     : isExhausted
-                      ? 'bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60'
-                      : 'hover:bg-muted/50 text-foreground'
+                      ? 'bg-muted/20 text-muted-foreground cursor-not-allowed opacity-50'
+                      : 'hover:bg-accent/10 hover:border-accent/20 border border-transparent text-foreground cursor-pointer hover:translate-x-1'
                     }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span>
-                      <span className="font-medium">{useCase.letter})</span>{' '}
-                      {useCase.description}
-                    </span>
-                    <span className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      {isSelected ? (
+                        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-accent/20">
+                          <Check className="h-3 w-3 text-accent" />
+                        </div>
+                      ) : isExhausted ? (
+                        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-destructive/20">
+                          <X className="h-3 w-3 text-destructive" />
+                        </div>
+                      ) : (
+                        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-muted/50 group-hover/item:bg-accent/20 transition-colors">
+                          <Plus className="h-3 w-3 text-muted-foreground group-hover/item:text-accent transition-colors" />
+                        </div>
+                      )}
+                      <span className={`${!isSelected && !isExhausted ? 'group-hover/item:text-accent' : ''} transition-colors`}>
+                        <span className="font-medium">{useCase.letter})</span>{' '}
+                        {useCase.description}
+                      </span>
+                    </div>
+                    <span className="flex-shrink-0 flex items-center gap-2">
                       {isExhausted ? (
-                        <span className="bg-destructive/20 text-destructive rounded px-2 py-0.5 text-xs">
+                        <span className="bg-destructive/20 text-destructive rounded-full px-2 py-0.5 text-xs font-medium">
                           {t('reports.exhausted')}
                         </span>
                       ) : ucHours ? (
                         <span
-                          className={`text-xs ${ucHours.remainingHours <= 10 ? 'text-yellow-500' : 'text-muted-foreground'}`}
+                          className={`text-xs whitespace-nowrap ${ucHours.remainingHours <= 10 ? 'text-yellow-500' : 'text-muted-foreground'}`}
                         >
                           {remainingText}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground text-xs">
+                        <span className="text-muted-foreground text-xs whitespace-nowrap">
                           ({useCase.plannedHours} {t('reports.hours')})
                         </span>
                       )}

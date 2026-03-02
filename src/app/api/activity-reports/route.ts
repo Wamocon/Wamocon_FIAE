@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, and, sql, inArray } from 'drizzle-orm';
-import { activityReports, profiles, activityReportUseCaseEntries } from '@/db/migrations/schemas/schema';
+import { eq, and, sql, inArray, ne } from 'drizzle-orm';
+import { activityReports, profiles, activityReportUseCaseEntries, trainingUseCases } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 
 // GET: List activity reports for the current user
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
         });
     } catch (error: any) {
         console.error('Error in activity-reports GET:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }
 
@@ -140,6 +140,60 @@ export async function POST(req: NextRequest) {
         const startDate = periodStart ? new Date(periodStart) : calcStart;
         const endDate = periodEnd ? new Date(periodEnd) : calcEnd;
 
+        // === Server-side hours validation ===
+        // Check that no entry exceeds remaining hours for its use case
+        const entryUseCaseIds = entries.map((e: any) => e.useCaseId);
+
+        // Get planned hours from master data
+        const masterUseCases = await db
+            .select({ id: trainingUseCases.id, plannedHours: trainingUseCases.plannedHours })
+            .from(trainingUseCases)
+            .where(inArray(trainingUseCases.id, entryUseCaseIds as any));
+        const plannedMap = new Map(masterUseCases.map((uc: any) => [uc.id, uc.plannedHours]));
+
+        // Get already-used hours from all non-rejected reports for this trainee
+        const existingReports = await db
+            .select({ id: activityReports.id })
+            .from(activityReports)
+            .where(and(
+                eq(activityReports.traineeId, userId as any),
+                ne(activityReports.status, 'REJECTED')
+            ));
+        const existingReportIds = existingReports.map(r => r.id);
+
+        let usedMap = new Map<string, number>();
+        if (existingReportIds.length > 0) {
+            const usedRows = await db
+                .select({
+                    useCaseId: activityReportUseCaseEntries.useCaseId,
+                    totalUsed: sql<number>`COALESCE(SUM(${activityReportUseCaseEntries.actualHours}), 0)`.as('total_used'),
+                })
+                .from(activityReportUseCaseEntries)
+                .where(inArray(activityReportUseCaseEntries.reportId, existingReportIds as any))
+                .groupBy(activityReportUseCaseEntries.useCaseId);
+
+            usedRows.forEach(row => usedMap.set(row.useCaseId, Number(row.totalUsed) || 0));
+        }
+
+        // Validate each entry does not exceed remaining hours
+        const violations: string[] = [];
+        for (const entry of entries) {
+            const totalHours = plannedMap.get(entry.useCaseId) ?? 0;
+            const usedHours = usedMap.get(entry.useCaseId) ?? 0;
+            const remaining = totalHours - usedHours;
+            if (entry.actualHours > remaining) {
+                violations.push(
+                    `Tätigkeit überschreitet verfügbare Stunden: ${entry.actualHours} Std. eingetragen, aber nur ${remaining.toFixed(1)} Std. von ${totalHours} Std. verfügbar.`
+                );
+            }
+        }
+        if (violations.length > 0) {
+            return NextResponse.json({
+                error: violations[0],
+                violations,
+            }, { status: 400 });
+        }
+
         // Create the report
         const [report] = await db
             .insert(activityReports)
@@ -162,10 +216,21 @@ export async function POST(req: NextRequest) {
                 entries.map((e: any) => ({
                     reportId: report.id,
                     useCaseId: e.useCaseId,
-                    plannedHours: e.plannedHours || 0,
+                    plannedHours: plannedMap.get(e.useCaseId) ?? e.plannedHours ?? 0,
                     actualHours: e.actualHours,
                     isOverbooked: e.isOverbooked || false,
                     notes: e.notes || null,
+                    // Grade columns - traineeGrade can be set by trainee, others null until trainer grades
+                    traineeGrade: e.traineeGrade ? (String(e.traineeGrade) as any) : null,
+                    trainerGrade: null,
+                    releaseGrade: null,
+                    gradeComment: null,
+                    releaseGradeComment: null,
+                    isGradeApproved: false,
+                    gradeApprovedAt: null,
+                    gradeApprovedBy: null,
+                    releaseGradeAt: null,
+                    releaseGradeBy: null,
                 }))
             );
         }
@@ -181,6 +246,12 @@ export async function POST(req: NextRequest) {
         });
     } catch (error: any) {
         console.error('Error in activity-reports POST:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // Return clean error message, never expose raw SQL
+        const message = error?.message?.includes('duplicate') || error?.message?.includes('already exists')
+            ? 'Ein Nachweis für diese Woche existiert bereits'
+            : error?.message?.includes('violates') || error?.message?.includes('Failed query')
+                ? 'Fehler beim Speichern der Einträge. Bitte versuchen Sie es erneut.'
+                : 'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

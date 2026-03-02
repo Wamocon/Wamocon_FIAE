@@ -260,6 +260,7 @@ export default function TrainerEvaluationsPage() {
                                                 <TrainerEvaluationReview
                                                     evaluation={item.evaluation}
                                                     trainee={item.trainee}
+                                                    trainerId={profile?.id}
                                                     onApprove={handleRefresh}
                                                     onReject={handleRefresh}
                                                     onSave={handleRefresh}
