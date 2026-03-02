@@ -23,7 +23,7 @@ export const pendingItems = [
     id: '1',
     type: 'report' as const,
     title: 'Tätigkeitsnachweis KW 8',
-    trainee: 'Max Mülle',
+    trainee: 'Max Müller',
     date: '2026-02-21',
     priority: 'high' as const,
   },
