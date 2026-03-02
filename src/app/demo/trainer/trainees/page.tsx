@@ -55,12 +55,12 @@ export default function DemoTrainerTrainees() {
         <div>
           <h1 className="text-foreground text-2xl font-bold">Auszubildende</h1>
           <p className="text-muted-foreground mt-1">
-            {demoTrainees.filter(t => t.status === 'active').length} aktiv &middot;{' '}
-            {demoTrainees.length} gesamt
+            {demoTrainees.filter(t => t.status === 'active').length} aktiv
+            &middot; {demoTrainees.length} gesamt
           </p>
         </div>
         <div className="relative w-full md:w-72">
-          <Search className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <Input
             placeholder="Azubi suchen..."
             value={search}
@@ -74,7 +74,9 @@ export default function DemoTrainerTrainees() {
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Card className="glass-effect border-border/40">
           <CardContent className="p-4 text-center">
-            <p className="text-foreground text-2xl font-bold">{demoTrainees.length}</p>
+            <p className="text-foreground text-2xl font-bold">
+              {demoTrainees.length}
+            </p>
             <p className="text-muted-foreground text-xs">Gesamt</p>
           </CardContent>
         </Card>
@@ -82,7 +84,8 @@ export default function DemoTrainerTrainees() {
           <CardContent className="p-4 text-center">
             <p className="text-foreground text-2xl font-bold">
               {Math.round(
-                demoTrainees.reduce((s, t) => s + t.progress, 0) / demoTrainees.length
+                demoTrainees.reduce((s, t) => s + t.progress, 0) /
+                  demoTrainees.length
               )}
               %
             </p>
@@ -93,7 +96,8 @@ export default function DemoTrainerTrainees() {
           <CardContent className="p-4 text-center">
             <p className="text-foreground text-2xl font-bold">
               {Math.round(
-                demoTrainees.reduce((s, t) => s + t.quizAvg, 0) / demoTrainees.length
+                demoTrainees.reduce((s, t) => s + t.quizAvg, 0) /
+                  demoTrainees.length
               )}
               %
             </p>
@@ -111,7 +115,7 @@ export default function DemoTrainerTrainees() {
       </div>
 
       {/* Trainee Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filteredTrainees.map(trainee => {
           const initials = trainee.full_name
             .split(' ')
@@ -122,14 +126,14 @@ export default function DemoTrainerTrainees() {
           return (
             <Card
               key={trainee.id}
-              className="glass-effect border-border/40 cursor-pointer transition-all duration-200 hover:ring-1 hover:ring-accent/30"
+              className="glass-effect border-border/40 hover:ring-accent/30 cursor-pointer transition-all duration-200 hover:ring-1"
               onClick={() => showDemoToast('Azubi-Profil öffnen')}
             >
               <CardContent className="p-6">
                 <div className="mb-4 flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-12 w-12">
-                      <AvatarFallback className="bg-gradient-to-br from-accent to-accent/80 text-sm font-bold text-white">
+                      <AvatarFallback className="from-accent to-accent/80 bg-gradient-to-br text-sm font-bold text-white">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
@@ -152,7 +156,9 @@ export default function DemoTrainerTrainees() {
                     <p className="text-foreground text-sm font-bold">
                       {trainee.progress}%
                     </p>
-                    <p className="text-muted-foreground text-[10px]">Fortschritt</p>
+                    <p className="text-muted-foreground text-[10px]">
+                      Fortschritt
+                    </p>
                   </div>
                   <div className="bg-background/50 rounded-lg p-2 text-center">
                     <HelpCircle className="mx-auto mb-1 h-4 w-4 text-purple-500" />
