@@ -1,7 +1,8 @@
-"use client";
+'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, CheckCheck } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
@@ -38,7 +39,10 @@ export default function NotificationsBell() {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/notifications?userId=${profile.id}&limit=30`, { cache: 'no-store' });
+        const res = await fetch(
+          `/api/notifications?userId=${profile.id}&limit=30`,
+          { cache: 'no-store' }
+        );
         if (res.ok) {
           const data = await res.json();
           if (mounted) setItems(data.notifications || []);
@@ -52,46 +56,63 @@ export default function NotificationsBell() {
     // Realtime subscription for this user's notifications
     const channel = supabase
       .channel(`public:notifications:user=${profile.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${profile.id}`,
-      }, (payload) => {
-        try {
-          if (!mounted) return;
-          if (payload.eventType === 'INSERT') {
-            const row = payload.new as any;
-            setItems(prev => [{
-              id: row.id,
-              userId: row.user_id,
-              actorId: row.actor_id ?? null,
-              type: row.type,
-              title: row.title,
-              message: row.message ?? null,
-              linkUrl: row.link_url ?? null,
-              context: row.context ?? null,
-              isRead: Boolean(row.is_read),
-              readAt: row.read_at ?? null,
-              createdAt: row.created_at,
-            }, ...prev].slice(0, 50));
-          } else if (payload.eventType === 'UPDATE') {
-            const row = payload.new as any;
-            setItems(prev => prev.map(i => i.id === row.id ? {
-              ...i,
-              isRead: Boolean(row.is_read),
-              readAt: row.read_at ?? null,
-            } : i));
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        payload => {
+          try {
+            if (!mounted) return;
+            if (payload.eventType === 'INSERT') {
+              const row = payload.new as any;
+              setItems(prev =>
+                [
+                  {
+                    id: row.id,
+                    userId: row.user_id,
+                    actorId: row.actor_id ?? null,
+                    type: row.type,
+                    title: row.title,
+                    message: row.message ?? null,
+                    linkUrl: row.link_url ?? null,
+                    context: row.context ?? null,
+                    isRead: Boolean(row.is_read),
+                    readAt: row.read_at ?? null,
+                    createdAt: row.created_at,
+                  },
+                  ...prev,
+                ].slice(0, 50)
+              );
+            } else if (payload.eventType === 'UPDATE') {
+              const row = payload.new as any;
+              setItems(prev =>
+                prev.map(i =>
+                  i.id === row.id
+                    ? {
+                        ...i,
+                        isRead: Boolean(row.is_read),
+                        readAt: row.read_at ?? null,
+                      }
+                    : i
+                )
+              );
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
         }
-      })
+      )
       .subscribe();
 
     return () => {
       mounted = false;
-      try { channel.unsubscribe(); } catch { }
+      try {
+        channel.unsubscribe();
+      } catch {}
     };
   }, [profile?.id]);
 
@@ -107,9 +128,19 @@ export default function NotificationsBell() {
   const markAsRead = async (id: string) => {
     const prevItems = items;
     // Optimistic update
-    setItems(prev => prev.map(i => i.id === id ? { ...i, isRead: true, readAt: new Date().toISOString() } : i));
+    setItems(prev =>
+      prev.map(i =>
+        i.id === id
+          ? { ...i, isRead: true, readAt: new Date().toISOString() }
+          : i
+      )
+    );
     try {
-      const res = await fetch(`/api/notifications/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isRead: true }) });
+      const res = await fetch(`/api/notifications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isRead: true }),
+      });
       if (!res.ok) throw new Error('Failed');
     } catch {
       setItems(prevItems);
@@ -121,7 +152,13 @@ export default function NotificationsBell() {
     const unreadItems = items.filter(i => !i.isRead);
     if (unreadItems.length === 0) return;
     // Optimistic update
-    setItems(prev => prev.map(i => ({ ...i, isRead: true, readAt: i.readAt || new Date().toISOString() })));
+    setItems(prev =>
+      prev.map(i => ({
+        ...i,
+        isRead: true,
+        readAt: i.readAt || new Date().toISOString(),
+      }))
+    );
     try {
       const res = await fetch(`/api/notifications/mark-all-read`, {
         method: 'POST',
@@ -132,12 +169,15 @@ export default function NotificationsBell() {
     } catch {
       // Revert on failure by re-fetching
       try {
-        const res = await fetch(`/api/notifications?userId=${profile.id}&limit=30`, { cache: 'no-store' });
+        const res = await fetch(
+          `/api/notifications?userId=${profile.id}&limit=30`,
+          { cache: 'no-store' }
+        );
         if (res.ok) {
           const data = await res.json();
           setItems(data.notifications || []);
         }
-      } catch { }
+      } catch {}
     }
   };
 
@@ -155,13 +195,13 @@ export default function NotificationsBell() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        className="relative rounded-lg p-2 hover:bg-muted text-muted hover:text-foreground"
+        className="hover:bg-muted text-muted hover:text-foreground relative rounded-lg p-2"
         onClick={() => setOpen(o => !o)}
         aria-label={t('notifications.title')}
       >
         <Bell className="h-5 w-5" />
         {unread > 0 && (
-          <span className="bg-accent text-accent-foreground absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-xs">
+          <span className="bg-accent text-accent-foreground absolute -top-1 -right-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-xs">
             {unread}
           </span>
         )}
@@ -169,8 +209,10 @@ export default function NotificationsBell() {
 
       {open && (
         <div className="bg-card border-border absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border shadow-xl">
-          <div className="border-border bg-muted/40 border-b px-4 py-2 flex items-center justify-between">
-            <span className="text-sm font-semibold">{t('notifications.title')}</span>
+          <div className="border-border bg-muted/40 flex items-center justify-between border-b px-4 py-2">
+            <span className="text-sm font-semibold">
+              {t('notifications.title')}
+            </span>
             {unread > 0 && (
               <button
                 onClick={markAllAsRead}
@@ -184,30 +226,42 @@ export default function NotificationsBell() {
           </div>
           <div className="max-h-96 overflow-y-auto">
             {loading && (
-              <div className="text-muted-foreground p-4 text-center text-sm">{t('notifications.loading')}</div>
+              <div className="flex items-center justify-center p-4">
+                <LoadingSpinner size="sm" />
+              </div>
             )}
             {!loading && items.length === 0 && (
-              <div className="text-muted-foreground p-4 text-center text-sm">{t('notifications.none')}</div>
+              <div className="text-muted-foreground p-4 text-center text-sm">
+                {t('notifications.none')}
+              </div>
             )}
             {(() => {
               const unreadItems = items.filter(i => !i.isRead);
               const readItems = items.filter(i => i.isRead);
               const visible = [...unreadItems, ...readItems.slice(0, 5)];
 
-              return visible.map((n) => (
+              return visible.map(n => (
                 <button
                   key={n.id}
                   onClick={() => onItemClick(n)}
-                  className={`w-full border-b border-border/30 px-4 py-3 text-left text-sm transition-colors hover:bg-muted ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
+                  className={`border-border/30 hover:bg-muted w-full border-b px-4 py-3 text-left text-sm transition-colors ${n.isRead ? 'opacity-60' : 'bg-accent/10 font-medium'}`}
                 >
                   <div className="flex items-start gap-2">
                     {!n.isRead && (
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+                      <span className="bg-accent mt-1.5 h-2 w-2 shrink-0 rounded-full" />
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="text-foreground line-clamp-1">{n.title}</div>
-                      {n.message && <div className="text-muted-foreground line-clamp-2 text-xs font-normal">{n.message}</div>}
-                      <div className="text-muted-foreground mt-1 text-[10px] font-normal">{new Date(n.createdAt).toLocaleString()}</div>
+                      <div className="text-foreground line-clamp-1">
+                        {n.title}
+                      </div>
+                      {n.message && (
+                        <div className="text-muted-foreground line-clamp-2 text-xs font-normal">
+                          {n.message}
+                        </div>
+                      )}
+                      <div className="text-muted-foreground mt-1 text-[10px] font-normal">
+                        {new Date(n.createdAt).toLocaleString()}
+                      </div>
                     </div>
                   </div>
                 </button>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   ArrowLeft,
   BookOpen,
@@ -78,8 +79,20 @@ export default function TrainerUseCaseDetailPage() {
         setEditDescription(data.useCase.descriptionText || '');
         setEditDurationValue(data.useCase.durationValue?.toString() || '');
         setEditDurationUnit(data.useCase.durationUnit || 'DAYS');
-        setEditYear(Array.isArray(data.useCase.year) ? data.useCase.year.map(String) : data.useCase.year ? [String(data.useCase.year)] : []);
-        setEditTrainingStage(Array.isArray(data.useCase.trainingStage) ? data.useCase.trainingStage.map(String) : data.useCase.trainingStage ? [String(data.useCase.trainingStage)] : []);
+        setEditYear(
+          Array.isArray(data.useCase.year)
+            ? data.useCase.year.map(String)
+            : data.useCase.year
+              ? [String(data.useCase.year)]
+              : []
+        );
+        setEditTrainingStage(
+          Array.isArray(data.useCase.trainingStage)
+            ? data.useCase.trainingStage.map(String)
+            : data.useCase.trainingStage
+              ? [String(data.useCase.trainingStage)]
+              : []
+        );
         setEditIsActive(data.useCase.isActive ?? true);
 
         // Fetch documents
@@ -109,19 +122,27 @@ export default function TrainerUseCaseDetailPage() {
     if (!profile?.id || !useCase) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/trainer/use-cases/${useCaseId}?trainerId=${profile.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editTitle,
-          descriptionText: editDescription,
-          durationValue: editDurationValue ? parseInt(editDurationValue) : null,
-          durationUnit: editDurationUnit || null,
-          year: editYear.length > 0 ? editYear.map(Number) : null,
-          trainingStage: editTrainingStage.length > 0 ? editTrainingStage.map(Number) : null,
-          isActive: editIsActive,
-        }),
-      });
+      const res = await fetch(
+        `/api/trainer/use-cases/${useCaseId}?trainerId=${profile.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: editTitle,
+            descriptionText: editDescription,
+            durationValue: editDurationValue
+              ? parseInt(editDurationValue)
+              : null,
+            durationUnit: editDurationUnit || null,
+            year: editYear.length > 0 ? editYear.map(Number) : null,
+            trainingStage:
+              editTrainingStage.length > 0
+                ? editTrainingStage.map(Number)
+                : null,
+            isActive: editIsActive,
+          }),
+        }
+      );
       if (res.ok) {
         const data = await res.json();
         setUseCase(data.useCase);
@@ -136,19 +157,19 @@ export default function TrainerUseCaseDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="border-accent/30 border-t-accent h-8 w-8 animate-spin rounded-full border-4"></div>
+      <div className="flex min-h-[400px] items-center justify-center">
+        <LoadingSpinner size="md" />
       </div>
     );
   }
 
   if (error || !useCase) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+      <div className="flex min-h-[400px] flex-col items-center justify-center gap-4">
         <p className="text-muted">{error || 'Nicht gefunden'}</p>
         <button
           onClick={() => router.back()}
-          className="text-accent hover:underline flex items-center gap-2"
+          className="text-accent flex items-center gap-2 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />
           {t('common.back')}
@@ -163,7 +184,7 @@ export default function TrainerUseCaseDetailPage() {
       <div className="flex items-center gap-4">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-muted hover:text-foreground transition-colors"
+          className="text-muted hover:text-foreground flex items-center gap-2 transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
           <span>{t('common.back')}</span>
@@ -172,51 +193,69 @@ export default function TrainerUseCaseDetailPage() {
 
       {/* Use Case Header Card */}
       <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-primary shadow-lg shadow-accent/25">
-              <BookOpen className="h-7 w-7 text-primary-foreground" />
+            <div className="from-accent to-primary shadow-accent/25 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg">
+              <BookOpen className="text-primary-foreground h-7 w-7" />
             </div>
             <div className="flex-1">
               {isEditing ? (
                 <input
                   type="text"
                   value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full text-2xl font-bold bg-background/50 border border-accent/30 rounded-xl px-3 py-2 text-foreground focus:ring-2 focus:ring-accent focus:outline-none"
+                  onChange={e => setEditTitle(e.target.value)}
+                  className="bg-background/50 border-accent/30 text-foreground focus:ring-accent w-full rounded-xl border px-3 py-2 text-2xl font-bold focus:ring-2 focus:outline-none"
                 />
               ) : (
-                <h1 className="text-foreground text-2xl font-bold">{useCase.title}</h1>
+                <h1 className="text-foreground text-2xl font-bold">
+                  {useCase.title}
+                </h1>
               )}
 
               {/* Status Badge */}
-              <div className="flex items-center gap-2 mt-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${useCase.isActive
-                    ? 'bg-green-500/20 text-green-500'
-                    : 'bg-muted/20 text-muted'
-                  }`}>
-                  {useCase.isActive ? t('useCase.active') || 'Aktiv' : t('useCase.inactive') || 'Inaktiv'}
+              <div className="mt-2 flex items-center gap-2">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    useCase.isActive
+                      ? 'bg-green-500/20 text-green-500'
+                      : 'bg-muted/20 text-muted'
+                  }`}
+                >
+                  {useCase.isActive
+                    ? t('useCase.active') || 'Aktiv'
+                    : t('useCase.inactive') || 'Inaktiv'}
                 </span>
-                {Array.isArray(useCase.year) && useCase.year.length > 0 && useCase.year.map(y => (
-                  <span key={y} className="bg-accent/20 px-3 py-1 rounded-full text-xs font-medium text-accent">
-                    {t('content.year')} {y}
-                  </span>
-                ))}
+                {Array.isArray(useCase.year) &&
+                  useCase.year.length > 0 &&
+                  useCase.year.map(y => (
+                    <span
+                      key={y}
+                      className="bg-accent/20 text-accent rounded-full px-3 py-1 text-xs font-medium"
+                    >
+                      {t('content.year')} {y}
+                    </span>
+                  ))}
                 {!Array.isArray(useCase.year) && useCase.year && (
-                  <span className="bg-accent/20 px-3 py-1 rounded-full text-xs font-medium text-accent">
+                  <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-xs font-medium">
                     {t('content.year')} {useCase.year}
                   </span>
                 )}
-                {Array.isArray(useCase.trainingStage) && useCase.trainingStage.length > 0 && useCase.trainingStage.map(s => (
-                  <span key={s} className="bg-primary/20 px-3 py-1 rounded-full text-xs font-medium text-primary">
-                    {t('trainer.content.stage' + s) || `Abschnitt ${s}`}
-                  </span>
-                ))}
-                {!Array.isArray(useCase.trainingStage) && useCase.trainingStage && (
-                  <span className="bg-primary/20 px-3 py-1 rounded-full text-xs font-medium text-primary">
-                    {useCase.trainingStage}
-                  </span>
-                )}
+                {Array.isArray(useCase.trainingStage) &&
+                  useCase.trainingStage.length > 0 &&
+                  useCase.trainingStage.map(s => (
+                    <span
+                      key={s}
+                      className="bg-primary/20 text-primary rounded-full px-3 py-1 text-xs font-medium"
+                    >
+                      {t('trainer.content.stage' + s) || `Abschnitt ${s}`}
+                    </span>
+                  ))}
+                {!Array.isArray(useCase.trainingStage) &&
+                  useCase.trainingStage && (
+                    <span className="bg-primary/20 text-primary rounded-full px-3 py-1 text-xs font-medium">
+                      {useCase.trainingStage}
+                    </span>
+                  )}
               </div>
             </div>
           </div>
@@ -227,14 +266,14 @@ export default function TrainerUseCaseDetailPage() {
               <>
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 rounded-xl text-muted hover:text-foreground transition-colors"
+                  className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-primary text-primary-foreground font-medium disabled:opacity-50"
+                  className="from-accent to-primary text-primary-foreground flex items-center gap-2 rounded-xl bg-gradient-to-r px-4 py-2 font-medium disabled:opacity-50"
                 >
                   <Save className="h-4 w-4" />
                   {saving ? '...' : t('common.save')}
@@ -243,7 +282,7 @@ export default function TrainerUseCaseDetailPage() {
             ) : (
               <button
                 onClick={() => setIsEditing(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-2 rounded-xl px-4 py-2 transition-colors"
               >
                 <Edit2 className="h-4 w-4" />
                 {t('common.edit')}
@@ -254,31 +293,40 @@ export default function TrainerUseCaseDetailPage() {
 
         {/* Description */}
         <div className="mt-6">
-          <label className="text-sm font-medium text-muted block mb-2">
+          <label className="text-muted mb-2 block text-sm font-medium">
             {t('useCase.description') || 'Beschreibung'}
           </label>
           {isEditing ? (
             <textarea
               value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
+              onChange={e => setEditDescription(e.target.value)}
               rows={4}
-              className="w-full px-4 py-3 rounded-xl bg-background/50 border border-accent/30 text-foreground focus:ring-2 focus:ring-accent focus:outline-none resize-none"
-              placeholder={t('useCase.descriptionPlaceholder') || 'Beschreibung eingeben...'}
+              className="bg-background/50 border-accent/30 text-foreground focus:ring-accent w-full resize-none rounded-xl border px-4 py-3 focus:ring-2 focus:outline-none"
+              placeholder={
+                t('useCase.descriptionPlaceholder') ||
+                'Beschreibung eingeben...'
+              }
             />
           ) : (
             <p className="text-foreground bg-muted/10 rounded-xl p-4">
-              {useCase.descriptionText || <span className="text-muted italic">{t('useCase.noDescription') || 'Keine Beschreibung'}</span>}
+              {useCase.descriptionText || (
+                <span className="text-muted italic">
+                  {t('useCase.noDescription') || 'Keine Beschreibung'}
+                </span>
+              )}
             </p>
           )}
         </div>
 
         {/* Metadata Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* Duration */}
           <div className="bg-muted/10 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-muted mb-2">
+            <div className="text-muted mb-2 flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              <span className="text-sm font-medium">{t('useCase.duration') || 'Dauer'}</span>
+              <span className="text-sm font-medium">
+                {t('useCase.duration') || 'Dauer'}
+              </span>
             </div>
             {isEditing ? (
               <div className="flex gap-2">
@@ -286,23 +334,25 @@ export default function TrainerUseCaseDetailPage() {
                   type="number"
                   min="1"
                   value={editDurationValue}
-                  onChange={(e) => setEditDurationValue(e.target.value)}
-                  className="w-20 px-3 py-2 rounded-lg bg-background/50 border border-accent/30 text-foreground text-sm"
+                  onChange={e => setEditDurationValue(e.target.value)}
+                  className="bg-background/50 border-accent/30 text-foreground w-20 rounded-lg border px-3 py-2 text-sm"
                   placeholder="0"
                 />
                 <select
                   value={editDurationUnit}
-                  onChange={(e) => setEditDurationUnit(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-background/50 border border-accent/30 text-foreground text-sm"
+                  onChange={e => setEditDurationUnit(e.target.value)}
+                  className="bg-background/50 border-accent/30 text-foreground flex-1 rounded-lg border px-3 py-2 text-sm"
                 >
                   <option value="DAYS">{t('useCase.days') || 'Tage'}</option>
-                  <option value="WEEKS">{t('useCase.weeks') || 'Wochen'}</option>
+                  <option value="WEEKS">
+                    {t('useCase.weeks') || 'Wochen'}
+                  </option>
                 </select>
               </div>
             ) : (
               <p className="text-foreground font-medium">
                 {useCase.durationValue
-                  ? `${useCase.durationValue} ${useCase.durationUnit === 'WEEKS' ? (t('useCase.weeks') || 'Wochen') : (t('useCase.days') || 'Tage')}`
+                  ? `${useCase.durationValue} ${useCase.durationUnit === 'WEEKS' ? t('useCase.weeks') || 'Wochen' : t('useCase.days') || 'Tage'}`
                   : '-'}
               </p>
             )}
@@ -310,31 +360,41 @@ export default function TrainerUseCaseDetailPage() {
 
           {/* Year */}
           <div className="bg-muted/10 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-muted mb-2">
+            <div className="text-muted mb-2 flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              <span className="text-sm font-medium">{t('content.year') || 'Lehrjahr'}</span>
+              <span className="text-sm font-medium">
+                {t('content.year') || 'Lehrjahr'}
+              </span>
             </div>
             {isEditing ? (
-              <div className="flex gap-3 flex-wrap">
+              <div className="flex flex-wrap gap-3">
                 {(['1', '2', '3'] as const).map(yr => (
-                  <label key={yr} className="flex items-center gap-2 cursor-pointer">
+                  <label
+                    key={yr}
+                    className="flex cursor-pointer items-center gap-2"
+                  >
                     <input
                       type="checkbox"
                       checked={editYear.includes(yr)}
                       onChange={e => {
-                        if (e.target.checked) setEditYear(prev => [...prev, yr]);
+                        if (e.target.checked)
+                          setEditYear(prev => [...prev, yr]);
                         else setEditYear(prev => prev.filter(x => x !== yr));
                       }}
-                      className="rounded border-accent/30 text-accent"
+                      className="border-accent/30 text-accent rounded"
                     />
-                    <span className="text-sm">{t('content.year') || 'Jahr'} {yr}</span>
+                    <span className="text-sm">
+                      {t('content.year') || 'Jahr'} {yr}
+                    </span>
                   </label>
                 ))}
               </div>
             ) : (
               <p className="text-foreground font-medium">
                 {Array.isArray(useCase.year) && useCase.year.length > 0
-                  ? useCase.year.map(y => `${t('content.year') || 'Jahr'} ${y}`).join(', ')
+                  ? useCase.year
+                      .map(y => `${t('content.year') || 'Jahr'} ${y}`)
+                      .join(', ')
                   : useCase.year
                     ? `${t('content.year') || 'Jahr'} ${useCase.year}`
                     : '-'}
@@ -344,25 +404,37 @@ export default function TrainerUseCaseDetailPage() {
 
           {/* Active Status */}
           <div className="bg-muted/10 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-muted mb-2">
-              {editIsActive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              <span className="text-sm font-medium">{t('useCase.status') || 'Status'}</span>
+            <div className="text-muted mb-2 flex items-center gap-2">
+              {editIsActive ? (
+                <Eye className="h-4 w-4" />
+              ) : (
+                <EyeOff className="h-4 w-4" />
+              )}
+              <span className="text-sm font-medium">
+                {t('useCase.status') || 'Status'}
+              </span>
             </div>
             {isEditing ? (
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex cursor-pointer items-center gap-2">
                 <input
                   type="checkbox"
                   checked={editIsActive}
-                  onChange={(e) => setEditIsActive(e.target.checked)}
-                  className="w-5 h-5 rounded border-accent/30 text-accent focus:ring-accent"
+                  onChange={e => setEditIsActive(e.target.checked)}
+                  className="border-accent/30 text-accent focus:ring-accent h-5 w-5 rounded"
                 />
                 <span className="text-foreground text-sm">
-                  {editIsActive ? (t('useCase.active') || 'Aktiv') : (t('useCase.inactive') || 'Inaktiv')}
+                  {editIsActive
+                    ? t('useCase.active') || 'Aktiv'
+                    : t('useCase.inactive') || 'Inaktiv'}
                 </span>
               </label>
             ) : (
-              <p className={`font-medium ${useCase.isActive ? 'text-green-500' : 'text-muted'}`}>
-                {useCase.isActive ? (t('useCase.active') || 'Aktiv') : (t('useCase.inactive') || 'Inaktiv')}
+              <p
+                className={`font-medium ${useCase.isActive ? 'text-green-500' : 'text-muted'}`}
+              >
+                {useCase.isActive
+                  ? t('useCase.active') || 'Aktiv'
+                  : t('useCase.inactive') || 'Inaktiv'}
               </p>
             )}
           </div>
@@ -371,15 +443,17 @@ export default function TrainerUseCaseDetailPage() {
         {/* Lernfelder */}
         {useCase.lernfelder && useCase.lernfelder.length > 0 && (
           <div className="mt-6">
-            <div className="flex items-center gap-2 text-muted mb-3">
+            <div className="text-muted mb-3 flex items-center gap-2">
               <Layers className="h-4 w-4" />
-              <span className="text-sm font-medium">{t('lernfelder.title') || 'Lernfelder'}</span>
+              <span className="text-sm font-medium">
+                {t('lernfelder.title') || 'Lernfelder'}
+              </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {useCase.lernfelder.map((lf) => (
+              {useCase.lernfelder.map(lf => (
                 <span
                   key={lf}
-                  className="px-3 py-1.5 rounded-full bg-accent/20 text-accent text-sm font-medium"
+                  className="bg-accent/20 text-accent rounded-full px-3 py-1.5 text-sm font-medium"
                 >
                   {lf}
                 </span>
@@ -392,26 +466,26 @@ export default function TrainerUseCaseDetailPage() {
       {/* Documents Section */}
       {documents.length > 0 && (
         <div className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg">
-          <div className="flex items-center gap-3 mb-4">
-            <FileText className="h-5 w-5 text-accent" />
+          <div className="mb-4 flex items-center gap-3">
+            <FileText className="text-accent h-5 w-5" />
             <h2 className="text-foreground text-xl font-semibold">
               {t('useCase.documents') || 'Dokumente'} ({documents.length})
             </h2>
           </div>
           <div className="space-y-2">
-            {documents.map((doc) => (
+            {documents.map(doc => (
               <a
                 key={doc.id}
                 href={doc.storageUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors border border-accent/10"
+                className="bg-muted/20 hover:bg-muted/30 border-accent/10 flex items-center justify-between rounded-xl border p-3 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-accent" />
+                  <FileText className="text-accent h-5 w-5" />
                   <span className="text-foreground">{doc.title}</span>
                 </div>
-                <span className="text-xs text-muted bg-accent/10 px-2 py-1 rounded-full">
+                <span className="text-muted bg-accent/10 rounded-full px-2 py-1 text-xs">
                   {doc.documentType}
                 </span>
               </a>
