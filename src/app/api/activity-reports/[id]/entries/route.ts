@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
-import { activityReportUseCaseEntries, gradeEditHistory } from '@/db/migrations/schemas/schema';
+import { activityReportUseCaseEntries, activityReports, gradeEditHistory, profiles } from '@/db/migrations/schemas/schema';
 
 // GET: Get report entries for a specific report
 export async function GET(
@@ -49,7 +49,7 @@ export async function GET(
     }
 }
 
-// PATCH: Update grades for report entries (supports trainer grade, release grade, and grade editing)
+// PATCH: Update grades for report entries
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -57,11 +57,32 @@ export async function PATCH(
     try {
         const { id } = await params;
         const body = await request.json();
-        const { entryGrades, trainerId, isReleaseGrade, editReason } = body;
+        const { entryGrades, trainerId, editReason } = body;
+
+        if (!trainerId) {
+            return NextResponse.json({ error: 'trainerId is required' }, { status: 400 });
+        }
+
+        // Verify user is a trainer
+        const [profile] = await db
+            .select({ role: profiles.role })
+            .from(profiles)
+            .where(eq(profiles.id, trainerId as any));
+
+        if (profile?.role !== 'TRAINER') {
+            return NextResponse.json({ error: 'Nur Ausbilder dürfen Noten vergeben' }, { status: 403 });
+        }
 
         // entryGrades: Array of { entryId, grade, comment }
         if (!entryGrades || !Array.isArray(entryGrades)) {
             return NextResponse.json({ error: 'entryGrades array required' }, { status: 400 });
+        }
+
+        // H-2 fix: Validate all trainer grades are in valid range
+        const validGrades = ['1', '2', '3', '4', '5', '6'];
+        const invalidGrades = entryGrades.filter((g: any) => g.grade && !validGrades.includes(String(g.grade)));
+        if (invalidGrades.length > 0) {
+            return NextResponse.json({ error: 'Noten müssen zwischen 1 und 6 liegen.' }, { status: 400 });
         }
 
         const updatedEntries = [];
@@ -72,7 +93,7 @@ export async function PATCH(
             
             if (!entryId || !grade) continue;
 
-            // Fetch existing entry for audit trail
+            // H-1 fix: Verify entry belongs to this report (prevent IDOR)
             const existingEntries = await db
                 .select()
                 .from(activityReportUseCaseEntries)
@@ -80,70 +101,44 @@ export async function PATCH(
 
             const existing = existingEntries[0];
 
-            if (isReleaseGrade) {
-                // Setting release grade (final grade after discussion)
-                // Log edit history if there was a previous release grade
-                if (existing?.releaseGrade && existing.releaseGrade !== String(grade)) {
-                    await db.insert(gradeEditHistory).values({
-                        entityType: 'USE_CASE_ENTRY',
-                        entityId: entryId,
-                        fieldName: 'releaseGrade',
-                        oldValue: existing.releaseGrade,
-                        newValue: String(grade),
-                        changedBy: trainerId,
-                        changeReason: editReason || null,
-                    });
-                }
-
-                const updated = await db
-                    .update(activityReportUseCaseEntries)
-                    .set({
-                        releaseGrade: String(grade) as any,
-                        releaseGradeComment: comment || null,
-                        releaseGradeAt: now,
-                        releaseGradeBy: trainerId || null,
-                        updatedAt: now,
-                    })
-                    .where(eq(activityReportUseCaseEntries.id, entryId as any))
-                    .returning();
-
-                if (updated.length > 0) updatedEntries.push(updated[0]);
-            } else {
-                // Setting/editing trainer grade
-                // Log edit history if grade is being changed (not first-time set)
-                if (existing?.trainerGrade && existing.trainerGrade !== String(grade)) {
-                    await db.insert(gradeEditHistory).values({
-                        entityType: 'USE_CASE_ENTRY',
-                        entityId: entryId,
-                        fieldName: 'trainerGrade',
-                        oldValue: existing.trainerGrade,
-                        newValue: String(grade),
-                        changedBy: trainerId,
-                        changeReason: editReason || null,
-                    });
-                }
-
-                const updated = await db
-                    .update(activityReportUseCaseEntries)
-                    .set({
-                        trainerGrade: String(grade) as any,
-                        gradeComment: comment || null,
-                        isGradeApproved: true,
-                        gradeApprovedAt: now,
-                        gradeApprovedBy: trainerId || null,
-                        updatedAt: now,
-                    })
-                    .where(eq(activityReportUseCaseEntries.id, entryId as any))
-                    .returning();
-
-                if (updated.length > 0) updatedEntries.push(updated[0]);
+            // H-1 fix: Verify entry belongs to the report in the URL
+            if (!existing || String(existing.reportId) !== id) {
+                return NextResponse.json({ error: 'Eintrag gehört nicht zu diesem Nachweis' }, { status: 403 });
             }
+
+            // Log edit history if grade is being changed (not first-time set)
+            if (existing?.trainerGrade && existing.trainerGrade !== String(grade)) {
+                await db.insert(gradeEditHistory).values({
+                    entityType: 'USE_CASE_ENTRY',
+                    entityId: entryId,
+                    fieldName: 'trainerGrade',
+                    oldValue: existing.trainerGrade,
+                    newValue: String(grade),
+                    changedBy: trainerId,
+                    changeReason: editReason || null,
+                });
+            }
+
+            const updated = await db
+                .update(activityReportUseCaseEntries)
+                .set({
+                    trainerGrade: String(grade) as any,
+                    gradeComment: comment || null,
+                    isGradeApproved: true,
+                    gradeApprovedAt: now,
+                    gradeApprovedBy: trainerId || null,
+                    updatedAt: now,
+                })
+                .where(eq(activityReportUseCaseEntries.id, entryId as any))
+                .returning();
+
+            if (updated.length > 0) updatedEntries.push(updated[0]);
         }
 
         return NextResponse.json({ 
             success: true, 
             updatedCount: updatedEntries.length,
-            entries: updatedEntries 
+            entries: updatedEntries,
         });
     } catch (error: any) {
         console.error('Error in report entries PATCH:', error);

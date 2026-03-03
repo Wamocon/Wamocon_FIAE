@@ -72,13 +72,11 @@ export async function GET(
         }
 
         // Fetch all graded use case entries for the trainee within the date range
-        // Now includes traineeGrade, trainerGrade, and releaseGrade for 3-column grading
         const gradedEntries = await db
             .select({
                 entryId: activityReportUseCaseEntries.id,
                 traineeGrade: activityReportUseCaseEntries.traineeGrade,
                 trainerGrade: activityReportUseCaseEntries.trainerGrade,
-                releaseGrade: activityReportUseCaseEntries.releaseGrade,
                 actualHours: activityReportUseCaseEntries.actualHours,
                 isGradeApproved: activityReportUseCaseEntries.isGradeApproved,
                 useCaseId: trainingUseCases.id,
@@ -116,8 +114,7 @@ export async function GET(
                 description: string;
                 traineeGrade: string | null;
                 trainerGrade: string | null;
-                releaseGrade: string | null;
-                effectiveGrade: string | null; // releaseGrade ?? trainerGrade (for calculation)
+                effectiveGrade: string | null; // trainerGrade is the final grade
                 hours: number;
                 isApproved: boolean;
             }>;
@@ -143,8 +140,8 @@ export async function GET(
             }
 
             const comp = componentMap.get(key)!;
-            // Effective grade: prefer releaseGrade, fall back to trainerGrade
-            const effectiveGrade = entry.releaseGrade || entry.trainerGrade;
+            // trainerGrade is the final grade (migration 0033 merged release_grade into trainer_grade)
+            const effectiveGrade = entry.trainerGrade;
 
             comp.useCases.push({
                 useCaseId: entry.useCaseId,
@@ -152,7 +149,6 @@ export async function GET(
                 description: entry.useCaseDescription,
                 traineeGrade: entry.traineeGrade,
                 trainerGrade: entry.trainerGrade,
-                releaseGrade: entry.releaseGrade,
                 effectiveGrade,
                 hours: entry.actualHours,
                 isApproved: entry.isGradeApproved ?? false,
@@ -204,7 +200,6 @@ export async function GET(
         
         try {
             // Get soft skills from weeklyEvaluations linked to this trainee
-            // Now includes releaseRating for 3-column grading
             const directRatings = await db
                 .select({
                     criterionId: mesSoftskillCriteria.id,
@@ -213,7 +208,6 @@ export async function GET(
                     competencyArea: mesSoftskillCriteria.competencyArea,
                     kLevel: mesSoftskillCriteria.kLevel,
                     trainerRating: weeklySoftskillRatings.trainerRating,
-                    releaseRating: weeklySoftskillRatings.releaseRating,
                     selfRating: weeklySoftskillRatings.selfRating,
                     weekNumber: weeklyEvaluations.weekNumber,
                     year: weeklyEvaluations.year,
@@ -239,7 +233,6 @@ export async function GET(
                     competencyArea: mesSoftskillCriteria.competencyArea,
                     kLevel: mesSoftskillCriteria.kLevel,
                     trainerRating: weeklySoftskillRatings.trainerRating,
-                    releaseRating: weeklySoftskillRatings.releaseRating,
                 })
                 .from(weeklySoftskillRatings)
                 .innerJoin(weeklyEvaluations, eq(weeklySoftskillRatings.weeklyEvaluationId, weeklyEvaluations.id))
@@ -302,8 +295,8 @@ export async function GET(
         }>();
 
         for (const rating of softSkillRatings) {
-            // Use effective rating: prefer releaseRating, fall back to trainerRating
-            const effectiveRatingStr = (rating as any).releaseRating || rating.trainerRating;
+            // trainerRating is the final rating (migration 0033 merged release_rating into trainer_rating)
+            const effectiveRatingStr = rating.trainerRating;
             const numRating = ratingToNumber(effectiveRatingStr);
             if (numRating !== null && rating.competencyArea) {
                 softSkillsByArea[rating.competencyArea]?.ratings.push(numRating);
@@ -404,8 +397,7 @@ export async function GET(
             },
         });
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error in arbeitszeugnis aggregate API:', error);
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler beim Aggregieren der Leistungsdaten' }, { status: 500 });
     }
 }

@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     } catch (error) {
         console.error('Error fetching grade edit history:', error);
         return NextResponse.json(
-            { error: 'Failed to fetch edit history' },
+            { error: 'Interner Serverfehler' },
             { status: 500 }
         );
     }

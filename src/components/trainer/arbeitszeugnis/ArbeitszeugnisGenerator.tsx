@@ -293,6 +293,11 @@ export function ArbeitszeugnisGenerator() {
       setError(t('arbeitszeugnis.invalidPeriod'));
       return;
     }
+    if (mode === 'CUSTOM' && customStart && customEnd && new Date(customStart) >= new Date(customEnd)) {
+      setError(t('arbeitszeugnis.startBeforeEnd'));
+      return;
+    }
+    setError(null);
     setStep('review');
   };
 

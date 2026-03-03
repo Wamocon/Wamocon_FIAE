@@ -45,6 +45,7 @@ interface ActivityReport {
   traineeSignedAt: string | null;
   trainerSignedAt: string | null;
   reviewerId: string | null;
+  reviewerName: string | null;
   createdAt: string;
   trainee?: TraineeProfile;
   hasOverbooking?: boolean;
@@ -60,12 +61,7 @@ interface ReportUseCaseEntry {
   notes: string | null;
   traineeGrade?: string | number | null;
   trainerGrade?: string | number | null;
-  releaseGrade?: string | number | null;
   gradeComment?: string | null;
-  releaseGradeComment?: string | null;
-  isGradeApproved?: boolean;
-  gradeApprovedAt?: string | null;
-  releaseGradeAt?: string | null;
 }
 
 interface SoftskillCriterion {
@@ -303,14 +299,6 @@ export default function TrainerActivityReportsPage() {
         selectedReport.weekNumber
       );
 
-      // Prepare soft skills
-      const softSkills =
-        evalData?.softskillRatings?.map((r: any) => ({
-          name: r.criterion.name,
-          selfRating: r.rating.selfRating,
-          trainerRating: r.rating.trainerRating,
-        })) || [];
-
       // Prepare report data for PDF
       const reportData = {
         id: selectedReport.id,
@@ -331,19 +319,15 @@ export default function TrainerActivityReportsPage() {
         reviewerId: selectedReport.reviewerId || null,
         reviewerName: profile?.full_name || t('trainer.reports.trainer'),
         entries: reportEntries,
-        // Grading Data
-        selfRating: evalData?.evaluation?.selfRating,
-        selfComment: evalData?.evaluation?.selfComment,
-        trainerRating: evalData?.evaluation?.trainerRating,
+        // Optional trainer comment
         trainerComment: evalData?.evaluation?.trainerComment,
-        softSkills: softSkills,
       };
 
       await (
         await import('@/utils/generateReportPDF')
       ).generateActivityReportPDF(reportData, useCases, components);
     } catch (err: any) {
-      setError(t('trainer.reports.pdfError') + err.message);
+      setError(t('trainer.reports.pdfError'));
     }
   };
 
@@ -374,13 +358,6 @@ export default function TrainerActivityReportsPage() {
           report.weekNumber
         );
 
-        const softSkills =
-          evalData?.softskillRatings?.map((r: any) => ({
-            name: r.criterion.name,
-            selfRating: r.rating.selfRating,
-            trainerRating: r.rating.trainerRating,
-          })) || [];
-
         const reportData = {
           id: report.id,
           traineeId: report.traineeId,
@@ -400,19 +377,15 @@ export default function TrainerActivityReportsPage() {
           reviewerId: report.reviewerId || null,
           reviewerName: profile?.full_name || t('trainer.reports.trainer'),
           entries: entriesData.entries || [],
-          // Grading Data
-          selfRating: evalData?.evaluation?.selfRating,
-          selfComment: evalData?.evaluation?.selfComment,
-          trainerRating: evalData?.evaluation?.trainerRating,
+          // Optional trainer comment
           trainerComment: evalData?.evaluation?.trainerComment,
-          softSkills: softSkills,
         };
 
         const blob = await (
           await import('@/utils/generateReportPDF')
         ).generateActivityReportPDF(reportData, useCases, components, true);
         if (blob instanceof Blob) {
-          const filename = `Tätigkeitsnachweis_KW${report.weekNumber}_${report.year}_${reportData.traineeName.replace(/\s+/g, '_')}.pdf`;
+          const filename = `Ausbildungsnachweis_KW${report.weekNumber}_${report.year}_${reportData.traineeName.replace(/\s+/g, '_')}.pdf`;
           folder?.file(filename, blob);
           count++;
         }
@@ -431,7 +404,7 @@ export default function TrainerActivityReportsPage() {
         document.body.removeChild(a);
       }
     } catch (err: any) {
-      setError(t('trainer.reports.exportError') + err.message);
+      setError(t('trainer.reports.exportError'));
     }
   };
 
@@ -780,6 +753,8 @@ export default function TrainerActivityReportsPage() {
   );
 }
 
+const COMPETENCY_AREAS = ['FACHKOMPETENZ', 'METHODENKOMPETENZ', 'SOZIALKOMPETENZ', 'PERSONALKOMPETENZ'] as const;
+
 // Review Modal Component
 function ReportReviewModal({
   report,
@@ -824,9 +799,6 @@ function ReportReviewModal({
   const [entryGrades, setEntryGrades] = useState<
     Record<string, { grade: number; comment: string }>
   >({});
-  const [releaseGrades, setReleaseGrades] = useState<
-    Record<string, { grade: number; comment: string }>
-  >({});
   const [savingGrades, setSavingGrades] = useState(false);
   const [gradesSaved, setGradesSaved] = useState(false);
   const [isEditingGrades, setIsEditingGrades] = useState(false);
@@ -837,9 +809,6 @@ function ReportReviewModal({
     SoftskillCriterion[]
   >([]);
   const [softskillRatings, setSoftskillRatings] = useState<
-    Record<string, { rating: number; comment: string }>
-  >({});
-  const [softskillReleaseRatings, setSoftskillReleaseRatings] = useState<
     Record<string, { rating: number; comment: string }>
   >({});
   const [loadingSoftskills, setLoadingSoftskills] = useState(false);
@@ -855,7 +824,10 @@ function ReportReviewModal({
     entries.length > 0 && entries.every(entry => entryGrades[entry.id]?.grade);
   const allSoftskillsRated =
     softskillCriteria.length > 0 &&
-    softskillCriteria.every(c => softskillRatings[c.id]?.rating);
+    COMPETENCY_AREAS.every(area => {
+      const firstCriterion = softskillCriteria.find(c => c.competencyArea === area);
+      return firstCriterion && softskillRatings[firstCriterion.id]?.rating;
+    });
   const canApprove = allEntriesGraded && allSoftskillsRated && softskillsSaved;
   const isLastTab = activeTab === 'softskills';
   const canProceedNext =
@@ -865,7 +837,9 @@ function ReportReviewModal({
         ? allEntriesGraded
         : false;
 
-  const goNextTab = () => {
+  const goNextTab = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (activeTab === 'details') {
       setActiveTab('grades');
       return;
@@ -879,8 +853,6 @@ function ReportReviewModal({
   useEffect(() => {
     const initialGrades: Record<string, { grade: number; comment: string }> =
       {};
-    const initialReleaseGrades: Record<string, { grade: number; comment: string }> =
-      {};
     entries.forEach(entry => {
       if (entry.trainerGrade) {
         initialGrades[entry.id] = {
@@ -888,15 +860,8 @@ function ReportReviewModal({
           comment: entry.gradeComment || '',
         };
       }
-      if (entry.releaseGrade) {
-        initialReleaseGrades[entry.id] = {
-          grade: Number(entry.releaseGrade),
-          comment: entry.releaseGradeComment || '',
-        };
-      }
     });
     setEntryGrades(initialGrades);
-    setReleaseGrades(initialReleaseGrades);
   }, [entries]);
 
   // Load soft skill criteria when tab is opened (for both SUBMITTED and APPROVED reports)
@@ -930,24 +895,13 @@ function ReportReviewModal({
           string,
           { rating: number; comment: string }
         > = {};
-        const existingReleaseRatings: Record<
-          string,
-          { rating: number; comment: string }
-        > = {};
         (data.softskillRatings || []).forEach((r: any) => {
           existingRatings[r.softskillCriterionId] = {
             rating: r.trainerRating,
             comment: r.trainerComment || '',
           };
-          if (r.releaseRating) {
-            existingReleaseRatings[r.softskillCriterionId] = {
-              rating: r.releaseRating,
-              comment: r.releaseComment || '',
-            };
-          }
         });
         setSoftskillRatings(existingRatings);
-        setSoftskillReleaseRatings(existingReleaseRatings);
       }
     } catch (err) {
       console.error('Error loading softskills:', err);
@@ -980,75 +934,42 @@ function ReportReviewModal({
     setGradesSaved(false);
   };
 
-  const handleReleaseGradeChange = (entryId: string, grade: number) => {
-    setReleaseGrades(prev => ({
-      ...prev,
-      [entryId]: {
-        ...prev[entryId],
-        grade,
-        comment: prev[entryId]?.comment || '',
-      },
-    }));
-    setGradesSaved(false);
-  };
-
-  const handleReleaseGradeCommentChange = (entryId: string, comment: string) => {
-    setReleaseGrades(prev => ({
-      ...prev,
-      [entryId]: {
-        ...prev[entryId],
-        comment,
-        grade: prev[entryId]?.grade || 3,
-      },
-    }));
-    setGradesSaved(false);
-  };
-
   const handleSoftskillRatingChange = (criterionId: string, rating: number) => {
-    setSoftskillRatings(prev => ({
-      ...prev,
-      [criterionId]: {
-        ...prev[criterionId],
-        rating,
-        comment: prev[criterionId]?.comment || '',
-      },
-    }));
+    // Find which area this criterion belongs to, then set all criteria in that area
+    const criterion = softskillCriteria.find(c => c.id === criterionId);
+    if (!criterion) return;
+    const areaCriteria = softskillCriteria.filter(c => c.competencyArea === criterion.competencyArea);
+    setSoftskillRatings(prev => {
+      const updated = { ...prev };
+      areaCriteria.forEach(c => {
+        updated[c.id] = {
+          ...updated[c.id],
+          rating,
+          comment: updated[c.id]?.comment || '',
+        };
+      });
+      return updated;
+    });
   };
 
   const handleSoftskillCommentChange = (
     criterionId: string,
     comment: string
   ) => {
-    setSoftskillRatings(prev => ({
-      ...prev,
-      [criterionId]: {
-        ...prev[criterionId],
-        comment,
-        rating: prev[criterionId]?.rating || 3,
-      },
-    }));
-  };
-
-  const handleSoftskillReleaseRatingChange = (criterionId: string, rating: number) => {
-    setSoftskillReleaseRatings(prev => ({
-      ...prev,
-      [criterionId]: {
-        ...prev[criterionId],
-        rating,
-        comment: prev[criterionId]?.comment || '',
-      },
-    }));
-  };
-
-  const handleSoftskillReleaseCommentChange = (criterionId: string, comment: string) => {
-    setSoftskillReleaseRatings(prev => ({
-      ...prev,
-      [criterionId]: {
-        ...prev[criterionId],
-        comment,
-        rating: prev[criterionId]?.rating || 3,
-      },
-    }));
+    const criterion = softskillCriteria.find(c => c.id === criterionId);
+    if (!criterion) return;
+    const areaCriteria = softskillCriteria.filter(c => c.competencyArea === criterion.competencyArea);
+    setSoftskillRatings(prev => {
+      const updated = { ...prev };
+      areaCriteria.forEach(c => {
+        updated[c.id] = {
+          ...updated[c.id],
+          comment,
+          rating: updated[c.id]?.rating || 3,
+        };
+      });
+      return updated;
+    });
   };
 
   const saveGrades = async () => {
@@ -1079,32 +1000,6 @@ function ReportReviewModal({
         }
       }
 
-      // Save release grades if any
-      const releaseGradesToSave = Object.entries(releaseGrades)
-        .filter(([_, val]) => val.grade)
-        .map(([entryId, val]) => ({
-          entryId,
-          grade: val.grade,
-          comment: val.comment,
-        }));
-
-      if (releaseGradesToSave.length > 0) {
-        const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            entryGrades: releaseGradesToSave,
-            trainerId,
-            isReleaseGrade: true,
-            editReason: isEditingGrades ? editReason : undefined,
-          }),
-        });
-        if (!res.ok) {
-          toast.error(t('trainer.reports.modal.gradesSaveError'));
-          return;
-        }
-      }
-
       setGradesSaved(true);
       setIsEditingGrades(false);
       setEditReason('');
@@ -1121,15 +1016,13 @@ function ReportReviewModal({
   const saveSoftskills = async () => {
     setSavingSoftskills(true);
     try {
-      // Build combined ratings with both trainer and release ratings
+      // Build ratings to save
       const ratingsToSave = Object.entries(softskillRatings)
         .filter(([_, val]) => val.rating)
         .map(([criterionId, val]) => ({
           criterionId,
           trainerRating: val.rating,
           trainerComment: val.comment,
-          releaseRating: softskillReleaseRatings[criterionId]?.rating || undefined,
-          releaseComment: softskillReleaseRatings[criterionId]?.comment || undefined,
         }));
 
       // Save trainer ratings
@@ -1153,40 +1046,6 @@ function ReportReviewModal({
       if (!res.ok) {
         toast.error(t('trainer.reports.modal.softskillsSaveError'));
         return;
-      }
-
-      // Save release ratings if any exist
-      const releaseRatingsToSave = Object.entries(softskillReleaseRatings)
-        .filter(([_, val]) => val.rating)
-        .map(([criterionId, val]) => ({
-          criterionId,
-          releaseRating: val.rating,
-          releaseComment: val.comment,
-        }));
-
-      if (releaseRatingsToSave.length > 0) {
-        const releaseRes = await fetch('/api/weekly-evaluations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            activityReportId: report.id,
-            traineeId: report.traineeId,
-            trainerId,
-            weekNumber: report.weekNumber,
-            year: report.year,
-            ausbildungsjahr: report.ausbildungsjahr,
-            trainerRating: 3,
-            softskillRatings: releaseRatingsToSave,
-            isRelease: true,
-            softskillsOnly: true,
-            editReason: isEditingSoftskills ? editReason : undefined,
-          }),
-        });
-
-        if (!releaseRes.ok) {
-          toast.error(t('trainer.reports.modal.softskillsSaveError'));
-          return;
-        }
       }
 
       setSoftskillsSaved(true);
@@ -1290,8 +1149,8 @@ function ReportReviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="bg-card border-border flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-card border-border flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="border-border/50 border-b p-6">
           <div className="flex items-center justify-between">
@@ -1312,6 +1171,7 @@ function ReportReviewModal({
               </div>
             </div>
             <button
+              type="button"
               onClick={onClose}
               className="hover:bg-muted rounded-lg p-2 transition-colors"
             >
@@ -1320,7 +1180,7 @@ function ReportReviewModal({
           </div>
 
           {/* Summary */}
-          <div className="mt-4 grid grid-cols-3 gap-4">
+          <div className="mt-4 grid grid-cols-4 gap-4">
             <div className="bg-muted/50 rounded-lg p-3">
               <p className="text-muted-foreground text-xs">
                 {t('trainer.reports.modal.planTotal')}
@@ -1351,6 +1211,16 @@ function ReportReviewModal({
                 {t('trainer.reports.modal.hours')}
               </p>
             </div>
+            <div className={`rounded-lg p-3 ${totalActual > 40 ? 'bg-red-500/10 border border-red-500/30' : 'bg-muted/50'}`}>
+              <p className="text-muted-foreground text-xs">
+                {t('reports.weeklyHoursLimit')}
+              </p>
+              <p
+                className={`text-lg font-bold ${totalActual > 40 ? 'text-red-500' : totalActual > 32 ? 'text-yellow-500' : 'text-green-500'}`}
+              >
+                {totalActual} / 40 Std.
+              </p>
+            </div>
           </div>
 
           {hasOverbooking && (
@@ -1366,6 +1236,7 @@ function ReportReviewModal({
           {(report.status === 'SUBMITTED' || report.status === 'APPROVED') && (
             <div className="border-border/30 mt-4 flex gap-2 border-b">
               <button
+                type="button"
                 onClick={() => setActiveTab('details')}
                 className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === 'details'
@@ -1376,6 +1247,7 @@ function ReportReviewModal({
                 {t('trainer.reports.modal.tabDetails')}
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab('grades')}
                 className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === 'grades'
@@ -1390,6 +1262,7 @@ function ReportReviewModal({
                 )}
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab('softskills')}
                 className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === 'softskills'
@@ -1513,17 +1386,18 @@ function ReportReviewModal({
               </div>
             )
           ) : activeTab === 'grades' ? (
-            /* Grades Tab - 3-Column: Azubi / Ausbilder / Freigabe */
+            /* Grades Tab - 2-Column: Azubi / Ausbilder */
             <div className="space-y-4">
               <div className="bg-accent/10 border-accent/20 mb-4 rounded-lg border p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-foreground text-sm">
                     {report.status === 'APPROVED' 
-                      ? 'Bewertung abgeschlossen. Sie können Noten bearbeiten oder Freigabenoten setzen.'
+                      ? 'Bewertung für den Auszubildenden. Sie können Noten bei Bedarf bearbeiten.'
                       : t('trainer.reports.modal.gradeInfo')}
                   </p>
                   {report.status === 'APPROVED' && !isEditingGrades && (
                     <button
+                      type="button"
                       onClick={() => setIsEditingGrades(true)}
                       className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
                     >
@@ -1556,7 +1430,6 @@ function ReportReviewModal({
                   ? getComponentById(useCase.componentId)
                   : null;
                 const currentGrade = entryGrades[entry.id];
-                const currentRelease = releaseGrades[entry.id];
                 const isApproved = report.status === 'APPROVED';
                 const canEditTrainer = !isApproved || isEditingGrades;
 
@@ -1594,7 +1467,7 @@ function ReportReviewModal({
                     </div>
 
                     {/* Grade Sections */}
-                    <div className="grid grid-cols-3 gap-px bg-border/50">
+                    <div className="grid grid-cols-2 gap-px bg-border/50">
                       {/* Trainee Self-Assessment */}
                       <div className="bg-card p-4 flex flex-col items-center gap-2">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
@@ -1630,28 +1503,6 @@ function ReportReviewModal({
                           />
                         )}
                       </div>
-
-                      {/* Release Grade */}
-                      <div className="bg-card p-4 flex flex-col items-center gap-2">
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-400">
-                          <Shield className="h-3.5 w-3.5" />
-                          Freigabe
-                        </div>
-                        <GradeSelector
-                          value={currentRelease?.grade}
-                          onChange={g => handleReleaseGradeChange(entry.id, g)}
-                          size="sm"
-                        />
-                        {currentRelease?.grade && (
-                          <input
-                            type="text"
-                            value={currentRelease?.comment || ''}
-                            onChange={e => handleReleaseGradeCommentChange(entry.id, e.target.value)}
-                            placeholder="Kommentar..."
-                            className="bg-muted/50 border-border/50 text-foreground w-full rounded-md border px-2 py-1 text-[11px] mt-1 placeholder:text-muted-foreground/50"
-                          />
-                        )}
-                      </div>
                     </div>
 
                     {/* Deviation indicator */}
@@ -1672,6 +1523,7 @@ function ReportReviewModal({
               <div className="flex justify-end gap-3 pt-4">
                 {isEditingGrades && (
                   <button
+                    type="button"
                     onClick={() => { setIsEditingGrades(false); setEditReason(''); }}
                     className="text-muted-foreground hover:text-foreground px-4 py-2 text-sm"
                   >
@@ -1679,29 +1531,32 @@ function ReportReviewModal({
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={saveGrades}
                   disabled={
                     savingGrades || Object.keys(entryGrades).length === 0
                   }
                   className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50"
                 >
-                  <span className="h-4 w-4">
+                  <span className="flex h-4 w-4 items-center justify-center">
                     {savingGrades ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                     ) : gradesSaved ? (
                       <Check className="h-4 w-4" />
                     ) : (
                       <Star className="h-4 w-4" />
                     )}
                   </span>
-                  {gradesSaved
-                    ? t('trainer.reports.modal.gradesSaved')
-                    : t('trainer.reports.modal.saveGrades')}
+                  <span>
+                    {gradesSaved
+                      ? t('trainer.reports.modal.gradesSaved')
+                      : t('trainer.reports.modal.saveGrades')}
+                  </span>
                 </button>
               </div>
             </div>
           ) : (
-            /* Soft Skills Tab - 3-Column: Azubi / Ausbilder / Freigabe */
+            /* Soft Skills Tab - 4 Competency Areas */
             <div className="space-y-4">
               {loadingSoftskills ? (
                 <div className="flex items-center justify-center py-12">
@@ -1720,11 +1575,12 @@ function ReportReviewModal({
                     <div className="flex items-center justify-between">
                       <p className="text-foreground text-sm">
                         {report.status === 'APPROVED'
-                          ? 'Bewertung abgeschlossen. Sie können Noten bearbeiten oder Freigabenoten setzen.'
+                          ? 'Bewertung abgeschlossen. Sie können die Kompetenzbewertung bei Bedarf bearbeiten.'
                           : t('trainer.reports.modal.softskillInfo')}
                       </p>
                       {report.status === 'APPROVED' && !isEditingSoftskills && (
                         <button
+                          type="button"
                           onClick={() => { setIsEditingSoftskills(true); loadSoftskillCriteria(); }}
                           className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
                         >
@@ -1751,17 +1607,18 @@ function ReportReviewModal({
                     </div>
                   )}
 
-                  {/* Group by competency area */}
-                  {[
-                    'FACHKOMPETENZ',
-                    'METHODENKOMPETENZ',
-                    'SOZIALKOMPETENZ',
-                    'PERSONALKOMPETENZ',
-                  ].map(area => {
+                  {/* 4 Competency Area Cards */}
+                  {COMPETENCY_AREAS.map(area => {
                     const areaCriteria = softskillCriteria.filter(
                       c => c.competencyArea === area
                     );
                     if (areaCriteria.length === 0) return null;
+
+                    // Use the first criterion as the representative for this area
+                    const representative = areaCriteria[0];
+                    const trainerRating = softskillRatings[representative.id];
+                    const isApproved = report.status === 'APPROVED';
+                    const canEditTrainer = !isApproved || isEditingSoftskills;
 
                     const areaLabels: Record<string, string> = {
                       FACHKOMPETENZ: t('trainer.reports.modal.fachkompetenz'),
@@ -1776,79 +1633,42 @@ function ReportReviewModal({
                       ),
                     };
 
+                    const areaDescriptions: Record<string, string> = {
+                      FACHKOMPETENZ: 'Sorgfalt, Qualitätsbewusstsein',
+                      METHODENKOMPETENZ: 'Problemlösung, Zeitmanagement, Analytisches Denken',
+                      SOZIALKOMPETENZ: 'Teamfähigkeit, Kommunikation, Kundenorientierung',
+                      PERSONALKOMPETENZ: 'Zuverlässigkeit, Selbstständigkeit, Lernbereitschaft',
+                    };
+
                     return (
-                      <div key={area} className="mb-6">
-                        <h4 className="text-foreground mb-3 text-sm font-semibold tracking-wide uppercase">
-                          {areaLabels[area] || area}
-                        </h4>
+                      <div
+                        key={area}
+                        className="border-border/50 bg-card rounded-xl border p-4 hover:bg-muted/20 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-foreground text-sm font-semibold">
+                              {areaLabels[area] || area}
+                            </h4>
+                            <p className="text-muted-foreground mt-0.5 text-xs">
+                              {areaDescriptions[area]}
+                            </p>
+                          </div>
 
-                        {/* 3-Column Headers */}
-                        <div className="grid grid-cols-[1fr_60px_196px_196px] gap-3 px-4 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/30 mb-2">
-                          <span>Kriterium</span>
-                          <span className="text-center text-blue-400">Azubi</span>
-                          <span className="text-center text-amber-400">Ausbilder</span>
-                          <span className="text-center text-purple-400 flex items-center justify-center gap-0.5">
-                            <Shield className="h-2.5 w-2.5" />
-                            Freigabe
-                          </span>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          {areaCriteria.map(criterion => {
-                            const trainerRating = softskillRatings[criterion.id];
-                            const releaseRating = softskillReleaseRatings[criterion.id];
-                            const isApproved = report.status === 'APPROVED';
-                            const canEditTrainer = !isApproved || isEditingSoftskills;
-
-                            return (
-                              <div
-                                key={criterion.id}
-                                className="border-border/50 bg-card grid grid-cols-[1fr_60px_196px_196px] items-center gap-3 rounded-xl border p-3 hover:bg-muted/20 transition-colors"
-                              >
-                                <div className="min-w-0">
-                                  <p className="text-foreground text-sm font-medium">
-                                    {criterion.code} – {criterion.name}
-                                  </p>
-                                  {criterion.description && (
-                                    <p className="text-muted-foreground mt-0.5 text-xs line-clamp-1">
-                                      {criterion.description}
-                                    </p>
-                                  )}
-                                </div>
-
-                                {/* Azubi self-rating placeholder */}
-                                <div className="flex justify-center">
-                                  <GradeBadge grade={null} size="sm" />
-                                </div>
-
-                                {/* Trainer rating */}
-                                <div className="flex justify-center">
-                                  {canEditTrainer ? (
-                                    <GradeSelector
-                                      value={trainerRating?.rating}
-                                      onChange={r =>
-                                        handleSoftskillRatingChange(criterion.id, r)
-                                      }
-                                      size="sm"
-                                    />
-                                  ) : (
-                                    <GradeBadge grade={trainerRating?.rating} size="sm" />
-                                  )}
-                                </div>
-
-                                {/* Release rating */}
-                                <div className="flex justify-center">
-                                  <GradeSelector
-                                    value={releaseRating?.rating}
-                                    onChange={r =>
-                                      handleSoftskillReleaseRatingChange(criterion.id, r)
-                                    }
-                                    size="sm"
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
+                          {/* Trainer rating */}
+                          <div className="flex-shrink-0">
+                            {canEditTrainer ? (
+                              <GradeSelector
+                                value={trainerRating?.rating}
+                                onChange={r =>
+                                  handleSoftskillRatingChange(representative.id, r)
+                                }
+                                size="md"
+                              />
+                            ) : (
+                              <GradeBadge grade={trainerRating?.rating} size="lg" />
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1857,6 +1677,7 @@ function ReportReviewModal({
                   <div className="flex justify-end gap-3 pt-4">
                     {isEditingSoftskills && (
                       <button
+                        type="button"
                         onClick={() => { setIsEditingSoftskills(false); setEditReason(''); }}
                         className="text-muted-foreground hover:text-foreground px-4 py-2 text-sm"
                       >
@@ -1864,18 +1685,19 @@ function ReportReviewModal({
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={saveSoftskills}
                       disabled={savingSoftskills || (!allSoftskillsRated && report.status !== 'APPROVED')}
                       className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50"
                     >
-                      <span className="h-4 w-4">
+                      <span className="flex h-4 w-4 items-center justify-center">
                         {savingSoftskills ? (
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                         ) : (
                           <Award className="h-4 w-4" />
                         )}
                       </span>
-                      {t('trainer.reports.modal.saveSoftskills')}
+                      <span>{t('trainer.reports.modal.saveSoftskills')}</span>
                     </button>
                   </div>
                 </>
@@ -1903,12 +1725,14 @@ function ReportReviewModal({
                 </div>
                 <div className="flex justify-end gap-3">
                   <button
+                    type="button"
                     onClick={() => setShowRejectForm(false)}
                     className="text-muted-foreground hover:text-foreground px-4 py-2"
                   >
                     {t('trainer.reports.modal.cancel')}
                   </button>
                   <button
+                    type="button"
                     onClick={handleReject}
                     disabled={!feedback.trim() || processing}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50"
@@ -1921,6 +1745,7 @@ function ReportReviewModal({
             ) : (
               <div className="flex justify-between">
                 <button
+                  type="button"
                   onClick={onClose}
                   className="text-muted-foreground hover:text-foreground px-4 py-2"
                 >
@@ -1928,6 +1753,7 @@ function ReportReviewModal({
                 </button>
                 <div className="flex gap-3">
                   <button
+                    type="button"
                     onClick={() => setShowRejectForm(true)}
                     disabled={processing}
                     className="bg-destructive/20 text-destructive hover:bg-destructive/30 flex items-center gap-2 rounded-lg px-4 py-2"
@@ -1935,31 +1761,32 @@ function ReportReviewModal({
                     <X className="h-4 w-4" />
                     {t('trainer.reports.modal.reject')}
                   </button>
-                  {isLastTab ? (
-                    <button
-                      onClick={handleApprove}
-                      disabled={processing || !canApprove}
-                      className="text-primary-foreground flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 hover:bg-green-700 disabled:opacity-50 dark:text-white"
-                    >
-                      <span className="h-4 w-4">
-                        {processing ? (
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        ) : (
-                          <Check className="h-4 w-4" />
-                        )}
-                      </span>
-                      {t('trainer.reports.modal.approve')}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={goNextTab}
-                      disabled={processing || !canProceedNext}
-                      className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                      Next
-                    </button>
-                  )}
+                  <button
+                    key="approve-btn"
+                    type="button"
+                    onClick={handleApprove}
+                    disabled={processing || !canApprove}
+                    className={`text-primary-foreground flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 hover:bg-green-700 disabled:opacity-50 dark:text-white ${isLastTab ? '' : 'hidden'}`}
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center">
+                      {processing ? (
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                    </span>
+                    <span>{t('trainer.reports.modal.approve')}</span>
+                  </button>
+                  <button
+                    key="next-btn"
+                    type="button"
+                    onClick={goNextTab}
+                    disabled={processing || !canProceedNext}
+                    className={`bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50 ${isLastTab ? 'hidden' : ''}`}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                    Next
+                  </button>
                 </div>
               </div>
             )
@@ -1974,19 +1801,23 @@ function ReportReviewModal({
               <div className="flex gap-3">
                 {(activeTab === 'grades' || activeTab === 'softskills') && (isEditingGrades || isEditingSoftskills) && (
                   <button
+                    type="button"
                     onClick={activeTab === 'grades' ? saveGrades : saveSoftskills}
                     disabled={savingGrades || savingSoftskills}
                     className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2"
                   >
-                    {savingGrades || savingSoftskills ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    ) : (
-                      <Check className="h-4 w-4" />
-                    )}
-                    Änderungen speichern
+                    <span className="flex h-4 w-4 items-center justify-center">
+                      {savingGrades || savingSoftskills ? (
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                    </span>
+                    <span>Änderungen speichern</span>
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={onDownloadPDF}
                   className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2"
                 >
@@ -1994,6 +1825,7 @@ function ReportReviewModal({
                   {t('trainer.reports.modal.downloadPdf')}
                 </button>
                 <button
+                  type="button"
                   onClick={onClose}
                   className="bg-muted text-foreground hover:bg-muted/80 rounded-lg px-4 py-2"
                 >
@@ -2013,6 +1845,7 @@ function ReportReviewModal({
               </div>
               <div className="flex justify-between">
                 <button
+                  type="button"
                   onClick={onDelete}
                   className="bg-destructive/20 text-destructive hover:bg-destructive/30 flex items-center gap-2 rounded-lg px-4 py-2"
                 >
@@ -2020,6 +1853,7 @@ function ReportReviewModal({
                   {t('trainer.reports.modal.delete')}
                 </button>
                 <button
+                  type="button"
                   onClick={onClose}
                   className="bg-muted text-foreground hover:bg-muted/80 rounded-lg px-4 py-2"
                 >
@@ -2030,6 +1864,7 @@ function ReportReviewModal({
           ) : (
             <div className="flex justify-end">
               <button
+                type="button"
                 onClick={onClose}
                 className="bg-muted text-foreground hover:bg-muted/80 rounded-lg px-4 py-2"
               >

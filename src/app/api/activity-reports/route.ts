@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
         const includeOverbooking = searchParams.get('includeOverbooking') !== 'false'; // default true
 
         if (!userId) {
-            return NextResponse.json({ error: 'Missing userId parameter' }, { status: 400 });
+            return NextResponse.json({ error: 'userId is required' }, { status: 400 });
         }
 
         // Get user profile to check role
@@ -61,6 +61,19 @@ export async function GET(req: NextRequest) {
             });
         }
 
+        // Batch-fetch reviewer names for all reports that have a reviewerId
+        const reviewerIds = [...new Set(reports.map(r => r.reviewerId).filter(Boolean))] as string[];
+        const reviewerNameMap = new Map<string, string>();
+        if (reviewerIds.length > 0) {
+            const reviewerProfiles = await db
+                .select({ id: profiles.id, fullName: profiles.fullName })
+                .from(profiles)
+                .where(inArray(profiles.id, reviewerIds as any));
+            reviewerProfiles.forEach(p => {
+                if (p.fullName) reviewerNameMap.set(String(p.id), p.fullName);
+            });
+        }
+
         // Transform to camelCase
         const formattedReports = reports.map(r => ({
             id: r.id,
@@ -74,6 +87,7 @@ export async function GET(req: NextRequest) {
             status: r.status,
             submittedAt: r.submittedAt,
             reviewerId: r.reviewerId,
+            reviewerName: r.reviewerId ? (reviewerNameMap.get(String(r.reviewerId)) || null) : null,
             reviewedAt: r.reviewedAt,
             reviewerFeedback: r.reviewerFeedback,
             traineeSignedAt: r.traineeSignedAt,
@@ -103,12 +117,39 @@ export async function POST(req: NextRequest) {
         const { userId, weekNumber, year, ausbildungsjahr, periodStart, periodEnd, entries, submit } = body;
 
         if (!userId) {
-            return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+            return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+        }
+
+        // M-1 fix: Only trainees can create activity reports
+        const [creatorProfile] = await db
+            .select({ role: profiles.role })
+            .from(profiles)
+            .where(eq(profiles.id, userId as any));
+
+        if (!creatorProfile) {
+            return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+        }
+
+        if (creatorProfile?.role !== 'TRAINEE') {
+            return NextResponse.json({ error: 'Nur Auszubildende können Nachweise erstellen' }, { status: 403 });
         }
 
         // Validate required fields
         if (!weekNumber || !year || !ausbildungsjahr || !entries?.length) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Validate actualHours are non-negative numbers
+        const invalidHours = entries.filter((e: any) => typeof e.actualHours !== 'number' || e.actualHours < 0);
+        if (invalidHours.length > 0) {
+            return NextResponse.json({ error: 'IST-Stunden müssen positive Zahlen sein (≥ 0).' }, { status: 400 });
+        }
+
+        // Validate traineeGrade range if provided
+        const validGrades = ['1', '2', '3', '4', '5', '6'];
+        const invalidGrades = entries.filter((e: any) => e.traineeGrade && !validGrades.includes(String(e.traineeGrade)));
+        if (invalidGrades.length > 0) {
+            return NextResponse.json({ error: 'Selbstbewertung muss eine Note von 1 bis 6 sein.' }, { status: 400 });
         }
 
         // Check for duplicate report (same week/year)
@@ -192,6 +233,25 @@ export async function POST(req: NextRequest) {
                 error: violations[0],
                 violations,
             }, { status: 400 });
+        }
+
+        // === 40h/week maximum validation (JArbSchG / BBiG compliance) ===
+        const totalWeeklyHours = entries.reduce((sum: number, e: any) => sum + (Number(e.actualHours) || 0), 0);
+        if (totalWeeklyHours > 40) {
+            return NextResponse.json({
+                error: `Maximale Wochenstunden überschritten: ${totalWeeklyHours} Std. eingetragen, aber maximal 40 Std. pro Woche zulässig (§ 8 JArbSchG).`,
+            }, { status: 400 });
+        }
+
+        // === Mandatory self-grade validation ===
+        // When submitting, every entry must have a traineeGrade (self-assessment)
+        if (submit) {
+            const missingGrades = entries.filter((e: any) => !e.traineeGrade);
+            if (missingGrades.length > 0) {
+                return NextResponse.json({
+                    error: `Bitte bewerten Sie alle Tätigkeiten mit einer Selbsteinschätzung (Note 1-6), bevor Sie den Nachweis einreichen. ${missingGrades.length} Einträge ohne Selbstbewertung.`,
+                }, { status: 400 });
+            }
         }
 
         // Create the report
