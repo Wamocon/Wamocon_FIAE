@@ -64,11 +64,10 @@ export async function GET(
             yearEnd.setDate(yearEnd.getDate() - 1);
         }
 
-        // Fetch graded entries grouped by component (includes release grade for effective grade calculation)
+        // Fetch graded entries grouped by component
         const gradedEntries = await db
             .select({
                 trainerGrade: activityReportUseCaseEntries.trainerGrade,
-                releaseGrade: activityReportUseCaseEntries.releaseGrade,
                 componentCode: trainingComponents.code,
                 componentTitle: trainingComponents.title,
                 componentOrderIndex: trainingComponents.orderIndex,
@@ -108,8 +107,8 @@ export async function GET(
                 });
             }
 
-            // Use effective grade: releaseGrade takes priority over trainerGrade
-            const effectiveGrade = entry.releaseGrade || entry.trainerGrade;
+            // trainerGrade is the final grade (migration 0033 merged release_grade into trainer_grade)
+            const effectiveGrade = entry.trainerGrade;
             if (effectiveGrade) {
                 const comp = componentMap.get(key)!;
                 comp.gradedCount++;
@@ -157,7 +156,6 @@ export async function GET(
             .select({
                 competencyArea: mesSoftskillCriteria.competencyArea,
                 trainerRating: weeklySoftskillRatings.trainerRating,
-                releaseRating: weeklySoftskillRatings.releaseRating,
             })
             .from(weeklySoftskillRatings)
             .innerJoin(weeklyEvaluations, eq(weeklySoftskillRatings.weeklyEvaluationId, weeklyEvaluations.id))
@@ -174,8 +172,8 @@ export async function GET(
         };
 
         for (const rating of softSkillRatings) {
-            // Use effective rating: releaseRating takes priority over trainerRating
-            const effectiveRating = (rating as any).releaseRating || rating.trainerRating;
+            // trainerRating is the final rating (migration 0033 merged release_rating into trainer_rating)
+            const effectiveRating = rating.trainerRating;
             if (!rating.competencyArea || !effectiveRating) continue;
             
             // performanceRating enum uses numeric strings '1'-'6'
@@ -245,9 +243,8 @@ export async function GET(
             },
         });
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error generating skill radar data:', error);
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler beim Erstellen des Kompetenzprofils' }, { status: 500 });
     }
 }
 

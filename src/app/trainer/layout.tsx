@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useSidebar } from '@/contexts/SidebarContext';
 
 const TrainerLayoutComponent = ({
   children,
@@ -13,7 +14,7 @@ const TrainerLayoutComponent = ({
 }) => {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isOpen: sidebarOpen, toggle: handleToggleSidebar } = useSidebar();
 
   // If profile is already available from cache, skip waiting entirely.
   const [waitingForProfile, setWaitingForProfile] = useState(() => !profile);
@@ -67,10 +68,6 @@ const TrainerLayoutComponent = ({
       router.push('/trainer/dashboard');
     }
   }, [router]);
-
-  const handleToggleSidebar = useCallback(() => {
-    setSidebarOpen(prev => !prev);
-  }, []);
 
   // Show loading state while auth is initializing or waiting for profile
   if (isLoading) {

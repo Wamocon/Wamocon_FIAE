@@ -60,6 +60,7 @@ interface ActivityReport {
   traineeSignedAt: string | null;
   trainerSignedAt: string | null;
   reviewerId: string | null;
+  reviewerName: string | null;
   createdAt: string;
 }
 
@@ -71,13 +72,10 @@ interface ReportUseCaseEntry {
   actualHours: number;
   isOverbooked: boolean;
   notes: string | null;
-  // Grading fields (3-column: trainee / trainer / release)
+  // Grading fields (trainee self-grade + trainer grade)
   traineeGrade?: string | number | null;
   trainerGrade?: string | number | null;
-  releaseGrade?: string | number | null;
   gradeComment?: string | null;
-  releaseGradeComment?: string | null;
-  isGradeApproved?: boolean;
   useCase?: TrainingUseCase;
   component?: TrainingComponent;
 }
@@ -280,14 +278,6 @@ export default function TraineeActivityReportsPage() {
         report.weekNumber
       );
 
-      // Prepare soft skills
-      const softSkills =
-        evalData?.softskillRatings?.map((r: any) => ({
-          name: r.criterion.name,
-          selfRating: r.rating.selfRating,
-          trainerRating: r.rating.trainerRating,
-        })) || [];
-
       // Prepare report data for PDF
       const reportData = {
         id: report.id,
@@ -304,21 +294,17 @@ export default function TraineeActivityReportsPage() {
         traineeSignedAt: report.traineeSignedAt,
         trainerSignedAt: report.trainerSignedAt,
         reviewerId: report.reviewerId,
-        reviewerName: null, // Would need to fetch trainer name if available
+        reviewerName: report.reviewerName || null,
         entries: entriesData.entries || [],
-        // Grading Data
-        selfRating: evalData?.evaluation?.selfRating,
-        selfComment: evalData?.evaluation?.selfComment,
-        trainerRating: evalData?.evaluation?.trainerRating,
+        // Optional trainer comment
         trainerComment: evalData?.evaluation?.trainerComment,
-        softSkills: softSkills,
       };
 
       await (
         await import('@/utils/generateReportPDF')
       ).generateActivityReportPDF(reportData, useCases, components);
     } catch (err: any) {
-      toast.error(t('reports.error.pdfGeneration') + ' ' + err.message);
+      toast.error(t('reports.error.pdfGeneration'));
     }
   };
 
@@ -713,6 +699,9 @@ function CreateReportModal({
     return e.actualHours > ucHours.remainingHours;
   });
 
+  // 40h/week maximum check (§ 8 JArbSchG)
+  const MAX_WEEKLY_HOURS = 40;
+
   // Get remaining hours for a use case (considering current entries)
   const getRemainingHours = (useCaseId: string): number => {
     const ucHours = useCaseHours[useCaseId];
@@ -789,6 +778,7 @@ function CreateReportModal({
   }, 0);
 
   const totalActualHours = entries.reduce((sum, e) => sum + e.actualHours, 0);
+  const exceeds40h = totalActualHours > MAX_WEEKLY_HOURS;
 
   // Validation helpers
   const periodValid =
@@ -808,6 +798,7 @@ function CreateReportModal({
     !saving &&
     !duplicateExists &&
     !hasOverbooking &&
+    !exceeds40h &&
     periodValid &&
     entriesValid;
 
@@ -839,6 +830,13 @@ function CreateReportModal({
 
       if (!periodValid) {
         setError('Bitte geben Sie eine gültige Kalenderwoche (1-52) und Jahr an.');
+        setSaving(false);
+        return;
+      }
+
+      // 40h/week maximum check
+      if (totalActualHours > MAX_WEEKLY_HOURS) {
+        setError(`Maximale Wochenstunden überschritten: ${totalActualHours} Std. eingetragen, aber maximal ${MAX_WEEKLY_HOURS} Std. pro Woche zulässig (§ 8 JArbSchG).`);
         setSaving(false);
         return;
       }
@@ -936,6 +934,15 @@ function CreateReportModal({
             <div className="bg-destructive/10 border-destructive/30 text-destructive flex items-center gap-2 rounded-lg border p-3 text-sm">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               {t('reports.modal.overbooking')}
+            </div>
+          )}
+
+          {exceeds40h && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              {t('reports.error.exceeds40h')
+                .replace('{hours}', String(totalActualHours))
+                .replace('{max}', String(MAX_WEEKLY_HOURS))}
             </div>
           )}
 
@@ -1060,7 +1067,7 @@ function CreateReportModal({
                             updateEntry(
                               entry.useCaseId,
                               'actualHours',
-                              Number(e.target.value)
+                              Math.max(0, Number(e.target.value) || 0)
                             )
                           }
                           className={`bg-background text-foreground w-full rounded border px-3 py-1.5 ${isOverbooked ? 'border-yellow-500' : 'border-border'
@@ -1168,36 +1175,63 @@ function CreateReportModal({
               })}
 
               {/* Totals */}
-              <div className="bg-muted/50 flex items-center justify-between rounded-lg p-4">
-                <div className="flex items-center gap-6">
-                  <div>
-                    <p className="text-muted-foreground text-xs">
-                      {t('reports.totalPlanned')}
-                    </p>
-                    <p className="text-foreground text-lg font-bold">
-                      {totalPlannedHours} {t('reports.hours')}
-                    </p>
+              <div className={`rounded-lg p-4 ${exceeds40h ? 'border border-red-500/30 bg-red-500/5' : 'bg-muted/50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <p className="text-muted-foreground text-xs">
+                        {t('reports.totalPlanned')}
+                      </p>
+                      <p className="text-foreground text-lg font-bold">
+                        {totalPlannedHours} {t('reports.hours')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">
+                        {t('reports.totalActual')}
+                      </p>
+                      <p
+                        className={`text-lg font-bold ${exceeds40h ? 'text-red-500' : totalActualHours > totalPlannedHours ? 'text-yellow-500' : 'text-foreground'}`}
+                      >
+                        {totalActualHours} / {MAX_WEEKLY_HOURS} {t('reports.hours')}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs">
-                      {t('reports.totalActual')}
-                    </p>
-                    <p
-                      className={`text-lg font-bold ${totalActualHours > totalPlannedHours ? 'text-yellow-500' : 'text-foreground'}`}
-                    >
-                      {totalActualHours} {t('reports.hours')}
-                    </p>
-                  </div>
+                  {totalActualHours > totalPlannedHours && !exceeds40h && (
+                    <div className="flex items-center gap-2 text-yellow-500">
+                      <AlertTriangle className="h-5 w-5" />
+                      <span className="font-medium">
+                        +{(totalActualHours - totalPlannedHours).toFixed(1)}{' '}
+                        {t('reports.hours')}
+                      </span>
+                    </div>
+                  )}
+                  {exceeds40h && (
+                    <div className="flex items-center gap-2 text-red-500">
+                      <AlertTriangle className="h-5 w-5" />
+                      <span className="text-sm font-medium">
+                        +{(totalActualHours - MAX_WEEKLY_HOURS).toFixed(1)} {t('reports.hours')} über Limit
+                      </span>
+                    </div>
+                  )}
                 </div>
-                {totalActualHours > totalPlannedHours && (
-                  <div className="flex items-center gap-2 text-yellow-500">
-                    <AlertTriangle className="h-5 w-5" />
-                    <span className="font-medium">
-                      +{(totalActualHours - totalPlannedHours).toFixed(1)}{' '}
-                      {t('reports.hours')}
+                {/* Weekly hours progress bar */}
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-muted-foreground text-xs">
+                      {t('reports.weeklyHoursLimit')}
+                    </span>
+                    <span className={`text-xs font-medium ${exceeds40h ? 'text-red-500' : totalActualHours > 32 ? 'text-yellow-500' : 'text-green-500'}`}>
+                      {totalActualHours} / {MAX_WEEKLY_HOURS} Std.
                     </span>
                   </div>
-                )}
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/50">
+                    <div
+                      className={`h-full rounded-full transition-all ${exceeds40h ? 'bg-red-500' : totalActualHours > 32 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                      style={{ width: `${Math.min(100, (totalActualHours / MAX_WEEKLY_HOURS) * 100)}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1292,7 +1326,8 @@ function CreateReportModal({
                 saving ||
                 entries.length === 0 ||
                 duplicateExists ||
-                hasOverbooking
+                hasOverbooking ||
+                exceeds40h
               }
               className="bg-muted text-foreground hover:bg-muted/80 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
             >
@@ -1364,9 +1399,11 @@ function ReportDetailModal({
             <h2 className="text-foreground text-xl font-bold">
               {t('reports.week')} {report.weekNumber} / {report.year}
             </h2>
-            <p className="text-muted-foreground text-sm">
-              {report.ausbildungsjahr}. {t('reports.trainingYear')}
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-muted-foreground text-sm">
+                {report.ausbildungsjahr}. {t('reports.trainingYear')}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -1455,10 +1492,10 @@ function ReportDetailModal({
                       </div>
                     )}
 
-                    {/* Show effective grade (release > trainer) if graded */}
-                    {(entry.releaseGrade || entry.trainerGrade) && (() => {
-                      const effectiveGrade = Number(entry.releaseGrade ?? entry.trainerGrade);
-                      const effectiveComment = entry.releaseGradeComment || entry.gradeComment;
+                    {/* Show trainer grade if graded */}
+                    {entry.trainerGrade && (() => {
+                      const trainerGrade = Number(entry.trainerGrade);
+                      const gradeComment = entry.gradeComment;
                       return (
                         <div className="bg-accent/10 border-accent/20 mt-3 rounded-lg border p-3">
                           <div className="flex items-center gap-3">
@@ -1467,19 +1504,19 @@ function ReportDetailModal({
                                 {t('reports.trainerGrade')}
                               </span>
                               <span
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${effectiveGrade <= 2
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${trainerGrade <= 2
                                   ? 'bg-green-500'
-                                  : effectiveGrade <= 4
+                                  : trainerGrade <= 4
                                     ? 'bg-yellow-500'
                                     : 'bg-red-500'
                                   }`}
                               >
-                                {effectiveGrade}
+                                {trainerGrade}
                               </span>
                             </div>
-                            {effectiveComment && (
+                            {gradeComment && (
                               <p className="text-foreground flex-1 text-sm italic">
-                                "{effectiveComment}"
+                                &quot;{gradeComment}&quot;
                               </p>
                             )}
                           </div>
@@ -1509,6 +1546,7 @@ function ReportDetailModal({
               </p>
             </div>
           )}
+
         </div>
 
         {/* Footer */}

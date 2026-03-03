@@ -87,13 +87,12 @@ export async function POST(
       yearEnd.setDate(yearEnd.getDate() - 1);
     }
 
-    // Fetch all graded use case entries for snapshot (includes all 3 grade columns)
+    // Fetch all graded use case entries for snapshot
     const gradedEntries = await db
       .select({
         entryId: activityReportUseCaseEntries.id,
         traineeGrade: activityReportUseCaseEntries.traineeGrade,
         trainerGrade: activityReportUseCaseEntries.trainerGrade,
-        releaseGrade: activityReportUseCaseEntries.releaseGrade,
         actualHours: activityReportUseCaseEntries.actualHours,
         useCaseLetter: trainingUseCases.letter,
         useCaseDescription: trainingUseCases.description,
@@ -125,7 +124,7 @@ export async function POST(
       .orderBy(trainingComponents.orderIndex, trainingUseCases.orderIndex);
 
     // Build snapshot data (frozen at issue time)
-    // Uses effective grade: releaseGrade ?? trainerGrade for calculations
+    // trainerGrade is the final grade (migration 0033 merged release_grade into trainer_grade)
     const componentMap = new Map<
       string,
       {
@@ -137,7 +136,6 @@ export async function POST(
           description: string;
           traineeGrade: string | null;
           trainerGrade: string | null;
-          releaseGrade: string | null;
           effectiveGrade: string | null;
           hours: number;
         }>;
@@ -161,14 +159,13 @@ export async function POST(
       }
 
       const comp = componentMap.get(key)!;
-      const effectiveGrade = entry.releaseGrade || entry.trainerGrade;
+      const effectiveGrade = entry.trainerGrade;
       
       comp.useCases.push({
         letter: entry.useCaseLetter,
         description: entry.useCaseDescription,
         traineeGrade: entry.traineeGrade,
         trainerGrade: entry.trainerGrade,
-        releaseGrade: entry.releaseGrade,
         effectiveGrade,
         hours: entry.actualHours,
       });
@@ -271,10 +268,8 @@ export async function POST(
       },
     });
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
     console.error('Error issuing certificate:', error);
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: 'Interner Serverfehler beim Ausstellen des Zeugnisses' }, { status: 500 });
   }
 }
 

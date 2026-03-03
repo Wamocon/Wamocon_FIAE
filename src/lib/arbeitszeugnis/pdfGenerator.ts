@@ -286,7 +286,7 @@ export async function generateArbeitszeugnisPDF(
     margin: { left: margin, right: margin },
   });
 
-  // @ts-ignore
+  // @ts-expect-error - jspdf-autotable extends jsPDF prototype
   y = doc.lastAutoTable.finalY + 8;
 
   // -- OVERALL GRADE --
@@ -360,7 +360,7 @@ export async function generateArbeitszeugnisPDF(
       margin: { left: margin, right: margin },
     });
 
-    // @ts-ignore
+    // @ts-expect-error - jspdf-autotable extends jsPDF prototype
     y = doc.lastAutoTable.finalY + 12;
   }
 
@@ -503,7 +503,7 @@ export async function generateArbeitszeugnisPDF(
     margin: { left: margin, right: margin },
   });
 
-  // @ts-ignore
+  // @ts-expect-error - jspdf-autotable extends jsPDF prototype
   y = doc.lastAutoTable.finalY + 20;
 
   // Additional info

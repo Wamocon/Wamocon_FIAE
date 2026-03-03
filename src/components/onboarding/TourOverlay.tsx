@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useSidebar } from '@/contexts/SidebarContext';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface SpotlightRect {
@@ -16,12 +17,38 @@ interface SpotlightRect {
 export function TourOverlay() {
   const { isActive, currentStep, currentStepIndex, steps, nextStep, prevStep, skipTour } = useOnboarding();
   const { t } = useLanguage();
+  const sidebar = useSidebar();
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const observerRef = useRef<ResizeObserver | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const sidebarOpenedByTour = useRef(false);
 
   const PAD = 10;
+
+  // Check if a step targets a sidebar element
+  const isSidebarStep = useCallback((selector: string) => {
+    return selector.includes('data-tour="sidebar-');
+  }, []);
+
+  // Open sidebar when tour step targets sidebar items
+  useEffect(() => {
+    if (!isActive || !currentStep) {
+      // Tour ended — close sidebar if we opened it
+      if (sidebarOpenedByTour.current) {
+        sidebar.close();
+        sidebarOpenedByTour.current = false;
+      }
+      return;
+    }
+
+    if (isSidebarStep(currentStep.targetSelector)) {
+      if (!sidebar.isOpen) {
+        sidebar.open();
+        sidebarOpenedByTour.current = true;
+      }
+    }
+  }, [isActive, currentStep, sidebar, isSidebarStep]);
 
   const calculatePositions = useCallback(() => {
     if (!currentStep) {
@@ -36,6 +63,13 @@ export function TourOverlay() {
     }
 
     const rect = el.getBoundingClientRect();
+
+    // If the element is off-screen (e.g. sidebar hidden), skip spotlight
+    if (rect.right < 0 || rect.bottom < 0 || rect.left > window.innerWidth || rect.top > window.innerHeight) {
+      setSpotlight(null);
+      return;
+    }
+
     const sr: SpotlightRect = {
       top: rect.top - PAD,
       left: rect.left - PAD,
@@ -61,9 +95,19 @@ export function TourOverlay() {
       tp = { top: sr.top - tooltipH - gap, left: sr.left + sr.width / 2 - tooltipW / 2 };
     }
 
-    // Clamp within viewport with padding
+    // If tooltip would overflow right, flip to left of target
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+
+    if (placement === 'right' && tp.left + tooltipW > vw - 16) {
+      tp.left = sr.left - tooltipW - gap;
+    }
+    // If tooltip would overflow left, flip to right of target
+    if (placement === 'left' && tp.left < 16) {
+      tp.left = sr.left + sr.width + gap;
+    }
+
+    // Final clamp within viewport with padding
     tp.left = Math.max(16, Math.min(vw - tooltipW - 16, tp.left));
     tp.top = Math.max(16, Math.min(vh - tooltipH - 16, tp.top));
 
@@ -73,8 +117,13 @@ export function TourOverlay() {
   useEffect(() => {
     if (!isActive || !currentStep) return;
 
-    // Initial calc
-    calculatePositions();
+    // If step targets sidebar, wait for sidebar animation to finish (300ms transition)
+    const isSidebar = isSidebarStep(currentStep.targetSelector);
+    const initialDelay = isSidebar ? 350 : 0;
+
+    const initialTimer = setTimeout(() => {
+      calculatePositions();
+    }, initialDelay);
 
     // Recalculate on scroll/resize
     const handle = () => calculatePositions();
@@ -89,15 +138,18 @@ export function TourOverlay() {
     }
 
     // Re-calculate after tooltip renders so height measurement is accurate
-    const raf = requestAnimationFrame(() => calculatePositions());
+    const raf = requestAnimationFrame(() => {
+      setTimeout(() => calculatePositions(), isSidebar ? 350 : 50);
+    });
 
     return () => {
+      clearTimeout(initialTimer);
       window.removeEventListener('resize', handle);
       window.removeEventListener('scroll', handle, true);
       observerRef.current?.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [isActive, currentStep, calculatePositions]);
+  }, [isActive, currentStep, calculatePositions, isSidebarStep]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -181,7 +233,7 @@ export function TourOverlay() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2, delay: 0.05 }}
-          className="absolute z-[9999] w-80 rounded-2xl border border-border bg-card p-5 shadow-2xl backdrop-blur-xl"
+          className="absolute z-[9999] w-[min(320px,calc(100vw-32px))] rounded-2xl border border-border bg-card p-5 shadow-2xl backdrop-blur-xl"
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,

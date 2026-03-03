@@ -6,6 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useSidebar } from '@/contexts/SidebarContext';
 
 const TraineeLayoutComponent = ({
   children,
@@ -15,7 +16,7 @@ const TraineeLayoutComponent = ({
   const { user, profile, loading } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isOpen: sidebarOpen, toggle: handleToggleSidebar } = useSidebar();
 
   // If profile is already available from cache, skip waiting entirely.
   // This avoids a flash of the loading spinner on cached sessions.
@@ -75,10 +76,6 @@ const TraineeLayoutComponent = ({
       router.push('/trainee/dashboard');
     }
   }, [router]);
-
-  const handleToggleSidebar = useCallback(() => {
-    setSidebarOpen(prev => !prev);
-  }, []);
 
   // Show loading state while auth is initializing or waiting for profile
   if (isLoading) {
