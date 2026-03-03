@@ -3,15 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import {
-  Users,
-  TrendingUp,
-  AlertTriangle,
-  BarChart3,
-} from 'lucide-react';
+import { Users, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // Dynamically import chart components with SSR disabled
 const ProgressTrendChart = dynamic(
@@ -20,7 +17,7 @@ const ProgressTrendChart = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-[200px] items-center justify-center">
-        <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-2" />
+        <LoadingSpinner size="sm" />
       </div>
     ),
   }
@@ -32,7 +29,7 @@ const ModuleProgressChart = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-[200px] items-center justify-center">
-        <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-2" />
+        <LoadingSpinner size="sm" />
       </div>
     ),
   }
@@ -205,9 +202,7 @@ export default function TrainerDashboard() {
                   </p>
                   <button
                     onClick={() =>
-                      router.push(
-                        '/trainer/reviews?onlyPending=true'
-                      )
+                      router.push('/trainer/reviews?onlyPending=true')
                     }
                     className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 w-full rounded-xl px-4 py-2 text-sm transition-colors"
                   >
@@ -235,18 +230,22 @@ export default function TrainerDashboard() {
                 </button>
               </div>
               {trainees.length === 0 ? (
-                <p className="text-muted-foreground text-sm">{t('trainee.management.noTrainees')}</p>
+                <p className="text-muted-foreground text-sm">
+                  {t('trainee.management.noTrainees')}
+                </p>
               ) : (
                 <div className="space-y-3">
-                  {trainees.map((trainee) => (
+                  {trainees.map(trainee => (
                     <div
                       key={trainee.id}
                       role="button"
-                      onClick={() => router.push(`/trainer/trainees/${trainee.id}`)}
-                      className="bg-background/50 border-border/50 hover:bg-accent/10 hover:ring-1 hover:ring-accent cursor-pointer rounded-xl border p-4 transition-all duration-200"
+                      onClick={() =>
+                        router.push(`/trainer/trainees/${trainee.id}`)
+                      }
+                      className="bg-background/50 border-border/50 hover:bg-accent/10 hover:ring-accent cursor-pointer rounded-xl border p-4 transition-all duration-200 hover:ring-1"
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-foreground font-medium text-sm">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-foreground text-sm font-medium">
                           {trainee.full_name}
                         </span>
                         <span className="text-foreground text-sm font-bold">
@@ -262,7 +261,9 @@ export default function TrainerDashboard() {
                                 ? 'bg-amber-500'
                                 : 'bg-primary'
                           }`}
-                          style={{ width: `${Math.max(0, Math.min(100, trainee.progress || 0))}%` }}
+                          style={{
+                            width: `${Math.max(0, Math.min(100, trainee.progress || 0))}%`,
+                          }}
                         />
                       </div>
                     </div>
@@ -270,7 +271,6 @@ export default function TrainerDashboard() {
                 </div>
               )}
             </div>
-
           </div>
 
           {/* Right Sidebar - Charts */}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   ChevronLeft,
   ChevronRight,
@@ -585,7 +586,7 @@ export function TrainerCalendarTab() {
           {/* Calendar Grid */}
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <div className="border-accent/30 border-t-accent h-10 w-10 animate-spin rounded-full border-4" />
+              <LoadingSpinner size="lg" />
             </div>
           ) : (
             <div className="border-border overflow-hidden rounded-xl border">

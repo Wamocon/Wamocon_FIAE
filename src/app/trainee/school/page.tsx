@@ -4,63 +4,55 @@ import { Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SchoolView } from '@/components/school/SchoolView';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 function SchoolPageContent() {
-    const { profile, loading } = useAuth();
-    const { t } = useLanguage();
+  const { profile, loading } = useAuth();
+  const { t } = useLanguage();
 
-    if (loading) {
-        return (
-            <div className="bg-background flex min-h-full items-center justify-center">
-                <div className="text-center">
-                    <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-                    <p className="text-muted-foreground">{t('school.loading')}</p>
-                </div>
-            </div>
-        );
-    }
+  if (loading) {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
-    if (!profile) {
-        return (
-            <div className="bg-background flex min-h-full items-center justify-center">
-                <div className="text-center">
-                    <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-                    <p className="text-muted-foreground">{t('quiz.userNotFound')}</p>
-                </div>
-            </div>
-        );
-    }
+  if (!profile) {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+        </div>
+      </div>
+    );
+  }
 
-    if (profile.role !== 'trainee') {
-        return (
-            <div className="bg-background flex min-h-full items-center justify-center">
-                <div className="text-center">
-                    <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-                    <p className="text-muted-foreground">{t('quiz.accessDenied')}</p>
-                </div>
-            </div>
-        );
-    }
+  if (profile.role !== 'trainee') {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+        </div>
+      </div>
+    );
+  }
 
-    return <SchoolView />;
+  return <SchoolView />;
 }
 
 function LoadingFallback() {
-    const { t } = useLanguage();
-    return (
-        <div className="bg-background flex min-h-full items-center justify-center">
-            <div className="text-center">
-                <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-                <p className="text-muted-foreground">{t('common.loading')}</p>
-            </div>
-        </div>
-    );
+  return (
+    <div className="bg-background flex min-h-full items-center justify-center">
+      <LoadingSpinner size="lg" />
+    </div>
+  );
 }
 
 export default function TraineeSchoolPage() {
-    return (
-        <Suspense fallback={<LoadingFallback />}>
-            <SchoolPageContent />
-        </Suspense>
-    );
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <SchoolPageContent />
+    </Suspense>
+  );
 }

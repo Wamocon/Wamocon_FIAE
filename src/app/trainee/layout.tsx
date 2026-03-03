@@ -6,6 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PageLoader } from '@/components/ui/PageLoader';
 
 const TraineeLayoutComponent = ({
   children,
@@ -82,54 +83,24 @@ const TraineeLayoutComponent = ({
 
   // Show loading state while auth is initializing or waiting for profile
   if (isLoading) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
-        </div>
-      </div>
-    );
+    return <PageLoader size="lg" fullScreen />;
   }
 
   // Show redirect state
   if (shouldRedirect) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">
-            {t('common.redirecting')}
-          </p>
-        </div>
-      </div>
-    );
+    return <PageLoader size="lg" fullScreen />;
   }
 
   // User exists but profile hasn't arrived yet — keep showing a
   // non-blocking loading state. AuthContext will update `profile` in the
   // background and this layout will re-render automatically.
   if (user && !profile) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
-        </div>
-      </div>
-    );
+    return <PageLoader size="lg" fullScreen />;
   }
 
   // No user and no profile after auth completed — truly not authenticated
   if (!isAuthenticated) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">{t('quiz.accessDenied')}</p>
-        </div>
-      </div>
-    );
+    return <PageLoader size="lg" fullScreen />;
   }
 
   return (

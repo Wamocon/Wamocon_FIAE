@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function DemoRedirect() {
   const router = useRouter();
@@ -12,7 +13,7 @@ export default function DemoRedirect() {
 
   return (
     <div className="flex h-full items-center justify-center">
-      <div className="text-muted-foreground animate-pulse text-lg">Wird geladen...</div>
+      <LoadingSpinner size="lg" />
     </div>
   );
 }

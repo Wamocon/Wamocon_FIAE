@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { PageLoader } from '@/components/ui/PageLoader';
 import {
   BookOpen,
   Users,
@@ -308,7 +309,7 @@ export default function EditCoursePage() {
     }
   };
 
-  if (loading) return <div className="p-6">{t('common.loading')}</div>;
+  if (loading) return <PageLoader />;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (

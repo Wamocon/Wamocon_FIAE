@@ -5,6 +5,7 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Profile } from '@/components/profile/Profile';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function TraineeProfilePage() {
   const { profile, loading } = useAuth();
@@ -15,10 +16,7 @@ export default function TraineeProfilePage() {
   if (loading) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
-        <div className="text-center">
-          <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">{t('profile.loading')}</p>
-        </div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -27,7 +25,9 @@ export default function TraineeProfilePage() {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">{t('quiz.userNotFound')}</p>
         </div>
       </div>
@@ -38,7 +38,9 @@ export default function TraineeProfilePage() {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">{t('quiz.accessDenied')}</p>
         </div>
       </div>
