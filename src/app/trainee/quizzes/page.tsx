@@ -3,6 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Brain, Play, Award } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useEffect, useState } from 'react';
 
 type QuizCard = {
@@ -26,7 +27,9 @@ export default function TraineeQuizzesPage() {
     const load = async () => {
       if (!profile?.id) return;
       try {
-        const res = await fetch(`/api/trainee/quizzes?userId=${profile.id}`, { cache: 'no-store' });
+        const res = await fetch(`/api/trainee/quizzes?userId=${profile.id}`, {
+          cache: 'no-store',
+        });
         const data = (await res.json()) as QuizCard[];
         setQuizzes(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -40,10 +43,7 @@ export default function TraineeQuizzesPage() {
   if (loading) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
-        <div className="text-center">
-          <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">{t('quiz.loading')}</p>
-        </div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -52,7 +52,9 @@ export default function TraineeQuizzesPage() {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">{t('quiz.userNotFound')}</p>
         </div>
       </div>
@@ -63,14 +65,14 @@ export default function TraineeQuizzesPage() {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">{t('quiz.accessDenied')}</p>
         </div>
       </div>
     );
   }
-
-
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
@@ -78,15 +80,13 @@ export default function TraineeQuizzesPage() {
       <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-6">
           <div className="from-accent to-primary flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br">
-            <Brain className="h-8 w-8 text-foreground" />
+            <Brain className="text-foreground h-8 w-8" />
           </div>
           <div>
             <h1 className="text-foreground mb-2 text-3xl font-bold">
               {t('quiz.title')}
             </h1>
-            <p className="text-muted">
-              {t('quiz.description')}
-            </p>
+            <p className="text-muted">{t('quiz.description')}</p>
           </div>
         </div>
       </div>
@@ -96,12 +96,12 @@ export default function TraineeQuizzesPage() {
         {quizzes.map(quiz => (
           <div
             key={quiz.id}
-            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-200 hover:scale-[1.02] hover:border-accent/50 hover:shadow-xl hover:shadow-accent/5"
+            className="glass-effect border-accent/30 hover:border-accent/50 hover:shadow-accent/5 rounded-3xl border p-6 shadow-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-xl"
           >
             <div className="mb-4 flex items-start justify-between">
               <div className="flex items-center gap-4">
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
-                  <Brain className="h-6 w-6 text-foreground" />
+                  <Brain className="text-foreground h-6 w-6" />
                 </div>
                 <div>
                   <h3 className="text-foreground text-xl font-bold">
@@ -156,7 +156,10 @@ export default function TraineeQuizzesPage() {
 
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <a href={`/trainee/quizzes/${quiz.id}`} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-center text-sm font-medium transition-colors">
+              <a
+                href={`/trainee/quizzes/${quiz.id}`}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 flex-1 rounded-xl px-4 py-2 text-center text-sm font-medium transition-colors"
+              >
                 <Play className="mr-2 inline h-4 w-4" />
                 {(quiz.bestScore ?? 0) > 0 ? t('quiz.retry') : t('quiz.start')}
               </a>

@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   ClipboardList,
   Plus,
@@ -93,10 +94,20 @@ export default function TraineeActivityReportsPage() {
   }, [profile?.id, authLoading, router]);
 
   // Data fetching via React Query (cached, deduped, auto-refresh on focus)
-  const reportsUrl = profile?.id ? `/api/activity-reports?userId=${profile.id}` : null;
-  const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>('/api/training-components');
-  const { data: ucData } = useApiQuery<{ useCases: TrainingUseCase[] }>('/api/training-use-cases');
-  const { data: reportData, isLoading: reportsLoading, error: reportsError } = useApiQuery<{ reports: ActivityReport[] }>(reportsUrl);
+  const reportsUrl = profile?.id
+    ? `/api/activity-reports?userId=${profile.id}`
+    : null;
+  const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>(
+    '/api/training-components'
+  );
+  const { data: ucData } = useApiQuery<{ useCases: TrainingUseCase[] }>(
+    '/api/training-use-cases'
+  );
+  const {
+    data: reportData,
+    isLoading: reportsLoading,
+    error: reportsError,
+  } = useApiQuery<{ reports: ActivityReport[] }>(reportsUrl);
 
   const components = compData?.components || [];
   const useCases = ucData?.useCases || [];
@@ -208,7 +219,9 @@ export default function TraineeActivityReportsPage() {
     e.stopPropagation();
     try {
       // Fetch entries for this report
-      const res = await fetch(`/api/activity-reports/${report.id}/entries`, { cache: 'no-store' });
+      const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error(t('reports.error.loadEntries'));
 
       const data = await res.json();
@@ -322,7 +335,7 @@ export default function TraineeActivityReportsPage() {
   if (authLoading || loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="border-accent h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -368,8 +381,9 @@ export default function TraineeActivityReportsPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <button
           onClick={() => setFilterStatus('ALL')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'ALL' ? 'ring-primary bg-primary/5 ring-2' : ''
-            }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
+            filterStatus === 'ALL' ? 'ring-primary bg-primary/5 ring-2' : ''
+          }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
@@ -388,10 +402,11 @@ export default function TraineeActivityReportsPage() {
 
         <button
           onClick={() => setFilterStatus('SUBMITTED')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'SUBMITTED'
-            ? 'bg-blue-400/5 ring-2 ring-blue-400'
-            : ''
-            }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
+            filterStatus === 'SUBMITTED'
+              ? 'bg-blue-400/5 ring-2 ring-blue-400'
+              : ''
+          }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
@@ -410,10 +425,11 @@ export default function TraineeActivityReportsPage() {
 
         <button
           onClick={() => setFilterStatus('APPROVED')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'APPROVED'
-            ? 'bg-green-400/5 ring-2 ring-green-400'
-            : ''
-            }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
+            filterStatus === 'APPROVED'
+              ? 'bg-green-400/5 ring-2 ring-green-400'
+              : ''
+          }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
@@ -477,7 +493,7 @@ export default function TraineeActivityReportsPage() {
                 <div
                   key={report.id}
                   onClick={() => setSelectedReport(report)}
-                  className="hover:bg-muted/50 cursor-pointer rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.005]"
+                  className="hover:bg-muted/50 cursor-pointer rounded-xl p-4 transition-all duration-200 hover:scale-[1.005] hover:shadow-md"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -503,25 +519,25 @@ export default function TraineeActivityReportsPage() {
                   {/* Actions for Drafts */}
                   {(report.status === 'DRAFT' ||
                     report.status === 'REJECTED') && (
-                      <div className="border-border/50 mt-3 flex items-center gap-2 border-t pt-3">
-                        <button
-                          onClick={e => handleEditReport(e, report)}
-                          className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                          {report.status === 'REJECTED'
-                            ? t('reports.resubmit')
-                            : t('common.edit')}
-                        </button>
-                        <button
-                          onClick={e => handleDeleteReport(e, report.id)}
-                          className="bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          {t('common.delete')}
-                        </button>
-                      </div>
-                    )}
+                    <div className="border-border/50 mt-3 flex items-center gap-2 border-t pt-3">
+                      <button
+                        onClick={e => handleEditReport(e, report)}
+                        className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                        {report.status === 'REJECTED'
+                          ? t('reports.resubmit')
+                          : t('common.edit')}
+                      </button>
+                      <button
+                        onClick={e => handleDeleteReport(e, report.id)}
+                        className="bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        {t('common.delete')}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Download Button for Approved Reports */}
                   {report.status === 'APPROVED' && (
@@ -795,7 +811,10 @@ function CreateReportModal({
   const entriesValid =
     entries.length > 0 &&
     entries.every(
-      e => e.actualHours > 0 && typeof e.actualHours === 'number' && e.notes.trim().length > 0
+      e =>
+        e.actualHours > 0 &&
+        typeof e.actualHours === 'number' &&
+        e.notes.trim().length > 0
     );
 
   const canSubmit =
@@ -1004,8 +1023,9 @@ function CreateReportModal({
                               Number(e.target.value)
                             )
                           }
-                          className={`bg-background text-foreground w-full rounded border px-3 py-1.5 ${isOverbooked ? 'border-yellow-500' : 'border-border'
-                            }`}
+                          className={`bg-background text-foreground w-full rounded border px-3 py-1.5 ${
+                            isOverbooked ? 'border-yellow-500' : 'border-border'
+                          }`}
                         />
                       </div>
                       <div className="col-span-2">
@@ -1218,7 +1238,9 @@ function ReportDetailModal({
 
   const loadEntries = async () => {
     try {
-      const res = await fetch(`/api/activity-reports/${report.id}/entries`, { cache: 'no-store' });
+      const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
+        cache: 'no-store',
+      });
       if (res.ok) {
         const data = await res.json();
         setEntries(data.entries || []);
@@ -1258,7 +1280,7 @@ function ReportDetailModal({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="border-accent h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
+              <LoadingSpinner size="md" />
             </div>
           ) : entries.length === 0 ? (
             <p className="text-muted-foreground py-12 text-center">
@@ -1320,12 +1342,13 @@ function ReportDetailModal({
                               {t('reports.trainerGrade')}
                             </span>
                             <span
-                              className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${entry.trainerGrade <= 2
-                                ? 'bg-green-500'
-                                : entry.trainerGrade <= 4
-                                  ? 'bg-yellow-500'
-                                  : 'bg-red-500'
-                                }`}
+                              className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${
+                                entry.trainerGrade <= 2
+                                  ? 'bg-green-500'
+                                  : entry.trainerGrade <= 4
+                                    ? 'bg-yellow-500'
+                                    : 'bg-red-500'
+                              }`}
                             >
                               {entry.trainerGrade}
                             </span>
@@ -1440,12 +1463,13 @@ function ComponentItem({
                     !isSelected && !isExhausted && onAddEntry(useCase)
                   }
                   disabled={isSelected || isExhausted}
-                  className={`w-full rounded p-2 text-left text-sm transition-colors ${isSelected
-                    ? 'bg-accent/20 text-accent cursor-not-allowed'
-                    : isExhausted
-                      ? 'bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60'
-                      : 'hover:bg-muted/50 text-foreground'
-                    }`}
+                  className={`w-full rounded p-2 text-left text-sm transition-colors ${
+                    isSelected
+                      ? 'bg-accent/20 text-accent cursor-not-allowed'
+                      : isExhausted
+                        ? 'bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60'
+                        : 'hover:bg-muted/50 text-foreground'
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <span>

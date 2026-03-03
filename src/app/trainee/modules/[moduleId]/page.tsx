@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { Check, Clock, X as XIcon, ChevronRight } from 'lucide-react';
+import { PageLoader } from '@/components/ui/PageLoader';
 
 export default function TraineeModuleDetailPage() {
   const params = useParams<{ moduleId: string }>();
@@ -14,13 +15,34 @@ export default function TraineeModuleDetailPage() {
   const { t } = useLanguage();
 
   type CourseDetail = {
-    course: { id: string; title: string; year: number | null; chapter: number | null } | null;
-    enablers: Array<{ id: string; title: string; attemptNumber?: number | null; status?: string | null }>;
-    useCases: Array<{ id: string; title: string; attemptNumber?: number | null; status?: string | null }>;
+    course: {
+      id: string;
+      title: string;
+      year: number | null;
+      chapter: number | null;
+    } | null;
+    enablers: Array<{
+      id: string;
+      title: string;
+      attemptNumber?: number | null;
+      status?: string | null;
+    }>;
+    useCases: Array<{
+      id: string;
+      title: string;
+      attemptNumber?: number | null;
+      status?: string | null;
+    }>;
   };
 
-  const { data, isLoading: loading, error } = useApiQuery<CourseDetail>(
-    profile?.id && courseId ? `/api/trainee/courses/${courseId}?traineeId=${profile.id}` : null
+  const {
+    data,
+    isLoading: loading,
+    error,
+  } = useApiQuery<CourseDetail>(
+    profile?.id && courseId
+      ? `/api/trainee/courses/${courseId}?traineeId=${profile.id}`
+      : null
   );
   const course = data?.course || null;
   const enablers = data?.enablers || [];
@@ -56,7 +78,7 @@ export default function TraineeModuleDetailPage() {
   };
 
   if (!profile) return <div className="p-6">{t('courses.loginPrompt')}</div>;
-  if (loading) return <div className="p-6">{t('common.loading')}</div>;
+  if (loading) return <PageLoader />;
   if (error) return <div className="p-6 text-red-500">{error.message}</div>;
   if (!course) return <div className="p-6">{t('common.notFound')}</div>;
 
@@ -102,7 +124,9 @@ export default function TraineeModuleDetailPage() {
                   >
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <StatusIndicator status={e.status} />
-                      <span className="transition-colors duration-200 group-hover:text-accent">{e.title}</span>
+                      <span className="group-hover:text-accent transition-colors duration-200">
+                        {e.title}
+                      </span>
                       {e.attemptNumber && !e.status ? (
                         <span className="border-accent/30 ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs">
                           {t('courses.attempt').replace(
@@ -112,7 +136,7 @@ export default function TraineeModuleDetailPage() {
                         </span>
                       ) : null}
                     </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-accent" />
+                    <ChevronRight className="text-muted-foreground group-hover:text-accent h-4 w-4 shrink-0 transition-all duration-200 group-hover:translate-x-1" />
                   </Link>
                 </li>
               ))}
@@ -147,7 +171,9 @@ export default function TraineeModuleDetailPage() {
                   >
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <StatusIndicator status={u.status} />
-                      <span className="transition-colors duration-200 group-hover:text-accent">{u.title}</span>
+                      <span className="group-hover:text-accent transition-colors duration-200">
+                        {u.title}
+                      </span>
                       {u.attemptNumber && !u.status ? (
                         <span className="border-accent/30 ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs">
                           {t('courses.attempt').replace(
@@ -157,7 +183,7 @@ export default function TraineeModuleDetailPage() {
                         </span>
                       ) : null}
                     </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-accent" />
+                    <ChevronRight className="text-muted-foreground group-hover:text-accent h-4 w-4 shrink-0 transition-all duration-200 group-hover:translate-x-1" />
                   </Link>
                 </li>
               ))}

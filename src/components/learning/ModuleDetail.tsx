@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useRouter } from 'next/navigation';
 import {
   BookOpen,
@@ -28,7 +29,9 @@ export default function ModuleDetail({ data }: ModuleDetailProps) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">{t('modules.notFound')}</p>
         </div>
       </div>

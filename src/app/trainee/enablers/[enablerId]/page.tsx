@@ -8,6 +8,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import LinkifyText from '@/components/ui/LinkifyText';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PageLoader } from '@/components/ui/PageLoader';
 import dynamic from 'next/dynamic';
 const MarkdownText = dynamic(
   () =>
@@ -20,7 +22,14 @@ import {
   FlipbookViewer,
   useFlipbookViewer,
 } from '@/components/ui/FlipbookViewer';
-import { BookOpen, CheckCircle, Clock, AlertCircle, FileText, Layers } from 'lucide-react';
+import {
+  BookOpen,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  FileText,
+  Layers,
+} from 'lucide-react';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -64,16 +73,35 @@ export default function TraineeEnablerPage() {
   const [error, setError] = useState<string | null>(null);
 
   // API URLs
-  const enablerUrl = profile?.id && enablerId ? `/api/trainee/enablers/${enablerId}?traineeId=${profile.id}` : null;
-  const quizzesUrl = profile?.id && enablerId ? `/api/trainee/enablers/${enablerId}/quizzes?traineeId=${profile.id}` : null;
-  const docsUrl = enablerId ? `/api/trainer/enablers/${enablerId}/documents` : null;
+  const enablerUrl =
+    profile?.id && enablerId
+      ? `/api/trainee/enablers/${enablerId}?traineeId=${profile.id}`
+      : null;
+  const quizzesUrl =
+    profile?.id && enablerId
+      ? `/api/trainee/enablers/${enablerId}/quizzes?traineeId=${profile.id}`
+      : null;
+  const docsUrl = enablerId
+    ? `/api/trainer/enablers/${enablerId}/documents`
+    : null;
 
   // Data fetching via React Query
   type EnablerResponse = { enabler: any | null; submission: any | null };
   type QuizzesResponse = { quizzes: GatedQuizInfo[] };
-  type DocsResponse = { documents: Array<{ id: string; title: string; storageUrl: string; documentType: string }> };
+  type DocsResponse = {
+    documents: Array<{
+      id: string;
+      title: string;
+      storageUrl: string;
+      documentType: string;
+    }>;
+  };
 
-  const { data: enablerData, isLoading: loading, error: enablerError } = useApiQuery<EnablerResponse>(enablerUrl);
+  const {
+    data: enablerData,
+    isLoading: loading,
+    error: enablerError,
+  } = useApiQuery<EnablerResponse>(enablerUrl);
   const { data: quizzesData } = useApiQuery<QuizzesResponse>(quizzesUrl);
   const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
 
@@ -82,7 +110,10 @@ export default function TraineeEnablerPage() {
   const gated = useMemo(() => {
     const list = quizzesData?.quizzes || [];
     const order: Difficulty[] = ['LOW', 'MEDIUM', 'HIGH'];
-    return order.map(d => list.find(x => x.difficulty === d) || { difficulty: d, unlocked: false });
+    return order.map(
+      d =>
+        list.find(x => x.difficulty === d) || { difficulty: d, unlocked: false }
+    );
   }, [quizzesData]);
 
   // Form state
@@ -131,10 +162,15 @@ export default function TraineeEnablerPage() {
         trainerFeedback: enablerData.submission.trainerFeedback,
         feedbacks: enablerData.submission.feedbacks,
       });
-      if (enablerData.submission.solutions && Array.isArray(enablerData.submission.solutions)) {
+      if (
+        enablerData.submission.solutions &&
+        Array.isArray(enablerData.submission.solutions)
+      ) {
         setSolutions(enablerData.submission.solutions);
       } else if (enablerData.submission.solutionText) {
-        setSolutions([{ scenarioIndex: 0, text: enablerData.submission.solutionText }]);
+        setSolutions([
+          { scenarioIndex: 0, text: enablerData.submission.solutionText },
+        ]);
       }
     } else {
       setSolutions([{ scenarioIndex: 0, text: '' }]);
@@ -298,9 +334,16 @@ export default function TraineeEnablerPage() {
       setSaveSuccess(t('enablerPage.solutionSaved'));
 
       // Optimistically update to PENDING, then refetch from server
-      setSubmission(prev => prev
-        ? { ...prev, status: 'PENDING', trainerFeedback: null, feedbacks: null }
-        : { id: '', status: 'PENDING' });
+      setSubmission(prev =>
+        prev
+          ? {
+              ...prev,
+              status: 'PENDING',
+              trainerFeedback: null,
+              feedbacks: null,
+            }
+          : { id: '', status: 'PENDING' }
+      );
       if (enablerUrl) queryClient.invalidateQueries({ queryKey: [enablerUrl] });
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
@@ -321,28 +364,27 @@ export default function TraineeEnablerPage() {
     () => documents.filter(d => d.documentType !== 'EXERCISE'),
     [documents]
   );
-  const scenarioDocs = useMemo(
-    () => {
-      const exercises = documents.filter(d => d.documentType === 'EXERCISE');
-      // Sort by extracted part number so display order is Part 1, 2, 3... regardless of upload order
-      return exercises.sort((a, b) => {
-        const partA = a.title.match(/Part\s*(\d+)/i);
-        const partB = b.title.match(/Part\s*(\d+)/i);
-        const numA = partA ? parseInt(partA[1], 10) : 9999;
-        const numB = partB ? parseInt(partB[1], 10) : 9999;
-        return numA - numB;
-      });
-    },
-    [documents]
-  );
+  const scenarioDocs = useMemo(() => {
+    const exercises = documents.filter(d => d.documentType === 'EXERCISE');
+    // Sort by extracted part number so display order is Part 1, 2, 3... regardless of upload order
+    return exercises.sort((a, b) => {
+      const partA = a.title.match(/Part\s*(\d+)/i);
+      const partB = b.title.match(/Part\s*(\d+)/i);
+      const numA = partA ? parseInt(partA[1], 10) : 9999;
+      const numB = partB ? parseInt(partB[1], 10) : 9999;
+      return numA - numB;
+    });
+  }, [documents]);
 
   /** Clean up scenario document title for display */
-  const formatScenarioLabel = (title: string): { part: number | null; label: string } => {
+  const formatScenarioLabel = (
+    title: string
+  ): { part: number | null; label: string } => {
     let cleaned = title
-      .replace(/^Szenario:\s*/i, '')       // Remove "Szenario: " prefix
-      .replace(/^Szenarien[\s_]*/i, '')    // Remove "Szenarien_" prefix
-      .replace(/^\d{10,}_/, '')             // Remove leading timestamp "1771857633602_"
-      .replace(/_/g, ' ')                   // Replace underscores with spaces
+      .replace(/^Szenario:\s*/i, '') // Remove "Szenario: " prefix
+      .replace(/^Szenarien[\s_]*/i, '') // Remove "Szenarien_" prefix
+      .replace(/^\d{10,}_/, '') // Remove leading timestamp "1771857633602_"
+      .replace(/_/g, ' ') // Replace underscores with spaces
       .replace(/\s*\bKORRIGIERT\b\s*/gi, '')
       .replace(/\s*\bKORR\b\s*/gi, '')
       .replace(/\s*\bBEARBEITET\b\s*/gi, '')
@@ -351,21 +393,22 @@ export default function TraineeEnablerPage() {
       .replace(/\s*\bREV\d*\b\s*/gi, '')
       .replace(/\s*\bPASST\b\s*/gi, '')
       .replace(/\s*\bsortiert\b\s*/gi, '')
-      .replace(/\s*\(\d+\)\s*/g, '')        // Remove "(1)" duplicates
-      .replace(/\s*\bFR-\d+\b\s*/gi, '')    // Remove "FR-732" references
+      .replace(/\s*\(\d+\)\s*/g, '') // Remove "(1)" duplicates
+      .replace(/\s*\bFR-\d+\b\s*/gi, '') // Remove "FR-732" references
       .replace(/\s{2,}/g, ' ')
       .trim();
 
     // Replace encoded German characters
-    const fixGermanEncoding = (s: string) => s
-      .replace(/\bKuenstliche\b/g, 'Künstliche')
-      .replace(/\bkuenstliche\b/g, 'künstliche')
-      .replace(/\bfuer\b/gi, 'für')
-      .replace(/\bueber\b/gi, 'über')
-      .replace(/\bmassnahm/gi, 'maßnahm')
-      .replace(/\bae\b/g, 'ä')
-      .replace(/\boe\b/g, 'ö')
-      .replace(/\bue\b/g, 'ü');
+    const fixGermanEncoding = (s: string) =>
+      s
+        .replace(/\bKuenstliche\b/g, 'Künstliche')
+        .replace(/\bkuenstliche\b/g, 'künstliche')
+        .replace(/\bfuer\b/gi, 'für')
+        .replace(/\bueber\b/gi, 'über')
+        .replace(/\bmassnahm/gi, 'maßnahm')
+        .replace(/\bae\b/g, 'ä')
+        .replace(/\boe\b/g, 'ö')
+        .replace(/\bue\b/g, 'ü');
 
     cleaned = fixGermanEncoding(cleaned);
 
@@ -379,12 +422,59 @@ export default function TraineeEnablerPage() {
       // Remove truncated final word (from PDF filename length limits)
       // Known valid short German/IT words that should NOT be stripped
       const validShortWords = new Set([
-        'und', 'der', 'die', 'das', 'von', 'mit', 'für', 'bei', 'zur', 'zum',
-        'Web', 'Code', 'SQL', 'OOP', 'DMZ', 'VPN', 'Test', 'Recht', 'Teil',
-        'Schutz', 'Markt', 'Daten', 'Netz', 'Agil', 'Cloud', 'Tools', 'Audit',
-        'Praxis', 'Rahmen', 'Module', 'Normen', 'Maven', 'Virus', 'Büro',
-        'Git', 'LAN', 'DSL', 'QM', 'DB', 'IO', 'SCM', 'PHP', 'CSS', 'HTML',
-        'MQTT', 'RISC', 'CISC', 'ISMS', 'P2P', 'CSV', 'XML', 'JSON', 'HTTP',
+        'und',
+        'der',
+        'die',
+        'das',
+        'von',
+        'mit',
+        'für',
+        'bei',
+        'zur',
+        'zum',
+        'Web',
+        'Code',
+        'SQL',
+        'OOP',
+        'DMZ',
+        'VPN',
+        'Test',
+        'Recht',
+        'Teil',
+        'Schutz',
+        'Markt',
+        'Daten',
+        'Netz',
+        'Agil',
+        'Cloud',
+        'Tools',
+        'Audit',
+        'Praxis',
+        'Rahmen',
+        'Module',
+        'Normen',
+        'Maven',
+        'Virus',
+        'Büro',
+        'Git',
+        'LAN',
+        'DSL',
+        'QM',
+        'DB',
+        'IO',
+        'SCM',
+        'PHP',
+        'CSS',
+        'HTML',
+        'MQTT',
+        'RISC',
+        'CISC',
+        'ISMS',
+        'P2P',
+        'CSV',
+        'XML',
+        'JSON',
+        'HTTP',
       ]);
       // Detect truncated ending: last word 1-6 chars, starts uppercase, preceded by longer word
       const truncMatch = label.match(/^(.+\s\S{4,})\s+([A-ZÄÖÜ]\S{0,5})$/);
@@ -393,7 +483,9 @@ export default function TraineeEnablerPage() {
       }
 
       label = label.replace(/\s{2,}/g, ' ').trim();
-      const partLabel = subPart ? `Teil ${partNum}${subPart}` : `Teil ${partNum}`;
+      const partLabel = subPart
+        ? `Teil ${partNum}${subPart}`
+        : `Teil ${partNum}`;
       return { part: partNum, label: label || partLabel };
     }
     return { part: null, label: cleaned };
@@ -401,8 +493,11 @@ export default function TraineeEnablerPage() {
 
   if (!profile)
     return <div className="p-6">{t('enablerPage.pleaseLogin')}</div>;
-  if (loading) return <div className="p-6">{t('common.loading')}</div>;
-  if (enablerError || error) return <div className="p-6 text-red-500">{enablerError?.message || error}</div>;
+  if (loading) return <PageLoader />;
+  if (enablerError || error)
+    return (
+      <div className="p-6 text-red-500">{enablerError?.message || error}</div>
+    );
   if (!enabler) return <div className="p-6">{t('enablerPage.notFound')}</div>;
 
   return (
@@ -483,20 +578,26 @@ export default function TraineeEnablerPage() {
           isOpen={flipbook.isOpen}
           onClose={flipbook.closePdf}
         />
-
       </div>
 
       {/* Scenario Section */}
       {(scenarioDocs.length > 0 || enabler.scenarioPdfUrl) && (
         <div className="border-accent/30 bg-background rounded-3xl border p-5">
           <div className="mb-4 flex items-center gap-2">
-            <Layers className="text-amber-500 h-5 w-5" />
-            <h2 className="text-lg font-semibold">{t('enablerPage.scenarioSection')}</h2>
+            <Layers className="h-5 w-5 text-amber-500" />
+            <h2 className="text-lg font-semibold">
+              {t('enablerPage.scenarioSection')}
+            </h2>
             {scenarioDocs.length > 0 && (
               <span className="text-muted-foreground ml-1 text-sm">
-                ({scenarioDocs.length === 1
+                (
+                {scenarioDocs.length === 1
                   ? t('enablerPage.scenarioPartSingular')
-                  : t('enablerPage.scenarioParts').replace('{count}', String(scenarioDocs.length))})
+                  : t('enablerPage.scenarioParts').replace(
+                      '{count}',
+                      String(scenarioDocs.length)
+                    )}
+                )
               </span>
             )}
           </div>
@@ -504,32 +605,39 @@ export default function TraineeEnablerPage() {
           {/* Legacy single scenario PDF */}
           {enabler.scenarioPdfUrl && scenarioDocs.length === 0 && (
             <button
-              onClick={() => flipbook.openPdf(t('trainer.content.scenarios'), enabler.scenarioPdfUrl)}
-              className="bg-amber-600 hover:bg-amber-700 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-white shadow-sm transition-colors"
+              onClick={() =>
+                flipbook.openPdf(
+                  t('trainer.content.scenarios'),
+                  enabler.scenarioPdfUrl
+                )
+              }
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-white shadow-sm transition-colors hover:bg-amber-700"
             >
               <FileText className="h-5 w-5" />
-              <span className="font-medium">{t('enablerPage.openScenario')}</span>
+              <span className="font-medium">
+                {t('enablerPage.openScenario')}
+              </span>
             </button>
           )}
 
           {/* Scenario parts grid */}
           {scenarioDocs.length > 0 && (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {scenarioDocs.map((doc) => {
+              {scenarioDocs.map(doc => {
                 const { part, label } = formatScenarioLabel(doc.title);
                 return (
                   <button
                     key={doc.id}
                     onClick={() => flipbook.openPdf(label, doc.storageUrl)}
-                    className="border-accent/20 hover:border-amber-500/50 hover:bg-amber-500/10 group flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-amber-500/10 active:scale-[0.98]"
+                    className="border-accent/20 group flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-all duration-200 hover:scale-[1.02] hover:border-amber-500/50 hover:bg-amber-500/10 hover:shadow-lg hover:shadow-amber-500/10 active:scale-[0.98]"
                   >
                     {part !== null && (
-                      <span className="bg-amber-500/15 text-amber-500 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold">
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-xs font-bold text-amber-500">
                         {part}
                       </span>
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="text-foreground truncate text-sm font-medium group-hover:text-amber-500 transition-colors">
+                      <div className="text-foreground truncate text-sm font-medium transition-colors group-hover:text-amber-500">
                         {label}
                       </div>
                       <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
@@ -546,120 +654,115 @@ export default function TraineeEnablerPage() {
       )}
 
       {/* Status Banner */}
-      {
-        submission?.status === 'APPROVED' && (
-          <div className="flex items-start gap-3 rounded-2xl border border-green-500/40 bg-green-500/10 p-4">
-            <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
-            <div>
-              <div className="font-semibold text-green-600 dark:text-green-400">
-                {t('enablerPage.approved')}
-              </div>
-              <div className="text-sm text-green-600/80 dark:text-green-400/80">
-                {t('enablerPage.approvedDesc')}
-              </div>
-              {/* Show trainer feedback even when approved */}
-              {(submission.trainerFeedback || (submission.feedbacks && submission.feedbacks.length > 0)) && (
-                <div className="mt-3 space-y-2 border-t border-green-500/20 pt-3">
-                  {submission.trainerFeedback && (
-                    <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
-                      <div className="mb-1 text-xs font-medium text-green-600/70 dark:text-green-400/70">
-                        {t('enablerPage.trainerFeedback')}
-                      </div>
-                      <p className="text-foreground text-sm whitespace-pre-line">
-                        {submission.trainerFeedback}
-                      </p>
-                    </div>
-                  )}
-                  {submission.feedbacks && submission.feedbacks.length > 0 && (
-                    <div className="space-y-2">
-                      {submission.feedbacks.map((fb, idx) => (
-                        <div
-                          key={idx}
-                          className="rounded-xl border border-green-500/20 bg-green-500/5 p-3"
-                        >
-                          <div className="mb-1 text-xs font-medium text-green-600/70 dark:text-green-400/70">
-                            {t('enablerPage.feedbackForScenario').replace(
-                              '{number}',
-                              String(fb.scenarioIndex + 1)
-                            )}
-                          </div>
-                          <p className="text-foreground text-sm whitespace-pre-line">
-                            {fb.feedback}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+      {submission?.status === 'APPROVED' && (
+        <div className="flex items-start gap-3 rounded-2xl border border-green-500/40 bg-green-500/10 p-4">
+          <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
+          <div>
+            <div className="font-semibold text-green-600 dark:text-green-400">
+              {t('enablerPage.approved')}
             </div>
-          </div>
-        )
-      }
-
-      {
-        submission?.status === 'PENDING' && (
-          <div className="flex items-start gap-3 rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-4">
-            <Clock className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />
-            <div>
-              <div className="font-semibold text-yellow-600 dark:text-yellow-400">
-                {t('enablerPage.pending')}
-              </div>
-              <div className="text-sm text-yellow-600/80 dark:text-yellow-400/80">
-                {t('enablerPage.pendingDesc')}
-              </div>
+            <div className="text-sm text-green-600/80 dark:text-green-400/80">
+              {t('enablerPage.approvedDesc')}
             </div>
-          </div>
-        )
-      }
-
-      {
-        submission?.status === 'REJECTED' && (
-          <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 p-4">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
-            <div className="flex-1">
-              <div className="font-semibold text-red-600 dark:text-red-400">
-                {t('enablerPage.rejected')}
-              </div>
-              <div className="mb-2 text-sm text-red-600/80 dark:text-red-400/80">
-                {t('enablerPage.rejectedDesc')}
-              </div>
-              {/* Show general trainer feedback */}
-              {submission.trainerFeedback && (
-                <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
-                  <div className="mb-1 text-xs font-medium text-red-600/70 dark:text-red-400/70">
-                    {t('enablerPage.trainerFeedback')}
+            {/* Show trainer feedback even when approved */}
+            {(submission.trainerFeedback ||
+              (submission.feedbacks && submission.feedbacks.length > 0)) && (
+              <div className="mt-3 space-y-2 border-t border-green-500/20 pt-3">
+                {submission.trainerFeedback && (
+                  <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
+                    <div className="mb-1 text-xs font-medium text-green-600/70 dark:text-green-400/70">
+                      {t('enablerPage.trainerFeedback')}
+                    </div>
+                    <p className="text-foreground text-sm whitespace-pre-line">
+                      {submission.trainerFeedback}
+                    </p>
                   </div>
-                  <p className="text-foreground text-sm whitespace-pre-line">
-                    {submission.trainerFeedback}
-                  </p>
-                </div>
-              )}
-              {/* Show per-scenario feedbacks */}
-              {submission.feedbacks && submission.feedbacks.length > 0 && (
-                <div className="mt-2 space-y-2">
-                  {submission.feedbacks.map((fb, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-xl border border-red-500/20 bg-red-500/5 p-3"
-                    >
-                      <div className="mb-1 text-xs font-medium text-red-600/70 dark:text-red-400/70">
-                        {t('enablerPage.feedbackForScenario').replace(
-                          '{number}',
-                          String(fb.scenarioIndex + 1)
-                        )}
+                )}
+                {submission.feedbacks && submission.feedbacks.length > 0 && (
+                  <div className="space-y-2">
+                    {submission.feedbacks.map((fb, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-xl border border-green-500/20 bg-green-500/5 p-3"
+                      >
+                        <div className="mb-1 text-xs font-medium text-green-600/70 dark:text-green-400/70">
+                          {t('enablerPage.feedbackForScenario').replace(
+                            '{number}',
+                            String(fb.scenarioIndex + 1)
+                          )}
+                        </div>
+                        <p className="text-foreground text-sm whitespace-pre-line">
+                          {fb.feedback}
+                        </p>
                       </div>
-                      <p className="text-foreground text-sm whitespace-pre-line">
-                        {fb.feedback}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {submission?.status === 'PENDING' && (
+        <div className="flex items-start gap-3 rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-4">
+          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />
+          <div>
+            <div className="font-semibold text-yellow-600 dark:text-yellow-400">
+              {t('enablerPage.pending')}
+            </div>
+            <div className="text-sm text-yellow-600/80 dark:text-yellow-400/80">
+              {t('enablerPage.pendingDesc')}
             </div>
           </div>
-        )
-      }
+        </div>
+      )}
+
+      {submission?.status === 'REJECTED' && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+          <div className="flex-1">
+            <div className="font-semibold text-red-600 dark:text-red-400">
+              {t('enablerPage.rejected')}
+            </div>
+            <div className="mb-2 text-sm text-red-600/80 dark:text-red-400/80">
+              {t('enablerPage.rejectedDesc')}
+            </div>
+            {/* Show general trainer feedback */}
+            {submission.trainerFeedback && (
+              <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <div className="mb-1 text-xs font-medium text-red-600/70 dark:text-red-400/70">
+                  {t('enablerPage.trainerFeedback')}
+                </div>
+                <p className="text-foreground text-sm whitespace-pre-line">
+                  {submission.trainerFeedback}
+                </p>
+              </div>
+            )}
+            {/* Show per-scenario feedbacks */}
+            {submission.feedbacks && submission.feedbacks.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {submission.feedbacks.map((fb, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-red-500/20 bg-red-500/5 p-3"
+                  >
+                    <div className="mb-1 text-xs font-medium text-red-600/70 dark:text-red-400/70">
+                      {t('enablerPage.feedbackForScenario').replace(
+                        '{number}',
+                        String(fb.scenarioIndex + 1)
+                      )}
+                    </div>
+                    <p className="text-foreground text-sm whitespace-pre-line">
+                      {fb.feedback}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Summary/Reflection Section */}
       <div className="border-accent/30 bg-background space-y-4 rounded-3xl border p-5">
@@ -679,11 +782,12 @@ export default function TraineeEnablerPage() {
             onChange={e => {
               if (!canEdit) return;
               const newSolutions = [...solutions];
-              if (!newSolutions[0]) newSolutions[0] = { scenarioIndex: 0, text: '' };
+              if (!newSolutions[0])
+                newSolutions[0] = { scenarioIndex: 0, text: '' };
               newSolutions[0].text = e.target.value;
               setSolutions(newSolutions);
             }}
-            className={`border-accent/30 w-full rounded-xl border bg-muted/30 px-3 py-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
+            className={`border-accent/30 bg-muted/30 w-full rounded-xl border px-3 py-2 ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
             rows={10}
             placeholder={t('enablerPage.describeSolution')}
             disabled={!canEdit}
@@ -713,7 +817,7 @@ export default function TraineeEnablerPage() {
 
         {/* Show message when no quizzes are available */}
         {gated.every(g => !g.quizId) ? (
-          <div className="border-accent/10 rounded-2xl border bg-muted/10 p-6 text-center">
+          <div className="border-accent/10 bg-muted/10 rounded-2xl border p-6 text-center">
             <div className="text-muted-foreground text-sm">
               {t('enablerPage.noQuizzesYet')}
             </div>
@@ -726,7 +830,7 @@ export default function TraineeEnablerPage() {
                 <button
                   key={g.difficulty}
                   onClick={() => !disabled && handleTileClick(g)}
-                  className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 cursor-not-allowed bg-muted/20 opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 cursor-pointer bg-muted/30 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
+                  className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 bg-muted/20 cursor-not-allowed opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 bg-muted/30 cursor-pointer hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
                   disabled={disabled}
                 >
                   <div className="text-muted-foreground text-sm">
@@ -763,7 +867,7 @@ export default function TraineeEnablerPage() {
 
         {/* Active quiz runner */}
         {quizContent && (
-          <div className="border-accent/20 mt-6 space-y-4 rounded-2xl border bg-muted/20 p-4">
+          <div className="border-accent/20 bg-muted/20 mt-6 space-y-4 rounded-2xl border p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-muted-foreground text-sm">
@@ -791,7 +895,7 @@ export default function TraineeEnablerPage() {
                     </MarkdownText>
                     <div className="space-y-2">
                       {currentQuestion.questionType === 'TEXT' ||
-                        currentQuestion.options.length === 0 ? (
+                      currentQuestion.options.length === 0 ? (
                         <div>
                           <textarea
                             className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
@@ -847,8 +951,8 @@ export default function TraineeEnablerPage() {
                           disabled={
                             currentQuestion.questionType === 'TEXT'
                               ? !String(
-                                answers[currentQuestion.id] || ''
-                              ).trim()
+                                  answers[currentQuestion.id] || ''
+                                ).trim()
                               : !answers[currentQuestion.id]
                           }
                         >
@@ -856,15 +960,20 @@ export default function TraineeEnablerPage() {
                         </button>
                       ) : (
                         <button
-                          className="inline-flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60"
+                          className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md px-4 py-2 disabled:opacity-60"
                           onClick={submitQuiz}
-                          disabled={submittingQuiz || quizContent.questions.some(q =>
-                            q.questionType === 'TEXT'
-                              ? !String(answers[q.id] || '').trim()
-                              : !answers[q.id]
-                          )}
+                          disabled={
+                            submittingQuiz ||
+                            quizContent.questions.some(q =>
+                              q.questionType === 'TEXT'
+                                ? !String(answers[q.id] || '').trim()
+                                : !answers[q.id]
+                            )
+                          }
                         >
-                          {submittingQuiz && <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />}
+                          {submittingQuiz && (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                          )}
                           {t('enablerPage.submitQuiz')}
                         </button>
                       )}
@@ -873,8 +982,8 @@ export default function TraineeEnablerPage() {
                 )}
               </div>
             ) : reviewMode && !result ? (
-              <div className="text-muted-foreground p-4 text-sm">
-                {t('enablerPage.loadingResults')}
+              <div className="flex items-center justify-center p-4">
+                <LoadingSpinner size="sm" />
               </div>
             ) : (
               <div className="space-y-3">
@@ -912,8 +1021,8 @@ export default function TraineeEnablerPage() {
                           {q.questionType === 'TEXT' || q.options.length === 0
                             ? fb?.selectedText || chosen || '-'
                             : q.options.find(
-                              o => String(o.id) === String(chosen)
-                            )?.optionText || '-'}
+                                o => String(o.id) === String(chosen)
+                              )?.optionText || '-'}
                         </div>
                         {q.questionType !== 'TEXT' && !fb?.correct && (
                           <div className="mt-1 text-sm text-green-400">
@@ -922,7 +1031,7 @@ export default function TraineeEnablerPage() {
                           </div>
                         )}
                         {explanation && (
-                          <div className="border-accent/20 text-muted-foreground mt-2 rounded-md border bg-muted/30 p-2 text-xs">
+                          <div className="border-accent/20 text-muted-foreground bg-muted/30 mt-2 rounded-md border p-2 text-xs">
                             {t('enablerPage.explanationLabel')} {explanation}
                           </div>
                         )}
@@ -954,6 +1063,6 @@ export default function TraineeEnablerPage() {
           {t('enablerPage.backToModules')}
         </Link>
       </div>
-    </div >
+    </div>
   );
 }
