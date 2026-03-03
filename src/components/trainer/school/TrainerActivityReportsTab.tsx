@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   ClipboardCheck,
   Check,
@@ -138,7 +139,7 @@ export function TrainerActivityReportsTab() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="border-accent/30 border-t-accent h-10 w-10 animate-spin rounded-full border-4" />
+          <LoadingSpinner size="lg" />
         </div>
       ) : reports.length === 0 ? (
         <div className="py-16 text-center">
@@ -366,8 +367,8 @@ function ReviewModal({
           {/* Grade Input Section */}
           <div className="border-border border-t pt-6">
             {loadingEntries ? (
-              <div className="text-muted-foreground py-4 text-center">
-                Lade Einträge zur Bewertung...
+              <div className="flex items-center justify-center py-4">
+                <LoadingSpinner size="sm" />
               </div>
             ) : (
               <GradeInputSection
@@ -421,10 +422,13 @@ function ReviewModal({
               className="btn-accent inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium disabled:opacity-70"
             >
               {submitting && (
-                <div className={`h-4 w-4 animate-spin rounded-full border-2 ${action === 'reject'
-                    ? 'border-destructive/30 border-t-destructive'
-                    : 'border-white/30 border-t-white'
-                  }`} />
+                <div
+                  className={`h-4 w-4 animate-spin rounded-full border-2 ${
+                    action === 'reject'
+                      ? 'border-destructive/30 border-t-destructive'
+                      : 'border-white/30 border-t-white'
+                  }`}
+                />
               )}
               Bestätigen
             </button>

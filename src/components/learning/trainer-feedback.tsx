@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { LessonWithSubLessons } from '@/db/queries';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface LessonProps {
   data: LessonWithSubLessons | null;
@@ -40,7 +41,9 @@ export default function Lesson({ data }: LessonProps) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">Lektion nicht gefunden...</p>
         </div>
       </div>

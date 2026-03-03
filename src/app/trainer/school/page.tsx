@@ -3,57 +3,48 @@
 import { Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { TrainerSchoolView } from '@/components/trainer/TrainerSchoolView';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 function SchoolPageContent() {
-    const { profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
 
-    if (loading) {
-        return (
-            <div className="bg-background flex min-h-full items-center justify-center">
-                <div className="text-center">
-                    <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-                    <p className="text-muted-foreground">Lade Schul-Verwaltung...</p>
-                </div>
-            </div>
-        );
-    }
+  if (loading) {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
-    if (!profile) {
-        return (
-            <div className="bg-background flex min-h-full items-center justify-center">
-                <div className="text-center">
-                    <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-                    <p className="text-muted-foreground">Benutzer nicht gefunden...</p>
-                </div>
-            </div>
-        );
-    }
+  if (!profile) {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
-    if (profile.role !== 'trainer') {
-        return (
-            <div className="bg-background flex min-h-full items-center justify-center">
-                <div className="text-center">
-                    <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-                    <p className="text-muted-foreground">Zugriff verweigert...</p>
-                </div>
-            </div>
-        );
-    }
+  if (profile.role !== 'trainer') {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
-    return <TrainerSchoolView />;
+  return <TrainerSchoolView />;
 }
 
 export default function TrainerSchoolPage() {
-    return (
-        <Suspense fallback={
-            <div className="bg-background flex min-h-full items-center justify-center">
-                <div className="text-center">
-                    <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-                    <p className="text-muted-foreground">Lade...</p>
-                </div>
-            </div>
-        }>
-            <SchoolPageContent />
-        </Suspense>
-    );
+  return (
+    <Suspense
+      fallback={
+        <div className="bg-background flex min-h-full items-center justify-center">
+          <LoadingSpinner size="lg" />
+        </div>
+      }
+    >
+      <SchoolPageContent />
+    </Suspense>
+  );
 }
