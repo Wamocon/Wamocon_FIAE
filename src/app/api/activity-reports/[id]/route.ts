@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, and } from 'drizzle-orm';
-import { activityReports, profiles, activityReportUseCaseEntries } from '@/db/migrations/schemas/schema';
+import { eq, and, ne, sql, inArray } from 'drizzle-orm';
+import { activityReports, profiles, activityReportUseCaseEntries, trainingUseCases } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 
 // GET: Get a single activity report
@@ -21,6 +21,16 @@ export async function GET(
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
 
+        // Fetch reviewer name if report has a reviewer
+        let reviewerName: string | null = null;
+        if (report.reviewerId) {
+            const [reviewer] = await db
+                .select({ fullName: profiles.fullName })
+                .from(profiles)
+                .where(eq(profiles.id, report.reviewerId as any));
+            reviewerName = reviewer?.fullName || null;
+        }
+
         return NextResponse.json({
             report: {
                 id: report.id,
@@ -33,6 +43,7 @@ export async function GET(
                 status: report.status,
                 submittedAt: report.submittedAt,
                 reviewerId: report.reviewerId,
+                reviewerName,
                 reviewedAt: report.reviewedAt,
                 reviewerFeedback: report.reviewerFeedback,
                 traineeSignedAt: report.traineeSignedAt,
@@ -42,11 +53,11 @@ export async function GET(
         });
     } catch (error: any) {
         console.error('Error in activity-reports GET [id]:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }
 
-// DELETE: Delete a report (only if Draft or if Admin/Trainer)
+// DELETE: Delete a report (only owner + DRAFT/REJECTED, or trainer)
 export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -54,9 +65,20 @@ export async function DELETE(
     try {
         const { id } = await params;
 
-        // In a real app we'd check session here, but for now we trust the client logic 
-        // regarding who can click the button, or better: verify ownership via session.
-        // Assuming the UI handles visibility and we might add backend checks later if needed.
+        // Fetch report
+        const [report] = await db
+            .select({ id: activityReports.id, traineeId: activityReports.traineeId, status: activityReports.status })
+            .from(activityReports)
+            .where(eq(activityReports.id, id as any));
+
+        if (!report) {
+            return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        }
+
+        // M-3 fix: Cannot delete APPROVED reports (BBiG §14 record-keeping)
+        if (report.status === 'APPROVED') {
+            return NextResponse.json({ error: 'Genehmigte Nachweise können nicht gelöscht werden (BBiG §14 Aufbewahrungspflicht)' }, { status: 403 });
+        }
 
         // Delete related entries first (if not cascading)
         await db.delete(activityReportUseCaseEntries).where(eq(activityReportUseCaseEntries.reportId, id as any));
@@ -77,7 +99,7 @@ export async function DELETE(
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Error in activity-reports DELETE [id]:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }
 
@@ -89,7 +111,7 @@ export async function PUT(
     try {
         const { id } = await params;
         const body = await request.json();
-        const { weekNumber, year, ausbildungsjahr, periodStart, periodEnd, entries, submit } = body;
+        const { userId, weekNumber, year, ausbildungsjahr, periodStart, periodEnd, entries, submit } = body;
 
         // Verify report is draft
         const [report] = await db
@@ -98,8 +120,105 @@ export async function PUT(
             .where(eq(activityReports.id, id as any));
 
         if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+
+        // Ownership check: only the report owner can update
+        if (userId && String(report.traineeId) !== userId) {
+            return NextResponse.json({ error: 'Zugriff verweigert' }, { status: 403 });
+        }
+
         if (report.status !== 'DRAFT' && report.status !== 'REJECTED') {
             return NextResponse.json({ error: 'Cannot edit submitted or approved reports' }, { status: 403 });
+        }
+
+        // Validate actualHours are non-negative numbers
+        if (entries && entries.length > 0) {
+            const invalidHours = entries.filter((e: any) => typeof e.actualHours !== 'number' || e.actualHours < 0);
+            if (invalidHours.length > 0) {
+                return NextResponse.json({ error: 'IST-Stunden müssen positive Zahlen sein (≥ 0).' }, { status: 400 });
+            }
+
+            // Validate traineeGrade range if provided
+            const validGrades = ['1', '2', '3', '4', '5', '6'];
+            const invalidGrades = entries.filter((e: any) => e.traineeGrade && !validGrades.includes(String(e.traineeGrade)));
+            if (invalidGrades.length > 0) {
+                return NextResponse.json({ error: 'Selbstbewertung muss eine Note von 1 bis 6 sein.' }, { status: 400 });
+            }
+        }
+
+        // === Server-side hours validation ===
+        let plannedMap = new Map<string, number>();
+        if (entries && entries.length > 0) {
+            const entryUseCaseIds = entries.map((e: any) => e.useCaseId);
+
+            // Get planned hours from master data
+            const masterUseCases = await db
+                .select({ id: trainingUseCases.id, plannedHours: trainingUseCases.plannedHours })
+                .from(trainingUseCases)
+                .where(inArray(trainingUseCases.id, entryUseCaseIds as any));
+            plannedMap = new Map(masterUseCases.map((uc: any) => [uc.id, uc.plannedHours]));
+
+            // Get already-used hours from all non-rejected reports EXCLUDING this one
+            const otherReports = await db
+                .select({ id: activityReports.id })
+                .from(activityReports)
+                .where(and(
+                    eq(activityReports.traineeId, report.traineeId as any),
+                    ne(activityReports.status, 'REJECTED'),
+                    ne(activityReports.id, id as any)
+                ));
+            const otherReportIds = otherReports.map(r => r.id);
+
+            let usedMap = new Map<string, number>();
+            if (otherReportIds.length > 0) {
+                const usedRows = await db
+                    .select({
+                        useCaseId: activityReportUseCaseEntries.useCaseId,
+                        totalUsed: sql<number>`COALESCE(SUM(${activityReportUseCaseEntries.actualHours}), 0)`.as('total_used'),
+                    })
+                    .from(activityReportUseCaseEntries)
+                    .where(inArray(activityReportUseCaseEntries.reportId, otherReportIds as any))
+                    .groupBy(activityReportUseCaseEntries.useCaseId);
+
+                usedRows.forEach(row => usedMap.set(row.useCaseId, Number(row.totalUsed) || 0));
+            }
+
+            // Validate each entry
+            const violations: string[] = [];
+            for (const entry of entries) {
+                const totalHours = plannedMap.get(entry.useCaseId) ?? 0;
+                const usedHours = usedMap.get(entry.useCaseId) ?? 0;
+                const remaining = totalHours - usedHours;
+                if (entry.actualHours > remaining) {
+                    violations.push(
+                        `Tätigkeit überschreitet verfügbare Stunden: ${entry.actualHours} Std. eingetragen, aber nur ${remaining.toFixed(1)} Std. von ${totalHours} Std. verfügbar.`
+                    );
+                }
+            }
+            if (violations.length > 0) {
+                return NextResponse.json({
+                    error: violations[0],
+                    violations,
+                }, { status: 400 });
+            }
+
+            // === 40h/week maximum validation (JArbSchG / BBiG compliance) ===
+            const totalWeeklyHours = entries.reduce((sum: number, e: any) => sum + (Number(e.actualHours) || 0), 0);
+            if (totalWeeklyHours > 40) {
+                return NextResponse.json({
+                    error: `Maximale Wochenstunden überschritten: ${totalWeeklyHours} Std. eingetragen, aber maximal 40 Std. pro Woche zulässig (§ 8 JArbSchG).`,
+                }, { status: 400 });
+            }
+        }
+
+        // === Mandatory self-grade validation ===
+        // When submitting, every entry must have a traineeGrade (self-assessment)
+        if (submit && entries && entries.length > 0) {
+            const missingGrades = entries.filter((e: any) => !e.traineeGrade);
+            if (missingGrades.length > 0) {
+                return NextResponse.json({
+                    error: `Bitte bewerten Sie alle Tätigkeiten mit einer Selbsteinschätzung (Note 1-6), bevor Sie den Nachweis einreichen. ${missingGrades.length} Einträge ohne Selbstbewertung.`,
+                }, { status: 400 });
+            }
         }
 
         // Build update data - clear previous reviewer data if resubmitting a rejected report
@@ -136,10 +255,21 @@ export async function PUT(
                 entries.map((e: any) => ({
                     reportId: id,
                     useCaseId: e.useCaseId,
-                    plannedHours: e.plannedHours,
+                    plannedHours: plannedMap.get(e.useCaseId) ?? e.plannedHours ?? 0,
                     actualHours: e.actualHours,
                     isOverbooked: e.isOverbooked,
                     notes: e.notes || null,
+                    // Grade columns - traineeGrade can be set by trainee, others null until trainer grades
+                    traineeGrade: e.traineeGrade ? (String(e.traineeGrade) as any) : null,
+                    trainerGrade: null,
+                    releaseGrade: null,
+                    gradeComment: null,
+                    releaseGradeComment: null,
+                    isGradeApproved: false,
+                    gradeApprovedAt: null,
+                    gradeApprovedBy: null,
+                    releaseGradeAt: null,
+                    releaseGradeBy: null,
                 }))
             );
         }
@@ -151,7 +281,10 @@ export async function PUT(
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Error in activity-reports PUT [id]:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error?.message?.includes('violates') || error?.message?.includes('Failed query')
+            ? 'Fehler beim Speichern der Einträge. Bitte versuchen Sie es erneut.'
+            : 'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
@@ -175,7 +308,7 @@ export async function PATCH(
         const { status, feedback, userId } = body;
 
         if (!userId) {
-            return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+            return NextResponse.json({ error: 'userId is required' }, { status: 400 });
         }
 
         // Check if user is a trainer
@@ -206,14 +339,28 @@ export async function PATCH(
             updateData.trainerSignedAt = new Date();
         }
 
+        // H-3 fix: Atomic status check + update (prevents TOCTOU race condition)
+        // Only update if the report exists AND is currently in SUBMITTED status
         const [updated] = await db
             .update(activityReports)
             .set(updateData)
-            .where(eq(activityReports.id, id as any))
+            .where(and(
+                eq(activityReports.id, id as any),
+                eq(activityReports.status, 'SUBMITTED')
+            ))
             .returning();
 
         if (!updated) {
-            return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+            // Distinguish between "not found" and "wrong status"
+            const [exists] = await db
+                .select({ id: activityReports.id, status: activityReports.status })
+                .from(activityReports)
+                .where(eq(activityReports.id, id as any));
+
+            if (!exists) {
+                return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+            }
+            return NextResponse.json({ error: `Nur eingereichte Nachweise können genehmigt/abgelehnt werden. Aktueller Status: ${exists.status}` }, { status: 400 });
         }
 
         apiCache.invalidate('activity_reports');
@@ -227,6 +374,6 @@ export async function PATCH(
         });
     } catch (error: any) {
         console.error('Error in activity-reports PATCH [id]:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
     }
 }

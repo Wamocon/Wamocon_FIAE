@@ -107,10 +107,12 @@ export async function GET(
                 });
             }
 
-            if (entry.trainerGrade) {
+            // trainerGrade is the final grade (migration 0033 merged release_grade into trainer_grade)
+            const effectiveGrade = entry.trainerGrade;
+            if (effectiveGrade) {
                 const comp = componentMap.get(key)!;
                 comp.gradedCount++;
-                comp.gradeSum += parseInt(entry.trainerGrade);
+                comp.gradeSum += parseInt(effectiveGrade);
             }
         }
 
@@ -170,15 +172,13 @@ export async function GET(
         };
 
         for (const rating of softSkillRatings) {
-            if (!rating.competencyArea || !rating.trainerRating) continue;
+            // trainerRating is the final rating (migration 0033 merged release_rating into trainer_rating)
+            const effectiveRating = rating.trainerRating;
+            if (!rating.competencyArea || !effectiveRating) continue;
             
-            // Convert rating enum to number
-            const ratingMap: Record<string, number> = {
-                'EXCELLENT': 1, 'GOOD': 2, 'SATISFACTORY': 3,
-                'ADEQUATE': 4, 'POOR': 5, 'INSUFFICIENT': 6
-            };
-            const numRating = ratingMap[rating.trainerRating];
-            if (!numRating) continue;
+            // performanceRating enum uses numeric strings '1'-'6'
+            const numRating = parseInt(effectiveRating);
+            if (isNaN(numRating) || numRating < 1 || numRating > 6) continue;
 
             if (!softSkillMap.has(rating.competencyArea)) {
                 softSkillMap.set(rating.competencyArea, { 
@@ -243,9 +243,8 @@ export async function GET(
             },
         });
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error generating skill radar data:', error);
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler beim Erstellen des Kompetenzprofils' }, { status: 500 });
     }
 }
 

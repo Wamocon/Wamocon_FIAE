@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Check, X, ChevronDown, ChevronUp, User, Calendar, Clock } from 'lucide-react';
+import { Loader2, Check, X, ChevronDown, ChevronUp, User, Calendar, Clock, Shield, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import SoftskillRatingGrid from './SoftskillRatingGrid';
 
@@ -26,6 +26,8 @@ interface Evaluation {
     selfComment: string | null;
     trainerRating: string | null;
     trainerComment: string | null;
+    releaseRating?: string | null;
+    releaseComment?: string | null;
     status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
     arpThemeText: string | null;
     selfSubmittedAt: string | null;
@@ -40,6 +42,7 @@ interface SoftskillRating {
 interface TrainerEvaluationReviewProps {
     evaluation: Evaluation;
     trainee: Trainee;
+    trainerId?: string;
     existingSoftskillRatings?: SoftskillRating[];
     onApprove?: () => void;
     onReject?: () => void;
@@ -58,6 +61,7 @@ const GRADE_OPTIONS = [
 export default function TrainerEvaluationReview({
     evaluation,
     trainee,
+    trainerId,
     existingSoftskillRatings = [],
     onApprove,
     onReject,
@@ -67,10 +71,14 @@ export default function TrainerEvaluationReview({
     const [showSoftskills, setShowSoftskills] = useState(true);
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectionReason, setRejectionReason] = useState('');
+    const [editReason, setEditReason] = useState('');
 
     // Form state
     const [trainerRating, setTrainerRating] = useState(evaluation.trainerRating || '');
     const [trainerComment, setTrainerComment] = useState(evaluation.trainerComment || '');
+    const [releaseRating, setReleaseRating] = useState(evaluation.releaseRating || '');
+    const [releaseComment, setReleaseComment] = useState(evaluation.releaseComment || '');
+    const [isEditing, setIsEditing] = useState(false);
     const [softskillRatings, setSoftskillRatings] = useState<Record<string, string>>(
         existingSoftskillRatings.reduce((acc, r) => ({ ...acc, [r.criterionId]: r.selfRating || '' }), {})
     );
@@ -78,25 +86,40 @@ export default function TrainerEvaluationReview({
         existingSoftskillRatings.reduce((acc, r) => ({ ...acc, [r.criterionId]: r.trainerRating || '' }), {})
     );
 
-    const isReadOnly = evaluation.status === 'APPROVED';
+    const isReadOnly = evaluation.status === 'APPROVED' && !isEditing;
 
     const handleSave = async () => {
         setLoading(true);
         try {
+            const isReleaseEdit = evaluation.status === 'APPROVED' && isEditing;
+            const payload: Record<string, unknown> = {
+                trainerRating,
+                trainerComment,
+                softskillRatings: Object.entries(trainerSoftskillRatings)
+                    .filter(([_, rating]) => rating)
+                    .map(([criterionId, rating]) => ({ criterionId, trainerRating: rating })),
+            };
+
+            if (isReleaseEdit) {
+                payload.isReleaseEdit = true;
+                payload.releaseRating = releaseRating || undefined;
+                payload.releaseComment = releaseComment || undefined;
+                payload.editReason = editReason || undefined;
+                if (trainerId) {
+                    payload.trainerId = trainerId;
+                }
+            }
+
             const res = await fetch(`/api/trainer/evaluations/${evaluation.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    trainerRating,
-                    trainerComment,
-                    softskillRatings: Object.entries(trainerSoftskillRatings)
-                        .filter(([_, rating]) => rating)
-                        .map(([criterionId, rating]) => ({ criterionId, trainerRating: rating })),
-                }),
+                body: JSON.stringify(payload),
             });
 
             if (res.ok) {
                 toast.success('Bewertung gespeichert');
+                setIsEditing(false);
+                setEditReason('');
                 onSave?.();
             } else {
                 const error = await res.json();
@@ -200,8 +223,8 @@ export default function TrainerEvaluationReview({
                     </div>
                 )}
 
-                {/* Side-by-Side Comparison */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* 3-Column Comparison: Azubi / Trainer / Freigabe */}
+                <div className="grid grid-cols-3 gap-4">
                     {/* Trainee Self-Assessment */}
                     <div className="space-y-3 p-4 rounded-lg bg-card/30 border border-border/50">
                         <p className="text-sm font-medium text-muted-foreground">Azubi Selbsteinschätzung</p>
@@ -221,7 +244,18 @@ export default function TrainerEvaluationReview({
 
                     {/* Trainer Assessment */}
                     <div className="space-y-3 p-4 rounded-lg bg-accent/5 border border-accent/20">
-                        <p className="text-sm font-medium text-accent">Trainer Bewertung</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-accent">Trainer Bewertung</p>
+                            {evaluation.status === 'APPROVED' && !isEditing && (
+                                <button
+                                    onClick={() => setIsEditing(true)}
+                                    className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                                >
+                                    <Pencil className="h-3 w-3" />
+                                    Bearbeiten
+                                </button>
+                            )}
+                        </div>
                         <div className="space-y-2">
                             <label className="text-sm text-muted-foreground">Note:</label>
                             <Select value={trainerRating} onValueChange={setTrainerRating} disabled={isReadOnly}>
@@ -247,6 +281,32 @@ export default function TrainerEvaluationReview({
                                 Abweichung: {deviation} {deviation === 1 ? 'Note' : 'Noten'}
                             </div>
                         )}
+                    </div>
+
+                    {/* Release Grade */}
+                    <div className="space-y-3 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                        <p className="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
+                            <Shield className="h-3.5 w-3.5" />
+                            Freigabenote
+                        </p>
+                        <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">Note:</label>
+                            <Select value={releaseRating} onValueChange={setReleaseRating}>
+                                <SelectTrigger className="bg-background/50 border-emerald-500/20">
+                                    <SelectValue placeholder="Freigabenote..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {GRADE_OPTIONS.map((grade) => (
+                                        <SelectItem key={grade.value} value={grade.value}>
+                                            <span className={grade.color}>{grade.label}</span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                            Endgültige Note nach Besprechung mit dem Auszubildenden
+                        </p>
                     </div>
                 </div>
 
@@ -289,8 +349,38 @@ export default function TrainerEvaluationReview({
                     )}
                 </div>
 
+                {/* Edit Reason (when editing approved evaluation) */}
+                {isEditing && evaluation.status === 'APPROVED' && (
+                    <div className="space-y-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                        <label className="text-sm font-medium text-amber-400">Änderungsgrund</label>
+                        <Textarea
+                            placeholder="Warum wird die Bewertung geändert?"
+                            value={editReason}
+                            onChange={(e) => setEditReason(e.target.value)}
+                            className="bg-background/50 min-h-[60px]"
+                        />
+                    </div>
+                )}
+
                 {/* Action Buttons */}
-                {!isReadOnly && (
+                {isEditing && evaluation.status === 'APPROVED' ? (
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <Button
+                            variant="outline"
+                            onClick={() => { setIsEditing(false); setEditReason(''); }}
+                            disabled={loading}
+                        >
+                            Abbrechen
+                        </Button>
+                        <Button
+                            onClick={handleSave}
+                            disabled={loading || !trainerRating}
+                        >
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                            Änderungen speichern
+                        </Button>
+                    </div>
+                ) : !isReadOnly && (
                     <div className="flex justify-end gap-3 pt-4 border-t">
                         <Button
                             variant="outline"

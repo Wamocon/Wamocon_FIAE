@@ -91,6 +91,7 @@ export async function POST(
     const gradedEntries = await db
       .select({
         entryId: activityReportUseCaseEntries.id,
+        traineeGrade: activityReportUseCaseEntries.traineeGrade,
         trainerGrade: activityReportUseCaseEntries.trainerGrade,
         actualHours: activityReportUseCaseEntries.actualHours,
         useCaseLetter: trainingUseCases.letter,
@@ -123,6 +124,7 @@ export async function POST(
       .orderBy(trainingComponents.orderIndex, trainingUseCases.orderIndex);
 
     // Build snapshot data (frozen at issue time)
+    // trainerGrade is the final grade (migration 0033 merged release_grade into trainer_grade)
     const componentMap = new Map<
       string,
       {
@@ -132,7 +134,9 @@ export async function POST(
         useCases: Array<{
           letter: string;
           description: string;
-          grade: string | null;
+          traineeGrade: string | null;
+          trainerGrade: string | null;
+          effectiveGrade: string | null;
           hours: number;
         }>;
         gradeSum: number;
@@ -155,16 +159,20 @@ export async function POST(
       }
 
       const comp = componentMap.get(key)!;
+      const effectiveGrade = entry.trainerGrade;
+      
       comp.useCases.push({
         letter: entry.useCaseLetter,
         description: entry.useCaseDescription,
-        grade: entry.trainerGrade,
+        traineeGrade: entry.traineeGrade,
+        trainerGrade: entry.trainerGrade,
+        effectiveGrade,
         hours: entry.actualHours,
       });
 
-      if (entry.trainerGrade) {
+      if (effectiveGrade) {
         comp.gradedCount++;
-        comp.gradeSum += parseInt(entry.trainerGrade);
+        comp.gradeSum += parseInt(effectiveGrade);
       }
     }
 
@@ -260,10 +268,8 @@ export async function POST(
       },
     });
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
     console.error('Error issuing certificate:', error);
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: 'Interner Serverfehler beim Ausstellen des Zeugnisses' }, { status: 500 });
   }
 }
 

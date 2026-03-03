@@ -210,10 +210,8 @@ export async function GET(
       highlightsFound: sortedHighlights.length,
     });
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
     console.error('Error generating evidence:', error);
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: 'Interner Serverfehler beim Erstellen der Leistungsnachweise' }, { status: 500 });
   }
 }
 

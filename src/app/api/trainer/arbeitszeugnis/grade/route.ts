@@ -103,9 +103,8 @@ export async function POST(request: NextRequest) {
             gradedAt: now.toISOString(),
         });
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error grading entries:', error);
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler beim Benoten der Einträge' }, { status: 500 });
     }
 }
 
@@ -153,8 +152,7 @@ export async function GET(request: NextRequest) {
             gradedEntries: entries.filter(e => e.isGradeApproved).length,
         });
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error fetching grades:', error);
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler beim Laden der Noten' }, { status: 500 });
     }
 }

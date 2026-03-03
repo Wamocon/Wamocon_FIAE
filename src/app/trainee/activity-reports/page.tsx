@@ -7,7 +7,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   ClipboardList,
   Plus,
@@ -61,6 +60,7 @@ interface ActivityReport {
   traineeSignedAt: string | null;
   trainerSignedAt: string | null;
   reviewerId: string | null;
+  reviewerName: string | null;
   createdAt: string;
 }
 
@@ -72,10 +72,10 @@ interface ReportUseCaseEntry {
   actualHours: number;
   isOverbooked: boolean;
   notes: string | null;
-  // Grading fields
-  trainerGrade?: number;
+  // Grading fields (trainee self-grade + trainer grade)
+  traineeGrade?: string | number | null;
+  trainerGrade?: string | number | null;
   gradeComment?: string | null;
-  isGradeApproved?: boolean;
   useCase?: TrainingUseCase;
   component?: TrainingComponent;
 }
@@ -94,20 +94,10 @@ export default function TraineeActivityReportsPage() {
   }, [profile?.id, authLoading, router]);
 
   // Data fetching via React Query (cached, deduped, auto-refresh on focus)
-  const reportsUrl = profile?.id
-    ? `/api/activity-reports?userId=${profile.id}`
-    : null;
-  const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>(
-    '/api/training-components'
-  );
-  const { data: ucData } = useApiQuery<{ useCases: TrainingUseCase[] }>(
-    '/api/training-use-cases'
-  );
-  const {
-    data: reportData,
-    isLoading: reportsLoading,
-    error: reportsError,
-  } = useApiQuery<{ reports: ActivityReport[] }>(reportsUrl);
+  const reportsUrl = profile?.id ? `/api/activity-reports?userId=${profile.id}` : null;
+  const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>('/api/training-components');
+  const { data: ucData } = useApiQuery<{ useCases: TrainingUseCase[] }>('/api/training-use-cases');
+  const { data: reportData, isLoading: reportsLoading, error: reportsError } = useApiQuery<{ reports: ActivityReport[] }>(reportsUrl);
 
   const components = compData?.components || [];
   const useCases = ucData?.useCases || [];
@@ -219,9 +209,7 @@ export default function TraineeActivityReportsPage() {
     e.stopPropagation();
     try {
       // Fetch entries for this report
-      const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
-        cache: 'no-store',
-      });
+      const res = await fetch(`/api/activity-reports/${report.id}/entries`, { cache: 'no-store' });
       if (!res.ok) throw new Error(t('reports.error.loadEntries'));
 
       const data = await res.json();
@@ -290,14 +278,6 @@ export default function TraineeActivityReportsPage() {
         report.weekNumber
       );
 
-      // Prepare soft skills
-      const softSkills =
-        evalData?.softskillRatings?.map((r: any) => ({
-          name: r.criterion.name,
-          selfRating: r.rating.selfRating,
-          trainerRating: r.rating.trainerRating,
-        })) || [];
-
       // Prepare report data for PDF
       const reportData = {
         id: report.id,
@@ -314,28 +294,24 @@ export default function TraineeActivityReportsPage() {
         traineeSignedAt: report.traineeSignedAt,
         trainerSignedAt: report.trainerSignedAt,
         reviewerId: report.reviewerId,
-        reviewerName: null, // Would need to fetch trainer name if available
+        reviewerName: report.reviewerName || null,
         entries: entriesData.entries || [],
-        // Grading Data
-        selfRating: evalData?.evaluation?.selfRating,
-        selfComment: evalData?.evaluation?.selfComment,
-        trainerRating: evalData?.evaluation?.trainerRating,
+        // Optional trainer comment
         trainerComment: evalData?.evaluation?.trainerComment,
-        softSkills: softSkills,
       };
 
       await (
         await import('@/utils/generateReportPDF')
       ).generateActivityReportPDF(reportData, useCases, components);
     } catch (err: any) {
-      toast.error(t('reports.error.pdfGeneration') + ' ' + err.message);
+      toast.error(t('reports.error.pdfGeneration'));
     }
   };
 
   if (authLoading || loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <LoadingSpinner size="lg" />
+        <div className="border-accent h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
       </div>
     );
   }
@@ -381,9 +357,8 @@ export default function TraineeActivityReportsPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <button
           onClick={() => setFilterStatus('ALL')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
-            filterStatus === 'ALL' ? 'ring-primary bg-primary/5 ring-2' : ''
-          }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'ALL' ? 'ring-primary bg-primary/5 ring-2' : ''
+            }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
@@ -402,11 +377,10 @@ export default function TraineeActivityReportsPage() {
 
         <button
           onClick={() => setFilterStatus('SUBMITTED')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
-            filterStatus === 'SUBMITTED'
-              ? 'bg-blue-400/5 ring-2 ring-blue-400'
-              : ''
-          }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'SUBMITTED'
+            ? 'bg-blue-400/5 ring-2 ring-blue-400'
+            : ''
+            }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
@@ -425,11 +399,10 @@ export default function TraineeActivityReportsPage() {
 
         <button
           onClick={() => setFilterStatus('APPROVED')}
-          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
-            filterStatus === 'APPROVED'
-              ? 'bg-green-400/5 ring-2 ring-green-400'
-              : ''
-          }`}
+          className={`glass-effect rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${filterStatus === 'APPROVED'
+            ? 'bg-green-400/5 ring-2 ring-green-400'
+            : ''
+            }`}
         >
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
@@ -493,7 +466,7 @@ export default function TraineeActivityReportsPage() {
                 <div
                   key={report.id}
                   onClick={() => setSelectedReport(report)}
-                  className="hover:bg-muted/50 cursor-pointer rounded-xl p-4 transition-all duration-200 hover:scale-[1.005] hover:shadow-md"
+                  className="hover:bg-muted/50 cursor-pointer rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.005]"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -519,25 +492,25 @@ export default function TraineeActivityReportsPage() {
                   {/* Actions for Drafts */}
                   {(report.status === 'DRAFT' ||
                     report.status === 'REJECTED') && (
-                    <div className="border-border/50 mt-3 flex items-center gap-2 border-t pt-3">
-                      <button
-                        onClick={e => handleEditReport(e, report)}
-                        className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                      >
-                        <Edit3 className="h-3 w-3" />
-                        {report.status === 'REJECTED'
-                          ? t('reports.resubmit')
-                          : t('common.edit')}
-                      </button>
-                      <button
-                        onClick={e => handleDeleteReport(e, report.id)}
-                        className="bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        {t('common.delete')}
-                      </button>
-                    </div>
-                  )}
+                      <div className="border-border/50 mt-3 flex items-center gap-2 border-t pt-3">
+                        <button
+                          onClick={e => handleEditReport(e, report)}
+                          className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          {report.status === 'REJECTED'
+                            ? t('reports.resubmit')
+                            : t('common.edit')}
+                        </button>
+                        <button
+                          onClick={e => handleDeleteReport(e, report.id)}
+                          className="bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          {t('common.delete')}
+                        </button>
+                      </div>
+                    )}
 
                   {/* Download Button for Approved Reports */}
                   {report.status === 'APPROVED' && (
@@ -651,12 +624,14 @@ function CreateReportModal({
       useCaseId: string;
       actualHours: number;
       notes: string;
+      traineeGrade: string | null;
     }[]
   >(
     initialEntries?.map(e => ({
       useCaseId: e.useCaseId,
       actualHours: e.actualHours,
       notes: e.notes || '',
+      traineeGrade: e.traineeGrade ? String(e.traineeGrade) : null,
     })) || []
   );
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(
@@ -724,6 +699,9 @@ function CreateReportModal({
     return e.actualHours > ucHours.remainingHours;
   });
 
+  // 40h/week maximum check (§ 8 JArbSchG)
+  const MAX_WEEKLY_HOURS = 40;
+
   // Get remaining hours for a use case (considering current entries)
   const getRemainingHours = (useCaseId: string): number => {
     const ucHours = useCaseHours[useCaseId];
@@ -756,14 +734,15 @@ function CreateReportModal({
         useCaseId: useCase.id,
         actualHours: 0,
         notes: '',
+        traineeGrade: null,
       },
     ]);
   };
 
   const updateEntry = (
     useCaseId: string,
-    field: 'actualHours' | 'notes',
-    value: number | string
+    field: 'actualHours' | 'notes' | 'traineeGrade',
+    value: number | string | null
   ) => {
     setEntries(
       entries.map(e =>
@@ -799,6 +778,7 @@ function CreateReportModal({
   }, 0);
 
   const totalActualHours = entries.reduce((sum, e) => sum + e.actualHours, 0);
+  const exceeds40h = totalActualHours > MAX_WEEKLY_HOURS;
 
   // Validation helpers
   const periodValid =
@@ -811,16 +791,14 @@ function CreateReportModal({
   const entriesValid =
     entries.length > 0 &&
     entries.every(
-      e =>
-        e.actualHours > 0 &&
-        typeof e.actualHours === 'number' &&
-        e.notes.trim().length > 0
+      e => e.actualHours > 0 && typeof e.actualHours === 'number' && e.notes.trim().length > 0
     );
 
   const canSubmit =
     !saving &&
     !duplicateExists &&
     !hasOverbooking &&
+    !exceeds40h &&
     periodValid &&
     entriesValid;
 
@@ -828,6 +806,40 @@ function CreateReportModal({
     try {
       setSaving(true);
       setError(null);
+
+      // Client-side validation with clear error messages
+      if (entries.length === 0) {
+        setError(t('reports.error.noEntries') || 'Bitte fügen Sie mindestens eine Tätigkeit hinzu.');
+        setSaving(false);
+        return;
+      }
+
+      const missingHours = entries.filter(e => !e.actualHours || e.actualHours <= 0);
+      if (missingHours.length > 0) {
+        setError(t('reports.error.missingHours') || 'Bitte tragen Sie für alle Tätigkeiten die IST-Stunden ein (> 0).');
+        setSaving(false);
+        return;
+      }
+
+      const missingNotes = entries.filter(e => !e.notes || e.notes.trim().length === 0);
+      if (submit && missingNotes.length > 0) {
+        setError(t('reports.error.missingNotes') || 'Bitte beschreiben Sie für alle Tätigkeiten, was Sie gelernt haben.');
+        setSaving(false);
+        return;
+      }
+
+      if (!periodValid) {
+        setError('Bitte geben Sie eine gültige Kalenderwoche (1-52) und Jahr an.');
+        setSaving(false);
+        return;
+      }
+
+      // 40h/week maximum check
+      if (totalActualHours > MAX_WEEKLY_HOURS) {
+        setError(`Maximale Wochenstunden überschritten: ${totalActualHours} Std. eingetragen, aber maximal ${MAX_WEEKLY_HOURS} Std. pro Woche zulässig (§ 8 JArbSchG).`);
+        setSaving(false);
+        return;
+      }
 
       // Calculate period start and end based on ISO week number
       // Get January 4th (always in ISO week 1)
@@ -867,6 +879,7 @@ function CreateReportModal({
             actualHours: e.actualHours,
             isOverbooked: checkOverbooked(e.useCaseId, e.actualHours),
             notes: e.notes || null,
+            traineeGrade: e.traineeGrade || null,
           })),
           submit,
         }),
@@ -921,6 +934,15 @@ function CreateReportModal({
             <div className="bg-destructive/10 border-destructive/30 text-destructive flex items-center gap-2 rounded-lg border p-3 text-sm">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               {t('reports.modal.overbooking')}
+            </div>
+          )}
+
+          {exceeds40h && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              {t('reports.error.exceeds40h')
+                .replace('{hours}', String(totalActualHours))
+                .replace('{max}', String(MAX_WEEKLY_HOURS))}
             </div>
           )}
 
@@ -1006,6 +1028,31 @@ function CreateReportModal({
                         <p className="text-foreground font-medium">
                           {useCase?.plannedHours} {t('reports.hours')}
                         </p>
+                        {/* Remaining hours indicator */}
+                        {(() => {
+                          const ucHours = useCaseHours[entry.useCaseId];
+                          if (!ucHours) return null;
+                          const remaining = ucHours.remainingHours;
+                          const usedPercent = Math.min(100, ((ucHours.usedHours + entry.actualHours) / ucHours.totalHours) * 100);
+                          const wouldExceed = entry.actualHours > remaining;
+                          return (
+                            <div className="mt-1.5">
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className={`text-[10px] ${wouldExceed ? 'text-red-400 font-medium' : 'text-muted-foreground'}`}>
+                                  {remaining.toFixed(1)} {t('reports.hoursRemaining')}
+                                </span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-muted/50 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    wouldExceed ? 'bg-red-500' : usedPercent > 80 ? 'bg-yellow-500' : 'bg-green-500'
+                                  }`}
+                                  style={{ width: `${Math.min(100, usedPercent)}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div>
                         <label className="text-muted-foreground mb-1 block text-xs">
@@ -1020,12 +1067,11 @@ function CreateReportModal({
                             updateEntry(
                               entry.useCaseId,
                               'actualHours',
-                              Number(e.target.value)
+                              Math.max(0, Number(e.target.value) || 0)
                             )
                           }
-                          className={`bg-background text-foreground w-full rounded border px-3 py-1.5 ${
-                            isOverbooked ? 'border-yellow-500' : 'border-border'
-                          }`}
+                          className={`bg-background text-foreground w-full rounded border px-3 py-1.5 ${isOverbooked ? 'border-yellow-500' : 'border-border'
+                            }`}
                         />
                       </div>
                       <div className="col-span-2">
@@ -1048,6 +1094,52 @@ function CreateReportModal({
                       </div>
                     </div>
 
+                    {/* Trainee Self-Grading */}
+                    <div className="mt-3 pt-3 border-t border-border/30">
+                      <label className="text-muted-foreground text-xs mb-2 block">
+                        {t('reports.selfGrade')}
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        {(['1', '2', '3', '4', '5', '6'] as const).map(grade => {
+                          const isSelected = entry.traineeGrade === grade;
+                          return (
+                            <button
+                              key={grade}
+                              type="button"
+                              onClick={() =>
+                                updateEntry(
+                                  entry.useCaseId,
+                                  'traineeGrade',
+                                  isSelected ? null : grade
+                                )
+                              }
+                              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-all duration-150 ${
+                                isSelected
+                                  ? Number(grade) <= 2
+                                    ? 'bg-green-500 text-white ring-2 ring-green-400/50 scale-110'
+                                    : Number(grade) <= 4
+                                      ? 'bg-yellow-500 text-white ring-2 ring-yellow-400/50 scale-110'
+                                      : 'bg-red-500 text-white ring-2 ring-red-400/50 scale-110'
+                                  : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                              }`}
+                            >
+                              {grade}
+                            </button>
+                          );
+                        })}
+                        {entry.traineeGrade && (
+                          <span className="text-muted-foreground ml-2 text-xs">
+                            {entry.traineeGrade === '1' ? t('reports.gradeLabels.1') :
+                             entry.traineeGrade === '2' ? t('reports.gradeLabels.2') :
+                             entry.traineeGrade === '3' ? t('reports.gradeLabels.3') :
+                             entry.traineeGrade === '4' ? t('reports.gradeLabels.4') :
+                             entry.traineeGrade === '5' ? t('reports.gradeLabels.5') :
+                             t('reports.gradeLabels.6')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
                     {isOverbooked && (
                       <div className="mt-2 flex items-center gap-2 text-sm text-yellow-500">
                         <AlertTriangle className="h-4 w-4" />
@@ -1061,41 +1153,85 @@ function CreateReportModal({
                         </span>
                       </div>
                     )}
+
+                    {/* Exceeded remaining hours warning */}
+                    {(() => {
+                      const ucHours = useCaseHours[entry.useCaseId];
+                      if (!ucHours || entry.actualHours <= ucHours.remainingHours) return null;
+                      return (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-red-400">
+                          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                          <span>
+                            {t('reports.exceedsRemaining')
+                              .replace('{entered}', String(entry.actualHours))
+                              .replace('{remaining}', ucHours.remainingHours.toFixed(1))
+                              .replace('{total}', String(ucHours.totalHours))}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
 
               {/* Totals */}
-              <div className="bg-muted/50 flex items-center justify-between rounded-lg p-4">
-                <div className="flex items-center gap-6">
-                  <div>
-                    <p className="text-muted-foreground text-xs">
-                      {t('reports.totalPlanned')}
-                    </p>
-                    <p className="text-foreground text-lg font-bold">
-                      {totalPlannedHours} {t('reports.hours')}
-                    </p>
+              <div className={`rounded-lg p-4 ${exceeds40h ? 'border border-red-500/30 bg-red-500/5' : 'bg-muted/50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <p className="text-muted-foreground text-xs">
+                        {t('reports.totalPlanned')}
+                      </p>
+                      <p className="text-foreground text-lg font-bold">
+                        {totalPlannedHours} {t('reports.hours')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">
+                        {t('reports.totalActual')}
+                      </p>
+                      <p
+                        className={`text-lg font-bold ${exceeds40h ? 'text-red-500' : totalActualHours > totalPlannedHours ? 'text-yellow-500' : 'text-foreground'}`}
+                      >
+                        {totalActualHours} / {MAX_WEEKLY_HOURS} {t('reports.hours')}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs">
-                      {t('reports.totalActual')}
-                    </p>
-                    <p
-                      className={`text-lg font-bold ${totalActualHours > totalPlannedHours ? 'text-yellow-500' : 'text-foreground'}`}
-                    >
-                      {totalActualHours} {t('reports.hours')}
-                    </p>
-                  </div>
+                  {totalActualHours > totalPlannedHours && !exceeds40h && (
+                    <div className="flex items-center gap-2 text-yellow-500">
+                      <AlertTriangle className="h-5 w-5" />
+                      <span className="font-medium">
+                        +{(totalActualHours - totalPlannedHours).toFixed(1)}{' '}
+                        {t('reports.hours')}
+                      </span>
+                    </div>
+                  )}
+                  {exceeds40h && (
+                    <div className="flex items-center gap-2 text-red-500">
+                      <AlertTriangle className="h-5 w-5" />
+                      <span className="text-sm font-medium">
+                        +{(totalActualHours - MAX_WEEKLY_HOURS).toFixed(1)} {t('reports.hours')} über Limit
+                      </span>
+                    </div>
+                  )}
                 </div>
-                {totalActualHours > totalPlannedHours && (
-                  <div className="flex items-center gap-2 text-yellow-500">
-                    <AlertTriangle className="h-5 w-5" />
-                    <span className="font-medium">
-                      +{(totalActualHours - totalPlannedHours).toFixed(1)}{' '}
-                      {t('reports.hours')}
+                {/* Weekly hours progress bar */}
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-muted-foreground text-xs">
+                      {t('reports.weeklyHoursLimit')}
+                    </span>
+                    <span className={`text-xs font-medium ${exceeds40h ? 'text-red-500' : totalActualHours > 32 ? 'text-yellow-500' : 'text-green-500'}`}>
+                      {totalActualHours} / {MAX_WEEKLY_HOURS} Std.
                     </span>
                   </div>
-                )}
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/50">
+                    <div
+                      className={`h-full rounded-full transition-all ${exceeds40h ? 'bg-red-500' : totalActualHours > 32 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                      style={{ width: `${Math.min(100, (totalActualHours / MAX_WEEKLY_HOURS) * 100)}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1190,7 +1326,8 @@ function CreateReportModal({
                 saving ||
                 entries.length === 0 ||
                 duplicateExists ||
-                hasOverbooking
+                hasOverbooking ||
+                exceeds40h
               }
               className="bg-muted text-foreground hover:bg-muted/80 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
             >
@@ -1238,9 +1375,7 @@ function ReportDetailModal({
 
   const loadEntries = async () => {
     try {
-      const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
-        cache: 'no-store',
-      });
+      const res = await fetch(`/api/activity-reports/${report.id}/entries`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setEntries(data.entries || []);
@@ -1264,9 +1399,11 @@ function ReportDetailModal({
             <h2 className="text-foreground text-xl font-bold">
               {t('reports.week')} {report.weekNumber} / {report.year}
             </h2>
-            <p className="text-muted-foreground text-sm">
-              {report.ausbildungsjahr}. {t('reports.trainingYear')}
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-muted-foreground text-sm">
+                {report.ausbildungsjahr}. {t('reports.trainingYear')}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -1280,7 +1417,7 @@ function ReportDetailModal({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <LoadingSpinner size="md" />
+              <div className="border-accent h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
             </div>
           ) : entries.length === 0 ? (
             <p className="text-muted-foreground py-12 text-center">
@@ -1333,34 +1470,59 @@ function ReportDetailModal({
                       </p>
                     )}
 
-                    {/* Show trainer grade if approved */}
-                    {entry.trainerGrade && (
-                      <div className="bg-accent/10 border-accent/20 mt-3 rounded-lg border p-3">
+                    {/* Show trainee self-grade if set */}
+                    {entry.traineeGrade && (
+                      <div className="bg-muted/30 border-border/30 mt-3 rounded-lg border p-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-xs">
-                              {t('reports.trainerGrade')}
-                            </span>
-                            <span
-                              className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${
-                                entry.trainerGrade <= 2
-                                  ? 'bg-green-500'
-                                  : entry.trainerGrade <= 4
-                                    ? 'bg-yellow-500'
-                                    : 'bg-red-500'
-                              }`}
-                            >
-                              {entry.trainerGrade}
-                            </span>
-                          </div>
-                          {entry.gradeComment && (
-                            <p className="text-foreground flex-1 text-sm italic">
-                              "{entry.gradeComment}"
-                            </p>
-                          )}
+                          <span className="text-muted-foreground text-xs">
+                            {t('reports.selfGradeLabel')}
+                          </span>
+                          <span
+                            className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold text-white ${
+                              Number(entry.traineeGrade) <= 2
+                                ? 'bg-green-500'
+                                : Number(entry.traineeGrade) <= 4
+                                  ? 'bg-yellow-500'
+                                  : 'bg-red-500'
+                            }`}
+                          >
+                            {entry.traineeGrade}
+                          </span>
                         </div>
                       </div>
                     )}
+
+                    {/* Show trainer grade if graded */}
+                    {entry.trainerGrade && (() => {
+                      const trainerGrade = Number(entry.trainerGrade);
+                      const gradeComment = entry.gradeComment;
+                      return (
+                        <div className="bg-accent/10 border-accent/20 mt-3 rounded-lg border p-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground text-xs">
+                                {t('reports.trainerGrade')}
+                              </span>
+                              <span
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full font-bold text-white ${trainerGrade <= 2
+                                  ? 'bg-green-500'
+                                  : trainerGrade <= 4
+                                    ? 'bg-yellow-500'
+                                    : 'bg-red-500'
+                                  }`}
+                              >
+                                {trainerGrade}
+                              </span>
+                            </div>
+                            {gradeComment && (
+                              <p className="text-foreground flex-1 text-sm italic">
+                                &quot;{gradeComment}&quot;
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {entry.isOverbooked && (
                       <div className="mt-2 flex items-center gap-2 text-sm text-yellow-500">
@@ -1384,6 +1546,7 @@ function ReportDetailModal({
               </p>
             </div>
           )}
+
         </div>
 
         {/* Footer */}
@@ -1427,15 +1590,17 @@ function ComponentItem({
     <div className="border-border/50 border-b last:border-b-0">
       <button
         onClick={onToggle}
-        className="hover:bg-muted/50 flex w-full items-center gap-3 p-3 text-left transition-colors"
+        className="hover:bg-muted/50 group flex w-full items-center gap-3 p-3 text-left transition-all duration-150 cursor-pointer"
       >
-        {isExpanded ? (
-          <ChevronDown className="text-muted-foreground h-4 w-4" />
-        ) : (
-          <ChevronRight className="text-muted-foreground h-4 w-4" />
-        )}
+        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-muted/50 group-hover:bg-accent/20 transition-colors">
+          {isExpanded ? (
+            <ChevronDown className="text-muted-foreground group-hover:text-accent h-4 w-4 transition-colors" />
+          ) : (
+            <ChevronRight className="text-muted-foreground group-hover:text-accent h-4 w-4 transition-colors" />
+          )}
+        </div>
         <div className="flex-1">
-          <p className="text-foreground text-sm font-medium">
+          <p className="text-foreground text-sm font-medium group-hover:text-accent transition-colors">
             {component.title}
           </p>
           <p className="text-muted-foreground text-xs">
@@ -1445,7 +1610,7 @@ function ComponentItem({
       </button>
 
       {isExpanded && (
-        <div className="space-y-1 pb-2 pl-10">
+        <div className="space-y-1 pb-3 pl-8 pr-2">
           {useCases
             .sort((a, b) => a.orderIndex - b.orderIndex)
             .map(useCase => {
@@ -1463,32 +1628,46 @@ function ComponentItem({
                     !isSelected && !isExhausted && onAddEntry(useCase)
                   }
                   disabled={isSelected || isExhausted}
-                  className={`w-full rounded p-2 text-left text-sm transition-colors ${
-                    isSelected
-                      ? 'bg-accent/20 text-accent cursor-not-allowed'
-                      : isExhausted
-                        ? 'bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60'
-                        : 'hover:bg-muted/50 text-foreground'
-                  }`}
+                  className={`group/item w-full rounded-lg px-3 py-2.5 text-left text-sm transition-all duration-150 ${isSelected
+                    ? 'bg-accent/15 text-accent border border-accent/30 cursor-default'
+                    : isExhausted
+                      ? 'bg-muted/20 text-muted-foreground cursor-not-allowed opacity-50'
+                      : 'hover:bg-accent/10 hover:border-accent/20 border border-transparent text-foreground cursor-pointer hover:translate-x-1'
+                    }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span>
-                      <span className="font-medium">{useCase.letter})</span>{' '}
-                      {useCase.description}
-                    </span>
-                    <span className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      {isSelected ? (
+                        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-accent/20">
+                          <Check className="h-3 w-3 text-accent" />
+                        </div>
+                      ) : isExhausted ? (
+                        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-destructive/20">
+                          <X className="h-3 w-3 text-destructive" />
+                        </div>
+                      ) : (
+                        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-muted/50 group-hover/item:bg-accent/20 transition-colors">
+                          <Plus className="h-3 w-3 text-muted-foreground group-hover/item:text-accent transition-colors" />
+                        </div>
+                      )}
+                      <span className={`${!isSelected && !isExhausted ? 'group-hover/item:text-accent' : ''} transition-colors`}>
+                        <span className="font-medium">{useCase.letter})</span>{' '}
+                        {useCase.description}
+                      </span>
+                    </div>
+                    <span className="flex-shrink-0 flex items-center gap-2">
                       {isExhausted ? (
-                        <span className="bg-destructive/20 text-destructive rounded px-2 py-0.5 text-xs">
+                        <span className="bg-destructive/20 text-destructive rounded-full px-2 py-0.5 text-xs font-medium">
                           {t('reports.exhausted')}
                         </span>
                       ) : ucHours ? (
                         <span
-                          className={`text-xs ${ucHours.remainingHours <= 10 ? 'text-yellow-500' : 'text-muted-foreground'}`}
+                          className={`text-xs whitespace-nowrap ${ucHours.remainingHours <= 10 ? 'text-yellow-500' : 'text-muted-foreground'}`}
                         >
                           {remainingText}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground text-xs">
+                        <span className="text-muted-foreground text-xs whitespace-nowrap">
                           ({useCase.plannedHours} {t('reports.hours')})
                         </span>
                       )}
