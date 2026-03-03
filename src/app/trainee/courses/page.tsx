@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { BookOpen, ArrowRight, Play, CheckCircle2 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 type CourseItem = {
   id: string;
@@ -20,7 +21,11 @@ export default function TraineeCoursesPage() {
   const { profile } = useAuth();
   const { t } = useLanguage();
 
-  const { data, isLoading: loading, error } = useApiQuery<{ courses: CourseItem[] }>(
+  const {
+    data,
+    isLoading: loading,
+    error,
+  } = useApiQuery<{ courses: CourseItem[] }>(
     profile?.id ? `/api/trainee/courses?traineeId=${profile.id}` : null
   );
   const courses = data?.courses || [];
@@ -41,11 +46,8 @@ export default function TraineeCoursesPage() {
     return (
       <div className="mx-auto max-w-7xl space-y-8 p-6">
         <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="border-accent h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"></div>
-            <h1 className="text-foreground text-2xl font-bold">
-              {t('courses.loading')}
-            </h1>
+          <div className="flex items-center justify-center">
+            <LoadingSpinner size="lg" />
           </div>
         </div>
       </div>
@@ -56,7 +58,9 @@ export default function TraineeCoursesPage() {
     return (
       <div className="mx-auto max-w-7xl space-y-8 p-6">
         <div className="glass-effect border-destructive/30 rounded-3xl border p-8 shadow-lg">
-          <h1 className="text-foreground text-2xl font-bold">{error.message}</h1>
+          <h1 className="text-foreground text-2xl font-bold">
+            {error.message}
+          </h1>
         </div>
       </div>
     );

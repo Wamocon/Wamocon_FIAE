@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   ClipboardList,
   AlertTriangle,
@@ -525,7 +526,7 @@ export default function TrainerActivityReportsPage() {
   if (authLoading || loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="border-accent h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -709,7 +710,7 @@ export default function TrainerActivityReportsPage() {
                 <button
                   key={report.id}
                   onClick={() => handleSelectReport(report)}
-                  className="hover:bg-muted/50 w-full rounded-xl p-4 text-left transition-all duration-200 hover:shadow-md hover:scale-[1.005]"
+                  className="hover:bg-muted/50 w-full rounded-xl p-4 text-left transition-all duration-200 hover:scale-[1.005] hover:shadow-md"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -1236,7 +1237,7 @@ function ReportReviewModal({
         <div className="flex-1 overflow-y-auto p-6">
           {loadingEntries ? (
             <div className="flex items-center justify-center py-12">
-              <div className="border-accent h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
+              <LoadingSpinner size="md" />
             </div>
           ) : activeTab === 'details' ? (
             /* Details Tab */
@@ -1436,7 +1437,7 @@ function ReportReviewModal({
             <div className="space-y-4">
               {loadingSoftskills ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="border-accent h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
+                  <LoadingSpinner size="md" />
                 </div>
               ) : softskillCriteria.length === 0 ? (
                 <div className="py-12 text-center">

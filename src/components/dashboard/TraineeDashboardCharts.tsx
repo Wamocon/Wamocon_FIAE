@@ -21,13 +21,19 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 function useTooltipStyle() {
   const { theme } = useTheme();
-  return useMemo(() => ({
-    backgroundColor: theme === 'dark' ? '#1e1423' : '#ffffff',
-    border: '2px solid #ff1a1a',
-    borderRadius: '12px',
-    color: theme === 'dark' ? '#ffffff' : '#1f2937',
-    boxShadow: theme === 'dark' ? '0 8px 24px rgba(255,26,26,0.3)' : '0 4px 12px rgba(0,0,0,0.15)',
-  }), [theme]);
+  return useMemo(
+    () => ({
+      backgroundColor: theme === 'dark' ? '#1e1423' : '#ffffff',
+      border: '2px solid #ff1a1a',
+      borderRadius: '12px',
+      color: theme === 'dark' ? '#ffffff' : '#1f2937',
+      boxShadow:
+        theme === 'dark'
+          ? '0 8px 24px rgba(255,26,26,0.3)'
+          : '0 4px 12px rgba(0,0,0,0.15)',
+    }),
+    [theme]
+  );
 }
 
 interface WeeklyProgressChartProps {
@@ -97,12 +103,7 @@ export function SkillRadarChart({ data }: SkillRadarChartProps) {
           fontSize={11}
           tick={{ fill: 'currentColor' }}
         />
-        <PolarRadiusAxis
-          stroke="currentColor"
-          fontSize={10}
-          tick={{ fill: 'currentColor' }}
-          axisLine={false}
-        />
+        <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
         <Radar
           name="Skills"
           dataKey="value"

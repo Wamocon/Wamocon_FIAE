@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import dynamic from 'next/dynamic';
 
 // Lazy-load recharts components (~200KB) - they're not needed for initial render
@@ -30,7 +31,7 @@ const WeeklyProgressChart = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-[200px] items-center justify-center">
-        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+        <LoadingSpinner size="sm" />
       </div>
     ),
   }
@@ -41,7 +42,7 @@ const SkillRadarChart = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-[200px] items-center justify-center">
-        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+        <LoadingSpinner size="sm" />
       </div>
     ),
   }
@@ -52,7 +53,7 @@ const ModuleBarChart = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-[200px] items-center justify-center">
-        <div className="border-accent h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+        <LoadingSpinner size="sm" />
       </div>
     ),
   }
@@ -84,7 +85,7 @@ const getCachedDashboard = (): DashboardData | null => {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < CACHE_TTL) return data;
     }
-  } catch (_) { }
+  } catch (_) {}
   return null;
 };
 
@@ -94,7 +95,7 @@ const setCachedDashboard = (data: DashboardData) => {
       TRAINEE_DASHBOARD_CACHE_KEY,
       JSON.stringify({ data, timestamp: Date.now() })
     );
-  } catch (_) { }
+  } catch (_) {}
 };
 
 export default function TraineeDashboard() {
@@ -135,11 +136,11 @@ export default function TraineeDashboard() {
   const deadlines = data?.deadlines ?? [];
   const nextLesson = data?.nextItem
     ? {
-      id: data.nextItem.lessonId,
-      title: data.nextItem.lessonTitle,
-      module: data.nextItem.moduleTitle,
-      estimatedTime: data.nextItem.estimatedTime,
-    }
+        id: data.nextItem.lessonId,
+        title: data.nextItem.lessonTitle,
+        module: data.nextItem.moduleTitle,
+        estimatedTime: data.nextItem.estimatedTime,
+      }
     : null;
 
   // ── UI State for Module List ──
@@ -147,12 +148,11 @@ export default function TraineeDashboard() {
     'all'
   );
   const [visibleCount, setVisibleCount] = useState(6);
-  const [visibleModuleProgressCount, setVisibleModuleProgressCount] = useState(5);
+  const [visibleModuleProgressCount, setVisibleModuleProgressCount] =
+    useState(5);
 
   // Don't render until mounted (SSR fix)
   if (!mounted) return null;
-
-
 
   // Filter modules
   const filteredModules = modules.filter((m: any) => {
@@ -274,28 +274,31 @@ export default function TraineeDashboard() {
                 <div className="bg-background/40 flex rounded-lg p-1 backdrop-blur-sm">
                   <button
                     onClick={() => setFilter('all')}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${filter === 'all'
-                      ? 'bg-accent text-white shadow-md'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
-                      }`}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                      filter === 'all'
+                        ? 'bg-accent text-white shadow-md'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+                    }`}
                   >
                     {t('dashboard.filterAll') || 'Alle'}
                   </button>
                   <button
                     onClick={() => setFilter('in_progress')}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${filter === 'in_progress'
-                      ? 'bg-accent text-white shadow-md'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
-                      }`}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                      filter === 'in_progress'
+                        ? 'bg-accent text-white shadow-md'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+                    }`}
                   >
                     {t('dashboard.filterInProgress') || 'In Bearbeitung'}
                   </button>
                   <button
                     onClick={() => setFilter('completed')}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${filter === 'completed'
-                      ? 'bg-green-600 text-white shadow-md'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
-                      }`}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                      filter === 'completed'
+                        ? 'bg-green-600 text-white shadow-md'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+                    }`}
                   >
                     {t('dashboard.filterCompleted') || 'Abgeschlossen'}
                   </button>
@@ -321,22 +324,23 @@ export default function TraineeDashboard() {
                         </h3>
                         <ArrowRight className="text-accent/60 group-hover:text-accent h-5 w-5 transition-colors" />
                       </div>
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="mb-2 flex items-center justify-between">
                         <p className="text-muted-foreground text-sm">
                           {t('dashboard.progress')}
                         </p>
                         {module.progress === 100 && (
-                          <span className="text-xs font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
-                            Completed
+                          <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-bold text-green-500">
+                            {t('dashboard.filterCompleted')}
                           </span>
                         )}
                       </div>
                       <div className="bg-muted/50 h-3 w-full overflow-hidden rounded-full">
                         <div
-                          className={`h-3 rounded-full shadow-lg transition-all duration-700 ${module.progress === 100
-                            ? 'bg-gradient-to-r from-green-500 to-emerald-500'
-                            : 'bg-gradient-to-r from-accent to-primary'
-                            }`}
+                          className={`h-3 rounded-full shadow-lg transition-all duration-700 ${
+                            module.progress === 100
+                              ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                              : 'from-accent to-primary bg-gradient-to-r'
+                          }`}
                           style={{ width: `${module.progress ?? 0}%` }}
                         />
                       </div>
@@ -344,7 +348,9 @@ export default function TraineeDashboard() {
                         <span className="text-muted-foreground text-sm">
                           0% → {module.progress ?? 0}%
                         </span>
-                        <span className={`text-lg font-bold ${module.progress === 100 ? 'text-green-500' : 'text-accent'}`}>
+                        <span
+                          className={`text-lg font-bold ${module.progress === 100 ? 'text-green-500' : 'text-accent'}`}
+                        >
                           {module.progress ?? 0}%
                         </span>
                       </div>
@@ -357,12 +363,15 @@ export default function TraineeDashboard() {
               {filteredModules.length > 6 && (
                 <div className="mt-6 flex justify-center">
                   <button
-                    onClick={() => setVisibleCount(hasMore ? filteredModules.length : 6)}
+                    onClick={() =>
+                      setVisibleCount(hasMore ? filteredModules.length : 6)
+                    }
                     className="group bg-accent/10 hover:bg-accent/20 border-accent/30 text-accent flex items-center gap-2 rounded-full border px-6 py-2.5 text-sm font-bold transition-all hover:scale-105 active:scale-95"
                   >
                     {hasMore ? (
                       <>
-                        {t('dashboard.showMore') || 'Mehr anzeigen'} ({filteredModules.length - visibleCount})
+                        {t('dashboard.showMore') || 'Mehr anzeigen'} (
+                        {filteredModules.length - visibleCount})
                         <ChevronDown className="h-4 w-4 transition-transform group-hover:translate-y-0.5" />
                       </>
                     ) : (
@@ -376,8 +385,8 @@ export default function TraineeDashboard() {
               )}
 
               {filteredModules.length === 0 && (
-                <div className="py-12 text-center text-muted-foreground">
-                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/20">
+                <div className="text-muted-foreground py-12 text-center">
+                  <div className="bg-muted/20 mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full">
                     <Filter className="h-6 w-6 opacity-50" />
                   </div>
                   <p>No modules found for this filter.</p>
@@ -522,46 +531,54 @@ export default function TraineeDashboard() {
               {/* Compact module progress display */}
               <div className="mt-4 space-y-2">
                 <AnimatePresence mode="popLayout">
-                  {moduleProgress.slice(0, visibleModuleProgressCount).map((item: any, index: number) => (
-                    <motion.div
-                      key={item.name || index}
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-2"
-                    >
-                      <span className="text-foreground mr-2 flex-1 truncate text-xs font-medium">
-                        {item.name}
-                      </span>
-                      <div className="flex items-center space-x-2">
-                        <div className="h-2 w-16 rounded-full bg-blue-500/30">
-                          <div
-                            className="from-accent to-primary h-2 rounded-full bg-gradient-to-r shadow-lg transition-all duration-500"
-                            style={{ width: `${item.progress}%` }}
-                          />
-                        </div>
-                        <span className="text-accent min-w-[2.5rem] text-right text-sm font-bold">
-                          {item.progress}%
+                  {moduleProgress
+                    .slice(0, visibleModuleProgressCount)
+                    .map((item: any, index: number) => (
+                      <motion.div
+                        key={item.name || index}
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-2"
+                      >
+                        <span className="text-foreground mr-2 flex-1 truncate text-xs font-medium">
+                          {item.name}
                         </span>
-                      </div>
-                    </motion.div>
-                  ))}
+                        <div className="flex items-center space-x-2">
+                          <div className="h-2 w-16 rounded-full bg-blue-500/30">
+                            <div
+                              className="from-accent to-primary h-2 rounded-full bg-gradient-to-r shadow-lg transition-all duration-500"
+                              style={{ width: `${item.progress}%` }}
+                            />
+                          </div>
+                          <span className="text-accent min-w-[2.5rem] text-right text-sm font-bold">
+                            {item.progress}%
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))}
                 </AnimatePresence>
 
                 {moduleProgress.length > 5 && (
                   <button
-                    onClick={() => setVisibleModuleProgressCount(
-                      visibleModuleProgressCount > 5 ? 5 : moduleProgress.length
-                    )}
+                    onClick={() =>
+                      setVisibleModuleProgressCount(
+                        visibleModuleProgressCount > 5
+                          ? 5
+                          : moduleProgress.length
+                      )
+                    }
                     className="text-accent hover:text-accent/80 flex w-full items-center justify-center gap-1 py-1 text-xs font-bold transition-colors"
                   >
                     {visibleModuleProgressCount > 5 ? (
                       <>
-                        {t('dashboard.showLess')} <ChevronUp className="h-3 w-3" />
+                        {t('dashboard.showLess')}{' '}
+                        <ChevronUp className="h-3 w-3" />
                       </>
                     ) : (
                       <>
-                        {t('dashboard.showMore')} ({moduleProgress.length - 5}) <ChevronDown className="h-3 w-3" />
+                        {t('dashboard.showMore')} ({moduleProgress.length - 5}){' '}
+                        <ChevronDown className="h-3 w-3" />
                       </>
                     )}
                   </button>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   Calendar,
   ChevronLeft,
@@ -545,9 +546,8 @@ export function BlockCalendar() {
 
   if (loading || !currentDate) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-16">
-        <div className="border-accent/30 border-t-accent h-10 w-10 animate-spin rounded-full border-4" />
-        <p className="text-muted-foreground text-sm">{t('calendar.loading')}</p>
+      <div className="flex items-center justify-center py-16">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }

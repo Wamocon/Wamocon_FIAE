@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/lib/supabase';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   BookOpen,
   Users,
@@ -95,7 +96,9 @@ export default function LandingPage() {
           <h1 className="text-foreground text-2xl font-bold">
             {t('landing.platformName')}
           </h1>
-          <p className="text-muted">{t('landing.loading')}</p>
+          <div className="mt-4 flex justify-center">
+            <LoadingSpinner size="md" />
+          </div>
         </div>
       </div>
     );
@@ -111,7 +114,7 @@ export default function LandingPage() {
 
         <div className="relative z-10 text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-red-600 to-red-800 shadow-2xl">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+            <LoadingSpinner size="md" />
           </div>
           <h1 className="text-foreground text-xl">
             {t('landing.redirecting')}

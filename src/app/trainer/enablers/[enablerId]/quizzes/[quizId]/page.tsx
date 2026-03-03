@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 const MarkdownText = dynamic(
@@ -57,11 +58,11 @@ export default function EditEnablerQuizPage() {
     options:
       type === 'MCQ'
         ? [0, 1, 2, 3].map(i => ({
-          id: '',
-          optionText: '',
-          isCorrect: i === 0,
-          explanation: '',
-        }))
+            id: '',
+            optionText: '',
+            isCorrect: i === 0,
+            explanation: '',
+          }))
         : [],
   });
 
@@ -98,7 +99,7 @@ export default function EditEnablerQuizPage() {
     if (enablerId && quizId) load();
   }, [enablerId, quizId]);
 
-  if (loading) return <div className="p-6">{t('common.loading')}</div>;
+  if (loading) return <PageLoader />;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
@@ -116,7 +117,8 @@ export default function EditEnablerQuizPage() {
                     `/api/trainer/enablers/${enablerId}/quizzes/${quizId}`,
                     { method: 'DELETE' }
                   );
-                  if (!r.ok) throw new Error(t('trainer.enablerQuiz.deleteFailed'));
+                  if (!r.ok)
+                    throw new Error(t('trainer.enablerQuiz.deleteFailed'));
                   router.back();
                 } catch (e: any) {
                   toast.error(e?.message || t('common.unknownError'));
@@ -130,7 +132,9 @@ export default function EditEnablerQuizPage() {
             className="border-accent/30 rounded-md border px-3 py-1.5 text-sm"
             onClick={() => setEditing(!editing)}
           >
-            {editing ? t('trainer.enablerQuiz.viewMode') : t('trainer.enablerQuiz.editMode')}
+            {editing
+              ? t('trainer.enablerQuiz.viewMode')
+              : t('trainer.enablerQuiz.editMode')}
           </button>
           <button
             className="border-accent/30 rounded-md border px-3 py-1.5 text-sm"
@@ -162,7 +166,9 @@ export default function EditEnablerQuizPage() {
             )}
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">{t('trainer.enablerQuiz.quizTitle')}</label>
+            <label className="mb-1 block text-sm font-medium">
+              {t('trainer.enablerQuiz.quizTitle')}
+            </label>
             {editing ? (
               <input
                 value={title}
@@ -185,7 +191,9 @@ export default function EditEnablerQuizPage() {
         </label>
 
         <div>
-          <div className="mb-2 text-sm font-semibold">{t('trainer.enablerQuiz.questions')}</div>
+          <div className="mb-2 text-sm font-semibold">
+            {t('trainer.enablerQuiz.questions')}
+          </div>
           <div className="space-y-4">
             {questions.map((q, qi) => {
               const correctIndex = q.options.findIndex(o => o.isCorrect) ?? 0;
@@ -197,7 +205,12 @@ export default function EditEnablerQuizPage() {
                   className="border-accent/20 bg-background/40 rounded-lg border p-3"
                 >
                   <div className="mb-2 flex items-center justify-between">
-                    <div className="font-medium">{t('trainer.enablerQuiz.questionNumber').replace('{n}', String(qi + 1))}</div>
+                    <div className="font-medium">
+                      {t('trainer.enablerQuiz.questionNumber').replace(
+                        '{n}',
+                        String(qi + 1)
+                      )}
+                    </div>
                     {editing && (
                       <button
                         type="button"
@@ -241,19 +254,19 @@ export default function EditEnablerQuizPage() {
                               prev.map((x, i) =>
                                 i === qi
                                   ? {
-                                    ...x,
-                                    questionType: 'MCQ',
-                                    expectedAnswer: null,
-                                    options:
-                                      x.options && x.options.length
-                                        ? x.options
-                                        : [0, 1, 2, 3].map(j => ({
-                                          id: '',
-                                          optionText: '',
-                                          isCorrect: j === 0,
-                                          explanation: '',
-                                        })),
-                                  }
+                                      ...x,
+                                      questionType: 'MCQ',
+                                      expectedAnswer: null,
+                                      options:
+                                        x.options && x.options.length
+                                          ? x.options
+                                          : [0, 1, 2, 3].map(j => ({
+                                              id: '',
+                                              optionText: '',
+                                              isCorrect: j === 0,
+                                              explanation: '',
+                                            })),
+                                    }
                                   : x
                               )
                             )
@@ -271,11 +284,11 @@ export default function EditEnablerQuizPage() {
                               prev.map((x, i) =>
                                 i === qi
                                   ? {
-                                    ...x,
-                                    questionType: 'TEXT',
-                                    expectedAnswer: x.expectedAnswer ?? '',
-                                    options: [],
-                                  }
+                                      ...x,
+                                      questionType: 'TEXT',
+                                      expectedAnswer: x.expectedAnswer ?? '',
+                                      options: [],
+                                    }
                                   : x
                               )
                             )
@@ -295,7 +308,9 @@ export default function EditEnablerQuizPage() {
                           <textarea
                             rows={2}
                             className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                            placeholder={t('trainer.enablerQuiz.expectedAnswerHint')}
+                            placeholder={t(
+                              'trainer.enablerQuiz.expectedAnswerHint'
+                            )}
                             value={q.expectedAnswer || ''}
                             onChange={e =>
                               setQuestions(prev =>
@@ -309,7 +324,8 @@ export default function EditEnablerQuizPage() {
                           />
                         ) : (
                           <div className="text-muted-foreground text-sm">
-                            {t('trainer.enablerQuiz.expectedAnswerLabel')}: {q.expectedAnswer || '–'}
+                            {t('trainer.enablerQuiz.expectedAnswerLabel')}:{' '}
+                            {q.expectedAnswer || '–'}
                           </div>
                         )}
                       </div>
@@ -321,7 +337,9 @@ export default function EditEnablerQuizPage() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="text-xs tracking-wide uppercase">
-                              {o.isCorrect ? t('trainer.enablerQuiz.correctOption') : t('trainer.enablerQuiz.option')}
+                              {o.isCorrect
+                                ? t('trainer.enablerQuiz.correctOption')
+                                : t('trainer.enablerQuiz.option')}
                             </div>
                             {editing && (
                               <label className="flex items-center gap-1 text-xs">
@@ -339,7 +357,7 @@ export default function EditEnablerQuizPage() {
                                         const prevExpl =
                                           prevCorrect >= 0
                                             ? x.options[prevCorrect]
-                                              .explanation || ''
+                                                .explanation || ''
                                             : '';
                                         return {
                                           ...x,
@@ -365,7 +383,9 @@ export default function EditEnablerQuizPage() {
                                     );
                                   }}
                                 />
-                                <span>{t('trainer.enablerQuiz.markCorrect')}</span>
+                                <span>
+                                  {t('trainer.enablerQuiz.markCorrect')}
+                                </span>
                               </label>
                             )}
                           </div>
@@ -378,16 +398,16 @@ export default function EditEnablerQuizPage() {
                                   prev.map((x, i) =>
                                     i === qi
                                       ? {
-                                        ...x,
-                                        options: x.options.map((oo, j) =>
-                                          j === oi
-                                            ? {
-                                              ...oo,
-                                              optionText: e.target.value,
-                                            }
-                                            : oo
-                                        ),
-                                      }
+                                          ...x,
+                                          options: x.options.map((oo, j) =>
+                                            j === oi
+                                              ? {
+                                                  ...oo,
+                                                  optionText: e.target.value,
+                                                }
+                                              : oo
+                                          ),
+                                        }
                                       : x
                                   )
                                 )
@@ -486,19 +506,19 @@ export default function EditEnablerQuizPage() {
                     questions: questions.map(q =>
                       q.questionType === 'TEXT'
                         ? {
-                          questionText: q.questionText,
-                          questionType: 'TEXT',
-                          expectedAnswer: q.expectedAnswer,
-                        }
+                            questionText: q.questionText,
+                            questionType: 'TEXT',
+                            expectedAnswer: q.expectedAnswer,
+                          }
                         : {
-                          questionText: q.questionText,
-                          questionType: 'MCQ',
-                          options: q.options.map(o => ({
-                            optionText: o.optionText,
-                            isCorrect: o.isCorrect,
-                            explanation: (o.explanation ?? '') || null,
-                          })),
-                        }
+                            questionText: q.questionText,
+                            questionType: 'MCQ',
+                            options: q.options.map(o => ({
+                              optionText: o.optionText,
+                              isCorrect: o.isCorrect,
+                              explanation: (o.explanation ?? '') || null,
+                            })),
+                          }
                     ),
                   };
                   const r = await fetch(
@@ -509,7 +529,8 @@ export default function EditEnablerQuizPage() {
                       body: JSON.stringify(payload),
                     }
                   );
-                  if (!r.ok) throw new Error(t('trainer.enablerQuiz.saveFailed'));
+                  if (!r.ok)
+                    throw new Error(t('trainer.enablerQuiz.saveFailed'));
                   setEditing(false);
                 } catch (e: any) {
                   toast.error(e?.message || t('common.unknownError'));
