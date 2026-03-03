@@ -54,8 +54,7 @@ export async function GET(
             latestCertificate: certificates.length > 0 ? certificates[0] : null,
         });
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error fetching certificates:', error);
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler beim Laden der Zeugnisse' }, { status: 500 });
     }
 }

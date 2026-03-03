@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { useSidebar } from '@/contexts/SidebarContext';
 
 const TrainerLayoutComponent = ({
   children,
@@ -14,7 +14,7 @@ const TrainerLayoutComponent = ({
 }) => {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isOpen: sidebarOpen, toggle: handleToggleSidebar } = useSidebar();
 
   // If profile is already available from cache, skip waiting entirely.
   const [waitingForProfile, setWaitingForProfile] = useState(() => !profile);
@@ -69,28 +69,52 @@ const TrainerLayoutComponent = ({
     }
   }, [router]);
 
-  const handleToggleSidebar = useCallback(() => {
-    setSidebarOpen(prev => !prev);
-  }, []);
-
   // Show loading state while auth is initializing or waiting for profile
   if (isLoading) {
-    return <PageLoader size="lg" fullScreen />;
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">Lade...</p>
+        </div>
+      </div>
+    );
   }
 
   // Show redirect state
   if (shouldRedirect) {
-    return <PageLoader size="lg" fullScreen />;
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">Weiterleitung...</p>
+        </div>
+      </div>
+    );
   }
 
   // User exists but profile hasn't arrived yet
   if (user && !profile) {
-    return <PageLoader size="lg" fullScreen />;
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">Lade...</p>
+        </div>
+      </div>
+    );
   }
 
   // No user and no profile after auth completed
   if (!isAuthenticated) {
-    return <PageLoader size="lg" fullScreen />;
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">Zugriff verweigert...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

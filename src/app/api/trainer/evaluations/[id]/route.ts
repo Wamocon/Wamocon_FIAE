@@ -6,6 +6,7 @@ import {
     mesSoftskillCriteria,
     profiles,
     notifications,
+    gradeEditHistory,
 } from '@/db/migrations/schemas/schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -81,21 +82,108 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
         const evaluation = evaluationRows[0];
 
-        if (evaluation.status === 'APPROVED') {
-            return NextResponse.json({ error: 'Cannot modify an approved evaluation' }, { status: 400 });
-        }
-
         const body = await request.json();
         const {
             trainerRating,
             trainerComment,
             softskillRatings,
+            isReleaseEdit = false,
+            releaseRating,
+            releaseComment,
+            editReason,
         } = body;
 
-        if (!trainerRating) {
+        // Block modification of APPROVED evaluations unless it's a release grade edit
+        if (evaluation.status === 'APPROVED' && !isReleaseEdit) {
+            return NextResponse.json({ error: 'Cannot modify an approved evaluation' }, { status: 400 });
+        }
+
+        if (!isReleaseEdit && !trainerRating) {
             return NextResponse.json({ error: 'Trainer rating is required' }, { status: 400 });
         }
 
+        if (isReleaseEdit) {
+            // Release grade edit on APPROVED evaluation
+            const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
+            if (releaseRating !== undefined) {
+                // Log audit trail if rating changed
+                if (evaluation.releaseRating !== releaseRating && body.trainerId) {
+                    await db.insert(gradeEditHistory).values({
+                        entityType: 'WEEKLY_EVALUATION',
+                        entityId: id,
+                        fieldName: 'releaseRating',
+                        oldValue: evaluation.releaseRating || null,
+                        newValue: releaseRating,
+                        changedBy: body.trainerId,
+                        changeReason: editReason || null,
+                    });
+                }
+                updateData.releaseRating = releaseRating;
+                updateData.releaseComment = releaseComment?.substring(0, 500) || null;
+                updateData.releasedAt = new Date();
+                updateData.releasedBy = body.trainerId || null;
+            }
+
+            // Also allow editing trainer rating on release edit
+            if (trainerRating !== undefined) {
+                if (evaluation.trainerRating !== trainerRating && body.trainerId) {
+                    await db.insert(gradeEditHistory).values({
+                        entityType: 'WEEKLY_EVALUATION',
+                        entityId: id,
+                        fieldName: 'trainerRating',
+                        oldValue: evaluation.trainerRating || null,
+                        newValue: trainerRating,
+                        changedBy: body.trainerId,
+                        changeReason: editReason || null,
+                    });
+                }
+                updateData.trainerRating = trainerRating;
+                updateData.trainerComment = trainerComment?.substring(0, 500) || null;
+            }
+
+            await db
+                .update(weeklyEvaluations)
+                .set(updateData)
+                .where(eq(weeklyEvaluations.id, id as any));
+
+            // Update softskill release ratings
+            if (softskillRatings && Array.isArray(softskillRatings)) {
+                for (const { criterionId, releaseRating: sRating, releaseComment: sComment, trainerRating: tRating, trainerComment: tComment } of softskillRatings) {
+                    const existingRating = await db
+                        .select()
+                        .from(weeklySoftskillRatings)
+                        .where(and(
+                            eq(weeklySoftskillRatings.weeklyEvaluationId, id as any),
+                            eq(weeklySoftskillRatings.softskillCriterionId, criterionId as any)
+                        ))
+                        .limit(1);
+
+                    if (existingRating.length > 0) {
+                        const updatePayload: Record<string, unknown> = { updatedAt: new Date() };
+                        if (sRating !== undefined) {
+                            updatePayload.releaseRating = sRating;
+                            updatePayload.releaseComment = sComment?.substring(0, 500) || null;
+                        }
+                        if (tRating !== undefined) {
+                            updatePayload.trainerRating = tRating;
+                            updatePayload.trainerComment = tComment?.substring(0, 500) || null;
+                        }
+                        await db
+                            .update(weeklySoftskillRatings)
+                            .set(updatePayload)
+                            .where(eq(weeklySoftskillRatings.id, existingRating[0].id));
+                    }
+                }
+            }
+
+            return NextResponse.json({
+                success: true,
+                message: 'Release grade saved',
+            });
+        }
+
+        // Standard trainer assessment (non-release edit)
         // Update evaluation
         await db
             .update(weeklyEvaluations)

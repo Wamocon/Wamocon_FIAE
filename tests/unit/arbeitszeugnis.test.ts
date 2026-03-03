@@ -18,13 +18,13 @@ describe('Arbeitszeugnis Module - Unit Tests', () => {
 
         it('should generate correct pronouns for FEMALE trainee', () => {
             const text = generateCertificateText('Maria Musterfrau', mockComponents, 2.0, 'female', 'FINAL');
-            expect(text).toContain('Frau Maria Musterfrau hat während ihre Ausbildung');
+            expect(text).toContain('Frau Maria Musterfrau hat während ihrer Ausbildung');
             expect(text).toContain('Sie hat den Anforderungen');
         });
 
         it('should generate correct pronouns for NEUTRAL/DIVERS trainee', () => {
             const text = generateCertificateText('Alex Muster', mockComponents, 2.0, 'neutral', 'FINAL');
-            expect(text).toContain('Alex Muster hat während die Ausbildung');
+            expect(text).toContain('Alex Muster hat während der Ausbildung');
             expect(text).toContain('Die Person hat den Anforderungen');
         });
 
