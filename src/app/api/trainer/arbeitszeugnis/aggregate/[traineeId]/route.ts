@@ -75,6 +75,7 @@ export async function GET(
         const gradedEntries = await db
             .select({
                 entryId: activityReportUseCaseEntries.id,
+                traineeGrade: activityReportUseCaseEntries.traineeGrade,
                 trainerGrade: activityReportUseCaseEntries.trainerGrade,
                 actualHours: activityReportUseCaseEntries.actualHours,
                 isGradeApproved: activityReportUseCaseEntries.isGradeApproved,
@@ -111,7 +112,9 @@ export async function GET(
                 useCaseId: string;
                 letter: string;
                 description: string;
-                grade: string | null;
+                traineeGrade: string | null;
+                trainerGrade: string | null;
+                effectiveGrade: string | null; // trainerGrade is the final grade
                 hours: number;
                 isApproved: boolean;
             }>;
@@ -137,20 +140,25 @@ export async function GET(
             }
 
             const comp = componentMap.get(key)!;
+            // trainerGrade is the final grade (migration 0033 merged release_grade into trainer_grade)
+            const effectiveGrade = entry.trainerGrade;
+
             comp.useCases.push({
                 useCaseId: entry.useCaseId,
                 letter: entry.useCaseLetter,
                 description: entry.useCaseDescription,
-                grade: entry.trainerGrade,
+                traineeGrade: entry.traineeGrade,
+                trainerGrade: entry.trainerGrade,
+                effectiveGrade,
                 hours: entry.actualHours,
                 isApproved: entry.isGradeApproved ?? false,
             });
 
             comp.totalHours += entry.actualHours;
 
-            if (entry.trainerGrade) {
+            if (effectiveGrade) {
                 comp.gradedCount++;
-                comp.gradeSum += parseInt(entry.trainerGrade);
+                comp.gradeSum += parseInt(effectiveGrade);
             }
         }
 
@@ -287,7 +295,9 @@ export async function GET(
         }>();
 
         for (const rating of softSkillRatings) {
-            const numRating = ratingToNumber(rating.trainerRating);
+            // trainerRating is the final rating (migration 0033 merged release_rating into trainer_rating)
+            const effectiveRatingStr = rating.trainerRating;
+            const numRating = ratingToNumber(effectiveRatingStr);
             if (numRating !== null && rating.competencyArea) {
                 softSkillsByArea[rating.competencyArea]?.ratings.push(numRating);
                 softSkillsByArea[rating.competencyArea]?.criteria.add(rating.criterionId);
@@ -387,8 +397,7 @@ export async function GET(
             },
         });
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error in arbeitszeugnis aggregate API:', error);
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+        return NextResponse.json({ error: 'Interner Serverfehler beim Aggregieren der Leistungsdaten' }, { status: 500 });
     }
 }

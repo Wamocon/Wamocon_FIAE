@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useSidebar } from '@/contexts/SidebarContext';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface SpotlightRect {
@@ -14,59 +15,40 @@ interface SpotlightRect {
 }
 
 export function TourOverlay() {
-  const {
-    isActive,
-    currentStep,
-    currentStepIndex,
-    steps,
-    nextStep,
-    prevStep,
-    skipTour,
-  } = useOnboarding();
+  const { isActive, currentStep, currentStepIndex, steps, nextStep, prevStep, skipTour } = useOnboarding();
   const { t } = useLanguage();
+  const sidebar = useSidebar();
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number }>({
-    top: 0,
-    left: 0,
-  });
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const observerRef = useRef<ResizeObserver | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const skipCountRef = useRef(0);
+  const sidebarOpenedByTour = useRef(false);
 
   const PAD = 10;
 
-  /**
-   * Check whether an element is truly user-visible:
-   * – not zero-sized
-   * – inside the viewport
-   * – not clipped to zero by an overflow:hidden ancestor (e.g. collapsed sidebar)
-   */
-  const isElementVisible = useCallback((el: Element): boolean => {
-    const rect = el.getBoundingClientRect();
-    if (rect.width < 1 || rect.height < 1) return false;
-    if (rect.right <= 0 || rect.bottom <= 0) return false;
-    if (rect.left >= window.innerWidth || rect.top >= window.innerHeight)
-      return false;
-
-    // Walk up the tree: if any overflow-hidden ancestor has collapsed size or
-    // fully clips the element, the target is invisible.
-    let parent = el.parentElement;
-    while (parent && parent !== document.body) {
-      const style = getComputedStyle(parent);
-      if (
-        style.overflow === 'hidden' ||
-        style.overflowX === 'hidden' ||
-        style.overflowY === 'hidden'
-      ) {
-        const pr = parent.getBoundingClientRect();
-        if (pr.width < 1 || pr.height < 1) return false;
-        if (rect.right < pr.left || rect.left > pr.right) return false;
-        if (rect.bottom < pr.top || rect.top > pr.bottom) return false;
-      }
-      parent = parent.parentElement;
-    }
-    return true;
+  // Check if a step targets a sidebar element
+  const isSidebarStep = useCallback((selector: string) => {
+    return selector.includes('data-tour="sidebar-');
   }, []);
+
+  // Open sidebar when tour step targets sidebar items
+  useEffect(() => {
+    if (!isActive || !currentStep) {
+      // Tour ended — close sidebar if we opened it
+      if (sidebarOpenedByTour.current) {
+        sidebar.close();
+        sidebarOpenedByTour.current = false;
+      }
+      return;
+    }
+
+    if (isSidebarStep(currentStep.targetSelector)) {
+      if (!sidebar.isOpen) {
+        sidebar.open();
+        sidebarOpenedByTour.current = true;
+      }
+    }
+  }, [isActive, currentStep, sidebar, isSidebarStep]);
 
   const calculatePositions = useCallback(() => {
     if (!currentStep) {
@@ -75,12 +57,19 @@ export function TourOverlay() {
     }
 
     const el = document.querySelector(currentStep.targetSelector);
-    if (!el || !isElementVisible(el)) {
+    if (!el) {
       setSpotlight(null);
       return;
     }
 
     const rect = el.getBoundingClientRect();
+
+    // If the element is off-screen (e.g. sidebar hidden), skip spotlight
+    if (rect.right < 0 || rect.bottom < 0 || rect.left > window.innerWidth || rect.top > window.innerHeight) {
+      setSpotlight(null);
+      return;
+    }
+
     const sr: SpotlightRect = {
       top: rect.top - PAD,
       left: rect.left - PAD,
@@ -97,72 +86,44 @@ export function TourOverlay() {
     const placement = currentStep.placement;
 
     if (placement === 'right') {
-      tp = {
-        top: sr.top + sr.height / 2 - tooltipH / 2,
-        left: sr.left + sr.width + gap,
-      };
+      tp = { top: sr.top + sr.height / 2 - tooltipH / 2, left: sr.left + sr.width + gap };
     } else if (placement === 'left') {
-      tp = {
-        top: sr.top + sr.height / 2 - tooltipH / 2,
-        left: sr.left - tooltipW - gap,
-      };
+      tp = { top: sr.top + sr.height / 2 - tooltipH / 2, left: sr.left - tooltipW - gap };
     } else if (placement === 'bottom') {
-      tp = {
-        top: sr.top + sr.height + gap,
-        left: sr.left + sr.width / 2 - tooltipW / 2,
-      };
+      tp = { top: sr.top + sr.height + gap, left: sr.left + sr.width / 2 - tooltipW / 2 };
     } else {
-      tp = {
-        top: sr.top - tooltipH - gap,
-        left: sr.left + sr.width / 2 - tooltipW / 2,
-      };
+      tp = { top: sr.top - tooltipH - gap, left: sr.left + sr.width / 2 - tooltipW / 2 };
     }
 
-    // Clamp within viewport with padding
+    // If tooltip would overflow right, flip to left of target
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+
+    if (placement === 'right' && tp.left + tooltipW > vw - 16) {
+      tp.left = sr.left - tooltipW - gap;
+    }
+    // If tooltip would overflow left, flip to right of target
+    if (placement === 'left' && tp.left < 16) {
+      tp.left = sr.left + sr.width + gap;
+    }
+
+    // Final clamp within viewport with padding
     tp.left = Math.max(16, Math.min(vw - tooltipW - 16, tp.left));
     tp.top = Math.max(16, Math.min(vh - tooltipH - 16, tp.top));
 
     setTooltipPos(tp);
-  }, [currentStep, isElementVisible]);
-
-  // Auto-skip steps whose target element is not visible (e.g. sidebar collapsed)
-  useEffect(() => {
-    if (!isActive || !currentStep) {
-      skipCountRef.current = 0;
-      return;
-    }
-
-    const el = document.querySelector(currentStep.targetSelector);
-    if (!el || !isElementVisible(el)) {
-      // Guard against infinite loops: if we skipped more than the total steps, bail out
-      if (skipCountRef.current >= steps.length) {
-        skipCountRef.current = 0;
-        skipTour();
-        return;
-      }
-      skipCountRef.current++;
-      nextStep();
-      return;
-    }
-
-    // Target is visible — reset skip counter
-    skipCountRef.current = 0;
-  }, [
-    isActive,
-    currentStep,
-    steps.length,
-    nextStep,
-    skipTour,
-    isElementVisible,
-  ]);
+  }, [currentStep]);
 
   useEffect(() => {
     if (!isActive || !currentStep) return;
 
-    // Initial calc
-    calculatePositions();
+    // If step targets sidebar, wait for sidebar animation to finish (300ms transition)
+    const isSidebar = isSidebarStep(currentStep.targetSelector);
+    const initialDelay = isSidebar ? 350 : 0;
+
+    const initialTimer = setTimeout(() => {
+      calculatePositions();
+    }, initialDelay);
 
     // Recalculate on scroll/resize
     const handle = () => calculatePositions();
@@ -177,15 +138,18 @@ export function TourOverlay() {
     }
 
     // Re-calculate after tooltip renders so height measurement is accurate
-    const raf = requestAnimationFrame(() => calculatePositions());
+    const raf = requestAnimationFrame(() => {
+      setTimeout(() => calculatePositions(), isSidebar ? 350 : 50);
+    });
 
     return () => {
+      clearTimeout(initialTimer);
       window.removeEventListener('resize', handle);
       window.removeEventListener('scroll', handle, true);
       observerRef.current?.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [isActive, currentStep, calculatePositions]);
+  }, [isActive, currentStep, calculatePositions, isSidebarStep]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -220,11 +184,7 @@ export function TourOverlay() {
         style={{ pointerEvents: 'none' }}
       >
         {/* Dark backdrop with spotlight cutout */}
-        <svg
-          className="absolute inset-0 h-full w-full"
-          style={{ pointerEvents: 'auto' }}
-          onClick={skipTour}
-        >
+        <svg className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'auto' }} onClick={skipTour}>
           <defs>
             <mask id="tour-spotlight-mask">
               <rect x="0" y="0" width="100%" height="100%" fill="white" />
@@ -254,7 +214,7 @@ export function TourOverlay() {
         {/* Spotlight border glow */}
         {spotlight && (
           <div
-            className="border-primary/60 absolute rounded-xl border-2 shadow-[0_0_24px_hsl(var(--primary)/0.35)]"
+            className="absolute rounded-xl border-2 border-primary/60 shadow-[0_0_24px_hsl(var(--primary)/0.35)]"
             style={{
               top: spotlight.top,
               left: spotlight.left,
@@ -273,7 +233,7 @@ export function TourOverlay() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2, delay: 0.05 }}
-          className="border-border bg-card absolute z-[9999] w-80 rounded-2xl border p-5 shadow-2xl backdrop-blur-xl"
+          className="absolute z-[9999] w-[min(320px,calc(100vw-32px))] rounded-2xl border border-border bg-card p-5 shadow-2xl backdrop-blur-xl"
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,
@@ -283,7 +243,7 @@ export function TourOverlay() {
           {/* Close button */}
           <button
             onClick={skipTour}
-            className="text-muted-foreground hover:bg-muted hover:text-foreground absolute top-3 right-3 rounded-lg p-1 transition-colors"
+            className="absolute right-3 top-3 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Close tour"
           >
             <X className="h-4 w-4" />
@@ -291,10 +251,10 @@ export function TourOverlay() {
 
           {/* Content */}
           <div className="pr-6">
-            <h3 className="text-foreground text-base font-semibold">
+            <h3 className="text-base font-semibold text-foreground">
               {t(currentStep.titleKey)}
             </h3>
-            <p className="text-foreground/70 mt-2 text-sm leading-relaxed">
+            <p className="mt-2 text-sm leading-relaxed text-foreground/70">
               {t(currentStep.descriptionKey)}
             </p>
           </div>
@@ -308,10 +268,10 @@ export function TourOverlay() {
                   key={idx}
                   className={`rounded-full transition-all ${
                     idx === currentStepIndex
-                      ? 'bg-primary h-2 w-5'
+                      ? 'h-2 w-5 bg-primary'
                       : idx < currentStepIndex
-                        ? 'bg-primary/40 h-2 w-2'
-                        : 'bg-muted-foreground/30 h-2 w-2'
+                        ? 'h-2 w-2 bg-primary/40'
+                        : 'h-2 w-2 bg-muted-foreground/30'
                   }`}
                 />
               ))}
@@ -321,14 +281,14 @@ export function TourOverlay() {
             <div className="flex items-center gap-2">
               <button
                 onClick={skipTour}
-                className="text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg px-3 py-1.5 text-xs transition-colors"
+                className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 {t('onboarding.skip')}
               </button>
               {!isFirst && (
                 <button
                   onClick={prevStep}
-                  className="border-border text-foreground hover:bg-muted inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs transition-colors"
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
                 >
                   <ChevronLeft className="h-3 w-3" />
                   {t('onboarding.back')}
@@ -336,7 +296,7 @@ export function TourOverlay() {
               )}
               <button
                 onClick={nextStep}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs transition-colors"
+                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 {isLast ? t('onboarding.finish') : t('onboarding.next')}
                 {!isLast && <ChevronRight className="h-3 w-3" />}

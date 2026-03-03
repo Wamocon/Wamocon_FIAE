@@ -5,11 +5,10 @@ const nextConfig: NextConfig = {
     domains: ['localhost', 'thzssnabxgchzbsnbgoh.supabase.co'],
   },
   typescript: {
-    // Temporarily ignore TS errors to allow dashboard integration while migrating legacy files
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   eslint: {
-    // Temporarily ignore ESLint errors during schema migration
+    // Pre-existing ESLint warnings in legacy files; TypeScript strict checking is enabled
     ignoreDuringBuilds: true,
   },
   experimental: {

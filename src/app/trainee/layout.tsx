@@ -6,7 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { useSidebar } from '@/contexts/SidebarContext';
 
 const TraineeLayoutComponent = ({
   children,
@@ -16,7 +16,7 @@ const TraineeLayoutComponent = ({
   const { user, profile, loading } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isOpen: sidebarOpen, toggle: handleToggleSidebar } = useSidebar();
 
   // If profile is already available from cache, skip waiting entirely.
   // This avoids a flash of the loading spinner on cached sessions.
@@ -77,30 +77,56 @@ const TraineeLayoutComponent = ({
     }
   }, [router]);
 
-  const handleToggleSidebar = useCallback(() => {
-    setSidebarOpen(prev => !prev);
-  }, []);
-
   // Show loading state while auth is initializing or waiting for profile
   if (isLoading) {
-    return <PageLoader size="lg" fullScreen />;
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
+        </div>
+      </div>
+    );
   }
 
   // Show redirect state
   if (shouldRedirect) {
-    return <PageLoader size="lg" fullScreen />;
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">
+            {t('common.redirecting')}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // User exists but profile hasn't arrived yet — keep showing a
   // non-blocking loading state. AuthContext will update `profile` in the
   // background and this layout will re-render automatically.
   if (user && !profile) {
-    return <PageLoader size="lg" fullScreen />;
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
+        </div>
+      </div>
+    );
   }
 
   // No user and no profile after auth completed — truly not authenticated
   if (!isAuthenticated) {
-    return <PageLoader size="lg" fullScreen />;
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">{t('quiz.accessDenied')}</p>
+        </div>
+      </div>
+    );
   }
 
   return (

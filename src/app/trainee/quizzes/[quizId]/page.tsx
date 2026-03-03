@@ -33,8 +33,9 @@ export default async function QuizPage({ params }: { params: Promise<{ quizId: s
       return {
         id: qr.id,
         question: qr.questionText,
-        options: opts.map((o) => ({ id: o.id, text: o.optionText })),
+        options: opts.map((o) => o.optionText),
         order_index: qr.orderIndex ?? 0,
+        correctIndex: -1, // Scoring handled server-side; not exposed to client
       };
     });
 
