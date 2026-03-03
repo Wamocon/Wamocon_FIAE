@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 import {
   User,
@@ -109,10 +110,7 @@ export function Profile() {
   if (!profile) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
-        <div className="text-center">
-          <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground mt-4">{t('profile.loading')}</p>
-        </div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -561,7 +559,7 @@ export function Profile() {
         </h2>
         {statsLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-4"></div>
+            <LoadingSpinner size="sm" />
           </div>
         ) : profile.role === 'trainer' ? (
           <div className="space-y-6">
@@ -658,7 +656,7 @@ export function Profile() {
           <div className="space-y-3">
             {statsLoading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="border-accent/30 border-t-accent h-6 w-6 animate-spin rounded-full border-4"></div>
+                <LoadingSpinner size="sm" />
               </div>
             ) : activities.length === 0 ? (
               <div className="py-8 text-center">
@@ -734,7 +732,7 @@ export function Profile() {
         </p>
         <button
           onClick={() => restartTour('main')}
-          className="rounded-xl border border-accent/30 px-5 py-2.5 text-sm font-medium transition-colors hover:bg-accent/10"
+          className="border-accent/30 hover:bg-accent/10 rounded-xl border px-5 py-2.5 text-sm font-medium transition-colors"
         >
           {t('onboarding.restartTour.button')}
         </button>

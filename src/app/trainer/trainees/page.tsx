@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 import { Users, Eye } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -48,12 +49,7 @@ export default function TrainerTraineesPage() {
   if (loading) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
-        <div className="text-center">
-          <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">
-            {t('trainee.management.loading')}
-          </p>
-        </div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -62,7 +58,9 @@ export default function TrainerTraineesPage() {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">{t('quiz.userNotFound')}</p>
         </div>
       </div>
@@ -73,7 +71,9 @@ export default function TrainerTraineesPage() {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">{t('quiz.accessDenied')}</p>
         </div>
       </div>
@@ -98,19 +98,23 @@ export default function TrainerTraineesPage() {
       </div>
 
       {/* Trainees Grid */}
-      {error && <div className="text-red-500 text-sm">{error}</div>}
+      {error && <div className="text-sm text-red-500">{error}</div>}
       {!error && trainees.length === 0 && (
         <div className="border-accent/30 rounded-3xl border p-12 text-center">
           <Users className="text-muted mx-auto mb-4 h-12 w-12" />
-          <h3 className="text-foreground text-lg font-semibold">{t('trainee.management.noTrainees')}</h3>
-          <p className="text-muted mt-1 text-sm">{t('trainee.management.noTraineesDesc')}</p>
+          <h3 className="text-foreground text-lg font-semibold">
+            {t('trainee.management.noTrainees')}
+          </h3>
+          <p className="text-muted mt-1 text-sm">
+            {t('trainee.management.noTraineesDesc')}
+          </p>
         </div>
       )}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {trainees.map(trainee => (
           <div
             key={trainee.id}
-            className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg transition-all duration-200 hover:scale-[1.02] hover:border-accent/50 hover:shadow-xl hover:shadow-accent/5"
+            className="glass-effect border-accent/30 hover:border-accent/50 hover:shadow-accent/5 rounded-3xl border p-6 shadow-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-xl"
           >
             <div className="mb-4 flex items-start justify-between">
               <div className="flex items-center gap-4">
@@ -176,7 +180,9 @@ export default function TrainerTraineesPage() {
                 <div className="text-muted">{t('modules.progress')}</div>
               </div>
               <div className="bg-background/50 rounded-xl p-3 text-center">
-                <div className="text-primary text-2xl font-bold">{trainee.coursesCount ?? 0}</div>
+                <div className="text-primary text-2xl font-bold">
+                  {trainee.coursesCount ?? 0}
+                </div>
                 <div className="text-muted">
                   {t('trainee.management.modules')}
                 </div>
@@ -204,14 +210,17 @@ export default function TrainerTraineesPage() {
                   );
                   setTogglingIds(prev => new Set(prev).add(trainee.id));
                   try {
-                    const res = await fetch(`/api/trainer/trainees/${trainee.id}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        trainer_id: profile?.id,
-                        isActive: !previousState,
-                      }),
-                    });
+                    const res = await fetch(
+                      `/api/trainer/trainees/${trainee.id}`,
+                      {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          trainer_id: profile?.id,
+                          isActive: !previousState,
+                        }),
+                      }
+                    );
                     if (!res.ok) throw new Error(await res.text());
                     // Optimistic update already applied — don't re-fetch
                     // (server cache may still be stale for a moment)
@@ -225,7 +234,9 @@ export default function TrainerTraineesPage() {
                     // Revert optimistic update
                     setTrainees(prev =>
                       prev.map(t =>
-                        t.id === trainee.id ? { ...t, isActive: previousState } : t
+                        t.id === trainee.id
+                          ? { ...t, isActive: previousState }
+                          : t
                       )
                     );
                     toast.error(t('trainee.management.updateError'));

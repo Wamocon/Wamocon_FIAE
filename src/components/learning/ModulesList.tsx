@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { ModuleSummary } from '@/db/queries';
 import { BookOpen, CheckCircle, Play } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import Link from 'next/link';
 
 export default function ModulesList({ modules }: { modules: ModuleSummary[] }) {
@@ -13,10 +14,7 @@ export default function ModulesList({ modules }: { modules: ModuleSummary[] }) {
   if (loading) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
-        <div className="text-center">
-          <div className="border-accent/30 border-t-accent mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
-          <p className="text-muted-foreground">{t('modules.loading')}</p>
-        </div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }

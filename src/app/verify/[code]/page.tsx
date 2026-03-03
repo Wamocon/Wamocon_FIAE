@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import toast from 'react-hot-toast';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   CheckCircle2,
   XCircle,
@@ -116,13 +117,7 @@ export default function VerificationPage({
   if (loading || downloading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        <p className="text-lg font-medium text-gray-700">
-          {downloading
-            ? 'Arbeitszeugnis wird heruntergeladen...'
-            : 'Zertifikat wird verifiziert...'}
-        </p>
-        <p className="text-sm text-gray-500">Bitte warten Sie einen Moment.</p>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }
@@ -200,9 +195,9 @@ export default function VerificationPage({
                 <p className="text-lg font-bold text-gray-900">
                   {result.certificate?.issueDate
                     ? format(
-                      new Date(result.certificate.issueDate),
-                      'dd.MM.yyyy'
-                    )
+                        new Date(result.certificate.issueDate),
+                        'dd.MM.yyyy'
+                      )
                     : '-'}
                 </p>
               </div>

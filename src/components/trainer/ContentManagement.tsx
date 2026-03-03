@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   Plus,
   Edit,
@@ -212,7 +213,7 @@ export function ContentManagement() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowAssign(true)}
-              className="border-accent/30 text-foreground hover:bg-accent/10 cursor-pointer inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5"
+              className="border-accent/30 text-foreground hover:bg-accent/10 inline-flex cursor-pointer items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5"
             >
               <UserPlus className="h-5 w-5" />
               {t('content.assignCourses')}
@@ -222,7 +223,7 @@ export function ContentManagement() {
                 // Navigate to new module page with form
                 router.push('/trainer/content-management/new');
               }}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground cursor-pointer flex transform items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground flex transform cursor-pointer items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
             >
               <Plus className="h-5 w-5" />
               {t('content.newCourse')}
@@ -270,8 +271,12 @@ export function ContentManagement() {
               className="bg-background/50 border-accent/30 focus:ring-accent text-foreground rounded-2xl border px-4 py-3 focus:border-transparent focus:ring-2 focus:outline-none"
             >
               <option value="all">{t('content.allExamParts')}</option>
-              <option value="1">{t('content.examPartNumber').replace('{number}', '1')}</option>
-              <option value="2">{t('content.examPartNumber').replace('{number}', '2')}</option>
+              <option value="1">
+                {t('content.examPartNumber').replace('{number}', '1')}
+              </option>
+              <option value="2">
+                {t('content.examPartNumber').replace('{number}', '2')}
+              </option>
             </select>
           </div>
 
@@ -279,19 +284,21 @@ export function ContentManagement() {
           <div className="bg-muted/30 flex rounded-2xl p-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${viewMode === 'grid'
-                ? 'bg-accent text-foreground shadow-sm'
-                : 'text-muted hover:text-foreground'
-                }`}
+              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                viewMode === 'grid'
+                  ? 'bg-accent text-foreground shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
             >
               {t('content.gridView')}
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${viewMode === 'list'
-                ? 'bg-accent text-foreground shadow-sm'
-                : 'text-muted hover:text-foreground'
-                }`}
+              className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                viewMode === 'list'
+                  ? 'bg-accent text-foreground shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
             >
               {t('content.listView')}
             </button>
@@ -301,7 +308,9 @@ export function ContentManagement() {
 
       {/* Content Grid/List */}
       {loading && (
-        <div className="text-muted">{t('content.loadingContent')}</div>
+        <div className="flex items-center justify-center py-8">
+          <LoadingSpinner size="md" />
+        </div>
       )}
       {error && <div className="text-red-500">{error}</div>}
       {viewMode === 'grid' ? (
@@ -309,7 +318,7 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 flex h-[420px] flex-col rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl cursor-pointer"
+              className="glass-effect border-accent/30 flex h-[420px] cursor-pointer flex-col rounded-3xl border p-6 shadow-lg transition-all duration-300 hover:shadow-xl"
               onClick={() =>
                 router.push(`/trainer/content-management/${course.id}/edit`)
               }
@@ -318,9 +327,7 @@ export function ContentManagement() {
               onKeyDown={e => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  router.push(
-                    `/trainer/content-management/${course.id}/edit`
-                  );
+                  router.push(`/trainer/content-management/${course.id}/edit`);
                 }
               }}
             >
@@ -442,7 +449,7 @@ export function ContentManagement() {
                       `/trainer/content-management/${course.id}/edit`
                     );
                   }}
-                  className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 cursor-pointer inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+                  className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
                 >
                   <Edit className="h-4 w-4" />
                   {t('content.edit')}
@@ -465,7 +472,7 @@ export function ContentManagement() {
                       toast.error(e?.message || t('content.unknownError'));
                     }
                   }}
-                  className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/20 transition-colors"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/20"
                 >
                   <Trash2 className="h-4 w-4" />
                   {t('content.deleteCourse')}
@@ -479,7 +486,7 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 rounded-3xl border p-6 shadow-lg cursor-pointer"
+              className="glass-effect border-accent/30 cursor-pointer rounded-3xl border p-6 shadow-lg"
               onClick={() =>
                 router.push(`/trainer/content-management/${course.id}/edit`)
               }
@@ -488,9 +495,7 @@ export function ContentManagement() {
               onKeyDown={e => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  router.push(
-                    `/trainer/content-management/${course.id}/edit`
-                  );
+                  router.push(`/trainer/content-management/${course.id}/edit`);
                 }
               }}
             >
@@ -555,7 +560,7 @@ export function ContentManagement() {
                         `/trainer/content-management/${course.id}/edit`
                       );
                     }}
-                    className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 cursor-pointer inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors"
+                    className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors"
                   >
                     {t('content.edit')}
                   </button>
@@ -565,9 +570,7 @@ export function ContentManagement() {
                       if (!window.confirm(t('content.deleteModuleConfirm')))
                         return;
                       const prevCourses = courses;
-                      setCourses(prev =>
-                        prev.filter(c => c.id !== course.id)
-                      );
+                      setCourses(prev => prev.filter(c => c.id !== course.id));
                       try {
                         const res = await fetch(
                           `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
@@ -579,7 +582,7 @@ export function ContentManagement() {
                         toast.error(e?.message || t('content.unknownError'));
                       }
                     }}
-                    className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/20 transition-colors"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/20"
                     aria-label={t('content.deleteCourse')}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -695,10 +698,11 @@ export function ContentManagement() {
                   {filteredCurriculum.map(course => (
                     <label
                       key={course.id}
-                      className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2 transition ${assignCourseIds.includes(course.id)
-                        ? 'border-accent/40 bg-accent/10'
-                        : 'border-accent/10 hover:border-accent/30 hover:bg-accent/5'
-                        } ${assignAllCourses ? 'cursor-not-allowed opacity-60' : ''}`}
+                      className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2 transition ${
+                        assignCourseIds.includes(course.id)
+                          ? 'border-accent/40 bg-accent/10'
+                          : 'border-accent/10 hover:border-accent/30 hover:bg-accent/5'
+                      } ${assignAllCourses ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">
@@ -1017,11 +1021,11 @@ export function ContentManagement() {
                                   prev.map((x, i) =>
                                     i === qi
                                       ? {
-                                        ...x,
-                                        options: x.options.map((o, j) =>
-                                          j === oi ? e.target.value : o
-                                        ) as [string, string, string, string],
-                                      }
+                                          ...x,
+                                          options: x.options.map((o, j) =>
+                                            j === oi ? e.target.value : o
+                                          ) as [string, string, string, string],
+                                        }
                                       : x
                                   )
                                 )

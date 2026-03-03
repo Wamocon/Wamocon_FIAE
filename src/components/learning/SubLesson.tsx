@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import Link from 'next/link';
@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import type { SubLessonDetail } from '@/db/queries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
   const router = useRouter();
@@ -20,7 +21,10 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
     const load = async () => {
       if (!profile?.id || !data?.lesson.id || !data?.id) return;
       try {
-        const res = await fetch(`/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`, { cache: 'no-store' });
+        const res = await fetch(
+          `/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`,
+          { cache: 'no-store' }
+        );
         const j = await res.json();
         const set: string[] = j.completedIds || [];
         setCompleted(set.includes(data.id));
@@ -35,14 +39,14 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">
-          <div className="border-destructive/30 border-t-destructive mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4"></div>
+          <div className="mx-auto mb-4">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-muted-foreground">{t('sublesson.notFound')}</p>
         </div>
       </div>
     );
   }
-
-
 
   const toggle = async (next: boolean) => {
     if (!profile?.id) return;
@@ -52,7 +56,11 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
       await fetch('/api/trainee/progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: profile.id, subLessonId: data.id, completed: next }),
+        body: JSON.stringify({
+          userId: profile.id,
+          subLessonId: data.id,
+          completed: next,
+        }),
       });
     } finally {
       setSaving(false);
@@ -74,7 +82,9 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
           </button>
           <div className="flex-1">
             <h1 className="text-foreground text-2xl font-bold">{data.title}</h1>
-            <p className="text-muted mt-1">{t('sublesson.lesson')} {data.lesson.title}</p>
+            <p className="text-muted mt-1">
+              {t('sublesson.lesson')} {data.lesson.title}
+            </p>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -84,7 +94,9 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
               onChange={e => toggle(e.target.checked)}
               disabled={saving}
             />
-            <span className="text-muted-foreground">{t('sublesson.completed')}</span>
+            <span className="text-muted-foreground">
+              {t('sublesson.completed')}
+            </span>
           </label>
         </div>
       </div>
@@ -93,20 +105,34 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
       <div className="glass-effect border-accent/30 rounded-2xl border p-6 shadow-lg">
         <div className="mb-4 flex items-center gap-3">
           <div className="from-accent to-primary flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br">
-            <BookOpen className="h-5 w-5 text-foregroundround" />
+            <BookOpen className="text-foregroundround h-5 w-5" />
           </div>
-          <h3 className="text-foreground text-lg font-semibold">{t('sublesson.task')}</h3>
+          <h3 className="text-foreground text-lg font-semibold">
+            {t('sublesson.task')}
+          </h3>
         </div>
         {data.content ? (
-          <div className="prose prose-invert max-w-none whitespace-pre-wrap text-muted">{data.content}</div>
+          <div className="prose prose-invert text-muted max-w-none whitespace-pre-wrap">
+            {data.content}
+          </div>
         ) : (
-          <div className="text-muted-foreground">{t('sublesson.noContent')}</div>
+          <div className="text-muted-foreground">
+            {t('sublesson.noContent')}
+          </div>
         )}
-        <div className="text-muted mt-4 text-xs">{t('sublesson.duration').replace('{minutes}', String(data.duration_minutes ?? 0))}</div>
+        <div className="text-muted mt-4 text-xs">
+          {t('sublesson.duration').replace(
+            '{minutes}',
+            String(data.duration_minutes ?? 0)
+          )}
+        </div>
       </div>
 
       <div className="flex justify-end">
-        <Link href={`/trainee/trainer-feedback/${data.lesson.id}`} className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors">
+        <Link
+          href={`/trainee/trainer-feedback/${data.lesson.id}`}
+          className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors"
+        >
           {t('sublesson.backToLesson')}
         </Link>
       </div>

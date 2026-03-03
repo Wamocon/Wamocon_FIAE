@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PageLoader } from '@/components/ui/PageLoader';
 
 const TrainerLayoutComponent = ({
   children,
@@ -74,50 +75,22 @@ const TrainerLayoutComponent = ({
 
   // Show loading state while auth is initializing or waiting for profile
   if (isLoading) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Lade...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader size="lg" fullScreen />;
   }
 
   // Show redirect state
   if (shouldRedirect) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Weiterleitung...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader size="lg" fullScreen />;
   }
 
   // User exists but profile hasn't arrived yet
   if (user && !profile) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Lade...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader size="lg" fullScreen />;
   }
 
   // No user and no profile after auth completed
   if (!isAuthenticated) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Zugriff verweigert...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader size="lg" fullScreen />;
   }
 
   return (

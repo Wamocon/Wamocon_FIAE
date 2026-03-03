@@ -3,8 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { PageLoader } from '@/components/ui/PageLoader';
 
-type ModuleItem = { id: string; title: string; training_year: number; lessons: Array<{ id: string; title: string }> };
+type ModuleItem = {
+  id: string;
+  title: string;
+  training_year: number;
+  lessons: Array<{ id: string; title: string }>;
+};
 
 export default function NewQuizPage() {
   const router = useRouter();
@@ -25,14 +31,19 @@ export default function NewQuizPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/trainer/content?limit=999', { cache: 'no-store' });
+        const res = await fetch('/api/trainer/content?limit=999', {
+          cache: 'no-store',
+        });
         if (!res.ok) throw new Error(t('quiz.form.loadModulesError'));
         const data = await res.json();
         const ms: ModuleItem[] = (data.modules || []).map((m: any) => ({
           id: m.id,
           title: m.title,
           training_year: m.training_year,
-          lessons: (m.lessons || []).map((l: any) => ({ id: l.id, title: l.title })),
+          lessons: (m.lessons || []).map((l: any) => ({
+            id: l.id,
+            title: l.title,
+          })),
         }));
         setModules(ms);
       } catch (e: any) {
@@ -81,7 +92,7 @@ export default function NewQuizPage() {
     }
   };
 
-  if (loading) return <div className="p-6">{t('common.loading')}</div>;
+  if (loading) return <PageLoader />;
 
   return (
     <div className="mx-auto max-w-3xl p-6">
@@ -90,22 +101,26 @@ export default function NewQuizPage() {
         {error && <div className="text-red-500">{error}</div>}
 
         <div>
-          <label className="mb-1 block text-sm font-medium">{t('quiz.form.title')}</label>
+          <label className="mb-1 block text-sm font-medium">
+            {t('quiz.form.title')}
+          </label>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            className="border-border bg-background w-full rounded-md border px-3 py-2"
             placeholder={t('quiz.form.titlePlaceholder')}
           />
         </div>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
-            <label className="mb-1 block text-sm font-medium">{t('quiz.form.quizType')}</label>
+            <label className="mb-1 block text-sm font-medium">
+              {t('quiz.form.quizType')}
+            </label>
             <select
               value={quizType}
               onChange={e => setQuizType(e.target.value as any)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className="border-border bg-background w-full rounded-md border px-3 py-2"
             >
               <option value="mini">{t('quiz.form.typeMini')}</option>
               <option value="big">{t('quiz.form.typeBig')}</option>
@@ -113,55 +128,76 @@ export default function NewQuizPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">{t('quiz.form.trainingYear')}</label>
+            <label className="mb-1 block text-sm font-medium">
+              {t('quiz.form.trainingYear')}
+            </label>
             <select
               value={trainingYear}
               onChange={e => setTrainingYear(e.target.value as any)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className="border-border bg-background w-full rounded-md border px-3 py-2"
             >
-              <option value="1">{t('quiz.form.yearOption').replace('{year}', '1')}</option>
-              <option value="2">{t('quiz.form.yearOption').replace('{year}', '2')}</option>
-              <option value="3">{t('quiz.form.yearOption').replace('{year}', '3')}</option>
+              <option value="1">
+                {t('quiz.form.yearOption').replace('{year}', '1')}
+              </option>
+              <option value="2">
+                {t('quiz.form.yearOption').replace('{year}', '2')}
+              </option>
+              <option value="3">
+                {t('quiz.form.yearOption').replace('{year}', '3')}
+              </option>
             </select>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">{t('quiz.form.timeLimit')}</label>
+            <label className="mb-1 block text-sm font-medium">
+              {t('quiz.form.timeLimit')}
+            </label>
             <input
               type="number"
               min={1}
               value={timeLimit}
               onChange={e => setTimeLimit(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className="border-border bg-background w-full rounded-md border px-3 py-2"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium">{t('quiz.form.moduleOptional')}</label>
+            <label className="mb-1 block text-sm font-medium">
+              {t('quiz.form.moduleOptional')}
+            </label>
             <select
               value={moduleId}
-              onChange={e => { setModuleId(e.target.value); setLessonId(''); }}
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              onChange={e => {
+                setModuleId(e.target.value);
+                setLessonId('');
+              }}
+              className="border-border bg-background w-full rounded-md border px-3 py-2"
             >
               <option value="">{t('quiz.form.noModule')}</option>
               {filteredModules.map(m => (
-                <option key={m.id} value={m.id}>{m.title}</option>
+                <option key={m.id} value={m.id}>
+                  {m.title}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">{t('quiz.form.lessonOptional')}</label>
+            <label className="mb-1 block text-sm font-medium">
+              {t('quiz.form.lessonOptional')}
+            </label>
             <select
               value={lessonId}
               onChange={e => setLessonId(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className="border-border bg-background w-full rounded-md border px-3 py-2"
               disabled={!moduleId}
             >
               <option value="">{t('quiz.form.noLesson')}</option>
               {lessonsForSelectedModule.map(l => (
-                <option key={l.id} value={l.id}>{l.title}</option>
+                <option key={l.id} value={l.id}>
+                  {l.title}
+                </option>
               ))}
             </select>
           </div>
@@ -171,14 +207,14 @@ export default function NewQuizPage() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-md bg-primary px-4 py-2 text-foregroundround hover:bg-primary/90 disabled:opacity-60"
+            className="bg-primary text-foregroundround hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-60"
           >
             {saving ? t('quiz.form.creating') : t('quiz.form.create')}
           </button>
           <button
             type="button"
             onClick={() => router.back()}
-            className="rounded-md border border-border px-4 py-2 hover:bg-background/60"
+            className="border-border hover:bg-background/60 rounded-md border px-4 py-2"
           >
             {t('quiz.form.cancel')}
           </button>
