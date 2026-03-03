@@ -1099,11 +1099,16 @@ export const activityReportUseCaseEntries = pgTable(
     notes: text('notes'),
 
     // === GRADING (for Arbeitszeugnis) ===
+    traineeGrade: performanceRating('trainee_grade'), // 1-6 trainee self-grade
     trainerGrade: performanceRating('trainer_grade'), // 1-6 scale from trainer
+    releaseGrade: performanceRating('release_grade'), // 1-6 final release grade after discussion
     gradeComment: text('grade_comment'), // Optional grading comment
+    releaseGradeComment: text('release_grade_comment'), // Reason for release grade change
     isGradeApproved: boolean('is_grade_approved').default(false),
     gradeApprovedAt: timestamp('grade_approved_at'),
     gradeApprovedBy: uuid('grade_approved_by').references(() => profiles.id),
+    releaseGradeAt: timestamp('release_grade_at'),
+    releaseGradeBy: uuid('release_grade_by').references(() => profiles.id),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at')
@@ -1238,6 +1243,12 @@ export const weeklyEvaluations = pgTable(
     trainerComment: text('trainer_comment'), // Max 500 characters
     trainerApprovedAt: timestamp('trainer_approved_at'),
 
+    // Release Grade (final grade after trainer-trainee discussion)
+    releaseRating: performanceRating('release_rating'),
+    releaseComment: text('release_comment'),
+    releasedAt: timestamp('released_at'),
+    releasedBy: uuid('released_by').references(() => profiles.id),
+
     // Workflow status
     status: evaluationStatus('status').notNull().default('DRAFT'),
     rejectionReason: text('rejection_reason'),
@@ -1273,8 +1284,10 @@ export const weeklySoftskillRatings = pgTable(
     // Ratings
     selfRating: performanceRating('self_rating'), // Trainee self-assessment
     trainerRating: performanceRating('trainer_rating').notNull(), // Trainer assessment (mandatory)
+    releaseRating: performanceRating('release_rating'), // Final release rating after discussion
 
     trainerComment: text('trainer_comment'), // Optional comment on this specific skill
+    releaseComment: text('release_comment'), // Comment on release rating
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at')
@@ -1433,3 +1446,20 @@ export const certificateTextTemplates = pgTable(
     uniqueAreaGrade: unique().on(table.competencyArea, table.grade),
   })
 );
+
+// Grade Edit History (Audit Trail)
+export const gradeEditHistory = pgTable('grade_edit_history', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  entityType: text('entity_type').notNull(), // 'USE_CASE_ENTRY', 'WEEKLY_EVALUATION', 'SOFTSKILL_RATING'
+  entityId: uuid('entity_id').notNull(),
+  fieldName: text('field_name').notNull(), // e.g., 'trainerGrade', 'releaseGrade'
+  oldValue: text('old_value'),
+  newValue: text('new_value'),
+  changedBy: uuid('changed_by')
+    .notNull()
+    .references(() => profiles.id),
+  changeReason: text('change_reason'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export type GradeEditHistory = typeof gradeEditHistory.$inferSelect;

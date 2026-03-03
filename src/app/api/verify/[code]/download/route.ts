@@ -123,6 +123,7 @@ export async function GET(
             const evaluationIds = relevantEvaluations.map(e => e.id);
 
             // Get MES ratings with criteria info for these evaluations
+            // Use effective rating: trainerRating (migration 0033 merged releaseRating into trainerRating)
             const relevantRatings = await db
               .select({
                 weeklyEvaluationId: weeklySoftskillRatings.weeklyEvaluationId,
@@ -175,7 +176,9 @@ export async function GET(
             }
 
             for (const rating of relevantRatings) {
-              const numRating = ratingToNumber(rating.trainerRating);
+              // trainerRating is the final effective rating
+              const effectiveRatingStr = rating.trainerRating;
+              const numRating = ratingToNumber(effectiveRatingStr);
               if (numRating !== null && rating.competencyArea) {
                 softSkillsByArea[rating.competencyArea]?.push(numRating);
               }

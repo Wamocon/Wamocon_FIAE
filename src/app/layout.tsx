@@ -11,6 +11,7 @@ import dynamic from 'next/dynamic';
 import QueryProvider from '@/components/QueryProvider';
 import { OnboardingProvider } from '@/contexts/OnboardingContext';
 import { TourOverlay } from '@/components/onboarding/TourOverlay';
+import { SidebarProvider } from '@/contexts/SidebarContext';
 
 // Lazy-load HAI chat widget - it's not needed for initial page render
 // Import directly instead of through barrel to avoid pulling in all HAI modules
@@ -25,6 +26,10 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'LFA Plattform',
   description: 'Eine moderne Lernplattform für LFA-Auszubildende',
+  icons: {
+    icon: '/WMC_Logo.png',
+    apple: '/WMC_Logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -44,10 +49,12 @@ export default function RootLayout({
             <LanguageProvider>
               <ThemeProvider>
                 <BreadcrumbProvider>
-                  <OnboardingProvider>
-                    <HaiWrapper>{children}</HaiWrapper>
-                    <TourOverlay />
-                  </OnboardingProvider>
+                  <SidebarProvider>
+                    <OnboardingProvider>
+                      <HaiWrapper>{children}</HaiWrapper>
+                      <TourOverlay />
+                    </OnboardingProvider>
+                  </SidebarProvider>
                 </BreadcrumbProvider>
               </ThemeProvider>
             </LanguageProvider>
