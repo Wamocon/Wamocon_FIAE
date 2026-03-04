@@ -52,7 +52,7 @@ export default function TraineeModuleDetailPage() {
   const StatusIndicator = ({ status }: { status?: string | null }) => {
     if (status === 'APPROVED') {
       return (
-        <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+        <div className="flex items-center mt-1 gap-1 text-green-600 dark:text-green-400">
           <Check className="h-4 w-4" />
           <span className="text-xs">{t('status.passed')}</span>
         </div>
@@ -60,7 +60,7 @@ export default function TraineeModuleDetailPage() {
     }
     if (status === 'PENDING') {
       return (
-        <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+        <div className="flex items-center mt-1 gap-1 text-yellow-600 dark:text-yellow-400">
           <Clock className="h-4 w-4" />
           <span className="text-xs">{t('status.underReview')}</span>
         </div>
@@ -68,7 +68,7 @@ export default function TraineeModuleDetailPage() {
     }
     if (status === 'REJECTED') {
       return (
-        <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
+        <div className="flex items-center mt-1 gap-1 text-red-600 dark:text-red-400">
           <XIcon className="h-4 w-4" />
           <span className="text-xs">{t('status.revise')}</span>
         </div>
