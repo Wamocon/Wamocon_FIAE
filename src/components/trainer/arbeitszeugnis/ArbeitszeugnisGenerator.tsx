@@ -314,11 +314,35 @@ export function ArbeitszeugnisGenerator() {
     setError(null);
 
     try {
+      // Ensure radar data is available — re-fetch if the initial load failed
+      let currentRadarData = radarData;
+      if (!currentRadarData?.radarData?.length) {
+        try {
+          let query = `?ausbildungsjahr=${ausbildungsjahr}`;
+          if (mode === 'CUSTOM' && customStart && customEnd) {
+            query = `?startDate=${customStart}&endDate=${customEnd}`;
+          }
+          const radarRes = await fetch(
+            `/api/trainer/arbeitszeugnis/skill-radar/${selectedTrainee}${query}`,
+            { cache: 'no-store' }
+          );
+          if (radarRes.ok) {
+            currentRadarData = await radarRes.json();
+            setRadarData(currentRadarData);
+          }
+        } catch (e) {
+          console.warn('Failed to re-fetch radar data:', e);
+        }
+      }
+
       let radarImageBase64: string | undefined;
-      if (radarData && radarData.radarData && radarData.radarData.length >= 1) {
+      if (
+        currentRadarData?.radarData &&
+        currentRadarData.radarData.length >= 1
+      ) {
         // Render chart with white background specifically for PDF
         radarImageBase64 = await renderRadarChartForPDF(
-          radarData.radarData,
+          currentRadarData.radarData,
           650
         );
       }
