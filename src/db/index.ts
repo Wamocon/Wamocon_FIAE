@@ -31,12 +31,12 @@ function getDb(): ReturnType<typeof drizzle> {
   const client =
     globalThis.__pgClient__ ||
     postgres(process.env.DB_CONNECTION_STRING, {
-      max: 20, // Increased from 5 to 20 for better performance
-      idle_timeout: 20, // Reduce idle timeout to free connections faster
-      connect_timeout: 10, // Add connect timeout
+      max: 10, // Keep under Supabase session-mode pool_size (usually 15)
+      idle_timeout: 20, // Free idle connections quickly
+      connect_timeout: 15, // Allow a bit more time for connection
       max_lifetime: 60 * 30, // 30 minutes max connection lifetime
       ssl: needsTls ? 'require' : undefined,
-      prepare: false, // Disable prepared statements for connection pool efficiency
+      prepare: false, // Required for PgBouncer pooler compatibility
     });
 
   const db = drizzle(client);
