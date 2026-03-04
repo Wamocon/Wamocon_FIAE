@@ -1,40 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { workCertificates, profiles } from '@/db/migrations/schemas/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 /**
- * GET /api/trainer/arbeitszeugnis/certificates/[traineeId]
+ * GET /api/trainer/arbeitszeugnis/certificates/all
  *
- * Fetches existing certificates for a trainee.
- * Returns the most recent certificate with QR code info and snapshot data.
+ * Fetches ALL existing certificates across all trainees with snapshot data.
+ * Used for bulk re-downloading PDFs with updated templates.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ traineeId: string }> }
-) {
+export async function GET(request: NextRequest) {
   try {
-    const { traineeId } = await params;
-
-    if (!traineeId) {
-      return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const ausbildungsjahr = searchParams.get('ausbildungsjahr');
-
-    // Build query conditions
-    const conditions = ausbildungsjahr
-      ? and(
-          eq(workCertificates.traineeId, traineeId),
-          eq(workCertificates.ausbildungsjahr, parseInt(ausbildungsjahr))
-        )
-      : eq(workCertificates.traineeId, traineeId);
-
-    // Fetch certificates with snapshot data for re-download
     const certificates = await db
       .select({
         id: workCertificates.id,
+        traineeId: workCertificates.traineeId,
         certificateType: workCertificates.certificateType,
         issueDate: workCertificates.issueDate,
         periodStart: workCertificates.periodStart,
@@ -43,21 +23,21 @@ export async function GET(
         qrVerificationCode: workCertificates.qrVerificationCode,
         qrVerificationUrl: workCertificates.qrVerificationUrl,
         status: workCertificates.status,
-        pdfUrl: workCertificates.pdfUrl,
         snapshotData: workCertificates.snapshotData,
         gender: workCertificates.gender,
         customSummary: workCertificates.customSummary,
+        traineeName: profiles.fullName,
       })
       .from(workCertificates)
-      .where(conditions)
+      .innerJoin(profiles, eq(workCertificates.traineeId, profiles.id))
       .orderBy(desc(workCertificates.issueDate));
 
     return NextResponse.json({
       certificates,
-      latestCertificate: certificates.length > 0 ? certificates[0] : null,
+      total: certificates.length,
     });
   } catch (error: unknown) {
-    console.error('Error fetching certificates:', error);
+    console.error('Error fetching all certificates:', error);
     return NextResponse.json(
       { error: 'Interner Serverfehler beim Laden der Zeugnisse' },
       { status: 500 }
