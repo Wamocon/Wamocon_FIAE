@@ -81,6 +81,8 @@ export async function generateArbeitszeugnisPDF(
   const pageHeight = doc.internal.pageSize.height;
   const margin = 25;
   const contentWidth = pageWidth - margin * 2;
+  const footerHeight = 24; // Reserved space at bottom for footer
+  const safeBottom = pageHeight - footerHeight; // Content must not go below this
   let y = 20;
 
   // Helper functions
@@ -283,7 +285,7 @@ export async function generateArbeitszeugnisPDF(
       1: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
       2: { cellWidth: 35, halign: 'center' },
     },
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, bottom: footerHeight + 5 },
   });
 
   // @ts-expect-error - jspdf-autotable extends jsPDF prototype
@@ -357,7 +359,7 @@ export async function generateArbeitszeugnisPDF(
         0: { cellWidth: 'auto' },
         1: { cellWidth: 45, halign: 'center', fontStyle: 'bold' },
       },
-      margin: { left: margin, right: margin },
+      margin: { left: margin, right: margin, bottom: footerHeight + 5 },
     });
 
     // @ts-expect-error - jspdf-autotable extends jsPDF prototype
@@ -365,7 +367,7 @@ export async function generateArbeitszeugnisPDF(
   }
 
   // Check if we need a new page
-  if (y > pageHeight - 80) {
+  if (y > safeBottom - 60) {
     doc.addPage();
     y = 25;
   }
@@ -395,8 +397,8 @@ export async function generateArbeitszeugnisPDF(
   y += summaryLines.length * 6 + 20;
 
   // -- SIGNATURE SECTION --
-  // Ensure we have space for signature + footer
-  if (y > pageHeight - 90) {
+  // Ensure we have space for signature + QR verification + footer
+  if (y > safeBottom - 75) {
     doc.addPage();
     y = 25;
   }
@@ -421,11 +423,18 @@ export async function generateArbeitszeugnisPDF(
   doc.setTextColor(...COLORS.secondary);
   doc.text('Ausbilder / verantwortliche Fachkraft', margin, y + 5);
 
-  // -- QR CODE & VERIFICATION (Bottom of page, separated from signature) --
-  const footerY = pageHeight - 25;
+  // -- QR CODE & VERIFICATION (placed after signature, above footer) --
+  y += 15;
 
-  // Horizontal line above footer
-  drawHorizontalLine(footerY - 15, COLORS.tableBorder);
+  // Ensure QR section fits above the footer
+  if (y > safeBottom - 30) {
+    doc.addPage();
+    y = 25;
+  }
+
+  // Horizontal line above QR section
+  drawHorizontalLine(y, COLORS.tableBorder);
+  y += 8;
 
   // QR Code - positioned on the right, smaller
   let qrImageData = data.qrCodeUrl;
@@ -445,22 +454,15 @@ export async function generateArbeitszeugnisPDF(
   }
 
   if (qrImageData && qrImageData.startsWith('data:image')) {
-    doc.addImage(
-      qrImageData,
-      'PNG',
-      pageWidth - margin - 18,
-      footerY - 12,
-      18,
-      18
-    );
+    doc.addImage(qrImageData, 'PNG', pageWidth - margin - 18, y - 2, 18, 18);
   }
 
   // Verification info on the left
   doc.setFontSize(7);
   doc.setTextColor(...COLORS.secondary);
-  doc.text('Dokumentenverifikation gemäß §126a BGB', margin, footerY - 6);
-  doc.text(`Verifizierungs-ID: ${data.verificationCode}`, margin, footerY - 2);
-  doc.text('Scannen Sie den QR-Code zur Echtheitsprüfung', margin, footerY + 2);
+  doc.text('Dokumentenverifikation gemäß §126a BGB', margin, y + 2);
+  doc.text(`Verifizierungs-ID: ${data.verificationCode}`, margin, y + 6);
+  doc.text('Scannen Sie den QR-Code zur Echtheitsprüfung', margin, y + 10);
 
   // ==================== PAGE 2: IHK LEGEND ====================
   doc.addPage();
@@ -500,7 +502,7 @@ export async function generateArbeitszeugnisPDF(
       1: { cellWidth: 35, fontStyle: 'bold' },
       2: { cellWidth: 'auto' },
     },
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, bottom: footerHeight + 5 },
   });
 
   // @ts-expect-error - jspdf-autotable extends jsPDF prototype
@@ -541,27 +543,79 @@ export async function generateArbeitszeugnisPDF(
       'Das folgende Kompetenzprofil visualisiert die Leistungen in den verschiedenen Ausbildungsbereichen. Die Darstellung ermöglicht einen schnellen Überblick über Stärken und Entwicklungspotenziale.';
     const radarLines = doc.splitTextToSize(radarExplanation, contentWidth);
     doc.text(radarLines, margin, y);
-    y += radarLines.length * 5 + 15;
+    y += radarLines.length * 5 + 10;
 
-    // Center the radar chart with equal width/height to prevent egg shape
-    const imgSize = Math.min(contentWidth - 20, 140);
+    // Calculate the maximum image size that fits between current y and safeBottom
+    // The chart image includes labels and legend already rendered inside it
+    const availableHeight = safeBottom - y - 5; // 5mm bottom padding
+    const maxImgSize = Math.min(contentWidth, availableHeight, 150); // cap at 150mm
+    const imgSize = Math.max(maxImgSize, 80); // minimum 80mm to be readable
+
+    // If even the minimum doesn't fit, start a new page
+    if (imgSize > availableHeight) {
+      doc.addPage();
+      y = 25;
+    }
+
     const imgX = (pageWidth - imgSize) / 2;
 
     doc.addImage(data.radarImage, 'PNG', imgX, y, imgSize, imgSize);
-    y += imgSize + 15;
+    y += imgSize + 8;
 
-    // Legend explanation
-    doc.setFontSize(9);
+    // Legend explanation — only add if it fits above safeBottom
+    if (y + 12 < safeBottom) {
+      doc.setFontSize(8);
+      doc.setTextColor(...COLORS.secondary);
+      doc.text(
+        'Die Farbcodierung zeigt die Leistungsstufe (grün = sehr gut bis rot = ungenügend).',
+        margin,
+        y
+      );
+      y += 4;
+      doc.text(
+        'Bei Radar-Ansicht entsprechen größere Flächen besseren Bewertungen.',
+        margin,
+        y
+      );
+    }
+  }
+
+  // ==================== ADD FOOTER TO ALL PAGES ====================
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+
+    // Footer separator line
+    drawHorizontalLine(pageHeight - footerHeight, COLORS.tableBorder);
+
+    // Company info on the left
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.secondary);
     doc.text(
-      'Legende: Die Farbcodierung zeigt die Leistungsstufe (grün = sehr gut bis rot = ungenügend).',
+      'WAMOCON GmbH | IT-Testmanagement',
       margin,
-      y
+      pageHeight - footerHeight + 5
     );
     doc.text(
-      'Bei Radar-Ansicht entsprechen größere Flächen besseren Bewertungen.',
+      'Mergenthalerallee 79-81, 65760 Eschborn',
       margin,
-      y + 5
+      pageHeight - footerHeight + 9
+    );
+    doc.text(
+      'www.wamocon.de | info@wamocon.de',
+      margin,
+      pageHeight - footerHeight + 13
+    );
+
+    // Page number on the right
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `Seite ${i} von ${totalPages}`,
+      pageWidth - margin,
+      pageHeight - footerHeight + 9,
+      { align: 'right' }
     );
   }
 
