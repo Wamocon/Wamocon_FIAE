@@ -27,7 +27,6 @@ import {
 import QRCode from 'qrcode';
 
 import { SkillRadarChart, renderRadarChartForPDF } from './SkillRadarChart';
-import { EvidenceSection } from './EvidenceSection';
 
 interface Trainee {
   id: string;
@@ -1078,14 +1077,7 @@ export function ArbeitszeugnisGenerator() {
               </div>
             )}
 
-          {/* Evidence */}
-          <div className="bg-card border-border rounded-2xl border p-6">
-            <EvidenceSection
-              traineeId={selectedTrainee}
-              query={evidenceQuery}
-              onCopy={text => setSummary(prev => prev + '\n' + text)}
-            />
-          </div>
+         
 
           {/* Summary Text */}
           <div className="bg-card border-border rounded-2xl border p-6">
