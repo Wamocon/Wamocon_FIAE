@@ -59,12 +59,20 @@ export async function GET(
       const startOfTraining =
         traineeProfile[0]?.startDate || new Date('2025-08-01');
 
-      yearStart = new Date(startOfTraining);
-      yearStart.setFullYear(yearStart.getFullYear() + (ausbildungsjahr - 1));
+      if (ausbildungsjahr === 0) {
+        // FINAL certificate: cover entire training period (all 3 years)
+        yearStart = new Date(startOfTraining);
+        yearEnd = new Date(startOfTraining);
+        yearEnd.setFullYear(yearEnd.getFullYear() + 3);
+        yearEnd.setDate(yearEnd.getDate() - 1);
+      } else {
+        yearStart = new Date(startOfTraining);
+        yearStart.setFullYear(yearStart.getFullYear() + (ausbildungsjahr - 1));
 
-      yearEnd = new Date(yearStart);
-      yearEnd.setFullYear(yearEnd.getFullYear() + 1);
-      yearEnd.setDate(yearEnd.getDate() - 1);
+        yearEnd = new Date(yearStart);
+        yearEnd.setFullYear(yearEnd.getFullYear() + 1);
+        yearEnd.setDate(yearEnd.getDate() - 1);
+      }
     }
 
     // Fetch graded entries grouped by component
