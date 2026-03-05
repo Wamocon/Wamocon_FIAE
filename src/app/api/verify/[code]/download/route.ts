@@ -328,6 +328,7 @@ export async function GET(
         snapshot.components?.map((c: any) => ({
           title: c.title,
           grade: c.finalGrade,
+          hours: c.totalHours || 0,
         })) || [],
       averageGrade: snapshot.overallAverage || 0,
       qrCodeUrl: qrImageBase64,

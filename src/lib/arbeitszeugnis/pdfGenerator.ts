@@ -14,6 +14,7 @@ interface CertificateData {
   components: {
     title: string;
     grade: number | null;
+    hours?: number;
   }[];
   averageGrade: number;
   qrCodeUrl: string;
@@ -31,6 +32,12 @@ interface CertificateData {
       personalkompetenz: number | null;
     };
     overallAverage: number | null;
+    criteria?: {
+      code: string;
+      name: string;
+      competencyArea: string;
+      averageGrade: number | null;
+    }[];
   };
 }
 
@@ -234,36 +241,30 @@ export async function generateArbeitszeugnisPDF(
   y += 6;
 
   doc.text(
-    `in unserem Unternehmen als Auszubildende${data.gender === 'male' ? 'r' : data.gender === 'female' ? '' : '(r)'} im Beruf`,
+    `in unserem Unternehmen als Auszubildende${data.gender === 'male' ? 'r' : data.gender === 'female' ? '' : '(r)'} im Beruf tätig.`,
     margin,
     y
   );
-  y += 12;
+  y += 10;
 
   // Profession highlight - centered and bold
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text(data.izhkProfile, pageWidth / 2, y, { align: 'center' });
-  y += 8;
-
-  // tätig.
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('tätig.', margin, y);
-  y += 15;
+  y += 12;
 
   // -- PERFORMANCE GRADES TABLE --
   y = addSectionTitle('Betriebliche Leistungsbeurteilung', y);
 
   const tableBody = data.components.map((c, i) => [
     `${i + 1}. ${c.title}`,
-    c.grade ? c.grade.toString() : '–',
+    c.hours != null ? c.hours.toString() : '–',
     c.grade ? getGradeText(c.grade) : '–',
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [['Ausbildungsinhalt', 'Note', 'Bewertung']],
+    head: [['Ausbildungsinhalt', 'Stunden', 'Bewertung']],
     body: tableBody,
     theme: 'grid',
     headStyles: {
@@ -283,16 +284,22 @@ export async function generateArbeitszeugnisPDF(
     },
     columnStyles: {
       0: { cellWidth: 'auto' },
-      1: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+      1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
       2: { cellWidth: 35, halign: 'center' },
     },
-    margin: { left: margin, right: margin, bottom: footerHeight + 5 },
+    margin: { left: margin, right: margin, top: 20, bottom: footerHeight + 5 },
   });
 
   // @ts-expect-error - jspdf-autotable extends jsPDF prototype
   y = doc.lastAutoTable.finalY + 8;
 
   // -- OVERALL GRADE --
+  const totalHours = data.components.reduce(
+    (sum, c) => sum + (c.hours || 0),
+    0
+  );
+  const totalDays = (totalHours / 8).toFixed(1);
+
   doc.setFillColor(...COLORS.coral);
   doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'F');
 
@@ -301,62 +308,82 @@ export async function generateArbeitszeugnisPDF(
   doc.setTextColor(255, 255, 255);
   doc.text('Gesamtdurchschnitt:', margin + 5, y + 11);
 
-  const avgText = `${data.averageGrade.toFixed(2)} – ${getGradeText(data.averageGrade)}`;
+  const avgText = `${totalHours} Std. (${totalDays} Tage) - ${getGradeText(data.averageGrade)}`;
   doc.setTextColor(255, 255, 255);
   doc.text(avgText, pageWidth - margin - 5, y + 11, { align: 'right' });
   y += 25;
 
   // -- SOFT SKILLS TABLE (if available) --
   if (data.softSkills && data.softSkills.overallAverage !== null) {
-    y = addSectionTitle('Kompetenzbewertung (Soft Skills)', y);
+    y = addSectionTitle('Skills', y);
 
+    // Constant sub-skill labels (these never change, only grades change)
     const softSkillsBody = [
       [
-        'Fachkompetenz',
-        data.softSkills.averages.fachkompetenz?.toFixed(2) || '–',
+        'Fachkompetenz (Sorgfalt, Qualitätsbewusstsein)',
+        data.softSkills.averages.fachkompetenz
+          ? getGradeText(data.softSkills.averages.fachkompetenz)
+          : '–',
       ],
       [
-        'Methodenkompetenz',
-        data.softSkills.averages.methodenkompetenz?.toFixed(2) || '–',
+        'Methodenkompetenz (Problemlösung, Zeitmanagement, Analytisches Denken)',
+        data.softSkills.averages.methodenkompetenz
+          ? getGradeText(data.softSkills.averages.methodenkompetenz)
+          : '–',
       ],
       [
-        'Personalkompetenz',
-        data.softSkills.averages.personalkompetenz?.toFixed(2) || '–',
+        'Personalkompetenz (Zuverlässigkeit, Selbstständigkeit, Lernbereitschaft)',
+        data.softSkills.averages.personalkompetenz
+          ? getGradeText(data.softSkills.averages.personalkompetenz)
+          : '–',
       ],
     ];
 
     autoTable(doc, {
       startY: y,
-      head: [['Kompetenzbereich', 'Durchschnittsnote']],
+      head: [['Kompetenzbereich', 'Bewertung']],
       body: softSkillsBody,
       foot: [
         [
-          'Gesamtdurchschnitt Soft Skills',
-          data.softSkills.overallAverage.toFixed(2),
+          'Gesamtdurchschnitt Skills',
+          getGradeText(data.softSkills.overallAverage),
         ],
       ],
       theme: 'grid',
+      styles: {
+        lineColor: COLORS.tableBorder,
+        lineWidth: 0.4,
+      },
       headStyles: {
         fillColor: COLORS.coral,
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 10,
+        lineColor: COLORS.coral,
       },
       footStyles: {
         fillColor: COLORS.coral,
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 10,
+        halign: 'center',
+        lineColor: COLORS.coral,
       },
       bodyStyles: {
         fontSize: 9,
         cellPadding: 3,
+        textColor: COLORS.primary,
       },
       columnStyles: {
-        0: { cellWidth: 'auto' },
-        1: { cellWidth: 45, halign: 'center', fontStyle: 'bold' },
+        0: { cellWidth: 'auto', halign: 'left' },
+        1: { cellWidth: 45, halign: 'left', fontStyle: 'bold' },
       },
-      margin: { left: margin, right: margin, bottom: footerHeight + 5 },
+      margin: {
+        left: margin,
+        right: margin,
+        top: 20,
+        bottom: footerHeight + 5,
+      },
     });
 
     // @ts-expect-error - jspdf-autotable extends jsPDF prototype
@@ -382,7 +409,7 @@ export async function generateArbeitszeugnisPDF(
       : data.gender === 'female'
         ? 'Ihre'
         : 'Die';
-  const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit der Note ${data.averageGrade.toFixed(2)} (${getGradeText(data.averageGrade)}) bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
+  const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit "${getGradeText(data.averageGrade)}" bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
   const summaryText = data.summary || defaultSummary;
 
   y = addSectionTitle('Abschließende Bemerkung', y);
@@ -431,10 +458,22 @@ export async function generateArbeitszeugnisPDF(
     y = 25;
   }
 
-  // ==================== ADD FOOTER TO ALL PAGES ====================
+  // ==================== ADD HEADER (pages 2+) AND FOOTER TO ALL PAGES ====================
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
+
+    // Header on pages 2+ only
+    if (i > 1) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...COLORS.secondary);
+      doc.text(data.companyName, margin, 12);
+      doc.text('Betriebliche Leistungsbeurteilung', pageWidth - margin, 12, {
+        align: 'right',
+      });
+      drawHorizontalLine(15);
+    }
 
     // Footer separator line
     drawHorizontalLine(pageHeight - footerHeight, COLORS.tableBorder);
