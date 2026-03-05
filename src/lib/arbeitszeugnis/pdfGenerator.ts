@@ -28,7 +28,6 @@ interface CertificateData {
     averages: {
       fachkompetenz: number | null;
       methodenkompetenz: number | null;
-      sozialkompetenz: number | null;
       personalkompetenz: number | null;
     };
     overallAverage: number | null;
@@ -187,7 +186,9 @@ export async function generateArbeitszeugnisPDF(
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.primary);
-  doc.text('AUSBILDUNGSZEUGNIS', pageWidth / 2, y, { align: 'center' });
+  doc.text('BETRIEBLICHE LEISTUNGSBURTEILUNG', pageWidth / 2, y, {
+    align: 'center',
+  });
   y += 6;
 
   // Subtitle
@@ -319,10 +320,6 @@ export async function generateArbeitszeugnisPDF(
         data.softSkills.averages.methodenkompetenz?.toFixed(2) || '–',
       ],
       [
-        'Sozialkompetenz',
-        data.softSkills.averages.sozialkompetenz?.toFixed(2) || '–',
-      ],
-      [
         'Personalkompetenz',
         data.softSkills.averages.personalkompetenz?.toFixed(2) || '–',
       ],
@@ -388,6 +385,8 @@ export async function generateArbeitszeugnisPDF(
   const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit der Note ${data.averageGrade.toFixed(2)} (${getGradeText(data.averageGrade)}) bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
   const summaryText = data.summary || defaultSummary;
 
+  y = addSectionTitle('Abschließende Bemerkung', y);
+
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.primary);
@@ -430,154 +429,6 @@ export async function generateArbeitszeugnisPDF(
   if (y > safeBottom - 30) {
     doc.addPage();
     y = 25;
-  }
-
-  // Horizontal line above QR section
-  drawHorizontalLine(y, COLORS.tableBorder);
-  y += 8;
-
-  // QR Code - positioned on the right, smaller
-  let qrImageData = data.qrCodeUrl;
-
-  // Generate QR code from URL if not already base64
-  if (data.qrCodeUrl && !data.qrCodeUrl.startsWith('data:image')) {
-    try {
-      qrImageData = await QRCode.toDataURL(data.qrCodeUrl, {
-        errorCorrectionLevel: 'H',
-        margin: 1,
-        width: 200,
-        color: { dark: '#000000', light: '#ffffff' },
-      });
-    } catch (e) {
-      console.error('Error generating QR code in PDF:', e);
-    }
-  }
-
-  if (qrImageData && qrImageData.startsWith('data:image')) {
-    doc.addImage(qrImageData, 'PNG', pageWidth - margin - 18, y - 2, 18, 18);
-  }
-
-  // Verification info on the left
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.secondary);
-  doc.text('Dokumentenverifikation gemäß §126a BGB', margin, y + 2);
-  doc.text(`Verifizierungs-ID: ${data.verificationCode}`, margin, y + 6);
-  doc.text('Scannen Sie den QR-Code zur Echtheitsprüfung', margin, y + 10);
-
-  // ==================== PAGE 2: IHK LEGEND ====================
-  doc.addPage();
-  y = 25;
-
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...COLORS.primary);
-  doc.text('Anhang: IHK-Notenschlüssel', margin, y);
-  y += 15;
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...COLORS.secondary);
-  const legendIntro =
-    'Die Benotung erfolgt nach dem bundeseinheitlichen IHK-Bewertungsschlüssel für die duale Berufsausbildung:';
-  doc.text(legendIntro, margin, y);
-  y += 12;
-
-  autoTable(doc, {
-    startY: y,
-    head: [['Note', 'Bezeichnung', 'Definition']],
-    body: IHK_LEGEND,
-    theme: 'striped',
-    headStyles: {
-      fillColor: COLORS.tableHeader,
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      fontSize: 10,
-    },
-    bodyStyles: {
-      fontSize: 9,
-      cellPadding: 4,
-    },
-    columnStyles: {
-      0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-      1: { cellWidth: 35, fontStyle: 'bold' },
-      2: { cellWidth: 'auto' },
-    },
-    margin: { left: margin, right: margin, bottom: footerHeight + 5 },
-  });
-
-  // @ts-expect-error - jspdf-autotable extends jsPDF prototype
-  y = doc.lastAutoTable.finalY + 20;
-
-  // Additional info
-  doc.setFontSize(9);
-  doc.setTextColor(...COLORS.secondary);
-  const additionalInfo = [
-    'Hinweise:',
-    '• Die Durchschnittsnote errechnet sich aus dem arithmetischen Mittel aller Einzelnoten.',
-    '• Bei einer Durchschnittsnote von 2,44 oder besser kann eine Verkürzung der Ausbildungszeit beantragt werden.',
-    '• Die Soft-Skill-Bewertung basiert auf dem MES-Kompetenzmodell (19 Kriterien in 4 Kompetenzbereichen).',
-  ];
-
-  for (const line of additionalInfo) {
-    const splitLine = doc.splitTextToSize(line, contentWidth);
-    doc.text(splitLine, margin, y);
-    y += splitLine.length * 5;
-  }
-
-  // ==================== PAGE 3: RADAR CHART (if available) ====================
-  if (data.radarImage) {
-    doc.addPage();
-    y = 25;
-
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.primary);
-    doc.text('Anhang: Kompetenzprofil', margin, y);
-    y += 12;
-
-    // Explanation
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...COLORS.secondary);
-    const radarExplanation =
-      'Das folgende Kompetenzprofil visualisiert die Leistungen in den verschiedenen Ausbildungsbereichen. Die Darstellung ermöglicht einen schnellen Überblick über Stärken und Entwicklungspotenziale.';
-    const radarLines = doc.splitTextToSize(radarExplanation, contentWidth);
-    doc.text(radarLines, margin, y);
-    y += radarLines.length * 5 + 10;
-
-    // Calculate the maximum image size that fits between current y and safeBottom
-    // The chart image includes labels and legend already rendered inside it
-    const availableHeight = safeBottom - y - 5; // 5mm bottom padding
-    const maxImgSize = Math.min(contentWidth, availableHeight, 150); // cap at 150mm
-    const imgSize = Math.max(maxImgSize, 80); // minimum 80mm to be readable
-
-    // If even the minimum doesn't fit, start a new page
-    if (imgSize > availableHeight) {
-      doc.addPage();
-      y = 25;
-    }
-
-    const imgX = (pageWidth - imgSize) / 2;
-
-    doc.addImage(data.radarImage, 'PNG', imgX, y, imgSize, imgSize);
-    y += imgSize + 8;
-
-    // Legend explanation — only add if it fits above safeBottom
-    if (y + 12 < safeBottom) {
-      doc.setFontSize(8);
-      doc.setTextColor(...COLORS.secondary);
-      doc.text(
-        'Die Farbcodierung zeigt die Leistungsstufe (grün = sehr gut bis rot = ungenügend).',
-        margin,
-        y
-      );
-      y += 4;
-      doc.text(
-        'Bei Radar-Ansicht entsprechen größere Flächen besseren Bewertungen.',
-        margin,
-        y
-      );
-    }
   }
 
   // ==================== ADD FOOTER TO ALL PAGES ====================

@@ -166,7 +166,6 @@ export async function GET(
             const competencyAreas = [
               'FACHKOMPETENZ',
               'METHODENKOMPETENZ',
-              'SOZIALKOMPETENZ',
               'PERSONALKOMPETENZ',
             ] as const;
             const softSkillsByArea: Record<string, number[]> = {};
@@ -203,17 +202,6 @@ export async function GET(
                       100
                   ) / 100
                 : null;
-            const sozialAvg =
-              softSkillsByArea.SOZIALKOMPETENZ.length > 0
-                ? Math.round(
-                    (softSkillsByArea.SOZIALKOMPETENZ.reduce(
-                      (a, b) => a + b,
-                      0
-                    ) /
-                      softSkillsByArea.SOZIALKOMPETENZ.length) *
-                      100
-                  ) / 100
-                : null;
             const personalAvg =
               softSkillsByArea.PERSONALKOMPETENZ.length > 0
                 ? Math.round(
@@ -239,14 +227,12 @@ export async function GET(
             if (
               fachAvg !== null ||
               methodAvg !== null ||
-              sozialAvg !== null ||
               personalAvg !== null
             ) {
               softSkills = {
                 averages: {
                   fachkompetenz: fachAvg,
                   methodenkompetenz: methodAvg,
-                  sozialkompetenz: sozialAvg,
                   personalkompetenz: personalAvg,
                 },
                 overallAverage: overallAvg || 0,

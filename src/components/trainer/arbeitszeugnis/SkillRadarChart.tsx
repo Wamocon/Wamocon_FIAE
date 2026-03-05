@@ -536,7 +536,6 @@ export function renderRadarChartForPDF(
       Marktanalyse: 'Marktana.',
       Methodenkompetenz: 'Methodik',
       Personalkompetenz: 'Personal',
-      Sozialkompetenz: 'Sozial',
       Fachkompetenz: 'Fach',
     };
 

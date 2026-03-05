@@ -69,7 +69,6 @@ interface SoftSkillsData {
   averages: {
     fachkompetenz: number | null;
     methodenkompetenz: number | null;
-    sozialkompetenz: number | null;
     personalkompetenz: number | null;
   };
   overallAverage: number | null;
@@ -520,7 +519,6 @@ export function ArbeitszeugnisGenerator() {
             averages: {
               fachkompetenz: number | null;
               methodenkompetenz: number | null;
-              sozialkompetenz: number | null;
               personalkompetenz: number | null;
             };
             overallAverage: number | null;
@@ -652,7 +650,6 @@ export function ArbeitszeugnisGenerator() {
                 averages: {
                   fachkompetenz: number | null;
                   methodenkompetenz: number | null;
-                  sozialkompetenz: number | null;
                   personalkompetenz: number | null;
                 };
                 overallAverage: number | null;
@@ -1344,10 +1341,6 @@ export function ArbeitszeugnisGenerator() {
                     {
                       key: 'methodenkompetenz',
                       label: t('arbeitszeugnis.methodic'),
-                    },
-                    {
-                      key: 'sozialkompetenz',
-                      label: t('arbeitszeugnis.social'),
                     },
                     {
                       key: 'personalkompetenz',
