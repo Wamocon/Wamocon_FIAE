@@ -50,6 +50,7 @@ interface ActivityReport {
   createdAt: string;
   trainee?: TraineeProfile;
   hasOverbooking?: boolean;
+  skillSelfRatings?: Record<string, string> | null;
 }
 
 interface ReportUseCaseEntry {
@@ -1824,25 +1825,44 @@ function ReportReviewModal({
                             </p>
                           </div>
 
-                          {/* Trainer rating */}
-                          <div className="flex-shrink-0">
-                            {canEditTrainer ? (
-                              <GradeSelector
-                                value={trainerRating?.rating}
-                                onChange={r =>
-                                  handleSoftskillRatingChange(
-                                    representative.id,
-                                    r
-                                  )
-                                }
-                                size="md"
-                              />
-                            ) : (
-                              <GradeBadge
-                                grade={trainerRating?.rating}
-                                size="lg"
-                              />
-                            )}
+                          <div className="flex flex-shrink-0 items-center gap-3">
+                            {/* Trainee self-rating badge */}
+                            {report.skillSelfRatings &&
+                              report.skillSelfRatings[area] && (
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+                                    {t('reports.skillSelfRatingTrainee')}
+                                  </span>
+                                  <GradeBadge
+                                    grade={report.skillSelfRatings[area]}
+                                    size="sm"
+                                  />
+                                </div>
+                              )}
+
+                            {/* Trainer rating */}
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+                                {t('reports.trainerGrade')}
+                              </span>
+                              {canEditTrainer ? (
+                                <GradeSelector
+                                  value={trainerRating?.rating}
+                                  onChange={r =>
+                                    handleSoftskillRatingChange(
+                                      representative.id,
+                                      r
+                                    )
+                                  }
+                                  size="md"
+                                />
+                              ) : (
+                                <GradeBadge
+                                  grade={trainerRating?.rating}
+                                  size="lg"
+                                />
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
