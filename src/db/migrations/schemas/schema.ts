@@ -1011,6 +1011,9 @@ export const activityReports = pgTable('activity_reports', {
   traineeSignedAt: timestamp('trainee_signed_at'),
   trainerSignedAt: timestamp('trainer_signed_at'),
 
+  // Trainee self-rating for competency areas (stored as JSON: {FACHKOMPETENZ: '2', METHODENKOMPETENZ: '3', PERSONALKOMPETENZ: '1'})
+  skillSelfRatings: jsonb('skill_self_ratings').$type<Record<string, string>>(),
+
   // Generated PDF storage
   pdfUrl: text('pdf_url'),
   pdfGeneratedAt: timestamp('pdf_generated_at'),
