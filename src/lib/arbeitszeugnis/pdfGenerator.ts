@@ -2,7 +2,6 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import QRCode from 'qrcode';
 
 interface CertificateData {
   traineeName: string;
@@ -125,10 +124,23 @@ export async function generateArbeitszeugnisPDF(
   };
 
   const addSectionTitle = (title: string, yPos: number): number => {
+    // Add breathing room above the heading
+    yPos += 4;
+
+    const barHeight = 7;
+
+    // Coral accent bar vertically centered on yPos
+    doc.setFillColor(...COLORS.coral);
+    doc.rect(margin, yPos - barHeight / 2, 1.8, barHeight, 'F');
+
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...COLORS.primary);
-    doc.text(title, margin, yPos);
+
+    // Text vertically centered on yPos using baseline 'middle'
+    doc.text(title, margin + 5, yPos, { baseline: 'middle' });
+
+    // Return a slightly larger offset because the text baseline changed
     return yPos + 8;
   };
 
@@ -241,31 +253,44 @@ export async function generateArbeitszeugnisPDF(
   y += 6;
 
   doc.text(
-    `in unserem Unternehmen als Auszubildende${data.gender === 'male' ? 'r' : data.gender === 'female' ? '' : '(r)'} im Beruf tätig.`,
+    `in unserem Unternehmen als Auszubildende${data.gender === 'male' ? 'r' : data.gender === 'female' ? '' : 'r'} im Beruf tätig.`,
     margin,
     y
   );
-  y += 10;
+  y += 16;
 
   // Profession highlight - centered and bold
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(14); // Made it significantly bigger
   doc.text(data.izhkProfile, pageWidth / 2, y, { align: 'center' });
-  y += 12;
+  y += 10; // Extra gap before the table
 
   // -- PERFORMANCE GRADES TABLE --
   y = addSectionTitle('Betriebliche Leistungsbeurteilung', y);
 
-  const tableBody = data.components.map((c, i) => [
-    `${i + 1}. ${c.title}`,
-    c.hours != null ? c.hours.toString() : '–',
-    c.grade ? getGradeText(c.grade) : '–',
+  const totalHours = data.components.reduce(
+    (sum, c) => sum + (c.hours || 0),
+    0
+  );
+  const totalDays = (totalHours / 8).toFixed(1);
+
+  const tableBody = data.components.map(component => [
+    component.title,
+    component.hours?.toString() || '–',
+    component.grade ? getGradeText(component.grade) : '–',
   ]);
 
   autoTable(doc, {
     startY: y,
     head: [['Ausbildungsinhalt', 'Stunden', 'Bewertung']],
     body: tableBody,
+    foot: [
+      [
+        'Gesamtdurchschnitt:',
+        `${totalHours} Std./\n(${totalDays} Tage)`,
+        getGradeText(data.averageGrade),
+      ],
+    ],
     theme: 'grid',
     headStyles: {
       fillColor: COLORS.tableHeader,
@@ -279,39 +304,45 @@ export async function generateArbeitszeugnisPDF(
       cellPadding: 3,
       textColor: COLORS.primary,
     },
+    footStyles: {
+      fillColor: COLORS.coral,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 10,
+      valign: 'middle',
+    },
     alternateRowStyles: {
       fillColor: COLORS.lightBg,
     },
     columnStyles: {
-      0: { cellWidth: 'auto' },
-      1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
+      0: { cellWidth: 'auto', halign: 'left' },
+      1: { cellWidth: 28, halign: 'center', fontStyle: 'bold' },
       2: { cellWidth: 35, halign: 'center' },
+    },
+    didParseCell: data => {
+      if (data.section === 'head') {
+        if (data.column.index === 1) data.cell.styles.halign = 'center';
+        if (data.column.index === 2) data.cell.styles.halign = 'center';
+      }
+      if (data.section === 'foot') {
+        if (data.column.index === 0) data.cell.styles.halign = 'left';
+        if (data.column.index === 1) data.cell.styles.halign = 'center';
+        if (data.column.index === 2) data.cell.styles.halign = 'center';
+      }
     },
     margin: { left: margin, right: margin, top: 20, bottom: footerHeight + 5 },
   });
 
   // @ts-expect-error - jspdf-autotable extends jsPDF prototype
-  y = doc.lastAutoTable.finalY + 8;
+  y = doc.lastAutoTable.finalY + 12;
 
-  // -- OVERALL GRADE --
-  const totalHours = data.components.reduce(
-    (sum, c) => sum + (c.hours || 0),
-    0
-  );
-  const totalDays = (totalHours / 8).toFixed(1);
-
-  doc.setFillColor(...COLORS.coral);
-  doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'F');
-
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('Gesamtdurchschnitt:', margin + 5, y + 11);
+  // @ts-expect-error - jspdf-autotable extends jsPDF prototype
+  y = doc.lastAutoTable.finalY + 4;
 
   const avgText = `${totalHours} Std. (${totalDays} Tage) - ${getGradeText(data.averageGrade)}`;
   doc.setTextColor(255, 255, 255);
   doc.text(avgText, pageWidth - margin - 5, y + 11, { align: 'right' });
-  y += 25;
+  // y += 12;
 
   // -- SOFT SKILLS TABLE (if available) --
   if (data.softSkills && data.softSkills.overallAverage !== null) {
@@ -344,15 +375,13 @@ export async function generateArbeitszeugnisPDF(
       head: [['Kompetenzbereich', 'Bewertung']],
       body: softSkillsBody,
       foot: [
-        [
-          'Gesamtdurchschnitt Skills',
-          getGradeText(data.softSkills.overallAverage),
-        ],
+        ['Gesamtdurchschnitt:', getGradeText(data.softSkills.overallAverage)],
       ],
       theme: 'grid',
       styles: {
         lineColor: COLORS.tableBorder,
         lineWidth: 0.4,
+        valign: 'middle',
       },
       headStyles: {
         fillColor: COLORS.coral,
@@ -360,23 +389,42 @@ export async function generateArbeitszeugnisPDF(
         fontStyle: 'bold',
         fontSize: 10,
         lineColor: COLORS.coral,
+        halign: 'left',
+        valign: 'middle',
       },
       footStyles: {
         fillColor: COLORS.coral,
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 10,
-        halign: 'center',
+        valign: 'middle',
         lineColor: COLORS.coral,
+        halign: 'left',
       },
       bodyStyles: {
         fontSize: 9,
         cellPadding: 3,
         textColor: COLORS.primary,
+        valign: 'middle',
       },
       columnStyles: {
-        0: { cellWidth: 'auto', halign: 'left' },
-        1: { cellWidth: 45, halign: 'left', fontStyle: 'bold' },
+        0: { cellWidth: 'auto', halign: 'left', valign: 'middle' },
+        1: {
+          cellWidth: 45,
+          halign: 'center',
+          fontStyle: 'bold',
+          valign: 'middle',
+        },
+      },
+      didParseCell: data => {
+        if (data.section === 'head') {
+          if (data.column.index === 0) data.cell.styles.halign = 'left';
+          if (data.column.index === 1) data.cell.styles.halign = 'center';
+        }
+        if (data.section === 'foot') {
+          if (data.column.index === 0) data.cell.styles.halign = 'left';
+          if (data.column.index === 1) data.cell.styles.halign = 'center';
+        }
       },
       margin: {
         left: margin,
@@ -387,7 +435,7 @@ export async function generateArbeitszeugnisPDF(
     });
 
     // @ts-expect-error - jspdf-autotable extends jsPDF prototype
-    y = doc.lastAutoTable.finalY + 12;
+    y = doc.lastAutoTable.finalY + 8;
   }
 
   // Check if we need a new page
@@ -412,12 +460,13 @@ export async function generateArbeitszeugnisPDF(
   const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit "${getGradeText(data.averageGrade)}" bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
   const summaryText = data.summary || defaultSummary;
 
+  y -= 4; // Move up a bit for better spacing before the summary
   y = addSectionTitle('Abschließende Bemerkung', y);
 
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.primary);
-
+  y += 2.5;
   const summaryLines = doc.splitTextToSize(summaryText, contentWidth);
   doc.text(summaryLines, margin, y);
   y += summaryLines.length * 6 + 20;
@@ -449,15 +498,6 @@ export async function generateArbeitszeugnisPDF(
   doc.setTextColor(...COLORS.secondary);
   doc.text('Ausbilder / verantwortliche Fachkraft', margin, y + 5);
 
-  // -- QR CODE & VERIFICATION (placed after signature, above footer) --
-  y += 15;
-
-  // Ensure QR section fits above the footer
-  if (y > safeBottom - 30) {
-    doc.addPage();
-    y = 25;
-  }
-
   // ==================== ADD HEADER (pages 2+) AND FOOTER TO ALL PAGES ====================
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
@@ -483,17 +523,12 @@ export async function generateArbeitszeugnisPDF(
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.secondary);
     doc.text(
-      'WAMOCON GmbH | IT-Testmanagement',
-      margin,
-      pageHeight - footerHeight + 5
-    );
-    doc.text(
-      'Mergenthalerallee 79-81, 65760 Eschborn',
+      'WAMOCON GmbH | Mergenthalerallee 79-81, 65760 Eschborn',
       margin,
       pageHeight - footerHeight + 9
     );
     doc.text(
-      'www.wamocon.de | info@wamocon.de',
+      'www.wamocon.com | info@wamocon.com',
       margin,
       pageHeight - footerHeight + 13
     );
