@@ -63,6 +63,7 @@ interface ActivityReport {
   reviewerId: string | null;
   reviewerName: string | null;
   createdAt: string;
+  skillSelfRatings?: Record<string, string> | null;
 }
 
 interface ReportUseCaseEntry {
@@ -722,6 +723,30 @@ function CreateReportModal({
   >({});
   const [loadingHours, setLoadingHours] = useState(true);
 
+  // Skill self-ratings for 3 competency areas
+  const COMPETENCY_AREAS = [
+    'FACHKOMPETENZ',
+    'METHODENKOMPETENZ',
+    'PERSONALKOMPETENZ',
+  ] as const;
+  const [skillSelfRatings, setSkillSelfRatings] = useState<
+    Record<string, string | null>
+  >(() => {
+    const initial = (initialReport as any)?.skillSelfRatings;
+    if (initial && typeof initial === 'object') {
+      return {
+        FACHKOMPETENZ: initial.FACHKOMPETENZ || null,
+        METHODENKOMPETENZ: initial.METHODENKOMPETENZ || null,
+        PERSONALKOMPETENZ: initial.PERSONALKOMPETENZ || null,
+      };
+    }
+    return {
+      FACHKOMPETENZ: null,
+      METHODENKOMPETENZ: null,
+      PERSONALKOMPETENZ: null,
+    };
+  });
+
   // Fetch used hours on mount
   useEffect(() => {
     const fetchUseCaseHours = async () => {
@@ -870,13 +895,16 @@ function CreateReportModal({
         e.notes.trim().length > 0
     );
 
+  const allSkillsRated = COMPETENCY_AREAS.every(area => skillSelfRatings[area]);
+
   const canSubmit =
     !saving &&
     !duplicateExists &&
     !hasOverbooking &&
     !exceeds40h &&
     periodValid &&
-    entriesValid;
+    entriesValid &&
+    allSkillsRated;
 
   const handleSave = async (submit: boolean = false) => {
     try {
@@ -934,6 +962,15 @@ function CreateReportModal({
         return;
       }
 
+      // Mandatory skill self-ratings when submitting
+      if (submit && !COMPETENCY_AREAS.every(area => skillSelfRatings[area])) {
+        setError(
+          'Bitte bewerten Sie alle Kompetenzbereiche (Fachkompetenz, Methodenkompetenz, Personalkompetenz) mit einer Note 1-6.'
+        );
+        setSaving(false);
+        return;
+      }
+
       // Calculate period start and end based on ISO week number
       // Get January 4th (always in ISO week 1)
       const jan4 = new Date(year, 0, 4);
@@ -974,6 +1011,7 @@ function CreateReportModal({
             notes: e.notes || null,
             traineeGrade: e.traineeGrade || null,
           })),
+          skillSelfRatings,
           submit,
         }),
       });
@@ -1366,6 +1404,106 @@ function CreateReportModal({
             </div>
           )}
 
+          {/* Skill Self-Rating Section */}
+          <div className="border-border rounded-xl border p-4">
+            <h3 className="text-foreground mb-1 text-lg font-semibold">
+              {t('reports.skillSelfRating')}
+            </h3>
+            <p className="text-muted-foreground mb-4 text-xs">
+              {t('reports.skillSelfRatingInfo')}
+            </p>
+            <div className="space-y-3">
+              {COMPETENCY_AREAS.map(area => {
+                const areaLabels: Record<string, string> = {
+                  FACHKOMPETENZ: t('reports.fachkompetenz'),
+                  METHODENKOMPETENZ: t('reports.methodenkompetenz'),
+                  PERSONALKOMPETENZ: t('reports.personalkompetenz'),
+                };
+                const areaDescriptions: Record<string, string> = {
+                  FACHKOMPETENZ: 'Sorgfalt, Qualitätsbewusstsein',
+                  METHODENKOMPETENZ:
+                    'Problemlösung, Zeitmanagement, Analytisches Denken',
+                  PERSONALKOMPETENZ:
+                    'Zuverlässigkeit, Selbstständigkeit, Lernbereitschaft',
+                };
+                const selectedGrade = skillSelfRatings[area];
+
+                return (
+                  <div
+                    key={area}
+                    className="border-border/50 bg-card hover:bg-muted/20 rounded-xl border p-4 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-foreground text-sm font-semibold">
+                          {areaLabels[area] || area}
+                        </h4>
+                        <p className="text-muted-foreground mt-0.5 text-xs">
+                          {areaDescriptions[area]}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {(['1', '2', '3', '4', '5', '6'] as const).map(
+                          grade => {
+                            const isSelected = selectedGrade === grade;
+                            return (
+                              <button
+                                key={grade}
+                                type="button"
+                                onClick={() =>
+                                  setSkillSelfRatings(prev => ({
+                                    ...prev,
+                                    [area]: isSelected ? null : grade,
+                                  }))
+                                }
+                                className={`flex h-9 w-9 items-center justify-center rounded-lg text-sm font-semibold transition-all duration-150 ${
+                                  isSelected
+                                    ? Number(grade) <= 2
+                                      ? 'scale-110 bg-green-500 text-white shadow-md ring-2 shadow-green-500/30 ring-green-400/50'
+                                      : Number(grade) <= 4
+                                        ? 'scale-110 bg-yellow-500 text-white shadow-md ring-2 shadow-yellow-500/30 ring-yellow-400/50'
+                                        : 'scale-110 bg-red-500 text-white shadow-md ring-2 shadow-red-500/30 ring-red-400/50'
+                                    : 'bg-muted hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground border-border/50 border'
+                                }`}
+                              >
+                                {grade}
+                              </button>
+                            );
+                          }
+                        )}
+                      </div>
+                    </div>
+                    {selectedGrade && (
+                      <div className="mt-2 text-right">
+                        <span
+                          className={`text-xs font-medium ${
+                            Number(selectedGrade) <= 2
+                              ? 'text-green-500'
+                              : Number(selectedGrade) <= 4
+                                ? 'text-yellow-500'
+                                : 'text-red-500'
+                          }`}
+                        >
+                          {selectedGrade === '1'
+                            ? t('reports.gradeLabels.1')
+                            : selectedGrade === '2'
+                              ? t('reports.gradeLabels.2')
+                              : selectedGrade === '3'
+                                ? t('reports.gradeLabels.3')
+                                : selectedGrade === '4'
+                                  ? t('reports.gradeLabels.4')
+                                  : selectedGrade === '5'
+                                    ? t('reports.gradeLabels.5')
+                                    : t('reports.gradeLabels.6')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Component/Use Case Selector */}
           <div className="space-y-3">
             <h3 className="text-foreground text-lg font-semibold">
@@ -1479,7 +1617,7 @@ function CreateReportModal({
   );
 }
 
-// Report Detail Modal Component (placeholder - will be expanded)
+// Report Detail Modal Component
 function ReportDetailModal({
   report,
   components,
@@ -1496,12 +1634,62 @@ function ReportDetailModal({
   onUpdated: () => void;
 }) {
   const { t } = useLanguage();
+  const { profile } = useAuth();
   const [entries, setEntries] = useState<ReportUseCaseEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Skill self-ratings state
+  const COMPETENCY_AREAS_DETAIL = [
+    'FACHKOMPETENZ',
+    'METHODENKOMPETENZ',
+    'PERSONALKOMPETENZ',
+  ] as const;
+  const [skillSelfRatings, setSkillSelfRatings] = useState<
+    Record<string, string | null>
+  >({
+    FACHKOMPETENZ: null,
+    METHODENKOMPETENZ: null,
+    PERSONALKOMPETENZ: null,
+  });
+  const [trainerSkillRatings, setTrainerSkillRatings] = useState<
+    Record<string, string | null>
+  >({
+    FACHKOMPETENZ: null,
+    METHODENKOMPETENZ: null,
+    PERSONALKOMPETENZ: null,
+  });
+  const [savingSkills, setSavingSkills] = useState(false);
+  const [skillsSaved, setSkillsSaved] = useState(false);
+
+  const [locallySubmitted, setLocallySubmitted] = useState(false);
+
+  // One-time submission: check if skills were already submitted (from DB or just saved)
+  const isSkillsSubmitted =
+    locallySubmitted ||
+    Boolean(
+      report.skillSelfRatings &&
+      typeof report.skillSelfRatings === 'object' &&
+      Object.values(report.skillSelfRatings).some(v => v)
+    );
+
   useEffect(() => {
     loadEntries();
+    loadSkillRatings();
   }, [report.id]);
+
+  // Initialize skill self-ratings from report
+  useEffect(() => {
+    if (
+      report.skillSelfRatings &&
+      typeof report.skillSelfRatings === 'object'
+    ) {
+      setSkillSelfRatings({
+        FACHKOMPETENZ: report.skillSelfRatings.FACHKOMPETENZ || null,
+        METHODENKOMPETENZ: report.skillSelfRatings.METHODENKOMPETENZ || null,
+        PERSONALKOMPETENZ: report.skillSelfRatings.PERSONALKOMPETENZ || null,
+      });
+    }
+  }, [report.skillSelfRatings]);
 
   const loadEntries = async () => {
     try {
@@ -1519,8 +1707,79 @@ function ReportDetailModal({
     }
   };
 
+  // Load trainer skill ratings from weekly evaluations
+  const loadSkillRatings = async () => {
+    try {
+      const res = await fetch(
+        `/api/weekly-evaluations?activityReportId=${report.id}`,
+        {
+          cache: 'no-store',
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.softskillRatings && data.softskillRatings.length > 0) {
+          const ratings: Record<string, string | null> = {
+            FACHKOMPETENZ: null,
+            METHODENKOMPETENZ: null,
+            PERSONALKOMPETENZ: null,
+          };
+          for (const r of data.softskillRatings) {
+            if (r.competencyArea && r.trainerRating) {
+              ratings[r.competencyArea] = String(r.trainerRating);
+            }
+          }
+          setTrainerSkillRatings(ratings);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading skill ratings:', err);
+    }
+  };
+
+  const handleSaveSkillRatings = async () => {
+    if (!profile?.id) return;
+    setSavingSkills(true);
+    try {
+      const res = await fetch(
+        `/api/activity-reports/${report.id}/skill-ratings`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: profile.id,
+            skillSelfRatings,
+          }),
+        }
+      );
+      if (res.ok) {
+        setLocallySubmitted(true);
+        setSkillsSaved(true);
+        setTimeout(() => setSkillsSaved(false), 3000);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Fehler beim Speichern');
+      }
+    } catch (err) {
+      toast.error('Fehler beim Speichern');
+    } finally {
+      setSavingSkills(false);
+    }
+  };
+
   const getUseCaseById = (id: string) => useCases.find(uc => uc.id === id);
   const getComponentById = (id: string) => components.find(c => c.id === id);
+
+  const areaLabels: Record<string, string> = {
+    FACHKOMPETENZ: t('reports.fachkompetenz'),
+    METHODENKOMPETENZ: t('reports.methodenkompetenz'),
+    PERSONALKOMPETENZ: t('reports.personalkompetenz'),
+  };
+  const areaDescriptions: Record<string, string> = {
+    FACHKOMPETENZ: 'Sorgfalt, Qualitätsbewusstsein',
+    METHODENKOMPETENZ: 'Problemlösung, Zeitmanagement, Analytisches Denken',
+    PERSONALKOMPETENZ: 'Zuverlässigkeit, Selbstständigkeit, Lernbereitschaft',
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
@@ -1602,14 +1861,14 @@ function ReportDetailModal({
                     )}
 
                     {/* Grades row: trainee self-grade + trainer grade side by side */}
-                    {entry.traineeGrade && (
-                      <div className="bg-muted/30 border-border/30 mt-3 rounded-lg border p-3">
-                        <div className="flex flex-wrap items-center gap-6">
-                          {/* Trainee self-grade */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-xs">
-                              {t('reports.selfGradeLabel')}
-                            </span>
+                    <div className="bg-muted/30 border-border/30 mt-3 rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center gap-6">
+                        {/* Trainee self-grade */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground text-xs">
+                            {t('reports.selfGradeLabel')}
+                          </span>
+                          {entry.traineeGrade ? (
                             <span
                               className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold text-white ${
                                 Number(entry.traineeGrade) <= 2
@@ -1621,44 +1880,51 @@ function ReportDetailModal({
                             >
                               {entry.traineeGrade}
                             </span>
-                          </div>
-
-                          {/* Trainer grade or pending */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-xs">
-                              {t('reports.trainerGrade')}
+                          ) : (
+                            <span
+                              className="bg-muted text-muted-foreground border-border/50 inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-bold"
+                              title={t('reports.gradePending')}
+                            >
+                              –
                             </span>
-                            {entry.trainerGrade ? (
-                              <span
-                                className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold text-white ${
-                                  Number(entry.trainerGrade) <= 2
-                                    ? 'bg-green-500'
-                                    : Number(entry.trainerGrade) <= 4
-                                      ? 'bg-yellow-500'
-                                      : 'bg-red-500'
-                                }`}
-                              >
-                                {entry.trainerGrade}
-                              </span>
-                            ) : (
-                              <span
-                                className="bg-muted text-muted-foreground border-border/50 inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-bold"
-                                title={t('reports.gradePending')}
-                              >
-                                ?
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Grade comment from trainer */}
-                          {entry.gradeComment && (
-                            <p className="text-muted-foreground flex-1 text-xs italic">
-                              &quot;{entry.gradeComment}&quot;
-                            </p>
                           )}
                         </div>
+
+                        {/* Trainer grade or pending */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground text-xs">
+                            {t('reports.trainerGrade')}
+                          </span>
+                          {entry.trainerGrade ? (
+                            <span
+                              className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold text-white ${
+                                Number(entry.trainerGrade) <= 2
+                                  ? 'bg-green-500'
+                                  : Number(entry.trainerGrade) <= 4
+                                    ? 'bg-yellow-500'
+                                    : 'bg-red-500'
+                              }`}
+                            >
+                              {entry.trainerGrade}
+                            </span>
+                          ) : (
+                            <span
+                              className="bg-muted text-muted-foreground border-border/50 inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-bold"
+                              title={t('reports.gradePending')}
+                            >
+                              ?
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Grade comment from trainer */}
+                        {entry.gradeComment && (
+                          <p className="text-muted-foreground flex-1 text-xs italic">
+                            &quot;{entry.gradeComment}&quot;
+                          </p>
+                        )}
                       </div>
-                    )}
+                    </div>
 
                     {entry.isOverbooked && (
                       <div className="mt-2 flex items-center gap-2 text-sm text-yellow-500">
@@ -1671,6 +1937,157 @@ function ReportDetailModal({
               })}
             </div>
           )}
+
+          {/* Skill Self-Rating Section */}
+          <div className="border-border mt-6 rounded-xl border p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-foreground text-lg font-semibold">
+                  {t('reports.skillSelfRating')}
+                </h3>
+                <p className="text-muted-foreground text-xs">
+                  {t('reports.skillSelfRatingInfo')}
+                </p>
+              </div>
+              {isSkillsSubmitted && !skillsSaved && (
+                <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                  <Check className="h-3.5 w-3.5" /> Abgegeben
+                </span>
+              )}
+              {skillsSaved && (
+                <span className="flex items-center gap-1 text-xs text-green-500">
+                  <Check className="h-3.5 w-3.5" /> Gespeichert
+                </span>
+              )}
+            </div>
+            <div className="space-y-3">
+              {COMPETENCY_AREAS_DETAIL.map(area => {
+                const selfGrade = skillSelfRatings[area];
+                const trainerGrade = trainerSkillRatings[area];
+
+                return (
+                  <div
+                    key={area}
+                    className="border-border/50 bg-card hover:bg-muted/20 rounded-xl border p-4 transition-colors"
+                  >
+                    <div className="mb-3">
+                      <h4 className="text-foreground text-sm font-semibold">
+                        {areaLabels[area] || area}
+                      </h4>
+                      <p className="text-muted-foreground mt-0.5 text-xs">
+                        {areaDescriptions[area]}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4">
+                      {/* Trainee self-rating - editable only if not yet submitted */}
+                      <div>
+                        <span className="text-muted-foreground mb-1.5 block text-[10px] font-medium tracking-wider uppercase">
+                          {t('reports.selfGradeLabel')}
+                        </span>
+                        {isSkillsSubmitted ? (
+                          /* Read-only badge after submission */
+                          selfGrade ? (
+                            <span
+                              className={`inline-flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold ${
+                                Number(selfGrade) <= 2
+                                  ? 'bg-green-500/15 text-green-500 ring-1 ring-green-500/20'
+                                  : Number(selfGrade) <= 4
+                                    ? 'bg-yellow-500/15 text-yellow-500 ring-1 ring-yellow-500/20'
+                                    : 'bg-red-500/15 text-red-500 ring-1 ring-red-500/20'
+                              }`}
+                            >
+                              {selfGrade}
+                            </span>
+                          ) : (
+                            <span className="bg-muted/50 text-muted-foreground/30 inline-flex h-8 w-8 items-center justify-center rounded-xl font-bold">
+                              –
+                            </span>
+                          )
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            {(['1', '2', '3', '4', '5', '6'] as const).map(
+                              grade => {
+                                const isSelected = selfGrade === grade;
+                                return (
+                                  <button
+                                    key={grade}
+                                    type="button"
+                                    onClick={() =>
+                                      setSkillSelfRatings(prev => ({
+                                        ...prev,
+                                        [area]: isSelected ? null : grade,
+                                      }))
+                                    }
+                                    className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-all duration-150 ${
+                                      isSelected
+                                        ? Number(grade) <= 2
+                                          ? 'scale-110 bg-green-500 text-white shadow-md ring-2 shadow-green-500/30 ring-green-400/50'
+                                          : Number(grade) <= 4
+                                            ? 'scale-110 bg-yellow-500 text-white shadow-md ring-2 shadow-yellow-500/30 ring-yellow-400/50'
+                                            : 'scale-110 bg-red-500 text-white shadow-md ring-2 shadow-red-500/30 ring-red-400/50'
+                                        : 'bg-muted hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground border-border/50 border'
+                                    }`}
+                                  >
+                                    {grade}
+                                  </button>
+                                );
+                              }
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Trainer rating - read only */}
+                      <div>
+                        <span className="text-muted-foreground mb-1.5 block text-[10px] font-medium tracking-wider uppercase">
+                          {t('reports.trainerGrade')}
+                        </span>
+                        {trainerGrade ? (
+                          <span
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold ${
+                              Number(trainerGrade) <= 2
+                                ? 'bg-green-500/15 text-green-500 ring-1 ring-green-500/20'
+                                : Number(trainerGrade) <= 4
+                                  ? 'bg-yellow-500/15 text-yellow-500 ring-1 ring-yellow-500/20'
+                                  : 'bg-red-500/15 text-red-500 ring-1 ring-red-500/20'
+                            }`}
+                          >
+                            {trainerGrade}
+                          </span>
+                        ) : (
+                          <span
+                            className="bg-muted/50 text-muted-foreground/30 inline-flex h-8 w-8 items-center justify-center rounded-xl font-bold"
+                            title={t('reports.gradePending')}
+                          >
+                            ?
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Save button - only shown if not yet submitted */}
+            {!isSkillsSubmitted && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={handleSaveSkillRatings}
+                  disabled={savingSkills}
+                  className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors disabled:opacity-50"
+                >
+                  {savingSkills ? (
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {t('reports.skillSelfRating').replace(' *', '')} speichern
+                </button>
+              </div>
+            )}
+          </div>
 
           {report.reviewerFeedback && (
             <div
