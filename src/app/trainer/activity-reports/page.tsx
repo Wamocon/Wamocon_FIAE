@@ -293,12 +293,62 @@ export default function TrainerActivityReportsPage() {
   const handleDownloadPDF = async () => {
     if (!selectedReport) return;
     try {
-      // Fetch validation data
+      // Fetch entries fresh from API for reliability
+      const entriesRes = await fetch(
+        `/api/activity-reports/${selectedReport.id}/entries`
+      );
+      const entriesData = entriesRes.ok
+        ? await entriesRes.json()
+        : { entries: [] };
+
+      // Fetch evaluation data
       const evalData = await fetchEvaluationData(
         selectedReport.traineeId,
         selectedReport.year,
         selectedReport.weekNumber
       );
+
+      // Build softSkills averages from evaluation data
+      let softSkills:
+        | {
+            fachkompetenz: number | null;
+            methodenkompetenz: number | null;
+            personalkompetenz: number | null;
+            overallAverage: number | null;
+          }
+        | undefined;
+      if (evalData?.softskillRatings && evalData.softskillRatings.length > 0) {
+        const byArea: Record<string, number[]> = {};
+        for (const sr of evalData.softskillRatings) {
+          const area = (
+            sr.criterion?.competencyArea as string | undefined
+          )?.toUpperCase();
+          const raw = sr.rating?.trainerRating;
+          const rating = raw != null ? Number(raw) : null;
+          if (area && rating != null && !isNaN(rating)) {
+            if (!byArea[area]) byArea[area] = [];
+            byArea[area].push(rating);
+          }
+        }
+        const avg = (arr?: number[]) =>
+          arr && arr.length > 0
+            ? arr.reduce((a: number, b: number) => a + b, 0) / arr.length
+            : null;
+        const fk = avg(byArea['FACHKOMPETENZ']);
+        const mk = avg(byArea['METHODENKOMPETENZ']);
+        const pk = avg(byArea['PERSONALKOMPETENZ']);
+        const allRatings = [
+          ...(byArea['FACHKOMPETENZ'] || []),
+          ...(byArea['METHODENKOMPETENZ'] || []),
+          ...(byArea['PERSONALKOMPETENZ'] || []),
+        ];
+        softSkills = {
+          fachkompetenz: fk,
+          methodenkompetenz: mk,
+          personalkompetenz: pk,
+          overallAverage: avg(allRatings),
+        };
+      }
 
       // Prepare report data for PDF
       const reportData = {
@@ -319,9 +369,10 @@ export default function TrainerActivityReportsPage() {
         trainerSignedAt: selectedReport.trainerSignedAt || null,
         reviewerId: selectedReport.reviewerId || null,
         reviewerName: profile?.full_name || t('trainer.reports.trainer'),
-        entries: reportEntries,
+        entries: entriesData.entries || [],
         // Optional trainer comment
         trainerComment: evalData?.evaluation?.trainerComment,
+        softSkills,
       };
 
       await (
@@ -359,6 +410,51 @@ export default function TrainerActivityReportsPage() {
           report.weekNumber
         );
 
+        // Build softSkills averages for mass export
+        let exportSoftSkills:
+          | {
+              fachkompetenz: number | null;
+              methodenkompetenz: number | null;
+              personalkompetenz: number | null;
+              overallAverage: number | null;
+            }
+          | undefined;
+        if (
+          evalData?.softskillRatings &&
+          evalData.softskillRatings.length > 0
+        ) {
+          const byArea: Record<string, number[]> = {};
+          for (const sr of evalData.softskillRatings) {
+            const area = (
+              sr.criterion?.competencyArea as string | undefined
+            )?.toUpperCase();
+            const raw = sr.rating?.trainerRating;
+            const rating = raw != null ? Number(raw) : null;
+            if (area && rating != null && !isNaN(rating)) {
+              if (!byArea[area]) byArea[area] = [];
+              byArea[area].push(rating);
+            }
+          }
+          const avg = (arr?: number[]) =>
+            arr && arr.length > 0
+              ? arr.reduce((a: number, b: number) => a + b, 0) / arr.length
+              : null;
+          const fk = avg(byArea['FACHKOMPETENZ']);
+          const mk = avg(byArea['METHODENKOMPETENZ']);
+          const pk = avg(byArea['PERSONALKOMPETENZ']);
+          const allRatings = [
+            ...(byArea['FACHKOMPETENZ'] || []),
+            ...(byArea['METHODENKOMPETENZ'] || []),
+            ...(byArea['PERSONALKOMPETENZ'] || []),
+          ];
+          exportSoftSkills = {
+            fachkompetenz: fk,
+            methodenkompetenz: mk,
+            personalkompetenz: pk,
+            overallAverage: avg(allRatings),
+          };
+        }
+
         const reportData = {
           id: report.id,
           traineeId: report.traineeId,
@@ -380,6 +476,7 @@ export default function TrainerActivityReportsPage() {
           entries: entriesData.entries || [],
           // Optional trainer comment
           trainerComment: evalData?.evaluation?.trainerComment,
+          softSkills: exportSoftSkills,
         };
 
         const blob = await (

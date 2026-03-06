@@ -23,6 +23,7 @@ import {
   Trash2,
   Edit3,
   Download,
+  MessageSquare,
 } from 'lucide-react';
 
 // Types
@@ -290,6 +291,48 @@ export default function TraineeActivityReportsPage() {
         report.weekNumber
       );
 
+      // Build softSkills averages from evaluation data
+      let softSkills:
+        | {
+            fachkompetenz: number | null;
+            methodenkompetenz: number | null;
+            personalkompetenz: number | null;
+            overallAverage: number | null;
+          }
+        | undefined;
+      if (evalData?.softskillRatings && evalData.softskillRatings.length > 0) {
+        const byArea: Record<string, number[]> = {};
+        for (const sr of evalData.softskillRatings) {
+          const area = (
+            sr.criterion?.competencyArea as string | undefined
+          )?.toUpperCase();
+          const raw = sr.rating?.trainerRating;
+          const rating = raw != null ? Number(raw) : null;
+          if (area && rating != null && !isNaN(rating)) {
+            if (!byArea[area]) byArea[area] = [];
+            byArea[area].push(rating);
+          }
+        }
+        const avg = (arr?: number[]) =>
+          arr && arr.length > 0
+            ? arr.reduce((a: number, b: number) => a + b, 0) / arr.length
+            : null;
+        const fk = avg(byArea['FACHKOMPETENZ']);
+        const mk = avg(byArea['METHODENKOMPETENZ']);
+        const pk = avg(byArea['PERSONALKOMPETENZ']);
+        const allRatings = [
+          ...(byArea['FACHKOMPETENZ'] || []),
+          ...(byArea['METHODENKOMPETENZ'] || []),
+          ...(byArea['PERSONALKOMPETENZ'] || []),
+        ];
+        softSkills = {
+          fachkompetenz: fk,
+          methodenkompetenz: mk,
+          personalkompetenz: pk,
+          overallAverage: avg(allRatings),
+        };
+      }
+
       // Prepare report data for PDF
       const reportData = {
         id: report.id,
@@ -310,6 +353,7 @@ export default function TraineeActivityReportsPage() {
         entries: entriesData.entries || [],
         // Optional trainer comment
         trainerComment: evalData?.evaluation?.trainerComment,
+        softSkills,
       };
 
       await (
@@ -548,6 +592,20 @@ export default function TraineeActivityReportsPage() {
                           {t('reports.feedback')}
                         </span>
                         {report.reviewerFeedback}
+                      </div>
+                    </div>
+                  )}
+
+                  {report.status !== 'REJECTED' && report.reviewerFeedback && (
+                    <div className="bg-accent/10 border-accent/30 mt-3 rounded-lg border p-3">
+                      <div className="text-foreground flex items-center gap-2 text-sm">
+                        <MessageSquare className="text-accent h-4 w-4" />
+                        <span className="font-medium">
+                          {t('reports.trainerComment')}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {report.reviewerFeedback}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -1615,11 +1673,31 @@ function ReportDetailModal({
           )}
 
           {report.reviewerFeedback && (
-            <div className="bg-destructive/10 border-destructive/30 mt-6 rounded-lg border p-4">
-              <h4 className="text-destructive mb-2 font-medium">
-                {t('reports.trainerFeedback').replace(':', '')}
+            <div
+              className={`mt-6 rounded-lg border p-4 ${
+                report.status === 'REJECTED'
+                  ? 'bg-destructive/10 border-destructive/30'
+                  : 'bg-accent/10 border-accent/30'
+              }`}
+            >
+              <h4
+                className={`mb-2 font-medium ${
+                  report.status === 'REJECTED'
+                    ? 'text-destructive'
+                    : 'text-foreground'
+                }`}
+              >
+                {report.status === 'REJECTED'
+                  ? t('reports.trainerFeedback').replace(':', '')
+                  : t('reports.trainerComment')}
               </h4>
-              <p className="text-destructive/80 text-sm">
+              <p
+                className={`text-sm ${
+                  report.status === 'REJECTED'
+                    ? 'text-destructive/80'
+                    : 'text-muted-foreground'
+                }`}
+              >
                 {report.reviewerFeedback}
               </p>
             </div>
