@@ -293,12 +293,62 @@ export default function TrainerActivityReportsPage() {
   const handleDownloadPDF = async () => {
     if (!selectedReport) return;
     try {
-      // Fetch validation data
+      // Fetch entries fresh from API for reliability
+      const entriesRes = await fetch(
+        `/api/activity-reports/${selectedReport.id}/entries`
+      );
+      const entriesData = entriesRes.ok
+        ? await entriesRes.json()
+        : { entries: [] };
+
+      // Fetch evaluation data
       const evalData = await fetchEvaluationData(
         selectedReport.traineeId,
         selectedReport.year,
         selectedReport.weekNumber
       );
+
+      // Build softSkills averages from evaluation data
+      let softSkills:
+        | {
+            fachkompetenz: number | null;
+            methodenkompetenz: number | null;
+            personalkompetenz: number | null;
+            overallAverage: number | null;
+          }
+        | undefined;
+      if (evalData?.softskillRatings && evalData.softskillRatings.length > 0) {
+        const byArea: Record<string, number[]> = {};
+        for (const sr of evalData.softskillRatings) {
+          const area = (
+            sr.criterion?.competencyArea as string | undefined
+          )?.toUpperCase();
+          const raw = sr.rating?.trainerRating;
+          const rating = raw != null ? Number(raw) : null;
+          if (area && rating != null && !isNaN(rating)) {
+            if (!byArea[area]) byArea[area] = [];
+            byArea[area].push(rating);
+          }
+        }
+        const avg = (arr?: number[]) =>
+          arr && arr.length > 0
+            ? arr.reduce((a: number, b: number) => a + b, 0) / arr.length
+            : null;
+        const fk = avg(byArea['FACHKOMPETENZ']);
+        const mk = avg(byArea['METHODENKOMPETENZ']);
+        const pk = avg(byArea['PERSONALKOMPETENZ']);
+        const allRatings = [
+          ...(byArea['FACHKOMPETENZ'] || []),
+          ...(byArea['METHODENKOMPETENZ'] || []),
+          ...(byArea['PERSONALKOMPETENZ'] || []),
+        ];
+        softSkills = {
+          fachkompetenz: fk,
+          methodenkompetenz: mk,
+          personalkompetenz: pk,
+          overallAverage: avg(allRatings),
+        };
+      }
 
       // Prepare report data for PDF
       const reportData = {
@@ -319,9 +369,10 @@ export default function TrainerActivityReportsPage() {
         trainerSignedAt: selectedReport.trainerSignedAt || null,
         reviewerId: selectedReport.reviewerId || null,
         reviewerName: profile?.full_name || t('trainer.reports.trainer'),
-        entries: reportEntries,
+        entries: entriesData.entries || [],
         // Optional trainer comment
         trainerComment: evalData?.evaluation?.trainerComment,
+        softSkills,
       };
 
       await (
@@ -359,6 +410,51 @@ export default function TrainerActivityReportsPage() {
           report.weekNumber
         );
 
+        // Build softSkills averages for mass export
+        let exportSoftSkills:
+          | {
+              fachkompetenz: number | null;
+              methodenkompetenz: number | null;
+              personalkompetenz: number | null;
+              overallAverage: number | null;
+            }
+          | undefined;
+        if (
+          evalData?.softskillRatings &&
+          evalData.softskillRatings.length > 0
+        ) {
+          const byArea: Record<string, number[]> = {};
+          for (const sr of evalData.softskillRatings) {
+            const area = (
+              sr.criterion?.competencyArea as string | undefined
+            )?.toUpperCase();
+            const raw = sr.rating?.trainerRating;
+            const rating = raw != null ? Number(raw) : null;
+            if (area && rating != null && !isNaN(rating)) {
+              if (!byArea[area]) byArea[area] = [];
+              byArea[area].push(rating);
+            }
+          }
+          const avg = (arr?: number[]) =>
+            arr && arr.length > 0
+              ? arr.reduce((a: number, b: number) => a + b, 0) / arr.length
+              : null;
+          const fk = avg(byArea['FACHKOMPETENZ']);
+          const mk = avg(byArea['METHODENKOMPETENZ']);
+          const pk = avg(byArea['PERSONALKOMPETENZ']);
+          const allRatings = [
+            ...(byArea['FACHKOMPETENZ'] || []),
+            ...(byArea['METHODENKOMPETENZ'] || []),
+            ...(byArea['PERSONALKOMPETENZ'] || []),
+          ];
+          exportSoftSkills = {
+            fachkompetenz: fk,
+            methodenkompetenz: mk,
+            personalkompetenz: pk,
+            overallAverage: avg(allRatings),
+          };
+        }
+
         const reportData = {
           id: report.id,
           traineeId: report.traineeId,
@@ -380,6 +476,7 @@ export default function TrainerActivityReportsPage() {
           entries: entriesData.entries || [],
           // Optional trainer comment
           trainerComment: evalData?.evaluation?.trainerComment,
+          softSkills: exportSoftSkills,
         };
 
         const blob = await (
@@ -754,7 +851,11 @@ export default function TrainerActivityReportsPage() {
   );
 }
 
-const COMPETENCY_AREAS = ['FACHKOMPETENZ', 'METHODENKOMPETENZ', 'SOZIALKOMPETENZ', 'PERSONALKOMPETENZ'] as const;
+const COMPETENCY_AREAS = [
+  'FACHKOMPETENZ',
+  'METHODENKOMPETENZ',
+  'PERSONALKOMPETENZ',
+] as const;
 
 // Review Modal Component
 function ReportReviewModal({
@@ -826,7 +927,9 @@ function ReportReviewModal({
   const allSoftskillsRated =
     softskillCriteria.length > 0 &&
     COMPETENCY_AREAS.every(area => {
-      const firstCriterion = softskillCriteria.find(c => c.competencyArea === area);
+      const firstCriterion = softskillCriteria.find(
+        c => c.competencyArea === area
+      );
       return firstCriterion && softskillRatings[firstCriterion.id]?.rating;
     });
   const canApprove = allEntriesGraded && allSoftskillsRated && softskillsSaved;
@@ -939,7 +1042,9 @@ function ReportReviewModal({
     // Find which area this criterion belongs to, then set all criteria in that area
     const criterion = softskillCriteria.find(c => c.id === criterionId);
     if (!criterion) return;
-    const areaCriteria = softskillCriteria.filter(c => c.competencyArea === criterion.competencyArea);
+    const areaCriteria = softskillCriteria.filter(
+      c => c.competencyArea === criterion.competencyArea
+    );
     setSoftskillRatings(prev => {
       const updated = { ...prev };
       areaCriteria.forEach(c => {
@@ -959,7 +1064,9 @@ function ReportReviewModal({
   ) => {
     const criterion = softskillCriteria.find(c => c.id === criterionId);
     if (!criterion) return;
-    const areaCriteria = softskillCriteria.filter(c => c.competencyArea === criterion.competencyArea);
+    const areaCriteria = softskillCriteria.filter(
+      c => c.competencyArea === criterion.competencyArea
+    );
     setSoftskillRatings(prev => {
       const updated = { ...prev };
       areaCriteria.forEach(c => {
@@ -1125,11 +1232,11 @@ function ReportReviewModal({
             className={`${sizeClasses} rounded-lg font-semibold transition-all duration-150 ${
               value === g
                 ? g <= 2
-                  ? 'bg-green-500 text-white shadow-md shadow-green-500/30 ring-2 ring-green-400/50 scale-110'
+                  ? 'scale-110 bg-green-500 text-white shadow-md ring-2 shadow-green-500/30 ring-green-400/50'
                   : g <= 4
-                    ? 'bg-yellow-500 text-white shadow-md shadow-yellow-500/30 ring-2 ring-yellow-400/50 scale-110'
-                    : 'bg-red-500 text-white shadow-md shadow-red-500/30 ring-2 ring-red-400/50 scale-110'
-                : 'bg-muted hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground border border-border/50'
+                    ? 'scale-110 bg-yellow-500 text-white shadow-md ring-2 shadow-yellow-500/30 ring-yellow-400/50'
+                    : 'scale-110 bg-red-500 text-white shadow-md ring-2 shadow-red-500/30 ring-red-400/50'
+                : 'bg-muted hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground border-border/50 border'
             }`}
           >
             {g}
@@ -1139,19 +1246,47 @@ function ReportReviewModal({
     );
   };
 
-  const GradeBadge = ({ grade, size = 'lg' }: { grade: string | number | null | undefined; size?: 'sm' | 'lg' }) => {
+  const GradeBadge = ({
+    grade,
+    size = 'lg',
+  }: {
+    grade: string | number | null | undefined;
+    size?: 'sm' | 'lg';
+  }) => {
     const g = grade ? Number(grade) : null;
     const sizeClass = size === 'lg' ? 'w-10 h-10 text-xl' : 'w-8 h-8 text-base';
-    if (!g) return (
-      <div className={`${sizeClass} rounded-xl bg-muted/50 flex items-center justify-center font-bold text-muted-foreground/30`}>–</div>
+    if (!g)
+      return (
+        <div
+          className={`${sizeClass} bg-muted/50 text-muted-foreground/30 flex items-center justify-center rounded-xl font-bold`}
+        >
+          –
+        </div>
+      );
+    const colorClass =
+      g <= 2
+        ? 'bg-green-500/15 text-green-500 ring-1 ring-green-500/20'
+        : g <= 4
+          ? 'bg-yellow-500/15 text-yellow-500 ring-1 ring-yellow-500/20'
+          : 'bg-red-500/15 text-red-500 ring-1 ring-red-500/20';
+    return (
+      <div
+        className={`${sizeClass} rounded-xl ${colorClass} flex items-center justify-center font-bold`}
+      >
+        {g}
+      </div>
     );
-    const colorClass = g <= 2 ? 'bg-green-500/15 text-green-500 ring-1 ring-green-500/20' : g <= 4 ? 'bg-yellow-500/15 text-yellow-500 ring-1 ring-yellow-500/20' : 'bg-red-500/15 text-red-500 ring-1 ring-red-500/20';
-    return <div className={`${sizeClass} rounded-xl ${colorClass} flex items-center justify-center font-bold`}>{g}</div>;
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-card border-border flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border" onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border-border flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="border-border/50 border-b p-6">
           <div className="flex items-center justify-between">
@@ -1212,7 +1347,9 @@ function ReportReviewModal({
                 {t('trainer.reports.modal.hours')}
               </p>
             </div>
-            <div className={`rounded-lg p-3 ${totalActual > 40 ? 'bg-red-500/10 border border-red-500/30' : 'bg-muted/50'}`}>
+            <div
+              className={`rounded-lg p-3 ${totalActual > 40 ? 'border border-red-500/30 bg-red-500/10' : 'bg-muted/50'}`}
+            >
               <p className="text-muted-foreground text-xs">
                 {t('reports.weeklyHoursLimit')}
               </p>
@@ -1392,7 +1529,7 @@ function ReportReviewModal({
               <div className="bg-accent/10 border-accent/20 mb-4 rounded-lg border p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-foreground text-sm">
-                    {report.status === 'APPROVED' 
+                    {report.status === 'APPROVED'
                       ? 'Bewertung für den Auszubildenden. Sie können Noten bei Bedarf bearbeiten.'
                       : t('trainer.reports.modal.gradeInfo')}
                   </p>
@@ -1400,7 +1537,7 @@ function ReportReviewModal({
                     <button
                       type="button"
                       onClick={() => setIsEditingGrades(true)}
-                      className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
+                      className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/30"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       Noten bearbeiten
@@ -1411,7 +1548,7 @@ function ReportReviewModal({
 
               {/* Edit reason input when editing approved grades */}
               {isEditingGrades && (
-                <div className="bg-amber-500/10 border-amber-500/20 rounded-lg border p-3">
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
                   <label className="text-foreground mb-1.5 block text-xs font-medium">
                     Grund der Änderung (optional)
                   </label>
@@ -1437,50 +1574,57 @@ function ReportReviewModal({
                 return (
                   <div
                     key={entry.id}
-                    className="border-border bg-card rounded-xl border shadow-sm overflow-hidden"
+                    className="border-border bg-card overflow-hidden rounded-xl border shadow-sm"
                   >
                     {/* Activity Info */}
                     <div className="px-5 pt-4 pb-3">
-                      <p className="text-muted-foreground text-[11px] uppercase tracking-wider font-medium">
+                      <p className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase">
                         {component?.title}
                       </p>
-                      <p className="text-foreground font-semibold text-sm mt-1 leading-snug">
+                      <p className="text-foreground mt-1 text-sm leading-snug font-semibold">
                         {useCase?.letter}) {useCase?.description}
                       </p>
-                      <div className="flex items-center gap-3 mt-2">
+                      <div className="mt-2 flex items-center gap-3">
                         <span className="text-muted-foreground text-xs">
                           {entry.actualHours} {t('trainer.reports.modal.hours')}
                         </span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          entry.actualHours - entry.plannedHours >= 0
-                            ? 'bg-green-500/10 text-green-500'
-                            : 'bg-red-500/10 text-red-500'
-                        }`}>
-                          {entry.actualHours - entry.plannedHours >= 0 ? '+' : ''}
-                          {(entry.actualHours - entry.plannedHours).toFixed(1)} h
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            entry.actualHours - entry.plannedHours >= 0
+                              ? 'bg-green-500/10 text-green-500'
+                              : 'bg-red-500/10 text-red-500'
+                          }`}
+                        >
+                          {entry.actualHours - entry.plannedHours >= 0
+                            ? '+'
+                            : ''}
+                          {(entry.actualHours - entry.plannedHours).toFixed(1)}{' '}
+                          h
                         </span>
                       </div>
                       {entry.notes && (
-                        <p className="text-muted-foreground bg-muted/50 mt-2.5 rounded-lg p-2.5 text-xs italic border border-border/30">
+                        <p className="text-muted-foreground bg-muted/50 border-border/30 mt-2.5 rounded-lg border p-2.5 text-xs italic">
                           „{entry.notes}"
                         </p>
                       )}
                     </div>
 
                     {/* Grade Sections */}
-                    <div className="grid grid-cols-2 gap-px bg-border/50">
+                    <div className="bg-border/50 grid grid-cols-2 gap-px">
                       {/* Trainee Self-Assessment */}
-                      <div className="bg-card p-4 flex flex-col items-center gap-2">
+                      <div className="bg-card flex flex-col items-center gap-2 p-4">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
                           <User className="h-3.5 w-3.5" />
                           Azubi
                         </div>
                         <GradeBadge grade={entry.traineeGrade} />
-                        <span className="text-[10px] text-muted-foreground">Selbstbewertung</span>
+                        <span className="text-muted-foreground text-[10px]">
+                          Selbstbewertung
+                        </span>
                       </div>
 
                       {/* Trainer Grade */}
-                      <div className="bg-card p-4 flex flex-col items-center gap-2">
+                      <div className="bg-card flex flex-col items-center gap-2 p-4">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
                           <Star className="h-3.5 w-3.5" />
                           Ausbilder
@@ -1498,9 +1642,11 @@ function ReportReviewModal({
                           <input
                             type="text"
                             value={currentGrade?.comment || ''}
-                            onChange={e => handleGradeCommentChange(entry.id, e.target.value)}
+                            onChange={e =>
+                              handleGradeCommentChange(entry.id, e.target.value)
+                            }
                             placeholder="Kommentar..."
-                            className="bg-muted/50 border-border/50 text-foreground w-full rounded-md border px-2 py-1 text-[11px] mt-1 placeholder:text-muted-foreground/50"
+                            className="bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground/50 mt-1 w-full rounded-md border px-2 py-1 text-[11px]"
                           />
                         )}
                       </div>
@@ -1508,12 +1654,30 @@ function ReportReviewModal({
 
                     {/* Deviation indicator */}
                     {currentGrade?.grade && entry.traineeGrade && (
-                      <div className="px-5 py-2 bg-muted/30 border-t border-border/50">
+                      <div className="bg-muted/30 border-border/50 border-t px-5 py-2">
                         {(() => {
-                          const diff = Math.abs(currentGrade.grade - Number(entry.traineeGrade));
-                          if (diff === 0) return <span className="text-xs text-green-400 flex items-center gap-1"><Check className="h-3 w-3" /> Übereinstimmung Azubi ↔ Ausbilder</span>;
-                          if (diff <= 1) return <span className="text-xs text-yellow-400">△ Geringe Abweichung ({diff} Note{diff > 1 ? 'n' : ''})</span>;
-                          return <span className="text-xs text-red-400 font-medium">⚠ Große Abweichung ({diff} Noten)</span>;
+                          const diff = Math.abs(
+                            currentGrade.grade - Number(entry.traineeGrade)
+                          );
+                          if (diff === 0)
+                            return (
+                              <span className="flex items-center gap-1 text-xs text-green-400">
+                                <Check className="h-3 w-3" /> Übereinstimmung
+                                Azubi ↔ Ausbilder
+                              </span>
+                            );
+                          if (diff <= 1)
+                            return (
+                              <span className="text-xs text-yellow-400">
+                                △ Geringe Abweichung ({diff} Note
+                                {diff > 1 ? 'n' : ''})
+                              </span>
+                            );
+                          return (
+                            <span className="text-xs font-medium text-red-400">
+                              ⚠ Große Abweichung ({diff} Noten)
+                            </span>
+                          );
                         })()}
                       </div>
                     )}
@@ -1525,7 +1689,10 @@ function ReportReviewModal({
                 {isEditingGrades && (
                   <button
                     type="button"
-                    onClick={() => { setIsEditingGrades(false); setEditReason(''); }}
+                    onClick={() => {
+                      setIsEditingGrades(false);
+                      setEditReason('');
+                    }}
                     className="text-muted-foreground hover:text-foreground px-4 py-2 text-sm"
                   >
                     Abbrechen
@@ -1582,8 +1749,11 @@ function ReportReviewModal({
                       {report.status === 'APPROVED' && !isEditingSoftskills && (
                         <button
                           type="button"
-                          onClick={() => { setIsEditingSoftskills(true); loadSoftskillCriteria(); }}
-                          className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
+                          onClick={() => {
+                            setIsEditingSoftskills(true);
+                            loadSoftskillCriteria();
+                          }}
+                          className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/30"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                           Noten bearbeiten
@@ -1594,7 +1764,7 @@ function ReportReviewModal({
 
                   {/* Edit reason for softskill editing */}
                   {isEditingSoftskills && (
-                    <div className="bg-amber-500/10 border-amber-500/20 rounded-lg border p-3">
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
                       <label className="text-foreground mb-1.5 block text-xs font-medium">
                         Grund der Änderung (optional)
                       </label>
@@ -1626,9 +1796,6 @@ function ReportReviewModal({
                       METHODENKOMPETENZ: t(
                         'trainer.reports.modal.methodenkompetenz'
                       ),
-                      SOZIALKOMPETENZ: t(
-                        'trainer.reports.modal.sozialkompetenz'
-                      ),
                       PERSONALKOMPETENZ: t(
                         'trainer.reports.modal.personalkompetenz'
                       ),
@@ -1636,15 +1803,16 @@ function ReportReviewModal({
 
                     const areaDescriptions: Record<string, string> = {
                       FACHKOMPETENZ: 'Sorgfalt, Qualitätsbewusstsein',
-                      METHODENKOMPETENZ: 'Problemlösung, Zeitmanagement, Analytisches Denken',
-                      SOZIALKOMPETENZ: 'Teamfähigkeit, Kommunikation, Kundenorientierung',
-                      PERSONALKOMPETENZ: 'Zuverlässigkeit, Selbstständigkeit, Lernbereitschaft',
+                      METHODENKOMPETENZ:
+                        'Problemlösung, Zeitmanagement, Analytisches Denken',
+                      PERSONALKOMPETENZ:
+                        'Zuverlässigkeit, Selbstständigkeit, Lernbereitschaft',
                     };
 
                     return (
                       <div
                         key={area}
-                        className="border-border/50 bg-card rounded-xl border p-4 hover:bg-muted/20 transition-colors"
+                        className="border-border/50 bg-card hover:bg-muted/20 rounded-xl border p-4 transition-colors"
                       >
                         <div className="flex items-center justify-between gap-4">
                           <div className="min-w-0 flex-1">
@@ -1662,12 +1830,18 @@ function ReportReviewModal({
                               <GradeSelector
                                 value={trainerRating?.rating}
                                 onChange={r =>
-                                  handleSoftskillRatingChange(representative.id, r)
+                                  handleSoftskillRatingChange(
+                                    representative.id,
+                                    r
+                                  )
                                 }
                                 size="md"
                               />
                             ) : (
-                              <GradeBadge grade={trainerRating?.rating} size="lg" />
+                              <GradeBadge
+                                grade={trainerRating?.rating}
+                                size="lg"
+                              />
                             )}
                           </div>
                         </div>
@@ -1679,7 +1853,10 @@ function ReportReviewModal({
                     {isEditingSoftskills && (
                       <button
                         type="button"
-                        onClick={() => { setIsEditingSoftskills(false); setEditReason(''); }}
+                        onClick={() => {
+                          setIsEditingSoftskills(false);
+                          setEditReason('');
+                        }}
                         className="text-muted-foreground hover:text-foreground px-4 py-2 text-sm"
                       >
                         Abbrechen
@@ -1688,7 +1865,10 @@ function ReportReviewModal({
                     <button
                       type="button"
                       onClick={saveSoftskills}
-                      disabled={savingSoftskills || (!allSoftskillsRated && report.status !== 'APPROVED')}
+                      disabled={
+                        savingSoftskills ||
+                        (!allSoftskillsRated && report.status !== 'APPROVED')
+                      }
                       className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50"
                     >
                       <span className="flex h-4 w-4 items-center justify-center">
@@ -1800,23 +1980,26 @@ function ReportReviewModal({
                 </span>
               </div>
               <div className="flex gap-3">
-                {(activeTab === 'grades' || activeTab === 'softskills') && (isEditingGrades || isEditingSoftskills) && (
-                  <button
-                    type="button"
-                    onClick={activeTab === 'grades' ? saveGrades : saveSoftskills}
-                    disabled={savingGrades || savingSoftskills}
-                    className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2"
-                  >
-                    <span className="flex h-4 w-4 items-center justify-center">
-                      {savingGrades || savingSoftskills ? (
-                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : (
-                        <Check className="h-4 w-4" />
-                      )}
-                    </span>
-                    <span>Änderungen speichern</span>
-                  </button>
-                )}
+                {(activeTab === 'grades' || activeTab === 'softskills') &&
+                  (isEditingGrades || isEditingSoftskills) && (
+                    <button
+                      type="button"
+                      onClick={
+                        activeTab === 'grades' ? saveGrades : saveSoftskills
+                      }
+                      disabled={savingGrades || savingSoftskills}
+                      className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2"
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center">
+                        {savingGrades || savingSoftskills ? (
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                      </span>
+                      <span>Änderungen speichern</span>
+                    </button>
+                  )}
                 <button
                   type="button"
                   onClick={onDownloadPDF}
