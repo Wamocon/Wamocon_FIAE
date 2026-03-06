@@ -2,7 +2,6 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import QRCode from 'qrcode';
 
 interface CertificateData {
   traineeName: string;
@@ -14,6 +13,7 @@ interface CertificateData {
   components: {
     title: string;
     grade: number | null;
+    hours?: number;
   }[];
   averageGrade: number;
   qrCodeUrl: string;
@@ -28,10 +28,15 @@ interface CertificateData {
     averages: {
       fachkompetenz: number | null;
       methodenkompetenz: number | null;
-      sozialkompetenz: number | null;
       personalkompetenz: number | null;
     };
     overallAverage: number | null;
+    criteria?: {
+      code: string;
+      name: string;
+      competencyArea: string;
+      averageGrade: number | null;
+    }[];
   };
 }
 
@@ -119,10 +124,23 @@ export async function generateArbeitszeugnisPDF(
   };
 
   const addSectionTitle = (title: string, yPos: number): number => {
+    // Add breathing room above the heading
+    yPos += 4;
+
+    const barHeight = 7;
+
+    // Coral accent bar vertically centered on yPos
+    doc.setFillColor(...COLORS.coral);
+    doc.rect(margin, yPos - barHeight / 2, 1.8, barHeight, 'F');
+
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...COLORS.primary);
-    doc.text(title, margin, yPos);
+
+    // Text vertically centered on yPos using baseline 'middle'
+    doc.text(title, margin + 5, yPos, { baseline: 'middle' });
+
+    // Return a slightly larger offset because the text baseline changed
     return yPos + 8;
   };
 
@@ -187,7 +205,9 @@ export async function generateArbeitszeugnisPDF(
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.primary);
-  doc.text('AUSBILDUNGSZEUGNIS', pageWidth / 2, y, { align: 'center' });
+  doc.text('BETRIEBLICHE LEISTUNGSBURTEILUNG', pageWidth / 2, y, {
+    align: 'center',
+  });
   y += 6;
 
   // Subtitle
@@ -233,37 +253,44 @@ export async function generateArbeitszeugnisPDF(
   y += 6;
 
   doc.text(
-    `in unserem Unternehmen als Auszubildende${data.gender === 'male' ? 'r' : data.gender === 'female' ? '' : '(r)'} im Beruf`,
+    `in unserem Unternehmen als Auszubildende${data.gender === 'male' ? 'r' : data.gender === 'female' ? '' : 'r'} im Beruf tätig.`,
     margin,
     y
   );
-  y += 12;
+  y += 16;
 
   // Profession highlight - centered and bold
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(14); // Made it significantly bigger
   doc.text(data.izhkProfile, pageWidth / 2, y, { align: 'center' });
-  y += 8;
-
-  // tätig.
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('tätig.', margin, y);
-  y += 15;
+  y += 10; // Extra gap before the table
 
   // -- PERFORMANCE GRADES TABLE --
   y = addSectionTitle('Betriebliche Leistungsbeurteilung', y);
 
-  const tableBody = data.components.map((c, i) => [
-    `${i + 1}. ${c.title}`,
-    c.grade ? c.grade.toString() : '–',
-    c.grade ? getGradeText(c.grade) : '–',
+  const totalHours = data.components.reduce(
+    (sum, c) => sum + (c.hours || 0),
+    0
+  );
+  const totalDays = (totalHours / 8).toFixed(1);
+
+  const tableBody = data.components.map(component => [
+    component.title,
+    component.hours?.toString() || '–',
+    component.grade ? getGradeText(component.grade) : '–',
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [['Ausbildungsinhalt', 'Note', 'Bewertung']],
+    head: [['Ausbildungsinhalt', 'Stunden', 'Bewertung']],
     body: tableBody,
+    foot: [
+      [
+        'Gesamtdurchschnitt:',
+        `${totalHours} Std./\n(${totalDays} Tage)`,
+        getGradeText(data.averageGrade),
+      ],
+    ],
     theme: 'grid',
     headStyles: {
       fillColor: COLORS.tableHeader,
@@ -277,93 +304,138 @@ export async function generateArbeitszeugnisPDF(
       cellPadding: 3,
       textColor: COLORS.primary,
     },
+    footStyles: {
+      fillColor: COLORS.coral,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 10,
+      valign: 'middle',
+    },
     alternateRowStyles: {
       fillColor: COLORS.lightBg,
     },
     columnStyles: {
-      0: { cellWidth: 'auto' },
-      1: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+      0: { cellWidth: 'auto', halign: 'left' },
+      1: { cellWidth: 28, halign: 'center', fontStyle: 'bold' },
       2: { cellWidth: 35, halign: 'center' },
     },
-    margin: { left: margin, right: margin, bottom: footerHeight + 5 },
+    didParseCell: data => {
+      if (data.section === 'head') {
+        if (data.column.index === 1) data.cell.styles.halign = 'center';
+        if (data.column.index === 2) data.cell.styles.halign = 'center';
+      }
+      if (data.section === 'foot') {
+        if (data.column.index === 0) data.cell.styles.halign = 'left';
+        if (data.column.index === 1) data.cell.styles.halign = 'center';
+        if (data.column.index === 2) data.cell.styles.halign = 'center';
+      }
+    },
+    margin: { left: margin, right: margin, top: 20, bottom: footerHeight + 5 },
   });
 
   // @ts-expect-error - jspdf-autotable extends jsPDF prototype
-  y = doc.lastAutoTable.finalY + 8;
+  y = doc.lastAutoTable.finalY + 12;
 
-  // -- OVERALL GRADE --
-  doc.setFillColor(...COLORS.coral);
-  doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'F');
+  // @ts-expect-error - jspdf-autotable extends jsPDF prototype
+  y = doc.lastAutoTable.finalY + 4;
 
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('Gesamtdurchschnitt:', margin + 5, y + 11);
-
-  const avgText = `${data.averageGrade.toFixed(2)} – ${getGradeText(data.averageGrade)}`;
+  const avgText = `${totalHours} Std. (${totalDays} Tage) - ${getGradeText(data.averageGrade)}`;
   doc.setTextColor(255, 255, 255);
   doc.text(avgText, pageWidth - margin - 5, y + 11, { align: 'right' });
-  y += 25;
+  // y += 12;
 
   // -- SOFT SKILLS TABLE (if available) --
   if (data.softSkills && data.softSkills.overallAverage !== null) {
-    y = addSectionTitle('Kompetenzbewertung (Soft Skills)', y);
+    y = addSectionTitle('Skills', y);
 
+    // Constant sub-skill labels (these never change, only grades change)
     const softSkillsBody = [
       [
-        'Fachkompetenz',
-        data.softSkills.averages.fachkompetenz?.toFixed(2) || '–',
+        'Fachkompetenz (Sorgfalt, Qualitätsbewusstsein)',
+        data.softSkills.averages.fachkompetenz
+          ? getGradeText(data.softSkills.averages.fachkompetenz)
+          : '–',
       ],
       [
-        'Methodenkompetenz',
-        data.softSkills.averages.methodenkompetenz?.toFixed(2) || '–',
+        'Methodenkompetenz (Problemlösung, Zeitmanagement, Analytisches Denken)',
+        data.softSkills.averages.methodenkompetenz
+          ? getGradeText(data.softSkills.averages.methodenkompetenz)
+          : '–',
       ],
       [
-        'Sozialkompetenz',
-        data.softSkills.averages.sozialkompetenz?.toFixed(2) || '–',
-      ],
-      [
-        'Personalkompetenz',
-        data.softSkills.averages.personalkompetenz?.toFixed(2) || '–',
+        'Personalkompetenz (Zuverlässigkeit, Selbstständigkeit, Lernbereitschaft)',
+        data.softSkills.averages.personalkompetenz
+          ? getGradeText(data.softSkills.averages.personalkompetenz)
+          : '–',
       ],
     ];
 
     autoTable(doc, {
       startY: y,
-      head: [['Kompetenzbereich', 'Durchschnittsnote']],
+      head: [['Kompetenzbereich', 'Bewertung']],
       body: softSkillsBody,
       foot: [
-        [
-          'Gesamtdurchschnitt Soft Skills',
-          data.softSkills.overallAverage.toFixed(2),
-        ],
+        ['Gesamtdurchschnitt:', getGradeText(data.softSkills.overallAverage)],
       ],
       theme: 'grid',
+      styles: {
+        lineColor: COLORS.tableBorder,
+        lineWidth: 0.4,
+        valign: 'middle',
+      },
       headStyles: {
         fillColor: COLORS.coral,
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 10,
+        lineColor: COLORS.coral,
+        halign: 'left',
+        valign: 'middle',
       },
       footStyles: {
         fillColor: COLORS.coral,
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 10,
+        valign: 'middle',
+        lineColor: COLORS.coral,
+        halign: 'left',
       },
       bodyStyles: {
         fontSize: 9,
         cellPadding: 3,
+        textColor: COLORS.primary,
+        valign: 'middle',
       },
       columnStyles: {
-        0: { cellWidth: 'auto' },
-        1: { cellWidth: 45, halign: 'center', fontStyle: 'bold' },
+        0: { cellWidth: 'auto', halign: 'left', valign: 'middle' },
+        1: {
+          cellWidth: 45,
+          halign: 'center',
+          fontStyle: 'bold',
+          valign: 'middle',
+        },
       },
-      margin: { left: margin, right: margin, bottom: footerHeight + 5 },
+      didParseCell: data => {
+        if (data.section === 'head') {
+          if (data.column.index === 0) data.cell.styles.halign = 'left';
+          if (data.column.index === 1) data.cell.styles.halign = 'center';
+        }
+        if (data.section === 'foot') {
+          if (data.column.index === 0) data.cell.styles.halign = 'left';
+          if (data.column.index === 1) data.cell.styles.halign = 'center';
+        }
+      },
+      margin: {
+        left: margin,
+        right: margin,
+        top: 20,
+        bottom: footerHeight + 5,
+      },
     });
 
     // @ts-expect-error - jspdf-autotable extends jsPDF prototype
-    y = doc.lastAutoTable.finalY + 12;
+    y = doc.lastAutoTable.finalY + 8;
   }
 
   // Check if we need a new page
@@ -385,13 +457,16 @@ export async function generateArbeitszeugnisPDF(
       : data.gender === 'female'
         ? 'Ihre'
         : 'Die';
-  const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit der Note ${data.averageGrade.toFixed(2)} (${getGradeText(data.averageGrade)}) bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
+  const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit "${getGradeText(data.averageGrade)}" bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
   const summaryText = data.summary || defaultSummary;
+
+  y -= 4; // Move up a bit for better spacing before the summary
+  y = addSectionTitle('Abschließende Bemerkung', y);
 
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.primary);
-
+  y += 2.5;
   const summaryLines = doc.splitTextToSize(summaryText, contentWidth);
   doc.text(summaryLines, margin, y);
   y += summaryLines.length * 6 + 20;
@@ -423,167 +498,22 @@ export async function generateArbeitszeugnisPDF(
   doc.setTextColor(...COLORS.secondary);
   doc.text('Ausbilder / verantwortliche Fachkraft', margin, y + 5);
 
-  // -- QR CODE & VERIFICATION (placed after signature, above footer) --
-  y += 15;
-
-  // Ensure QR section fits above the footer
-  if (y > safeBottom - 30) {
-    doc.addPage();
-    y = 25;
-  }
-
-  // Horizontal line above QR section
-  drawHorizontalLine(y, COLORS.tableBorder);
-  y += 8;
-
-  // QR Code - positioned on the right, smaller
-  let qrImageData = data.qrCodeUrl;
-
-  // Generate QR code from URL if not already base64
-  if (data.qrCodeUrl && !data.qrCodeUrl.startsWith('data:image')) {
-    try {
-      qrImageData = await QRCode.toDataURL(data.qrCodeUrl, {
-        errorCorrectionLevel: 'H',
-        margin: 1,
-        width: 200,
-        color: { dark: '#000000', light: '#ffffff' },
-      });
-    } catch (e) {
-      console.error('Error generating QR code in PDF:', e);
-    }
-  }
-
-  if (qrImageData && qrImageData.startsWith('data:image')) {
-    doc.addImage(qrImageData, 'PNG', pageWidth - margin - 18, y - 2, 18, 18);
-  }
-
-  // Verification info on the left
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.secondary);
-  doc.text('Dokumentenverifikation gemäß §126a BGB', margin, y + 2);
-  doc.text(`Verifizierungs-ID: ${data.verificationCode}`, margin, y + 6);
-  doc.text('Scannen Sie den QR-Code zur Echtheitsprüfung', margin, y + 10);
-
-  // ==================== PAGE 2: IHK LEGEND ====================
-  doc.addPage();
-  y = 25;
-
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...COLORS.primary);
-  doc.text('Anhang: IHK-Notenschlüssel', margin, y);
-  y += 15;
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...COLORS.secondary);
-  const legendIntro =
-    'Die Benotung erfolgt nach dem bundeseinheitlichen IHK-Bewertungsschlüssel für die duale Berufsausbildung:';
-  doc.text(legendIntro, margin, y);
-  y += 12;
-
-  autoTable(doc, {
-    startY: y,
-    head: [['Note', 'Bezeichnung', 'Definition']],
-    body: IHK_LEGEND,
-    theme: 'striped',
-    headStyles: {
-      fillColor: COLORS.tableHeader,
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      fontSize: 10,
-    },
-    bodyStyles: {
-      fontSize: 9,
-      cellPadding: 4,
-    },
-    columnStyles: {
-      0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-      1: { cellWidth: 35, fontStyle: 'bold' },
-      2: { cellWidth: 'auto' },
-    },
-    margin: { left: margin, right: margin, bottom: footerHeight + 5 },
-  });
-
-  // @ts-expect-error - jspdf-autotable extends jsPDF prototype
-  y = doc.lastAutoTable.finalY + 20;
-
-  // Additional info
-  doc.setFontSize(9);
-  doc.setTextColor(...COLORS.secondary);
-  const additionalInfo = [
-    'Hinweise:',
-    '• Die Durchschnittsnote errechnet sich aus dem arithmetischen Mittel aller Einzelnoten.',
-    '• Bei einer Durchschnittsnote von 2,44 oder besser kann eine Verkürzung der Ausbildungszeit beantragt werden.',
-    '• Die Soft-Skill-Bewertung basiert auf dem MES-Kompetenzmodell (19 Kriterien in 4 Kompetenzbereichen).',
-  ];
-
-  for (const line of additionalInfo) {
-    const splitLine = doc.splitTextToSize(line, contentWidth);
-    doc.text(splitLine, margin, y);
-    y += splitLine.length * 5;
-  }
-
-  // ==================== PAGE 3: RADAR CHART (if available) ====================
-  if (data.radarImage) {
-    doc.addPage();
-    y = 25;
-
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.primary);
-    doc.text('Anhang: Kompetenzprofil', margin, y);
-    y += 12;
-
-    // Explanation
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...COLORS.secondary);
-    const radarExplanation =
-      'Das folgende Kompetenzprofil visualisiert die Leistungen in den verschiedenen Ausbildungsbereichen. Die Darstellung ermöglicht einen schnellen Überblick über Stärken und Entwicklungspotenziale.';
-    const radarLines = doc.splitTextToSize(radarExplanation, contentWidth);
-    doc.text(radarLines, margin, y);
-    y += radarLines.length * 5 + 10;
-
-    // Calculate the maximum image size that fits between current y and safeBottom
-    // The chart image includes labels and legend already rendered inside it
-    const availableHeight = safeBottom - y - 5; // 5mm bottom padding
-    const maxImgSize = Math.min(contentWidth, availableHeight, 150); // cap at 150mm
-    const imgSize = Math.max(maxImgSize, 80); // minimum 80mm to be readable
-
-    // If even the minimum doesn't fit, start a new page
-    if (imgSize > availableHeight) {
-      doc.addPage();
-      y = 25;
-    }
-
-    const imgX = (pageWidth - imgSize) / 2;
-
-    doc.addImage(data.radarImage, 'PNG', imgX, y, imgSize, imgSize);
-    y += imgSize + 8;
-
-    // Legend explanation — only add if it fits above safeBottom
-    if (y + 12 < safeBottom) {
-      doc.setFontSize(8);
-      doc.setTextColor(...COLORS.secondary);
-      doc.text(
-        'Die Farbcodierung zeigt die Leistungsstufe (grün = sehr gut bis rot = ungenügend).',
-        margin,
-        y
-      );
-      y += 4;
-      doc.text(
-        'Bei Radar-Ansicht entsprechen größere Flächen besseren Bewertungen.',
-        margin,
-        y
-      );
-    }
-  }
-
-  // ==================== ADD FOOTER TO ALL PAGES ====================
+  // ==================== ADD HEADER (pages 2+) AND FOOTER TO ALL PAGES ====================
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
+
+    // Header on pages 2+ only
+    if (i > 1) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...COLORS.secondary);
+      doc.text(data.companyName, margin, 12);
+      doc.text('Betriebliche Leistungsbeurteilung', pageWidth - margin, 12, {
+        align: 'right',
+      });
+      drawHorizontalLine(15);
+    }
 
     // Footer separator line
     drawHorizontalLine(pageHeight - footerHeight, COLORS.tableBorder);
@@ -593,17 +523,12 @@ export async function generateArbeitszeugnisPDF(
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.secondary);
     doc.text(
-      'WAMOCON GmbH | IT-Testmanagement',
-      margin,
-      pageHeight - footerHeight + 5
-    );
-    doc.text(
-      'Mergenthalerallee 79-81, 65760 Eschborn',
+      'WAMOCON GmbH | Mergenthalerallee 79-81, 65760 Eschborn',
       margin,
       pageHeight - footerHeight + 9
     );
     doc.text(
-      'www.wamocon.de | info@wamocon.de',
+      'www.wamocon.com | info@wamocon.com',
       margin,
       pageHeight - footerHeight + 13
     );

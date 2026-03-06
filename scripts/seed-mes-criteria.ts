@@ -27,7 +27,7 @@ const mesCriteria = [
     name: 'Teamfähigkeit',
     description: 'Kooperatives Arbeiten im Team',
     kLevel: 'K3',
-    competencyArea: 'SOZIALKOMPETENZ' as const,
+    competencyArea: 'PERSONALKOMPETENZ' as const,
     orderIndex: 1,
   },
   {
@@ -35,7 +35,7 @@ const mesCriteria = [
     name: 'Kommunikationsfähigkeit',
     description: 'Effektive mündliche und schriftliche Kommunikation',
     kLevel: 'K3',
-    competencyArea: 'SOZIALKOMPETENZ' as const,
+    competencyArea: 'PERSONALKOMPETENZ' as const,
     orderIndex: 2,
   },
   {
@@ -117,7 +117,7 @@ const mesCriteria = [
     name: 'Konfliktfähigkeit',
     description: 'Konstruktiver Umgang mit Meinungsverschiedenheiten',
     kLevel: 'K4',
-    competencyArea: 'SOZIALKOMPETENZ' as const,
+    competencyArea: 'PERSONALKOMPETENZ' as const,
     orderIndex: 12,
   },
   {
@@ -143,7 +143,7 @@ const mesCriteria = [
     name: 'Kundenorientierung',
     description: 'Verständnis und Berücksichtigung von Kundenanforderungen',
     kLevel: 'K5',
-    competencyArea: 'SOZIALKOMPETENZ' as const,
+    competencyArea: 'PERSONALKOMPETENZ' as const,
     orderIndex: 15,
   },
   {
@@ -175,7 +175,7 @@ const mesCriteria = [
     name: 'Führungsqualitäten',
     description: 'Fähigkeit zur Koordination und Motivation',
     kLevel: 'K5',
-    competencyArea: 'SOZIALKOMPETENZ' as const,
+    competencyArea: 'PERSONALKOMPETENZ' as const,
     orderIndex: 19,
   },
 ];
@@ -188,20 +188,33 @@ async function seedMesCriteria() {
     // await db.delete(mesSoftskillCriteria);
 
     // Insert all 19 criteria
-    const inserted = await db.insert(mesSoftskillCriteria).values(mesCriteria).returning();
+    const inserted = await db
+      .insert(mesSoftskillCriteria)
+      .values(mesCriteria)
+      .returning();
 
     console.log(`✅ Successfully seeded ${inserted.length} MES criteria!`);
     console.log('\nBreakdown by competency area:');
-    console.log(`  - FACHKOMPETENZ: ${inserted.filter(c => c.competencyArea === 'FACHKOMPETENZ').length}`);
-    console.log(`  - METHODENKOMPETENZ: ${inserted.filter(c => c.competencyArea === 'METHODENKOMPETENZ').length}`);
-    console.log(`  - SOZIALKOMPETENZ: ${inserted.filter(c => c.competencyArea === 'SOZIALKOMPETENZ').length}`);
-    console.log(`  - PERSONALKOMPETENZ: ${inserted.filter(c => c.competencyArea === 'PERSONALKOMPETENZ').length}`);
+    console.log(
+      `  - FACHKOMPETENZ: ${inserted.filter(c => c.competencyArea === 'FACHKOMPETENZ').length}`
+    );
+    console.log(
+      `  - METHODENKOMPETENZ: ${inserted.filter(c => c.competencyArea === 'METHODENKOMPETENZ').length}`
+    );
+    console.log(
+      `  - PERSONALKOMPETENZ: ${inserted.filter(c => c.competencyArea === 'PERSONALKOMPETENZ').length}`
+    );
 
     console.log('\nBreakdown by K-Level:');
-    console.log(`  - K3 (Anwenden): ${inserted.filter(c => c.kLevel === 'K3').length}`);
-    console.log(`  - K4 (Analysieren): ${inserted.filter(c => c.kLevel === 'K4').length}`);
-    console.log(`  - K5 (Bewerten): ${inserted.filter(c => c.kLevel === 'K5').length}`);
-
+    console.log(
+      `  - K3 (Anwenden): ${inserted.filter(c => c.kLevel === 'K3').length}`
+    );
+    console.log(
+      `  - K4 (Analysieren): ${inserted.filter(c => c.kLevel === 'K4').length}`
+    );
+    console.log(
+      `  - K5 (Bewerten): ${inserted.filter(c => c.kLevel === 'K5').length}`
+    );
   } catch (error) {
     console.error('❌ Error seeding MES criteria:', error);
     throw error;
@@ -215,7 +228,7 @@ seedMesCriteria()
     console.log('🎉 Seeding completed successfully!');
     process.exit(0);
   })
-  .catch((error) => {
+  .catch(error => {
     console.error('Failed to seed:', error);
     process.exit(1);
   });
