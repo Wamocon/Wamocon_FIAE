@@ -58,7 +58,6 @@ export const certificateStatus = pgEnum('certificate_status', [
 export const competencyArea = pgEnum('competency_area', [
   'FACHKOMPETENZ', // Technical competency
   'METHODENKOMPETENZ', // Methodological competency
-  'SOZIALKOMPETENZ', // Social competency
   'PERSONALKOMPETENZ', // Personal competency
 ]);
 export const evaluationStatus = pgEnum('evaluation_status', [
@@ -1317,7 +1316,6 @@ export const annualPerformanceSummaries = pgTable(
     // Competency Area Averages (automatically calculated)
     fachkompetenzAvg: real('fachkompetenz_avg'), // Technical competency average
     methodenkompetenzAvg: real('methodenkompetenz_avg'), // Methodological competency average
-    sozialkompetenzAvg: real('sozialkompetenz_avg'), // Social competency average
     personalkompetenzAvg: real('personalkompetenz_avg'), // Personal competency average
 
     overallAverage: real('overall_average'), // Overall grade average across all areas
@@ -1383,7 +1381,6 @@ export const workCertificates = pgTable('work_certificates', {
   // Competency ratings (from annual summary)
   fachkompetenzGrade: performanceRating('fachkompetenz_grade'),
   methodenkompetenzGrade: performanceRating('methodenkompetenz_grade'),
-  sozialkompetenzGrade: performanceRating('sozialkompetenz_grade'),
   personalkompetenzGrade: performanceRating('personalkompetenz_grade'),
 
   // === SNAPSHOT (Frozen grades at issue time) ===
