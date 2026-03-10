@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import {
   enablers,
   courseMembers,
@@ -24,6 +25,8 @@ export async function POST(
       | undefined = body?.solutions; // New: multiple solutions
     if (!traineeId)
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    const organizationId = await getUserOrgId(traineeId);
 
     const [e] = await db
       .select({
@@ -98,6 +101,7 @@ export async function POST(
           solutions: solutions || undefined,
           status: 'PENDING',
           attemptNumber: 1,
+          organizationId,
         })
         .returning();
       saved = row;
@@ -130,6 +134,7 @@ export async function POST(
           message: `Ein Trainee hat ein Enabler-Szenario eingereicht: ${e.title}`,
           linkUrl: '/trainer/reviews?view=enablers&onlyPending=true',
           context: { enablerId, courseId: e.courseId },
+          organizationId,
         }));
         await db.insert(notifications).values(values);
       }

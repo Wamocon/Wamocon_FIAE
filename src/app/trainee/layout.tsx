@@ -120,7 +120,7 @@ const TraineeLayoutComponent = ({
 
   // Memoize authentication check to prevent unnecessary re-renders
   const isAuthenticated = useMemo(() => {
-    return user && profile && profile.role === 'trainee';
+    return user && profile && profile.role === 'trainee' && profile.trainerActivated !== false;
   }, [user, profile]);
 
   // Determine if we're still in a loading state
@@ -131,6 +131,7 @@ const TraineeLayoutComponent = ({
     if (isLoading) return false;
     if (!user) return true;
     if (profile && profile.role !== 'trainee') return true;
+    if (profile && profile.trainerActivated === false) return true;
     return false;
   }, [isLoading, user, profile]);
 

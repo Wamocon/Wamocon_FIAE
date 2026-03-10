@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
+import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
 
 // GET /api/trainer/school/exams?trainerId=...&traineeId=...
 export async function GET(req: NextRequest) {
@@ -14,7 +15,20 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'trainerId required' }, { status: 400 });
         }
 
-        const whereClause = traineeId ? eq(schoolExams.traineeId, traineeId as any) : undefined;
+        if (!(await verifyTrainer(trainerId))) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        const isPO = await verifyPlatformOwner(trainerId);
+        const trainerOrgId = await getUserOrgId(trainerId);
+
+        const conditions: any[] = [];
+        if (traineeId) conditions.push(eq(schoolExams.traineeId, traineeId as any));
+        if (!isPO && trainerOrgId) {
+            conditions.push(eq(schoolExams.organizationId, trainerOrgId));
+        }
+
+        const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
         const examsRaw = await db
             .select({
@@ -58,7 +72,20 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Get trainee profile to get schuljahr and ausbildungsjahr
+        if (!(await verifyTrainer(trainerId))) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        const organizationId = await getUserOrgId(trainerId);
+
+        const isPO = await verifyPlatformOwner(trainerId);
+        if (!isPO) {
+            const traineeOrgId = await getUserOrgId(traineeId);
+            if (organizationId !== traineeOrgId) {
+                return NextResponse.json({ error: 'Trainee not in your organization' }, { status: 403 });
+            }
+        }
+
         const [trainee] = await db
             .select({
                 fullName: profiles.fullName,
@@ -84,6 +111,7 @@ export async function POST(req: NextRequest) {
                 isPersonal: false,
                 schuljahr,
                 ausbildungsjahr,
+                organizationId,
             })
             .returning();
 
@@ -98,6 +126,7 @@ export async function POST(req: NextRequest) {
                 message: `Eine Prüfung "${subject}" wurde für den ${examDateStr} geplant.`,
                 linkUrl: '/trainee/school?tab=exams',
                 context: { examId: exam.id, subject, examDate },
+                organizationId,
             });
         } catch (notifyErr) {
             console.warn('Failed to notify trainee for exam scheduling', notifyErr);

@@ -12,6 +12,7 @@ import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { runProactiveChecks } from '@/lib/hai/proactive';
+import { requireProPlan } from '@/lib/auth-helpers';
 
 // ============================================================================
 // ROUTE HANDLERS
@@ -27,6 +28,13 @@ export async function GET(req: NextRequest) {
 
         if (!userId) {
             return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+        }
+
+        if (!(await requireProPlan(userId))) {
+            return NextResponse.json(
+                { error: 'HAI.ai is only available with a PRO subscription.' },
+                { status: 403 }
+            );
         }
 
         // Verify user exists

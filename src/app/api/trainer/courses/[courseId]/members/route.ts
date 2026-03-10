@@ -8,7 +8,7 @@ import {
   courses,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -107,6 +107,8 @@ export async function POST(
       );
     }
 
+    const organizationId = await getUserOrgId(trainerId);
+
     const body = await req.json();
     const userId: string | undefined = body?.userId;
     const role: 'TRAINER' | 'TRAINEE' | undefined = body?.role;
@@ -158,6 +160,7 @@ export async function POST(
           courseId: courseId as any,
           userId,
           role,
+          organizationId,
         })
         .returning();
 
@@ -188,7 +191,7 @@ export async function POST(
         .from(courses)
         .where(eq(courses.id, courseId as any));
       const courseName = courseInfo?.title || 'einem Kurs';
-      const isTrainer = role === 'TRAINER';
+      const isTrainer = ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(role);
 
       try {
         await db.insert(notifications).values({
@@ -203,6 +206,7 @@ export async function POST(
             ? `/trainer/courses/${courseId}`
             : '/trainee/modules',
           context: { courseId },
+          organizationId,
         });
       } catch (drizzleErr: unknown) {
         const pgCode = (drizzleErr as { cause?: { code?: string } })?.cause
@@ -276,6 +280,8 @@ export async function DELETE(
       );
     }
 
+    const organizationId = await getUserOrgId(trainerId);
+
     // Prevent trainer from removing themselves if they're the only trainer
     const [memberToRemove] = await db
       .select()
@@ -318,10 +324,11 @@ export async function DELETE(
         title: 'Aus Kurs entfernt',
         message: `Du wurdest aus dem Kurs "${courseName}" entfernt.`,
         linkUrl:
-          memberToRemove.role === 'TRAINER'
+          ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(memberToRemove.role)
             ? '/trainer/courses'
             : '/trainee/modules',
         context: { courseId },
+        organizationId,
       });
     } catch (notifyErr) {
       console.warn('Failed to notify removed course member', notifyErr);

@@ -13,6 +13,7 @@ import {
     activityReportEntries,
     profiles
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // Helper to get ISO week number
 function getISOWeek(date: Date): number {
@@ -139,6 +140,8 @@ export async function POST(req: NextRequest) {
         // Validation
         if (!traineeId) return NextResponse.json({ error: 'traineeId required' }, { status: 400 });
 
+        const organizationId = await getUserOrgId(traineeId);
+
         // Use provided or current week/year
         const reportWeek = weekNumber || getISOWeek(new Date());
         const reportYear = year || new Date().getFullYear();
@@ -180,6 +183,7 @@ export async function POST(req: NextRequest) {
             .insert(activityReports)
             .values({
                 traineeId: traineeId as any,
+                organizationId,
                 ausbildungsjahr: calculatedAusbildungsjahr,
                 weekNumber: reportWeek,
                 year: reportYear,

@@ -561,7 +561,7 @@ export function Profile() {
           <div className="flex items-center justify-center py-8">
             <LoadingSpinner size="sm" />
           </div>
-        ) : profile.role === 'trainer' ? (
+        ) : ['admin', 'temp_admin', 'trainer'].includes(profile.role) ? (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <div className="glass-effect border-accent/20 rounded-2xl border p-4 text-center">
@@ -652,7 +652,7 @@ export function Profile() {
         <h2 className="text-foreground mb-6 text-2xl font-bold">
           {t('profile.recentActivities')}
         </h2>
-        {profile.role === 'trainer' ? (
+        {['admin', 'temp_admin', 'trainer'].includes(profile.role) ? (
           <div className="space-y-3">
             {statsLoading ? (
               <div className="flex items-center justify-center py-8">

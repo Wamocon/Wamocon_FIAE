@@ -36,6 +36,7 @@ import {
   ChatMessage,
 } from '@/lib/hai';
 import { getProviderStatus } from '@/lib/hai/providers';
+import { getUserOrgId, requireProPlan } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -100,10 +101,12 @@ async function getOrCreateSession(
   }
 
   // Create new session
+  const organizationId = await getUserOrgId(userId);
   const newSession = await db
     .insert(haiChatSessions)
     .values({
       userId: userId,
+      organizationId,
       contextType: contextType || 'general',
       contextId: contextId || null,
       isActive: true,
@@ -509,6 +512,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Nicht authentifiziert. Bitte melde dich an.' },
         { status: 401 }
+      );
+    }
+
+    if (!(await requireProPlan(userId))) {
+      return NextResponse.json(
+        { error: 'HAI.ai is only available with a PRO subscription.' },
+        { status: 403 }
       );
     }
 
@@ -1044,6 +1054,13 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    if (!(await requireProPlan(userId))) {
+      return NextResponse.json(
+        { error: 'HAI.ai is only available with a PRO subscription.' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { messageId, content } = body as {
       messageId?: string;
@@ -1131,6 +1148,13 @@ export async function GET(req: NextRequest) {
 
   if (!userId) {
     return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+  }
+
+  if (!(await requireProPlan(userId))) {
+    return NextResponse.json(
+      { error: 'HAI.ai is only available with a PRO subscription.' },
+      { status: 403 }
+    );
   }
 
   try {

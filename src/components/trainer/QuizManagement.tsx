@@ -250,7 +250,7 @@ type QuestionDraft = {
 };
 
 export function QuizManagement() {
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner } = useAuth();
   const { t } = useLanguage();
   const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -557,12 +557,14 @@ export function QuizManagement() {
           <h2 className="text-foreground text-2xl font-bold">
             {t('quiz.managementTitle')}
           </h2>
-          <Button
-            onClick={openCreate}
-            className="from-accent to-primary text-foreground hover:from-accent/90 hover:to-primary/90 gap-2 bg-gradient-to-r"
-          >
-            <Plus className="h-4 w-4" /> {t('quiz.managementCreate')}
-          </Button>
+          {isPlatformOwner && (
+            <Button
+              onClick={openCreate}
+              className="from-accent to-primary text-foreground hover:from-accent/90 hover:to-primary/90 gap-2 bg-gradient-to-r"
+            >
+              <Plus className="h-4 w-4" /> {t('quiz.managementCreate')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -619,27 +621,31 @@ export function QuizManagement() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
-                        className="h-8 gap-1 px-3"
-                        onClick={() => openEdit(q.id)}
-                      >
-                        <Pencil className="h-4 w-4" />{' '}
-                        {t('quiz.managementEdit')}
-                      </Button>
+                      {isPlatformOwner && (
+                        <Button
+                          className="h-8 gap-1 px-3"
+                          onClick={() => openEdit(q.id)}
+                        >
+                          <Pencil className="h-4 w-4" />{' '}
+                          {t('quiz.managementEdit')}
+                        </Button>
+                      )}
                       <a
                         href={`/trainer/quiz-management/${q.id}`}
                         className="border-accent/30 hover:bg-background/60 inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm"
                       >
                         {t('quiz.managementView')}
                       </a>
-                      <Button
-                        variant="destructive"
-                        className="h-8 gap-1 px-3"
-                        onClick={() => onDelete(q.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />{' '}
-                        {t('quiz.managementDelete')}
-                      </Button>
+                      {isPlatformOwner && (
+                        <Button
+                          variant="destructive"
+                          className="h-8 gap-1 px-3"
+                          onClick={() => onDelete(q.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />{' '}
+                          {t('quiz.managementDelete')}
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

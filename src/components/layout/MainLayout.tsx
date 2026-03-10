@@ -11,11 +11,13 @@ interface User {
   email: string;
 }
 
+type UserRole = 'admin' | 'temp_admin' | 'trainer' | 'trainee';
+
 interface Profile {
   id: string;
   email: string;
   full_name: string;
-  role: 'trainee' | 'trainer';
+  role: UserRole;
   avatar?: string | null;
   training_start_date?: string | null;
   trainer_id?: string | null;

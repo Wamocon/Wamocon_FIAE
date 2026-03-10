@@ -8,6 +8,7 @@ import {
   trainingUseCases,
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // GET: List activity reports for the current user
 export async function GET(req: NextRequest) {
@@ -154,6 +155,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const organizationId = await getUserOrgId(userId);
 
     // M-1 fix: Only trainees can create activity reports
     const [creatorProfile] = await db
@@ -348,6 +351,7 @@ export async function POST(req: NextRequest) {
       .insert(activityReports)
       .values({
         traineeId: userId,
+        organizationId,
         weekNumber,
         year,
         ausbildungsjahr,

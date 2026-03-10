@@ -19,9 +19,12 @@ export default function LoginForm() {
   const { profile, signIn } = useAuth();
   const { t } = useLanguage();
 
+  const TRAINER_LEVEL_ROLES = ['admin', 'temp_admin', 'trainer'];
+
   useEffect(() => {
     if (profile) {
-      if (profile.role === 'trainer') router.push('/trainer/dashboard');
+      if (TRAINER_LEVEL_ROLES.includes(profile.role))
+        router.push('/trainer/dashboard');
       else router.push('/trainee/dashboard');
     }
   }, [profile, router]);
@@ -146,14 +149,8 @@ export default function LoginForm() {
               )}
             </button>
             <div className="space-y-1 text-center">
-              <p className="text-muted-foreground">
-                {t('auth.noAccount')}{' '}
-                <Link
-                  href="/register"
-                  className="font-medium text-red-400 hover:text-red-300"
-                >
-                  {t('auth.createAccount')}
-                </Link>
+              <p className="text-muted-foreground text-xs">
+                {t('auth.accountCreatedByAdmin')}
               </p>
             </div>
           </form>
