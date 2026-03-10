@@ -24,7 +24,7 @@ export default function EditCoursePage() {
   const router = useRouter();
   const params = useParams<{ moduleId: string }>();
   const courseId = params?.moduleId as string;
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner, subscriptionPlan, loading: authLoading } = useAuth();
   const { t } = useLanguage();
   const trainerId = profile?.id;
 
@@ -112,8 +112,26 @@ export default function EditCoursePage() {
       storageUrl: string;
       fileName: string;
       documentType?: string;
+      organizationId?: string | null;
     }>
   >([]);
+
+  // Plan-based document visibility
+  const trainerOrgId = profile?.organizationId || profile?.organization?.id;
+  const isLightPlan = subscriptionPlan === 'LIGHT';
+
+  // LIGHT plan hides only Wamocon THEORY PDFs; scenario + use case PDFs are always visible
+  const canSeeTheoryDoc = (doc: { organizationId?: string | null }) => {
+    if (isPlatformOwner) return true;
+    if (isLightPlan) return doc.organizationId != null && doc.organizationId === trainerOrgId;
+    return true;
+  };
+
+  // Non-Wamocon trainers can only delete their own org's documents
+  const canDeleteDoc = (doc: { organizationId?: string | null }) => {
+    if (isPlatformOwner) return true;
+    return doc.organizationId != null && doc.organizationId === trainerOrgId;
+  };
 
   // UI: Add Use Case Modal state
   const [showAddUseCase, setShowAddUseCase] = useState(false);
@@ -149,6 +167,7 @@ export default function EditCoursePage() {
       storageUrl: string;
       fileName: string;
       documentType?: string;
+      organizationId?: string | null;
     }>
   >([]);
 
@@ -309,7 +328,7 @@ export default function EditCoursePage() {
     }
   };
 
-  if (loading) return <PageLoader />;
+  if (loading || authLoading) return <PageLoader />;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
@@ -337,14 +356,16 @@ export default function EditCoursePage() {
             >
               <X className="h-4 w-4" /> {t('common.cancel')}
             </button>
-            <button
-              onClick={e => handleSave(e as any)}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
-              disabled={saving}
-            >
-              <Save className="h-4 w-4" />{' '}
-              {saving ? t('common.saving') : t('common.save')}
-            </button>
+            {isPlatformOwner && (
+              <button
+                onClick={e => handleSave(e as any)}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
+                disabled={saving}
+              >
+                <Save className="h-4 w-4" />{' '}
+                {saving ? t('common.saving') : t('common.save')}
+              </button>
+            )}
           </div>
         </div>
 
@@ -364,6 +385,7 @@ export default function EditCoursePage() {
                     value={title}
                     onChange={e => setTitle(e.target.value)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    disabled={!isPlatformOwner}
                   />
                 </div>
                 <div>
@@ -374,6 +396,7 @@ export default function EditCoursePage() {
                     value={year}
                     onChange={e => setYear(e.target.value as any)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    disabled={!isPlatformOwner}
                   >
                     <option value="">
                       {t('trainer.content.examPartNone')}
@@ -1879,13 +1902,13 @@ export default function EditCoursePage() {
                       {t('trainer.content.theoryPdfs')}
                     </span>
                     {enablerDocuments.filter(
-                      d => d.documentType === 'THEORY' || !d.documentType
+                      d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
                     ).length > 0 && (
                       <span className="text-muted text-xs">
                         (
                         {
                           enablerDocuments.filter(
-                            d => d.documentType === 'THEORY' || !d.documentType
+                            d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
                           ).length
                         }
                         )
@@ -1896,12 +1919,12 @@ export default function EditCoursePage() {
 
                 {/* Theory documents - inline pills */}
                 {enablerDocuments.filter(
-                  d => d.documentType === 'THEORY' || !d.documentType
+                  d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
                 ).length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-2">
                     {enablerDocuments
                       .filter(
-                        d => d.documentType === 'THEORY' || !d.documentType
+                        d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
                       )
                       .map(doc => (
                         <div
@@ -1927,31 +1950,33 @@ export default function EditCoursePage() {
                               <Eye className="h-3 w-3" />
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!trainerId || !editingEnablerId) return;
-                              const ok = window.confirm(
-                                t('trainer.content.confirmDeleteDoc')
-                              );
-                              if (!ok) return;
-                              try {
-                                await fetch(
-                                  `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
-                                  { method: 'DELETE' }
+                          {canDeleteDoc(doc) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!trainerId || !editingEnablerId) return;
+                                const ok = window.confirm(
+                                  t('trainer.content.confirmDeleteDoc')
                                 );
-                                setEnablerDocuments(prev =>
-                                  prev.filter(d => d.id !== doc.id)
-                                );
-                              } catch (err) {
-                                console.error(err);
-                              }
-                            }}
-                            className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                            title={t('common.remove')}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                                if (!ok) return;
+                                try {
+                                  await fetch(
+                                    `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                    { method: 'DELETE' }
+                                  );
+                                  setEnablerDocuments(prev =>
+                                    prev.filter(d => d.id !== doc.id)
+                                  );
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }}
+                              className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                              title={t('common.remove')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       ))}
                   </div>
@@ -2070,31 +2095,33 @@ export default function EditCoursePage() {
                               <Eye className="h-3 w-3" />
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!trainerId || !editingEnablerId) return;
-                              const ok = window.confirm(
-                                t('trainer.content.confirmDeleteDoc')
-                              );
-                              if (!ok) return;
-                              try {
-                                await fetch(
-                                  `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
-                                  { method: 'DELETE' }
+                          {canDeleteDoc(doc) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!trainerId || !editingEnablerId) return;
+                                const ok = window.confirm(
+                                  t('trainer.content.confirmDeleteDoc')
                                 );
-                                setEnablerDocuments(prev =>
-                                  prev.filter(d => d.id !== doc.id)
-                                );
-                              } catch (err) {
-                                console.error(err);
-                              }
-                            }}
-                            className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                            title={t('common.remove')}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                                if (!ok) return;
+                                try {
+                                  await fetch(
+                                    `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                    { method: 'DELETE' }
+                                  );
+                                  setEnablerDocuments(prev =>
+                                    prev.filter(d => d.id !== doc.id)
+                                  );
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }}
+                              className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                              title={t('common.remove')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       ))}
                   </div>
@@ -2465,31 +2492,33 @@ export default function EditCoursePage() {
                             <Eye className="h-3 w-3" />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!trainerId || !editingUseCaseId) return;
-                            const ok = window.confirm(
-                              t('trainer.content.confirmDeleteDoc')
-                            );
-                            if (!ok) return;
-                            try {
-                              await fetch(
-                                `/api/trainer/use-cases/${editingUseCaseId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
-                                { method: 'DELETE' }
+                        {canDeleteDoc(doc) && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!trainerId || !editingUseCaseId) return;
+                              const ok = window.confirm(
+                                t('trainer.content.confirmDeleteDoc')
                               );
-                              setUseCaseDocuments(prev =>
-                                prev.filter(d => d.id !== doc.id)
-                              );
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }}
-                          className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                          title={t('common.remove')}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                              if (!ok) return;
+                              try {
+                                await fetch(
+                                  `/api/trainer/use-cases/${editingUseCaseId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                  { method: 'DELETE' }
+                                );
+                                setUseCaseDocuments(prev =>
+                                  prev.filter(d => d.id !== doc.id)
+                                );
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                            title={t('common.remove')}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

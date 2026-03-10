@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { contentDocuments, useCases } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET documents for a use case
 export async function GET(
@@ -107,7 +107,8 @@ export async function POST(
       visibility = 'ALL'; // Trainee questions visible to both
     }
 
-    // Insert document
+    const trainerOrgId = await getUserOrgId(trainerId);
+
     const [doc] = await db
       .insert(contentDocuments)
       .values({
@@ -122,6 +123,7 @@ export async function POST(
         storageUrl,
         storagePath: storagePath || null,
         uploadedById: trainerId as any,
+        organizationId: trainerOrgId,
       })
       .returning();
 
@@ -198,7 +200,6 @@ export async function DELETE(
       );
     }
 
-    // Get document first to extract storage path for cleanup
     const [doc] = await db
       .select()
       .from(contentDocuments)
@@ -207,6 +208,15 @@ export async function DELETE(
       return NextResponse.json(
         { error: 'Document not found' },
         { status: 404 }
+      );
+    }
+
+    const trainerOrgId = await getUserOrgId(trainerId);
+    const isPlatform = await verifyPlatformOwner(trainerId);
+    if (!isPlatform && doc.organizationId !== trainerOrgId) {
+      return NextResponse.json(
+        { error: 'You can only delete documents uploaded by your organization' },
+        { status: 403 }
       );
     }
 

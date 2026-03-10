@@ -27,6 +27,7 @@ import {
     enablerSubmissions,
     notifications
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -456,8 +457,10 @@ export async function createNotificationFromInsight(
     insight: ProactiveInsight
 ): Promise<void> {
     try {
+        const organizationId = await getUserOrgId(userId);
         await db.insert(notifications).values({
             userId,
+            organizationId,
             type: insight.type === 'warning' ? 'REPORT_UPDATE' : 'GENERAL',
             title: insight.title,
             message: insight.message,

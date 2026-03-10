@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import {
   enablers,
   enablerQuizzes,
@@ -28,6 +29,8 @@ export async function POST(
       Array.isArray(body?.answers) ? body.answers : [];
     if (!traineeId || answers.length === 0)
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+    const organizationId = await getUserOrgId(traineeId);
 
     const [enabler] = await db
       .select({
@@ -89,7 +92,7 @@ export async function POST(
     const sub = await db.transaction(async tx => {
       const [sub] = await tx
         .insert(quizSubmissions)
-        .values({ traineeId, quizId: quiz.id, score, isReviewed: false })
+        .values({ traineeId, quizId: quiz.id, score, isReviewed: false, organizationId })
         .returning();
       if (answers.length) {
         await tx.insert(quizSubmissionAnswers).values(
@@ -146,6 +149,7 @@ export async function POST(
           message: `Ein Trainee hat ein Mini-Quiz abgegeben: ${enabler.title}`,
           linkUrl: '/trainer/reviews?view=quizzes&onlyPending=true',
           context: { enablerId, quizId: quiz.id, submissionId: sub.id },
+          organizationId,
         }));
         await db.insert(notifications).values(values);
       }

@@ -10,7 +10,6 @@ import {
   LogOut,
   GraduationCap,
   HelpCircle,
-  Upload,
   School,
   ClipboardList,
 } from 'lucide-react';
@@ -62,12 +61,6 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
               label: t('nav.quizzes'),
               icon: HelpCircle,
               href: '/demo/trainer/quiz-management',
-            },
-            {
-              id: 'bulkImport',
-              label: t('nav.bulkImport'),
-              icon: Upload,
-              href: '/demo/trainer/bulk-import',
             },
             {
               id: 'trainees',

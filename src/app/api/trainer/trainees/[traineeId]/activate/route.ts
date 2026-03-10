@@ -8,6 +8,7 @@ import {
   quizAssignments,
   notifications,
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
 
@@ -31,6 +32,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     if (!itemType || !itemId || typeof isActive !== 'boolean') {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
+
+    const organizationId = await getUserOrgId(trainerId || traineeId);
 
     switch (itemType) {
       case 'ENABLER': {
@@ -59,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
         if (isActive) {
           await db
             .insert(quizAssignments)
-            .values({ quizId: itemId as any, traineeId: traineeId as any, assignedById: (trainerId as any) ?? traineeId })
+            .values({ quizId: itemId as any, traineeId: traineeId as any, assignedById: (trainerId as any) ?? traineeId, organizationId })
             .onConflictDoNothing();
         } else {
           await db.delete(quizAssignments).where(and(eq(quizAssignments.quizId, itemId as any), eq(quizAssignments.traineeId, traineeId as any)));
@@ -82,6 +85,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
         message: `Ein ${typeLabel} wurde für dich ${statusLabel}.`,
         linkUrl: '/trainee/modules',
         context: { itemType, itemId, isActive },
+        organizationId,
       });
     } catch (notifyErr) {
       console.warn('Failed to notify trainee for activation toggle', notifyErr);

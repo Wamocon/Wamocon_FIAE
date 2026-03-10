@@ -64,7 +64,7 @@ export default function LandingPage() {
     if (!loading && sessionReady && hasSession && user && profile) {
       if (profile.role === 'trainee') {
         router.push('/trainee/dashboard');
-      } else if (profile.role === 'trainer') {
+      } else {
         router.push('/trainer/dashboard');
       }
     }
