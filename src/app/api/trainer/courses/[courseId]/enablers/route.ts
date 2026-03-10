@@ -7,7 +7,7 @@ import {
   courseMembers,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(
   _req: NextRequest,
@@ -64,6 +64,15 @@ export async function POST(
         { status: 403 }
       );
     }
+
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = await getUserOrgId(trainerId);
 
     const body = await req.json();
     const title: string | undefined = body?.title;
@@ -139,6 +148,7 @@ export async function POST(
             message: `Eine neue Lesson "${title}" wurde aktiviert.`,
             linkUrl: '/trainee/modules',
             context: { enablerId: inserted.id, courseId },
+            organizationId,
           }));
           await db.insert(notifications).values(notifValues);
         }

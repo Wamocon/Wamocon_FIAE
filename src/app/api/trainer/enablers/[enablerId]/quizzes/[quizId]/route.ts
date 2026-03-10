@@ -8,7 +8,7 @@ import {
   questions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET: quiz detail for editing/view
 export async function GET(
@@ -87,10 +87,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
     }
 
-    // Shared curriculum: any valid trainer can edit quizzes
     if (!(await verifyTrainer(trainerId))) {
       return NextResponse.json(
         { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
+    }
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
         { status: 403 }
       );
     }
@@ -182,10 +187,15 @@ export async function DELETE(
       return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
     }
 
-    // Shared curriculum: any valid trainer can delete quizzes
     if (!(await verifyTrainer(trainerId))) {
       return NextResponse.json(
         { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
+    }
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
         { status: 403 }
       );
     }

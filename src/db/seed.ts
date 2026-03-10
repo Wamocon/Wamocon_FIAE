@@ -36,6 +36,7 @@ async function main() {
   const trainerId = 'f178409e-4991-4f81-8052-f90951ce1f81';
   const trainee1Id = 'e09b9c61-a86a-4ac2-9eb8-55fc49662b3e';
   const trainee2Id = 'b5abfe96-31a8-4160-8d60-100541bde1a7';
+  const WAMOCON_ORG = '00000000-0000-0000-0000-000000000001';
 
   await db.transaction(async (tx) => {
     // Clean relevant tables for repeatable seeding (FK-safe order)
@@ -107,9 +108,9 @@ async function main() {
       .returning();
 
     await tx.insert(courseMembers).values([
-      { courseId: course.id, userId: trainerId, role: 'TRAINER' },
-      { courseId: course.id, userId: trainee1Id, role: 'TRAINEE' },
-      { courseId: course.id, userId: trainee2Id, role: 'TRAINEE' },
+      { courseId: course.id, userId: trainerId, role: 'TRAINER', organizationId: WAMOCON_ORG },
+      { courseId: course.id, userId: trainee1Id, role: 'TRAINEE', organizationId: WAMOCON_ORG },
+      { courseId: course.id, userId: trainee2Id, role: 'TRAINEE', organizationId: WAMOCON_ORG },
     ]);
 
     // Skills and course skills
@@ -223,18 +224,18 @@ async function main() {
       .returning();
 
     await tx.insert(quizAssignments).values([
-      { quizId: globalQuiz.id, traineeId: trainee1Id, assignedById: trainerId },
-      { quizId: globalQuiz.id, traineeId: trainee2Id, assignedById: trainerId },
+      { quizId: globalQuiz.id, traineeId: trainee1Id, assignedById: trainerId, organizationId: WAMOCON_ORG },
+      { quizId: globalQuiz.id, traineeId: trainee2Id, assignedById: trainerId, organizationId: WAMOCON_ORG },
     ]);
 
     // Submissions for global quiz
     const [sub1] = await tx
       .insert(quizSubmissions)
-      .values({ traineeId: trainee1Id, quizId: globalQuiz.id, score: 100, isReviewed: false })
+      .values({ traineeId: trainee1Id, quizId: globalQuiz.id, score: 100, isReviewed: false, organizationId: WAMOCON_ORG })
       .returning();
     const [sub2] = await tx
       .insert(quizSubmissions)
-      .values({ traineeId: trainee2Id, quizId: globalQuiz.id, score: 50, isReviewed: false })
+      .values({ traineeId: trainee2Id, quizId: globalQuiz.id, score: 50, isReviewed: false, organizationId: WAMOCON_ORG })
       .returning();
 
     // Pick correct options for answers
@@ -253,8 +254,8 @@ async function main() {
 
     // Knowledge notes
     await tx.insert(knowledgeNotes).values([
-      { traineeId: trainee1Id, title: 'Flexbox Cheatsheet', content: 'Notes on flex properties.', oneDriveLink: null },
-      { traineeId: trainee2Id, title: 'CSS Grid Areas', content: 'Grid templates and areas.', oneDriveLink: 'https://1drv.ms/mock' },
+      { traineeId: trainee1Id, title: 'Flexbox Cheatsheet', content: 'Notes on flex properties.', oneDriveLink: null, organizationId: WAMOCON_ORG },
+      { traineeId: trainee2Id, title: 'CSS Grid Areas', content: 'Grid templates and areas.', oneDriveLink: 'https://1drv.ms/mock', organizationId: WAMOCON_ORG },
     ]);
 
     // Use case submissions and links
@@ -273,11 +274,11 @@ async function main() {
 
     const [ucs1] = await tx
       .insert(useCaseSubmissions)
-      .values({ traineeId: trainee1Id, useCaseId: uc.id, submissionText: 'My solution text', status: 'APPROVED', trainerFeedback: 'Good job', reviewedById: trainerId, reviewedAt: new Date() })
+      .values({ traineeId: trainee1Id, useCaseId: uc.id, submissionText: 'My solution text', status: 'APPROVED', trainerFeedback: 'Good job', reviewedById: trainerId, reviewedAt: new Date(), organizationId: WAMOCON_ORG })
       .returning();
     const [ucs2] = await tx
       .insert(useCaseSubmissions)
-      .values({ traineeId: trainee2Id, useCaseId: uc.id, submissionText: 'Links attached', status: 'PENDING' })
+      .values({ traineeId: trainee2Id, useCaseId: uc.id, submissionText: 'Links attached', status: 'PENDING', organizationId: WAMOCON_ORG })
       .returning();
     await tx.insert(useCaseSubmissionLinks).values([
       { submissionId: ucs1.id, url: 'https://github.com/example/repo', description: 'GitHub Repo' },
@@ -286,8 +287,8 @@ async function main() {
 
     // Acceptance protocols
     await tx.insert(acceptanceProtocols).values([
-      { traineeId: trainee1Id, trainerId: trainerId, acceptanceDate: new Date(), milestone: 'Module 1 Complete', comments: 'Well done', instructions: 'Proceed to next module', pdfUrl: 'https://files.example.com/protocol1.pdf' },
-      { traineeId: trainee2Id, trainerId: trainerId, acceptanceDate: new Date(), milestone: 'Onboarding', comments: 'Welcome aboard', instructions: 'Start Web Essentials', pdfUrl: 'https://files.example.com/protocol2.pdf' },
+      { traineeId: trainee1Id, trainerId: trainerId, acceptanceDate: new Date(), milestone: 'Module 1 Complete', comments: 'Well done', instructions: 'Proceed to next module', pdfUrl: 'https://files.example.com/protocol1.pdf', organizationId: WAMOCON_ORG },
+      { traineeId: trainee2Id, trainerId: trainerId, acceptanceDate: new Date(), milestone: 'Onboarding', comments: 'Welcome aboard', instructions: 'Start Web Essentials', pdfUrl: 'https://files.example.com/protocol2.pdf', organizationId: WAMOCON_ORG },
     ]);
 
     // Achieved skills
@@ -299,8 +300,8 @@ async function main() {
 
     // Activity log
     await tx.insert(activityLog).values([
-      { userId: trainee1Id, activityType: 'QUIZ_SUBMITTED', relatedItemId: sub1.id, relatedItemTable: 'quiz_submissions', context: { score: 100 } as any },
-      { userId: trainee2Id, activityType: 'COURSE_ASSIGNED', relatedItemId: course.id, relatedItemTable: 'courses', context: { title: course.title } as any },
+      { userId: trainee1Id, activityType: 'QUIZ_SUBMITTED', relatedItemId: sub1.id, relatedItemTable: 'quiz_submissions', context: { score: 100 } as any, organizationId: WAMOCON_ORG },
+      { userId: trainee2Id, activityType: 'COURSE_ASSIGNED', relatedItemId: course.id, relatedItemTable: 'courses', context: { title: course.title } as any, organizationId: WAMOCON_ORG },
     ]);
 
     // Enabler completions

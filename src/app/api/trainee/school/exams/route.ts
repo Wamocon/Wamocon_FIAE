@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, asc, desc, eq, gte, lt, sql } from 'drizzle-orm';
 import { schoolExams, schoolExamResults, profiles, ausbildungBlocks } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // Helper to get current Schuljahr
 function getCurrentSchuljahr(): string {
@@ -197,6 +198,8 @@ export async function POST(req: NextRequest) {
         if (!examDate) return NextResponse.json({ error: 'examDate required' }, { status: 400 });
         if (!subject) return NextResponse.json({ error: 'subject required' }, { status: 400 });
 
+        const organizationId = await getUserOrgId(traineeId);
+
         // Get trainee profile for defaults
         const [trainee] = await db
             .select({ startOfTrainingDate: profiles.startOfTrainingDate })
@@ -228,6 +231,7 @@ export async function POST(req: NextRequest) {
             .insert(schoolExams)
             .values({
                 traineeId: traineeId as any,
+                organizationId,
                 schuljahr: calculatedSchuljahr,
                 ausbildungsjahr: calculatedAusbildungsjahr,
                 examDate: new Date(examDate),

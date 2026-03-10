@@ -347,7 +347,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
 
     try {
       const payload: any = { itemType, itemId, isActive };
-      if (profile?.role === 'trainer' && profile?.id)
+      if (profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && profile?.id)
         payload.trainerId = profile.id;
 
       const res = await fetch(`/api/trainer/trainees/${trainee.id}/activate`, {
@@ -481,7 +481,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       <div className="glass-effect bg-background border-accent/30 rounded-3xl border p-6 shadow-lg">
         <div className="p-8">
           {/* Edit form for trainers */}
-          {profile?.role === 'trainer' && trainee && showEdit && (
+          {profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && trainee && showEdit && (
             <div className="border-accent/30 bg-background mb-8 rounded-2xl border p-6">
               <h3 className="text-foreground mb-4 text-lg font-semibold">
                 {t('trainee.detail.editDetails')}
@@ -657,7 +657,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      {profile?.role === 'trainer' && (
+                                      {profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && (
                                         <button
                                           onClick={() =>
                                             toggleItem('ENABLER', e.id, !e.isActive)
@@ -787,7 +787,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {profile?.role === 'trainer' && (
+                            {profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && (
                               <button
                                 onClick={() =>
                                   toggleItem('USE_CASE', u.id, !u.isActive)
@@ -854,7 +854,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {profile?.role === 'trainer' && (
+                            {profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && (
                               <button
                                 onClick={() =>
                                   toggleItem('GLOBAL_QUIZ', q.quizId, false)

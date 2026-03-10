@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // Helper to calculate Ausbildungsjahr from startOfTrainingDate
 function calculateAusbildungsjahr(startDate: Date): number {
@@ -135,6 +136,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Description required for SONSTIGES block type' }, { status: 400 });
         }
 
+        const organizationId = await getUserOrgId(traineeId);
+
         // Get trainee profile to calculate Ausbildungsjahr if not provided
         let calculatedAusbildungsjahr = ausbildungsjahr;
         let calculatedSchuljahr = schuljahr;
@@ -160,6 +163,7 @@ export async function POST(req: NextRequest) {
             .insert(ausbildungBlocks)
             .values({
                 traineeId: traineeId as any,
+                organizationId,
                 schuljahr: calculatedSchuljahr,
                 ausbildungsjahr: calculatedAusbildungsjahr,
                 calendarWeek,

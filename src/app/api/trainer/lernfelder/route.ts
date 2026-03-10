@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lernfelderSchema, useCases } from '@/db/migrations/schemas/schema';
 import { eq, arrayContains, count, and } from 'drizzle-orm';
+import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 /**
  * GET /api/trainer/lernfelder
@@ -47,6 +48,17 @@ export async function GET() {
  */
 export async function POST(req: NextRequest) {
   try {
+    const trainerId = req.nextUrl.searchParams.get('trainerId');
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { title, description, label } = body;
 

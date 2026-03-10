@@ -10,6 +10,7 @@ import {
   skills,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET /api/trainer/courses?trainerProfileId=...
 // Returns ALL courses for any authenticated trainer (shared curriculum model)
@@ -150,6 +151,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!(await verifyPlatformOwner(createdById))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = await getUserOrgId(createdById);
+
     const result = await db.transaction(async tx => {
       const [course] = await tx
         .insert(courses)
@@ -167,6 +177,7 @@ export async function POST(req: NextRequest) {
         courseId: course.id,
         userId: createdById as any,
         role: 'TRAINER' as any,
+        organizationId,
       });
 
       if (skillNames.length) {

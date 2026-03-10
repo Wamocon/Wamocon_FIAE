@@ -8,7 +8,7 @@ import {
   questions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET quiz for an enabler (trainer editing)
 export async function GET(
@@ -92,10 +92,15 @@ export async function POST(
       return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
     }
 
-    // Shared curriculum: any valid trainer can create quizzes
     if (!(await verifyTrainer(createdById))) {
       return NextResponse.json(
         { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
+    }
+    if (!(await verifyPlatformOwner(createdById))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
         { status: 403 }
       );
     }

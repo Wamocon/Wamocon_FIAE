@@ -6,7 +6,7 @@ import {
   useCaseSubmissions,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 
 export async function PATCH(
@@ -62,6 +62,8 @@ export async function PATCH(
       );
     }
 
+    const organizationId = await getUserOrgId(trainerId);
+
     const [row] = await db
       .update(useCaseSubmissions)
       .set({
@@ -84,6 +86,7 @@ export async function PATCH(
           message: `Status: ${status}`,
           linkUrl: '/trainee/modules',
           context: { submissionId, useCaseId: String(row.useCaseId) },
+          organizationId,
         });
       }
     } catch (notifyErr) {
