@@ -14,6 +14,7 @@ import {
     profiles,
     notifications
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -118,6 +119,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             .from(profiles)
             .where(eq(profiles.id, trainerId));
 
+        const organizationId = await getUserOrgId(trainerId);
+
         const now = new Date();
         let updateData: Record<string, any>;
         let notificationTitle: string;
@@ -172,6 +175,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
                 action,
                 feedback: feedback || null,
             },
+            organizationId,
         });
 
         return NextResponse.json({

@@ -13,6 +13,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
@@ -132,6 +133,16 @@ export async function POST(req: NextRequest) {
         { error: 'trainer_id required' },
         { status: 400 }
       );
+
+    if (!(await verifyPlatformOwner(trainer_id))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = await getUserOrgId(trainer_id);
+
     if (!title)
       return NextResponse.json({ error: 'title required' }, { status: 400 });
     if (!quiz_type || !['mini', 'big'].includes(quiz_type)) {
@@ -198,6 +209,7 @@ export async function POST(req: NextRequest) {
         quizId: qz.id,
         traineeId: tid,
         assignedById: trainer_id,
+        organizationId,
       }));
       await db.insert(quizAssignments).values(values).onConflictDoNothing();
 
@@ -211,6 +223,7 @@ export async function POST(req: NextRequest) {
           message: `Dir wurde ein neues Quiz zugewiesen: "${title}"`,
           linkUrl: `/trainee/quizzes/${qz.id}`,
           context: { quizId: qz.id },
+          organizationId,
         }));
         await db.insert(notifications).values(notifValues);
       } catch (notifyErr) {

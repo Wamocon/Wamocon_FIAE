@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
 import { profiles, notifications } from '@/db/migrations/schemas/schema';
 import { and, eq } from 'drizzle-orm';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 function deriveNameFromEmail(email: string) {
   const local = (email || '').split('@')[0] || '';
@@ -37,16 +38,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const allowlistCsv = (
-      process.env.ALLOWED_TRAINER_EMAILS ||
-      process.env.NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS ||
-      ''
-    ).trim();
-    const allowedList = allowlistCsv
-      ? allowlistCsv.split(',').map((s: string) => s.trim().toLowerCase())
-      : [];
     const emailLower = email.trim().toLowerCase();
-    const role = allowedList.includes(emailLower) ? 'TRAINER' : 'TRAINEE';
+
+    // Check if a profile was pre-created by admin (standard flow)
+    const existingProfile = await db
+      .select({ role: profiles.role })
+      .from(profiles)
+      .where(eq(profiles.email, emailLower))
+      .limit(1);
+
+    // ADMIN_EMAIL always gets ADMIN role; pre-existing profile keeps its role; default TRAINEE
+    const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    let role: string;
+    if (adminEmail && emailLower === adminEmail) {
+      role = 'ADMIN';
+    } else if (existingProfile[0]?.role) {
+      role = existingProfile[0].role;
+    } else {
+      role = 'TRAINEE';
+    }
     const full_name = deriveNameFromEmail(email);
 
     // Use service role to create user WITHOUT email confirmation
@@ -125,7 +135,8 @@ export async function POST(request: Request) {
         fullName: full_name,
         role: role as any,
         assignedTrainerId: assignedTrainerId ?? undefined,
-        isActive: role === 'TRAINER', // Trainers are active immediately, trainees need approval
+        isActive: true,
+        trainerActivated: role !== 'TRAINEE',
       })
       .onConflictDoNothing();
 
@@ -138,6 +149,7 @@ export async function POST(request: Request) {
 
     // Create notification for trainers when a new trainee registers
     if (role === 'TRAINEE') {
+      const organizationId = await getUserOrgId(user.id);
       const trainerProfiles = await db
         .select({ id: profiles.id })
         .from(profiles)
@@ -152,6 +164,7 @@ export async function POST(request: Request) {
           message: `${full_name} (${email.trim()}) hat sich registriert und wartet auf Freischaltung.`,
           linkUrl: '/trainer/trainees',
           isRead: false,
+          organizationId,
         });
       }
     }

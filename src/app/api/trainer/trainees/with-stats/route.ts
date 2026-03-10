@@ -8,6 +8,7 @@ import {
   courseMembers,
   activityReports,
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
 
 /**
  * GET /api/trainer/trainees/with-stats
@@ -34,7 +35,18 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get all trainees
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const isPlatformOwnerUser = await verifyPlatformOwner(trainerId);
+    const trainerOrgId = await getUserOrgId(trainerId);
+
+    const traineeConditions = [eq(profiles.role, 'TRAINEE')];
+    if (!isPlatformOwnerUser && trainerOrgId) {
+      traineeConditions.push(eq(profiles.organizationId, trainerOrgId));
+    }
+
     const traineeRows = await db
       .select({
         id: profiles.id,
@@ -44,10 +56,11 @@ export async function GET(req: NextRequest) {
         email: profiles.email,
         avatarUrl: profiles.avatarUrl,
         isActive: profiles.isActive,
+        trainerActivated: profiles.trainerActivated,
         birthDate: profiles.birthDate,
       })
       .from(profiles)
-      .where(eq(profiles.role, 'TRAINEE'));
+      .where(and(...traineeConditions));
 
     const traineeIds = traineeRows.map(t => String(t.id));
 

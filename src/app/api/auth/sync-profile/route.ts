@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
-import { profiles } from '@/db/migrations/schemas/schema';
+import { profiles, organizations } from '@/db/migrations/schemas/schema';
 import { and, eq, ne } from 'drizzle-orm';
+
+const WAMOCON_ORG_ID = '00000000-0000-0000-0000-000000000001';
 
 function getAdminClient() {
   const url =
@@ -21,9 +23,13 @@ function deriveNameFromEmail(email: string) {
   return capitalized || local;
 }
 
+function isAdminEmail(email: string): boolean {
+  const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  return !!adminEmail && email === adminEmail;
+}
+
 export async function POST(request: Request) {
   try {
-    // Prefer NEXT_PUBLIC_SUPABASE_URL to ensure we validate against the same instance the client used
     const supabaseUrl =
       process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.SUPABASE_URL ||
@@ -62,32 +68,48 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if profile already exists — preserve its role instead of guessing
+    // Check if profile already exists
     const existingProfile = await db
-      .select({ id: profiles.id, role: profiles.role })
+      .select({
+        id: profiles.id,
+        role: profiles.role,
+        organizationId: profiles.organizationId,
+        isActive: profiles.isActive,
+        trainerActivated: profiles.trainerActivated,
+      })
       .from(profiles)
       .where(eq(profiles.email, email))
       .limit(1);
 
-    // Determine role: existing DB role > allowlist > user metadata > default TRAINEE
+    // --- Role determination ---
+    // Priority: ADMIN_EMAIL env > existing DB role > user metadata > TRAINEE default
     let role: string;
-    if (existingProfile[0]?.role) {
+    if (isAdminEmail(email)) {
+      role = 'ADMIN';
+    } else if (existingProfile[0]?.role) {
       role = existingProfile[0].role;
     } else {
-      const allowlistCsv = (
-        process.env.ALLOWED_TRAINER_EMAILS ||
-        process.env.NEXT_PUBLIC_ALLOWED_TRAINER_EMAILS ||
-        ''
-      ).trim();
-      const allowedList = allowlistCsv
-        ? allowlistCsv.split(',').map((s: string) => s.trim().toLowerCase())
-        : [];
-      role = allowedList.includes(email)
-        ? 'TRAINER'
-        : user.user_metadata?.role?.toUpperCase?.() === 'TRAINER'
-          ? 'TRAINER'
-          : 'TRAINEE';
+      const metaRole = user.user_metadata?.role?.toUpperCase?.();
+      role = metaRole === 'TRAINER' ? 'TRAINER' : 'TRAINEE';
     }
+
+    // --- Organization assignment ---
+    // Preserve existing org; ADMIN_EMAIL always belongs to wamocon org
+    let organizationId: string | null = existingProfile[0]?.organizationId ?? null;
+    if (isAdminEmail(email) && !organizationId) {
+      organizationId = WAMOCON_ORG_ID;
+    }
+
+    // --- Activation state ---
+    // Preserve existing flags. For new profiles created via self-registration:
+    // - is_active defaults to true (Wamocon creates accounts as active)
+    // - trainer_activated defaults to false for TRAINEE (trainer must activate)
+    // - trainer_activated defaults to true for TRAINER/ADMIN/TEMP_ADMIN
+    const isNewProfile = !existingProfile[0];
+    const trainerActivated = isNewProfile
+      ? role === 'TRAINEE' ? false : true
+      : existingProfile[0].trainerActivated;
+
     const full_name =
       typeof user.user_metadata?.full_name === 'string' &&
       user.user_metadata.full_name
@@ -116,22 +138,36 @@ export async function POST(request: Request) {
         assignedTrainerId = t[0]?.id ?? null;
       }
       if (!assignedTrainerId) {
-        const trainers = await db
-          .select({ id: profiles.id })
-          .from(profiles)
-          .where(eq(profiles.role, 'TRAINER'))
-          .limit(1);
-        assignedTrainerId = trainers[0]?.id ?? null;
+        // Fall back to any trainer in the same org, or any trainer
+        if (organizationId) {
+          const orgTrainers = await db
+            .select({ id: profiles.id })
+            .from(profiles)
+            .where(
+              and(
+                eq(profiles.organizationId, organizationId),
+                eq(profiles.role, 'TRAINER')
+              )
+            )
+            .limit(1);
+          assignedTrainerId = orgTrainers[0]?.id ?? null;
+        }
+        if (!assignedTrainerId) {
+          const trainers = await db
+            .select({ id: profiles.id })
+            .from(profiles)
+            .where(eq(profiles.role, 'TRAINER'))
+            .limit(1);
+          assignedTrainerId = trainers[0]?.id ?? null;
+        }
       }
     }
 
-    // Split full name for first/last name columns
     const nameParts = full_name.split(' ');
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ') || '';
 
-    // Upsert the profile — use Drizzle first, fall back to Supabase admin client
-    // if the pooler connection can't verify the auth.users FK constraint
+    // Upsert the profile
     try {
       await db
         .insert(profiles)
@@ -144,6 +180,8 @@ export async function POST(request: Request) {
           role: role as any,
           assignedTrainerId: assignedTrainerId ?? undefined,
           isActive: true,
+          organizationId,
+          trainerActivated,
         })
         .onConflictDoUpdate({
           target: profiles.id,
@@ -152,21 +190,22 @@ export async function POST(request: Request) {
             fullName: full_name,
             firstName,
             lastName,
-            isActive: true,
+            ...(isAdminEmail(email)
+              ? { role: 'ADMIN' as any, organizationId: WAMOCON_ORG_ID }
+              : {}),
           },
         });
     } catch (drizzleErr: unknown) {
       const pgCode = (drizzleErr as { cause?: { code?: string } })?.cause?.code;
       if (pgCode === '23505') {
-        // Unique constraint violation on email — an orphaned profile with the
-        // same email but a different id exists.  Preserve the orphan's role,
-        // remove it, and re-insert with the correct auth user id.
         const orphan = await db
           .select({ role: profiles.role })
           .from(profiles)
           .where(and(eq(profiles.email, email), ne(profiles.id, user.id)))
           .limit(1);
-        const preservedRole = orphan[0]?.role ?? role;
+        const preservedRole = isAdminEmail(email)
+          ? 'ADMIN'
+          : (orphan[0]?.role ?? role);
         await db
           .delete(profiles)
           .where(and(eq(profiles.email, email), ne(profiles.id, user.id)));
@@ -181,6 +220,8 @@ export async function POST(request: Request) {
             role: preservedRole as any,
             assignedTrainerId: assignedTrainerId ?? undefined,
             isActive: true,
+            organizationId: isAdminEmail(email) ? WAMOCON_ORG_ID : organizationId,
+            trainerActivated,
           })
           .onConflictDoUpdate({
             target: profiles.id,
@@ -193,7 +234,6 @@ export async function POST(request: Request) {
             },
           });
       } else if (pgCode === '23503') {
-        // FK violation — pooler can't see auth.users; fall back to admin client
         const admin = getAdminClient();
         const { error: upsertErr } = await admin.from('profiles').upsert(
           {
@@ -202,9 +242,11 @@ export async function POST(request: Request) {
             full_name,
             first_name: firstName,
             last_name: lastName,
-            role,
+            role: isAdminEmail(email) ? 'ADMIN' : role,
             is_active: true,
             assigned_trainer_id: assignedTrainerId,
+            organization_id: isAdminEmail(email) ? WAMOCON_ORG_ID : organizationId,
+            trainer_activated: trainerActivated,
           },
           { onConflict: 'id' }
         );
@@ -221,7 +263,6 @@ export async function POST(request: Request) {
           .set({ assignedTrainerId })
           .where(eq(profiles.id, user.id));
       } catch {
-        // Fallback to admin client for update as well
         const admin = getAdminClient();
         await admin
           .from('profiles')
@@ -232,7 +273,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err: unknown) {
-    // eslint-disable-next-line no-console
     console.error('[api/auth/sync-profile] error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

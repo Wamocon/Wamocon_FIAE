@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { activityReports, activityReportEntries, profiles } from '@/db/migrations/schemas/schema';
+import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
 
 // GET /api/trainer/school/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
@@ -14,10 +15,22 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'trainerId required' }, { status: 400 });
         }
 
-        // Build query conditions
-        const whereClause = status ? eq(activityReports.status, status as any) : undefined;
+        if (!(await verifyTrainer(trainerId))) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
 
-        // Get all reports with trainee info
+        const isPO = await verifyPlatformOwner(trainerId);
+        const trainerOrgId = await getUserOrgId(trainerId);
+
+        const conditions: any[] = [];
+        if (status) conditions.push(eq(activityReports.status, status as any));
+        if (!isPO && trainerOrgId) {
+            conditions.push(eq(activityReports.organizationId, trainerOrgId));
+        }
+
+        const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+        // Get reports with trainee info (org-scoped)
         const reportsRaw = await db
             .select({
                 id: activityReports.id,

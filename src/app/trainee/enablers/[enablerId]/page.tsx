@@ -64,7 +64,7 @@ type GatedQuizInfo = {
 };
 
 export default function TraineeEnablerPage() {
-  const { profile } = useAuth();
+  const { profile, subscriptionPlan } = useAuth();
   const { t } = useLanguage();
   const params = useParams();
   const enablerId = params?.enablerId as string | undefined;
@@ -94,6 +94,7 @@ export default function TraineeEnablerPage() {
       title: string;
       storageUrl: string;
       documentType: string;
+      organizationId?: string | null;
     }>;
   };
 
@@ -359,14 +360,19 @@ export default function TraineeEnablerPage() {
         ? t('enablerPage.difficultyMedium')
         : t('enablerPage.difficultyHigh');
 
-  // Split documents into theory and scenario
-  const theoryDocs = useMemo(
-    () => documents.filter(d => d.documentType !== 'EXERCISE'),
-    [documents]
-  );
+  // LIGHT plan: hide only Wamocon THEORY PDFs, show own org's theory + ALL scenario PDFs
+  // PRO plan: show everything
+  const userOrgId = profile?.organizationId || profile?.organization?.id;
+  const isLightPlan = subscriptionPlan === 'LIGHT';
+
+  const theoryDocs = useMemo(() => {
+    const theory = documents.filter(d => d.documentType !== 'EXERCISE');
+    if (!isLightPlan) return theory;
+    return theory.filter(d => d.organizationId && d.organizationId === userOrgId);
+  }, [documents, isLightPlan, userOrgId]);
+
   const scenarioDocs = useMemo(() => {
     const exercises = documents.filter(d => d.documentType === 'EXERCISE');
-    // Sort by extracted part number so display order is Part 1, 2, 3... regardless of upload order
     return exercises.sort((a, b) => {
       const partA = a.title.match(/Part\s*(\d+)/i);
       const partB = b.title.match(/Part\s*(\d+)/i);

@@ -10,9 +10,10 @@ import {
   LogOut,
   GraduationCap,
   HelpCircle,
-  Upload,
   School,
   ClipboardList,
+  Building2,
+  ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -41,7 +42,7 @@ export function Sidebar({
   onToggle: _onToggle,
   userRole,
 }: SidebarProps) {
-  const { profile, signOut, loading } = useAuth();
+  const { profile, signOut, loading, subscriptionPlan, isAdmin } = useAuth();
   const { language, t } = useLanguage();
   const router = useRouter();
   const pathname = usePathname();
@@ -84,9 +85,6 @@ export function Sidebar({
           break;
         case 'quizzes':
           router.push('/trainee/quizzes');
-          break;
-        case 'bulkImport':
-          router.push('/trainer/bulk-import');
           break;
         case 'school':
           router.push(
@@ -156,7 +154,6 @@ export function Sidebar({
               icon: BookOpen,
               href: '/trainer/content-management',
             },
-
             {
               id: 'quizManagement',
               label: t('nav.quizzes'),
@@ -164,17 +161,27 @@ export function Sidebar({
               href: '/trainer/quiz-management',
             },
             {
-              id: 'bulkImport',
-              label: t('nav.bulkImport'),
-              icon: Upload,
-              href: '/trainer/bulk-import',
-            },
-            {
               id: 'trainees',
               label: t('nav.trainees'),
               icon: Users,
               href: '/trainer/trainees',
             },
+            ...(isAdmin
+              ? [
+                  {
+                    id: 'adminOrgs',
+                    label: t('nav.organizations'),
+                    icon: Building2,
+                    href: '/trainer/admin/organizations',
+                  },
+                  {
+                    id: 'adminUsers',
+                    label: t('nav.userManagement'),
+                    icon: ShieldCheck,
+                    href: '/trainer/admin/users',
+                  },
+                ]
+              : []),
           ]
         : [
             {
@@ -216,7 +223,7 @@ export function Sidebar({
         href: userRole === 'trainee' ? '/trainee/profile' : '/trainer/profile',
       },
     ],
-    [userRole, t]
+    [userRole, t, isAdmin, subscriptionPlan]
   );
 
   if (!profile) return null;
@@ -303,8 +310,8 @@ export function Sidebar({
           })}
         </nav>
 
-        {/* HAI Admin Button — trainer only */}
-        {userRole === 'trainer' && (
+        {/* HAI Admin Button — trainer + PRO plan only */}
+        {userRole === 'trainer' && subscriptionPlan === 'PRO' && (
           <div className="px-4 pb-2">
             <button
               onClick={() => setHaiAdminOpen(true)}
@@ -347,7 +354,11 @@ export function Sidebar({
               <p className="text-muted-foreground text-xs capitalize">
                 {profile.role === 'trainee'
                   ? t('roles.trainee')
-                  : t('roles.trainer')}
+                  : profile.role === 'admin'
+                    ? t('roles.admin')
+                    : profile.role === 'temp_admin'
+                      ? t('roles.tempAdmin')
+                      : t('roles.trainer')}
               </p>
             </div>
           </div>

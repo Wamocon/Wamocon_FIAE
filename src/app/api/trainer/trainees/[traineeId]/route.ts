@@ -8,13 +8,29 @@ import {
   enablerCompletions,
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
+import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ traineeId: string }> }
 ) {
   try {
     const { traineeId } = await params;
+    const { searchParams } = new URL(req.url);
+    const requesterId = searchParams.get('trainerId') || searchParams.get('requesterId');
+    if (!requesterId || !(await verifyTrainer(requesterId))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const isPO = await verifyPlatformOwner(requesterId);
+    if (!isPO) {
+      const requesterOrgId = await getUserOrgId(requesterId);
+      const traineeOrgId = await getUserOrgId(traineeId);
+      if (requesterOrgId !== traineeOrgId) {
+        return NextResponse.json({ error: 'Trainee not in your organization' }, { status: 403 });
+      }
+    }
+
     const [p] = await db
       .select({
         id: profiles.id,
@@ -97,31 +113,33 @@ export async function PATCH(
         { status: 400 }
       );
 
-    // Validate trainer
-    const [trainer] = await db
-      .select({ id: profiles.id, role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, trainer_id as any))
-      .limit(1);
-    if (!trainer || String(trainer.role || '').toUpperCase() !== 'TRAINER') {
+    if (!(await verifyTrainer(trainer_id))) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Load trainee and ensure assignment to this trainer (if assigned)
     const [trainee] = await db
       .select({
         id: profiles.id,
+        organizationId: profiles.organizationId,
         assignedTrainerId: profiles.assignedTrainerId,
         isActive: profiles.isActive,
+        trainerActivated: profiles.trainerActivated,
       })
       .from(profiles)
       .where(eq(profiles.id, traineeId as any))
       .limit(1);
     if (!trainee)
       return NextResponse.json({ error: 'Trainee not found' }, { status: 404 });
-    // NOTE: We no longer block updates when the trainee is assigned to a different
-    // trainer. Validation that the caller is a TRAINER is sufficient here, and
-    // avoids confusing errors in the UI when trainers manage shared trainees.
+
+    // Org-scoping: trainer can only manage trainees in their own org (platform owner can manage any)
+    const trainerOrgId = await getUserOrgId(trainer_id);
+    const isPlatform = await verifyPlatformOwner(trainer_id);
+    if (!isPlatform && trainee.organizationId !== trainerOrgId) {
+      return NextResponse.json(
+        { error: 'You can only manage trainees in your organization' },
+        { status: 403 }
+      );
+    }
 
     const updates: any = {};
     if (typeof body?.full_name === 'string')
@@ -133,6 +151,8 @@ export async function PATCH(
     if (typeof body?.assigned_trainer_id === 'string')
       updates.assignedTrainerId = body.assigned_trainer_id;
     if (typeof body?.isActive === 'boolean') updates.isActive = body.isActive;
+    if (typeof body?.trainer_activated === 'boolean')
+      updates.trainerActivated = body.trainer_activated;
     if (body?.isActive === true && !updates.assignedTrainerId) {
       updates.assignedTrainerId = trainer_id;
     }
@@ -154,9 +174,9 @@ export async function PATCH(
         avatarUrl: profiles.avatarUrl,
         startOfTrainingDate: profiles.startOfTrainingDate,
         assignedTrainerId: profiles.assignedTrainerId,
+        trainerActivated: profiles.trainerActivated,
       });
 
-    // Invalidate the trainees list cache so the next GET returns fresh data
     apiCache.invalidate('trainer_trainees');
 
     return NextResponse.json({
@@ -166,6 +186,7 @@ export async function PATCH(
         avatar_url: row.avatarUrl,
         training_start_date: row.startOfTrainingDate,
         assigned_trainer_id: row.assignedTrainerId,
+        trainer_activated: row.trainerActivated,
       },
     });
   } catch (e) {

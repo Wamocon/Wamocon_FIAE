@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lernfelderSchema, useCases } from '@/db/migrations/schemas/schema';
 import { eq, arrayContains } from 'drizzle-orm';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 /**
  * GET /api/trainer/lernfelder/[id]
@@ -66,6 +66,12 @@ export async function PATCH(
     if (!trainerId || !(await verifyTrainer(trainerId))) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
     const body = await req.json();
     const { title, description, label } = body; // All optional
 
@@ -103,6 +109,12 @@ export async function DELETE(
     const trainerId = req.nextUrl.searchParams.get('trainerId');
     if (!trainerId || !(await verifyTrainer(trainerId))) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
     }
     await db.delete(lernfelderSchema).where(eq(lernfelderSchema.id, id));
     return NextResponse.json({ success: true });

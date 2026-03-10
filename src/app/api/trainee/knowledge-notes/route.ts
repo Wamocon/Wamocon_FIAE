@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq } from 'drizzle-orm';
 import { knowledgeNotes } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // Helper to encode lernfeld code in title
 function encodeLernfeldInTitle(title: string, lernfeldCode: string | null): string {
@@ -74,12 +75,14 @@ export async function POST(req: NextRequest) {
     if (!rawTitle) return NextResponse.json({ error: 'title required' }, { status: 400 });
     if (!content) return NextResponse.json({ error: 'content required' }, { status: 400 });
 
+    const organizationId = await getUserOrgId(trainee_id);
+
     // Encode lernfeld code in title
     const title = encodeLernfeldInTitle(rawTitle, lernfeld_code);
 
     const [row] = await db
       .insert(knowledgeNotes)
-      .values({ traineeId: trainee_id as any, title, content, oneDriveLink: one_drive_link })
+      .values({ traineeId: trainee_id as any, title, content, oneDriveLink: one_drive_link, organizationId })
       .returning();
 
     return NextResponse.json({ id: row.id }, { status: 201 });

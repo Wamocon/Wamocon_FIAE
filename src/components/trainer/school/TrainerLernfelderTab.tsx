@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
@@ -15,6 +16,7 @@ import {
 
 export function TrainerLernfelderTab() {
   const router = useRouter();
+  const { isPlatformOwner } = useAuth();
   const { t } = useLanguage();
   const [lernfelder, setLernfelder] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,13 +177,15 @@ export function TrainerLernfelderTab() {
             </h2>
             <p className="text-muted text-sm">{t('lernfelder.overview')}</p>
           </div>
-          <button
-            onClick={openCreate}
-            className="bg-primary from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-primary-foreground flex items-center gap-2 rounded-xl bg-gradient-to-r px-5 py-2.5 font-medium shadow-lg transition-all duration-200 hover:shadow-xl"
-          >
-            <Plus className="h-4 w-4" />
-            {t('lernfelder.new')}
-          </button>
+          {isPlatformOwner && (
+            <button
+              onClick={openCreate}
+              className="bg-primary from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-primary-foreground flex items-center gap-2 rounded-xl bg-gradient-to-r px-5 py-2.5 font-medium shadow-lg transition-all duration-200 hover:shadow-xl"
+            >
+              <Plus className="h-4 w-4" />
+              {t('lernfelder.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -251,22 +255,24 @@ export function TrainerLernfelderTab() {
               </span>
             </div>
 
-            {/* Actions Footer */}
-            <div className="border-accent/10 flex items-center justify-between border-t pt-2">
-              <button
-                onClick={e => openEdit(e, lf)}
-                className="text-accent hover:text-accent/80 flex items-center gap-1 text-sm font-medium transition-colors"
-              >
-                {t('common.edit')}
-                <ArrowRight className="h-3 w-3 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
-              </button>
-              <button
-                onClick={e => handleDelete(e, lf.id)}
-                className="text-muted-foreground rounded-lg p-1.5 transition-all hover:bg-red-500/10 hover:text-red-500"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
+            {/* Actions Footer — platform owner only */}
+            {isPlatformOwner && (
+              <div className="border-accent/10 flex items-center justify-between border-t pt-2">
+                <button
+                  onClick={e => openEdit(e, lf)}
+                  className="text-accent hover:text-accent/80 flex items-center gap-1 text-sm font-medium transition-colors"
+                >
+                  {t('common.edit')}
+                  <ArrowRight className="h-3 w-3 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+                </button>
+                <button
+                  onClick={e => handleDelete(e, lf.id)}
+                  className="text-muted-foreground rounded-lg p-1.5 transition-all hover:bg-red-500/10 hover:text-red-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -285,12 +291,14 @@ export function TrainerLernfelderTab() {
               ? t('lernfelder.tryDifferentSearch')
               : t('lernfelder.createFirst')}
           </p>
-          <button
-            onClick={openCreate}
-            className="from-accent to-primary text-foreground rounded-xl bg-gradient-to-r px-5 py-2 font-medium"
-          >
-            {t('lernfelder.create')}
-          </button>
+          {isPlatformOwner && (
+            <button
+              onClick={openCreate}
+              className="from-accent to-primary text-foreground rounded-xl bg-gradient-to-r px-5 py-2 font-medium"
+            >
+              {t('lernfelder.create')}
+            </button>
+          )}
         </div>
       )}
 
