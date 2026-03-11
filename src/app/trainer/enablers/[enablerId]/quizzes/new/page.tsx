@@ -18,7 +18,7 @@ type BuilderQ = {
 export default function NewEnablerQuizPage() {
   const params = useParams<{ enablerId: string }>();
   const enablerId = params?.enablerId as string;
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner, loading: authLoading } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -31,8 +31,12 @@ export default function NewEnablerQuizPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // no-op; page for creating only
-  }, []);
+    if (!authLoading && !isPlatformOwner) {
+      router.replace('/trainer/content-management');
+    }
+  }, [authLoading, isPlatformOwner, router]);
+
+  if (!isPlatformOwner) return null;
 
   return (
     <div className="mx-auto mt-6 max-w-7xl bg-background border border-accent/20 rounded-2xl space-y-6 p-6">

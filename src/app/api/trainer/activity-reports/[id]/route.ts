@@ -14,7 +14,7 @@ import {
     profiles,
     notifications
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -24,6 +24,8 @@ interface RouteParams {
 export async function GET(req: NextRequest, { params }: RouteParams) {
     try {
         const { id } = await params;
+        const { searchParams } = new URL(req.url);
+        const requesterId = searchParams.get('requesterId') || searchParams.get('trainerId');
 
         // Get report
         const [report] = await db
@@ -33,6 +35,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
         if (!report) {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        }
+
+        if (requesterId) {
+            const isPO = await verifyPlatformOwner(requesterId);
+            if (!isPO) {
+                const trainerOrgId = await getUserOrgId(requesterId);
+                const traineeOrgId = await getUserOrgId(report.traineeId);
+                if (trainerOrgId !== traineeOrgId) {
+                    return NextResponse.json({ error: 'Not in your organization' }, { status: 403 });
+                }
+            }
         }
 
         // Get entries
@@ -111,6 +124,15 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             return NextResponse.json({
                 error: `Cannot ${action} report with status: ${report.status}`
             }, { status: 403 });
+        }
+
+        const isPO = await verifyPlatformOwner(trainerId);
+        if (!isPO) {
+            const trainerOrgId = await getUserOrgId(trainerId);
+            const traineeOrgId = await getUserOrgId(report.traineeId);
+            if (trainerOrgId !== traineeOrgId) {
+                return NextResponse.json({ error: 'Not in your organization' }, { status: 403 });
+            }
         }
 
         // Get trainer info for notification

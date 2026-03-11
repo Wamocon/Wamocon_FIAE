@@ -68,7 +68,7 @@ function getTraineeDisplayName(trainee: Trainee, traineeLabel: string): string {
 }
 
 export function TrainerExamsTab() {
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner } = useAuth();
   const { t } = useLanguage();
 
   // Get exam type label helper
@@ -191,13 +191,15 @@ export function TrainerExamsTab() {
             ))}
           </select>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="btn-accent flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium"
-        >
-          <Plus className="h-4 w-4" />
-          {t('exams.companyExam')}
-        </button>
+        {isPlatformOwner && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-accent flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium"
+          >
+            <Plus className="h-4 w-4" />
+            {t('exams.companyExam')}
+          </button>
+        )}
       </div>
 
       {loading ? (
