@@ -92,7 +92,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 .from(schoolExams)
                 .where(eq(schoolExams.id, examId as any));
             if (traineeProfile?.assignedTrainerId) {
-                const traineeName = traineeProfile.fullName || 'Trainee';
+                const traineeName = traineeProfile.fullName || 'Auszubildender';
                 const subjectName = examDetail?.subject || 'Prüfung';
                 await db.insert(notifications).values({
                     userId: String(traineeProfile.assignedTrainerId),

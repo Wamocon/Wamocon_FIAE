@@ -99,7 +99,7 @@ const BLOCK_CONFIG: Record<
     text: 'text-rose-600 dark:text-rose-400',
   },
   TRAINER_BLOCKER: {
-    label: 'Trainer',
+    label: 'Ausbilder',
     Icon: User,
     color: 'bg-indigo-500',
     lightBg: 'bg-indigo-500/20',

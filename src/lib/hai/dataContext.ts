@@ -1067,7 +1067,7 @@ function formatDate(date: Date): string {
 
 function formatSnapshot(snapshot: UserSnapshot): string {
     const lines: string[] = [
-        `**Nutzer:** ${snapshot.fullName} (${['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(snapshot.role) ? 'Trainer' : 'Azubi'})`,
+        `**Nutzer:** ${snapshot.fullName} (${['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(snapshot.role) ? 'Ausbilder' : 'Azubi'})`,
         `**Gesamtfortschritt:** ${snapshot.overallProgressPercent}%`,
     ];
 

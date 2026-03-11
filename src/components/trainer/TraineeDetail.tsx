@@ -94,9 +94,13 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/trainer/trainees/${traineeId}`, {
-          cache: 'no-store',
-        });
+        const trainerId = profile?.id;
+        if (!trainerId) return;
+
+        const res = await fetch(
+          `/api/trainer/trainees/${traineeId}?requesterId=${trainerId}`,
+          { cache: 'no-store' }
+        );
         if (!res.ok) throw new Error(t('trainee.detail.loadError'));
         const data = await res.json();
         setTrainee(data.trainee);
@@ -109,7 +113,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         });
         // Load overview
         const oRes = await fetch(
-          `/api/trainer/trainees/${traineeId}/overview`,
+          `/api/trainer/trainees/${traineeId}/overview?requesterId=${trainerId}`,
           { cache: 'no-store' }
         );
         if (oRes.ok) {
@@ -122,8 +126,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         setLoading(false);
       }
     };
-    if (traineeId) load();
-  }, [traineeId, t]);
+    if (traineeId && profile?.id) load();
+  }, [traineeId, t, profile?.id]);
 
   const generatePdfBlob = async () => {
     // dynamically import to keep bundle small and avoid SSR issues
@@ -380,7 +384,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     }
   };
 
-  if (loading) {
+  if (loading || (!profile?.id && !error)) {
     return (
       <div className="mx-auto max-w-7xl space-y-8 p-6">
         {/* Skeleton header */}
@@ -401,6 +405,27 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                 <div className="bg-muted h-6 w-40 rounded-lg" />
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !trainee) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-8 p-6">
+        <div className="glass-effect border-accent/30 rounded-3xl border p-8 shadow-lg">
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <div className="bg-destructive/10 flex h-16 w-16 items-center justify-center rounded-full">
+              <TrendingUp className="text-destructive h-8 w-8" />
+            </div>
+            <h2 className="text-foreground text-xl font-bold">{error}</h2>
+            <button
+              onClick={() => router.back()}
+              className="text-muted bg-muted/30 hover:bg-muted/50 rounded-2xl px-6 py-2 transition-all duration-200"
+            >
+              {t('common.back') || 'Back'}
+            </button>
           </div>
         </div>
       </div>
