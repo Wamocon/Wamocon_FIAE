@@ -213,8 +213,8 @@ export async function POST(req: NextRequest) {
 
                 // Send email invitation to trainee if requested
                 if (sendInvitation && trainee.email) {
-                    const trainerName = `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim() || 'Trainer';
-                    const traineeName = `${trainee.firstName || ''} ${trainee.lastName || ''}`.trim() || 'Trainee';
+                    const trainerName = `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim() || 'Ausbilder';
+                    const traineeName = `${trainee.firstName || ''} ${trainee.lastName || ''}`.trim() || 'Auszubildender';
 
                     await sendBlockerInvite([trainee.email], {
                         blockId: row.id,
