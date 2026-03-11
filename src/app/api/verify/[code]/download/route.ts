@@ -302,7 +302,7 @@ export async function GET(
     ) as 'male' | 'female' | 'neutral';
 
     // Generate default summary if missing
-    const traineeName = snapshot.traineeName || 'Trainee';
+    const traineeName = snapshot.traineeName || 'Auszubildender';
     const summaryText =
       cert.customSummary ||
       `Person ${traineeName} hat die ihm übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;

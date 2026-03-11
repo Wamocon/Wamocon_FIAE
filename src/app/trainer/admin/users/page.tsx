@@ -44,10 +44,10 @@ type OrgOption = {
 const ADMIN_ROLES = ['admin', 'temp_admin'];
 
 const ROLE_CONFIG: Record<string, { labelKey: string; icon: typeof Shield; color: string }> = {
-  ADMIN: { labelKey: 'Admin', icon: ShieldCheck, color: 'text-red-400 bg-red-500/10' },
-  TEMP_ADMIN: { labelKey: 'Temp Admin', icon: Shield, color: 'text-orange-400 bg-orange-500/10' },
-  TRAINER: { labelKey: 'Trainer', icon: UserCog, color: 'text-blue-400 bg-blue-500/10' },
-  TRAINEE: { labelKey: 'Trainee', icon: GraduationCap, color: 'text-green-400 bg-green-500/10' },
+  ADMIN: { labelKey: 'roles.admin', icon: ShieldCheck, color: 'text-red-400 bg-red-500/10' },
+  TEMP_ADMIN: { labelKey: 'roles.tempAdmin', icon: Shield, color: 'text-orange-400 bg-orange-500/10' },
+  TRAINER: { labelKey: 'roles.trainer', icon: UserCog, color: 'text-blue-400 bg-blue-500/10' },
+  TRAINEE: { labelKey: 'roles.trainee', icon: GraduationCap, color: 'text-green-400 bg-green-500/10' },
 };
 
 export default function AdminUsersPage() {
@@ -359,9 +359,9 @@ export default function AdminUsersPage() {
                     onChange={e => setNewUser(f => ({ ...f, role: e.target.value }))}
                     className="bg-background border-border text-foreground w-full rounded-xl border px-4 py-3 focus:outline-none focus:ring-2 focus:ring-accent"
                   >
-                    <option value="TRAINEE">Trainee</option>
-                    <option value="TRAINER">Trainer</option>
-                    <option value="TEMP_ADMIN">Temp Admin</option>
+                    <option value="TRAINEE">{t('roles.trainee')}</option>
+                    <option value="TRAINER">{t('roles.trainer')}</option>
+                    <option value="TEMP_ADMIN">{t('roles.tempAdmin')}</option>
                   </select>
                 </div>
                 <div>
@@ -440,10 +440,10 @@ export default function AdminUsersPage() {
             className="bg-background border-border text-foreground appearance-none rounded-xl border py-2.5 pl-4 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
           >
             <option value="">{t('admin.users.allRoles')}</option>
-            <option value="ADMIN">Admin</option>
-            <option value="TEMP_ADMIN">Temp Admin</option>
-            <option value="TRAINER">Trainer</option>
-            <option value="TRAINEE">Trainee</option>
+            <option value="ADMIN">{t('roles.admin')}</option>
+            <option value="TEMP_ADMIN">{t('roles.tempAdmin')}</option>
+            <option value="TRAINER">{t('roles.trainer')}</option>
+            <option value="TRAINEE">{t('roles.trainee')}</option>
           </select>
           <ChevronDown className="text-muted pointer-events-none absolute right-3 top-3 h-4 w-4" />
         </div>
@@ -489,15 +489,15 @@ export default function AdminUsersPage() {
                           onChange={e => updateUser(u.id, { role: e.target.value })}
                           className="bg-background border-border text-foreground rounded-lg border px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
                         >
-                          {isFullAdmin && <option value="ADMIN">Admin</option>}
-                          <option value="TEMP_ADMIN">Temp Admin</option>
-                          <option value="TRAINER">Trainer</option>
-                          <option value="TRAINEE">Trainee</option>
+                          {isFullAdmin && <option value="ADMIN">{t('roles.admin')}</option>}
+                          <option value="TEMP_ADMIN">{t('roles.tempAdmin')}</option>
+                          <option value="TRAINER">{t('roles.trainer')}</option>
+                          <option value="TRAINEE">{t('roles.trainee')}</option>
                         </select>
                       ) : (
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${rc.color}`}>
                           <RoleIcon className="h-3.5 w-3.5" />
-                          {rc.labelKey}
+                          {t(rc.labelKey)}
                         </span>
                       )}
                     </td>

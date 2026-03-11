@@ -10,6 +10,7 @@ import {
   useCases,
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,6 +20,11 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (all)
     if (!trainerId)
       return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+
+    const [trainerOrgId, isPlatformOwner] = await Promise.all([
+      getUserOrgId(trainerId),
+      verifyPlatformOwner(trainerId),
+    ]);
 
     // Determine courses the trainer can review: creator or member (TRAINER)
     const created = await db
@@ -182,6 +188,26 @@ export async function GET(req: NextRequest) {
           traineeName: trMap[String(r.traineeId)] || 'Unbekannt',
           attemptNumber: (r as any).attemptNumber,
         }));
+      }
+    }
+
+    if (!isPlatformOwner && trainerOrgId) {
+      const allTraineeIds = new Set([
+        ...enablerRows.map(r => String(r.traineeId)),
+        ...useCaseRows.map(r => String(r.traineeId)),
+      ]);
+      if (allTraineeIds.size > 0) {
+        const traineeProfiles = await db
+          .select({ id: profiles.id, organizationId: profiles.organizationId })
+          .from(profiles)
+          .where(inArray(profiles.id, Array.from(allTraineeIds)));
+        const sameOrgTrainees = new Set(
+          traineeProfiles
+            .filter(p => p.organizationId === trainerOrgId)
+            .map(p => String(p.id))
+        );
+        enablerRows = enablerRows.filter(r => sameOrgTrainees.has(String(r.traineeId)));
+        useCaseRows = useCaseRows.filter(r => sameOrgTrainees.has(String(r.traineeId)));
       }
     }
 

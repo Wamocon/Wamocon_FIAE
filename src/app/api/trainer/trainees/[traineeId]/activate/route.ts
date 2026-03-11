@@ -8,7 +8,7 @@ import {
   quizAssignments,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
 
@@ -23,10 +23,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
       trainerId?: string;
     };
 
-    // Optional auth: ensure trainer is TRAINER
     if (trainerId) {
       const [t] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any)).limit(1);
-      if (!t || t.role !== 'TRAINER') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      if (!t || !['TRAINER', 'ADMIN', 'TEMP_ADMIN'].includes(t.role || ''))
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
+      const isPO = await verifyPlatformOwner(trainerId);
+      if (!isPO) {
+        const trainerOrgId = await getUserOrgId(trainerId);
+        const traineeOrgId = await getUserOrgId(traineeId);
+        if (trainerOrgId !== traineeOrgId) {
+          return NextResponse.json({ error: 'Trainee not in your organization' }, { status: 403 });
+        }
+      }
     }
 
     if (!itemType || !itemId || typeof isActive !== 'boolean') {
