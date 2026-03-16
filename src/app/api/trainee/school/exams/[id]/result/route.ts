@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { schoolExams, schoolExamResults, profiles, notifications } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             }, { status: 409 });
         }
 
+        const effectiveTraineeId = traineeId || String(exam.traineeId);
+        const organizationId = await getUserOrgId(effectiveTraineeId);
+
         // Determine passed status
         const isPassed = passed !== undefined ? passed : determinePassed(grade, points);
 
@@ -79,7 +83,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
         // Notify the trainee's assigned trainer about the exam result
         try {
-            const effectiveTraineeId = traineeId || String(exam.traineeId);
             const [traineeProfile] = await db
                 .select({ fullName: profiles.fullName, assignedTrainerId: profiles.assignedTrainerId })
                 .from(profiles)
@@ -89,11 +92,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 .from(schoolExams)
                 .where(eq(schoolExams.id, examId as any));
             if (traineeProfile?.assignedTrainerId) {
-                const traineeName = traineeProfile.fullName || 'Trainee';
+                const traineeName = traineeProfile.fullName || 'Auszubildender';
                 const subjectName = examDetail?.subject || 'Prüfung';
                 await db.insert(notifications).values({
                     userId: String(traineeProfile.assignedTrainerId),
                     actorId: effectiveTraineeId,
+                    organizationId,
                     type: 'EXAM_RESULT_SUBMITTED',
                     title: 'Prüfungsergebnis eingetragen',
                     message: `${traineeName} hat ein Ergebnis für "${subjectName}" eingetragen.`,

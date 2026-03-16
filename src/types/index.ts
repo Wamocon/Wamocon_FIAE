@@ -6,10 +6,12 @@ export interface User {
   updated_at: string;
 }
 
+export type UserRole = 'admin' | 'temp_admin' | 'trainer' | 'trainee';
+
 export interface Profile {
   id: string;
   full_name: string;
-  role: 'trainee' | 'trainer';
+  role: UserRole;
   avatar_url?: string;
   birth_date?: string;
   trainer_id?: string;

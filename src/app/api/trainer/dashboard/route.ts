@@ -17,12 +17,18 @@ import {
   activityReports,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // Passing score threshold
 const PASS_THRESHOLD = 50;
 
 async function fetchTrainerDashboardData(trainerId: string) {
   try {
+    const [trainerOrgId, isPlatformOwner] = await Promise.all([
+      getUserOrgId(trainerId),
+      verifyPlatformOwner(trainerId),
+    ]);
+
     // ── Phase 1: Trainer + trainee lookups (3 queries) ──
     const [createdCourses, memberCoursesRaw] = await Promise.all([
       db
@@ -51,14 +57,15 @@ async function fetchTrainerDashboardData(trainerId: string) {
       ])
     );
 
-    // Fetch only trainees enrolled in this trainer's courses (was: ALL trainees)
-    const traineeRows = courseIds.length
+    // Fetch trainees enrolled in this trainer's courses, filtered by org for non-platform-owner trainers
+    const traineeRowsAll = courseIds.length
       ? await db
         .selectDistinct({
           id: profiles.id,
           fullName: profiles.fullName,
           avatarUrl: profiles.avatarUrl,
           isActive: profiles.isActive,
+          organizationId: profiles.organizationId,
         })
         .from(profiles)
         .innerJoin(courseMembers, eq(courseMembers.userId, profiles.id))
@@ -70,6 +77,10 @@ async function fetchTrainerDashboardData(trainerId: string) {
           )
         )
       : [];
+
+    const traineeRows = isPlatformOwner
+      ? traineeRowsAll
+      : traineeRowsAll.filter(t => t.organizationId === trainerOrgId);
     const traineeIds = traineeRows.map(t => String(t.id));
     const hasTrainees = traineeIds.length > 0;
 

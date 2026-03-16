@@ -34,7 +34,7 @@ export default function EditEnablerQuizPage() {
   const params = useParams<{ enablerId: string; quizId: string }>();
   const enablerId = params?.enablerId as string;
   const quizId = params?.quizId as string;
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -107,7 +107,7 @@ export default function EditEnablerQuizPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">{t('trainer.enablerQuiz.title')}</h1>
         <div className="flex items-center gap-2">
-          {editing && (
+          {editing && isPlatformOwner && (
             <button
               className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600"
               onClick={async () => {
@@ -128,14 +128,16 @@ export default function EditEnablerQuizPage() {
               {t('common.delete')}
             </button>
           )}
-          <button
-            className="border-accent/30 rounded-md border px-3 py-1.5 text-sm"
-            onClick={() => setEditing(!editing)}
-          >
-            {editing
-              ? t('trainer.enablerQuiz.viewMode')
-              : t('trainer.enablerQuiz.editMode')}
-          </button>
+          {isPlatformOwner && (
+            <button
+              className="border-accent/30 rounded-md border px-3 py-1.5 text-sm"
+              onClick={() => setEditing(!editing)}
+            >
+              {editing
+                ? t('trainer.enablerQuiz.viewMode')
+                : t('trainer.enablerQuiz.editMode')}
+            </button>
+          )}
           <button
             className="border-accent/30 rounded-md border px-3 py-1.5 text-sm"
             onClick={() => router.back()}

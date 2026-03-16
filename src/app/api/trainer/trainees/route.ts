@@ -9,6 +9,7 @@ import {
   courseMembers,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,10 +23,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    if (!(await verifyTrainer(trainerId))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const cached = await apiCache.getOrFetch(
       `trainer_trainees_${trainerId}`,
       async () => {
-        // List ALL trainees regardless of assigned trainer
+        const trainerOrgId = await getUserOrgId(trainerId);
+        const isPlatform = await verifyPlatformOwner(trainerId);
+
+        // Org-scoped: list trainees from the trainer's org (platform owner sees all)
         const traineeRows = await db
           .select({
             id: profiles.id,
@@ -35,9 +43,17 @@ export async function GET(req: NextRequest) {
             email: profiles.email,
             avatarUrl: profiles.avatarUrl,
             isActive: profiles.isActive,
+            trainerActivated: profiles.trainerActivated,
           })
           .from(profiles)
-          .where(eq(profiles.role, 'TRAINEE'));
+          .where(
+            isPlatform
+              ? eq(profiles.role, 'TRAINEE')
+              : and(
+                  eq(profiles.role, 'TRAINEE'),
+                  eq(profiles.organizationId, trainerOrgId as any)
+                )
+          );
 
         const traineeIds = traineeRows.map(t => String(t.id));
 
@@ -122,6 +138,7 @@ export async function GET(req: NextRequest) {
               progress: pct,
               coursesCount: courseIdsForTrainee.length,
               isActive: Boolean(t.isActive),
+              trainerActivated: Boolean(t.trainerActivated),
             };
           }),
         };

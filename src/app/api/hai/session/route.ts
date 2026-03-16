@@ -18,6 +18,7 @@ import {
   haiChatMessages,
   profiles,
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId, requireProPlan } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -50,6 +51,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { error: 'Nicht authentifiziert.' },
         { status: 401 }
+      );
+    }
+
+    if (!(await requireProPlan(userId))) {
+      return NextResponse.json(
+        { error: 'HAI.ai is only available with a PRO subscription.' },
+        { status: 403 }
       );
     }
 
@@ -281,6 +289,13 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    if (!(await requireProPlan(userId))) {
+      return NextResponse.json(
+        { error: 'HAI.ai is only available with a PRO subscription.' },
+        { status: 403 }
+      );
+    }
+
     const body: UpdateSessionBody = await req.json();
     const { sessionId, title, isActive } = body;
 
@@ -357,6 +372,13 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    if (!(await requireProPlan(userId))) {
+      return NextResponse.json(
+        { error: 'HAI.ai is only available with a PRO subscription.' },
+        { status: 403 }
+      );
+    }
+
     if (!sessionId) {
       return NextResponse.json(
         { error: 'sessionId erforderlich.' },
@@ -418,10 +440,12 @@ export async function POST(req: NextRequest) {
     const { contextType, contextId, title } = body;
 
     // Create new session
+    const organizationId = await getUserOrgId(userId);
     const newSession = await db
       .insert(haiChatSessions)
       .values({
         userId,
+        organizationId,
         contextType: contextType || 'general',
         contextId: contextId || null,
         title: title || null,

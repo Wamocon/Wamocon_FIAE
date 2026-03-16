@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 import {
   courses,
@@ -113,6 +113,15 @@ export async function PATCH(
       );
     }
 
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = await getUserOrgId(trainerId);
+
     const body = await req.json();
     const updates: any = {};
     if (typeof body?.title === 'string') updates.title = body.title;
@@ -192,6 +201,7 @@ export async function PATCH(
           message: `Der Kurs "${courseTitle}" wurde aktualisiert.`,
           linkUrl: '/trainee/modules',
           context: { courseId },
+          organizationId,
         }));
         await db.insert(notifications).values(notifValues);
       }
@@ -242,6 +252,15 @@ export async function DELETE(
       );
     }
 
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = await getUserOrgId(trainerId);
+
     // Gather course members before deletion to notify them
     const memberRows = await db
       .select({ userId: courseMembers.userId, role: courseMembers.role })
@@ -277,8 +296,9 @@ export async function DELETE(
           title: 'Kurs gelöscht',
           message: `Der Kurs "${courseName}" wurde gelöscht.`,
           linkUrl:
-            m.role === 'TRAINER' ? '/trainer/courses' : '/trainee/modules',
+            ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(m.role) ? '/trainer/courses' : '/trainee/modules',
           context: { courseId },
+          organizationId,
         }));
         await db.insert(notifications).values(notifValues);
       }

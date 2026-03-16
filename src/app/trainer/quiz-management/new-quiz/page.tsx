@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { PageLoader } from '@/components/ui/PageLoader';
 
@@ -14,7 +15,17 @@ type ModuleItem = {
 
 export default function NewQuizPage() {
   const router = useRouter();
+  const { isPlatformOwner, loading: authLoading } = useAuth();
   const { t } = useLanguage();
+
+  if (authLoading) return <PageLoader />;
+  if (!isPlatformOwner) {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+          <p className="text-muted-foreground">{t('access.quizManagement')}</p>
+      </div>
+    );
+  }
   const [title, setTitle] = useState('');
   const [quizType, setQuizType] = useState<'mini' | 'big'>('mini');
   const [trainingYear, setTrainingYear] = useState<'1' | '2' | '3'>('1');

@@ -6,7 +6,7 @@ import {
   useCaseSubmissions,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 
 export async function PATCH(
@@ -54,12 +54,23 @@ export async function PATCH(
       );
     }
 
-    // Shared curriculum: any valid trainer can review submissions
     if (!(await verifyTrainer(trainerId))) {
       return NextResponse.json(
         { error: 'Forbidden - not a trainer' },
         { status: 403 }
       );
+    }
+
+    const organizationId = await getUserOrgId(trainerId);
+    const isPO = await verifyPlatformOwner(trainerId);
+    if (!isPO && sub.traineeId) {
+      const traineeOrgId = await getUserOrgId(String(sub.traineeId));
+      if (organizationId !== traineeOrgId) {
+        return NextResponse.json(
+          { error: 'Trainee not in your organization' },
+          { status: 403 }
+        );
+      }
     }
 
     const [row] = await db
@@ -84,6 +95,7 @@ export async function PATCH(
           message: `Status: ${status}`,
           linkUrl: '/trainee/modules',
           context: { submissionId, useCaseId: String(row.useCaseId) },
+          organizationId,
         });
       }
     } catch (notifyErr) {

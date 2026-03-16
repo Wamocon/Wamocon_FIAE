@@ -10,7 +10,7 @@ import {
   courseMembers,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET: List quizzes for an enabler grouped by difficulty
 export async function GET(
@@ -108,6 +108,15 @@ export async function POST(
         { status: 403 }
       );
     }
+
+    if (!(await verifyPlatformOwner(createdById))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = await getUserOrgId(createdById);
 
     const created = await db.transaction(async tx => {
       // If a quiz already exists for this difficulty, delete it
@@ -211,6 +220,7 @@ export async function POST(
             message: `Ein neues ${diffLabel}-Quiz wurde für "${enabler.title}" erstellt.`,
             linkUrl: `/trainee/enablers/${enablerId}`,
             context: { enablerId, quizId: created.id, difficulty },
+            organizationId,
           }));
           await db.insert(notifications).values(notifValues);
         }
