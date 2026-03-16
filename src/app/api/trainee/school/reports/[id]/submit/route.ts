@@ -13,6 +13,7 @@ import {
     profiles,
     notifications
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -74,6 +75,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             }, { status: 400 });
         }
 
+        const organizationId = await getUserOrgId(report.traineeId);
+
         // Get trainee info
         const [trainee] = await db
             .select({
@@ -101,6 +104,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             await db.insert(notifications).values({
                 userId: trainee.assignedTrainerId as any,
                 actorId: report.traineeId,
+                organizationId,
                 type: 'ACTIVITY_REPORT_SUBMITTED',
                 title: 'Tätigkeitsnachweis zur Genehmigung',
                 message: `${trainee.fullName || 'Ein Auszubildender'} hat den Tätigkeitsnachweis für KW ${report.weekNumber}/${report.year} eingereicht.`,

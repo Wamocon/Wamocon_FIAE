@@ -9,6 +9,7 @@ import {
     gradeEditHistory,
 } from '@/db/migrations/schemas/schema';
 import { eq, and } from 'drizzle-orm';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -283,6 +284,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
         // Create notification for trainee
         if (trainerId) {
+            const organizationId = await getUserOrgId(trainerId);
             await db.insert(notifications).values({
                 userId: evaluation.traineeId,
                 actorId: trainerId,
@@ -294,6 +296,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
                     ? `Deine Leistungsbewertung für KW ${evaluation.weekNumber}/${evaluation.year} wurde genehmigt.`
                     : `Deine Leistungsbewertung für KW ${evaluation.weekNumber}/${evaluation.year} wurde abgelehnt. Grund: ${rejectionReason || 'Bitte korrigieren.'}`,
                 linkUrl: '/trainee/evaluations',
+                organizationId,
             });
         }
 

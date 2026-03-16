@@ -18,6 +18,7 @@ import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { executeAction, ActionType } from '@/lib/hai/actions';
+import { requireProPlan } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -45,6 +46,13 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
                 { error: 'Nicht authentifiziert. Bitte melde dich an.' },
                 { status: 401 }
+            );
+        }
+
+        if (!(await requireProPlan(userId))) {
+            return NextResponse.json(
+                { error: 'HAI.ai is only available with a PRO subscription.' },
+                { status: 403 }
             );
         }
 
@@ -113,6 +121,10 @@ export async function GET(req: NextRequest) {
 
         if (!userId) {
             return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+        }
+
+        if (!(await requireProPlan(userId))) {
+            return NextResponse.json({ error: 'HAI.ai is only available with a PRO subscription.' }, { status: 403 });
         }
 
         // Get user role

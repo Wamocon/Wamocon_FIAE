@@ -47,7 +47,7 @@ function clearCompleted(type: TourType): void {
   localStorage.removeItem(STORAGE_KEYS[type]);
 }
 
-function getSteps(role: 'trainee' | 'trainer', type: TourType): TourStep[] {
+function getSteps(role: string, type: TourType): TourStep[] {
   if (role === 'trainee') return type === 'main' ? TRAINEE_MAIN_STEPS : TRAINEE_HAI_STEPS;
   return type === 'main' ? TRAINER_MAIN_STEPS : TRAINER_HAI_STEPS;
 }

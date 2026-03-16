@@ -10,6 +10,7 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { ausbildungBlocks, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { sendBlockerInvite } from '@/lib/email';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // Helper to calculate Ausbildungsjahr from startOfTrainingDate
 function calculateAusbildungsjahr(startDate: Date): number {
@@ -133,6 +134,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized: Trainer access required' }, { status: 403 });
         }
 
+        const organizationId = await getUserOrgId(trainerId);
+
         // Process each trainee
         const results = [];
         const errors = [];
@@ -204,13 +207,14 @@ export async function POST(req: NextRequest) {
                         isPersonal: false,
                         createdByTrainerId: trainerId,
                         inviteeEmails: trainee.email,
+                        organizationId,
                     })
                     .returning();
 
                 // Send email invitation to trainee if requested
                 if (sendInvitation && trainee.email) {
-                    const trainerName = `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim() || 'Trainer';
-                    const traineeName = `${trainee.firstName || ''} ${trainee.lastName || ''}`.trim() || 'Trainee';
+                    const trainerName = `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim() || 'Ausbilder';
+                    const traineeName = `${trainee.firstName || ''} ${trainee.lastName || ''}`.trim() || 'Auszubildender';
 
                     await sendBlockerInvite([trainee.email], {
                         blockId: row.id,
@@ -240,6 +244,7 @@ export async function POST(req: NextRequest) {
                         message: `Ein neuer Block "${blockLabel}" wurde für ${startStr} – ${endStr} geplant.`,
                         linkUrl: '/trainee/school?tab=blocks',
                         context: { blockId: row.id, blockType, startDate: startDate, endDate: endDate },
+                        organizationId,
                     });
                 } catch (notifyErr) {
                     console.warn(`Failed to notify trainee ${tid} for block creation`, notifyErr);

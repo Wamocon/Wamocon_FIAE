@@ -16,10 +16,24 @@ import {
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ traineeId: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ traineeId: string }> }) {
   try {
     const { traineeId } = await params;
+
+    const { searchParams } = new URL(req.url);
+    const requesterId = searchParams.get('requesterId') || searchParams.get('trainerId');
+    if (requesterId && (await verifyTrainer(requesterId))) {
+      const isPO = await verifyPlatformOwner(requesterId);
+      if (!isPO) {
+        const requesterOrgId = await getUserOrgId(requesterId);
+        const traineeOrgId = await getUserOrgId(traineeId);
+        if (requesterOrgId !== traineeOrgId) {
+          return NextResponse.json({ error: 'Trainee not in your organization' }, { status: 403 });
+        }
+      }
+    }
 
     // Basic trainee info
     const [p] = await db

@@ -47,7 +47,7 @@ export default function LernfeldDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { t } = useLanguage();
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner } = useAuth();
   const [lernfeld, setLernfeld] = useState<Lernfeld | null>(null);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,22 +180,24 @@ export default function LernfeldDetailPage({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowEditModal(true)}
-              className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-2 rounded-xl px-4 py-2 transition-colors"
-            >
-              <Edit2 className="h-4 w-4" />
-              {t('common.edit')}
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-2 text-red-500 transition-colors hover:bg-red-500/20"
-            >
-              <Trash2 className="h-4 w-4" />
-              {t('common.delete')}
-            </button>
-          </div>
+          {isPlatformOwner && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-2 rounded-xl px-4 py-2 transition-colors"
+              >
+                <Edit2 className="h-4 w-4" />
+                {t('common.edit')}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-2 text-red-500 transition-colors hover:bg-red-500/20"
+              >
+                <Trash2 className="h-4 w-4" />
+                {t('common.delete')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

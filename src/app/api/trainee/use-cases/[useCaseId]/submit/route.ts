@@ -3,6 +3,7 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, notifications, courses } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // POST submit or update a use-case submission
 // Body: { traineeId: string, submissionText?: string, links?: Array<{ url: string, description?: string }> }
@@ -14,6 +15,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     const submissionText: string | undefined = body?.submissionText;
     const links: Array<{ url: string; description?: string }> = Array.isArray(body?.links) ? body.links : [];
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    const organizationId = await getUserOrgId(traineeId);
 
     const [u] = await db.select().from(useCases).where(eq(useCases.id, useCaseId as any));
     if (!u || !u.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -44,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
       } else {
         const [created] = await tx
           .insert(useCaseSubmissions)
-          .values({ traineeId: traineeId as any, useCaseId: useCaseId as any, submissionText: submissionText as any, status: 'PENDING' as any, attemptNumber: nextAttempt as any })
+          .values({ traineeId: traineeId as any, useCaseId: useCaseId as any, submissionText: submissionText as any, status: 'PENDING' as any, attemptNumber: nextAttempt as any, organizationId })
           .returning();
         submissionId = created.id as any;
       }
@@ -77,6 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
           message: `Ein Trainee hat einen Use Case eingereicht: ${u.title}`,
           linkUrl: '/trainer/reviews?view=usecases&onlyPending=true',
           context: { useCaseId, submissionId: result },
+          organizationId,
         }));
         await db.insert(notifications).values(values);
       }

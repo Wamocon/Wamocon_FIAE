@@ -13,6 +13,7 @@ import {
   profiles,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET /api/trainer/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
@@ -26,20 +27,27 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
     }
 
+    const [trainerOrgId, isPlatformOwner] = await Promise.all([
+      getUserOrgId(trainerId),
+      verifyPlatformOwner(trainerId),
+    ]);
+
     const cacheKey = `trainer_activity_reports_${trainerId}_${status || 'all'}_${traineeId || 'all'}`;
     const cached = await apiCache.getOrFetch(
       cacheKey,
       async () => {
-        // Get trainees assigned to this trainer
+        const traineeConditions: any[] = [
+          eq(profiles.assignedTrainerId, trainerId as any),
+          eq(profiles.role, 'TRAINEE'),
+        ];
+        if (!isPlatformOwner && trainerOrgId) {
+          traineeConditions.push(eq(profiles.organizationId, trainerOrgId as any));
+        }
+
         const trainees = await db
           .select({ id: profiles.id, fullName: profiles.fullName })
           .from(profiles)
-          .where(
-            and(
-              eq(profiles.assignedTrainerId, trainerId as any),
-              eq(profiles.role, 'TRAINEE')
-            )
-          );
+          .where(and(...traineeConditions));
 
         const traineeIds = trainees.map(t => t.id);
         const traineeMap = new Map(trainees.map(t => [t.id, t.fullName]));

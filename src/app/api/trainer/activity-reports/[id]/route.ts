@@ -14,6 +14,7 @@ import {
     profiles,
     notifications
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -23,6 +24,8 @@ interface RouteParams {
 export async function GET(req: NextRequest, { params }: RouteParams) {
     try {
         const { id } = await params;
+        const { searchParams } = new URL(req.url);
+        const requesterId = searchParams.get('requesterId') || searchParams.get('trainerId');
 
         // Get report
         const [report] = await db
@@ -32,6 +35,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
         if (!report) {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        }
+
+        if (requesterId) {
+            const isPO = await verifyPlatformOwner(requesterId);
+            if (!isPO) {
+                const trainerOrgId = await getUserOrgId(requesterId);
+                const traineeOrgId = await getUserOrgId(report.traineeId);
+                if (trainerOrgId !== traineeOrgId) {
+                    return NextResponse.json({ error: 'Not in your organization' }, { status: 403 });
+                }
+            }
         }
 
         // Get entries
@@ -112,11 +126,22 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             }, { status: 403 });
         }
 
+        const isPO = await verifyPlatformOwner(trainerId);
+        if (!isPO) {
+            const trainerOrgId = await getUserOrgId(trainerId);
+            const traineeOrgId = await getUserOrgId(report.traineeId);
+            if (trainerOrgId !== traineeOrgId) {
+                return NextResponse.json({ error: 'Not in your organization' }, { status: 403 });
+            }
+        }
+
         // Get trainer info for notification
         const [trainer] = await db
             .select({ fullName: profiles.fullName })
             .from(profiles)
             .where(eq(profiles.id, trainerId));
+
+        const organizationId = await getUserOrgId(trainerId);
 
         const now = new Date();
         let updateData: Record<string, any>;
@@ -172,6 +197,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
                 action,
                 feedback: feedback || null,
             },
+            organizationId,
         });
 
         return NextResponse.json({

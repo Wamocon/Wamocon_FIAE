@@ -24,7 +24,7 @@ export default function EditCoursePage() {
   const router = useRouter();
   const params = useParams<{ moduleId: string }>();
   const courseId = params?.moduleId as string;
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner, subscriptionPlan, loading: authLoading } = useAuth();
   const { t } = useLanguage();
   const trainerId = profile?.id;
 
@@ -112,8 +112,26 @@ export default function EditCoursePage() {
       storageUrl: string;
       fileName: string;
       documentType?: string;
+      organizationId?: string | null;
     }>
   >([]);
+
+  // Plan-based document visibility
+  const trainerOrgId = profile?.organizationId || profile?.organization?.id;
+  const isLightPlan = subscriptionPlan === 'LIGHT';
+
+  // LIGHT plan hides only Wamocon THEORY PDFs; scenario + use case PDFs are always visible
+  const canSeeTheoryDoc = (doc: { organizationId?: string | null }) => {
+    if (isPlatformOwner) return true;
+    if (isLightPlan) return doc.organizationId != null && doc.organizationId === trainerOrgId;
+    return true;
+  };
+
+  // Non-Wamocon trainers can only delete their own org's documents
+  const canDeleteDoc = (doc: { organizationId?: string | null }) => {
+    if (isPlatformOwner) return true;
+    return doc.organizationId != null && doc.organizationId === trainerOrgId;
+  };
 
   // UI: Add Use Case Modal state
   const [showAddUseCase, setShowAddUseCase] = useState(false);
@@ -149,6 +167,7 @@ export default function EditCoursePage() {
       storageUrl: string;
       fileName: string;
       documentType?: string;
+      organizationId?: string | null;
     }>
   >([]);
 
@@ -309,7 +328,7 @@ export default function EditCoursePage() {
     }
   };
 
-  if (loading) return <PageLoader />;
+  if (loading || authLoading) return <PageLoader />;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
@@ -337,14 +356,16 @@ export default function EditCoursePage() {
             >
               <X className="h-4 w-4" /> {t('common.cancel')}
             </button>
-            <button
-              onClick={e => handleSave(e as any)}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
-              disabled={saving}
-            >
-              <Save className="h-4 w-4" />{' '}
-              {saving ? t('common.saving') : t('common.save')}
-            </button>
+            {isPlatformOwner && (
+              <button
+                onClick={e => handleSave(e as any)}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
+                disabled={saving}
+              >
+                <Save className="h-4 w-4" />{' '}
+                {saving ? t('common.saving') : t('common.save')}
+              </button>
+            )}
           </div>
         </div>
 
@@ -364,6 +385,7 @@ export default function EditCoursePage() {
                     value={title}
                     onChange={e => setTitle(e.target.value)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    disabled={!isPlatformOwner}
                   />
                 </div>
                 <div>
@@ -374,6 +396,7 @@ export default function EditCoursePage() {
                     value={year}
                     onChange={e => setYear(e.target.value as any)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    disabled={!isPlatformOwner}
                   >
                     <option value="">
                       {t('trainer.content.examPartNone')}
@@ -390,30 +413,41 @@ export default function EditCoursePage() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
+                      disabled={!isPlatformOwner}
                       onClick={() =>
                         setChapter(prev =>
                           String(Math.max(1, (parseInt(prev) || 0) - 1))
                         )
                       }
-                      className="border-accent/20 bg-background/60 hover:bg-accent/10 cursor-pointer rounded-l-xl border px-3 py-2 text-sm font-bold transition-colors"
+                      className="border-accent/20 bg-background/60 hover:bg-accent/10 cursor-pointer rounded-l-xl border px-3 py-2 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       −
                     </button>
                     <input
                       value={chapter}
-                      onChange={e =>
-                        setChapter(e.target.value.replace(/\D/g, ''))
-                      }
-                      className="border-accent/20 bg-background/60 w-full border-y px-3 py-2 text-center"
+                      disabled={!isPlatformOwner}
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        const num = parseInt(val);
+                        if (val === '' || (num >= 0 && num <= 999)) {
+                          setChapter(val);
+                        }
+                      }}
+                      className="border-accent/20 bg-background/60 w-full border-y px-3 py-2 text-center disabled:cursor-not-allowed disabled:opacity-50"
                       placeholder={t('trainer.content.chapterPlaceholder')}
                       inputMode="numeric"
+                      max={999}
                     />
                     <button
                       type="button"
+                      disabled={!isPlatformOwner}
                       onClick={() =>
-                        setChapter(prev => String((parseInt(prev) || 0) + 1))
+                        setChapter(prev => {
+                          const next = (parseInt(prev) || 0) + 1;
+                          return next <= 999 ? String(next) : prev;
+                        })
                       }
-                      className="border-accent/20 bg-background/60 hover:bg-accent/10 cursor-pointer rounded-r-xl border px-3 py-2 text-sm font-bold transition-colors"
+                      className="border-accent/20 bg-background/60 hover:bg-accent/10 cursor-pointer rounded-r-xl border px-3 py-2 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       +
                     </button>
@@ -644,44 +678,44 @@ export default function EditCoursePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
+                    {isPlatformOwner && (
+                      <button
+                        type="button"
+                        className="border-accent/30 rounded-md border px-2 py-1 text-xs"
+                        onClick={async () => {
+                          await fetch(
+                            `/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`,
+                            {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ isActive: !e.isActive }),
+                            }
+                          );
+                          const r = await fetch(
+                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                            { cache: 'no-store' }
+                          );
+                          const data = await r.json();
+                          setEnablers(
+                            (data.enablers || []).map((x: any) => ({
+                              id: x.id,
+                              title: x.title,
+                              isActive: !!x.isActive,
+                            }))
+                          );
+                        }}
+                      >
+                        {e.isActive
+                          ? t('common.deactivate')
+                          : t('common.activate')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="border-accent/30 rounded-md border px-2 py-1 text-xs"
                       onClick={async () => {
-                        await fetch(
-                          `/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`,
-                          {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ isActive: !e.isActive }),
-                          }
-                        );
-                        const r = await fetch(
-                          `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
-                          { cache: 'no-store' }
-                        );
-                        const data = await r.json();
-                        setEnablers(
-                          (data.enablers || []).map((x: any) => ({
-                            id: x.id,
-                            title: x.title,
-                            isActive: !!x.isActive,
-                          }))
-                        );
-                      }}
-                    >
-                      {e.isActive
-                        ? t('common.deactivate')
-                        : t('common.activate')}
-                    </button>
-                    <button
-                      type="button"
-                      className="border-accent/30 rounded-md border px-2 py-1 text-xs"
-                      onClick={async () => {
-                        // Prefill enabler details and quiz into add/edit fields and open edit modal
                         try {
                           setEditingEnablerId(e.id);
-                          // Load enabler fields
                           const er = await fetch(
                             `/api/trainer/enablers/${e.id}`,
                             { cache: 'no-store' }
@@ -693,7 +727,6 @@ export default function EditCoursePage() {
                             setEnablerDescription(en.descriptionText || '');
                             setEnablerScenarioPdf(en.scenarioPdfUrl || '');
                           }
-                          // Load multi-difficulty quiz list
                           const ql = await fetch(
                             `/api/trainer/enablers/${e.id}/quizzes`,
                             { cache: 'no-store' }
@@ -704,7 +737,6 @@ export default function EditCoursePage() {
                           } else {
                             setEnablerQuizList([]);
                           }
-                          // Load documents
                           try {
                             const dr = await fetch(
                               `/api/trainer/enablers/${e.id}/documents`,
@@ -719,66 +751,69 @@ export default function EditCoursePage() {
                           } catch {
                             setEnablerDocuments([]);
                           }
-                          // Quizzes are managed via multi-difficulty section below; legacy single-quiz flow removed
                           setShowEditEnabler(true);
                         } catch (e) {
                           console.error(e);
                         }
                       }}
                     >
-                      {t('common.edit')}
+                      {isPlatformOwner ? t('common.edit') : t('content.view')}
                     </button>
-                    <button
-                      type="button"
-                      className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
-                      onClick={async () => {
-                        if (!trainerId) {
-                          alert(t('trainer.content.errorNoTrainer'));
-                          return;
-                        }
-                        const ok = window.confirm(
-                          t('trainer.content.confirmDeleteEnabler')
-                        );
-                        if (!ok) return;
-                        try {
-                          const del = await fetch(
-                            `/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`,
-                            { method: 'DELETE' }
+                    {isPlatformOwner && (
+                      <button
+                        type="button"
+                        className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
+                        onClick={async () => {
+                          if (!trainerId) {
+                            alert(t('trainer.content.errorNoTrainer'));
+                            return;
+                          }
+                          const ok = window.confirm(
+                            t('trainer.content.confirmDeleteEnabler')
                           );
-                          if (!del.ok)
-                            throw new Error(
-                              t('trainer.content.errorDeleteFailed')
+                          if (!ok) return;
+                          try {
+                            const del = await fetch(
+                              `/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`,
+                              { method: 'DELETE' }
                             );
-                          const r = await fetch(
-                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
-                            { cache: 'no-store' }
-                          );
-                          const data = await r.json();
-                          setEnablers(
-                            (data.enablers || []).map((x: any) => ({
-                              id: x.id,
-                              title: x.title,
-                              isActive: !!x.isActive,
-                            }))
-                          );
-                        } catch (err: any) {
-                          alert(err?.message || t('common.unknownError'));
-                        }
-                      }}
-                    >
-                      {t('common.delete')}
-                    </button>
+                            if (!del.ok)
+                              throw new Error(
+                                t('trainer.content.errorDeleteFailed')
+                              );
+                            const r = await fetch(
+                              `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                              { cache: 'no-store' }
+                            );
+                            const data = await r.json();
+                            setEnablers(
+                              (data.enablers || []).map((x: any) => ({
+                                id: x.id,
+                                title: x.title,
+                                isActive: !!x.isActive,
+                              }))
+                            );
+                          } catch (err: any) {
+                            alert(err?.message || t('common.unknownError'));
+                          }
+                        }}
+                      >
+                        {t('common.delete')}
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              className="border-accent/30 mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
-              onClick={() => setShowAddEnabler(true)}
-            >
-              <Plus className="h-4 w-4" /> {t('trainer.content.addLesson')}
-            </button>
+            {isPlatformOwner && (
+              <button
+                type="button"
+                className="border-accent/30 mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+                onClick={() => setShowAddEnabler(true)}
+              >
+                <Plus className="h-4 w-4" /> {t('trainer.content.addLesson')}
+              </button>
+            )}
           </div>
 
           <div className="border-accent/20 bg-background/40 rounded-2xl border p-5">
@@ -797,36 +832,38 @@ export default function EditCoursePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="border-accent/30 rounded-md border px-2 py-1 text-xs"
-                      onClick={async () => {
-                        await fetch(
-                          `/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`,
-                          {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ isActive: !u.isActive }),
-                          }
-                        );
-                        const r = await fetch(
-                          `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
-                          { cache: 'no-store' }
-                        );
-                        const data = await r.json();
-                        setUseCases(
-                          (data.useCases || []).map((x: any) => ({
-                            id: x.id,
-                            title: x.title,
-                            isActive: !!x.isActive,
-                          }))
-                        );
-                      }}
-                    >
-                      {u.isActive
-                        ? t('common.deactivate')
-                        : t('common.activate')}
-                    </button>
+                    {isPlatformOwner && (
+                      <button
+                        type="button"
+                        className="border-accent/30 rounded-md border px-2 py-1 text-xs"
+                        onClick={async () => {
+                          await fetch(
+                            `/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`,
+                            {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ isActive: !u.isActive }),
+                            }
+                          );
+                          const r = await fetch(
+                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                            { cache: 'no-store' }
+                          );
+                          const data = await r.json();
+                          setUseCases(
+                            (data.useCases || []).map((x: any) => ({
+                              id: x.id,
+                              title: x.title,
+                              isActive: !!x.isActive,
+                            }))
+                          );
+                        }}
+                      >
+                        {u.isActive
+                          ? t('common.deactivate')
+                          : t('common.activate')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="border-accent/30 rounded-md border px-2 py-1 text-xs"
@@ -870,7 +907,6 @@ export default function EditCoursePage() {
                             setUseCaseEditLernfelder([]);
                             setUseCaseEditActive(false);
                           }
-                          // Fetch documents for this use case
                           try {
                             const docRes = await fetch(
                               `/api/trainer/use-cases/${u.id}/documents`,
@@ -891,59 +927,63 @@ export default function EditCoursePage() {
                         }
                       }}
                     >
-                      {t('common.edit')}
+                      {isPlatformOwner ? t('common.edit') : t('content.view')}
                     </button>
-                    <button
-                      type="button"
-                      className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
-                      onClick={async () => {
-                        if (!trainerId) {
-                          alert(t('trainer.content.errorNoTrainer'));
-                          return;
-                        }
-                        const ok = window.confirm(
-                          t('trainer.content.confirmDeleteUseCase')
-                        );
-                        if (!ok) return;
-                        try {
-                          const del = await fetch(
-                            `/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`,
-                            { method: 'DELETE' }
+                    {isPlatformOwner && (
+                      <button
+                        type="button"
+                        className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
+                        onClick={async () => {
+                          if (!trainerId) {
+                            alert(t('trainer.content.errorNoTrainer'));
+                            return;
+                          }
+                          const ok = window.confirm(
+                            t('trainer.content.confirmDeleteUseCase')
                           );
-                          if (!del.ok)
-                            throw new Error(
-                              t('trainer.content.errorDeleteFailed')
+                          if (!ok) return;
+                          try {
+                            const del = await fetch(
+                              `/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`,
+                              { method: 'DELETE' }
                             );
-                          const r = await fetch(
-                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
-                            { cache: 'no-store' }
-                          );
-                          const data = await r.json();
-                          setUseCases(
-                            (data.useCases || []).map((x: any) => ({
-                              id: x.id,
-                              title: x.title,
-                              isActive: !!x.isActive,
-                            }))
-                          );
-                        } catch (err: any) {
-                          alert(err?.message || t('common.unknownError'));
-                        }
-                      }}
-                    >
-                      {t('common.delete')}
-                    </button>
+                            if (!del.ok)
+                              throw new Error(
+                                t('trainer.content.errorDeleteFailed')
+                              );
+                            const r = await fetch(
+                              `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                              { cache: 'no-store' }
+                            );
+                            const data = await r.json();
+                            setUseCases(
+                              (data.useCases || []).map((x: any) => ({
+                                id: x.id,
+                                title: x.title,
+                                isActive: !!x.isActive,
+                              }))
+                            );
+                          } catch (err: any) {
+                            alert(err?.message || t('common.unknownError'));
+                          }
+                        }}
+                      >
+                        {t('common.delete')}
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              className="border-accent/30 mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
-              onClick={() => setShowAddUseCase(true)}
-            >
-              <Plus className="h-4 w-4" /> {t('trainer.content.addUseCase')}
-            </button>
+            {isPlatformOwner && (
+              <button
+                type="button"
+                className="border-accent/30 mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+                onClick={() => setShowAddUseCase(true)}
+              >
+                <Plus className="h-4 w-4" /> {t('trainer.content.addUseCase')}
+              </button>
+            )}
           </div>
         </form>
       </div>
@@ -1730,68 +1770,72 @@ export default function EditCoursePage() {
                                   )
                                 }
                               >
-                                {t('common.edit')}
+                                {isPlatformOwner ? t('common.edit') : t('content.view')}
                               </button>
-                              <button
-                                type="button"
-                                className="border-accent/30 rounded-md border px-2 py-1 text-xs"
-                                onClick={async () => {
-                                  if (!editingEnablerId) return;
-                                  try {
-                                    await fetch(
-                                      `/api/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`,
-                                      {
-                                        method: 'PATCH',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                        },
-                                        body: JSON.stringify({
-                                          isActive: !item.isActive,
-                                        }),
-                                      }
+                              {isPlatformOwner && (
+                                <button
+                                  type="button"
+                                  className="border-accent/30 rounded-md border px-2 py-1 text-xs"
+                                  onClick={async () => {
+                                    if (!editingEnablerId) return;
+                                    try {
+                                      await fetch(
+                                        `/api/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`,
+                                        {
+                                          method: 'PATCH',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                          },
+                                          body: JSON.stringify({
+                                            isActive: !item.isActive,
+                                          }),
+                                        }
+                                      );
+                                      const ql = await fetch(
+                                        `/api/trainer/enablers/${editingEnablerId}/quizzes`,
+                                        { cache: 'no-store' }
+                                      );
+                                      const qlj = await ql.json();
+                                      setEnablerQuizList(qlj.quizzes || []);
+                                    } catch (e) {
+                                      console.error(e);
+                                    }
+                                  }}
+                                >
+                                  {item.isActive
+                                    ? t('common.deactivate')
+                                    : t('common.activate')}
+                                </button>
+                              )}
+                              {isPlatformOwner && (
+                                <button
+                                  type="button"
+                                  className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
+                                  onClick={async () => {
+                                    if (!editingEnablerId) return;
+                                    const ok = window.confirm(
+                                      t('trainer.content.confirmDeleteQuiz')
                                     );
-                                    const ql = await fetch(
-                                      `/api/trainer/enablers/${editingEnablerId}/quizzes`,
-                                      { cache: 'no-store' }
-                                    );
-                                    const qlj = await ql.json();
-                                    setEnablerQuizList(qlj.quizzes || []);
-                                  } catch (e) {
-                                    console.error(e);
-                                  }
-                                }}
-                              >
-                                {item.isActive
-                                  ? t('common.deactivate')
-                                  : t('common.activate')}
-                              </button>
-                              <button
-                                type="button"
-                                className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
-                                onClick={async () => {
-                                  if (!editingEnablerId) return;
-                                  const ok = window.confirm(
-                                    t('trainer.content.confirmDeleteQuiz')
-                                  );
-                                  if (!ok) return;
-                                  try {
-                                    await fetch(
-                                      `/api/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`,
-                                      { method: 'DELETE' }
-                                    );
-                                    const ql = await fetch(
-                                      `/api/trainer/enablers/${editingEnablerId}/quizzes`,
-                                      { cache: 'no-store' }
-                                    );
-                                    const qlj = await ql.json();
-                                    setEnablerQuizList(qlj.quizzes || []);
-                                  } catch (e) {
-                                    console.error(e);
-                                  }
-                                }}
-                              >
-                                {t('common.delete')}
-                              </button>
+                                    if (!ok) return;
+                                    try {
+                                      await fetch(
+                                        `/api/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`,
+                                        { method: 'DELETE' }
+                                      );
+                                      const ql = await fetch(
+                                        `/api/trainer/enablers/${editingEnablerId}/quizzes`,
+                                        { cache: 'no-store' }
+                                      );
+                                      const qlj = await ql.json();
+                                      setEnablerQuizList(qlj.quizzes || []);
+                                    } catch (e) {
+                                      console.error(e);
+                                    }
+                                  }}
+                                >
+                                  {t('common.delete')}
+                                </button>
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -1802,17 +1846,19 @@ export default function EditCoursePage() {
                                 difficultyLabel
                               )}
                             </div>
-                            <button
-                              type="button"
-                              className="border-accent/30 rounded-md border px-2 py-1 text-xs"
-                              onClick={() =>
-                                router.push(
-                                  `/trainer/enablers/${editingEnablerId}/quizzes/new?difficulty=${level}`
-                                )
-                              }
-                            >
-                              {t('common.create')}
-                            </button>
+                            {isPlatformOwner && (
+                              <button
+                                type="button"
+                                className="border-accent/30 rounded-md border px-2 py-1 text-xs"
+                                onClick={() =>
+                                  router.push(
+                                    `/trainer/enablers/${editingEnablerId}/quizzes/new?difficulty=${level}`
+                                  )
+                                }
+                              >
+                                {t('common.create')}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1827,8 +1873,9 @@ export default function EditCoursePage() {
                 </label>
                 <input
                   value={enablerTitle}
+                  disabled={!isPlatformOwner}
                   onChange={e => setEnablerTitle(e.target.value)}
-                  className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                  className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
               <div>
@@ -1837,8 +1884,9 @@ export default function EditCoursePage() {
                 </label>
                 <textarea
                   value={enablerDescription}
+                  disabled={!isPlatformOwner}
                   onChange={e => setEnablerDescription(e.target.value)}
-                  className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                  className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                   rows={3}
                   placeholder={t(
                     'trainer.content.lessonDescriptionPlaceholder'
@@ -1852,8 +1900,9 @@ export default function EditCoursePage() {
                   </label>
                   <input
                     value={enablerPpt}
+                    disabled={!isPlatformOwner}
                     onChange={e => setEnablerPpt(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder="https://..."
                   />
                 </div>
@@ -1863,8 +1912,9 @@ export default function EditCoursePage() {
                   </label>
                   <input
                     value={enablerVideo}
+                    disabled={!isPlatformOwner}
                     onChange={e => setEnablerVideo(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder="https://..."
                   />
                 </div>
@@ -1879,13 +1929,13 @@ export default function EditCoursePage() {
                       {t('trainer.content.theoryPdfs')}
                     </span>
                     {enablerDocuments.filter(
-                      d => d.documentType === 'THEORY' || !d.documentType
+                      d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
                     ).length > 0 && (
                       <span className="text-muted text-xs">
                         (
                         {
                           enablerDocuments.filter(
-                            d => d.documentType === 'THEORY' || !d.documentType
+                            d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
                           ).length
                         }
                         )
@@ -1896,12 +1946,12 @@ export default function EditCoursePage() {
 
                 {/* Theory documents - inline pills */}
                 {enablerDocuments.filter(
-                  d => d.documentType === 'THEORY' || !d.documentType
+                  d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
                 ).length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-2">
                     {enablerDocuments
                       .filter(
-                        d => d.documentType === 'THEORY' || !d.documentType
+                        d => (d.documentType === 'THEORY' || !d.documentType) && canSeeTheoryDoc(d)
                       )
                       .map(doc => (
                         <div
@@ -1927,31 +1977,33 @@ export default function EditCoursePage() {
                               <Eye className="h-3 w-3" />
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!trainerId || !editingEnablerId) return;
-                              const ok = window.confirm(
-                                t('trainer.content.confirmDeleteDoc')
-                              );
-                              if (!ok) return;
-                              try {
-                                await fetch(
-                                  `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
-                                  { method: 'DELETE' }
+                          {canDeleteDoc(doc) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!trainerId || !editingEnablerId) return;
+                                const ok = window.confirm(
+                                  t('trainer.content.confirmDeleteDoc')
                                 );
-                                setEnablerDocuments(prev =>
-                                  prev.filter(d => d.id !== doc.id)
-                                );
-                              } catch (err) {
-                                console.error(err);
-                              }
-                            }}
-                            className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                            title={t('common.remove')}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                                if (!ok) return;
+                                try {
+                                  await fetch(
+                                    `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                    { method: 'DELETE' }
+                                  );
+                                  setEnablerDocuments(prev =>
+                                    prev.filter(d => d.id !== doc.id)
+                                  );
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }}
+                              className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                              title={t('common.remove')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       ))}
                   </div>
@@ -2070,31 +2122,33 @@ export default function EditCoursePage() {
                               <Eye className="h-3 w-3" />
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!trainerId || !editingEnablerId) return;
-                              const ok = window.confirm(
-                                t('trainer.content.confirmDeleteDoc')
-                              );
-                              if (!ok) return;
-                              try {
-                                await fetch(
-                                  `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
-                                  { method: 'DELETE' }
+                          {canDeleteDoc(doc) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!trainerId || !editingEnablerId) return;
+                                const ok = window.confirm(
+                                  t('trainer.content.confirmDeleteDoc')
                                 );
-                                setEnablerDocuments(prev =>
-                                  prev.filter(d => d.id !== doc.id)
-                                );
-                              } catch (err) {
-                                console.error(err);
-                              }
-                            }}
-                            className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                            title={t('common.remove')}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                                if (!ok) return;
+                                try {
+                                  await fetch(
+                                    `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                    { method: 'DELETE' }
+                                  );
+                                  setEnablerDocuments(prev =>
+                                    prev.filter(d => d.id !== doc.id)
+                                  );
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }}
+                              className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                              title={t('common.remove')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       ))}
                   </div>
@@ -2173,71 +2227,71 @@ export default function EditCoursePage() {
                   type="button"
                   onClick={() => setShowEditEnabler(false)}
                 >
-                  {t('common.cancel')}
+                  {isPlatformOwner ? t('common.cancel') : t('common.close')}
                 </button>
-                <button
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2"
-                  onClick={async () => {
-                    if (!trainerId) {
-                      alert(t('trainer.content.errorNoTrainer'));
-                      return;
-                    }
-                    if (!editingEnablerId) {
-                      alert(t('trainer.content.errorNoLessonSelected'));
-                      return;
-                    }
-                    if (!enablerTitle.trim()) {
-                      alert(t('trainer.content.errorNoTitle'));
-                      return;
-                    }
-                    try {
-                      // PATCH enabler details
-                      const pr = await fetch(
-                        `/api/trainer/enablers/${editingEnablerId}?trainerId=${trainerId}`,
-                        {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            title: enablerTitle.trim(),
-                            descriptionText: enablerDescription.trim() || null,
-                            scenarioPdfUrl: enablerScenarioPdf.trim() || null,
-                            pptUrl: enablerPpt.trim() || null,
-                            videoUrl: enablerVideo.trim() || null,
-                            durationValue: enablerDuration
-                              ? Number(enablerDuration)
-                              : null,
-                            durationUnit: enablerDuration ? 'DAYS' : null,
-                            isActive: enablerActive,
-                          }),
-                        }
-                      );
-                      if (!pr.ok)
-                        throw new Error(
-                          t('trainer.content.errorLessonUpdateFailed')
+                {isPlatformOwner && (
+                  <button
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2"
+                    onClick={async () => {
+                      if (!trainerId) {
+                        alert(t('trainer.content.errorNoTrainer'));
+                        return;
+                      }
+                      if (!editingEnablerId) {
+                        alert(t('trainer.content.errorNoLessonSelected'));
+                        return;
+                      }
+                      if (!enablerTitle.trim()) {
+                        alert(t('trainer.content.errorNoTitle'));
+                        return;
+                      }
+                      try {
+                        const pr = await fetch(
+                          `/api/trainer/enablers/${editingEnablerId}?trainerId=${trainerId}`,
+                          {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: enablerTitle.trim(),
+                              descriptionText: enablerDescription.trim() || null,
+                              scenarioPdfUrl: enablerScenarioPdf.trim() || null,
+                              pptUrl: enablerPpt.trim() || null,
+                              videoUrl: enablerVideo.trim() || null,
+                              durationValue: enablerDuration
+                                ? Number(enablerDuration)
+                                : null,
+                              durationUnit: enablerDuration ? 'DAYS' : null,
+                              isActive: enablerActive,
+                            }),
+                          }
                         );
+                        if (!pr.ok)
+                          throw new Error(
+                            t('trainer.content.errorLessonUpdateFailed')
+                          );
 
-                      // Refresh and close
-                      const r = await fetch(
-                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
-                        { cache: 'no-store' }
-                      );
-                      const fresh = await r.json();
-                      setEnablers(
-                        (fresh.enablers || []).map((x: any) => ({
-                          id: x.id,
-                          title: x.title,
-                          isActive: !!x.isActive,
-                        }))
-                      );
-                      setShowEditEnabler(false);
-                      setEditingEnablerId(null);
-                    } catch (e: any) {
-                      alert(e?.message || t('common.unknownError'));
-                    }
-                  }}
-                >
-                  {t('common.save')}
-                </button>
+                        const r = await fetch(
+                          `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                          { cache: 'no-store' }
+                        );
+                        const fresh = await r.json();
+                        setEnablers(
+                          (fresh.enablers || []).map((x: any) => ({
+                            id: x.id,
+                            title: x.title,
+                            isActive: !!x.isActive,
+                          }))
+                        );
+                        setShowEditEnabler(false);
+                        setEditingEnablerId(null);
+                      } catch (e: any) {
+                        alert(e?.message || t('common.unknownError'));
+                      }
+                    }}
+                  >
+                    {t('common.save')}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2270,8 +2324,9 @@ export default function EditCoursePage() {
                 </label>
                 <input
                   value={useCaseEditTitle}
+                  disabled={!isPlatformOwner}
                   onChange={e => setUseCaseEditTitle(e.target.value)}
-                  className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                  className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
               <div>
@@ -2280,8 +2335,9 @@ export default function EditCoursePage() {
                 </label>
                 <textarea
                   value={useCaseEditDesc}
+                  disabled={!isPlatformOwner}
                   onChange={e => setUseCaseEditDesc(e.target.value)}
-                  className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                  className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                   rows={3}
                 />
               </div>
@@ -2298,6 +2354,7 @@ export default function EditCoursePage() {
                       >
                         <input
                           type="checkbox"
+                          disabled={!isPlatformOwner}
                           checked={useCaseEditYear.includes(yr)}
                           onChange={e => {
                             if (e.target.checked)
@@ -2328,6 +2385,7 @@ export default function EditCoursePage() {
                       >
                         <input
                           type="checkbox"
+                          disabled={!isPlatformOwner}
                           checked={useCaseEditStage.includes(stage)}
                           onChange={e => {
                             if (e.target.checked)
@@ -2364,6 +2422,7 @@ export default function EditCoursePage() {
                     >
                       <input
                         type="checkbox"
+                        disabled={!isPlatformOwner}
                         checked={useCaseEditLernfelder.includes(lf)}
                         onChange={e => {
                           if (e.target.checked)
@@ -2389,9 +2448,10 @@ export default function EditCoursePage() {
                   <input
                     type="number"
                     min={0}
+                    disabled={!isPlatformOwner}
                     value={useCaseEditDuration}
                     onChange={e => setUseCaseEditDuration(e.target.value)}
-                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
+                    className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder={t('trainer.content.durationPlaceholder')}
                   />
                 </div>
@@ -2399,6 +2459,7 @@ export default function EditCoursePage() {
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
+                      disabled={!isPlatformOwner}
                       checked={useCaseEditActive}
                       onChange={e => setUseCaseEditActive(e.target.checked)}
                     />
@@ -2465,31 +2526,33 @@ export default function EditCoursePage() {
                             <Eye className="h-3 w-3" />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!trainerId || !editingUseCaseId) return;
-                            const ok = window.confirm(
-                              t('trainer.content.confirmDeleteDoc')
-                            );
-                            if (!ok) return;
-                            try {
-                              await fetch(
-                                `/api/trainer/use-cases/${editingUseCaseId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
-                                { method: 'DELETE' }
+                        {canDeleteDoc(doc) && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!trainerId || !editingUseCaseId) return;
+                              const ok = window.confirm(
+                                t('trainer.content.confirmDeleteDoc')
                               );
-                              setUseCaseDocuments(prev =>
-                                prev.filter(d => d.id !== doc.id)
-                              );
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }}
-                          className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
-                          title={t('common.remove')}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                              if (!ok) return;
+                              try {
+                                await fetch(
+                                  `/api/trainer/use-cases/${editingUseCaseId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                  { method: 'DELETE' }
+                                );
+                                setUseCaseDocuments(prev =>
+                                  prev.filter(d => d.id !== doc.id)
+                                );
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            className="text-muted rounded p-0.5 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                            title={t('common.remove')}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2537,81 +2600,83 @@ export default function EditCoursePage() {
                   type="button"
                   onClick={() => setShowEditUseCase(false)}
                 >
-                  {t('common.cancel')}
+                  {isPlatformOwner ? t('common.cancel') : t('common.close')}
                 </button>
-                <button
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2"
-                  onClick={async () => {
-                    if (!trainerId) {
-                      alert(t('trainer.content.errorNoTrainer'));
-                      return;
-                    }
-                    if (!editingUseCaseId) {
-                      alert(t('trainer.content.errorNoUseCaseSelected'));
-                      return;
-                    }
-                    if (!useCaseEditTitle.trim()) {
-                      alert(t('trainer.content.errorNoTitle'));
-                      return;
-                    }
-                    if (!useCaseEditDesc.trim()) {
-                      alert(t('trainer.content.errorNoDescription'));
-                      return;
-                    }
-                    try {
-                      const pr = await fetch(
-                        `/api/trainer/use-cases/${editingUseCaseId}?trainerId=${trainerId}`,
-                        {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            title: useCaseEditTitle.trim(),
-                            descriptionText: useCaseEditDesc.trim(),
-                            durationValue: useCaseEditDuration
-                              ? Number(useCaseEditDuration)
-                              : null,
-                            durationUnit: useCaseEditDuration ? 'DAYS' : null,
-                            isActive: useCaseEditActive,
-                            year:
-                              useCaseEditYear.length > 0
-                                ? useCaseEditYear.map(Number)
+                {isPlatformOwner && (
+                  <button
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2"
+                    onClick={async () => {
+                      if (!trainerId) {
+                        alert(t('trainer.content.errorNoTrainer'));
+                        return;
+                      }
+                      if (!editingUseCaseId) {
+                        alert(t('trainer.content.errorNoUseCaseSelected'));
+                        return;
+                      }
+                      if (!useCaseEditTitle.trim()) {
+                        alert(t('trainer.content.errorNoTitle'));
+                        return;
+                      }
+                      if (!useCaseEditDesc.trim()) {
+                        alert(t('trainer.content.errorNoDescription'));
+                        return;
+                      }
+                      try {
+                        const pr = await fetch(
+                          `/api/trainer/use-cases/${editingUseCaseId}?trainerId=${trainerId}`,
+                          {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: useCaseEditTitle.trim(),
+                              descriptionText: useCaseEditDesc.trim(),
+                              durationValue: useCaseEditDuration
+                                ? Number(useCaseEditDuration)
                                 : null,
-                            trainingStage:
-                              useCaseEditStage.length > 0
-                                ? useCaseEditStage.map(Number)
-                                : null,
-                            lernfelder:
-                              useCaseEditLernfelder.length > 0
-                                ? useCaseEditLernfelder
-                                : [],
-                          }),
-                        }
-                      );
-                      if (!pr.ok)
-                        throw new Error(
-                          t('trainer.content.errorUseCaseUpdateFailed')
+                              durationUnit: useCaseEditDuration ? 'DAYS' : null,
+                              isActive: useCaseEditActive,
+                              year:
+                                useCaseEditYear.length > 0
+                                  ? useCaseEditYear.map(Number)
+                                  : null,
+                              trainingStage:
+                                useCaseEditStage.length > 0
+                                  ? useCaseEditStage.map(Number)
+                                  : null,
+                              lernfelder:
+                                useCaseEditLernfelder.length > 0
+                                  ? useCaseEditLernfelder
+                                  : [],
+                            }),
+                          }
                         );
-                      const r = await fetch(
-                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
-                        { cache: 'no-store' }
-                      );
-                      const fresh = await r.json();
-                      setUseCases(
-                        (fresh.useCases || []).map((x: any) => ({
-                          id: x.id,
-                          title: x.title,
-                          isActive: !!x.isActive,
-                        }))
-                      );
-                      setShowEditUseCase(false);
-                      setEditingUseCaseId(null);
-                    } catch (e: any) {
-                      alert(e?.message || t('common.unknownError'));
-                    }
-                  }}
-                >
-                  {t('common.save')}
-                </button>
+                        if (!pr.ok)
+                          throw new Error(
+                            t('trainer.content.errorUseCaseUpdateFailed')
+                          );
+                        const r = await fetch(
+                          `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                          { cache: 'no-store' }
+                        );
+                        const fresh = await r.json();
+                        setUseCases(
+                          (fresh.useCases || []).map((x: any) => ({
+                            id: x.id,
+                            title: x.title,
+                            isActive: !!x.isActive,
+                          }))
+                        );
+                        setShowEditUseCase(false);
+                        setEditingUseCaseId(null);
+                      } catch (e: any) {
+                        alert(e?.message || t('common.unknownError'));
+                      }
+                    }}
+                  >
+                    {t('common.save')}
+                  </button>
+                )}
               </div>
             </div>
           </div>
