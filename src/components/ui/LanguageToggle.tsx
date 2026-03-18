@@ -30,12 +30,12 @@ export function LanguageToggle({
     return (
       <button
         onClick={toggleLanguage}
-        className={`hover:bg-accent/10 flex items-center gap-1 rounded-lg p-2 transition-all duration-200 ${className}`}
+        className={`hover:bg-accent/10 flex h-9 min-w-14 items-center justify-center gap-1 rounded-lg px-2 transition-all duration-200 ${className}`}
         aria-label={switchLabel}
         title={switchLabel}
       >
         <Languages className="text-muted-foreground h-5 w-5" />
-        <span className="text-foreground/80 text-xs font-semibold">
+        <span className="text-foreground/80 w-6 text-center text-xs font-semibold">
           {language.toUpperCase()}
         </span>
       </button>

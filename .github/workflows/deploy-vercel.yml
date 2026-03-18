@@ -1,0 +1,49 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # This step detects the branch and sets the correct Project ID
+      - name: Set Environment Variables
+        id: set-vars
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_name }}" == "staging" ]]; then
+            echo "project_id=${{ secrets.VERCEL_PROJECT_ID_STAGING }}" >> $GITHUB_OUTPUT
+            echo "deploy_type=preview" >> $GITHUB_OUTPUT
+            echo "vercel_args=" >> $GITHUB_OUTPUT
+          else
+            echo "project_id=${{ secrets.VERCEL_PROJECT_ID_PROD }}" >> $GITHUB_OUTPUT
+            echo "deploy_type=production" >> $GITHUB_OUTPUT
+            echo "vercel_args=--prod" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          # Dynamically injected ID
+          vercel-project-id: ${{ steps.set-vars.outputs.project_id }}
+          working-directory: ./
+          # Automatically adds --prod for main/master, leaves empty for staging
+          vercel-args: ${{ steps.set-vars.outputs.vercel_args }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "Successfully deployed to Vercel!"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Target Project ID: ${{ steps.set-vars.outputs.project_id }}"
