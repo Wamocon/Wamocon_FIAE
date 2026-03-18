@@ -3,7 +3,10 @@ name: Deploy to Vercel
 on:
   push:
     branches:
-      - main
+      - master
+      - staging
+  pull_request:
+    branches:
       - master
       - staging
 
@@ -14,19 +17,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # This step detects the branch and sets the correct Project ID
       - name: Set Environment Variables
         id: set-vars
         shell: bash
         run: |
-          if [[ "${{ github.ref_name }}" == "staging" ]]; then
+          # 1. Determine which Vercel Project ID to use
+          # If we are in a PR, look at the base branch (where we want to merge)
+          # If we are on a push (after merge), look at the current branch
+          TARGET_BRANCH=${{ github.base_ref || github.ref_name }}
+
+          if [[ "$TARGET_BRANCH" == "staging" ]]; then
             echo "project_id=${{ secrets.VERCEL_PROJECT_ID_STAGING }}" >> $GITHUB_OUTPUT
-            echo "deploy_type=preview" >> $GITHUB_OUTPUT
-            echo "vercel_args=" >> $GITHUB_OUTPUT
           else
             echo "project_id=${{ secrets.VERCEL_PROJECT_ID_PROD }}" >> $GITHUB_OUTPUT
-            echo "deploy_type=production" >> $GITHUB_OUTPUT
+          fi
+
+          # 2. Determine if this is a real Production Deployment
+          # We only use --prod if it's a PUSH event (which happens AFTER a merge)
+          if [[ "${{ github.event_name }}" == "push" ]]; then
             echo "vercel_args=--prod" >> $GITHUB_OUTPUT
+          else
+            echo "vercel_args=" >> $GITHUB_OUTPUT
           fi
 
       - name: Deploy to Vercel
@@ -34,16 +45,8 @@ jobs:
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          # Dynamically injected ID
           vercel-project-id: ${{ steps.set-vars.outputs.project_id }}
           working-directory: ./
-          # Automatically adds --prod for main/master, leaves empty for staging
           vercel-args: ${{ steps.set-vars.outputs.vercel_args }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-      - name: Summary
-        run: |
-          echo "Successfully deployed to Vercel!"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Target Project ID: ${{ steps.set-vars.outputs.project_id }}"
