@@ -731,12 +731,10 @@ function SolarSystemCanvas() {
       ctx.clearRect(0, 0, st.W, st.H);
       const isLight = document.documentElement.classList.contains('light');
 
-      // ── Twinkling stars ──
+      // ── Twinkling stars ── (always bright on black background)
       for (const s of st.stars) {
         ctx.globalAlpha =
-          (isLight ? 0.04 : 0.1) +
-          (isLight ? 0.22 : 0.5) *
-            (0.5 + 0.5 * Math.sin(ts * 0.001 * s.sp + s.ph));
+          0.1 + 0.5 * (0.5 + 0.5 * Math.sin(ts * 0.001 * s.sp + s.ph));
         ctx.fillStyle = s.col;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, 6.2832);
@@ -900,14 +898,12 @@ function SolarSystemCanvas() {
             ? isHov
               ? '#fff'
               : 'rgba(255,255,255,.95)'
-            : isLight
-              ? 'rgba(60,70,90,.75)'
-              : 'rgba(180,180,200,.45)';
+            : 'rgba(255,255,255,.78)';
           ctx.fillText(p.abbr, px, py);
           ctx.shadowBlur = 0;
           if (p.active && isHov) {
             ctx.font = `${Math.max(7, Math.round(9 * st.sc))}px Inter,sans-serif`;
-            ctx.fillStyle = 'rgba(255,180,180,.88)';
+            ctx.fillStyle = 'rgba(255,255,255,.88)';
             ctx.fillText('Klicken →', px, py + pr + 14 * st.sc);
           }
         }
@@ -1033,11 +1029,7 @@ function SolarSystemCanvas() {
           ctx.textBaseline = 'middle';
           ctx.shadowColor = 'rgba(0,0,0,.9)';
           ctx.shadowBlur = 4;
-          ctx.fillStyle = isHov
-            ? '#fff'
-            : isLight
-              ? 'rgba(90,20,20,.92)'
-              : 'rgba(255,200,200,.88)';
+          ctx.fillStyle = isHov ? '#fff' : 'rgba(255,255,255,.9)';
           ctx.fillText(lf.short, px, py);
           ctx.shadowBlur = 0;
 
@@ -1179,22 +1171,22 @@ function SolarSystemCanvas() {
             setTip(null);
             stRef.current.hovered = null;
           }}
-          className="bg-background/85 text-foreground border-border hover:bg-background absolute top-4 left-4 z-10 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur-sm transition-colors"
+          className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-full border border-white/30 bg-black/65 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/80"
         >
           ← Zurück zum Universum
         </button>
       )}
 
       {mode === 'solar' && (
-        <div className="bg-background/80 text-muted-foreground border-border pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-xs whitespace-nowrap backdrop-blur-sm">
-          Klicke auf <span className="font-medium text-red-400">FIAE</span> ·
+        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/25 bg-black/60 px-4 py-1.5 text-xs whitespace-nowrap text-white/85 backdrop-blur-sm">
+          Klicke auf <span className="font-medium text-white">FIAE</span> ·
           Erkunde die 12 Lernfelder
         </div>
       )}
 
       {tip && (
         <div
-          className="bg-background/95 border-border pointer-events-none absolute z-20 rounded-xl border px-3.5 py-2.5 shadow-2xl backdrop-blur-md"
+          className="pointer-events-none absolute z-20 rounded-xl border border-white/20 bg-black/80 px-3.5 py-2.5 shadow-2xl backdrop-blur-md"
           style={{
             left: Math.min(
               tip.x + 18,
@@ -1204,8 +1196,8 @@ function SolarSystemCanvas() {
             maxWidth: '215px',
           }}
         >
-          <p className="text-foreground text-sm font-semibold">{tip.text}</p>
-          <p className="text-muted-foreground mt-0.5 text-xs">{tip.sub}</p>
+          <p className="text-sm font-semibold text-white">{tip.text}</p>
+          <p className="mt-0.5 text-xs text-white/80">{tip.sub}</p>
         </div>
       )}
     </div>
@@ -1572,7 +1564,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── SOLUTION ────────────────────────────────────────────────────────── */}
-        <section className="bg-background relative pb-24 md:pb-32">
+        <section className="bg-background relative mt-24 pb-24 md:pb-32">
           <div className="mx-auto max-w-275 px-5 md:px-10">
             <div className="mb-12 grid grid-cols-1 gap-5 md:grid-cols-3">
               {[
@@ -2137,7 +2129,7 @@ export default function LandingPage() {
             </Reveal>
 
             {/* Interactive canvas */}
-            <div className="border-border bg-card overflow-hidden rounded-2xl border shadow-2xl shadow-black/20">
+            <div className="border-border overflow-hidden rounded-2xl border bg-black shadow-2xl shadow-black/20">
               <SolarSystemCanvas />
             </div>
 
@@ -2240,24 +2232,9 @@ export default function LandingPage() {
 
               {/* ── PRO ── */}
               <Reveal delay={0.1}>
-                <div
-                  className="group relative flex h-full cursor-default flex-col rounded-2xl p-7 transition-all hover:-translate-y-2"
-                  style={{
-                    background:
-                      'linear-gradient(165deg,rgba(255,251,235,.06) 0%,rgba(254,243,199,.04) 40%,rgba(234,179,8,.03) 100%)',
-                    border: '1.5px solid rgba(234,179,8,.3)',
-                    boxShadow:
-                      '0 0 40px rgba(234,179,8,.06),0 8px 32px rgba(0,0,0,.3)',
-                  }}
-                >
+                <div className="border-border bg-card group relative flex h-full cursor-default flex-col rounded-2xl border p-7 transition-all hover:-translate-y-2 hover:border-red-500/30 hover:shadow-xl hover:shadow-black/20">
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <span
-                      className="rounded-full px-4 py-1 text-xs font-bold text-amber-900"
-                      style={{
-                        background: 'linear-gradient(135deg,#fde68a,#fcd34d)',
-                        boxShadow: '0 2px 12px rgba(234,179,8,.3)',
-                      }}
-                    >
+                    <span className="border-border bg-card text-muted-foreground rounded-full border px-4 py-1 text-xs font-bold">
                       {t('landing.pricing.pro.comingSoonBadge')}
                     </span>
                   </div>
@@ -2267,31 +2244,22 @@ export default function LandingPage() {
                       style={{ animation: 'shimmer 5s ease-in-out infinite' }}
                     />
                   </div>
-                  <div className="relative mb-6">
-                    <div
-                      className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
-                      style={{
-                        background: 'linear-gradient(135deg,#fde68a,#eab308)',
-                        border: '1px solid rgba(234,179,8,.35)',
-                      }}
-                    >
-                      <Zap className="h-5 w-5 text-amber-900" />
+                  <div className="mb-6">
+                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+                      <Zap className="h-5 w-5 text-[#9999a1]" />
                     </div>
-                    <span className="mb-1 block text-xs font-semibold tracking-widest text-amber-600 uppercase">
+                    <span className="mb-1 block text-xs font-semibold tracking-widest text-[#9999a1] uppercase">
                       {t('landing.pricing.planLabel')}
                     </span>
                     <h3 className="text-foreground mb-1 text-2xl font-bold">
                       Pro
                     </h3>
-                    <p className="text-sm text-[#9a9a8a]">
+                    <p className="text-muted-foreground text-sm">
                       {t('landing.pricing.pro.subtitle')}
                     </p>
                   </div>
-                  <div
-                    className="mb-6 border-t pt-5"
-                    style={{ borderColor: 'rgba(234,179,8,.2)' }}
-                  >
-                    <p className="text-sm leading-relaxed text-[#8a8a7a]">
+                  <div className="border-border/50 mb-6 border-t pt-5">
+                    <p className="text-muted-foreground text-sm leading-relaxed">
                       {t('landing.pricing.pro.description')}
                     </p>
                   </div>
@@ -2303,32 +2271,24 @@ export default function LandingPage() {
                       t('landing.pricing.pro.feature4'),
                       t('landing.pricing.pro.feature5'),
                       t('landing.pricing.pro.feature6'),
-                    ].map((f, i) => (
+                    ].map(f => (
                       <li
                         key={f}
-                        className="flex items-center gap-2.5"
-                        style={{ color: i === 0 ? '#c8a400' : '#b8b89a' }}
+                        className="text-muted-foreground flex items-center gap-2.5"
                       >
-                        <CheckCircle
-                          className="h-4 w-4 shrink-0"
-                          style={{ color: '#eab308' }}
-                        />
+                        <CheckCircle className="h-4 w-4 shrink-0 text-[#9999a1]" />
                         {f}
                       </li>
                     ))}
                   </ul>
-                  <div className="relative mb-4 text-center">
+                  <div className="mb-4 text-center">
                     <span className="text-foreground text-xl font-bold">
                       {t('landing.pricing.pro.price')}
                     </span>
                   </div>
                   <Button
                     onClick={() => setActivePlan('Pro')}
-                    className="relative w-full font-bold text-amber-900 hover:opacity-90"
-                    style={{
-                      background: 'linear-gradient(135deg,#fde68a,#eab308)',
-                      border: '1px solid rgba(234,179,8,.4)',
-                    }}
+                    className="w-full bg-red-600 text-white hover:bg-red-700"
                   >
                     {t('landing.pricing.pro.cta')}{' '}
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -2338,16 +2298,7 @@ export default function LandingPage() {
 
               {/* ── ENTERPRISE ── */}
               <Reveal delay={0.2}>
-                <div
-                  className="group relative flex h-full cursor-default flex-col rounded-2xl p-7 transition-all hover:-translate-y-2"
-                  style={{
-                    background:
-                      'linear-gradient(165deg,rgba(220,38,38,.08) 0%,rgba(220,38,38,.04) 50%,rgba(0,0,0,.02) 100%)',
-                    border: '1.5px solid rgba(220,38,38,.3)',
-                    boxShadow:
-                      '0 0 40px rgba(220,38,38,.06),0 8px 32px rgba(0,0,0,.3)',
-                  }}
-                >
+                <div className="border-border bg-card group relative flex h-full cursor-default flex-col rounded-2xl border p-7 transition-all hover:-translate-y-2 hover:border-red-500/30 hover:shadow-xl hover:shadow-black/20">
                   <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
                     <div
                       className="absolute top-0 -left-full h-full w-1/2 bg-linear-to-r from-transparent via-white/8 to-transparent"
@@ -2355,31 +2306,21 @@ export default function LandingPage() {
                     />
                   </div>
                   <div className="mb-6">
-                    <div
-                      className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
-                      style={{
-                        background:
-                          'linear-gradient(135deg,rgba(220,38,38,.3),rgba(185,28,28,.2))',
-                        border: '1px solid rgba(220,38,38,.4)',
-                      }}
-                    >
-                      <Building2 className="h-5 w-5 text-red-400" />
+                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+                      <Building2 className="h-5 w-5 text-[#9999a1]" />
                     </div>
-                    <span className="mb-1 block text-xs font-semibold tracking-widest text-red-500 uppercase">
+                    <span className="mb-1 block text-xs font-semibold tracking-widest text-[#9999a1] uppercase">
                       {t('landing.pricing.planLabel')}
                     </span>
                     <h3 className="text-foreground mb-1 text-2xl font-bold">
                       Enterprise
                     </h3>
-                    <p className="text-sm text-[#9a9a9a]">
+                    <p className="text-muted-foreground text-sm">
                       {t('landing.pricing.enterprise.subtitle')}
                     </p>
                   </div>
-                  <div
-                    className="mb-6 border-t pt-5"
-                    style={{ borderColor: 'rgba(220,38,38,.2)' }}
-                  >
-                    <p className="text-sm leading-relaxed text-[#8a8a8a]">
+                  <div className="border-border/50 mb-6 border-t pt-5">
+                    <p className="text-muted-foreground text-sm leading-relaxed">
                       {t('landing.pricing.enterprise.description')}
                     </p>
                   </div>
@@ -2392,13 +2333,12 @@ export default function LandingPage() {
                       t('landing.pricing.enterprise.feature5'),
                       t('landing.pricing.enterprise.feature6'),
                       t('landing.pricing.enterprise.feature7'),
-                    ].map((f, i) => (
+                    ].map(f => (
                       <li
                         key={f}
-                        className="flex items-center gap-2.5"
-                        style={{ color: i === 0 ? '#ff6b6b' : '#b0b0b0' }}
+                        className="text-muted-foreground flex items-center gap-2.5"
                       >
-                        <CheckCircle className="h-4 w-4 shrink-0 text-red-500" />
+                        <CheckCircle className="h-4 w-4 shrink-0 text-[#9999a1]" />
                         {f}
                       </li>
                     ))}
@@ -2410,8 +2350,7 @@ export default function LandingPage() {
                   </div>
                   <Button
                     onClick={() => setActivePlan('Enterprise')}
-                    variant="outline"
-                    className="w-full border-red-500/40 bg-red-600/15 font-bold text-red-400 hover:bg-red-600/25 hover:text-red-300"
+                    className="w-full bg-red-600 text-white hover:bg-red-700"
                   >
                     {t('landing.pricing.enterprise.cta')}{' '}
                     <ArrowRight className="ml-2 h-4 w-4" />
