@@ -489,7 +489,7 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 cursor-pointer rounded-3xl border p-6 shadow-lg"
+              className="glass-effect border-accent/30 cursor-pointer overflow-hidden rounded-3xl border p-6 shadow-lg"
               onClick={() =>
                 router.push(`/trainer/content-management/${course.id}/edit`)
               }
@@ -504,12 +504,12 @@ export function ContentManagement() {
             >
               {/* Header Row */}
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex items-start gap-4">
+                <div className="flex min-w-0 flex-1 items-start gap-4">
                   <div className="from-accent to-primary flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br">
                     <BookOpen className="text-foreground h-7 w-7" />
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="text-foreground mb-1 truncate text-2xl font-bold">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-foreground mb-1 text-2xl font-bold break-words">
                       {course.title}
                     </h3>
                     <div className="flex flex-wrap gap-2">
@@ -555,7 +555,7 @@ export function ContentManagement() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 self-end md:self-auto">
+                <div className="flex shrink-0 items-center gap-2 self-end md:self-auto">
                   <button
                     onClick={e => {
                       e.stopPropagation();
@@ -563,7 +563,7 @@ export function ContentManagement() {
                         `/trainer/content-management/${course.id}/edit`
                       );
                     }}
-                    className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors"
+                    className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors"
                   >
                     {isPlatformOwner ? t('content.edit') : t('content.view')}
                   </button>
