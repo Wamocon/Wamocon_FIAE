@@ -1,0 +1,49 @@
+# =============================================================================
+# Caller Workflow - Manual Vercel Deployment
+# =============================================================================
+# Source: Wamocon/github_workflow/examples/caller-production-deploy.yml
+#
+# Trigger : MANUAL ONLY - Actions tab → "Deploy to Vercel" → Run workflow
+#           Choose "production" (live URL) or "preview" (test URL) at run time.
+#           This workflow NEVER runs automatically.
+#
+# Secrets required:
+#   - VERCEL_PROJECT_ID → add this to your repo's GitHub secrets
+#                         (Vercel Project → Settings → General → Project ID)
+#
+# Already set at organisation level (no action needed):
+#   - VERCEL_TOKEN   → personal Vercel access token
+#   - VERCEL_ORG_ID  → Vercel personal account ID
+#
+# How it works:
+#   Builds locally via Vercel CLI - Vercel never sees the GitHub repo owner,
+#   so there are no "team seat" errors on a personal Hobby account in a GitHub org.
+# =============================================================================
+
+name: Deploy to Vercel
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deploy target"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+          - preview
+      db_schema:
+        description: "Optional NEXT_PUBLIC_DB_SCHEMA override (leave empty to use Vercel env vars)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  deploy:
+    name: Deploy - ${{ inputs.environment }}
+    uses: Wamocon/github_workflow/.github/workflows/deploy.yml@main
+    with:
+      vercel_env: ${{ inputs.environment }}
+      db_schema: ${{ inputs.db_schema }}
+    secrets: inherit
