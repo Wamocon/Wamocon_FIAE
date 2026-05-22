@@ -1281,11 +1281,14 @@ function ReportReviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onMouseDown={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className="bg-card border-border flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border"
+        onMouseDown={e => e.stopPropagation()}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -1640,15 +1643,20 @@ function ReportReviewModal({
                           <GradeBadge grade={currentGrade?.grade} />
                         )}
                         {canEditTrainer && currentGrade?.grade && (
-                          <input
-                            type="text"
+                          <textarea
                             value={currentGrade?.comment || ''}
                             onChange={e =>
                               handleGradeCommentChange(entry.id, e.target.value)
                             }
                             placeholder="Kommentar..."
-                            className="bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground/50 mt-1 w-full rounded-md border px-2 py-1 text-[11px]"
+                            rows={2}
+                            className="bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground/50 mt-1 w-full resize-none rounded-md border px-2 py-1.5 text-xs"
                           />
+                        )}
+                        {!canEditTrainer && currentGrade?.comment && (
+                          <p className="text-muted-foreground mt-1 w-full text-center text-[11px] italic">
+                            „{currentGrade.comment}"
+                          </p>
                         )}
                       </div>
                     </div>
@@ -1825,7 +1833,7 @@ function ReportReviewModal({
                             </p>
                           </div>
 
-                          <div className="flex flex-shrink-0 items-center gap-3">
+                          <div className="flex shrink-0 items-center gap-3">
                             {/* Trainee self-rating badge */}
                             {report.skillSelfRatings &&
                               report.skillSelfRatings[area] && (
@@ -1865,6 +1873,31 @@ function ReportReviewModal({
                             </div>
                           </div>
                         </div>
+                        {/* Trainer comment - edit mode */}
+                        {canEditTrainer && (
+                          <div className="border-border/30 mt-3 border-t pt-3">
+                            <textarea
+                              value={trainerRating?.comment || ''}
+                              onChange={e =>
+                                handleSoftskillCommentChange(
+                                  representative.id,
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Ausbilder-Kommentar (optional)..."
+                              rows={2}
+                              className="bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground/50 w-full resize-none rounded-md border px-3 py-2 text-sm"
+                            />
+                          </div>
+                        )}
+                        {/* Trainer comment - view mode */}
+                        {!canEditTrainer && trainerRating?.comment && (
+                          <div className="border-border/30 mt-3 border-t pt-3">
+                            <p className="text-muted-foreground text-sm italic">
+                              „{trainerRating.comment}"
+                            </p>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
