@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, FormEvent } from 'react';
+import { useEffect, useState, useRef, useMemo, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -86,43 +86,6 @@ function Reveal({
     >
       {children}
     </motion.div>
-  );
-}
-
-// ─── Stat counter ───────────────────────────────────────────────────────────────
-function StatCounter({
-  target,
-  suffix = '',
-  prefix = '',
-}: {
-  target: number;
-  suffix?: string;
-  prefix?: string;
-}) {
-  const [value, setValue] = useState(0);
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true });
-  useEffect(() => {
-    if (!inView) return;
-    let start = 0;
-    const duration = 1800;
-    const step = 16;
-    const increment = target / (duration / step);
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= target) {
-        setValue(target);
-        clearInterval(timer);
-      } else setValue(Math.floor(start));
-    }, step);
-    return () => clearInterval(timer);
-  }, [inView, target]);
-  return (
-    <span ref={ref}>
-      {prefix}
-      {value >= 1000 ? value.toLocaleString('de-DE') : value}
-      {suffix}
-    </span>
   );
 }
 
@@ -1007,7 +970,7 @@ function SolarSystemCanvas() {
           }
 
           // LF body
-          let lgr: CanvasGradient = ctx.createRadialGradient(
+          const lgr: CanvasGradient = ctx.createRadialGradient(
             px,
             py,
             0,
@@ -1246,15 +1209,18 @@ export default function LandingPage() {
   const shouldRedirect =
     !loading && sessionReady && hasSession && !!user && !!profile;
 
-  const navLinks = [
-    { href: '#hero', label: t('landing.nav.home') },
-    { href: '#warum-lfa', label: t('landing.nav.warumLfa') },
-    { href: '#rollen', label: t('landing.nav.rollen') },
-    { href: '#funktionen', label: t('landing.nav.funktionen') },
-    { href: '#universum', label: t('landing.nav.universum') },
-    { href: '#preise', label: t('landing.nav.preise') },
-    { href: '#faq', label: t('landing.nav.faq') },
-  ];
+  const navLinks = useMemo(
+    () => [
+      { href: '#hero', label: t('landing.nav.home') },
+      { href: '#warum-lfa', label: t('landing.nav.warumLfa') },
+      { href: '#rollen', label: t('landing.nav.rollen') },
+      { href: '#funktionen', label: t('landing.nav.funktionen') },
+      { href: '#universum', label: t('landing.nav.universum') },
+      { href: '#preise', label: t('landing.nav.preise') },
+      { href: '#faq', label: t('landing.nav.faq') },
+    ],
+    [t]
+  );
 
   useEffect(() => {
     const sectionIds = navLinks.map(link => link.href.slice(1));
