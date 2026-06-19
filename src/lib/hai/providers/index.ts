@@ -25,6 +25,7 @@ import {
   loadProviderConfig,
   type ChatProvider,
   type EmbeddingProvider,
+  type ChatProviderType,
 } from './types';
 
 // Re-export types so consumers can import from '@/lib/hai/providers'
@@ -162,8 +163,63 @@ export function getEmbeddingProvider(): EmbeddingProvider {
 }
 
 /**
- * Execute a chat request via the configured provider (OpenRouter or Claude).
- * Provider is determined by HAI_CHAT_PROVIDER environment variable.
+ * Build all chat providers that have credentials, ordered by preference.
+ * The configured provider is always first; remaining providers act as fallbacks.
+ */
+function getAvailableChatProviders(): ChatProvider[] {
+  ensureInitialized();
+  const config = loadProviderConfig();
+
+  const providers = new Map<ChatProviderType, ChatProvider>();
+
+  if (_chatProvider && _chatProvider.isInitialized()) {
+    providers.set(config.chatProvider, _chatProvider);
+  }
+
+  const allProviders: { type: ChatProviderType; instance: ChatProvider }[] = [
+    {
+      type: 'openai-compatible',
+      instance: new OpenAICompatibleChatProvider(
+        config.openaiCompatible.baseUrl,
+        config.openaiCompatible.apiKey,
+        config.openaiCompatible.model
+      ),
+    },
+    {
+      type: 'gemini',
+      instance: new GeminiChatProvider(
+        config.gemini.apiKey,
+        config.gemini.chatModel
+      ),
+    },
+    {
+      type: 'claude',
+      instance: new ClaudeChatProvider(
+        config.claude.apiKey,
+        config.claude.model
+      ),
+    },
+    {
+      type: 'openrouter',
+      instance: new OpenRouterChatProvider(
+        config.openrouter.apiKey,
+        config.openrouter.model
+      ),
+    },
+  ];
+
+  for (const { type, instance } of allProviders) {
+    if (!providers.has(type) && instance.isInitialized()) {
+      providers.set(type, instance);
+    }
+  }
+
+  return Array.from(providers.values());
+}
+
+/**
+ * Execute a chat request via the configured provider, falling back to other
+ * initialized providers if the primary one fails.
  */
 export async function chatWithFallback(
   systemPrompt: string,
@@ -172,24 +228,43 @@ export async function chatWithFallback(
   onChunk?: (text: string) => void,
   options?: import('./types').ChatGenerateOptions
 ): Promise<import('./types').ChatResponse> {
-  const provider = getChatProvider();
+  const providers = getAvailableChatProviders();
 
-  if (onChunk) {
-    return await provider.generateResponseStream(
-      systemPrompt,
-      messages,
-      userMessage,
-      onChunk,
-      options
-    );
-  } else {
-    return await provider.generateResponse(
-      systemPrompt,
-      messages,
-      userMessage,
-      options
+  if (providers.length === 0) {
+    throw new Error(
+      'HAI.ai: No chat providers are initialized. Check your AI provider API keys.'
     );
   }
+
+  const errors: string[] = [];
+
+  for (const provider of providers) {
+    try {
+      if (onChunk) {
+        return await provider.generateResponseStream(
+          systemPrompt,
+          messages,
+          userMessage,
+          onChunk,
+          options
+        );
+      }
+      return await provider.generateResponse(
+        systemPrompt,
+        messages,
+        userMessage,
+        options
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `HAI.ai [chatWithFallback]: provider "${provider.name}" failed: ${message}`
+      );
+      errors.push(`${provider.name}: ${message}`);
+    }
+  }
+
+  throw new Error(`HAI.ai: All chat providers failed. ${errors.join(' | ')}`);
 }
 
 /**
@@ -221,7 +296,8 @@ export function getProviderStatus(): {
     embedding: {
       provider: _embeddingProvider?.name ?? 'none',
       initialized: _embeddingProvider?.isInitialized() ?? false,
-      dimensions: (_embeddingProvider as EmbeddingProvider | null)?.dimensions ?? 0,
+      dimensions:
+        (_embeddingProvider as EmbeddingProvider | null)?.dimensions ?? 0,
     },
   };
 }

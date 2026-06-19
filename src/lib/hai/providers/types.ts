@@ -165,7 +165,9 @@ export interface ProviderConfig {
  *   - 'ollama' → Local Ollama, for local dev only (768 dims — incompatible with production)
  */
 export function loadProviderConfig(): ProviderConfig {
-  const rawChatProvider = (process.env.HAI_CHAT_PROVIDER || 'gemini') as string;
+  // Prefer openai-compatible when available; fall back to gemini for legacy setups.
+  const rawChatProvider = (process.env.HAI_CHAT_PROVIDER ||
+    'openai-compatible') as string;
 
   // Validate chat provider
   const validChatProviders: ChatProviderType[] = [
@@ -174,13 +176,15 @@ export function loadProviderConfig(): ProviderConfig {
     'claude',
     'openai-compatible',
   ];
-  const chatProvider: ChatProviderType = validChatProviders.includes(rawChatProvider as ChatProviderType)
+  const chatProvider: ChatProviderType = validChatProviders.includes(
+    rawChatProvider as ChatProviderType
+  )
     ? (rawChatProvider as ChatProviderType)
-    : 'gemini';
+    : 'openai-compatible';
 
   if (!validChatProviders.includes(rawChatProvider as ChatProviderType)) {
     console.warn(
-      `HAI.ai: Unknown HAI_CHAT_PROVIDER "${rawChatProvider}". Falling back to "gemini".`
+      `HAI.ai: Unknown HAI_CHAT_PROVIDER "${rawChatProvider}". Falling back to "openai-compatible".`
     );
   }
 

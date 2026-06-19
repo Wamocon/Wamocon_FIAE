@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
@@ -40,16 +40,31 @@ export default function VerificationPage({
 }: {
   params: Promise<{ code: string }>;
 }) {
-  const { code } = use(params);
+  const [code, setCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadStarted, setDownloadStarted] = useState(false);
+
+  // React 18 compatible way to unwrap the params promise
+  useEffect(() => {
+    let cancelled = false;
+    params.then(p => {
+      if (!cancelled) setCode(p.code);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [params]);
 
   const downloadPdf = async (verificationCode: string) => {
     const res = await fetch(`/api/verify/${verificationCode}/download`, {
       cache: 'no-store',
     });
-    if (!res.ok) throw new Error('Download failed');
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Download failed: ${res.status} ${body}`);
+    }
 
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
@@ -62,11 +77,9 @@ export default function VerificationPage({
     document.body.removeChild(a);
   };
 
-  const loadVerificationAndDownload = async () => {
-    if (!code || downloading) return;
-    setDownloading(true);
+  const verifyCode = async (verificationCode: string) => {
     try {
-      const verifyRes = await fetch(`/api/verify/${code}`, {
+      const verifyRes = await fetch(`/api/verify/${verificationCode}`, {
         cache: 'no-store',
       });
       if (!verifyRes.ok) {
@@ -82,30 +95,24 @@ export default function VerificationPage({
 
       const verifyData = (await verifyRes.json()) as VerificationResult;
       setResult(verifyData);
-
-      await downloadPdf(code);
     } catch (error) {
-      console.error('Download error:', error);
+      console.error('Verification error:', error);
       setResult({
         valid: false,
-        message: 'Fehler beim Herunterladen des Zeugnisses',
+        message: 'Fehler beim Prüfen des Zeugnisses.',
       });
     } finally {
-      setDownloading(false);
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    // Auto-download PDF immediately when page loads
-    loadVerificationAndDownload();
-  }, [code]);
 
   const handleDownload = async () => {
     if (!code) return;
     setDownloading(true);
     try {
       await downloadPdf(code);
+      setDownloadStarted(true);
+      toast.success('PDF heruntergeladen.');
     } catch (error) {
       console.error('Download error:', error);
       toast.error('Fehler beim Herunterladen des Zeugnisses.');
@@ -114,7 +121,13 @@ export default function VerificationPage({
     }
   };
 
-  if (loading || downloading) {
+  useEffect(() => {
+    if (code) {
+      verifyCode(code);
+    }
+  }, [code]);
+
+  if (loading || code === null) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50">
         <LoadingSpinner size="xl" />
@@ -168,7 +181,9 @@ export default function VerificationPage({
 
             <div>
               <h1 className="mb-2 text-3xl font-bold text-gray-900">
-                PDF heruntergeladen!
+                {downloadStarted
+                  ? 'PDF heruntergeladen!'
+                  : 'Zeugnis verifiziert'}
               </h1>
               <p className="text-lg text-gray-500">
                 Das Arbeitszeugnis ist authentisch und wurde von{' '}
@@ -233,12 +248,15 @@ export default function VerificationPage({
               ) : (
                 <Download className="h-5 w-5" />
               )}
-              <span className="font-medium">PDF erneut herunterladen</span>
+              <span className="font-medium">
+                {downloadStarted
+                  ? 'PDF erneut herunterladen'
+                  : 'PDF herunterladen'}
+              </span>
             </button>
 
             <p className="text-center text-xs text-gray-400">
-              Das PDF wurde automatisch heruntergeladen. Klicken Sie hier um es
-              erneut zu laden.
+              Klicken Sie auf die Schaltfläche, um das PDF herunterzuladen.
             </p>
           </div>
         </div>

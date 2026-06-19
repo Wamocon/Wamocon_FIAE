@@ -20,6 +20,8 @@ import type {
   ChatResponse,
 } from './types';
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 export class OpenAICompatibleChatProvider implements ChatProvider {
   readonly name = 'openai-compatible';
   private apiKey: string | null = null;
@@ -68,6 +70,44 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
     ];
   }
 
+  private createAbortSignal(timeoutMs: number): AbortSignal {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    // Ensure the timeout is cleaned up if the request finishes quickly.
+    const originalAbort = controller.abort.bind(controller);
+    controller.abort = (reason?: unknown) => {
+      clearTimeout(timeout);
+      originalAbort(reason);
+    };
+    return controller.signal;
+  }
+
+  private extractText(data: unknown): string {
+    if (typeof data !== 'object' || data === null) return '';
+
+    const d = data as Record<string, unknown>;
+
+    // Standard OpenAI shape
+    const choices = Array.isArray(d.choices) ? d.choices : [];
+    const choice = choices[0] as Record<string, unknown> | undefined;
+    if (choice) {
+      const message = choice.message as Record<string, unknown> | undefined;
+      if (typeof message?.content === 'string') {
+        return message.content;
+      }
+      if (typeof choice.text === 'string') {
+        return choice.text;
+      }
+    }
+
+    // Some endpoints return the text directly
+    if (typeof d.text === 'string') {
+      return d.text;
+    }
+
+    return '';
+  }
+
   async generateResponse(
     systemPrompt: string,
     messages: ChatMessage[],
@@ -80,44 +120,98 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
       );
     }
 
-    const response = await fetch(this.getApiUrl(), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: this.modelName,
-        messages: this.buildMessages(systemPrompt, messages, userMessage),
-        max_tokens: options.maxOutputTokens ?? 2048,
-        temperature: options.temperature ?? 0.7,
-        top_p: options.topP ?? 0.9,
-        ...(options.stopSequences?.length
-          ? { stop: options.stopSequences }
-          : {}),
-      }),
-    });
+    const body = {
+      model: this.modelName,
+      messages: this.buildMessages(systemPrompt, messages, userMessage),
+      max_tokens: options.maxOutputTokens ?? 2048,
+      temperature: options.temperature ?? 0.7,
+      top_p: options.topP ?? 0.9,
+      ...(options.stopSequences?.length ? { stop: options.stopSequences } : {}),
+      stream: false,
+    };
+
+    const signal = this.createAbortSignal(DEFAULT_TIMEOUT_MS);
+    const url = this.getApiUrl();
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error ? fetchError.message : String(fetchError);
+      console.error(
+        `HAI.ai [openai-compatible]: fetch failed for ${url}:`,
+        fetchError
+      );
+      throw new Error(`OpenAI-compatible API request failed: ${message}`);
+    }
+
+    let responseText = '';
+    try {
+      responseText = await response.text();
+    } catch {
+      responseText = '<unreadable body>';
+    }
 
     if (!response.ok) {
-      const errorBody = await response.text().catch(() => 'Unknown error');
+      console.error(
+        `HAI.ai [openai-compatible]: API error ${response.status} from ${url}. Body:`,
+        responseText.slice(0, 1000)
+      );
       throw new Error(
-        `OpenAI-compatible API error: ${response.status} - ${errorBody}`
+        `OpenAI-compatible API error: ${response.status} - ${responseText.slice(0, 500)}`
       );
     }
 
-    const data = await response.json();
-    const choice = data.choices?.[0];
-    const text = choice?.message?.content || '';
+    let data: unknown;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(
+        `HAI.ai [openai-compatible]: Failed to parse JSON response from ${url}. Body:`,
+        responseText.slice(0, 1000)
+      );
+      throw new Error(
+        `OpenAI-compatible API returned invalid JSON: ${responseText.slice(0, 500)}`
+      );
+    }
+
+    const text = this.extractText(data);
+    if (!text) {
+      console.warn(
+        `HAI.ai [openai-compatible]: Empty content in response from ${url}. Response:`,
+        JSON.stringify(data).slice(0, 1000)
+      );
+    }
+
+    const usage = (data as Record<string, unknown>)?.usage as
+      | Record<string, number>
+      | undefined;
 
     return {
       text,
       citations: [],
-      tokenCount:
-        (data.usage?.prompt_tokens ?? 0) +
-        (data.usage?.completion_tokens ?? 0),
-      finishReason: choice?.finish_reason ?? undefined,
+      tokenCount: (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0),
+      finishReason: this.extractFinishReason(data),
       provider: this.name,
     };
+  }
+
+  private extractFinishReason(data: unknown): string | undefined {
+    const d = data as Record<string, unknown> | undefined;
+    const choices = Array.isArray(d?.choices) ? d.choices : [];
+    const choice = choices[0] as Record<string, unknown> | undefined;
+    return typeof choice?.finish_reason === 'string'
+      ? choice.finish_reason
+      : undefined;
   }
 
   async generateResponseStream(
@@ -133,24 +227,41 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
       );
     }
 
-    const response = await fetch(this.getApiUrl(), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: this.modelName,
-        messages: this.buildMessages(systemPrompt, messages, userMessage),
-        max_tokens: options.maxOutputTokens ?? 2048,
-        temperature: options.temperature ?? 0.7,
-        top_p: options.topP ?? 0.9,
-        ...(options.stopSequences?.length
-          ? { stop: options.stopSequences }
-          : {}),
-        stream: true,
-      }),
-    });
+    const signal = this.createAbortSignal(DEFAULT_TIMEOUT_MS);
+    const url = this.getApiUrl();
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.modelName,
+          messages: this.buildMessages(systemPrompt, messages, userMessage),
+          max_tokens: options.maxOutputTokens ?? 2048,
+          temperature: options.temperature ?? 0.7,
+          top_p: options.topP ?? 0.9,
+          ...(options.stopSequences?.length
+            ? { stop: options.stopSequences }
+            : {}),
+          stream: true,
+        }),
+        signal,
+      });
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error ? fetchError.message : String(fetchError);
+      console.error(
+        `HAI.ai [openai-compatible]: streaming fetch failed for ${url}:`,
+        fetchError
+      );
+      throw new Error(
+        `OpenAI-compatible API streaming request failed: ${message}`
+      );
+    }
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => 'Unknown error');
