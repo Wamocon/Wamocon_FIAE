@@ -1,5 +1,22 @@
 @import 'tailwindcss';
 
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 @layer base {
   /* Dark Theme (Default) */
   :root,
@@ -25,7 +42,7 @@
     --destructive-foreground: 0 0% 100%; /* #ffffff - White */
     --ring: 0 100% 65%; /* #ff1a1a - Brighter Crimson ring for focus */
     --radius: 0.5rem;
-    
+
     /* Theme-specific colors */
     --theme-bg-gradient-1: #000000;
     --theme-bg-gradient-2: #0a0a0a;
@@ -64,7 +81,7 @@
     --destructive-foreground: 0 0% 100%;
     --ring: 0 85% 50%;
     --radius: 0.5rem;
-    
+
     /* Theme-specific colors for light mode */
     --theme-bg-gradient-1: #ffffff;
     --theme-bg-gradient-2: #fafafa;
@@ -96,7 +113,8 @@
     ) !important;
     min-height: 100vh;
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   /* Light mode HTML */
@@ -111,7 +129,8 @@
     ) !important;
     min-height: 100vh;
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .dark body,
@@ -131,7 +150,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .light body,
@@ -149,14 +169,15 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   /* Force base colors - theme aware */
   .dark * {
     border-color: #333333 !important;
   }
-  
+
   .light * {
     border-color: #e0e0e0 !important;
   }

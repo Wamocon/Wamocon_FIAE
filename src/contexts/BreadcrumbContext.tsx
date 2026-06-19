@@ -80,6 +80,12 @@ export function BreadcrumbProvider({
           if (prev === 'modules') label = t('breadcrumb.module');
           else if (prev === 'lessons') label = t('breadcrumb.lesson');
           else if (prev === 'quizzes') label = t('breadcrumb.quiz');
+          else if (prev === 'trainees') label = t('breadcrumb.details');
+          else if (prev === 'enablers') label = t('breadcrumb.enablers');
+          else if (prev === 'content-management') label = t('breadcrumb.details');
+          else if (prev === 'use-cases') label = t('breadcrumb.details');
+          else if (prev === 'organizations') label = t('breadcrumb.details');
+          else if (prev === 'users') label = t('breadcrumb.details');
           else label = t('breadcrumb.details');
         }
         if (segment === 'dashboard') label = t('breadcrumb.dashboard');
@@ -98,6 +104,23 @@ export function BreadcrumbProvider({
         else if (segment === 'activity-reports')
           label = t('nav.activityReports');
         else if (segment === 'courses') label = t('nav.courses');
+        else if (segment === 'calendar') label = t('breadcrumb.calendar');
+        else if (segment === 'evaluations') label = t('breadcrumb.evaluations');
+        else if (segment === 'reviews') label = t('breadcrumb.reviews');
+        else if (segment === 'trainer-feedback')
+          label = t('breadcrumb.trainerFeedback');
+        else if (segment === 'admin') label = t('breadcrumb.admin');
+        else if (segment === 'enablers') label = t('breadcrumb.enablers');
+        else if (segment === 'new') label = t('breadcrumb.new');
+        else if (segment === 'edit') label = t('breadcrumb.edit');
+        else if (segment === 'new-quiz') label = t('breadcrumb.newQuiz');
+        else if (segment === 'use-cases') label = t('breadcrumb.useCases');
+        else if (segment === 'lernfelder') label = t('breadcrumb.lernfelder');
+        else if (segment === 'organizations')
+          label = t('breadcrumb.organizations');
+        else if (segment === 'users') label = t('breadcrumb.users');
+        else if (segment === 'arbeitszeugnis')
+          label = t('breadcrumb.arbeitszeugnis');
 
         // Capitalize first letter
         label = label.charAt(0).toUpperCase() + label.slice(1);

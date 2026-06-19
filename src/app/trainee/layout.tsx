@@ -7,6 +7,78 @@ import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useSidebar } from '@/contexts/SidebarContext';
+import { AlertCircle, Calendar } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+/**
+ * Full-screen blocking overlay shown when the trainee has no birth_date.
+ * Prevents any navigation or interaction until the date is provided.
+ */
+function BirthdateBlocker() {
+  const { t } = useLanguage();
+  const { profile, updateProfile, refreshProfile } = useAuth();
+  const [birthDate, setBirthDate] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!birthDate) return;
+    setSaving(true);
+    try {
+      await updateProfile({ birth_date: birthDate });
+      await refreshProfile();
+      toast.success(t('profile.updateSuccess') || 'Profil aktualisiert');
+    } catch {
+      toast.error('Fehler beim Speichern');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md">
+      <div className="bg-card border-border mx-4 w-full max-w-md rounded-2xl border p-8 shadow-2xl">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="bg-destructive/10 mb-4 flex h-14 w-14 items-center justify-center rounded-full">
+            <AlertCircle className="text-destructive h-7 w-7" />
+          </div>
+          <h2 className="text-foreground text-xl font-bold">
+            {t('profile.birthDateRequired') || 'Geburtsdatum erforderlich'}
+          </h2>
+          <p className="text-muted-foreground mt-2 text-sm">
+            {t('profile.birthDateRequiredText') ||
+              'Bitte geben Sie Ihr Geburtsdatum ein, um die Plattform nutzen zu können.'}
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-foreground mb-1.5 block text-sm font-medium">
+              <Calendar className="mr-1.5 inline-block h-4 w-4" />
+              {t('profile.birthDate') || 'Geburtsdatum'}
+            </label>
+            <input
+              type="date"
+              value={birthDate}
+              onChange={e => setBirthDate(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
+              className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2.5 text-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={!birthDate || saving}
+            className="bg-accent text-accent-foreground hover:bg-accent/90 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {saving ? (
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : null}
+            {t('common.save') || 'Speichern'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const TraineeLayoutComponent = ({
   children,
@@ -48,7 +120,7 @@ const TraineeLayoutComponent = ({
 
   // Memoize authentication check to prevent unnecessary re-renders
   const isAuthenticated = useMemo(() => {
-    return user && profile && profile.role === 'trainee';
+    return user && profile && profile.role === 'trainee' && profile.trainerActivated !== false;
   }, [user, profile]);
 
   // Determine if we're still in a loading state
@@ -59,6 +131,7 @@ const TraineeLayoutComponent = ({
     if (isLoading) return false;
     if (!user) return true;
     if (profile && profile.role !== 'trainee') return true;
+    if (profile && profile.trainerActivated === false) return true;
     return false;
   }, [isLoading, user, profile]);
 
@@ -138,6 +211,7 @@ const TraineeLayoutComponent = ({
       onToggleSidebar={handleToggleSidebar}
       userRole="trainee"
     >
+      {!profile?.birth_date && <BirthdateBlocker />}
       {children}
     </MainLayout>
   );

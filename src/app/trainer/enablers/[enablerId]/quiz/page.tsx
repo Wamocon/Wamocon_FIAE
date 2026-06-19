@@ -15,7 +15,13 @@ export default function EnablerQuizBuilderPage() {
   const router = useRouter();
   const params = useParams<{ enablerId: string }>();
   const enablerId = params?.enablerId as string;
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !isPlatformOwner) {
+      router.replace('/trainer/content-management');
+    }
+  }, [authLoading, isPlatformOwner, router]);
 
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');

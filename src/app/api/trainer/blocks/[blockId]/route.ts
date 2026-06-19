@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { ausbildungBlocks, profiles, notifications } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // Helper to get ISO week number
 function getISOWeek(date: Date): number {
@@ -46,6 +47,8 @@ export async function DELETE(
             return NextResponse.json({ error: 'Can only delete trainer-created blocks' }, { status: 403 });
         }
 
+        const organizationId = await getUserOrgId(String(block.createdByTrainerId || block.traineeId));
+
         // Delete the block
         await db.delete(ausbildungBlocks).where(eq(ausbildungBlocks.id, blockId));
 
@@ -60,6 +63,7 @@ export async function DELETE(
                     message: `Der Block "${blockLabel}" wurde storniert.`,
                     linkUrl: '/trainee/school?tab=blocks',
                     context: { blockId, blockType: block.blockType },
+                    organizationId,
                 });
             } catch (notifyErr) {
                 console.warn('Failed to notify trainee for block deletion', notifyErr);
@@ -135,6 +139,8 @@ export async function PATCH(
             .where(eq(ausbildungBlocks.id, blockId))
             .returning();
 
+        const organizationId = await getUserOrgId(String(existingBlock.createdByTrainerId || existingBlock.traineeId));
+
         // Notify trainee about block update
         if (existingBlock.traineeId) {
             try {
@@ -146,6 +152,7 @@ export async function PATCH(
                     message: `Der Block "${blockLabel}" wurde aktualisiert.`,
                     linkUrl: '/trainee/school?tab=blocks',
                     context: { blockId, blockType: updatedBlock.blockType },
+                    organizationId,
                 });
             } catch (notifyErr) {
                 console.warn('Failed to notify trainee for block update', notifyErr);

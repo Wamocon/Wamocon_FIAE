@@ -43,7 +43,7 @@ export default function TrainerUseCaseDetailPage() {
   const router = useRouter();
   const params = useParams<{ useCaseId: string }>();
   const useCaseId = params?.useCaseId as string;
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner } = useAuth();
   const { t } = useLanguage();
 
   const [useCase, setUseCase] = useState<UseCase | null>(null);
@@ -260,35 +260,37 @@ export default function TrainerUseCaseDetailPage() {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <>
+          {/* Action Buttons — platform owner only */}
+          {isPlatformOwner && (
+            <div className="flex items-center gap-2">
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="from-accent to-primary text-primary-foreground flex items-center gap-2 rounded-xl bg-gradient-to-r px-4 py-2 font-medium disabled:opacity-50"
+                  >
+                    <Save className="h-4 w-4" />
+                    {saving ? '...' : t('common.save')}
+                  </button>
+                </>
+              ) : (
                 <button
-                  onClick={() => setIsEditing(false)}
-                  className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors"
+                  onClick={() => setIsEditing(true)}
+                  className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-2 rounded-xl px-4 py-2 transition-colors"
                 >
-                  {t('common.cancel')}
+                  <Edit2 className="h-4 w-4" />
+                  {t('common.edit')}
                 </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="from-accent to-primary text-primary-foreground flex items-center gap-2 rounded-xl bg-gradient-to-r px-4 py-2 font-medium disabled:opacity-50"
-                >
-                  <Save className="h-4 w-4" />
-                  {saving ? '...' : t('common.save')}
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-2 rounded-xl px-4 py-2 transition-colors"
-              >
-                <Edit2 className="h-4 w-4" />
-                {t('common.edit')}
-              </button>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Description */}

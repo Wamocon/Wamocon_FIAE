@@ -10,10 +10,10 @@ import {
   LogOut,
   GraduationCap,
   HelpCircle,
-  Upload,
   School,
-  Calendar,
   ClipboardList,
+  Building2,
+  ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -22,9 +22,12 @@ import { useMemo, useCallback, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import dynamic from 'next/dynamic';
 
-const HaiAdminDialog = dynamic(() => import('@/components/hai/HaiAdminDialog'), {
-  ssr: false,
-});
+const HaiAdminDialog = dynamic(
+  () => import('@/components/hai/HaiAdminDialog'),
+  {
+    ssr: false,
+  }
+);
 
 interface SidebarProps {
   currentView: string;
@@ -39,7 +42,7 @@ export function Sidebar({
   onToggle: _onToggle,
   userRole,
 }: SidebarProps) {
-  const { profile, signOut, loading } = useAuth();
+  const { profile, signOut, loading, subscriptionPlan, isAdmin } = useAuth();
   const { language, t } = useLanguage();
   const router = useRouter();
   const pathname = usePathname();
@@ -82,9 +85,6 @@ export function Sidebar({
           break;
         case 'quizzes':
           router.push('/trainee/quizzes');
-          break;
-        case 'bulkImport':
-          router.push('/trainer/bulk-import');
           break;
         case 'school':
           router.push(
@@ -136,77 +136,86 @@ export function Sidebar({
       },
       ...(userRole === 'trainer'
         ? [
-          {
-            id: 'activityReports',
-            label: t('nav.activityReports'),
-            icon: ClipboardList,
-            href: '/trainer/activity-reports',
-          },
-          {
-            id: 'school',
-            label: t('nav.school'),
-            icon: School,
-            href: '/trainer/school',
-          },
-          {
-            id: 'contentManagement',
-            label: t('nav.contentManagement'),
-            icon: BookOpen,
-            href: '/trainer/content-management',
-          },
-
-          {
-            id: 'quizManagement',
-            label: t('nav.quizzes'),
-            icon: HelpCircle,
-            href: '/trainer/quiz-management',
-          },
-          {
-            id: 'bulkImport',
-            label: t('nav.bulkImport'),
-            icon: Upload,
-            href: '/trainer/bulk-import',
-          },
-          {
-            id: 'trainees',
-            label: t('nav.trainees'),
-            icon: Users,
-            href: '/trainer/trainees',
-          },
-        ]
+            {
+              id: 'activityReports',
+              label: t('nav.activityReports'),
+              icon: ClipboardList,
+              href: '/trainer/activity-reports',
+            },
+            {
+              id: 'school',
+              label: t('nav.school'),
+              icon: School,
+              href: '/trainer/school',
+            },
+            {
+              id: 'contentManagement',
+              label: t('nav.contentManagement'),
+              icon: BookOpen,
+              href: '/trainer/content-management',
+            },
+            {
+              id: 'quizManagement',
+              label: t('nav.quizzes'),
+              icon: HelpCircle,
+              href: '/trainer/quiz-management',
+            },
+            {
+              id: 'trainees',
+              label: t('nav.trainees'),
+              icon: Users,
+              href: '/trainer/trainees',
+            },
+            ...(isAdmin
+              ? [
+                  {
+                    id: 'adminOrgs',
+                    label: t('nav.organizations'),
+                    icon: Building2,
+                    href: '/trainer/admin/organizations',
+                  },
+                  {
+                    id: 'adminUsers',
+                    label: t('nav.userManagement'),
+                    icon: ShieldCheck,
+                    href: '/trainer/admin/users',
+                  },
+                ]
+              : []),
+          ]
         : [
-          {
-            id: 'activityReports',
-            label: t('nav.activityReports'),
-            icon: ClipboardList,
-            href: '/trainee/activity-reports',
-          },
-          {
-            id: 'school',
-            label: t('nav.school'),
-            icon: School,
-            href: '/trainee/school',
-          },
-          {
-            id: 'courses',
-            label: t('nav.courses'),
-            icon: BookOpen,
-            href: '/trainee/courses',
-          },
+            {
+              id: 'activityReports',
+              label: t('nav.activityReports'),
+              icon: ClipboardList,
+              href: '/trainee/activity-reports',
+            },
+            {
+              id: 'school',
+              label: t('nav.school'),
+              icon: School,
+              href: '/trainee/school',
+            },
+            {
+              id: 'courses',
+              label: t('nav.courses'),
+              icon: BookOpen,
+              href: '/trainee/courses',
+            },
 
-          {
-            id: 'lessons',
-            label: t('nav.trainerFeedback'),
-            icon: GraduationCap,
-            href: '/trainee/trainer-feedback',
-          },
-          {
-            id: 'quizzes',
-            label: t('nav.quizzes'),
-            icon: HelpCircle,
-            href: '/trainee/quizzes',
-          },
-        ]),
+            {
+              id: 'lessons',
+              label: t('nav.trainerFeedback'),
+              icon: GraduationCap,
+              href: '/trainee/trainer-feedback',
+            },
+            {
+              id: 'quizzes',
+              label: t('nav.quizzes'),
+              icon: HelpCircle,
+              href: '/trainee/quizzes',
+            },
+          ]),
       {
         id: 'profile',
         label: t('nav.profile'),
@@ -214,7 +223,7 @@ export function Sidebar({
         href: userRole === 'trainee' ? '/trainee/profile' : '/trainer/profile',
       },
     ],
-    [userRole, t]
+    [userRole, t, isAdmin, subscriptionPlan]
   );
 
   if (!profile) return null;
@@ -224,20 +233,23 @@ export function Sidebar({
       className={[
         'glass-effect border-border/50 border-r transition-all duration-300 ease-in-out',
         // Mobile: slide-in drawer
-        'fixed inset-y-0 left-0 z-40 w-64',
+        'fixed inset-y-0 left-0 z-40 w-72',
         isOpen ? 'translate-x-0' : '-translate-x-full',
         // Desktop: in-flow sidebar that pushes content
         'lg:static lg:inset-auto lg:h-full lg:shrink-0 lg:translate-x-0 lg:overflow-hidden',
         isOpen
-          ? 'lg:pointer-events-auto lg:w-64'
+          ? 'lg:pointer-events-auto lg:w-72'
           : 'lg:pointer-events-none lg:w-0',
         // Desktop hover to reveal when collapsed
-        'group-hover:lg:pointer-events-auto group-hover:lg:w-64',
+        'group-hover:lg:pointer-events-auto group-hover:lg:w-72',
       ].join(' ')}
     >
       <div className="flex h-full flex-col">
         {/* Logo Section */}
-        <div className="border-border/50 flex h-16 items-center justify-start border-b px-5" data-tour="sidebar-logo">
+        <div
+          className="border-border/50 flex h-16 items-center justify-start border-b px-5"
+          data-tour="sidebar-logo"
+        >
           <div className="flex min-w-0 items-center gap-3">
             <div className="from-primary to-primary/80 flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br shadow-md ring-1 ring-white/10">
               <GraduationCap className="text-foreground h-6 w-6" />
@@ -263,18 +275,18 @@ export function Sidebar({
               : currentView === item.id;
 
             return (
-
               <Link
                 key={item.id}
                 href={item.href}
                 data-tour={`sidebar-${item.id}`}
-                className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${isActive
-                  ? 'bg-accent/20 text-accent border-accent/30 border'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent'
-                  }`}
+                className={`flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${
+                  isActive
+                    ? 'bg-accent/20 text-accent border-accent/30 border'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent hover:ring-1'
+                }`}
               >
                 {item.id === 'profile' ? (
-                  <Avatar className="h-5 w-5">
+                  <Avatar className="h-5 w-5 shrink-0">
                     {profile.avatar ? (
                       <AvatarImage
                         src={profile.avatar}
@@ -289,23 +301,22 @@ export function Sidebar({
                   </Avatar>
                 ) : (
                   <Icon
-                    className={`h-5 w-5 ${isActive ? 'text-accent' : ''}`}
+                    className={`h-5 w-5 shrink-0 ${isActive ? 'text-accent' : ''}`}
                   />
                 )}
-                <span className="font-medium">{item.label}</span>
+                <span className="truncate font-medium">{item.label}</span>
               </Link>
             );
-
           })}
         </nav>
 
-        {/* HAI Admin Button — trainer only */}
-        {userRole === 'trainer' && (
+        {/* HAI Admin Button — trainer + PRO plan only */}
+        {userRole === 'trainer' && subscriptionPlan === 'PRO' && (
           <div className="px-4 pb-2">
             <button
               onClick={() => setHaiAdminOpen(true)}
               data-tour="sidebar-hai-admin"
-              className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent"
+              className="text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 hover:ring-1"
             >
               <span className="text-lg">🦈</span>
               <span className="font-medium">HAI Admin</span>
@@ -343,7 +354,11 @@ export function Sidebar({
               <p className="text-muted-foreground text-xs capitalize">
                 {profile.role === 'trainee'
                   ? t('roles.trainee')
-                  : t('roles.trainer')}
+                  : profile.role === 'admin'
+                    ? t('roles.admin')
+                    : profile.role === 'temp_admin'
+                      ? t('roles.tempAdmin')
+                      : t('roles.trainer')}
               </p>
             </div>
           </div>
@@ -351,7 +366,7 @@ export function Sidebar({
           <button
             onClick={handleSignOut}
             disabled={loading}
-            className={`mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${loading ? 'cursor-not-allowed opacity-60' : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-1 hover:ring-accent'}`}
+            className={`mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 ${loading ? 'cursor-not-allowed opacity-60' : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent hover:ring-1'}`}
           >
             <LogOut className={`h-5 w-5 ${loading ? 'animate-pulse' : ''}`} />
             <span className="font-medium">

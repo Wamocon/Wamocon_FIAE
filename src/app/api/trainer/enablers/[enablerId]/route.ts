@@ -7,7 +7,7 @@ import {
   courses,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(
   _req: NextRequest,
@@ -66,6 +66,15 @@ export async function PATCH(
       );
     }
 
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = await getUserOrgId(trainerId);
+
     const body = await req.json();
     const updates: any = {};
     for (const key of [
@@ -118,6 +127,7 @@ export async function PATCH(
             message: `Ein Enabler wurde aktiviert: ${row0.title}`,
             linkUrl: '/trainee/modules',
             context: { enablerId, courseId: row0.courseId },
+            organizationId,
           }));
           await db.insert(notifications).values(values);
         }
@@ -165,6 +175,13 @@ export async function DELETE(
     if (!(await verifyTrainer(trainerId))) {
       return NextResponse.json(
         { error: 'Forbidden - not a trainer' },
+        { status: 403 }
+      );
+    }
+
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
         { status: 403 }
       );
     }

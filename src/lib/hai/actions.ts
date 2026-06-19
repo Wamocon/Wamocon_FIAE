@@ -25,6 +25,7 @@ import {
     profiles,
     enablers
 } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -421,6 +422,8 @@ async function createActivityReport(
         // Determine training year (simplified - would need actual enrollment date)
         const ausbildungsjahr = 1; // TODO: Calculate based on enrollment date
 
+        const organizationId = await getUserOrgId(userId);
+
         // Create the report as DRAFT
         const newReport = await db
             .insert(activityReports)
@@ -432,6 +435,7 @@ async function createActivityReport(
                 periodStart,
                 periodEnd,
                 status: 'DRAFT',
+                organizationId,
             })
             .returning({ id: activityReports.id });
 
@@ -640,11 +644,14 @@ async function submitQuiz(
             };
         }
 
+        const organizationId = await getUserOrgId(userId);
+
         // Submit quiz
         await db.insert(quizSubmissions).values({
             traineeId: userId,
             quizId,
             submittedAt: new Date(),
+            organizationId,
         });
 
         return {

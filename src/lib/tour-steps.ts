@@ -126,13 +126,6 @@ export const TRAINER_MAIN_STEPS: TourStep[] = [
     placement: 'right',
   },
   {
-    id: 'bulk-import',
-    targetSelector: '[data-tour="sidebar-bulkImport"]',
-    titleKey: 'onboarding.bulkImport.title',
-    descriptionKey: 'onboarding.bulkImport.desc',
-    placement: 'right',
-  },
-  {
     id: 'notifications',
     targetSelector: '[data-tour="header-notifications"]',
     titleKey: 'onboarding.notifications.title',

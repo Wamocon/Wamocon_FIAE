@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { schoolExamResults, schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 interface RouteParams {
     params: Promise<{ examId: string }>;
@@ -38,6 +39,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (!exam) {
             return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
         }
+
+        const organizationId = await getUserOrgId(String(exam.traineeId));
 
         // Check if result already exists
         const existingResults = await db
@@ -85,6 +88,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
                 message: `Deine Prüfung "${subjectName}" wurde bewertet: ${numPoints}/${numMaxPoints} Punkte (${percentage.toFixed(1)}%).`,
                 linkUrl: '/trainee/school?tab=exams',
                 context: { examId, points: numPoints, maxPoints: numMaxPoints, passed },
+                organizationId,
             });
         } catch (notifyErr) {
             console.warn('Failed to notify trainee for exam grading', notifyErr);

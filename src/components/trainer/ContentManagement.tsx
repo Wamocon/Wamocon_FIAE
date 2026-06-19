@@ -36,7 +36,7 @@ type CourseCard = {
 
 export function ContentManagement() {
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner } = useAuth();
   const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
@@ -210,25 +210,26 @@ export function ContentManagement() {
             </h1>
             <p className="text-muted">{t('content.management.description')}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setShowAssign(true)}
-              className="border-accent/30 text-foreground hover:bg-accent/10 inline-flex cursor-pointer items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5"
-            >
-              <UserPlus className="h-5 w-5" />
-              {t('content.assignCourses')}
-            </button>
-            <button
-              onClick={() => {
-                // Navigate to new module page with form
-                router.push('/trainer/content-management/new');
-              }}
-              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground flex transform cursor-pointer items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-            >
-              <Plus className="h-5 w-5" />
-              {t('content.newCourse')}
-            </button>
-          </div>
+          {isPlatformOwner && (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setShowAssign(true)}
+                className="border-accent/30 text-foreground hover:bg-accent/10 inline-flex cursor-pointer items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5"
+              >
+                <UserPlus className="h-5 w-5" />
+                {t('content.assignCourses')}
+              </button>
+              <button
+                onClick={() => {
+                  router.push('/trainer/content-management/new');
+                }}
+                className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground flex transform cursor-pointer items-center gap-2 rounded-2xl bg-gradient-to-r px-6 py-3 font-semibold shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                <Plus className="h-5 w-5" />
+                {t('content.newCourse')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -451,32 +452,34 @@ export function ContentManagement() {
                   }}
                   className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
                 >
-                  <Edit className="h-4 w-4" />
-                  {t('content.edit')}
+                  <Eye className="h-4 w-4" />
+                  {isPlatformOwner ? t('content.edit') : t('content.view')}
                 </button>
-                <button
-                  onClick={async e => {
-                    e.stopPropagation();
-                    if (!window.confirm(t('content.deleteModuleConfirm')))
-                      return;
-                    const prevCourses = courses;
-                    setCourses(prev => prev.filter(c => c.id !== course.id));
-                    try {
-                      const res = await fetch(
-                        `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
-                        { method: 'DELETE' }
-                      );
-                      if (!res.ok) throw new Error(t('content.error.delete'));
-                    } catch (e: any) {
-                      setCourses(prevCourses);
-                      toast.error(e?.message || t('content.unknownError'));
-                    }
-                  }}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/20"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {t('content.deleteCourse')}
-                </button>
+                {isPlatformOwner && (
+                  <button
+                    onClick={async e => {
+                      e.stopPropagation();
+                      if (!window.confirm(t('content.deleteModuleConfirm')))
+                        return;
+                      const prevCourses = courses;
+                      setCourses(prev => prev.filter(c => c.id !== course.id));
+                      try {
+                        const res = await fetch(
+                          `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
+                          { method: 'DELETE' }
+                        );
+                        if (!res.ok) throw new Error(t('content.error.delete'));
+                      } catch (e: any) {
+                        setCourses(prevCourses);
+                        toast.error(e?.message || t('content.unknownError'));
+                      }
+                    }}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/20"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {t('content.deleteCourse')}
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -486,7 +489,7 @@ export function ContentManagement() {
           {filteredCurriculum.map(course => (
             <div
               key={course.id}
-              className="glass-effect border-accent/30 cursor-pointer rounded-3xl border p-6 shadow-lg"
+              className="glass-effect border-accent/30 cursor-pointer overflow-hidden rounded-3xl border p-6 shadow-lg"
               onClick={() =>
                 router.push(`/trainer/content-management/${course.id}/edit`)
               }
@@ -501,12 +504,12 @@ export function ContentManagement() {
             >
               {/* Header Row */}
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex items-start gap-4">
+                <div className="flex min-w-0 flex-1 items-start gap-4">
                   <div className="from-accent to-primary flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br">
                     <BookOpen className="text-foreground h-7 w-7" />
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="text-foreground mb-1 truncate text-2xl font-bold">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-foreground mb-1 text-2xl font-bold break-words">
                       {course.title}
                     </h3>
                     <div className="flex flex-wrap gap-2">
@@ -552,7 +555,7 @@ export function ContentManagement() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 self-end md:self-auto">
+                <div className="flex shrink-0 items-center gap-2 self-end md:self-auto">
                   <button
                     onClick={e => {
                       e.stopPropagation();
@@ -560,34 +563,36 @@ export function ContentManagement() {
                         `/trainer/content-management/${course.id}/edit`
                       );
                     }}
-                    className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors"
+                    className="border-accent/30 bg-accent/10 text-foreground hover:bg-accent/20 inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors"
                   >
-                    {t('content.edit')}
+                    {isPlatformOwner ? t('content.edit') : t('content.view')}
                   </button>
-                  <button
-                    onClick={async e => {
-                      e.stopPropagation();
-                      if (!window.confirm(t('content.deleteModuleConfirm')))
-                        return;
-                      const prevCourses = courses;
-                      setCourses(prev => prev.filter(c => c.id !== course.id));
-                      try {
-                        const res = await fetch(
-                          `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
-                          { method: 'DELETE' }
-                        );
-                        if (!res.ok) throw new Error(t('content.error.delete'));
-                      } catch (e: any) {
-                        setCourses(prevCourses);
-                        toast.error(e?.message || t('content.unknownError'));
-                      }
-                    }}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/20"
-                    aria-label={t('content.deleteCourse')}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    {t('content.deleteCourse')}
-                  </button>
+                  {isPlatformOwner && (
+                    <button
+                      onClick={async e => {
+                        e.stopPropagation();
+                        if (!window.confirm(t('content.deleteModuleConfirm')))
+                          return;
+                        const prevCourses = courses;
+                        setCourses(prev => prev.filter(c => c.id !== course.id));
+                        try {
+                          const res = await fetch(
+                            `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
+                            { method: 'DELETE' }
+                          );
+                          if (!res.ok) throw new Error(t('content.error.delete'));
+                        } catch (e: any) {
+                          setCourses(prevCourses);
+                          toast.error(e?.message || t('content.unknownError'));
+                        }
+                      }}
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/20"
+                      aria-label={t('content.deleteCourse')}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {t('content.deleteCourse')}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -645,12 +650,14 @@ export function ContentManagement() {
               ? t('content.tryOtherCriteria')
               : t('content.createFirst')}
           </p>
-          <button
-            onClick={() => router.push('/trainer/content-management/new')}
-            className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-          >
-            {t('content.createNewCourse')}
-          </button>
+          {isPlatformOwner && (
+            <button
+              onClick={() => router.push('/trainer/content-management/new')}
+              className="from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-foreground transform rounded-2xl bg-gradient-to-r px-6 py-3 font-medium shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+            >
+              {t('content.createNewCourse')}
+            </button>
+          )}
         </div>
       )}
 
