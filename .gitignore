@@ -132,6 +132,8 @@ quiz_data/
 
 # Test output files
 test_output.txt
+/test-results/
+/playwright/.auth/
 
 # SQL backups (old data exports)
 data_backup.sql
