@@ -18,14 +18,14 @@ async function run() {
   const page = await context.newPage();
 
   try {
-    await page.goto('/login', { waitUntil: 'networkidle' });
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('input#email', { timeout: 60000 });
     await page.fill('input#email', email);
     await page.fill('input#password', password);
     await page.click('button[type="submit"]');
 
-    await page.waitForURL(/\/trainer/, { timeout: 60000 });
-    await page.waitForSelector('text=Dashboard', { timeout: 15000 });
+    // Wait for client-side redirect to dashboard
+    await page.waitForSelector('h2:text("Dashboard")', { timeout: 60000 });
 
     await context.storageState({ path: authFile });
     console.log(`Auth state saved to ${authFile}`);

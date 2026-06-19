@@ -19,6 +19,19 @@ The authenticated end-to-end Arbeitszeugnis/Tätigkeitsnachweis flow has been fu
 | Authenticated manual flow | ✅ Verified via browser automation |
 | Lint (changed files) | ✅ Clean (1 pre-existing `<img>` warning remains) |
 
+### Post-Merge Regression (origin/master → maanik_dev)
+
+After merging the latest `origin/master`, merge conflicts were resolved in:
+- `src/app/api/trainer/arbeitszeugnis/aggregate/[traineeId]/route.ts`
+- `src/app/api/verify/[code]/download/route.ts`
+- `src/components/trainer/arbeitszeugnis/ArbeitszeugnisGenerator.tsx`
+- `src/lib/arbeitszeugnis/pdfGenerator.ts`
+
+Regression re-run:
+- ✅ Production build: success
+- ✅ Unit/integration tests: 30/30 passed
+- ✅ Playwright E2E tests: 10/10 passed
+
 ---
 
 ## 2. What Was Implemented
