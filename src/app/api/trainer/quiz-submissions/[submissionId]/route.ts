@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { quizSubmissions, notifications } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 
 // PATCH /api/trainer/quiz-submissions/[submissionId]
@@ -55,6 +55,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissio
     if (is_reviewed) {
       try {
         const actorId = reviewer_id || null;
+        const organizationId = await getUserOrgId(String(reviewer_id || sub.traineeId));
         await db.insert(notifications).values({
           userId: String(sub.traineeId),
           actorId: actorId ? String(actorId) : null,
@@ -63,6 +64,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissio
           message: trainer_feedback ? 'Dein Quiz wurde bewertet. Trainer-Feedback ist verfügbar.' : 'Dein Quiz wurde bewertet.',
           linkUrl: '/trainee/quizzes',
           context: { submissionId },
+          organizationId,
         });
       } catch (notifyErr) {
         console.warn('Failed to notify trainee for quiz review', notifyErr);

@@ -15,6 +15,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // POST: submit answers for a quiz attempt
 // Body: { traineeId: string, answers: [{ questionId, selectedOptionId? , textAnswer? }] }
@@ -31,6 +32,8 @@ export async function POST(
       : [];
     if (!traineeId || answers.length === 0)
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+    const organizationId = await getUserOrgId(traineeId);
 
     const [quiz] = await db
       .select()
@@ -244,7 +247,7 @@ export async function POST(
       const attemptNumber = previousSubs.length + 1;
       const [sub] = await tx
         .insert(quizSubmissions)
-        .values({ traineeId, quizId, score, isReviewed: false, attemptNumber })
+        .values({ traineeId, quizId, score, isReviewed: false, attemptNumber, organizationId })
         .returning();
       await tx.insert(quizSubmissionAnswers).values(
         normalized.map(a => ({
@@ -348,6 +351,7 @@ export async function POST(
               enablerId: enabler.id,
               difficulty: link.difficulty,
             },
+            organizationId,
           }))
         );
       }

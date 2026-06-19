@@ -9,6 +9,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { apiCache } from '@/lib/api-cache';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(
   _req: NextRequest,
@@ -76,15 +77,28 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ quizId: string }> }
 ) {
   try {
     const { quizId } = await ctx.params;
+    const { searchParams } = new URL(req.url);
+    const trainerId = searchParams.get('trainerId');
+
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
 
     // Get quiz info and assigned trainees before deleting
     const [qzInfo] = await db
-      .select({ title: quizzes.title })
+      .select({ title: quizzes.title, createdById: quizzes.createdById })
       .from(quizzes)
       .where(eq(quizzes.id, quizId as any))
       .limit(1);
@@ -111,6 +125,7 @@ export async function DELETE(
     // Notify previously assigned trainees that quiz was removed
     if (assignedRows.length > 0 && qzInfo) {
       try {
+        const organizationId = await getUserOrgId(String(qzInfo.createdById || assignedRows[0]?.traineeId));
         const notifValues = assignedRows.map(r => ({
           userId: String(r.traineeId),
           type: 'QUIZ_DELETED',
@@ -118,6 +133,7 @@ export async function DELETE(
           message: `Das Quiz "${qzInfo.title}" wurde entfernt.`,
           linkUrl: '/trainee/quizzes',
           context: { quizId },
+          organizationId,
         }));
         await db.insert(notifications).values(notifValues);
       } catch (notifyErr) {
@@ -156,6 +172,19 @@ export async function PATCH(
     const trainerId = (body?.trainer_id || body?.trainerId) as
       | string
       | undefined;
+
+    if (!trainerId) {
+      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
+    }
+
+    if (!(await verifyPlatformOwner(trainerId))) {
+      return NextResponse.json(
+        { error: 'Only platform administrators can manage curriculum content' },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = await getUserOrgId(trainerId || '');
 
     // Update quiz details
     if (title !== undefined || is_active !== undefined) {
@@ -238,6 +267,7 @@ export async function PATCH(
             quizId: quizId as any,
             traineeId: tid,
             assignedById: trainerId,
+            organizationId,
           }));
 
           await tx.insert(quizAssignments).values(values).onConflictDoNothing();
@@ -259,6 +289,7 @@ export async function PATCH(
             message: `Dir wurde ein Quiz zugewiesen: "${quizTitle}"`,
             linkUrl: `/trainee/quizzes/${quizId}`,
             context: { quizId },
+            organizationId,
           }));
           await db.insert(notifications).values(notifValues);
         } catch (notifyErr) {

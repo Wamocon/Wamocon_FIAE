@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -13,6 +14,7 @@ const TrainerLayoutComponent = ({
   children: React.ReactNode;
 }) => {
   const { user, profile, loading } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const { isOpen: sidebarOpen, toggle: handleToggleSidebar } = useSidebar();
 
@@ -38,9 +40,11 @@ const TrainerLayoutComponent = ({
     }
   }, [loading, user, profile]);
 
+  const TRAINER_LEVEL_ROLES = ['admin', 'temp_admin', 'trainer'];
+
   // Memoize authentication check to prevent unnecessary re-renders
   const isAuthenticated = useMemo(() => {
-    return user && profile && profile.role === 'trainer';
+    return user && profile && TRAINER_LEVEL_ROLES.includes(profile.role);
   }, [user, profile]);
 
   // Determine if we're still in a loading state
@@ -50,7 +54,7 @@ const TrainerLayoutComponent = ({
   const shouldRedirect = useMemo(() => {
     if (isLoading) return false;
     if (!user) return true;
-    if (profile && profile.role !== 'trainer') return true;
+    if (profile && !TRAINER_LEVEL_ROLES.includes(profile.role)) return true;
     return false;
   }, [isLoading, user, profile]);
 
@@ -75,7 +79,7 @@ const TrainerLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Lade...</p>
+          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
         </div>
       </div>
     );
@@ -87,7 +91,7 @@ const TrainerLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Weiterleitung...</p>
+          <p className="text-muted-foreground mt-4">{t('common.redirecting')}</p>
         </div>
       </div>
     );
@@ -99,7 +103,7 @@ const TrainerLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Lade...</p>
+          <p className="text-muted-foreground mt-4">{t('common.loading')}</p>
         </div>
       </div>
     );
@@ -111,7 +115,7 @@ const TrainerLayoutComponent = ({
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-muted-foreground mt-4">Zugriff verweigert...</p>
+          <p className="text-muted-foreground mt-4">{t('common.accessDenied')}</p>
         </div>
       </div>
     );

@@ -7,8 +7,17 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function NewCoursePage() {
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, isPlatformOwner, loading: authLoading } = useAuth();
   const { t } = useLanguage();
+
+  if (authLoading) return null;
+  if (!isPlatformOwner) {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <p className="text-muted-foreground">{t('access.contentManagement')}</p>
+      </div>
+    );
+  }
 
   const [title, setTitle] = useState('');
   const [year, setYear] = useState<'1' | '2' | '3' | ''>('');

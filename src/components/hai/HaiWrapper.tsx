@@ -35,11 +35,14 @@ interface HaiWrapperProps {
 }
 
 export function HaiWrapper({ children, context }: HaiWrapperProps) {
-  const { user } = useAuth();
+  const { user, subscriptionPlan } = useAuth();
 
-  // Only render HAI if user is logged in
-  // If not logged in, just render children without the chat overlay
   if (!user) {
+    return <>{children}</>;
+  }
+
+  // HAI is only available for PRO plan subscribers
+  if (subscriptionPlan !== 'PRO') {
     return <>{children}</>;
   }
 

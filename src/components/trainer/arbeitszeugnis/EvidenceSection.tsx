@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Copy, Check, Star } from 'lucide-react';
+import { Copy, Check, Star } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface EvidenceItem {
@@ -72,7 +72,7 @@ export function EvidenceSection({
         Vorschläge aus Tätigkeitsnachweisen
       </h3>
       <p className="text-muted-foreground mb-4 text-sm">
-        Klicken Sie auf "Kopieren", um Highlights in den Abschlusstext zu
+        Klicken Sie auf &quot;Kopieren&quot;, um Highlights in den Abschlusstext zu
         übernehmen.
       </p>
       <div className="max-h-60 space-y-3 overflow-y-auto pr-2">

@@ -22,6 +22,7 @@ import {
   Star,
   Users,
   GraduationCap,
+  Download,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -150,6 +151,9 @@ export function ArbeitszeugnisGenerator() {
   const [certificateQrImage, setCertificateQrImage] = useState<string | null>(
     null
   );
+  const [redownloading, setRedownloading] = useState(false);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
   // Date Range Logic
   const [mode, setMode] = useState<'YEAR' | 'CUSTOM'>('YEAR');
@@ -570,6 +574,273 @@ export function ArbeitszeugnisGenerator() {
     return 'text-red-500';
   };
 
+  const handleRedownloadCertificate = async () => {
+    if (!existingCertificate || !selectedTrainee) return;
+
+    setRedownloading(true);
+    try {
+      const certRes = await fetch(
+        `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${ausbildungsjahr}`,
+        { cache: 'no-store' }
+      );
+      if (!certRes.ok) throw new Error('Failed to fetch certificate');
+      const certData = await certRes.json();
+      const cert = certData.latestCertificate;
+      if (!cert?.snapshotData) throw new Error('No snapshot data found');
+
+      const snapshot = cert.snapshotData as Record<string, unknown>;
+
+      const birthDate =
+        (snapshot.traineeBirthDate as string) ||
+        selectedTraineeData?.birth_date ||
+        null;
+
+      let qrImageBase64: string | undefined;
+      if (cert.qrVerificationUrl) {
+        try {
+          qrImageBase64 = await QRCode.toDataURL(cert.qrVerificationUrl, {
+            errorCorrectionLevel: 'H',
+            margin: 1,
+            width: 200,
+            color: { dark: '#000000', light: '#ffffff' },
+          });
+        } catch (e) {
+          console.error('Error generating QR code:', e);
+        }
+      }
+
+      let logoImageBase64: string | undefined;
+      try {
+        const logoResponse = await fetch('/WMC_Logo.png');
+        const logoBlob = await logoResponse.blob();
+        logoImageBase64 = await new Promise<string>(resolve => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(logoBlob);
+        });
+      } catch (e) {
+        console.error('Error loading logo:', e);
+      }
+
+      const snapshotComponents =
+        (snapshot.components as Array<{
+          title: string;
+          finalGrade: number | null;
+        }>) || [];
+      const snapshotSoftSkills = snapshot.softSkills as
+        | {
+            averages: {
+              fachkompetenz: number | null;
+              methodenkompetenz: number | null;
+              sozialkompetenz: number | null;
+              personalkompetenz: number | null;
+            };
+            overallAverage: number | null;
+          }
+        | undefined;
+
+      const { generateArbeitszeugnisPDF } =
+        await import('@/lib/arbeitszeugnis/pdfGenerator');
+      const pdfBlob = await generateArbeitszeugnisPDF({
+        traineeName:
+          (snapshot.traineeName as string) ||
+          aggregatedData?.traineeName ||
+          selectedTraineeData?.full_name ||
+          'Auszubildende/r',
+        traineeBirthDate: birthDate || undefined,
+        startDate: (snapshot.periodStart as string) || cert.periodStart,
+        endDate: (snapshot.periodEnd as string) || cert.periodEnd,
+        izhkProfile: 'Fachinformatiker für Anwendungsentwicklung',
+        companyName: 'WAMOCON GmbH',
+        components: snapshotComponents.map(c => ({
+          title: c.title,
+          grade: c.finalGrade,
+        })),
+        averageGrade:
+          (snapshot.manualOverallGrade as number) ??
+          (snapshot.overallAverage as number) ??
+          0,
+        manualOverallGrade:
+          (snapshot.manualOverallGrade as number) ?? null,
+        qrCodeUrl: qrImageBase64 || cert.qrVerificationUrl,
+        verificationCode: cert.qrVerificationCode,
+        issuedAt: new Date(cert.issueDate),
+        signerName: profile?.full_name || 'Ausbilder',
+        gender: (cert.gender as 'male' | 'female' | 'neutral') || 'neutral',
+        summary: cert.customSummary || undefined,
+        overallAssessment:
+          (snapshot.overallAssessment as string) || undefined,
+        radarImage: (snapshot.radarImage as string) || undefined,
+        logoImage: logoImageBase64,
+        softSkills:
+          snapshotSoftSkills?.overallAverage != null
+            ? snapshotSoftSkills
+            : undefined,
+      });
+
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Arbeitszeugnis_${(snapshot.traineeName as string) || 'Zeugnis'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('PDF erfolgreich heruntergeladen');
+    } catch (err) {
+      console.error('Error re-downloading certificate:', err);
+      toast.error('Fehler beim Herunterladen des Zeugnisses');
+    } finally {
+      setRedownloading(false);
+    }
+  };
+
+  const handleBulkRedownloadAll = async () => {
+    setBulkDownloading(true);
+    setBulkProgress({ current: 0, total: 0 });
+
+    try {
+      const res = await fetch('/api/trainer/arbeitszeugnis/certificates/all', {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('Failed to fetch certificates');
+      const data = await res.json();
+      const certificates = data.certificates || [];
+
+      if (certificates.length === 0) {
+        toast.error('Keine Zeugnisse gefunden');
+        return;
+      }
+
+      setBulkProgress({ current: 0, total: certificates.length });
+
+      let logoImageBase64: string | undefined;
+      try {
+        const logoResponse = await fetch('/WMC_Logo.png');
+        const logoBlob = await logoResponse.blob();
+        logoImageBase64 = await new Promise<string>(resolve => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(logoBlob);
+        });
+      } catch (e) {
+        console.error('Error loading logo:', e);
+      }
+
+      const { generateArbeitszeugnisPDF } =
+        await import('@/lib/arbeitszeugnis/pdfGenerator');
+
+      let successCount = 0;
+      for (let i = 0; i < certificates.length; i++) {
+        const cert = certificates[i];
+        setBulkProgress({ current: i + 1, total: certificates.length });
+
+        try {
+          const snapshot = (cert.snapshotData || {}) as Record<string, unknown>;
+          const birthDate = (snapshot.traineeBirthDate as string) || null;
+
+          let qrImageBase64: string | undefined;
+          if (cert.qrVerificationUrl) {
+            try {
+              qrImageBase64 = await QRCode.toDataURL(cert.qrVerificationUrl, {
+                errorCorrectionLevel: 'H',
+                margin: 1,
+                width: 200,
+                color: { dark: '#000000', light: '#ffffff' },
+              });
+            } catch (e) {
+              console.error('Error generating QR code:', e);
+            }
+          }
+
+          const snapshotComponents =
+            (snapshot.components as Array<{
+              title: string;
+              finalGrade: number | null;
+            }>) || [];
+          const snapshotSoftSkills = snapshot.softSkills as
+            | {
+                averages: {
+                  fachkompetenz: number | null;
+                  methodenkompetenz: number | null;
+                  sozialkompetenz: number | null;
+                  personalkompetenz: number | null;
+                };
+                overallAverage: number | null;
+              }
+            | undefined;
+
+          const pdfBlob = await generateArbeitszeugnisPDF({
+            traineeName:
+              (snapshot.traineeName as string) ||
+              cert.traineeName ||
+              'Auszubildende/r',
+            traineeBirthDate: birthDate || undefined,
+            startDate: (snapshot.periodStart as string) || cert.periodStart,
+            endDate: (snapshot.periodEnd as string) || cert.periodEnd,
+            izhkProfile: 'Fachinformatiker für Anwendungsentwicklung',
+            companyName: 'WAMOCON GmbH',
+            components: snapshotComponents.map(c => ({
+              title: c.title,
+              grade: c.finalGrade,
+            })),
+            averageGrade:
+              (snapshot.manualOverallGrade as number) ??
+              (snapshot.overallAverage as number) ??
+              0,
+            manualOverallGrade:
+              (snapshot.manualOverallGrade as number) ?? null,
+            qrCodeUrl: qrImageBase64 || cert.qrVerificationUrl || '',
+            verificationCode: cert.qrVerificationCode || '',
+            issuedAt: new Date(cert.issueDate),
+            signerName: profile?.full_name || 'Ausbilder',
+            gender: (cert.gender as 'male' | 'female' | 'neutral') || 'neutral',
+            summary: cert.customSummary || undefined,
+            overallAssessment:
+              (snapshot.overallAssessment as string) || undefined,
+            radarImage: (snapshot.radarImage as string) || undefined,
+            logoImage: logoImageBase64,
+            softSkills:
+              snapshotSoftSkills?.overallAverage != null
+                ? snapshotSoftSkills
+                : undefined,
+          });
+
+          const url = window.URL.createObjectURL(pdfBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          const traineeName =
+            (snapshot.traineeName as string) || cert.traineeName || 'Zeugnis';
+          const dateStr = new Date(cert.issueDate).toISOString().slice(0, 10);
+          a.download = `Arbeitszeugnis_${traineeName}_${dateStr}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          successCount++;
+
+          await new Promise(r => setTimeout(r, 500));
+        } catch (err) {
+          console.error(
+            `Error generating PDF for certificate ${cert.id}:`,
+            err
+          );
+        }
+      }
+
+      toast.success(
+        `${successCount} von ${certificates.length} Zeugnisse erfolgreich heruntergeladen`
+      );
+    } catch (err) {
+      console.error('Error bulk downloading certificates:', err);
+      toast.error('Fehler beim Herunterladen der Zeugnisse');
+    } finally {
+      setBulkDownloading(false);
+      setBulkProgress({ current: 0, total: 0 });
+    }
+  };
+
   const getTraineeName = (trainee: Trainee) => {
     return (
       trainee.full_name ||
@@ -620,6 +891,26 @@ export function ArbeitszeugnisGenerator() {
           <p className="text-muted-foreground mx-auto mt-2 max-w-md">
             {t('arbeitszeugnis.subtitle')}
           </p>
+          {/* Bulk Re-download All Certificates Button */}
+          <div className="mt-4">
+            <button
+              onClick={handleBulkRedownloadAll}
+              disabled={bulkDownloading}
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-600 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {bulkDownloading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Herunterladen... ({bulkProgress.current}/{bulkProgress.total})
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Alle Zeugnisse neu herunterladen
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {traineesLoading ? (
@@ -1124,6 +1415,18 @@ export function ArbeitszeugnisGenerator() {
                       <p className="text-xs font-medium text-green-600">
                         {t('arbeitszeugnis.certificateIssued')}
                       </p>
+                      <button
+                        onClick={handleRedownloadCertificate}
+                        disabled={redownloading}
+                        className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-700 disabled:opacity-50"
+                      >
+                        {redownloading ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <FileText className="h-3 w-3" />
+                        )}
+                        PDF erneut herunterladen
+                      </button>
                     </div>
                     <img
                       src={certificateQrImage}

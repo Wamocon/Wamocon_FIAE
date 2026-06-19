@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
+import { getUserOrgId } from '@/lib/auth-helpers';
 
 // Helper to parse German date format "10.08." or "10.08. - 14.08."
 function parseGermanDateRange(dateStr: string, year: number): { start: Date; end: Date } | null {
@@ -145,6 +146,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'csvData array required' }, { status: 400 });
         }
 
+        const organizationId = await getUserOrgId(traineeId);
+
         // Get trainee profile for Ausbildungsjahr calculation
         const [trainee] = await db
             .select({ startOfTrainingDate: profiles.startOfTrainingDate })
@@ -229,6 +232,7 @@ export async function POST(req: NextRequest) {
                 // Insert block
                 await db.insert(ausbildungBlocks).values({
                     traineeId: traineeId as any,
+                    organizationId,
                     schuljahr: targetSchuljahr,
                     ausbildungsjahr,
                     calendarWeek: kw,

@@ -25,7 +25,12 @@ export const authUsers = auth.table('users', {
 // --- ENUMS ---
 // Re-usable ENUM types for your database columns
 
-export const userRole = pgEnum('user_role', ['TRAINER', 'TRAINEE']);
+export const userRole = pgEnum('user_role', [
+  'ADMIN',
+  'TEMP_ADMIN',
+  'TRAINER',
+  'TRAINEE',
+]);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
 export const quizType = pgEnum('quiz_type', ['LESSON', 'GLOBAL']);
 export const questionType = pgEnum('question_type', ['MCQ', 'TEXT']);
@@ -58,7 +63,6 @@ export const certificateStatus = pgEnum('certificate_status', [
 export const competencyArea = pgEnum('competency_area', [
   'FACHKOMPETENZ', // Technical competency
   'METHODENKOMPETENZ', // Methodological competency
-  'SOZIALKOMPETENZ', // Social competency
   'PERSONALKOMPETENZ', // Personal competency
 ]);
 export const evaluationStatus = pgEnum('evaluation_status', [
@@ -67,6 +71,29 @@ export const evaluationStatus = pgEnum('evaluation_status', [
   'APPROVED',
   'REJECTED',
 ]);
+
+export const subscriptionPlan = pgEnum('subscription_plan', ['LIGHT', 'PRO']);
+
+// --- 0. ORGANIZATION TABLE ---
+
+export const organizations = pgTable('organizations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logoUrl: text('logo_url'),
+  subscriptionPlan: subscriptionPlan('subscription_plan').notNull(),
+  maxTraineeSeats: integer('max_trainee_seats').notNull(),
+  maxTrainerSeats: integer('max_trainer_seats').notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  isPlatformOwner: boolean('is_platform_owner').default(false).notNull(),
+  contactEmail: text('contact_email'),
+  contactPerson: text('contact_person'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
 
 // --- 1. CORE USER TABLES ---
 
@@ -85,7 +112,11 @@ export const profiles = pgTable('profiles', {
   avatarUrl: varchar('avatar_url', { length: 256 }),
   birthDate: timestamp('birth_date'),
   role: userRole('role').notNull(),
+  organizationId: uuid('organization_id').references(() => organizations.id, {
+    onDelete: 'set null',
+  }),
   isActive: boolean('is_active').default(false),
+  trainerActivated: boolean('trainer_activated').default(false).notNull(),
   startOfTrainingDate: timestamp('start_of_training_date'),
 
   // A trainee can be assigned to a specific trainer
@@ -135,10 +166,12 @@ export const courseMembers = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => profiles.id, { onDelete: 'cascade' }),
-    role: userRole('role').notNull(), // To store if the member is a co-trainer or trainee
+    role: userRole('role').notNull(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
   },
   table => ({
-    // A user can only be in a course once
     unq: unique().on(table.courseId, table.userId),
   })
 );
@@ -247,6 +280,10 @@ export const contentDocuments = pgTable('content_documents', {
     onDelete: 'cascade',
   }),
   courseId: uuid('course_id').references(() => courses.id, {
+    onDelete: 'cascade',
+  }),
+
+  organizationId: uuid('organization_id').references(() => organizations.id, {
     onDelete: 'cascade',
   }),
 
@@ -369,11 +406,14 @@ export const quizAssignments = pgTable(
     assignedById: uuid('assigned_by_id')
       .notNull()
       .references(() => profiles.id),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => ({
-    unq: unique().on(table.quizId, table.traineeId), // Trainee can only be assigned once
+    unq: unique().on(table.quizId, table.traineeId),
   })
 );
 
@@ -386,7 +426,10 @@ export const quizSubmissions = pgTable('quiz_submissions', {
   quizId: uuid('quiz_id')
     .notNull()
     .references(() => quizzes.id, { onDelete: 'cascade' }),
-  score: real('score'), // A percentage, e.g., 85.5
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  score: real('score'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
 
   // For "Action Required" dashboard
@@ -444,9 +487,11 @@ export const useCaseSubmissions = pgTable('use_case_submissions', {
   useCaseId: uuid('use_case_id')
     .notNull()
     .references(() => useCases.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
   submissionText: text('submission_text'),
 
-  // For "Action Required" and progress
   status: reviewStatus('status').default('PENDING'),
   trainerFeedback: text('trainer_feedback'),
   reviewedById: uuid('reviewed_by_id').references(() => profiles.id),
@@ -475,6 +520,9 @@ export const knowledgeNotes = pgTable('knowledge_notes', {
   traineeId: uuid('trainee_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   content: text('content'),
   oneDriveLink: text('onedrive_link'),
@@ -495,6 +543,9 @@ export const acceptanceProtocols = pgTable('acceptance_protocols', {
   trainerId: uuid('trainer_id')
     .notNull()
     .references(() => profiles.id),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
 
   acceptanceDate: timestamp('acceptance_date').notNull(),
   milestone: text('milestone').notNull(),
@@ -536,7 +587,10 @@ export const activityLog = pgTable('activity_log', {
   userId: uuid('user_id')
     .notNull()
     .references(() => profiles.id),
-  activityType: text('activity_type').notNull(), // e.g., 'COURSE_COMPLETED'
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  activityType: text('activity_type').notNull(),
 
   // Polymorphic link to the related item
   relatedItemId: uuid('related_item_id'),
@@ -551,16 +605,16 @@ export const activityLog = pgTable('activity_log', {
 // Notifications sent between users (trainer/trainee)
 export const notifications = pgTable('notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
-  // recipient of the notification
   userId: uuid('user_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
-  // who triggered the notification (optional)
   actorId: uuid('actor_id').references(() => profiles.id, {
     onDelete: 'set null',
   }),
-  // categorization and content
-  type: text('type').notNull(), // e.g., 'QUIZ_SUBMITTED'
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
   title: text('title').notNull(),
   message: text('message'),
   linkUrl: text('link_url'),
@@ -632,7 +686,10 @@ export const enablerSubmissions = pgTable('enabler_submissions', {
   enablerId: uuid('enabler_id')
     .notNull()
     .references(() => enablers.id, { onDelete: 'cascade' }),
-  solutionText: text('solution_text'), // Legacy: single solution
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  solutionText: text('solution_text'),
   solutions:
     jsonb('solutions').$type<Array<{ scenarioIndex: number; text: string }>>(), // New: multiple scenario solutions
   status: reviewStatus('status').default('PENDING'),
@@ -753,7 +810,10 @@ export const haiChatSessions = pgTable('hai_chat_sessions', {
   userId: uuid('user_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
-  contextType: text('context_type'), // 'enabler', 'course', 'quiz', 'general'
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  contextType: text('context_type'),
   contextId: uuid('context_id'),
 
   // Chat history features
@@ -832,9 +892,11 @@ export const ausbildungBlocks = pgTable('ausbildung_blocks', {
   traineeId: uuid('trainee_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
 
-  // Time scoping - data is year-specific
-  schuljahr: text('schuljahr').notNull(), // e.g., "2026/2027"
+  schuljahr: text('schuljahr').notNull(),
   ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
 
   // Calendar positioning
@@ -886,8 +948,10 @@ export const schoolExams = pgTable('school_exams', {
   traineeId: uuid('trainee_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
 
-  // Time scoping
   schuljahr: text('schuljahr').notNull(),
   ausbildungsjahr: integer('ausbildungsjahr').notNull(),
 
@@ -988,9 +1052,11 @@ export const activityReports = pgTable('activity_reports', {
   traineeId: uuid('trainee_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
 
-  // Report period identification
-  ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
+  ausbildungsjahr: integer('ausbildungsjahr').notNull(),
   weekNumber: integer('week_number').notNull(), // ISO week 1-52
   year: integer('year').notNull(), // Calendar year
   periodStart: timestamp('period_start').notNull(),
@@ -1011,6 +1077,9 @@ export const activityReports = pgTable('activity_reports', {
   // Digital signatures (timestamp = signed)
   traineeSignedAt: timestamp('trainee_signed_at'),
   trainerSignedAt: timestamp('trainer_signed_at'),
+
+  // Trainee self-rating for competency areas (stored as JSON: {FACHKOMPETENZ: '2', METHODENKOMPETENZ: '3', PERSONALKOMPETENZ: '1'})
+  skillSelfRatings: jsonb('skill_self_ratings').$type<Record<string, string>>(),
 
   // Generated PDF storage
   pdfUrl: text('pdf_url'),
@@ -1119,6 +1188,7 @@ export const activityReportUseCaseEntries = pgTable(
 
 // --- TYPE EXPORTS ---
 
+export type Organization = typeof organizations.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type Course = typeof courses.$inferSelect;
 export type CourseMember = typeof courseMembers.$inferSelect;
@@ -1212,17 +1282,19 @@ export const weeklyEvaluations = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
 
-    // Linking
     traineeId: uuid('trainee_id')
       .notNull()
       .references(() => profiles.id, { onDelete: 'cascade' }),
     trainerId: uuid('trainer_id')
       .notNull()
       .references(() => profiles.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     activityReportId: uuid('activity_report_id').references(
       () => activityReports.id,
       { onDelete: 'cascade' }
-    ), // Link to existing weekly reports
+    ),
 
     // Time period
     weekNumber: integer('week_number').notNull(), // ISO week 1-52
@@ -1311,13 +1383,14 @@ export const annualPerformanceSummaries = pgTable(
     traineeId: uuid('trainee_id')
       .notNull()
       .references(() => profiles.id, { onDelete: 'cascade' }),
-    ausbildungsjahr: integer('ausbildungsjahr').notNull(), // 1, 2, or 3
-    year: integer('year').notNull(), // Calendar year
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    ausbildungsjahr: integer('ausbildungsjahr').notNull(),
+    year: integer('year').notNull(),
 
-    // Competency Area Averages (automatically calculated)
-    fachkompetenzAvg: real('fachkompetenz_avg'), // Technical competency average
+    fachkompetenzAvg: real('fachkompetenz_avg'),
     methodenkompetenzAvg: real('methodenkompetenz_avg'), // Methodological competency average
-    sozialkompetenzAvg: real('sozialkompetenz_avg'), // Social competency average
     personalkompetenzAvg: real('personalkompetenz_avg'), // Personal competency average
 
     overallAverage: real('overall_average'), // Overall grade average across all areas
@@ -1362,6 +1435,9 @@ export const workCertificates = pgTable('work_certificates', {
   traineeId: uuid('trainee_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
   annualSummaryId: uuid('annual_summary_id').references(
     () => annualPerformanceSummaries.id,
     { onDelete: 'set null' }
@@ -1383,7 +1459,6 @@ export const workCertificates = pgTable('work_certificates', {
   // Competency ratings (from annual summary)
   fachkompetenzGrade: performanceRating('fachkompetenz_grade'),
   methodenkompetenzGrade: performanceRating('methodenkompetenz_grade'),
-  sozialkompetenzGrade: performanceRating('sozialkompetenz_grade'),
   personalkompetenzGrade: performanceRating('personalkompetenz_grade'),
 
   // === SNAPSHOT (Frozen grades at issue time) ===

@@ -10,6 +10,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import { generateCertificateText } from '@/lib/arbeitszeugnis/textGenerator';
 
 /**
@@ -82,6 +83,8 @@ export async function POST(
     if (!traineeProfile[0]) {
       return NextResponse.json({ error: 'Trainee not found' }, { status: 404 });
     }
+
+    const organizationId = await getUserOrgId(trainerId || traineeId);
 
     let yearStart: Date;
     let yearEnd: Date;
@@ -271,6 +274,7 @@ export async function POST(
         approvedAt: new Date(),
         isLocked: true,
         lockedAt: new Date(),
+        organizationId,
       })
       .returning();
 
