@@ -17,7 +17,8 @@ describe('loadProviderConfig', () => {
 
   it('should load openai-compatible provider config from environment', () => {
     process.env.HAI_CHAT_PROVIDER = 'openai-compatible';
-    process.env.OPENAI_COMPATIBLE_BASE_URL = 'https://sokrates.test-qualitaetsmanagement.com/api';
+    process.env.OPENAI_COMPATIBLE_BASE_URL =
+      'https://sokrates.test-qualitaetsmanagement.com/api';
     process.env.OPENAI_COMPATIBLE_API_KEY = 'sk-test-key';
     process.env.OPENAI_COMPATIBLE_MODEL = 'gpt-4o';
 
@@ -31,7 +32,7 @@ describe('loadProviderConfig', () => {
     expect(config.openaiCompatible.model).toBe('gpt-4o');
   });
 
-  it('should fall back to default Sokrates endpoint and gpt-4o-mini', () => {
+  it('should fall back to default openai-compatible provider', () => {
     delete process.env.HAI_CHAT_PROVIDER;
     delete process.env.OPENAI_COMPATIBLE_BASE_URL;
     delete process.env.OPENAI_COMPATIBLE_API_KEY;
@@ -39,7 +40,7 @@ describe('loadProviderConfig', () => {
 
     const config = loadProviderConfig();
 
-    expect(config.chatProvider).toBe('gemini');
+    expect(config.chatProvider).toBe('openai-compatible');
     expect(config.openaiCompatible.baseUrl).toBe(
       'https://sokrates.test-qualitaetsmanagement.com/api'
     );
@@ -47,11 +48,11 @@ describe('loadProviderConfig', () => {
     expect(config.openaiCompatible.model).toBe('gpt-4o-mini');
   });
 
-  it('should reject unknown chat provider and fall back to gemini', () => {
+  it('should reject unknown chat provider and fall back to openai-compatible', () => {
     process.env.HAI_CHAT_PROVIDER = 'unknown-provider';
 
     const config = loadProviderConfig();
 
-    expect(config.chatProvider).toBe('gemini');
+    expect(config.chatProvider).toBe('openai-compatible');
   });
 });

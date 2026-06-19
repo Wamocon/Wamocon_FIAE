@@ -110,6 +110,43 @@ interface SkillRadarData {
 
 type Step = 'select-trainee' | 'configure' | 'review';
 
+function getDefaultClosingSummary(
+  name: string,
+  gender: 'male' | 'female' | 'neutral'
+): string {
+  if (gender === 'male') {
+    return `Herr ${name} hat die ihm übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
+  }
+  if (gender === 'female') {
+    return `Frau ${name} hat die ihr übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
+  }
+  return `Person ${name} hat die der Person übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
+}
+
+function isSummaryEdited(summary: string, name: string): boolean {
+  const defaultNeutral = getDefaultClosingSummary(name, 'neutral');
+  const defaultMale = getDefaultClosingSummary(name, 'male');
+  const defaultFemale = getDefaultClosingSummary(name, 'female');
+  return (
+    summary !== defaultNeutral &&
+    summary !== defaultMale &&
+    summary !== defaultFemale
+  );
+}
+
+function updateSummarySalutation(
+  summary: string,
+  gender: 'male' | 'female' | 'neutral'
+): string {
+  if (gender === 'male') {
+    return summary.replace(/^\S+/, 'Herr');
+  }
+  if (gender === 'female') {
+    return summary.replace(/^\S+/, 'Frau');
+  }
+  return summary.replace(/^\S+/, 'Person');
+}
+
 export function ArbeitszeugnisGenerator() {
   const { profile } = useAuth();
   const { t } = useLanguage();
@@ -227,12 +264,13 @@ export function ArbeitszeugnisGenerator() {
 
           const name =
             aggData.traineeName || selectedTraineeData?.full_name || 'Person';
-          setSummary(
-            `Person ${name} hat die ihm übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`
-          );
+          setSummary(getDefaultClosingSummary(name, gender));
 
           // Default overall grade to rounded average
-          if (aggData.overallAverage !== null && aggData.overallAverage !== undefined) {
+          if (
+            aggData.overallAverage !== null &&
+            aggData.overallAverage !== undefined
+          ) {
             setManualOverallGrade(Math.round(aggData.overallAverage));
           } else {
             setManualOverallGrade(null);
@@ -302,10 +340,16 @@ export function ArbeitszeugnisGenerator() {
   // Update summary when gender changes
   useEffect(() => {
     if (!aggregatedData) return;
-    const pronoun =
-      gender === 'male' ? 'Herr' : gender === 'female' ? 'Frau' : 'Person';
-    setSummary(prev => prev.replace(/^(Herr|Frau|Person)/, pronoun));
-  }, [gender, aggregatedData]);
+    const name =
+      aggregatedData.traineeName || selectedTraineeData?.full_name || 'Person';
+    setSummary(prev => {
+      // If the user has manually edited the summary, only update the salutation prefix
+      if (isSummaryEdited(prev, name)) {
+        return updateSummarySalutation(prev, gender);
+      }
+      return getDefaultClosingSummary(name, gender);
+    });
+  }, [gender, aggregatedData, selectedTraineeData?.full_name]);
 
   // Compute validation errors for the issue button
   useEffect(() => {
@@ -331,13 +375,7 @@ export function ArbeitszeugnisGenerator() {
     }
 
     setValidationErrors(errors);
-  }, [
-    aggregatedData,
-    manualOverallGrade,
-    overallAssessment,
-    gender,
-    t,
-  ]);
+  }, [aggregatedData, manualOverallGrade, overallAssessment, gender, t]);
 
   const handleSelectTrainee = (trainee: Trainee) => {
     setSelectedTrainee(trainee.id);
@@ -350,7 +388,12 @@ export function ArbeitszeugnisGenerator() {
       setError(t('arbeitszeugnis.invalidPeriod'));
       return;
     }
-    if (mode === 'CUSTOM' && customStart && customEnd && new Date(customStart) >= new Date(customEnd)) {
+    if (
+      mode === 'CUSTOM' &&
+      customStart &&
+      customEnd &&
+      new Date(customStart) >= new Date(customEnd)
+    ) {
       setError(t('arbeitszeugnis.startBeforeEnd'));
       return;
     }
@@ -363,6 +406,13 @@ export function ArbeitszeugnisGenerator() {
 
     setAiLoading(true);
     setError(null);
+
+    const name =
+      aggregatedData.traineeName || selectedTraineeData?.full_name || 'Person';
+    // Only send additional trainer remarks to the AI. The default closing formula
+    // is added separately by the PDF generator, so sending it here would duplicate
+    // the closing and confuse the model.
+    const summaryContext = isSummaryEdited(summary, name) ? summary : '';
 
     try {
       const res = await fetch('/api/trainer/arbeitszeugnis/generate-summary', {
@@ -381,7 +431,7 @@ export function ArbeitszeugnisGenerator() {
             totalHours: c.totalHours,
           })),
           softSkills: aggregatedData.softSkills || null,
-          summaryContext: summary,
+          summaryContext,
           shorteningEligible: aggregatedData.shorteningEligible,
         }),
       });
@@ -395,7 +445,10 @@ export function ArbeitszeugnisGenerator() {
       setOverallAssessment(data.summary || '');
       toast.success(t('arbeitszeugnis.aiGenerateSuccess'));
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('arbeitszeugnis.aiGenerateError');
+      const message =
+        err instanceof Error
+          ? err.message
+          : t('arbeitszeugnis.aiGenerateError');
       console.error(err);
       setError(message);
       toast.error(message);
@@ -408,9 +461,8 @@ export function ArbeitszeugnisGenerator() {
     if (!aggregatedData || manualOverallGrade === null) return;
 
     try {
-      const { generateOverallAssessmentText } = await import(
-        '@/lib/arbeitszeugnis/textGenerator'
-      );
+      const { generateOverallAssessmentText } =
+        await import('@/lib/arbeitszeugnis/textGenerator');
       const text = generateOverallAssessmentText(
         aggregatedData.traineeName,
         gender,
@@ -429,7 +481,10 @@ export function ArbeitszeugnisGenerator() {
       setOverallAssessment(text);
       toast.success(t('arbeitszeugnis.ruleGenerateSuccess'));
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('arbeitszeugnis.ruleGenerateError');
+      const message =
+        err instanceof Error
+          ? err.message
+          : t('arbeitszeugnis.ruleGenerateError');
       console.error(err);
       setError(message);
       toast.error(message);
@@ -660,16 +715,14 @@ export function ArbeitszeugnisGenerator() {
           (snapshot.manualOverallGrade as number) ??
           (snapshot.overallAverage as number) ??
           0,
-        manualOverallGrade:
-          (snapshot.manualOverallGrade as number) ?? null,
+        manualOverallGrade: (snapshot.manualOverallGrade as number) ?? null,
         qrCodeUrl: qrImageBase64 || cert.qrVerificationUrl,
         verificationCode: cert.qrVerificationCode,
         issuedAt: new Date(cert.issueDate),
         signerName: profile?.full_name || 'Ausbilder',
         gender: (cert.gender as 'male' | 'female' | 'neutral') || 'neutral',
         summary: cert.customSummary || undefined,
-        overallAssessment:
-          (snapshot.overallAssessment as string) || undefined,
+        overallAssessment: (snapshot.overallAssessment as string) || undefined,
         radarImage: (snapshot.radarImage as string) || undefined,
         logoImage: logoImageBase64,
         softSkills:
@@ -789,8 +842,7 @@ export function ArbeitszeugnisGenerator() {
               (snapshot.manualOverallGrade as number) ??
               (snapshot.overallAverage as number) ??
               0,
-            manualOverallGrade:
-              (snapshot.manualOverallGrade as number) ?? null,
+            manualOverallGrade: (snapshot.manualOverallGrade as number) ?? null,
             qrCodeUrl: qrImageBase64 || cert.qrVerificationUrl || '',
             verificationCode: cert.qrVerificationCode || '',
             issuedAt: new Date(cert.issueDate),
@@ -1388,7 +1440,9 @@ export function ArbeitszeugnisGenerator() {
                 {t('arbeitszeugnis.period')}
               </p>
               <p className="text-sm font-bold">
-                {new Date(aggregatedData.periodStart).toLocaleDateString('de-DE')}
+                {new Date(aggregatedData.periodStart).toLocaleDateString(
+                  'de-DE'
+                )}
                 <br />
                 {new Date(aggregatedData.periodEnd).toLocaleDateString('de-DE')}
               </p>
@@ -1585,7 +1639,7 @@ export function ArbeitszeugnisGenerator() {
                   className={`rounded-xl border-2 p-3 text-center transition-all ${
                     manualOverallGrade === grade
                       ? 'border-amber-500 bg-amber-500/10 text-amber-600'
-                      : 'border-border hover:border-amber-500/50 bg-background'
+                      : 'border-border bg-background hover:border-amber-500/50'
                   }`}
                 >
                   <p className="text-xl font-bold">{grade}</p>
@@ -1632,7 +1686,7 @@ export function ArbeitszeugnisGenerator() {
                 disabled={
                   manualOverallGrade === null || !aggregatedData.overallAverage
                 }
-                className="flex items-center justify-center gap-2 rounded-xl border-2 border-amber-500/30 bg-background py-3 font-semibold text-amber-600 transition-all hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="bg-background flex items-center justify-center gap-2 rounded-xl border-2 border-amber-500/30 py-3 font-semibold text-amber-600 transition-all hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FileCheck className="h-5 w-5" />
                 {t('arbeitszeugnis.generateWithoutAI')}
@@ -1694,9 +1748,7 @@ export function ArbeitszeugnisGenerator() {
               <div className="flex flex-1 flex-col items-end">
                 <button
                   onClick={handleIssueCertificate}
-                  disabled={
-                    issuing || validationErrors.length > 0
-                  }
+                  disabled={issuing || validationErrors.length > 0}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 py-4 font-bold text-white shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                 >
                   {issuing ? (

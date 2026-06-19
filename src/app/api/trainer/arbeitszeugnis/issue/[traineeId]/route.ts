@@ -12,6 +12,7 @@ import { eq, and, gte, lte } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { generateCertificateText } from '@/lib/arbeitszeugnis/textGenerator';
+import { getBaseUrlFromRequest } from '@/lib/url';
 
 /**
  * POST /api/trainer/arbeitszeugnis/issue/[traineeId]
@@ -57,12 +58,19 @@ export async function POST(
     // Server-side validation for required fields
     if (!overallAssessment || overallAssessment.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Gesamturteil fehlt. Bitte generieren Sie es vor dem Ausstellen.' },
+        {
+          error:
+            'Gesamturteil fehlt. Bitte generieren Sie es vor dem Ausstellen.',
+        },
         { status: 400 }
       );
     }
 
-    if (manualOverallGrade === null || manualOverallGrade < 1 || manualOverallGrade > 6) {
+    if (
+      manualOverallGrade === null ||
+      manualOverallGrade < 1 ||
+      manualOverallGrade > 6
+    ) {
       return NextResponse.json(
         { error: 'Gesamtnote fehlt oder ist ungültig.' },
         { status: 400 }
@@ -180,7 +188,7 @@ export async function POST(
 
       const comp = componentMap.get(key)!;
       const effectiveGrade = entry.trainerGrade;
-      
+
       comp.useCases.push({
         letter: entry.useCaseLetter,
         description: entry.useCaseDescription,
@@ -224,7 +232,7 @@ export async function POST(
     const qrVerificationCode = randomBytes(12)
       .toString('base64url')
       .slice(0, 16);
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fiae-learn.com';
+    const baseUrl = getBaseUrlFromRequest(request);
     const qrVerificationUrl = `${baseUrl}/verify/${qrVerificationCode}`;
 
     // Generate certificate text based on grades
@@ -292,7 +300,10 @@ export async function POST(
     });
   } catch (error: unknown) {
     console.error('Error issuing certificate:', error);
-    return NextResponse.json({ error: 'Interner Serverfehler beim Ausstellen des Zeugnisses' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Interner Serverfehler beim Ausstellen des Zeugnisses' },
+      { status: 500 }
+    );
   }
 }
 

@@ -11,6 +11,7 @@ import {
 import { eq, and, gte, lte, isNotNull, inArray } from 'drizzle-orm';
 import { generateArbeitszeugnisPDF } from '@/lib/arbeitszeugnis/pdfGenerator';
 import QRCode from 'qrcode';
+import { getBaseUrlFromRequest } from '@/lib/url';
 
 interface SnapshotComponent {
   title: string;
@@ -306,9 +307,8 @@ export async function GET(
     // Generate QR code image
     let qrImageBase64 = '';
     try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_APP_URL || 'https://fiae-learn.com';
-      const qrUrl = `${baseUrl.replace(/\/$/, '')}/verify/${code}`;
+      const baseUrl = getBaseUrlFromRequest(request);
+      const qrUrl = `${baseUrl}/verify/${code}`;
       qrImageBase64 = await QRCode.toDataURL(qrUrl, {
         errorCorrectionLevel: 'H',
         margin: 1,
@@ -381,8 +381,7 @@ export async function GET(
           title: c.title,
           grade: c.finalGrade,
         })) || [],
-      averageGrade:
-        snapshot.manualOverallGrade ?? snapshot.overallAverage ?? 0,
+      averageGrade: snapshot.manualOverallGrade ?? snapshot.overallAverage ?? 0,
       manualOverallGrade: snapshot.manualOverallGrade ?? null,
       qrCodeUrl: qrImageBase64,
       verificationCode: cert.qrVerificationCode || code,

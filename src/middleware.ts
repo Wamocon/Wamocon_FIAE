@@ -6,8 +6,8 @@ import type { NextRequest } from 'next/server';
  * Values are aligned with src/lib/api-cache.ts `cacheHeaders`.
  * ===================================================================== */
 const CC_LONG = 'public, s-maxage=900, stale-while-revalidate=1800'; // 15 min – only for truly static data
-const CC_MEDIUM = 'private, no-cache';  // mutable data – always reach origin
-const CC_SHORT = 'private, no-cache';  // mutable data – always reach origin
+const CC_MEDIUM = 'private, no-cache'; // mutable data – always reach origin
+const CC_SHORT = 'private, no-cache'; // mutable data – always reach origin
 
 /** Static / reference data — rarely or never changes */
 const LONG_RE =
@@ -16,8 +16,8 @@ const LONG_RE =
 /** Trainer & trainee data routes — changes on writes, 5 min TTL */
 const MEDIUM_RE = /^\/api\/(trainer|trainee)\//;
 
-/** Routes that must NOT be cached (AI chat, auth, real-time) */
-const NO_CACHE_RE = /^\/api\/(hai\/|auth\/|register)/;
+/** Routes that must NOT be cached (AI chat, auth, real-time, PDF downloads) */
+const NO_CACHE_RE = /^\/api\/(hai\/|auth\/|register|verify\/[^/]+\/download)/;
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

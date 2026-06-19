@@ -73,23 +73,11 @@ export async function POST(request: NextRequest) {
     }
 
     const pronounSubject =
-      gender === 'male'
-        ? 'Er'
-        : gender === 'female'
-          ? 'Sie'
-          : 'Die Person';
+      gender === 'male' ? 'Er' : gender === 'female' ? 'Sie' : 'Die Person';
     const pronounPossessive =
-      gender === 'male'
-        ? 'seiner'
-        : gender === 'female'
-          ? 'ihrer'
-          : 'der';
+      gender === 'male' ? 'seiner' : gender === 'female' ? 'ihrer' : 'der';
     const title =
-      gender === 'male'
-        ? 'Herr'
-        : gender === 'female'
-          ? 'Frau'
-          : '';
+      gender === 'male' ? 'Herr' : gender === 'female' ? 'Frau' : '';
 
     const gradeLabel = gradeText[effectiveOverallGrade] || 'befriedigend';
     const certificateLabel =
@@ -135,6 +123,7 @@ Regeln:
 - Beziehe dich auf die Gesamtnote und die wichtigsten Stärken.
 - Wenn eine Verkürzung der Ausbildungszeit möglich ist (< 2,45), erwähne dies positiv.
 - Wenn der Nutzer zusätzliche Bemerkungen liefert, arbeite diese sinnvoll ein.
+- Verwende NICHT die Schlussformel "Wir danken für die angenehme Zusammenarbeit...". Diese wird separat ergänzt.
 - Verwende folgende Anredeformen: ${pronounSubject} / ${pronounPossessive}.`;
 
     const userPrompt = `Erstelle das Gesamturteil für folgende/n Auszubildende/n:
@@ -154,7 +143,7 @@ Verkürzung möglich: ${shorteningEligible ? 'Ja' : 'Nein'}
 Zusätzliche Bemerkungen des Ausbilders:
 ${summaryContext || 'Keine zusätzlichen Bemerkungen.'}
 
-Schreibe nun das Gesamturteil (max. 600 Zeichen).`;
+Schreibe nun ausschließlich das Gesamturteil (max. 600 Zeichen, Fließtext).`;
 
     const response = await chatWithFallback(
       systemPrompt,
@@ -167,13 +156,24 @@ Schreibe nun das Gesamturteil (max. 600 Zeichen).`;
       }
     );
 
-    const generatedSummary = response.text.trim();
+    let generatedSummary = response.text.trim();
 
     if (!generatedSummary) {
       return NextResponse.json(
         { error: 'KI hat keinen Text generiert' },
         { status: 500 }
       );
+    }
+
+    // Strip markdown artifacts and truncate to 600 chars as requested in the prompt
+    generatedSummary = generatedSummary
+      .replace(/\*\*/g, '')
+      .replace(/#{1,6}\s?/g, '')
+      .replace(/\n+/g, ' ')
+      .trim();
+
+    if (generatedSummary.length > 600) {
+      generatedSummary = generatedSummary.slice(0, 597) + '...';
     }
 
     return NextResponse.json({
@@ -183,8 +183,7 @@ Schreibe nun das Gesamturteil (max. 600 Zeichen).`;
     });
   } catch (error: unknown) {
     console.error('Error generating certificate summary:', error);
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { error: `Fehler bei der KI-Generierung: ${message}` },
       { status: 500 }
