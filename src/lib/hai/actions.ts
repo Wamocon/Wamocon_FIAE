@@ -22,10 +22,8 @@ import {
     quizSubmissions,
     notifications,
     enablerSubmissions,
-    useCaseSubmissions,
     profiles,
-    enablers,
-    ausbildungBlocks
+    enablers
 } from '@/db/migrations/schemas/schema';
 
 // ============================================================================
@@ -99,8 +97,6 @@ export function detectActionIntent(
     message: string,
     context: ActionDetectionContext
 ): ActionIntent | null {
-    const lowerMessage = message.toLowerCase().trim();
-
     // --- Trainee Actions ---
 
     // Create activity report
@@ -470,7 +466,7 @@ async function submitActivityReport(
         if (reportId) {
             // Submit specific report by ID
             reportToSubmit = await db
-                .select({ id: activityReports.id, status: activityReports.status })
+                .select({ id: activityReports.id, status: activityReports.status, weekNumber: activityReports.weekNumber })
                 .from(activityReports)
                 .where(
                     and(
@@ -483,7 +479,7 @@ async function submitActivityReport(
             // Submit report for specific week
             const year = (parameters.year as number) || new Date().getFullYear();
             reportToSubmit = await db
-                .select({ id: activityReports.id, status: activityReports.status })
+                .select({ id: activityReports.id, status: activityReports.status, weekNumber: activityReports.weekNumber })
                 .from(activityReports)
                 .where(
                     and(
@@ -537,7 +533,7 @@ async function submitActivityReport(
 
         return {
             success: true,
-            message: `📤 **Tätigkeitsnachweis eingereicht!**\n\n✅ KW ${(report as any).weekNumber} wurde zur Prüfung eingereicht.\n\n📬 Dein Trainer wird benachrichtigt und gibt dir bald Feedback.`,
+            message: `📤 **Tätigkeitsnachweis eingereicht!**\n\n✅ KW ${report.weekNumber} wurde zur Prüfung eingereicht.\n\n📬 Dein Trainer wird benachrichtigt und gibt dir bald Feedback.`,
             data: { reportId: report.id },
         };
     } catch (error) {
@@ -679,7 +675,7 @@ async function markNotificationRead(
 
         if (markAll) {
             // Mark all unread notifications as read
-            const result = await db
+            await db
                 .update(notifications)
                 .set({ isRead: true, readAt: new Date() })
                 .where(
@@ -787,6 +783,47 @@ async function approveReport(
                 success: false,
                 message: 'Keine Report-ID angegeben.',
                 error: 'Missing reportId',
+            };
+        }
+
+        // Fetch report with trainee assignment info
+        const reportRows = await db
+            .select({
+                id: activityReports.id,
+                status: activityReports.status,
+                traineeId: activityReports.traineeId,
+                assignedTrainerId: profiles.assignedTrainerId,
+            })
+            .from(activityReports)
+            .innerJoin(profiles, eq(activityReports.traineeId, profiles.id))
+            .where(eq(activityReports.id, reportId))
+            .limit(1);
+
+        if (reportRows.length === 0) {
+            return {
+                success: false,
+                message: 'Tätigkeitsnachweis nicht gefunden.',
+                error: 'Report not found',
+            };
+        }
+
+        const report = reportRows[0];
+
+        // Security: verify trainer is assigned to this trainee
+        if (report.assignedTrainerId !== trainerId) {
+            return {
+                success: false,
+                message: 'Sie sind nicht als verantwortlicher Trainer für diesen Auszubildenden eingetragen.',
+                error: 'Trainer not assigned to trainee',
+            };
+        }
+
+        // Validate workflow state
+        if (report.status !== 'SUBMITTED') {
+            return {
+                success: false,
+                message: `Der Tätigkeitsnachweis kann nicht genehmigt werden (Status: ${report.status}). Nur eingereichte Nachweise können genehmigt werden.`,
+                error: 'Invalid report status',
             };
         }
 

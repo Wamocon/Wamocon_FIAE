@@ -12,6 +12,36 @@ import { eq, and, gte, lte, isNotNull, inArray } from 'drizzle-orm';
 import { generateArbeitszeugnisPDF } from '@/lib/arbeitszeugnis/pdfGenerator';
 import QRCode from 'qrcode';
 
+interface SnapshotComponent {
+  title: string;
+  finalGrade: number | null;
+}
+
+interface SoftSkillsSnapshot {
+  averages: {
+    fachkompetenz: number | null;
+    methodenkompetenz: number | null;
+    sozialkompetenz: number | null;
+    personalkompetenz: number | null;
+  };
+  overallAverage: number | null;
+}
+
+interface CertificateSnapshot {
+  traineeName?: string;
+  traineeBirthDate?: string | Date | null;
+  periodStart?: string;
+  periodEnd?: string;
+  izhkProfile?: string;
+  companyName?: string;
+  components?: SnapshotComponent[];
+  overallAverage?: number | null;
+  manualOverallGrade?: number | null;
+  radarImage?: string;
+  softSkills?: SoftSkillsSnapshot;
+  overallAssessment?: string;
+}
+
 /**
  * GET /api/verify/[code]/download
  *
@@ -50,11 +80,14 @@ export async function GET(
     }
 
     const cert = certificate[0];
-    const snapshot = cert.snapshotData as any;
+    const snapshot = cert.snapshotData as CertificateSnapshot;
 
     // Fetch signer name and trainee birth date from profiles
     let signerName = 'Ausbildungsleitung';
-    let traineeBirthDate = snapshot.traineeBirthDate || null;
+    let traineeBirthDate: string | null =
+      snapshot.traineeBirthDate instanceof Date
+        ? snapshot.traineeBirthDate.toISOString().split('T')[0]
+        : snapshot.traineeBirthDate || null;
 
     // Fetch signer name
     if (cert.approvedByTrainerId) {
@@ -76,12 +109,15 @@ export async function GET(
         .where(eq(profiles.id, cert.traineeId))
         .limit(1);
       if (traineeProfile[0]?.birthDate) {
-        traineeBirthDate = traineeProfile[0].birthDate;
+        traineeBirthDate =
+          traineeProfile[0].birthDate instanceof Date
+            ? traineeProfile[0].birthDate.toISOString().split('T')[0]
+            : traineeProfile[0].birthDate;
       }
     }
 
     // Reconstruct soft skills if missing from snapshot
-    let softSkills = snapshot.softSkills;
+    let softSkills: SoftSkillsSnapshot | undefined = snapshot.softSkills;
     if (
       !softSkills &&
       cert.traineeId &&
@@ -317,8 +353,9 @@ export async function GET(
 
     // Generate default summary if missing
     const traineeName = snapshot.traineeName || 'Trainee';
-    const summaryText =
-      cert.customSummary ||
+    const summaryText = cert.customSummary || '';
+    const overallAssessmentText =
+      snapshot.overallAssessment ||
       `Person ${traineeName} hat die ihm übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
 
     console.log('PDF Generation params:', {
@@ -328,28 +365,32 @@ export async function GET(
       softSkills: softSkills ? 'Present' : 'MISSING',
       radarImage: snapshot.radarImage ? 'Present' : 'MISSING',
       summary: summaryText ? 'Present' : 'MISSING',
+      overallAssessment: overallAssessmentText ? 'Present' : 'MISSING',
     });
 
     const pdfBlob = await generateArbeitszeugnisPDF({
       traineeName: traineeName,
       traineeBirthDate: traineeBirthDate || undefined,
-      startDate: snapshot.periodStart,
-      endDate: snapshot.periodEnd,
+      startDate: snapshot.periodStart || '',
+      endDate: snapshot.periodEnd || '',
       izhkProfile:
         snapshot.izhkProfile || 'Fachinformatiker für Anwendungsentwicklung',
       companyName: snapshot.companyName || 'WAMOCON GmbH',
       components:
-        snapshot.components?.map((c: any) => ({
+        snapshot.components?.map((c: SnapshotComponent) => ({
           title: c.title,
           grade: c.finalGrade,
         })) || [],
-      averageGrade: snapshot.overallAverage || 0,
+      averageGrade:
+        snapshot.manualOverallGrade ?? snapshot.overallAverage ?? 0,
+      manualOverallGrade: snapshot.manualOverallGrade ?? null,
       qrCodeUrl: qrImageBase64,
       verificationCode: cert.qrVerificationCode || code,
       issuedAt: new Date(cert.issueDate),
       signerName: signerName,
       gender: genderValue,
       summary: summaryText,
+      overallAssessment: overallAssessmentText,
       radarImage: snapshot.radarImage || undefined,
       logoImage: logoImageBase64,
       softSkills: softSkills || undefined,
@@ -371,7 +412,7 @@ export async function GET(
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Download error:', error);
     return NextResponse.json(
       { error: 'Failed to generate PDF' },

@@ -12,6 +12,19 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 
+interface SoftSkillRating {
+    criterionId: string;
+    criterionCode: string;
+    criterionName: string;
+    competencyArea: string;
+    trainerRating?: string | null;
+    selfRating?: string | null;
+    kLevel?: string | null;
+    weekNumber?: number;
+    year?: number;
+    activityReportId?: string | null;
+}
+
 /**
  * GET /api/trainer/arbeitszeugnis/aggregate/[traineeId]
  * 
@@ -187,6 +200,52 @@ export async function GET(
             ? totalGradedComponents.reduce((sum, c) => sum + (c.averageGrade || 0), 0) / totalGradedComponents.length
             : null;
 
+        // === ACTIVITY REPORT KPIs ===
+        // Count approved reports and total/evaluated use-case entries in the period
+        let approvedReportsCount = 0;
+        let totalEvaluatedUseCases = 0;
+        let totalHours = 0;
+
+        try {
+            const reportStats = await db
+                .select({
+                    reportId: activityReports.id,
+                    periodStart: activityReports.periodStart,
+                    periodEnd: activityReports.periodEnd,
+                    actualHours: activityReportUseCaseEntries.actualHours,
+                    trainerGrade: activityReportUseCaseEntries.trainerGrade,
+                })
+                .from(activityReports)
+                .leftJoin(
+                    activityReportUseCaseEntries,
+                    eq(activityReportUseCaseEntries.reportId, activityReports.id)
+                )
+                .where(
+                    and(
+                        eq(activityReports.traineeId, traineeId),
+                        eq(activityReports.status, 'APPROVED'),
+                        gte(activityReports.periodStart, yearStart),
+                        lte(activityReports.periodStart, yearEnd)
+                    )
+                );
+
+            const uniqueReportIds = new Set<string>();
+            for (const row of reportStats) {
+                if (row.reportId) uniqueReportIds.add(row.reportId);
+                totalHours += row.actualHours || 0;
+                if (row.trainerGrade) {
+                    totalEvaluatedUseCases++;
+                }
+            }
+            approvedReportsCount = uniqueReportIds.size;
+        } catch (e) {
+            console.error('Error fetching activity report KPIs:', e);
+        }
+
+        const avgWeeklyHours = approvedReportsCount > 0
+            ? Math.round((totalHours / approvedReportsCount) * 100) / 100
+            : 0;
+
         // Determine shortening eligibility (< 2.45)
         const shorteningEligible = overallAverage !== null && overallAverage < 2.45;
 
@@ -196,7 +255,7 @@ export async function GET(
         // 2. Weekly evaluations linked to approved activity reports for this trainee
         
         // Query 1: Soft skills from weekly evaluations for this trainee (by ausbildungsjahr or all)
-        let softSkillRatings: any[] = [];
+        let softSkillRatings: SoftSkillRating[] = [];
         
         try {
             // Get soft skills from weeklyEvaluations linked to this trainee
@@ -296,7 +355,7 @@ export async function GET(
 
         for (const rating of softSkillRatings) {
             // trainerRating is the final rating (migration 0033 merged release_rating into trainer_rating)
-            const effectiveRatingStr = rating.trainerRating;
+            const effectiveRatingStr = rating.trainerRating ?? null;
             const numRating = ratingToNumber(effectiveRatingStr);
             if (numRating !== null && rating.competencyArea) {
                 softSkillsByArea[rating.competencyArea]?.ratings.push(numRating);
@@ -308,7 +367,7 @@ export async function GET(
                         code: rating.criterionCode,
                         name: rating.criterionName,
                         area: rating.competencyArea,
-                        kLevel: rating.kLevel,
+                        kLevel: rating.kLevel ?? null,
                         ratings: [],
                     });
                 }
@@ -379,6 +438,10 @@ export async function GET(
             shorteningEligible,
             totalGradedComponents: totalGradedComponents.length,
             totalComponents: components.length,
+            approvedReportsCount,
+            totalEvaluatedUseCases,
+            totalHours,
+            avgWeeklyHours,
             // === SOFT SKILLS DATA ===
             softSkills: {
                 averages: softSkillAverages,

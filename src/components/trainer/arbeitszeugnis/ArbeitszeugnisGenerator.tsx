@@ -8,7 +8,6 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   FileText,
   Award,
-  User,
   Calendar,
   TrendingUp,
   CheckCircle2,
@@ -91,6 +90,10 @@ interface AggregatedData {
     string,
     { label: string; range: string; description: string }
   >;
+  approvedReportsCount?: number;
+  totalEvaluatedUseCases?: number;
+  totalHours?: number;
+  avgWeeklyHours?: number;
 }
 
 interface SkillRadarData {
@@ -133,6 +136,12 @@ export function ArbeitszeugnisGenerator() {
   );
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState('');
+  const [overallAssessment, setOverallAssessment] = useState('');
+  const [manualOverallGrade, setManualOverallGrade] = useState<number | null>(
+    null
+  );
+  const [aiLoading, setAiLoading] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [existingCertificate, setExistingCertificate] = useState<{
     id: string;
     qrVerificationUrl: string | null;
@@ -217,6 +226,16 @@ export function ArbeitszeugnisGenerator() {
           setSummary(
             `Person ${name} hat die ihm übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`
           );
+
+          // Default overall grade to rounded average
+          if (aggData.overallAverage !== null && aggData.overallAverage !== undefined) {
+            setManualOverallGrade(Math.round(aggData.overallAverage));
+          } else {
+            setManualOverallGrade(null);
+          }
+
+          // Reset generated assessment when data changes
+          setOverallAssessment('');
         } else {
           setError(t('arbeitszeugnis.noData'));
         }
@@ -257,7 +276,7 @@ export function ArbeitszeugnisGenerator() {
         } catch (e) {
           console.error('Error fetching existing certificates:', e);
         }
-      } catch (err) {
+      } catch {
         setError(t('arbeitszeugnis.loadError'));
       } finally {
         setLoading(false);
@@ -273,6 +292,7 @@ export function ArbeitszeugnisGenerator() {
     customEnd,
     step,
     selectedTraineeData?.full_name,
+    t,
   ]);
 
   // Update summary when gender changes
@@ -282,6 +302,38 @@ export function ArbeitszeugnisGenerator() {
       gender === 'male' ? 'Herr' : gender === 'female' ? 'Frau' : 'Person';
     setSummary(prev => prev.replace(/^(Herr|Frau|Person)/, pronoun));
   }, [gender, aggregatedData]);
+
+  // Compute validation errors for the issue button
+  useEffect(() => {
+    const errors: string[] = [];
+
+    if (!aggregatedData) {
+      errors.push(t('arbeitszeugnis.noData'));
+    } else {
+      if (!aggregatedData.overallAverage) {
+        errors.push(t('arbeitszeugnis.missingComponentGrades'));
+      }
+      if (manualOverallGrade === null) {
+        errors.push(t('arbeitszeugnis.missingOverallGrade'));
+      }
+    }
+
+    if (!overallAssessment.trim()) {
+      errors.push(t('arbeitszeugnis.missingOverallAssessment'));
+    }
+
+    if (!gender) {
+      errors.push(t('arbeitszeugnis.missingSalutation'));
+    }
+
+    setValidationErrors(errors);
+  }, [
+    aggregatedData,
+    manualOverallGrade,
+    overallAssessment,
+    gender,
+    t,
+  ]);
 
   const handleSelectTrainee = (trainee: Trainee) => {
     setSelectedTrainee(trainee.id);
@@ -300,6 +352,84 @@ export function ArbeitszeugnisGenerator() {
     }
     setError(null);
     setStep('review');
+  };
+
+  const handleGenerateWithAI = async () => {
+    if (!aggregatedData || manualOverallGrade === null) return;
+
+    setAiLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/trainer/arbeitszeugnis/generate-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          traineeName: aggregatedData.traineeName,
+          gender,
+          certificateType,
+          overallAverage: aggregatedData.overallAverage,
+          manualOverallGrade,
+          components: aggregatedData.components.map(c => ({
+            title: c.componentTitle,
+            finalGrade: c.finalGrade,
+            averageGrade: c.averageGrade,
+            totalHours: c.totalHours,
+          })),
+          softSkills: aggregatedData.softSkills || null,
+          summaryContext: summary,
+          shorteningEligible: aggregatedData.shorteningEligible,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'KI-Generierung fehlgeschlagen');
+      }
+
+      const data = await res.json();
+      setOverallAssessment(data.summary || '');
+      toast.success(t('arbeitszeugnis.aiGenerateSuccess'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('arbeitszeugnis.aiGenerateError');
+      console.error(err);
+      setError(message);
+      toast.error(message);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleGenerateWithoutAI = async () => {
+    if (!aggregatedData || manualOverallGrade === null) return;
+
+    try {
+      const { generateOverallAssessmentText } = await import(
+        '@/lib/arbeitszeugnis/textGenerator'
+      );
+      const text = generateOverallAssessmentText(
+        aggregatedData.traineeName,
+        gender,
+        certificateType,
+        manualOverallGrade,
+        aggregatedData.overallAverage,
+        aggregatedData.components.map(c => ({
+          code: c.componentCode,
+          title: c.componentTitle,
+          finalGrade: c.finalGrade,
+        })),
+        aggregatedData.softSkills || null,
+        summary,
+        aggregatedData.shorteningEligible
+      );
+      setOverallAssessment(text);
+      toast.success(t('arbeitszeugnis.ruleGenerateSuccess'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('arbeitszeugnis.ruleGenerateError');
+      console.error(err);
+      setError(message);
+      toast.error(message);
+    }
   };
 
   const handleIssueCertificate = async () => {
@@ -327,6 +457,8 @@ export function ArbeitszeugnisGenerator() {
             ausbildungsjahr,
             certificateType,
             customSummary: summary,
+            overallAssessment,
+            manualOverallGrade,
             gender,
             radarImage: radarImageBase64,
             startDate: aggregatedData.periodStart,
@@ -393,7 +525,8 @@ export function ArbeitszeugnisGenerator() {
           title: c.componentTitle,
           grade: c.finalGrade,
         })),
-        averageGrade: aggregatedData.overallAverage || 0,
+        averageGrade: manualOverallGrade ?? aggregatedData.overallAverage ?? 0,
+        overallAssessment: overallAssessment || undefined,
         qrCodeUrl: qrImageBase64 || data.certificate.qrVerificationUrl,
         verificationCode: data.certificate.qrVerificationCode,
         issuedAt: new Date(data.certificate.issueDate),
@@ -929,6 +1062,48 @@ export function ArbeitszeugnisGenerator() {
             )}
           </div>
 
+          {/* Activity Report KPIs */}
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="bg-card border-border rounded-xl border p-4">
+              <FileText className="mb-2 h-5 w-5 text-indigo-500" />
+              <p className="text-muted-foreground text-xs">
+                {t('arbeitszeugnis.approvedReportsCount')}
+              </p>
+              <p className="text-2xl font-bold">
+                {aggregatedData.approvedReportsCount ?? 0}
+              </p>
+            </div>
+            <div className="bg-card border-border rounded-xl border p-4">
+              <Clock className="mb-2 h-5 w-5 text-cyan-500" />
+              <p className="text-muted-foreground text-xs">
+                {t('arbeitszeugnis.avgWeeklyHours')}
+              </p>
+              <p className="text-2xl font-bold">
+                {aggregatedData.avgWeeklyHours?.toFixed(1) ?? '–'}h
+              </p>
+            </div>
+            <div className="bg-card border-border rounded-xl border p-4">
+              <Award className="mb-2 h-5 w-5 text-violet-500" />
+              <p className="text-muted-foreground text-xs">
+                {t('arbeitszeugnis.evaluatedUseCases')}
+              </p>
+              <p className="text-2xl font-bold">
+                {aggregatedData.totalEvaluatedUseCases ?? 0}
+              </p>
+            </div>
+            <div className="bg-card border-border rounded-xl border p-4">
+              <Calendar className="mb-2 h-5 w-5 text-rose-500" />
+              <p className="text-muted-foreground text-xs">
+                {t('arbeitszeugnis.period')}
+              </p>
+              <p className="text-sm font-bold">
+                {new Date(aggregatedData.periodStart).toLocaleDateString('de-DE')}
+                <br />
+                {new Date(aggregatedData.periodEnd).toLocaleDateString('de-DE')}
+              </p>
+            </div>
+          </div>
+
           {/* Skill Radar */}
           {radarData && radarData.radarData.length >= 1 && (
             <div
@@ -1087,7 +1262,37 @@ export function ArbeitszeugnisGenerator() {
             />
           </div>
 
-          {/* Summary Text */}
+          {/* Overall Grade Selection */}
+          <div className="bg-card border-border rounded-2xl border p-6">
+            <h3 className="mb-3 text-sm font-medium">
+              {t('arbeitszeugnis.overallGrade')}
+            </h3>
+            <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
+              {[
+                { grade: 1, label: t('arbeitszeugnis.grade1') },
+                { grade: 2, label: t('arbeitszeugnis.grade2') },
+                { grade: 3, label: t('arbeitszeugnis.grade3') },
+                { grade: 4, label: t('arbeitszeugnis.grade4') },
+                { grade: 5, label: t('arbeitszeugnis.grade5') },
+                { grade: 6, label: t('arbeitszeugnis.grade6') },
+              ].map(({ grade, label }) => (
+                <button
+                  key={grade}
+                  onClick={() => setManualOverallGrade(grade)}
+                  className={`rounded-xl border-2 p-3 text-center transition-all ${
+                    manualOverallGrade === grade
+                      ? 'border-amber-500 bg-amber-500/10 text-amber-600'
+                      : 'border-border hover:border-amber-500/50 bg-background'
+                  }`}
+                >
+                  <p className="text-xl font-bold">{grade}</p>
+                  <p className="text-xs">{label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Summary Context & Generation */}
           <div className="bg-card border-border rounded-2xl border p-6">
             <h3 className="mb-3 flex items-center gap-2 text-lg font-bold">
               <FileText className="text-accent h-5 w-5" />
@@ -1096,9 +1301,64 @@ export function ArbeitszeugnisGenerator() {
             <textarea
               value={summary}
               onChange={e => setSummary(e.target.value)}
-              className="bg-background border-border min-h-[120px] w-full resize-y rounded-xl border p-4 focus:ring-2 focus:ring-amber-500"
+              className="bg-background border-border min-h-[100px] w-full resize-y rounded-xl border p-4 focus:ring-2 focus:ring-amber-500"
               placeholder={t('arbeitszeugnis.textPlaceholder')}
             />
+
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <button
+                onClick={handleGenerateWithAI}
+                disabled={
+                  aiLoading ||
+                  manualOverallGrade === null ||
+                  !aggregatedData.overallAverage
+                }
+                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-600 py-3 font-semibold text-white shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+              >
+                {aiLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5" />
+                    {t('arbeitszeugnis.generateWithAI')}
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleGenerateWithoutAI}
+                disabled={
+                  manualOverallGrade === null || !aggregatedData.overallAverage
+                }
+                className="flex items-center justify-center gap-2 rounded-xl border-2 border-amber-500/30 bg-background py-3 font-semibold text-amber-600 transition-all hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileCheck className="h-5 w-5" />
+                {t('arbeitszeugnis.generateWithoutAI')}
+              </button>
+            </div>
+          </div>
+
+          {/* Overall Assessment Preview */}
+          <div className="bg-card border-border rounded-2xl border p-6">
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-bold">
+              <Award className="text-accent h-5 w-5" />
+              {t('arbeitszeugnis.overallAssessment')}
+            </h3>
+            {overallAssessment ? (
+              <textarea
+                value={overallAssessment}
+                onChange={e => setOverallAssessment(e.target.value)}
+                className="bg-background border-border min-h-[120px] w-full resize-y rounded-xl border p-4 focus:ring-2 focus:ring-amber-500"
+                placeholder={t('arbeitszeugnis.overallAssessmentPlaceholder')}
+              />
+            ) : (
+              <div className="text-muted-foreground flex flex-col items-center justify-center rounded-xl border border-dashed py-10 text-center">
+                <Sparkles className="mb-3 h-12 w-12 opacity-30" />
+                <p>{t('arbeitszeugnis.overallAssessmentHint')}</p>
+                <p className="mt-1 text-sm">
+                  {t('arbeitszeugnis.overallAssessmentHintDesc')}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Gender & Issue */}
@@ -1128,10 +1388,12 @@ export function ArbeitszeugnisGenerator() {
                   ))}
                 </div>
               </div>
-              <div className="flex flex-1 items-end">
+              <div className="flex flex-1 flex-col items-end">
                 <button
                   onClick={handleIssueCertificate}
-                  disabled={issuing || !aggregatedData.overallAverage}
+                  disabled={
+                    issuing || validationErrors.length > 0
+                  }
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 py-4 font-bold text-white shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                 >
                   {issuing ? (
@@ -1145,6 +1407,22 @@ export function ArbeitszeugnisGenerator() {
                 </button>
               </div>
             </div>
+
+            {/* Validation Errors */}
+            {validationErrors.length > 0 && (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-700">
+                  <AlertCircle className="h-4 w-4" />
+                  {t('arbeitszeugnis.missingForDownload')}
+                </div>
+                <ul className="list-inside list-disc space-y-1 text-sm text-amber-700">
+                  {validationErrors.map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <p className="text-muted-foreground mt-4 text-center text-xs">
               {t('arbeitszeugnis.qrNote')}
             </p>
