@@ -20,11 +20,11 @@ import { ClaudeChatProvider } from './claude';
 import { GeminiChatProvider, GeminiEmbeddingProvider } from './gemini';
 import { OllamaEmbeddingProvider } from './ollama';
 import { OpenRouterChatProvider } from './openrouter';
+import { OpenAICompatibleChatProvider } from './openai-compatible';
 import {
   loadProviderConfig,
   type ChatProvider,
   type EmbeddingProvider,
-  type ChatProviderType,
 } from './types';
 
 // Re-export types so consumers can import from '@/lib/hai/providers'
@@ -83,6 +83,12 @@ function ensureInitialized(): void {
       config.claude.apiKey,
       config.claude.model
     );
+  } else if (config.chatProvider === 'openai-compatible') {
+    _chatProvider = new OpenAICompatibleChatProvider(
+      config.openaiCompatible.baseUrl,
+      config.openaiCompatible.apiKey,
+      config.openaiCompatible.model
+    );
   } else {
     _chatProvider = new OpenRouterChatProvider(
       config.openrouter.apiKey,
@@ -124,6 +130,7 @@ export function getChatProvider(): ChatProvider {
       gemini: 'GEMINI_API_KEY',
       claude: 'ANTHROPIC_API_KEY',
       openrouter: 'OPENROUTER_API_KEY',
+      'openai-compatible': 'OPENAI_COMPATIBLE_API_KEY',
     };
     const keyHint = keyHints[config.chatProvider] || 'API key';
     throw new Error(
@@ -214,7 +221,7 @@ export function getProviderStatus(): {
     embedding: {
       provider: _embeddingProvider?.name ?? 'none',
       initialized: _embeddingProvider?.isInitialized() ?? false,
-      dimensions: (_embeddingProvider as any)?.dimensions ?? 0,
+      dimensions: (_embeddingProvider as EmbeddingProvider | null)?.dimensions ?? 0,
     },
   };
 }

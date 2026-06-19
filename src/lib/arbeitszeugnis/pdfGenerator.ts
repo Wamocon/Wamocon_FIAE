@@ -22,6 +22,8 @@ interface CertificateData {
   signerName: string;
   gender: 'male' | 'female' | 'neutral';
   summary?: string;
+  overallAssessment?: string;
+  manualOverallGrade?: number | null;
   radarImage?: string;
   logoImage?: string;
   softSkills?: {
@@ -116,6 +118,10 @@ export async function generateArbeitszeugnisPDF(
     return grades[Math.round(grade)] || '';
   };
 
+  const getGradeWord = (grade: number): string => {
+    return getGradeText(grade);
+  };
+
   const addSectionTitle = (title: string, yPos: number): number => {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
@@ -199,9 +205,6 @@ export async function generateArbeitszeugnisPDF(
   y += 10;
 
   // -- PERSONAL INFORMATION SECTION --
-  const pronoun =
-    data.gender === 'male' ? 'Herr' : data.gender === 'female' ? 'Frau' : '';
-
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.primary);
@@ -303,6 +306,27 @@ export async function generateArbeitszeugnisPDF(
   doc.text(avgText, pageWidth - margin - 5, y + 11, { align: 'right' });
   y += 25;
 
+  // -- MANUAL OVERALL GRADE (if different from average) --
+  const displayedOverallGrade =
+    data.manualOverallGrade ?? Math.round(data.averageGrade);
+  if (
+    data.manualOverallGrade !== null &&
+    data.manualOverallGrade !== undefined &&
+    data.manualOverallGrade !== Math.round(data.averageGrade)
+  ) {
+    doc.setFillColor(...COLORS.accent);
+    doc.roundedRect(margin, y, contentWidth, 14, 2, 2, 'F');
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(
+      `Gesamtnote: ${displayedOverallGrade} – ${getGradeWord(displayedOverallGrade)}`,
+      margin + 5,
+      y + 9
+    );
+    y += 22;
+  }
+
   // -- SOFT SKILLS TABLE (if available) --
   if (data.softSkills && data.softSkills.overallAverage !== null) {
     y = addSectionTitle('Kompetenzbewertung (Soft Skills)', y);
@@ -370,7 +394,7 @@ export async function generateArbeitszeugnisPDF(
     y = 25;
   }
 
-  // -- CLOSING SUMMARY --
+  // -- CLOSING SUMMARY / OVERALL ASSESSMENT --
   const pronounRef =
     data.gender === 'male'
       ? 'Er'
@@ -383,16 +407,45 @@ export async function generateArbeitszeugnisPDF(
       : data.gender === 'female'
         ? 'Ihre'
         : 'Die';
-  const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit der Note ${data.averageGrade.toFixed(2)} (${getGradeText(data.averageGrade)}) bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
-  const summaryText = data.summary || defaultSummary;
 
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...COLORS.primary);
+  // Overall assessment (Gesamturteil)
+  if (data.overallAssessment?.trim()) {
+    y = addSectionTitle('Gesamturteil', y);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...COLORS.primary);
+    const assessmentLines = doc.splitTextToSize(
+      data.overallAssessment.trim(),
+      contentWidth
+    );
+    doc.text(assessmentLines, margin, y);
+    y += assessmentLines.length * 6 + 14;
+  }
 
-  const summaryLines = doc.splitTextToSize(summaryText, contentWidth);
-  doc.text(summaryLines, margin, y);
-  y += summaryLines.length * 6 + 20;
+  // Trainer's closing remarks
+  if (data.summary?.trim()) {
+    y = addSectionTitle('Abschließende Bemerkung', y);
+    const summaryText = data.summary.trim();
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...COLORS.primary);
+
+    const summaryLines = doc.splitTextToSize(summaryText, contentWidth);
+    doc.text(summaryLines, margin, y);
+    y += summaryLines.length * 6 + 20;
+  } else if (!data.overallAssessment?.trim()) {
+    // Fallback only if neither assessment nor summary is provided
+    const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit der Note ${data.averageGrade.toFixed(2)} (${getGradeText(data.averageGrade)}) bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...COLORS.primary);
+
+    const summaryLines = doc.splitTextToSize(defaultSummary, contentWidth);
+    doc.text(summaryLines, margin, y);
+    y += summaryLines.length * 6 + 20;
+  }
 
   // -- SIGNATURE SECTION --
   // Ensure we have space for signature + footer

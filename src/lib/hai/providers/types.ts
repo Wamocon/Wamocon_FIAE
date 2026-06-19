@@ -103,7 +103,11 @@ export interface EmbeddingProvider {
 // PROVIDER CONFIGURATION
 // ============================================================================
 
-export type ChatProviderType = 'gemini' | 'openrouter' | 'claude';
+export type ChatProviderType =
+  | 'gemini'
+  | 'openrouter'
+  | 'claude'
+  | 'openai-compatible';
 export type EmbeddingProviderType = 'gemini' | 'ollama';
 
 export interface ProviderConfig {
@@ -134,6 +138,13 @@ export interface ProviderConfig {
     model: string;
   };
 
+  /** Generic OpenAI-compatible config (chat — local/self-hosted endpoints) */
+  openaiCompatible: {
+    baseUrl: string;
+    apiKey: string | undefined;
+    model: string;
+  };
+
   /** Claude/Anthropic-specific config (chat — production) */
   claude: {
     apiKey: string | undefined;
@@ -157,7 +168,12 @@ export function loadProviderConfig(): ProviderConfig {
   const rawChatProvider = (process.env.HAI_CHAT_PROVIDER || 'gemini') as string;
 
   // Validate chat provider
-  const validChatProviders: ChatProviderType[] = ['gemini', 'openrouter', 'claude'];
+  const validChatProviders: ChatProviderType[] = [
+    'gemini',
+    'openrouter',
+    'claude',
+    'openai-compatible',
+  ];
   const chatProvider: ChatProviderType = validChatProviders.includes(rawChatProvider as ChatProviderType)
     ? (rawChatProvider as ChatProviderType)
     : 'gemini';
@@ -173,6 +189,11 @@ export function loadProviderConfig(): ProviderConfig {
     'gemini') as EmbeddingProviderType;
 
   const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+
+  // OpenAI-compatible endpoint (e.g. local Sokrates AI)
+  const openaiCompatibleBaseUrl =
+    process.env.OPENAI_COMPATIBLE_BASE_URL ||
+    'https://sokrates.test-qualitaetsmanagement.com/api';
 
   // Detect if we're in a serverless environment (Vercel) with localhost Ollama
   const isVercel = process.env.VERCEL === '1';
@@ -222,6 +243,12 @@ export function loadProviderConfig(): ProviderConfig {
       model:
         process.env.HAI_OPENROUTER_MODEL ||
         'meta-llama/llama-3.3-70b-instruct:free',
+    },
+
+    openaiCompatible: {
+      baseUrl: openaiCompatibleBaseUrl,
+      apiKey: process.env.OPENAI_COMPATIBLE_API_KEY,
+      model: process.env.OPENAI_COMPATIBLE_MODEL || 'gpt-4o-mini',
     },
 
     claude: {

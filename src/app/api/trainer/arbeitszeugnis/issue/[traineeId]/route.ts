@@ -42,6 +42,8 @@ export async function POST(
       ausbildungsjahr = 1,
       certificateType = 'INTERIM',
       customSummary = '',
+      overallAssessment = '',
+      manualOverallGrade = null,
       gender = 'neutral',
       radarImage,
       startDate,
@@ -50,6 +52,21 @@ export async function POST(
       traineeBirthDate,
       softSkills,
     } = body;
+
+    // Server-side validation for required fields
+    if (!overallAssessment || overallAssessment.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'Gesamturteil fehlt. Bitte generieren Sie es vor dem Ausstellen.' },
+        { status: 400 }
+      );
+    }
+
+    if (manualOverallGrade === null || manualOverallGrade < 1 || manualOverallGrade > 6) {
+      return NextResponse.json(
+        { error: 'Gesamtnote fehlt oder ist ungültig.' },
+        { status: 400 }
+      );
+    }
 
     // Get trainee info
     const traineeProfile = await db
@@ -227,6 +244,8 @@ export async function POST(
       periodEnd: yearEnd.toISOString(),
       components,
       overallAverage,
+      manualOverallGrade,
+      overallAssessment: overallAssessment.trim(),
       shorteningEligible: overallAverage !== null && overallAverage < 2.45,
       radarImage, // Store the radar image in the snapshot
       softSkills: softSkills || null, // Store soft skills in the snapshot
