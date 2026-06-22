@@ -176,7 +176,9 @@ export default function TrainerActivityReportsPage() {
   useEffect(() => {
     if (!profile?.id || authLoading) return;
 
-    if (profile.role !== 'trainer') {
+    // Trainer-level roles (trainer, admin, temp_admin) may review reports.
+    // Only actual trainees are redirected to their own view.
+    if (!['trainer', 'admin', 'temp_admin'].includes(profile.role)) {
       router.push('/trainee/activity-reports');
       return;
     }

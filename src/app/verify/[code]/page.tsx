@@ -129,16 +129,25 @@ export default function VerificationPage({
 
   if (loading || code === null) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50">
+      <main
+        className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
         <LoadingSpinner size="xl" />
-      </div>
+        <span className="sr-only">Zeugnis wird verifiziert …</span>
+      </main>
     );
   }
 
   if (!result?.valid) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-        <div className="w-full max-w-md space-y-6 rounded-2xl bg-white p-8 text-center shadow-xl">
+      <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+        <div
+          className="w-full max-w-md space-y-6 rounded-2xl bg-white p-8 text-center shadow-xl"
+          role="alert"
+        >
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
             <XCircle className="h-10 w-10 text-red-600" />
           </div>
@@ -155,12 +164,12 @@ export default function VerificationPage({
             Code: {code}
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl space-y-8">
         {/* Header Card */}
         <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -241,12 +250,14 @@ export default function VerificationPage({
             <button
               onClick={handleDownload}
               disabled={downloading}
+              aria-busy={downloading}
+              aria-label="Arbeitszeugnis als PDF herunterladen"
               className="flex w-full items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {downloading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
               ) : (
-                <Download className="h-5 w-5" />
+                <Download className="h-5 w-5" aria-hidden="true" />
               )}
               <span className="font-medium">
                 {downloadStarted
@@ -267,6 +278,6 @@ export default function VerificationPage({
           </p>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

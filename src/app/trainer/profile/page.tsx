@@ -23,7 +23,7 @@ export default function TrainerProfilePage() {
     );
   }
 
-  if (profile.role !== 'trainer') {
+  if (!['trainer', 'admin', 'temp_admin'].includes(profile.role)) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <LoadingSpinner size="lg" />

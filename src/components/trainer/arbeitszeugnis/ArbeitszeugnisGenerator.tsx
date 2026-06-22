@@ -588,9 +588,13 @@ export function ArbeitszeugnisGenerator() {
         overallAssessment: overallAssessment || undefined,
         qrCodeUrl: qrImageBase64 || data.certificate.qrVerificationUrl,
         verificationCode: data.certificate.qrVerificationCode,
-        issuedAt: new Date(data.certificate.issueDate),
+        issuedAt: data.certificate.issueDate
+          ? new Date(data.certificate.issueDate)
+          : new Date(),
         signerName: profile?.full_name || 'Ausbilder',
         gender: gender,
+        certificateType,
+        ausbildungsjahr,
         summary: summary,
         radarImage: radarImageBase64,
         logoImage: logoImageBase64,
@@ -718,9 +722,12 @@ export function ArbeitszeugnisGenerator() {
         manualOverallGrade: (snapshot.manualOverallGrade as number) ?? null,
         qrCodeUrl: qrImageBase64 || cert.qrVerificationUrl,
         verificationCode: cert.qrVerificationCode,
-        issuedAt: new Date(cert.issueDate),
+        issuedAt: cert.issueDate ? new Date(cert.issueDate) : new Date(),
         signerName: profile?.full_name || 'Ausbilder',
         gender: (cert.gender as 'male' | 'female' | 'neutral') || 'neutral',
+        certificateType:
+          (cert.certificateType as 'INTERIM' | 'FINAL') || certificateType,
+        ausbildungsjahr: cert.ausbildungsjahr ?? ausbildungsjahr,
         summary: cert.customSummary || undefined,
         overallAssessment: (snapshot.overallAssessment as string) || undefined,
         radarImage: (snapshot.radarImage as string) || undefined,
@@ -845,9 +852,12 @@ export function ArbeitszeugnisGenerator() {
             manualOverallGrade: (snapshot.manualOverallGrade as number) ?? null,
             qrCodeUrl: qrImageBase64 || cert.qrVerificationUrl || '',
             verificationCode: cert.qrVerificationCode || '',
-            issuedAt: new Date(cert.issueDate),
+            issuedAt: cert.issueDate ? new Date(cert.issueDate) : new Date(),
             signerName: profile?.full_name || 'Ausbilder',
             gender: (cert.gender as 'male' | 'female' | 'neutral') || 'neutral',
+            certificateType:
+              (cert.certificateType as 'INTERIM' | 'FINAL') || 'INTERIM',
+            ausbildungsjahr: cert.ausbildungsjahr ?? undefined,
             summary: cert.customSummary || undefined,
             overallAssessment:
               (snapshot.overallAssessment as string) || undefined,
@@ -864,7 +874,11 @@ export function ArbeitszeugnisGenerator() {
           a.href = url;
           const traineeName =
             (snapshot.traineeName as string) || cert.traineeName || 'Zeugnis';
-          const dateStr = new Date(cert.issueDate).toISOString().slice(0, 10);
+          const dateStr = (
+            cert.issueDate ? new Date(cert.issueDate) : new Date()
+          )
+            .toISOString()
+            .slice(0, 10);
           a.download = `Arbeitszeugnis_${traineeName}_${dateStr}.pdf`;
           document.body.appendChild(a);
           a.click();

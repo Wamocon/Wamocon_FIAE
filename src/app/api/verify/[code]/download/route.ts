@@ -385,7 +385,10 @@ export async function GET(
       manualOverallGrade: snapshot.manualOverallGrade ?? null,
       qrCodeUrl: qrImageBase64,
       verificationCode: cert.qrVerificationCode || code,
-      issuedAt: new Date(cert.issueDate),
+      issuedAt:
+        cert.issueDate && !isNaN(new Date(cert.issueDate).getTime())
+          ? new Date(cert.issueDate)
+          : new Date(),
       signerName: signerName,
       gender: genderValue,
       summary: summaryText,

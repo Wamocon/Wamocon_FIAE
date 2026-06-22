@@ -21,6 +21,8 @@ interface CertificateData {
   issuedAt: Date;
   signerName: string;
   gender: 'male' | 'female' | 'neutral';
+  certificateType?: 'INTERIM' | 'FINAL';
+  ausbildungsjahr?: number;
   summary?: string;
   overallAssessment?: string;
   manualOverallGrade?: number | null;
@@ -188,17 +190,29 @@ export async function generateArbeitszeugnisPDF(
   }
 
   // -- DOCUMENT TITLE --
+  // An interim certificate is a "Leistungsbeurteilung" for a specific training
+  // year; the final certificate is the "Ausbildungszeugnis" per § 16 BBiG.
+  const isInterim = data.certificateType === 'INTERIM';
+  const documentTitle = isInterim
+    ? 'LEISTUNGSBEURTEILUNG'
+    : 'AUSBILDUNGSZEUGNIS';
+  const documentSubtitle = isInterim
+    ? data.ausbildungsjahr
+      ? `für das ${data.ausbildungsjahr}. Ausbildungsjahr`
+      : 'während der Ausbildung'
+    : 'gemäß § 16 BBiG';
+
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.primary);
-  doc.text('AUSBILDUNGSZEUGNIS', pageWidth / 2, y, { align: 'center' });
+  doc.text(documentTitle, pageWidth / 2, y, { align: 'center' });
   y += 6;
 
   // Subtitle
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.secondary);
-  doc.text('gemäß § 16 BBiG', pageWidth / 2, y, { align: 'center' });
+  doc.text(documentSubtitle, pageWidth / 2, y, { align: 'center' });
   y += 15;
 
   drawHorizontalLine(y);
@@ -265,9 +279,23 @@ export async function generateArbeitszeugnisPDF(
     startY: y,
     head: [['Ausbildungsinhalt', 'Note', 'Bewertung']],
     body: tableBody,
+    foot: [
+      [
+        'Gesamtdurchschnitt',
+        data.averageGrade.toFixed(2),
+        getGradeText(data.averageGrade),
+      ],
+    ],
     theme: 'grid',
     headStyles: {
       fillColor: COLORS.tableHeader,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 10,
+      cellPadding: 4,
+    },
+    footStyles: {
+      fillColor: COLORS.coral,
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 10,
@@ -290,21 +318,7 @@ export async function generateArbeitszeugnisPDF(
   });
 
   // @ts-expect-error - jspdf-autotable extends jsPDF prototype
-  y = doc.lastAutoTable.finalY + 8;
-
-  // -- OVERALL GRADE --
-  doc.setFillColor(...COLORS.coral);
-  doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'F');
-
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('Gesamtdurchschnitt:', margin + 5, y + 11);
-
-  const avgText = `${data.averageGrade.toFixed(2)} – ${getGradeText(data.averageGrade)}`;
-  doc.setTextColor(255, 255, 255);
-  doc.text(avgText, pageWidth - margin - 5, y + 11, { align: 'right' });
-  y += 25;
+  y = doc.lastAutoTable.finalY + 12;
 
   // -- MANUAL OVERALL GRADE (if different from average) --
   const displayedOverallGrade =
@@ -408,7 +422,10 @@ export async function generateArbeitszeugnisPDF(
         ? 'Ihre'
         : 'Die';
 
-  // Overall assessment (Gesamturteil)
+  // -- CLOSING: GESAMTURTEIL ONLY --
+  // Only the "Gesamturteil" (data.overallAssessment) is rendered. The trainer's
+  // separate "Abschließende Bemerkung" (data.summary) is intentionally omitted
+  // to avoid duplicating the closing statement in the PDF.
   if (data.overallAssessment?.trim()) {
     y = addSectionTitle('Gesamturteil', y);
     doc.setFontSize(11);
@@ -420,22 +437,9 @@ export async function generateArbeitszeugnisPDF(
     );
     doc.text(assessmentLines, margin, y);
     y += assessmentLines.length * 6 + 14;
-  }
-
-  // Trainer's closing remarks
-  if (data.summary?.trim()) {
-    y = addSectionTitle('Abschließende Bemerkung', y);
-    const summaryText = data.summary.trim();
-
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...COLORS.primary);
-
-    const summaryLines = doc.splitTextToSize(summaryText, contentWidth);
-    doc.text(summaryLines, margin, y);
-    y += summaryLines.length * 6 + 20;
-  } else if (!data.overallAssessment?.trim()) {
-    // Fallback only if neither assessment nor summary is provided
+  } else {
+    // Fallback only if no Gesamturteil is provided
+    y = addSectionTitle('Gesamturteil', y);
     const defaultSummary = `${pronounRef} hat die übertragenen Aufgaben stets zu unserer vollen Zufriedenheit erledigt. ${pronounPoss} Leistungen wurden insgesamt mit der Note ${data.averageGrade.toFixed(2)} (${getGradeText(data.averageGrade)}) bewertet. Wir danken für die angenehme Zusammenarbeit und wünschen für die berufliche und private Zukunft alles Gute.`;
 
     doc.setFontSize(11);
@@ -454,11 +458,19 @@ export async function generateArbeitszeugnisPDF(
     y = 25;
   }
 
-  // Location and date
+  // Location and date.
+  // Guard against missing/epoch dates (e.g. a null issueDate would otherwise
+  // render as 01.01.1970). A freshly issued certificate is dated today.
+  const issuedDate =
+    data.issuedAt instanceof Date &&
+    !isNaN(data.issuedAt.getTime()) &&
+    data.issuedAt.getFullYear() > 1971
+      ? data.issuedAt
+      : new Date();
   doc.setFontSize(10);
   doc.setTextColor(...COLORS.primary);
   doc.text(`${data.companyName}`, margin, y);
-  doc.text(`${formatDateShort(data.issuedAt.toISOString())}`, margin, y + 6);
+  doc.text(`${formatDateShort(issuedDate.toISOString())}`, margin, y + 6);
   y += 20;
 
   // Signature line
