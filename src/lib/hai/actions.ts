@@ -16,6 +16,7 @@
 
 import db from '@/db';
 import { eq, and, sql } from 'drizzle-orm';
+import { toHaiRole } from '@/lib/auth-helpers';
 import {
     activityReports,
     enablerCompletions,
@@ -310,7 +311,7 @@ export async function executeAction(
             };
         }
 
-        const userRole = user[0].role as 'TRAINER' | 'TRAINEE';
+        const userRole = toHaiRole(user[0].role);
 
         // Route to specific action handler
         switch (actionType) {

@@ -18,7 +18,7 @@ import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { executeAction, ActionType } from '@/lib/hai/actions';
-import { requireProPlan } from '@/lib/auth-helpers';
+import { requireProPlan, toHaiRole } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -159,7 +159,8 @@ export async function GET(req: NextRequest) {
             'grade_quiz',
         ];
 
-        const availableActions = userRole === 'TRAINER' ? trainerActions : traineeActions;
+        const availableActions =
+            toHaiRole(userRole) === 'TRAINER' ? trainerActions : traineeActions;
 
         return NextResponse.json({
             success: true,

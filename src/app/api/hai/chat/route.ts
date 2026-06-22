@@ -36,7 +36,7 @@ import {
   ChatMessage,
 } from '@/lib/hai';
 import { getProviderStatus } from '@/lib/hai/providers';
-import { getUserOrgId, requireProPlan } from '@/lib/auth-helpers';
+import { getUserOrgId, requireProPlan, toHaiRole } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -823,7 +823,9 @@ export async function POST(req: NextRequest) {
       courseTitle,
       scenarioText: context?.scenarioText,
       previousMessages,
-      userRole: user[0].role as 'TRAINER' | 'TRAINEE',
+      // Privileged roles (ADMIN, TEMP_ADMIN) act as TRAINER so they receive
+      // full trainer-level context and live data branches in the RAG pipeline.
+      userRole: toHaiRole(user[0].role),
       conversationSummary: storedSummary,
       crossSessionMemory,
     };

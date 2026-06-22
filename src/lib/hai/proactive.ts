@@ -27,7 +27,7 @@ import {
     enablerSubmissions,
     notifications
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId } from '@/lib/auth-helpers';
+import { getUserOrgId, toHaiRole } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -75,7 +75,8 @@ export async function runProactiveChecks(userId: string): Promise<ProactiveInsig
             return insights;
         }
 
-        const userRole = user[0].role as 'TRAINER' | 'TRAINEE';
+        // Privileged roles (ADMIN, TEMP_ADMIN) are treated as TRAINER.
+        const userRole = toHaiRole(user[0].role);
 
         // Run role-specific checks
         if (userRole === 'TRAINEE') {

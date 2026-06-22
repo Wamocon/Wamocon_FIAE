@@ -12,9 +12,21 @@ import db from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
 import { profiles, organizations } from '@/db/migrations/schemas/schema';
+import { withDbRetry } from '@/lib/db-retry';
 
 const PRIVILEGED_ROLES = ['ADMIN', 'TEMP_ADMIN', 'TRAINER'] as const;
 const ADMIN_ROLES = ['ADMIN', 'TEMP_ADMIN'] as const;
+
+/**
+ * Map a stored profile role to the two-tier role used by HAI/trainer features.
+ * Privileged roles (ADMIN, TEMP_ADMIN, TRAINER) all act as 'TRAINER'; everyone
+ * else (including unknown roles) falls back to the least-privileged 'TRAINEE'.
+ */
+export function toHaiRole(role?: string | null): 'TRAINER' | 'TRAINEE' {
+  return role === 'ADMIN' || role === 'TEMP_ADMIN' || role === 'TRAINER'
+    ? 'TRAINER'
+    : 'TRAINEE';
+}
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -30,10 +42,12 @@ export async function verifyTrainer(userId: string): Promise<boolean> {
   if (!userId) return false;
 
   try {
-    const [row] = await db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, userId as any));
+    const [row] = await withDbRetry(() =>
+      db
+        .select({ role: profiles.role })
+        .from(profiles)
+        .where(eq(profiles.id, userId as any))
+    );
 
     if (row && PRIVILEGED_ROLES.includes(row.role as any)) return true;
 
@@ -60,10 +74,12 @@ export async function verifyAdmin(userId: string): Promise<boolean> {
   if (!userId) return false;
 
   try {
-    const [row] = await db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, userId as any));
+    const [row] = await withDbRetry(() =>
+      db
+        .select({ role: profiles.role })
+        .from(profiles)
+        .where(eq(profiles.id, userId as any))
+    );
 
     if (row && ADMIN_ROLES.includes(row.role as any)) return true;
 
@@ -90,14 +106,16 @@ export async function verifyPlatformOwner(userId: string): Promise<boolean> {
   if (!userId) return false;
 
   try {
-    const [row] = await db
-      .select({
-        orgId: profiles.organizationId,
-        isPlatformOwner: organizations.isPlatformOwner,
-      })
-      .from(profiles)
-      .leftJoin(organizations, eq(profiles.organizationId, organizations.id))
-      .where(eq(profiles.id, userId as any));
+    const [row] = await withDbRetry(() =>
+      db
+        .select({
+          orgId: profiles.organizationId,
+          isPlatformOwner: organizations.isPlatformOwner,
+        })
+        .from(profiles)
+        .leftJoin(organizations, eq(profiles.organizationId, organizations.id))
+        .where(eq(profiles.id, userId as any))
+    );
 
     return row?.isPlatformOwner === true;
   } catch (error) {
@@ -113,10 +131,12 @@ export async function verifyTrainee(traineeId: string): Promise<boolean> {
   if (!traineeId) return false;
 
   try {
-    const [trainee] = await db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, traineeId as any));
+    const [trainee] = await withDbRetry(() =>
+      db
+        .select({ role: profiles.role })
+        .from(profiles)
+        .where(eq(profiles.id, traineeId as any))
+    );
 
     if (trainee?.role === 'TRAINEE') return true;
 
@@ -143,10 +163,9 @@ export async function getProfile(userId: string) {
   if (!userId) return null;
 
   try {
-    const [profile] = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.id, userId as any));
+    const [profile] = await withDbRetry(() =>
+      db.select().from(profiles).where(eq(profiles.id, userId as any))
+    );
 
     return profile || null;
   } catch (error) {
@@ -162,14 +181,16 @@ export async function getProfileWithOrg(userId: string) {
   if (!userId) return null;
 
   try {
-    const [row] = await db
-      .select({
-        profile: profiles,
-        org: organizations,
-      })
-      .from(profiles)
-      .leftJoin(organizations, eq(profiles.organizationId, organizations.id))
-      .where(eq(profiles.id, userId as any));
+    const [row] = await withDbRetry(() =>
+      db
+        .select({
+          profile: profiles,
+          org: organizations,
+        })
+        .from(profiles)
+        .leftJoin(organizations, eq(profiles.organizationId, organizations.id))
+        .where(eq(profiles.id, userId as any))
+    );
 
     if (!row) return null;
     return { profile: row.profile, organization: row.org };
@@ -191,10 +212,12 @@ export async function getUserOrgId(userId: string): Promise<string> {
     return WAMOCON_ORG_ID;
   }
   try {
-    const [row] = await db
-      .select({ organizationId: profiles.organizationId })
-      .from(profiles)
-      .where(eq(profiles.id, userId as any));
+    const [row] = await withDbRetry(() =>
+      db
+        .select({ organizationId: profiles.organizationId })
+        .from(profiles)
+        .where(eq(profiles.id, userId as any))
+    );
     if (!row) {
       console.warn(`[getUserOrgId] no profile found for userId=${userId}, defaulting to WAMOCON_ORG_ID`);
       return WAMOCON_ORG_ID;
