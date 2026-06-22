@@ -128,7 +128,9 @@ export async function generateActivityReportPDF(
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('de-DE', {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString('de-DE', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
