@@ -19,6 +19,7 @@ import db from '@/db';
 import haiDb from '@/db/haiDb';
 import { eq, sql } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
+import { toHaiRole } from '@/lib/auth-helpers';
 import {
   indexAllContent,
   indexAllTrainees,
@@ -46,7 +47,8 @@ export async function POST(request: NextRequest) {
       .where(eq(profiles.id, userId))
       .limit(1);
 
-    if (user.length === 0 || user[0].role !== 'TRAINER') {
+    // Privileged roles (ADMIN, TEMP_ADMIN) are allowed alongside TRAINER.
+    if (user.length === 0 || toHaiRole(user[0].role) !== 'TRAINER') {
       return NextResponse.json(
         { error: 'Unauthorized — trainer access required' },
         { status: 403 }

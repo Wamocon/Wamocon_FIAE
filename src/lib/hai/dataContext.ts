@@ -34,6 +34,7 @@ import {
     activityReports,
     notifications,
 } from '@/db/migrations/schemas/schema';
+import { toHaiRole } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -269,7 +270,9 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
         if (user.length === 0) return null;
 
         const displayName = user[0].fullName || user[0].firstName || 'Nutzer';
-        const role = user[0].role as UserRole;
+        // Privileged roles (ADMIN, TEMP_ADMIN) are treated as TRAINER so HAI
+        // builds the trainer-facing context for them.
+        const role = toHaiRole(user[0].role);
 
         // Get overall progress (completed enablers / total active enablers across enrolled courses)
         const progressResult = await db.execute(sql`

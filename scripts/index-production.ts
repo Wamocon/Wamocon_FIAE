@@ -19,9 +19,18 @@
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-// Override DB connection to production
+// Override DB connection to production.
+// The production connection string must be supplied via the environment
+// (e.g. PROD_DB_CONNECTION_STRING in your shell or .env.local). It is NOT
+// hardcoded here to avoid committing database credentials to source control.
 const PROD_DB_URL =
-  'postgresql://postgres.ngpsgwwlnlliphfgtrya:EschbornEschborn26%21%21@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require';
+  process.env.PROD_DB_CONNECTION_STRING || process.env.PROD_DB_URL || '';
+if (!PROD_DB_URL) {
+  console.error(
+    'ERROR: Set PROD_DB_CONNECTION_STRING (production Supabase pooler URL) before running this script.'
+  );
+  process.exit(1);
+}
 process.env.DB_CONNECTION_STRING = PROD_DB_URL;
 
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

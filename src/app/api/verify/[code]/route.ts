@@ -43,8 +43,10 @@ export async function GET(
             valid: true,
             verified: true,
             certificate: {
-                type: cert.certificateType === 'INTERIM' ? 'Zwischenzeugnis' : 'Ausbildungszeugnis',
-                type_en: cert.certificateType === 'INTERIM' ? 'Interim Certificate' : 'Final Certificate',
+                // Keep terminology aligned with the generated PDF title:
+                // INTERIM -> "LEISTUNGSBEURTEILUNG", FINAL -> "AUSBILDUNGSZEUGNIS".
+                type: cert.certificateType === 'INTERIM' ? 'Leistungsbeurteilung' : 'Ausbildungszeugnis',
+                type_en: cert.certificateType === 'INTERIM' ? 'Interim Performance Assessment' : 'Final Certificate',
                 issueDate: cert.issueDate,
                 trainingYear: cert.ausbildungsjahr,
                 isAuthentic: cert.isLocked,
