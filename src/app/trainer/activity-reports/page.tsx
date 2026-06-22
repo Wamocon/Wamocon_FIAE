@@ -381,12 +381,19 @@ export default function TrainerActivityReportsPage() {
       await (
         await import('@/utils/generateReportPDF')
       ).generateActivityReportPDF(reportData, useCases, components);
+      toast.success(t('trainer.reports.pdfSuccess'));
     } catch (err: any) {
       setError(t('trainer.reports.pdfError'));
+      toast.error(t('trainer.reports.pdfError'));
     }
   };
 
   const handleMassExport = async () => {
+    if (filteredReports.length === 0) {
+      toast.error(t('trainer.reports.exportEmpty'));
+      return;
+    }
+    const exportToast = toast.loading(t('trainer.reports.exportInProgress'));
     try {
       setError(null);
       const { default: JSZip } = await import('jszip');
@@ -503,9 +510,13 @@ export default function TrainerActivityReportsPage() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        toast.success(t('trainer.reports.exportSuccess'), { id: exportToast });
+      } else {
+        toast.error(t('trainer.reports.exportEmpty'), { id: exportToast });
       }
     } catch (err: any) {
       setError(t('trainer.reports.exportError'));
+      toast.error(t('trainer.reports.exportError'), { id: exportToast });
     }
   };
 
