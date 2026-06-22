@@ -282,35 +282,39 @@ export async function generateArbeitszeugnisPDF(
   const formattedBirthDate = data.traineeBirthDate
     ? formatDate(data.traineeBirthDate)
     : '[Geburtsdatum]';
-  doc.text(`geboren am ${formattedBirthDate},`, margin, y);
+  doc.text(`geboren am ${formattedBirthDate}.`, margin, y);
   y += 15;
 
-  // Training period
+  // Evaluation scope — phrased as a formal performance assessment covering the
+  // training period, not an end-of-employment reference.
+  const azubiSuffix =
+    data.gender === 'male' ? 'r' : data.gender === 'female' ? '' : '(r)';
+  const assessmentDocName =
+    data.certificateType === 'INTERIM'
+      ? 'Die vorliegende Leistungsbeurteilung'
+      : 'Das vorliegende Ausbildungszeugnis';
+
+  doc.text(`${assessmentDocName} bewertet die Leistungen im`, margin, y);
+  y += 6;
+
   doc.text(
-    `war vom ${formatDate(data.startDate)} bis ${formatDate(data.endDate)}`,
+    `Ausbildungszeitraum vom ${formatDate(data.startDate)} bis ${formatDate(data.endDate)}`,
     margin,
     y
   );
   y += 6;
 
-  doc.text(
-    `in unserem Unternehmen als Auszubildende${data.gender === 'male' ? 'r' : data.gender === 'female' ? '' : '(r)'} im Beruf`,
-    margin,
-    y
-  );
+  doc.text(`als Auszubildende${azubiSuffix} im Ausbildungsberuf`, margin, y);
   y += 12;
 
   // Profession highlight - centered and bold
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text(data.izhkProfile, pageWidth / 2, y, { align: 'center' });
-  y += 8;
+  y += 15;
 
-  // tätig.
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text('tätig.', margin, y);
-  y += 15;
 
   // -- PERFORMANCE GRADES TABLE --
   y = addSectionTitle('Betriebliche Leistungsbeurteilung', y);
@@ -328,10 +332,17 @@ export async function generateArbeitszeugnisPDF(
     foot: [
       [
         'Gesamtdurchschnitt',
-        data.averageGrade.toFixed(2),
-        getGradeText(data.averageGrade),
+        {
+          content: Math.round(data.averageGrade).toString(),
+          styles: { halign: 'center' },
+        },
+        {
+          content: getGradeText(data.averageGrade),
+          styles: { halign: 'center' },
+        },
       ],
     ],
+    showFoot: 'lastPage',
     theme: 'grid',
     headStyles: {
       fillColor: COLORS.tableHeader,
@@ -417,9 +428,13 @@ export async function generateArbeitszeugnisPDF(
       foot: [
         [
           'Gesamtdurchschnitt Soft Skills',
-          data.softSkills.overallAverage.toFixed(2),
+          {
+            content: data.softSkills.overallAverage.toFixed(2),
+            styles: { halign: 'center' },
+          },
         ],
       ],
+      showFoot: 'lastPage',
       theme: 'grid',
       headStyles: {
         fillColor: COLORS.coral,
