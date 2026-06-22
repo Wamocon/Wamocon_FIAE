@@ -72,6 +72,34 @@ const IHK_LEGEND = [
   ],
 ];
 
+/**
+ * Normalises free text (e.g. AI-generated summaries) so that jsPDF's standard
+ * Helvetica font can measure and render it correctly. Unicode whitespace such as
+ * non-breaking or narrow spaces and zero-width characters are not part of the
+ * WinAnsi width table, which causes jsPDF to mis-measure line widths — the line
+ * then overflows the page margin and the glyphs appear abnormally letter-spaced.
+ */
+function sanitizePdfText(input?: string | null): string {
+  if (!input) return '';
+  return input
+    .normalize('NFC')
+    // Collapse all Unicode space separators (NBSP, narrow/thin spaces, etc.)
+    // into a normal space so widths are measured correctly. Newlines are kept.
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    // Strip zero-width characters, BOM and soft hyphens that have no width.
+    .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '')
+    // Normalise typographic quotes to straight quotes.
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    // Ellipsis glyph -> three dots.
+    .replace(/\u2026/g, '...')
+    // Figure/non-standard hyphens -> ASCII hyphen.
+    .replace(/[\u2010\u2011\u2012]/g, '-')
+    // Collapse runs of spaces/tabs (but preserve newlines).
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
 export async function generateArbeitszeugnisPDF(
   data: CertificateData
 ): Promise<Blob> {
@@ -136,6 +164,24 @@ export async function generateArbeitszeugnisPDF(
     doc.setDrawColor(...color);
     doc.setLineWidth(0.3);
     doc.line(margin, yPos, pageWidth - margin, yPos);
+  };
+
+  // Renders an array of pre-wrapped lines with automatic page breaks so long
+  // free-text blocks (e.g. the Gesamturteil) never overflow the page bottom.
+  const renderParagraph = (
+    lines: string[],
+    yPos: number,
+    lineHeight = 6
+  ): number => {
+    for (const line of lines) {
+      if (yPos > pageHeight - 40) {
+        doc.addPage();
+        yPos = 25;
+      }
+      doc.text(line, margin, yPos);
+      yPos += lineHeight;
+    }
+    return yPos;
   };
 
   // ==================== PAGE 1: MAIN CERTIFICATE ====================
@@ -432,11 +478,11 @@ export async function generateArbeitszeugnisPDF(
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.primary);
     const assessmentLines = doc.splitTextToSize(
-      data.overallAssessment.trim(),
+      sanitizePdfText(data.overallAssessment),
       contentWidth
     );
-    doc.text(assessmentLines, margin, y);
-    y += assessmentLines.length * 6 + 14;
+    y = renderParagraph(assessmentLines, y);
+    y += 14;
   } else {
     // Fallback only if no Gesamturteil is provided
     y = addSectionTitle('Gesamturteil', y);
@@ -446,9 +492,12 @@ export async function generateArbeitszeugnisPDF(
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.primary);
 
-    const summaryLines = doc.splitTextToSize(defaultSummary, contentWidth);
-    doc.text(summaryLines, margin, y);
-    y += summaryLines.length * 6 + 20;
+    const summaryLines = doc.splitTextToSize(
+      sanitizePdfText(defaultSummary),
+      contentWidth
+    );
+    y = renderParagraph(summaryLines, y);
+    y += 20;
   }
 
   // -- SIGNATURE SECTION --
