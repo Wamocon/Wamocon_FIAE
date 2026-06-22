@@ -165,15 +165,32 @@ Schreibe nun ausschließlich das Gesamturteil (max. 600 Zeichen, Fließtext).`;
       );
     }
 
-    // Strip markdown artifacts and truncate to 600 chars as requested in the prompt
+    // Strip markdown artifacts and normalise whitespace.
     generatedSummary = generatedSummary
       .replace(/\*\*/g, '')
       .replace(/#{1,6}\s?/g, '')
       .replace(/\n+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
       .trim();
 
+    // Enforce the ~600 character limit without cutting off mid-word. Prefer to
+    // end on a complete sentence; otherwise fall back to the last word boundary.
+    // This avoids producing dangling fragments like "...die seine au".
     if (generatedSummary.length > 600) {
-      generatedSummary = generatedSummary.slice(0, 597) + '...';
+      const truncated = generatedSummary.slice(0, 600);
+      const lastSentenceEnd = Math.max(
+        truncated.lastIndexOf('. '),
+        truncated.lastIndexOf('! '),
+        truncated.lastIndexOf('? ')
+      );
+      if (lastSentenceEnd >= 200) {
+        generatedSummary = truncated.slice(0, lastSentenceEnd + 1).trim();
+      } else {
+        const lastSpace = truncated.lastIndexOf(' ');
+        generatedSummary = truncated
+          .slice(0, lastSpace > 0 ? lastSpace : 600)
+          .trim();
+      }
     }
 
     return NextResponse.json({

@@ -85,6 +85,26 @@ const FACHRICHTUNG = 'Anwendungsentwicklung';
 const AUSBILDUNGSBERUF_FULL = `${AUSBILDUNGSBERUF} – ${FACHRICHTUNG}`;
 
 /**
+ * Normalises free text so jsPDF's standard Helvetica font measures and renders
+ * it correctly. Unicode whitespace (NBSP, narrow spaces) and zero-width
+ * characters are outside the WinAnsi width table and otherwise cause overflow
+ * and abnormal letter-spacing.
+ */
+function sanitizePdfText(input?: string | null): string {
+  if (!input) return '';
+  return input
+    .normalize('NFC')
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '')
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/\u2026/g, '...')
+    .replace(/[\u2010\u2011\u2012]/g, '-')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+/**
  * Generates a simple hash for document verification
  */
 function generateDocumentHash(report: ReportData): string {
@@ -641,7 +661,7 @@ export async function generateActivityReportPDF(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'italic');
     const splitComment = doc.splitTextToSize(
-      effectiveComment,
+      sanitizePdfText(effectiveComment),
       contentWidth - 10
     );
     const commentBoxH = splitComment.length * 4.5 + 8;
