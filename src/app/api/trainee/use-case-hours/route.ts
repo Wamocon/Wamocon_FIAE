@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and, sql, ne } from 'drizzle-orm';
 import { activityReports, activityReportUseCaseEntries, trainingUseCases } from '@/db/migrations/schemas/schema';
+import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
 
 /**
  * GET /api/trainee/use-case-hours
@@ -42,15 +43,16 @@ export async function GET(request: NextRequest) {
             const allUseCases = await db
                 .select({
                     id: trainingUseCases.id,
+                    description: trainingUseCases.description,
                     plannedHours: trainingUseCases.plannedHours,
                 })
                 .from(trainingUseCases);
 
             const result = allUseCases.map(uc => ({
                 useCaseId: uc.id,
-                totalHours: uc.plannedHours,
+                totalHours: normalizePlannedHours(uc),
                 usedHours: 0,
-                remainingHours: uc.plannedHours,
+                remainingHours: normalizePlannedHours(uc),
             }));
 
             return NextResponse.json({ useCaseHours: result });
@@ -76,17 +78,19 @@ export async function GET(request: NextRequest) {
         const allUseCases = await db
             .select({
                 id: trainingUseCases.id,
+                description: trainingUseCases.description,
                 plannedHours: trainingUseCases.plannedHours,
             })
             .from(trainingUseCases);
 
         const result = allUseCases.map(uc => {
             const used = usedMap.get(uc.id) || 0;
+            const totalHours = normalizePlannedHours(uc);
             return {
                 useCaseId: uc.id,
-                totalHours: uc.plannedHours,
+                totalHours,
                 usedHours: used,
-                remainingHours: Math.max(0, uc.plannedHours - used),
+                remainingHours: Math.max(0, totalHours - used),
             };
         });
 

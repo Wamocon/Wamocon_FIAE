@@ -9,6 +9,7 @@ import {
   profiles,
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte, isNotNull, inArray } from 'drizzle-orm';
+import { getTrainingYearDateRange } from '@/lib/ausbildung/duration';
 
 /**
  * GET /api/trainer/arbeitszeugnis/evidence/[traineeId]
@@ -38,7 +39,10 @@ export async function GET(
 
     // Get trainee start date
     const traineeProfile = await db
-      .select({ startDate: profiles.startOfTrainingDate })
+      .select({
+        startDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
+      })
       .from(profiles)
       .where(eq(profiles.id, traineeId))
       .limit(1);
@@ -55,13 +59,13 @@ export async function GET(
     } else {
       const startOfTraining =
         traineeProfile[0]?.startDate || new Date('2025-08-01');
-
-      yearStart = new Date(startOfTraining);
-      yearStart.setFullYear(yearStart.getFullYear() + (ausbildungsjahr - 1));
-
-      yearEnd = new Date(yearStart);
-      yearEnd.setFullYear(yearEnd.getFullYear() + 1);
-      yearEnd.setDate(yearEnd.getDate() - 1);
+      const range = getTrainingYearDateRange(
+        startOfTraining,
+        ausbildungsjahr,
+        traineeProfile[0]?.ausbildungDurationYears
+      );
+      yearStart = range.startDate;
+      yearEnd = range.endDate;
     }
 
     // Fetch all activity reports with their entries (betrieblicheTaetigkeit is in entries table)

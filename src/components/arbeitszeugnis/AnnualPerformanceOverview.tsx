@@ -325,11 +325,11 @@ export default function AnnualPerformanceOverview({
             </div>
           )}
 
-          {/* By Ausbildungsjahr */}
+          {/* By phase */}
           {showDetails && Object.keys(summary.byAusbildungsjahr).length > 0 && (
             <div className="mt-6">
               <p className="text-foreground/70 mb-3 text-sm font-medium">
-                Nach Ausbildungsjahr
+                Nach Phase
               </p>
               <div className="space-y-2">
                 {Object.entries(summary.byAusbildungsjahr)
@@ -340,7 +340,7 @@ export default function AnnualPerformanceOverview({
                       className="bg-muted/20 border-border flex items-center justify-between rounded-lg border p-3"
                     >
                       <div className="flex items-center gap-3">
-                        <Badge variant="secondary">{aj}. Jahr</Badge>
+                        <Badge variant="secondary">Phase {aj}</Badge>
                         <span className="text-muted-foreground text-sm">
                           {data.count} Bewertungen
                         </span>

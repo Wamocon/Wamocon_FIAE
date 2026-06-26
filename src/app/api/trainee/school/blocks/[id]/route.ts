@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
-import { ausbildungBlocks } from '@/db/migrations/schemas/schema';
+import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
+import { getTrainingPhase } from '@/lib/ausbildung/duration';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -72,6 +73,24 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (body.schuljahr !== undefined) updateData.schuljahr = body.schuljahr;
         if (body.ausbildungsjahr !== undefined) updateData.ausbildungsjahr = body.ausbildungsjahr;
         if (body.isPersonal !== undefined) updateData.isPersonal = body.isPersonal;
+
+        if (body.startDate !== undefined || body.ausbildungsjahr !== undefined) {
+            const [trainee] = await db
+                .select({
+                    startOfTrainingDate: profiles.startOfTrainingDate,
+                    ausbildungDurationYears: profiles.ausbildungDurationYears,
+                })
+                .from(profiles)
+                .where(eq(profiles.id, existing.traineeId));
+
+            if (trainee?.startOfTrainingDate) {
+                updateData.ausbildungsjahr = getTrainingPhase(
+                    trainee.startOfTrainingDate,
+                    trainee.ausbildungDurationYears,
+                    body.startDate !== undefined ? new Date(body.startDate) : existing.startDate
+                );
+            }
+        }
 
         if (Object.keys(updateData).length === 0) {
             return NextResponse.json({ error: 'No fields to update' }, { status: 400 });

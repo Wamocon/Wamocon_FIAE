@@ -15,8 +15,17 @@ import {
   enablerSubmissions,
   useCases,
   useCaseSubmissions,
+  profiles,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import {
+  getPhaseDeadline,
+  getPhaseMonthRange,
+  getTrainingPhase,
+  normalizeDurationYears,
+  type ContentStage,
+  type TrainingPhase,
+} from '@/lib/ausbildung/duration';
 
 // Passing score threshold for quizzes (50%)
 const PASS_THRESHOLD = 50;
@@ -192,36 +201,36 @@ async function fetchDashboardData(userId: string) {
       const [quizLinks, enablerSubRows, useCaseSubRows] = await Promise.all([
         allEnablerIds.length > 0
           ? db
-            .select({
-              enablerId: enablerQuizLinks.enablerId,
-              quizId: enablerQuizLinks.quizId,
-            })
-            .from(enablerQuizLinks)
-            .where(inArray(enablerQuizLinks.enablerId, allEnablerIds as any))
+              .select({
+                enablerId: enablerQuizLinks.enablerId,
+                quizId: enablerQuizLinks.quizId,
+              })
+              .from(enablerQuizLinks)
+              .where(inArray(enablerQuizLinks.enablerId, allEnablerIds as any))
           : Promise.resolve([]),
         allEnablerIds.length > 0
           ? db
-            .select({ enablerId: enablerSubmissions.enablerId })
-            .from(enablerSubmissions)
-            .where(
-              and(
-                eq(enablerSubmissions.traineeId, userId as any),
-                inArray(enablerSubmissions.enablerId, allEnablerIds as any),
-                eq(enablerSubmissions.status, 'APPROVED')
+              .select({ enablerId: enablerSubmissions.enablerId })
+              .from(enablerSubmissions)
+              .where(
+                and(
+                  eq(enablerSubmissions.traineeId, userId as any),
+                  inArray(enablerSubmissions.enablerId, allEnablerIds as any),
+                  eq(enablerSubmissions.status, 'APPROVED')
+                )
               )
-            )
           : Promise.resolve([]),
         useCaseIds.length > 0
           ? db
-            .select({ useCaseId: useCaseSubmissions.useCaseId })
-            .from(useCaseSubmissions)
-            .where(
-              and(
-                eq(useCaseSubmissions.traineeId, userId as any),
-                inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
-                eq(useCaseSubmissions.status, 'APPROVED')
+              .select({ useCaseId: useCaseSubmissions.useCaseId })
+              .from(useCaseSubmissions)
+              .where(
+                and(
+                  eq(useCaseSubmissions.traineeId, userId as any),
+                  inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
+                  eq(useCaseSubmissions.status, 'APPROVED')
+                )
               )
-            )
           : Promise.resolve([]),
       ]);
 
@@ -234,7 +243,7 @@ async function fetchDashboardData(userId: string) {
 
       // Build optimized Maps for O(1) access
       // Explicitly infer element types to avoid 'never' issues with empty array unions
-      type EnablerType = typeof allEnablers[number];
+      type EnablerType = (typeof allEnablers)[number];
       const enablersByCourse = new Map<string, EnablerType[]>();
       for (const e of allEnablers) {
         const key = String(e.courseId);
@@ -242,7 +251,7 @@ async function fetchDashboardData(userId: string) {
         enablersByCourse.get(key)!.push(e);
       }
 
-      type UseCaseType = typeof useCaseRows[number];
+      type UseCaseType = (typeof useCaseRows)[number];
       const useCasesByCourse = new Map<string, UseCaseType[]>();
       for (const u of useCaseRows) {
         const key = String(u.courseId);
@@ -250,7 +259,7 @@ async function fetchDashboardData(userId: string) {
         useCasesByCourse.get(key)!.push(u);
       }
 
-      type QuizLinkType = typeof quizLinks[number];
+      type QuizLinkType = (typeof quizLinks)[number];
       const quizzesByEnabler = new Map<string, QuizLinkType[]>();
       for (const l of quizLinks) {
         const key = String(l.enablerId);
@@ -432,6 +441,59 @@ async function fetchDashboardData(userId: string) {
     }
 
     const deadlines: any[] = [];
+
+    // Module phase deadlines: standard plans use 18+18 months, intensive plans
+    // use 12+12 months. Integrative phase 3 runs across the whole plan.
+    try {
+      const [traineeProfile] = await db
+        .select({
+          startOfTrainingDate: profiles.startOfTrainingDate,
+          ausbildungDurationYears: profiles.ausbildungDurationYears,
+        })
+        .from(profiles)
+        .where(eq(profiles.id, userId as any))
+        .limit(1);
+
+      const startDate = traineeProfile?.startOfTrainingDate;
+      if (startDate) {
+        const durationYears = normalizeDurationYears(
+          traineeProfile?.ausbildungDurationYears
+        );
+        const currentStage = getTrainingPhase(startDate, durationYears);
+        const stageYears = Array.from(
+          new Set(
+            memberCourses
+              .map(c => c.year)
+              .filter((y): y is number => y === 1 || y === 2 || y === 3)
+          )
+        ).sort((a, b) => a - b);
+
+        const getPhaseLabel = (stage: ContentStage): string => {
+          if (stage === 3) {
+            return `Integrative Fertigkeiten (1. bis ${durationYears * 12}. Ausbildungsmonat)`;
+          }
+          const range = getPhaseMonthRange(durationYears, stage as TrainingPhase);
+          return `Phase ${stage} (${range.startMonth}. bis ${range.endMonth}. Ausbildungsmonat)`;
+        };
+
+        for (const year of stageYears) {
+          // Only surface the current and upcoming phases as deadlines.
+          if (year < currentStage) continue;
+          const dueDate = getPhaseDeadline(
+            startDate,
+            durationYears,
+            year as ContentStage
+          );
+          deadlines.push({
+            label: getPhaseLabel(year as ContentStage),
+            dueDate: dueDate.toISOString(),
+            year,
+          });
+        }
+      }
+    } catch (deadlineErr) {
+      console.error('Dashboard deadlines computation error', deadlineErr);
+    }
 
     // Skill radar fallback
     if (skillRadar.length === 0 && modules.length > 0) {

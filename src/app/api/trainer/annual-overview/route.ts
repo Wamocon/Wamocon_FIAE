@@ -84,9 +84,9 @@ export async function GET(request: NextRequest) {
                     warnings.push('PERFORMANCE_CRITICAL');
                 }
 
-                // Get Ausbildungsjahr distribution
+                // Get training phase distribution
                 const byAusbildungsjahr: Record<number, { count: number; average: number | null }> = {};
-                [1, 2, 3].forEach(aj => {
+                [1, 2].forEach(aj => {
                     const ajEvs = evaluations.filter(e => e.ausbildungsjahr === aj);
                     const ajRatings = ajEvs.filter(e => e.trainerRating).map(e => parseFloat(e.trainerRating!));
                     byAusbildungsjahr[aj] = {

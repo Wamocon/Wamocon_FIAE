@@ -293,8 +293,7 @@ export default function WeeklyEvaluationForm({
                 {getStatusBadge()}
               </CardTitle>
               <CardDescription className="mt-0.5">
-                {ausbildungsjahr}. Ausbildungsjahr – Wöchentliche
-                Leistungsbewertung
+                Phase {ausbildungsjahr} – Wöchentliche Leistungsbewertung
               </CardDescription>
             </div>
           </div>

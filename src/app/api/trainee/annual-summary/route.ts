@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { weeklyEvaluations, profiles } from '@/db/migrations/schemas/schema';
-import { eq, and, sql, avg } from 'drizzle-orm';
+import { weeklyEvaluations } from '@/db/migrations/schemas/schema';
+import { eq, and } from 'drizzle-orm';
 
 // GET: Get annual performance summary for a trainee
 export async function GET(request: NextRequest) {
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
             ? trainerAverage
             : selfAverage;
 
-        // Group by Ausbildungsjahr
+        // Group by training phase.
         const byAusbildungsjahr: Record<number, {
             evaluations: typeof evaluations;
             selfAverage: number | null;
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
             byAusbildungsjahr[aj].count++;
         });
 
-        // Calculate averages per Ausbildungsjahr
+        // Calculate averages per training phase.
         Object.keys(byAusbildungsjahr).forEach(key => {
             const aj = parseInt(key);
             const group = byAusbildungsjahr[aj];

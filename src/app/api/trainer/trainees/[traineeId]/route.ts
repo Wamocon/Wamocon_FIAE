@@ -8,7 +8,11 @@ import {
   enablerCompletions,
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
-import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+  verifyTrainer,
+  getUserOrgId,
+  verifyPlatformOwner,
+} from '@/lib/auth-helpers';
 
 export async function GET(
   req: NextRequest,
@@ -17,7 +21,8 @@ export async function GET(
   try {
     const { traineeId } = await params;
     const { searchParams } = new URL(req.url);
-    const requesterId = searchParams.get('trainerId') || searchParams.get('requesterId');
+    const requesterId =
+      searchParams.get('trainerId') || searchParams.get('requesterId');
     if (!requesterId || !(await verifyTrainer(requesterId))) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -27,7 +32,10 @@ export async function GET(
       const requesterOrgId = await getUserOrgId(requesterId);
       const traineeOrgId = await getUserOrgId(traineeId);
       if (requesterOrgId !== traineeOrgId) {
-        return NextResponse.json({ error: 'Trainee not in your organization' }, { status: 403 });
+        return NextResponse.json(
+          { error: 'Trainee not in your organization' },
+          { status: 403 }
+        );
       }
     }
 
@@ -37,6 +45,7 @@ export async function GET(
         fullName: profiles.fullName,
         avatarUrl: profiles.avatarUrl,
         startOfTrainingDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
       })
       .from(profiles)
       .where(eq(profiles.id, traineeId as any))
@@ -85,6 +94,7 @@ export async function GET(
         full_name: p.fullName,
         avatar_url: p.avatarUrl,
         training_start_date: p.startOfTrainingDate,
+        ausbildung_duration_years: p.ausbildungDurationYears ?? 3,
         progress: progressPct,
       },
     });
@@ -148,6 +158,16 @@ export async function PATCH(
       updates.avatarUrl = body.avatar_url.trim();
     if (body?.start_of_training_date)
       updates.startOfTrainingDate = new Date(body.start_of_training_date);
+    if (body?.ausbildung_duration_years !== undefined) {
+      const duration = Number(body.ausbildung_duration_years);
+      if (![2, 3].includes(duration)) {
+        return NextResponse.json(
+          { error: 'ausbildung_duration_years must be 2 or 3' },
+          { status: 400 }
+        );
+      }
+      updates.ausbildungDurationYears = duration;
+    }
     if (typeof body?.assigned_trainer_id === 'string')
       updates.assignedTrainerId = body.assigned_trainer_id;
     if (typeof body?.isActive === 'boolean') updates.isActive = body.isActive;
@@ -173,11 +193,15 @@ export async function PATCH(
         fullName: profiles.fullName,
         avatarUrl: profiles.avatarUrl,
         startOfTrainingDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
         assignedTrainerId: profiles.assignedTrainerId,
         trainerActivated: profiles.trainerActivated,
       });
 
     apiCache.invalidate('trainer_trainees');
+    apiCache.invalidate('trainee_dashboard');
+    apiCache.invalidate('activity_reports');
+    apiCache.invalidate('trainer_dashboard');
 
     return NextResponse.json({
       trainee: {
@@ -185,6 +209,7 @@ export async function PATCH(
         full_name: row.fullName,
         avatar_url: row.avatarUrl,
         training_start_date: row.startOfTrainingDate,
+        ausbildung_duration_years: row.ausbildungDurationYears ?? 3,
         assigned_trainer_id: row.assignedTrainerId,
         trainer_activated: row.trainerActivated,
       },

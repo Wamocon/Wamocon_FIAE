@@ -7,6 +7,13 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
+  getPhaseMonthRange,
+  normalizeDurationYears,
+  type AusbildungDurationYears,
+  type TrainingPhase,
+} from '@/lib/ausbildung/duration';
+import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
   ClipboardList,
   AlertTriangle,
   Check,
@@ -30,6 +37,7 @@ interface TraineeProfile {
   id: string;
   fullName: string;
   email: string;
+  ausbildungDurationYears?: number | null;
 }
 
 interface ActivityReport {
@@ -118,9 +126,7 @@ export default function TrainerActivityReportsPage() {
     'all' | 'pending' | 'overbooked' | 'approved' | 'history'
   >('pending');
   const [traineeFilter, setTraineeFilter] = useState<string>('all');
-  const [periodFilter, setPeriodFilter] = useState<'all' | '1-18' | '19-36'>(
-    'all'
-  );
+  const [periodFilter, setPeriodFilter] = useState<'all' | '1' | '2'>('all');
 
   const loadData = useCallback(async (userId: string) => {
     try {
@@ -128,10 +134,14 @@ export default function TrainerActivityReportsPage() {
 
       const [reportsRes, traineesRes, useCasesRes, componentsRes] =
         await Promise.all([
-          fetch(`/api/activity-reports?userId=${userId}`),
-          fetch(`/api/trainer/trainees?trainerProfileId=${userId}`),
-          fetch('/api/training-use-cases'),
-          fetch('/api/training-components'),
+          fetch(`/api/trainer/activity-reports?trainerId=${userId}`, {
+            cache: 'no-store',
+          }),
+          fetch(`/api/trainer/trainees?trainerProfileId=${userId}`, {
+            cache: 'no-store',
+          }),
+          fetch('/api/training-use-cases', { cache: 'no-store' }),
+          fetch('/api/training-components', { cache: 'no-store' }),
         ]);
 
       const [reportsData, traineesData, useCasesData, componentsData] =
@@ -149,20 +159,47 @@ export default function TrainerActivityReportsPage() {
           id: t.id,
           fullName: t.fullName || t.full_name,
           email: t.email,
+          ausbildungDurationYears:
+            t.ausbildungDurationYears ?? t.ausbildung_duration_years ?? 3,
         };
       });
 
       setTrainees(traineeMap);
-      setUseCases(useCasesData.useCases || []);
+      setUseCases(
+        (useCasesData.useCases || []).map((useCase: TrainingUseCase) => ({
+          ...useCase,
+          plannedHours: normalizePlannedHours({
+            plannedHours: useCase.plannedHours,
+          }),
+        }))
+      );
       setComponents(componentsData.components || []);
 
       // Reports now include hasOverbooking from the API - no N+1 calls needed
       const enhancedReports = (reportsData.reports || []).map(
-        (r: ActivityReport) => ({
-          ...r,
-          trainee: traineeMap[r.traineeId],
-          hasOverbooking: r.hasOverbooking || false,
-        })
+        (
+          r: ActivityReport & {
+            traineeName?: string;
+            traineeAusbildungDurationYears?: number | null;
+          }
+        ) => {
+          const knownTrainee = traineeMap[r.traineeId];
+          return {
+            ...r,
+            trainee:
+              knownTrainee ||
+              (r.traineeName
+                ? {
+                    id: r.traineeId,
+                    fullName: r.traineeName,
+                    email: '',
+                    ausbildungDurationYears:
+                      r.traineeAusbildungDurationYears ?? 3,
+                  }
+                : undefined),
+            hasOverbooking: r.hasOverbooking || false,
+          };
+        }
       );
 
       setReports(enhancedReports);
@@ -592,8 +629,7 @@ export default function TrainerActivityReportsPage() {
 
     // Period filter (only for history)
     if (filter === 'history' && periodFilter !== 'all') {
-      if (periodFilter === '1-18' && r.ausbildungsjahr > 1) return false;
-      if (periodFilter === '19-36' && r.ausbildungsjahr === 1) return false;
+      if (r.ausbildungsjahr !== Number(periodFilter)) return false;
     }
 
     return true;
@@ -613,6 +649,40 @@ export default function TrainerActivityReportsPage() {
   const traineeList = Object.values(trainees).sort((a, b) =>
     a.fullName.localeCompare(b.fullName)
   );
+  const selectedDuration: AusbildungDurationYears | null =
+    traineeFilter !== 'all'
+      ? normalizeDurationYears(trainees[traineeFilter]?.ausbildungDurationYears)
+      : null;
+
+  const formatPhaseRange = (
+    phase: TrainingPhase,
+    durationYears: AusbildungDurationYears
+  ) => {
+    const range = getPhaseMonthRange(durationYears, phase);
+    return t('trainer.reports.phaseRange')
+      .replace('{phase}', String(phase))
+      .replace('{start}', String(range.startMonth))
+      .replace('{end}', String(range.endMonth));
+  };
+
+  const formatPeriodOption = (phase: TrainingPhase) => {
+    if (!selectedDuration) {
+      return t('trainer.reports.phaseOption').replace(
+        '{phase}',
+        String(phase)
+      );
+    }
+    return formatPhaseRange(phase, selectedDuration);
+  };
+
+  const formatReportPhase = (report: ActivityReport) => {
+    if (report.ausbildungsjahr === 3) return t('reports.integrativePhase');
+    const durationYears = normalizeDurationYears(
+      report.trainee?.ausbildungDurationYears ??
+        trainees[report.traineeId]?.ausbildungDurationYears
+    );
+    return formatPhaseRange(report.ausbildungsjahr as TrainingPhase, durationYears);
+  };
 
   if (authLoading || loading) {
     return (
@@ -739,14 +809,12 @@ export default function TrainerActivityReportsPage() {
             </label>
             <select
               value={periodFilter}
-              onChange={e =>
-                setPeriodFilter(e.target.value as 'all' | '1-18' | '19-36')
-              }
+              onChange={e => setPeriodFilter(e.target.value as 'all' | '1' | '2')}
               className="bg-muted border-border text-foreground rounded-lg border px-3 py-1.5 text-sm"
             >
               <option value="all">{t('trainer.reports.allPeriods')}</option>
-              <option value="1-18">{t('trainer.reports.period1to18')}</option>
-              <option value="19-36">{t('trainer.reports.period19to36')}</option>
+              <option value="1">{formatPeriodOption(1)}</option>
+              <option value="2">{formatPeriodOption(2)}</option>
             </select>
           </div>
 
@@ -822,10 +890,7 @@ export default function TrainerActivityReportsPage() {
                           </span>
                           <span>•</span>
                           <span>
-                            {t('trainer.reports.trainingYear').replace(
-                              '{year}',
-                              String(report.ausbildungsjahr)
-                            )}
+                            {formatReportPhase(report)}
                           </span>
                         </div>
                       </div>
@@ -1511,7 +1576,7 @@ function ReportReviewModal({
                             {t('trainer.reports.modal.traineeNotes')}
                           </p>
                           <p className="text-foreground bg-accent/10 rounded-lg p-2 text-sm italic">
-                            "{entry.notes}"
+                            {`"${entry.notes}"`}
                           </p>
                         </div>
                       )}
@@ -1621,7 +1686,7 @@ function ReportReviewModal({
                       </div>
                       {entry.notes && (
                         <p className="text-muted-foreground bg-muted/50 border-border/30 mt-2.5 rounded-lg border p-2.5 text-xs italic">
-                          „{entry.notes}"
+                          {`"${entry.notes}"`}
                         </p>
                       )}
                     </div>
@@ -1668,7 +1733,7 @@ function ReportReviewModal({
                         )}
                         {!canEditTrainer && currentGrade?.comment && (
                           <p className="text-muted-foreground mt-1 w-full text-center text-[11px] italic">
-                            „{currentGrade.comment}"
+                            {`"${currentGrade.comment}"`}
                           </p>
                         )}
                       </div>
@@ -1907,7 +1972,7 @@ function ReportReviewModal({
                         {!canEditTrainer && trainerRating?.comment && (
                           <div className="border-border/30 mt-3 border-t pt-3">
                             <p className="text-muted-foreground text-sm italic">
-                              „{trainerRating.comment}"
+                              {`"${trainerRating.comment}"`}
                             </p>
                           </div>
                         )}

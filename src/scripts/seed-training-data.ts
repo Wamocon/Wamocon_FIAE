@@ -364,10 +364,10 @@ const useCasesMap: Record<string, { letter: string; description: string; planned
         { letter: 'b', description: 'Speicherlösungen, insbesondere Datenbanksysteme, integrieren', plannedHours: 0 }, // No hours specified in text
     ],
     '10-P2': [
-        { letter: 'a', description: 'Teilaufgaben von IT-Systemen automatisieren', plannedHours: 400 },
+        { letter: 'a', description: 'Teilaufgaben von IT-Systemen automatisieren', plannedHours: 40 },
     ],
     'AE1-P2': [
-        { letter: 'a', description: 'Anwendungslösungen unter Berücksichtigung der bestehenden Systemarchitektur entwerfen und realisieren', plannedHours: 400 },
+        { letter: 'a', description: 'Anwendungslösungen unter Berücksichtigung der bestehenden Systemarchitektur entwerfen und realisieren', plannedHours: 40 },
         { letter: 'b', description: 'Bestehende Anwendungslösungen anpassen', plannedHours: 240 },
         { letter: 'c', description: 'Datenaustausch zwischen Systemen realisieren und unterschiedliche Datenquellen nutzen', plannedHours: 200 },
         { letter: 'd', description: 'Komplexe Abfragen aus unterschiedlichen Datenquellen durchführen und Datenbestandsberichte erstellen', plannedHours: 160 },

@@ -36,6 +36,7 @@ import {
   ChatMessage,
 } from '@/lib/hai';
 import { getProviderStatus } from '@/lib/hai/providers';
+import { buildHaiTrainingScope } from '@/lib/hai/trainingScope';
 import { getUserOrgId, requireProPlan, toHaiRole } from '@/lib/auth-helpers';
 
 // ============================================================================
@@ -524,7 +525,12 @@ export async function POST(req: NextRequest) {
 
     // Verify user exists
     const user = await db
-      .select({ id: profiles.id, role: profiles.role })
+      .select({
+        id: profiles.id,
+        role: profiles.role,
+        startOfTrainingDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
+      })
       .from(profiles)
       .where(eq(profiles.id, userId))
       .limit(1);
@@ -814,6 +820,7 @@ export async function POST(req: NextRequest) {
     );
 
     // Build pipeline context (Phase 1: pass userRole for live data context)
+    const userRole = toHaiRole(user[0].role);
     const pipelineContext: PipelineContext = {
       userId,
       sessionId,
@@ -825,9 +832,14 @@ export async function POST(req: NextRequest) {
       previousMessages,
       // Privileged roles (ADMIN, TEMP_ADMIN) act as TRAINER so they receive
       // full trainer-level context and live data branches in the RAG pipeline.
-      userRole: toHaiRole(user[0].role),
+      userRole,
       conversationSummary: storedSummary,
       crossSessionMemory,
+      trainingScope: buildHaiTrainingScope({
+        role: userRole,
+        startOfTrainingDate: user[0].startOfTrainingDate,
+        ausbildungDurationYears: user[0].ausbildungDurationYears,
+      }),
     };
 
     // Save user message (skip if we are editing an existing message)

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import toast from 'react-hot-toast';
 import {
   FileCheck2,
@@ -16,10 +16,90 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import { getAusbildungDurationLabel } from '@/lib/ausbildung/duration';
 
 interface TraineeDetailProps {
   traineeId: string;
 }
+
+type OverviewStats = {
+  progressPct: number;
+  completedEnablers: number;
+  totalEnablers: number;
+  pending: { quizzes: number; useCases: number };
+};
+
+type TraineeOverview = {
+  stats: OverviewStats;
+  enablers: Array<{
+    id: string;
+    title: string;
+    courseId: string;
+    courseTitle: string;
+    completed: boolean;
+    isActive: boolean;
+    link: string;
+  }>;
+  useCases: Array<{
+    id: string;
+    title: string;
+    status: string | null;
+    isActive: boolean;
+    attemptNumber?: number | null;
+    link: string;
+  }>;
+  enablerQuizzes: Array<{
+    enablerId: string;
+    enablerTitle: string;
+    quizId: string;
+    difficulty: string;
+    lastScore: number | null;
+    attemptNumber: number | null;
+    isReviewed: boolean | null;
+    link: string;
+  }>;
+  globalQuizzes: Array<{
+    quizId: string;
+    title: string;
+    lastScore: number | null;
+    attemptNumber: number | null;
+    isReviewed: boolean | null;
+    isActive: boolean;
+    link: string;
+  }>;
+};
+
+const EMPTY_STATS: OverviewStats = {
+  progressPct: 0,
+  completedEnablers: 0,
+  totalEnablers: 0,
+  pending: { quizzes: 0, useCases: 0 },
+};
+
+const normalizeOverview = (data: any): TraineeOverview => ({
+  stats: {
+    ...EMPTY_STATS,
+    ...(data?.stats ?? {}),
+    pending: {
+      ...EMPTY_STATS.pending,
+      ...(data?.stats?.pending ?? {}),
+    },
+  },
+  enablers: Array.isArray(data?.enablers) ? data.enablers : [],
+  useCases: Array.isArray(data?.useCases) ? data.useCases : [],
+  enablerQuizzes: Array.isArray(data?.enablerQuizzes)
+    ? data.enablerQuizzes
+    : [],
+  globalQuizzes: Array.isArray(data?.globalQuizzes)
+    ? data.globalQuizzes.map((quiz: any) => ({
+        ...quiz,
+        isActive: quiz?.isActive !== false,
+      }))
+    : [],
+});
+
+const formatDurationLabel = (years?: number | null) =>
+  getAusbildungDurationLabel(years);
 
 export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
   const router = useRouter();
@@ -36,6 +116,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     full_name: string;
     avatar_url?: string | null;
     training_start_date?: string | null;
+    ausbildung_duration_years?: number | null;
     assigned_trainer_id?: string | null;
     progress: number;
   } | null>(null);
@@ -43,52 +124,11 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     full_name: '',
     avatar_url: '',
     start_of_training_date: '',
+    ausbildung_duration_years: 3,
   });
   const [saving, setSaving] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
-  const [overview, setOverview] = useState<null | {
-    stats: {
-      progressPct: number;
-      completedEnablers: number;
-      totalEnablers: number;
-      pending: { quizzes: number; useCases: number };
-    };
-    enablers: Array<{
-      id: string;
-      title: string;
-      courseId: string;
-      courseTitle: string;
-      completed: boolean;
-      isActive: boolean;
-      link: string;
-    }>;
-    useCases: Array<{
-      id: string;
-      title: string;
-      status: string | null;
-      isActive: boolean;
-      attemptNumber?: number | null;
-      link: string;
-    }>;
-    enablerQuizzes: Array<{
-      enablerId: string;
-      enablerTitle: string;
-      quizId: string;
-      difficulty: string;
-      lastScore: number | null;
-      attemptNumber: number | null;
-      isReviewed: boolean | null;
-      link: string;
-    }>;
-    globalQuizzes: Array<{
-      quizId: string;
-      title: string;
-      lastScore: number | null;
-      attemptNumber: number | null;
-      isReviewed: boolean | null;
-      link: string;
-    }>;
-  }>(null);
+  const [overview, setOverview] = useState<TraineeOverview | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -110,6 +150,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
           start_of_training_date: data.trainee?.training_start_date
             ? String(data.trainee.training_start_date).slice(0, 10)
             : '',
+          ausbildung_duration_years:
+            data.trainee?.ausbildung_duration_years ?? 3,
         });
         // Load overview
         const oRes = await fetch(
@@ -118,7 +160,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         );
         if (oRes.ok) {
           const oData = await oRes.json();
-          setOverview(oData);
+          setOverview(normalizeOverview(oData));
         }
       } catch (e: any) {
         setError(e?.message || t('error.unknown'));
@@ -260,6 +302,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       };
       if (edit.start_of_training_date)
         payload.start_of_training_date = edit.start_of_training_date;
+      payload.ausbildung_duration_years = edit.ausbildung_duration_years;
       const res = await fetch(`/api/trainer/trainees/${trainee.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -272,6 +315,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         full_name: data.trainee.full_name,
         avatar_url: data.trainee.avatar_url,
         training_start_date: data.trainee.training_start_date,
+        ausbildung_duration_years: data.trainee.ausbildung_duration_years,
       }));
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
@@ -291,7 +335,9 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const [enablerFilter, setEnablerFilter] = useState<'all' | 'completed' | 'active' | 'inactive'>('all');
+  const [enablerFilter, setEnablerFilter] = useState<
+    'all' | 'completed' | 'active' | 'inactive'
+  >('all');
   const [openCourses, setOpenCourses] = useState<Set<string> | null>(null);
 
   const toggleCourse = (courseTitle: string) => {
@@ -338,20 +384,35 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
     // Optimistic update
     setOverview(prev => {
       if (!prev) return prev;
-      const next = { ...prev };
+      const next: TraineeOverview = {
+        ...prev,
+        enablers: prev.enablers ?? [],
+        useCases: prev.useCases ?? [],
+        globalQuizzes: prev.globalQuizzes ?? [],
+      };
       if (itemType === 'ENABLER') {
-        next.enablers = next.enablers.map(e => (e.id === itemId ? { ...e, isActive } : e));
+        next.enablers = next.enablers.map(e =>
+          e.id === itemId ? { ...e, isActive } : e
+        );
       } else if (itemType === 'USE_CASE') {
-        next.useCases = next.useCases.map(u => (u.id === itemId ? { ...u, isActive } : u));
+        next.useCases = next.useCases.map(u =>
+          u.id === itemId ? { ...u, isActive } : u
+        );
       } else if (itemType === 'GLOBAL_QUIZ') {
-        next.globalQuizzes = next.globalQuizzes.map(q => (q.quizId === itemId ? { ...q, isActive } : q));
+        next.globalQuizzes = next.globalQuizzes.map(q =>
+          q.quizId === itemId ? { ...q, isActive } : q
+        );
       }
       return next;
     });
 
     try {
       const payload: any = { itemType, itemId, isActive };
-      if (profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && profile?.id)
+      if (
+        profile &&
+        ['admin', 'temp_admin', 'trainer'].includes(profile.role) &&
+        profile?.id
+      )
         payload.trainerId = profile.id;
 
       const res = await fetch(`/api/trainer/trainees/${trainee.id}/activate`, {
@@ -368,7 +429,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       });
       if (oRes.ok) {
         const oData = await oRes.json();
-        setOverview(oData);
+        setOverview(normalizeOverview(oData));
       }
     } catch (e) {
       console.error(e);
@@ -379,10 +440,12 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       });
       if (oRes.ok) {
         const oData = await oRes.json();
-        setOverview(oData);
+        setOverview(normalizeOverview(oData));
       }
     }
   };
+
+  const overviewStats = overview?.stats ?? EMPTY_STATS;
 
   if (loading || (!profile?.id && !error)) {
     return (
@@ -439,19 +502,18 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-6">
             <div className="relative">
-              {trainee?.avatar_url ? (
-                <Image
-                  src={trainee.avatar_url}
-                  alt={trainee.full_name}
-                  width={96}
-                  height={96}
-                  className="border-accent/30 h-24 w-24 rounded-3xl border-4 object-cover shadow-lg"
-                />
-              ) : (
-                <div className="border-accent/30 bg-muted text-muted flex h-24 w-24 items-center justify-center rounded-3xl border-4 shadow-lg">
+              <Avatar className="border-accent/30 h-24 w-24 rounded-3xl border-4 shadow-lg">
+                {trainee?.avatar_url ? (
+                  <AvatarImage
+                    src={trainee.avatar_url}
+                    alt={trainee.full_name}
+                    className="object-cover"
+                  />
+                ) : null}
+                <AvatarFallback className="text-muted rounded-3xl">
                   <TrendingUp className="h-6 w-6" />
-                </div>
-              )}
+                </AvatarFallback>
+              </Avatar>
               <div className="absolute -right-2 -bottom-2 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-green-500">
                 <div className="h-3 w-3 rounded-full bg-white"></div>
               </div>
@@ -460,9 +522,12 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <h1 className="text-foreground mb-2 text-3xl font-bold">
                 {trainee?.full_name || t('trainee.detail.trainee')}
               </h1>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <span className="bg-accent/20 text-accent rounded-full px-3 py-1 text-sm font-medium">
                   {t('trainee.detail.trainee')}
+                </span>
+                <span className="rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-500">
+                  {formatDurationLabel(trainee?.ausbildung_duration_years)}
                 </span>
                 <span className="text-muted">ID: {trainee?.id}</span>
               </div>
@@ -506,67 +571,88 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       <div className="glass-effect bg-background border-accent/30 rounded-3xl border p-6 shadow-lg">
         <div className="p-8">
           {/* Edit form for trainers */}
-          {profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && trainee && showEdit && (
-            <div className="border-accent/30 bg-background mb-8 rounded-2xl border p-6">
-              <h3 className="text-foreground mb-4 text-lg font-semibold">
-                {t('trainee.detail.editDetails')}
-              </h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div>
-                  <label className="text-foreground mb-1 block text-sm">
-                    {t('trainee.detail.fullName')}
-                  </label>
-                  <input
-                    className="bg-background text-foreground w-full rounded-xl border px-3 py-2"
-                    value={edit.full_name}
-                    onChange={e =>
-                      setEdit(p => ({ ...p, full_name: e.target.value }))
-                    }
-                  />
+          {profile &&
+            ['admin', 'temp_admin', 'trainer'].includes(profile.role) &&
+            trainee &&
+            showEdit && (
+              <div className="border-accent/30 bg-background mb-8 rounded-2xl border p-6">
+                <h3 className="text-foreground mb-4 text-lg font-semibold">
+                  {t('trainee.detail.editDetails')}
+                </h3>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div>
+                    <label className="text-foreground mb-1 block text-sm">
+                      {t('trainee.detail.fullName')}
+                    </label>
+                    <input
+                      className="bg-background text-foreground w-full rounded-xl border px-3 py-2"
+                      value={edit.full_name}
+                      onChange={e =>
+                        setEdit(p => ({ ...p, full_name: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-foreground mb-1 block">
+                      {t('trainee.detail.avatarUrl')}
+                    </label>
+                    <input
+                      className="bg-background text-foreground w-full rounded-xl border px-3 py-2"
+                      value={edit.avatar_url}
+                      onChange={e =>
+                        setEdit(p => ({ ...p, avatar_url: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-foreground mb-1 block text-sm">
+                      {t('trainee.detail.trainingStart')}
+                    </label>
+                    <input
+                      type="date"
+                      className="bg-background text-foreground w-full rounded-xl border px-3 py-2"
+                      value={edit.start_of_training_date}
+                      onChange={e =>
+                        setEdit(p => ({
+                          ...p,
+                          start_of_training_date: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-foreground mb-1 block text-sm">
+                      {t('trainee.detail.durationYears')}
+                    </label>
+                    <select
+                      className="bg-background text-foreground w-full rounded-xl border px-3 py-2"
+                      value={edit.ausbildung_duration_years}
+                      onChange={e =>
+                        setEdit(p => ({
+                          ...p,
+                          ausbildung_duration_years: Number(e.target.value),
+                        }))
+                      }
+                    >
+                      <option value={2}>{t('trainee.detail.duration2')}</option>
+                      <option value={3}>{t('trainee.detail.duration3')}</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-foreground mb-1 block">
-                    {t('trainee.detail.avatarUrl')}
-                  </label>
-                  <input
-                    className="bg-background text-foreground w-full rounded-xl border px-3 py-2"
-                    value={edit.avatar_url}
-                    onChange={e =>
-                      setEdit(p => ({ ...p, avatar_url: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-foreground mb-1 block text-sm">
-                    {t('trainee.detail.trainingStart')}
-                  </label>
-                  <input
-                    type="date"
-                    className="bg-background text-foreground w-full rounded-xl border px-3 py-2"
-                    value={edit.start_of_training_date}
-                    onChange={e =>
-                      setEdit(p => ({
-                        ...p,
-                        start_of_training_date: e.target.value,
-                      }))
-                    }
-                  />
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="text-foreground rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {saving
+                      ? t('trainee.detail.saving')
+                      : t('trainee.detail.save')}
+                  </button>
+                  {error && <div className="text-sm text-red-600">{error}</div>}
                 </div>
               </div>
-              <div className="mt-4 flex items-center gap-3">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="text-foreground rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
-                >
-                  {saving
-                    ? t('trainee.detail.saving')
-                    : t('trainee.detail.save')}
-                </button>
-                {error && <div className="text-sm text-red-600">{error}</div>}
-              </div>
-            </div>
-          )}
+            )}
 
           {/* Redesigned third row content */}
           <div className="space-y-4">
@@ -575,7 +661,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <button
                 type="button"
                 onClick={() => toggleSection('modules')}
-                className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors hover:bg-accent/5"
+                className="hover:bg-accent/5 flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors"
               >
                 <div className="bg-background text-foreground flex flex-1 items-center justify-between">
                   <h3 className="text-foreground text-xl font-bold">
@@ -587,121 +673,160 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       <div className="bg-muted h-2 w-24 overflow-hidden rounded-full">
                         <div
                           className="h-full rounded-full bg-green-500 transition-all"
-                          style={{ width: `${overview?.stats.progressPct ?? 0}%` }}
+                          style={{
+                            width: `${overviewStats.progressPct}%`,
+                          }}
                         />
                       </div>
                       <span className="text-foreground text-sm font-medium">
-                        {overview?.stats.completedEnablers ?? 0}/{overview?.stats.totalEnablers ?? 0}
+                        {overviewStats.completedEnablers}/
+                        {overviewStats.totalEnablers}
                       </span>
                     </div>
                   </div>
                 </div>
                 <ChevronDown
-                  className={`h-5 w-5 text-muted-foreground transition-transform ${openSections.modules ? 'rotate-180' : ''
-                    }`}
+                  className={`text-muted-foreground h-5 w-5 transition-transform ${
+                    openSections.modules ? 'rotate-180' : ''
+                  }`}
                 />
               </button>
               {openSections.modules && (
                 <div className="mt-4">
                   {/* Filter controls */}
                   <div className="mb-4 flex flex-wrap gap-2">
-                    {(['all', 'completed', 'active', 'inactive'] as const).map(f => (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => setEnablerFilter(f)}
-                        className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all ${enablerFilter === f
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                    {(['all', 'completed', 'active', 'inactive'] as const).map(
+                      f => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setEnablerFilter(f)}
+                          className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                            enablerFilter === f
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
                           }`}
-                      >
-                        {f === 'all' ? t('trainee.detail.filterAll')
-                          : f === 'completed' ? t('trainee.detail.filterCompleted')
-                            : f === 'active' ? t('trainee.detail.filterActive')
-                              : t('trainee.detail.filterInactive')}
-                      </button>
-                    ))}
+                        >
+                          {f === 'all'
+                            ? t('trainee.detail.filterAll')
+                            : f === 'completed'
+                              ? t('trainee.detail.filterCompleted')
+                              : f === 'active'
+                                ? t('trainee.detail.filterActive')
+                                : t('trainee.detail.filterInactive')}
+                        </button>
+                      )
+                    )}
                   </div>
 
                   {Object.keys(groupedEnablers).length ? (
                     <div className="space-y-3">
-                      {Object.entries(groupedEnablers).map(([courseTitle, courseEnablers]) => {
-                        const completedInCourse = courseEnablers.filter(e => e.completed).length;
-                        const totalInCourse = courseEnablers.length;
-                        const coursePct = totalInCourse > 0 ? Math.round((completedInCourse / totalInCourse) * 100) : 0;
-                        const isOpen = openCourses === null || openCourses.has(courseTitle);
-                        return (
-                          <div key={courseTitle} className="border-accent/20 rounded-xl border">
-                            <button
-                              type="button"
-                              onClick={() => toggleCourse(courseTitle)}
-                              className="flex w-full cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-accent/5"
+                      {Object.entries(groupedEnablers).map(
+                        ([courseTitle, courseEnablers]) => {
+                          const completedInCourse = courseEnablers.filter(
+                            e => e.completed
+                          ).length;
+                          const totalInCourse = courseEnablers.length;
+                          const coursePct =
+                            totalInCourse > 0
+                              ? Math.round(
+                                  (completedInCourse / totalInCourse) * 100
+                                )
+                              : 0;
+                          const isOpen =
+                            openCourses === null ||
+                            openCourses.has(courseTitle);
+                          return (
+                            <div
+                              key={courseTitle}
+                              className="border-accent/20 rounded-xl border"
                             >
-                              <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                              <div className="flex flex-1 items-center justify-between gap-2">
-                                <span className="text-foreground text-sm font-semibold">{courseTitle}</span>
-                                <div className="flex items-center gap-2">
-                                  <div className="bg-muted h-1.5 w-16 overflow-hidden rounded-full">
-                                    <div
-                                      className="h-full rounded-full bg-green-500 transition-all"
-                                      style={{ width: `${coursePct}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-muted-foreground text-xs">
-                                    {completedInCourse}/{totalInCourse}
+                              <button
+                                type="button"
+                                onClick={() => toggleCourse(courseTitle)}
+                                className="hover:bg-accent/5 flex w-full cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors"
+                              >
+                                <ChevronRight
+                                  className={`text-muted-foreground h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                                />
+                                <div className="flex flex-1 items-center justify-between gap-2">
+                                  <span className="text-foreground text-sm font-semibold">
+                                    {courseTitle}
                                   </span>
+                                  <div className="flex items-center gap-2">
+                                    <div className="bg-muted h-1.5 w-16 overflow-hidden rounded-full">
+                                      <div
+                                        className="h-full rounded-full bg-green-500 transition-all"
+                                        style={{ width: `${coursePct}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-muted-foreground text-xs">
+                                      {completedInCourse}/{totalInCourse}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            </button>
-                            {isOpen && (
-                              <div className="grid grid-cols-1 gap-3 px-3 pb-3 md:grid-cols-2">
-                                {courseEnablers.map(e => (
-                                  <div
-                                    key={e.id}
-                                    className="border-accent/30 rounded-2xl border p-4 transition-all hover:border-accent/50 hover:shadow-md"
-                                  >
-                                    <div className="mb-2 flex items-center justify-between gap-2">
-                                      <div className="text-foreground min-w-0 truncate font-semibold">
-                                        {e.title}
+                              </button>
+                              {isOpen && (
+                                <div className="grid grid-cols-1 gap-3 px-3 pb-3 md:grid-cols-2">
+                                  {courseEnablers.map(e => (
+                                    <div
+                                      key={e.id}
+                                      className="border-accent/30 hover:border-accent/50 rounded-2xl border p-4 transition-all hover:shadow-md"
+                                    >
+                                      <div className="mb-2 flex items-center justify-between gap-2">
+                                        <div className="text-foreground min-w-0 truncate font-semibold">
+                                          {e.title}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className={`rounded-full border px-2 py-0.5 text-xs ${e.completed ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
+                                          >
+                                            {e.completed
+                                              ? t('trainee.detail.participated')
+                                              : t(
+                                                  'trainee.detail.notParticipated'
+                                                )}
+                                          </span>
+                                          <span
+                                            className={`rounded-full border px-2 py-0.5 text-xs ${e.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
+                                          >
+                                            {e.isActive
+                                              ? t('trainee.detail.active')
+                                              : t('trainee.detail.inactive')}
+                                          </span>
+                                        </div>
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <span
-                                          className={`rounded-full border px-2 py-0.5 text-xs ${e.completed ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
-                                        >
-                                          {e.completed
-                                            ? t('trainee.detail.participated')
-                                            : t('trainee.detail.notParticipated')}
-                                        </span>
-                                        <span
-                                          className={`rounded-full border px-2 py-0.5 text-xs ${e.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
-                                        >
-                                          {e.isActive
-                                            ? t('trainee.detail.active')
-                                            : t('trainee.detail.inactive')}
-                                        </span>
+                                        {profile &&
+                                          [
+                                            'admin',
+                                            'temp_admin',
+                                            'trainer',
+                                          ].includes(profile.role) && (
+                                            <button
+                                              onClick={() =>
+                                                toggleItem(
+                                                  'ENABLER',
+                                                  e.id,
+                                                  !e.isActive
+                                                )
+                                              }
+                                              className={`cursor-pointer rounded-md border px-2 py-1 text-sm transition-opacity hover:opacity-80 ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
+                                            >
+                                              {e.isActive
+                                                ? t('trainee.detail.deactivate')
+                                                : t('trainee.detail.activate')}
+                                            </button>
+                                          )}
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      {profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && (
-                                        <button
-                                          onClick={() =>
-                                            toggleItem('ENABLER', e.id, !e.isActive)
-                                          }
-                                          className={`cursor-pointer rounded-md border px-2 py-1 text-sm transition-opacity hover:opacity-80 ${e.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
-                                        >
-                                          {e.isActive
-                                            ? t('trainee.detail.deactivate')
-                                            : t('trainee.detail.activate')}
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                      )}
                     </div>
                   ) : (
                     <div className="text-muted-foreground py-4 text-center text-sm">
@@ -719,14 +844,15 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <button
                 type="button"
                 onClick={() => toggleSection('lessonQuizzes')}
-                className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors hover:bg-accent/5"
+                className="hover:bg-accent/5 flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors"
               >
                 <h3 className="text-foreground text-xl font-bold">
                   {t('trainee.detail.lessonQuizzes')}
                 </h3>
                 <ChevronDown
-                  className={`h-5 w-5 text-muted-foreground transition-transform ${openSections.lessonQuizzes ? 'rotate-180' : ''
-                    }`}
+                  className={`text-muted-foreground h-5 w-5 transition-transform ${
+                    openSections.lessonQuizzes ? 'rotate-180' : ''
+                  }`}
                 />
               </button>
               {openSections.lessonQuizzes && (
@@ -736,7 +862,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       {overview.enablerQuizzes.map(q => (
                         <div
                           key={`${q.enablerId}-${q.quizId}`}
-                          className="border-accent/30 flex items-center justify-between rounded-2xl border p-4 transition-all hover:border-accent/50 hover:shadow-md"
+                          className="border-accent/30 hover:border-accent/50 flex items-center justify-between rounded-2xl border p-4 transition-all hover:shadow-md"
                         >
                           <div>
                             <div className="text-foreground font-medium">
@@ -772,14 +898,15 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <button
                 type="button"
                 onClick={() => toggleSection('useCases')}
-                className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors hover:bg-accent/5"
+                className="hover:bg-accent/5 flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors"
               >
                 <h3 className="text-foreground text-xl font-bold">
                   {t('trainee.detail.useCases')}
                 </h3>
                 <ChevronDown
-                  className={`h-5 w-5 text-muted-foreground transition-transform ${openSections.useCases ? 'rotate-180' : ''
-                    }`}
+                  className={`text-muted-foreground h-5 w-5 transition-transform ${
+                    openSections.useCases ? 'rotate-180' : ''
+                  }`}
                 />
               </button>
               {openSections.useCases && (
@@ -789,7 +916,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       {overview.useCases.map(u => (
                         <div
                           key={u.id}
-                          className="border-accent/30 rounded-2xl border p-4 transition-all hover:border-accent/50 hover:shadow-md"
+                          className="border-accent/30 hover:border-accent/50 rounded-2xl border p-4 transition-all hover:shadow-md"
                         >
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="text-foreground min-w-0 truncate font-semibold">
@@ -799,8 +926,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                               <span
                                 className={`rounded-full border px-2 py-0.5 text-xs ${u.status === 'PENDING' ? 'border-yellow-500 text-yellow-500' : u.status ? 'border-green-500 text-green-500' : 'text-foreground border-slate-300'}`}
                               >
-                                {u.status ??
-                                  t('trainee.detail.notSubmitted')}
+                                {u.status ?? t('trainee.detail.notSubmitted')}
                               </span>
                               <span
                                 className={`rounded-full border px-2 py-0.5 text-xs ${u.isActive ? 'border-blue-500 text-blue-500' : 'text-foreground border-slate-300'}`}
@@ -812,18 +938,21 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && (
-                              <button
-                                onClick={() =>
-                                  toggleItem('USE_CASE', u.id, !u.isActive)
-                                }
-                                className={`cursor-pointer rounded-md border px-2 py-1 text-sm transition-opacity hover:opacity-80 ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
-                              >
-                                {u.isActive
-                                  ? t('trainee.detail.deactivate')
-                                  : t('trainee.detail.activate')}
-                              </button>
-                            )}
+                            {profile &&
+                              ['admin', 'temp_admin', 'trainer'].includes(
+                                profile.role
+                              ) && (
+                                <button
+                                  onClick={() =>
+                                    toggleItem('USE_CASE', u.id, !u.isActive)
+                                  }
+                                  className={`cursor-pointer rounded-md border px-2 py-1 text-sm transition-opacity hover:opacity-80 ${u.isActive ? 'border-yellow-500 text-yellow-500' : 'border-green-600 text-green-500'}`}
+                                >
+                                  {u.isActive
+                                    ? t('trainee.detail.deactivate')
+                                    : t('trainee.detail.activate')}
+                                </button>
+                              )}
                           </div>
                         </div>
                       ))}
@@ -843,14 +972,15 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
               <button
                 type="button"
                 onClick={() => toggleSection('globalQuizzes')}
-                className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors hover:bg-accent/5"
+                className="hover:bg-accent/5 flex w-full cursor-pointer items-center justify-between gap-4 rounded-lg p-1 transition-colors"
               >
                 <h3 className="text-foreground text-xl font-bold">
                   {t('trainee.detail.globalQuizzes')}
                 </h3>
                 <ChevronDown
-                  className={`h-5 w-5 text-muted-foreground transition-transform ${openSections.globalQuizzes ? 'rotate-180' : ''
-                    }`}
+                  className={`text-muted-foreground h-5 w-5 transition-transform ${
+                    openSections.globalQuizzes ? 'rotate-180' : ''
+                  }`}
                 />
               </button>
               {openSections.globalQuizzes && (
@@ -860,7 +990,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                       {overview.globalQuizzes.map(q => (
                         <div
                           key={q.quizId}
-                          className="border-accent/30 flex items-center justify-between rounded-2xl border p-4 transition-all hover:border-accent/50 hover:shadow-md"
+                          className="border-accent/30 hover:border-accent/50 flex items-center justify-between rounded-2xl border p-4 transition-all hover:shadow-md"
                         >
                           <div>
                             <div className="text-foreground font-medium">
@@ -879,16 +1009,19 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {profile && ['admin', 'temp_admin', 'trainer'].includes(profile.role) && (
-                              <button
-                                onClick={() =>
-                                  toggleItem('GLOBAL_QUIZ', q.quizId, false)
-                                }
-                                className="cursor-pointer rounded-md border border-yellow-500 px-2 py-1 text-sm text-yellow-500 transition-opacity hover:opacity-80"
-                              >
-                                {t('trainee.detail.remove')}
-                              </button>
-                            )}
+                            {profile &&
+                              ['admin', 'temp_admin', 'trainer'].includes(
+                                profile.role
+                              ) && (
+                                <button
+                                  onClick={() =>
+                                    toggleItem('GLOBAL_QUIZ', q.quizId, false)
+                                  }
+                                  className="cursor-pointer rounded-md border border-yellow-500 px-2 py-1 text-sm text-yellow-500 transition-opacity hover:opacity-80"
+                                >
+                                  {t('trainee.detail.remove')}
+                                </button>
+                              )}
                           </div>
                         </div>
                       ))}

@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import WeeklyEvaluationForm from '@/components/arbeitszeugnis/WeeklyEvaluationForm';
 import AnnualPerformanceOverview from '@/components/arbeitszeugnis/AnnualPerformanceOverview';
+import { getTrainingPhase } from '@/lib/ausbildung/duration';
 
 interface Evaluation {
   id: string;
@@ -64,13 +65,13 @@ export default function TraineeEvaluationsPage() {
   const currentWeek = getCurrentWeek();
   const currentYear = new Date().getFullYear();
 
-  // Calculate trainee's Ausbildungsjahr (1, 2, or 3)
+  // Calculate trainee's current module phase from the selected Ausbildung duration.
   const getAusbildungsjahr = (): number => {
-    const profileAny = profile as unknown as Record<string, unknown>;
-    if (!profileAny?.startDate) return 1;
-    const startYear = new Date(profileAny.startDate as string).getFullYear();
-    const yearDiff = currentYear - startYear + 1;
-    return Math.min(Math.max(yearDiff, 1), 3);
+    if (!profile?.training_start_date) return 1;
+    return getTrainingPhase(
+      new Date(profile.training_start_date),
+      profile.ausbildung_duration_years
+    );
   };
 
   const evalUrl = profile?.id
@@ -318,7 +319,7 @@ export default function TraineeEvaluationsPage() {
                         <div className="bg-border h-10 w-px" />
                         <div>
                           <CardTitle className="text-foreground flex items-center gap-2 text-base">
-                            {item.ausbildungsjahr}. Ausbildungsjahr
+                            Phase {item.ausbildungsjahr}
                           </CardTitle>
                           <CardDescription className="mt-1 flex items-center gap-3">
                             {item.selfRating && (

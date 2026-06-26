@@ -16,7 +16,7 @@ import {
   useCases,
   activityReports,
 } from '@/db/migrations/schemas/schema';
-import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import { cacheHeaders } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // Passing score threshold
@@ -57,30 +57,24 @@ async function fetchTrainerDashboardData(trainerId: string) {
       ])
     );
 
-    // Fetch trainees enrolled in this trainer's courses, filtered by org for non-platform-owner trainers
-    const traineeRowsAll = courseIds.length
-      ? await db
-        .selectDistinct({
-          id: profiles.id,
-          fullName: profiles.fullName,
-          avatarUrl: profiles.avatarUrl,
-          isActive: profiles.isActive,
-          organizationId: profiles.organizationId,
-        })
-        .from(profiles)
-        .innerJoin(courseMembers, eq(courseMembers.userId, profiles.id))
-        .where(
-          and(
-            eq(profiles.role, 'TRAINEE'),
-            eq(courseMembers.role, 'TRAINEE'),
-            inArray(courseMembers.courseId, courseIds as any)
-          )
-        )
-      : [];
-
-    const traineeRows = isPlatformOwner
-      ? traineeRowsAll
-      : traineeRowsAll.filter(t => t.organizationId === trainerOrgId);
+    // Trainers see every trainee in their organization, regardless of direct assignment.
+    const traineeRows = await db
+      .selectDistinct({
+        id: profiles.id,
+        fullName: profiles.fullName,
+        avatarUrl: profiles.avatarUrl,
+        isActive: profiles.isActive,
+        organizationId: profiles.organizationId,
+      })
+      .from(profiles)
+      .where(
+        isPlatformOwner
+          ? eq(profiles.role, 'TRAINEE')
+          : and(
+              eq(profiles.role, 'TRAINEE'),
+              eq(profiles.organizationId, trainerOrgId as any)
+            )
+      );
     const traineeIds = traineeRows.map(t => String(t.id));
     const hasTrainees = traineeIds.length > 0;
 
@@ -465,13 +459,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const cached = await apiCache.getOrFetch(
-      `trainer_dashboard_${trainerId}`,
-      async () => await fetchTrainerDashboardData(trainerId),
-      ApiCache.TTL.MEDIUM // 5 minutes cache
-    );
+    const data = await fetchTrainerDashboardData(trainerId);
 
-    return NextResponse.json(cached, { headers: cacheHeaders.medium });
+    return NextResponse.json(data, { headers: cacheHeaders.none });
   } catch (e) {
     console.error('Trainer dashboard API error', e);
     return NextResponse.json(

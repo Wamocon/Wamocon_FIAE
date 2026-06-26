@@ -35,6 +35,7 @@ import {
     notifications,
 } from '@/db/migrations/schemas/schema';
 import { toHaiRole } from '@/lib/auth-helpers';
+import { buildHaiTrainingScope } from './trainingScope';
 
 // ============================================================================
 // TYPES
@@ -71,6 +72,9 @@ export interface UserSnapshot {
     overallProgressPercent: number;
     unreadNotifications: number;
     currentBlockType: string | null;
+    ausbildungPlanLabel?: string;
+    currentAusbildungsjahr?: number;
+    currentTrainingPhase?: number;
 }
 
 export interface CourseProgress {
@@ -262,6 +266,8 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
                 fullName: profiles.fullName,
                 firstName: profiles.firstName,
                 role: profiles.role,
+                startOfTrainingDate: profiles.startOfTrainingDate,
+                ausbildungDurationYears: profiles.ausbildungDurationYears,
             })
             .from(profiles)
             .where(eq(profiles.id, userId))
@@ -273,6 +279,11 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
         // Privileged roles (ADMIN, TEMP_ADMIN) are treated as TRAINER so HAI
         // builds the trainer-facing context for them.
         const role = toHaiRole(user[0].role);
+        const trainingScope = buildHaiTrainingScope({
+            role,
+            startOfTrainingDate: user[0].startOfTrainingDate,
+            ausbildungDurationYears: user[0].ausbildungDurationYears,
+        });
 
         // Get overall progress (completed enablers / total active enablers across enrolled courses)
         const progressResult = await db.execute(sql`
@@ -320,6 +331,9 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
             overallProgressPercent: progressPercent,
             unreadNotifications: unreadCount,
             currentBlockType: currentBlock,
+            ausbildungPlanLabel: trainingScope?.planLabel,
+            currentAusbildungsjahr: trainingScope?.currentAusbildungsjahr,
+            currentTrainingPhase: trainingScope?.currentPhase,
         };
     } catch (error) {
         console.error('HAI.ai DataContext: Error fetching user snapshot:', error);
@@ -1073,6 +1087,14 @@ function formatSnapshot(snapshot: UserSnapshot): string {
         `**Nutzer:** ${snapshot.fullName} (${['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(snapshot.role) ? 'Ausbilder' : 'Azubi'})`,
         `**Gesamtfortschritt:** ${snapshot.overallProgressPercent}%`,
     ];
+
+    if (snapshot.ausbildungPlanLabel) {
+        lines.push(`**Ausbildungsplan:** ${snapshot.ausbildungPlanLabel}`);
+    }
+
+    if (snapshot.currentAusbildungsjahr) {
+        lines.push(`**Aktuelles Ausbildungsjahr:** ${snapshot.currentAusbildungsjahr}`);
+    }
 
     if (snapshot.unreadNotifications > 0) {
         lines.push(`**Ungelesene Benachrichtigungen:** ${snapshot.unreadNotifications}`);

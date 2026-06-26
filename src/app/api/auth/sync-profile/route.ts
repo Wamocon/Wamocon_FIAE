@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
 import { profiles, organizations } from '@/db/migrations/schemas/schema';
 import { and, eq, ne } from 'drizzle-orm';
+import { mergeProfileReferences } from '@/lib/profile-identity';
 
 const WAMOCON_ORG_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -72,22 +73,31 @@ export async function POST(request: Request) {
     const existingProfile = await db
       .select({
         id: profiles.id,
+        fullName: profiles.fullName,
+        firstName: profiles.firstName,
+        lastName: profiles.lastName,
+        avatarUrl: profiles.avatarUrl,
+        birthDate: profiles.birthDate,
         role: profiles.role,
         organizationId: profiles.organizationId,
         isActive: profiles.isActive,
         trainerActivated: profiles.trainerActivated,
+        startOfTrainingDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
+        assignedTrainerId: profiles.assignedTrainerId,
       })
       .from(profiles)
       .where(eq(profiles.email, email))
       .limit(1);
+    const existing = existingProfile[0];
 
     // --- Role determination ---
     // Priority: ADMIN_EMAIL env > existing DB role > user metadata > TRAINEE default
     let role: string;
     if (isAdminEmail(email)) {
       role = 'ADMIN';
-    } else if (existingProfile[0]?.role) {
-      role = existingProfile[0].role;
+    } else if (existing?.role) {
+      role = existing.role;
     } else {
       const metaRole = user.user_metadata?.role?.toUpperCase?.();
       role = metaRole === 'TRAINER' ? 'TRAINER' : 'TRAINEE';
@@ -95,7 +105,7 @@ export async function POST(request: Request) {
 
     // --- Organization assignment ---
     // Preserve existing org; ADMIN_EMAIL always belongs to wamocon org
-    let organizationId: string | null = existingProfile[0]?.organizationId ?? null;
+    let organizationId: string | null = existing?.organizationId ?? null;
     if (isAdminEmail(email) && !organizationId) {
       organizationId = WAMOCON_ORG_ID;
     }
@@ -105,10 +115,10 @@ export async function POST(request: Request) {
     // - is_active defaults to true (Wamocon creates accounts as active)
     // - trainer_activated defaults to false for TRAINEE (trainer must activate)
     // - trainer_activated defaults to true for TRAINER/ADMIN/TEMP_ADMIN
-    const isNewProfile = !existingProfile[0];
+    const isNewProfile = !existing;
     const trainerActivated = isNewProfile
       ? role === 'TRAINEE' ? false : true
-      : existingProfile[0].trainerActivated;
+      : existing.trainerActivated;
 
     const full_name =
       typeof user.user_metadata?.full_name === 'string' &&
@@ -117,7 +127,8 @@ export async function POST(request: Request) {
         : deriveNameFromEmail(email);
 
     // Determine trainer assignment for trainees
-    let assignedTrainerId: string | null = null;
+    let assignedTrainerId: string | null =
+      role === 'TRAINEE' ? (existing?.assignedTrainerId ?? null) : null;
     if (role === 'TRAINEE') {
       const defaultTrainerId = process.env.DEFAULT_TRAINER_ID?.trim();
       const defaultTrainerEmail =
@@ -167,6 +178,71 @@ export async function POST(request: Request) {
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ') || '';
 
+    if (existing && existing.id !== user.id) {
+      const temporaryEmail = `profile-merge-${user.id}@local.invalid`;
+      await db.transaction(async tx => {
+        await tx
+          .insert(profiles)
+          .values({
+            id: user.id,
+            email: temporaryEmail,
+            fullName: existing.fullName || full_name,
+            firstName: existing.firstName || firstName,
+            lastName: existing.lastName || lastName,
+            avatarUrl: existing.avatarUrl,
+            birthDate: existing.birthDate,
+            role: role as any,
+            organizationId,
+            isActive: existing.isActive ?? true,
+            trainerActivated,
+            startOfTrainingDate: existing.startOfTrainingDate,
+            ausbildungDurationYears: existing.ausbildungDurationYears ?? 3,
+            assignedTrainerId: assignedTrainerId ?? undefined,
+          })
+          .onConflictDoUpdate({
+            target: profiles.id,
+            set: {
+              email: temporaryEmail,
+              role: role as any,
+              organizationId,
+              isActive: existing.isActive ?? true,
+              trainerActivated,
+              startOfTrainingDate: existing.startOfTrainingDate,
+              ausbildungDurationYears: existing.ausbildungDurationYears ?? 3,
+              assignedTrainerId: assignedTrainerId ?? null,
+            },
+          });
+
+        await mergeProfileReferences(tx, existing.id, user.id);
+
+        await tx.delete(profiles).where(eq(profiles.id, existing.id as any));
+
+        await tx
+          .update(profiles)
+          .set({
+            email,
+            fullName: full_name,
+            firstName,
+            lastName,
+            role: isAdminEmail(email) ? ('ADMIN' as any) : (role as any),
+            organizationId: isAdminEmail(email)
+              ? WAMOCON_ORG_ID
+              : organizationId,
+            isActive: true,
+            trainerActivated,
+            assignedTrainerId: assignedTrainerId ?? null,
+            startOfTrainingDate: existing.startOfTrainingDate,
+            ausbildungDurationYears: existing.ausbildungDurationYears ?? 3,
+            birthDate: existing.birthDate,
+            avatarUrl: existing.avatarUrl,
+            updatedAt: new Date(),
+          })
+          .where(eq(profiles.id, user.id as any));
+      });
+
+      return NextResponse.json({ ok: true, merged: true }, { status: 200 });
+    }
+
     // Upsert the profile
     try {
       await db
@@ -199,40 +275,54 @@ export async function POST(request: Request) {
       const pgCode = (drizzleErr as { cause?: { code?: string } })?.cause?.code;
       if (pgCode === '23505') {
         const orphan = await db
-          .select({ role: profiles.role })
+          .select({ id: profiles.id, role: profiles.role })
           .from(profiles)
           .where(and(eq(profiles.email, email), ne(profiles.id, user.id)))
           .limit(1);
         const preservedRole = isAdminEmail(email)
           ? 'ADMIN'
           : (orphan[0]?.role ?? role);
-        await db
-          .delete(profiles)
-          .where(and(eq(profiles.email, email), ne(profiles.id, user.id)));
-        await db
-          .insert(profiles)
-          .values({
-            id: user.id,
-            email,
-            fullName: full_name,
-            firstName,
-            lastName,
-            role: preservedRole as any,
-            assignedTrainerId: assignedTrainerId ?? undefined,
-            isActive: true,
-            organizationId: isAdminEmail(email) ? WAMOCON_ORG_ID : organizationId,
-            trainerActivated,
-          })
-          .onConflictDoUpdate({
-            target: profiles.id,
-            set: {
+        if (!orphan[0]?.id) throw drizzleErr;
+
+        await db.transaction(async tx => {
+          await tx
+            .insert(profiles)
+            .values({
+              id: user.id,
+              email: `profile-merge-${user.id}@local.invalid`,
+              fullName: full_name,
+              firstName,
+              lastName,
+              role: preservedRole as any,
+              assignedTrainerId: assignedTrainerId ?? undefined,
+              isActive: true,
+              organizationId: isAdminEmail(email)
+                ? WAMOCON_ORG_ID
+                : organizationId,
+              trainerActivated,
+            })
+            .onConflictDoNothing();
+          await mergeProfileReferences(tx, orphan[0].id, user.id);
+          await tx
+            .delete(profiles)
+            .where(eq(profiles.id, orphan[0].id as any));
+          await tx
+            .update(profiles)
+            .set({
               email,
               fullName: full_name,
               firstName,
               lastName,
+              role: preservedRole as any,
               isActive: true,
-            },
-          });
+              organizationId: isAdminEmail(email)
+                ? WAMOCON_ORG_ID
+                : organizationId,
+              trainerActivated,
+              assignedTrainerId: assignedTrainerId ?? null,
+            })
+            .where(eq(profiles.id, user.id as any));
+        });
       } else if (pgCode === '23503') {
         const admin = getAdminClient();
         const { error: upsertErr } = await admin.from('profiles').upsert(

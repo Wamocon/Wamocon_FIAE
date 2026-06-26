@@ -8,6 +8,13 @@ import {
   trainingUseCases,
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
+import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import { getISOWeekDates } from '@/lib/date/iso-week';
+import {
+  getTrainerScope,
+  isTraineeVisibleToTrainer,
+} from '@/lib/trainer-scope';
 
 // GET: Get a single activity report
 export async function GET(
@@ -205,12 +212,13 @@ export async function PUT(
       const masterUseCases = await db
         .select({
           id: trainingUseCases.id,
+          description: trainingUseCases.description,
           plannedHours: trainingUseCases.plannedHours,
         })
         .from(trainingUseCases)
         .where(inArray(trainingUseCases.id, entryUseCaseIds as any));
       plannedMap = new Map(
-        masterUseCases.map((uc: any) => [uc.id, uc.plannedHours])
+        masterUseCases.map((uc: any) => [uc.id, normalizePlannedHours(uc)])
       );
 
       // Get already-used hours from all non-rejected reports EXCLUDING this one
@@ -301,13 +309,48 @@ export async function PUT(
       }
     }
 
+    const reportWeekNumber = Number(weekNumber);
+    const reportYear = Number(year);
+    if (
+      !Number.isInteger(reportWeekNumber) ||
+      reportWeekNumber < 1 ||
+      reportWeekNumber > 53 ||
+      !Number.isInteger(reportYear) ||
+      reportYear < 2000
+    ) {
+      return NextResponse.json(
+        { error: 'Bitte geben Sie eine gÃ¼ltige Kalenderwoche und Jahr an.' },
+        { status: 400 }
+      );
+    }
+
+    const calculatedPeriod = getISOWeekDates(reportWeekNumber, reportYear);
+    const nextPeriodStart = periodStart
+      ? new Date(periodStart)
+      : calculatedPeriod.start;
+    const nextPeriodEnd = periodEnd ? new Date(periodEnd) : calculatedPeriod.end;
+    const [traineeProfile] = await db
+      .select({
+        startOfTrainingDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, report.traineeId as any));
+    const calculatedAusbildungsjahr = traineeProfile?.startOfTrainingDate
+      ? getTrainingPhase(
+          traineeProfile.startOfTrainingDate,
+          traineeProfile.ausbildungDurationYears,
+          nextPeriodStart
+        )
+      : Number(ausbildungsjahr) || report.ausbildungsjahr;
+
     // Build update data - clear previous reviewer data if resubmitting a rejected report
     const updateData: Record<string, any> = {
-      weekNumber,
-      year,
-      ausbildungsjahr,
-      periodStart: new Date(periodStart),
-      periodEnd: new Date(periodEnd),
+      weekNumber: reportWeekNumber,
+      year: reportYear,
+      ausbildungsjahr: calculatedAusbildungsjahr,
+      periodStart: nextPeriodStart,
+      periodEnd: nextPeriodEnd,
       skillSelfRatings: skillSelfRatings || null,
       status: submit ? 'SUBMITTED' : 'DRAFT',
       submittedAt: submit ? new Date() : null,
@@ -400,13 +443,8 @@ export async function PATCH(
       );
     }
 
-    // Check if user is a trainer
-    const [profile] = await db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, userId as any));
-
-    if (profile?.role !== 'TRAINER') {
+    const scope = await getTrainerScope(userId);
+    if (!scope) {
       return NextResponse.json(
         { error: 'Only trainers can update reports' },
         { status: 403 }
@@ -415,6 +453,28 @@ export async function PATCH(
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    }
+
+    const [accessRow] = await db
+      .select({
+        reportId: activityReports.id,
+        traineeId: activityReports.traineeId,
+        assignedTrainerId: profiles.assignedTrainerId,
+        organizationId: profiles.organizationId,
+      })
+      .from(activityReports)
+      .leftJoin(profiles, eq(profiles.id, activityReports.traineeId))
+      .where(eq(activityReports.id, id as any));
+
+    if (!accessRow) {
+      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+    }
+
+    if (!isTraineeVisibleToTrainer(scope, accessRow)) {
+      return NextResponse.json(
+        { error: 'Trainee is not assigned to this trainer' },
+        { status: 403 }
+      );
     }
 
     const updateData: any = {

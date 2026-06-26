@@ -42,6 +42,7 @@ interface Profile {
   avatar?: string | null;
   birth_date?: string | null;
   training_start_date?: string | null;
+  ausbildung_duration_years?: number | null;
   trainer_id?: string | null;
   isActive?: boolean;
   trainerActivated?: boolean;
@@ -223,7 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('profiles')
         .select(
           `id, full_name, role, avatar_url, assigned_trainer_id,
-           start_of_training_date, birth_date, is_active,
+           start_of_training_date, ausbildung_duration_years, birth_date, is_active,
            trainer_activated, organization_id,
            organizations (id, name, slug, subscription_plan, is_platform_owner, is_active)`
         )
@@ -251,6 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         avatar_url: string | null;
         assigned_trainer_id: string | null;
         start_of_training_date: string | null;
+        ausbildung_duration_years: number | null;
         birth_date: string | null;
         is_active: boolean | null;
         trainer_activated: boolean | null;
@@ -281,6 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         avatar: row.avatar_url || null,
         birth_date: row.birth_date || null,
         training_start_date: row.start_of_training_date || null,
+        ausbildung_duration_years: row.ausbildung_duration_years ?? 3,
         trainer_id: row.assigned_trainer_id || null,
         isActive:
           row.is_active === null || row.is_active === undefined
@@ -388,6 +391,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       typeof newRow['trainer_activated'] === 'boolean'
                         ? newRow['trainer_activated']
                         : prev.trainerActivated,
+                    ausbildung_duration_years:
+                      typeof newRow['ausbildung_duration_years'] === 'number'
+                        ? (newRow['ausbildung_duration_years'] as number)
+                        : prev.ausbildung_duration_years,
                     role:
                       typeof newRow['role'] === 'string'
                         ? (String(newRow['role']).toLowerCase() as UserRole)

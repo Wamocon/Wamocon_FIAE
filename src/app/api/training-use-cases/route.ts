@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/db';
 import { trainingUseCases, trainingComponents } from '@/db/migrations/schemas/schema';
 import { eq } from 'drizzle-orm';
+import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
 
 export async function GET() {
     try {
@@ -28,7 +29,7 @@ export async function GET() {
             componentId: uc.componentId,
             letter: uc.letter,
             description: uc.description,
-            plannedHours: uc.plannedHours,
+            plannedHours: normalizePlannedHours(uc),
             orderIndex: uc.orderIndex,
             createdAt: uc.createdAt,
             component: {
@@ -39,7 +40,7 @@ export async function GET() {
 
         return NextResponse.json({ useCases: formattedUseCases }, {
             headers: {
-                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=59',
+                'Cache-Control': 'no-store',
             },
         });
     } catch (error: any) {

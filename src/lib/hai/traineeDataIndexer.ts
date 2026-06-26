@@ -32,6 +32,12 @@ import {
   lernfelder,
 } from '@/db/migrations/schemas/schema';
 import { indexContent, type SourceType } from './embeddings';
+import {
+  getPhaseMonthRange,
+  getTrainingEndDate,
+  getTrainingPhase,
+  normalizeDurationYears,
+} from '@/lib/ausbildung/duration';
 
 // ============================================================================
 // TYPES
@@ -71,6 +77,7 @@ async function buildTraineeProfileText(
         email: profiles.email,
         role: profiles.role,
         startOfTrainingDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
       })
       .from(profiles)
       .where(eq(profiles.id, traineeId))
@@ -112,15 +119,16 @@ async function buildTraineeProfileText(
 
     if (p.startOfTrainingDate) {
       const startDate = new Date(p.startOfTrainingDate);
+      const durationYears = normalizeDurationYears(p.ausbildungDurationYears);
+      const currentPhase = getTrainingPhase(startDate, durationYears);
+      const phaseRange = getPhaseMonthRange(durationYears, currentPhase);
+      const endDate = getTrainingEndDate(startDate, durationYears);
       lines.push(`Ausbildungsbeginn: ${startDate.toLocaleDateString('de-DE')}`);
-
-      // Calculate training year
-      const now = new Date();
-      const monthsDiff =
-        (now.getFullYear() - startDate.getFullYear()) * 12 +
-        (now.getMonth() - startDate.getMonth());
-      const trainingYear = Math.floor(monthsDiff / 12) + 1;
-      lines.push(`Aktuelles Ausbildungsjahr: ${trainingYear}`);
+      lines.push(`Ausbildungsdauer: ${durationYears} Jahre`);
+      lines.push(
+        `Aktuelle Modulphase: Phase ${currentPhase} (${phaseRange.startMonth}. bis ${phaseRange.endMonth}. Ausbildungsmonat)`
+      );
+      lines.push(`Geplantes Ausbildungsende: ${endDate.toLocaleDateString('de-DE')}`);
     }
 
     if (trainer) {

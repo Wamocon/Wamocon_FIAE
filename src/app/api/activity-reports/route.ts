@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, and, sql, inArray, ne } from 'drizzle-orm';
+import { eq, and, sql, inArray, ne, desc, or } from 'drizzle-orm';
 import {
   activityReports,
   profiles,
   activityReportUseCaseEntries,
   trainingUseCases,
 } from '@/db/migrations/schemas/schema';
+import type { ActivityReport as ActivityReportRow } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import { getISOWeekDates } from '@/lib/date/iso-week';
+import { withDbRetry } from '@/lib/db-retry';
+import { getTrainerScope } from '@/lib/trainer-scope';
 
 // GET: List activity reports for the current user
 export async function GET(req: NextRequest) {
@@ -17,6 +23,10 @@ export async function GET(req: NextRequest) {
     const userId = searchParams.get('userId');
     const includeOverbooking =
       searchParams.get('includeOverbooking') !== 'false'; // default true
+    const requestedLimit = Number(searchParams.get('limit'));
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 500)
+      : 500;
 
     if (!userId) {
       return NextResponse.json(
@@ -26,47 +36,139 @@ export async function GET(req: NextRequest) {
     }
 
     // Get user profile to check role
-    const [profile] = await db
-      .select({ id: profiles.id, role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, userId as any));
+    const [profile] = await withDbRetry(() =>
+      db
+        .select({
+          id: profiles.id,
+          email: profiles.email,
+          role: profiles.role,
+          organizationId: profiles.organizationId,
+        })
+        .from(profiles)
+        .where(eq(profiles.id, userId as any))
+    );
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    let reports;
+    let reports: ActivityReportRow[] = [];
 
     // Trainees only see their own reports, trainers see all
     if (profile.role === 'TRAINEE') {
-      reports = await db
-        .select()
-        .from(activityReports)
-        .where(eq(activityReports.traineeId, userId as any))
-        .orderBy(activityReports.createdAt);
+      const reportOwnerIds = new Set<string>([String(profile.id)]);
+      if (profile.email) {
+        const aliasProfiles = await withDbRetry(() =>
+          db
+            .select({ id: profiles.id })
+            .from(profiles)
+            .where(
+              and(
+                eq(profiles.email, profile.email),
+                eq(profiles.role, 'TRAINEE')
+              )
+            )
+        );
+        aliasProfiles.forEach(alias => reportOwnerIds.add(String(alias.id)));
+      }
+
+      const ownerIds = Array.from(reportOwnerIds);
+      reports = await withDbRetry(() =>
+        db
+          .select()
+          .from(activityReports)
+          .where(inArray(activityReports.traineeId, ownerIds as any))
+          .orderBy(desc(activityReports.createdAt))
+          .limit(limit)
+      );
     } else {
-      // Trainer sees all reports
-      reports = await db
-        .select()
-        .from(activityReports)
-        .orderBy(activityReports.createdAt);
+      const scope = await getTrainerScope(userId);
+
+      if (!scope) {
+        reports = [];
+      } else if (scope.canSeeOrgWide) {
+        const visibilityFilters = [
+          ne(activityReports.status, 'DRAFT'),
+          !scope.isPlatformOwner && scope.organizationId
+            ? eq(activityReports.organizationId, scope.organizationId as any)
+            : undefined,
+        ].filter(Boolean);
+
+        const reportQuery = db
+          .select()
+          .from(activityReports)
+          .orderBy(desc(activityReports.createdAt))
+          .limit(limit);
+
+        reports = await withDbRetry(() =>
+          visibilityFilters.length > 0
+            ? reportQuery.where(and(...(visibilityFilters as any)))
+            : reportQuery
+        );
+      } else if (scope.role === 'TRAINER') {
+        const traineeConditions: any[] = [
+          eq(profiles.role, 'TRAINEE'),
+        ];
+        const traineeAccessFilters: any[] = [
+          inArray(profiles.assignedTrainerId, scope.profileIds as any),
+        ];
+
+        if (scope.organizationId) {
+          traineeAccessFilters.push(
+            eq(profiles.organizationId, scope.organizationId as any)
+          );
+        }
+        traineeConditions.push(or(...traineeAccessFilters)!);
+
+        const assignedTrainees = await withDbRetry(() =>
+          db
+            .select({ id: profiles.id })
+            .from(profiles)
+            .where(and(...traineeConditions))
+        );
+        const assignedTraineeIds = assignedTrainees.map(t => String(t.id));
+
+        reports =
+          assignedTraineeIds.length > 0
+            ? await withDbRetry(() =>
+                db
+                  .select()
+                  .from(activityReports)
+                  .where(
+                    and(
+                      inArray(
+                        activityReports.traineeId,
+                        assignedTraineeIds as any
+                      ),
+                      ne(activityReports.status, 'DRAFT')
+                    )
+                  )
+                  .orderBy(desc(activityReports.createdAt))
+                  .limit(limit)
+              )
+            : [];
+      } else {
+        reports = [];
+      }
     }
 
     // Get overbooking status for all reports in one query
     let overbookingMap = new Map<string, boolean>();
     if (includeOverbooking && reports.length > 0) {
       const reportIds = reports.map(r => String(r.id));
-      const overbookedEntries = await db
-        .select({
-          reportId: activityReportUseCaseEntries.reportId,
-        })
-        .from(activityReportUseCaseEntries)
-        .where(
-          and(
-            inArray(activityReportUseCaseEntries.reportId, reportIds as any),
-            eq(activityReportUseCaseEntries.isOverbooked, true)
+      const overbookedEntries = await withDbRetry(() =>
+        db
+          .select({
+            reportId: activityReportUseCaseEntries.reportId,
+          })
+          .from(activityReportUseCaseEntries)
+          .where(
+            and(
+              inArray(activityReportUseCaseEntries.reportId, reportIds as any),
+              eq(activityReportUseCaseEntries.isOverbooked, true)
+            )
           )
-        );
+      );
 
       overbookedEntries.forEach(e => {
         overbookingMap.set(String(e.reportId), true);
@@ -79,10 +181,12 @@ export async function GET(req: NextRequest) {
     ] as string[];
     const reviewerNameMap = new Map<string, string>();
     if (reviewerIds.length > 0) {
-      const reviewerProfiles = await db
-        .select({ id: profiles.id, fullName: profiles.fullName })
-        .from(profiles)
-        .where(inArray(profiles.id, reviewerIds as any));
+      const reviewerProfiles = await withDbRetry(() =>
+        db
+          .select({ id: profiles.id, fullName: profiles.fullName })
+          .from(profiles)
+          .where(inArray(profiles.id, reviewerIds as any))
+      );
       reviewerProfiles.forEach(p => {
         if (p.fullName) reviewerNameMap.set(String(p.id), p.fullName);
       });
@@ -120,7 +224,7 @@ export async function GET(req: NextRequest) {
       { reports: formattedReports },
       {
         headers: {
-          'Cache-Control': 'private, max-age=10, stale-while-revalidate=59',
+          'Cache-Control': 'no-store',
         },
       }
     );
@@ -160,7 +264,11 @@ export async function POST(req: NextRequest) {
 
     // M-1 fix: Only trainees can create activity reports
     const [creatorProfile] = await db
-      .select({ role: profiles.role })
+      .select({
+        role: profiles.role,
+        startOfTrainingDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
+      })
       .from(profiles)
       .where(eq(profiles.id, userId as any));
 
@@ -175,8 +283,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const reportWeekNumber = Number(weekNumber);
+    const reportYear = Number(year);
+
     // Validate required fields
-    if (!weekNumber || !year || !ausbildungsjahr || !entries?.length) {
+    if (
+      !Number.isInteger(reportWeekNumber) ||
+      reportWeekNumber < 1 ||
+      reportWeekNumber > 53 ||
+      !Number.isInteger(reportYear) ||
+      reportYear < 2000 ||
+      !entries?.length
+    ) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -214,8 +332,8 @@ export async function POST(req: NextRequest) {
       .where(
         and(
           eq(activityReports.traineeId, userId as any),
-          eq(activityReports.weekNumber, weekNumber),
-          eq(activityReports.year, year)
+          eq(activityReports.weekNumber, reportWeekNumber),
+          eq(activityReports.year, reportYear)
         )
       );
 
@@ -228,21 +346,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Calculate period start and end based on week number if not provided
-    const calculatePeriodDates = (weekNum: number, yr: number) => {
-      const startOfYear = new Date(yr, 0, 1);
-      const daysOffset = (weekNum - 1) * 7;
-      const start = new Date(startOfYear.getTime() + daysOffset * 86400000);
-      const end = new Date(start.getTime() + 6 * 86400000);
-      return { start, end };
-    };
-
-    const { start: calcStart, end: calcEnd } = calculatePeriodDates(
-      weekNumber,
-      year
+    const { start: calcStart, end: calcEnd } = getISOWeekDates(
+      reportWeekNumber,
+      reportYear
     );
     const startDate = periodStart ? new Date(periodStart) : calcStart;
     const endDate = periodEnd ? new Date(periodEnd) : calcEnd;
+    const calculatedAusbildungsjahr = creatorProfile.startOfTrainingDate
+      ? getTrainingPhase(
+          creatorProfile.startOfTrainingDate,
+          creatorProfile.ausbildungDurationYears,
+          startDate
+        )
+      : Number(ausbildungsjahr) || 1;
 
     // === Server-side hours validation ===
     // Check that no entry exceeds remaining hours for its use case
@@ -252,12 +368,13 @@ export async function POST(req: NextRequest) {
     const masterUseCases = await db
       .select({
         id: trainingUseCases.id,
+        description: trainingUseCases.description,
         plannedHours: trainingUseCases.plannedHours,
       })
       .from(trainingUseCases)
       .where(inArray(trainingUseCases.id, entryUseCaseIds as any));
     const plannedMap = new Map(
-      masterUseCases.map((uc: any) => [uc.id, uc.plannedHours])
+      masterUseCases.map((uc: any) => [uc.id, normalizePlannedHours(uc)])
     );
 
     // Get already-used hours from all non-rejected reports for this trainee
@@ -352,9 +469,9 @@ export async function POST(req: NextRequest) {
       .values({
         traineeId: userId,
         organizationId,
-        weekNumber,
-        year,
-        ausbildungsjahr,
+        weekNumber: reportWeekNumber,
+        year: reportYear,
+        ausbildungsjahr: calculatedAusbildungsjahr,
         periodStart: startDate,
         periodEnd: endDate,
         skillSelfRatings: skillSelfRatings || null,

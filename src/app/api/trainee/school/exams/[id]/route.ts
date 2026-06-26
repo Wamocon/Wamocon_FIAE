@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
-import { schoolExams, schoolExamResults, ausbildungBlocks } from '@/db/migrations/schemas/schema';
+import { schoolExams, schoolExamResults, ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
+import { getTrainingPhase } from '@/lib/ausbildung/duration';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -88,6 +89,24 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (body.notes !== undefined) updateData.notes = body.notes;
         if (body.schuljahr !== undefined) updateData.schuljahr = body.schuljahr;
         if (body.ausbildungsjahr !== undefined) updateData.ausbildungsjahr = body.ausbildungsjahr;
+
+        if (body.examDate !== undefined || body.ausbildungsjahr !== undefined) {
+            const [trainee] = await db
+                .select({
+                    startOfTrainingDate: profiles.startOfTrainingDate,
+                    ausbildungDurationYears: profiles.ausbildungDurationYears,
+                })
+                .from(profiles)
+                .where(eq(profiles.id, existing.traineeId));
+
+            if (trainee?.startOfTrainingDate) {
+                updateData.ausbildungsjahr = getTrainingPhase(
+                    trainee.startOfTrainingDate,
+                    trainee.ausbildungDurationYears,
+                    body.examDate !== undefined ? new Date(body.examDate) : existing.examDate
+                );
+            }
+        }
 
         if (Object.keys(updateData).length === 0) {
             return NextResponse.json({ error: 'No fields to update' }, { status: 400 });

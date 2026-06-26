@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
         isActive: profiles.isActive,
         trainerActivated: profiles.trainerActivated,
         birthDate: profiles.birthDate,
+        startOfTrainingDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
       })
       .from(profiles)
       .where(and(...traineeConditions));
@@ -175,6 +177,11 @@ export async function GET(req: NextRequest) {
         full_name: t.fullName,
         avatar_url: t.avatarUrl,
         birth_date: t.birthDate ? new Date(t.birthDate).toISOString() : null,
+        training_start_date: t.startOfTrainingDate
+          ? new Date(t.startOfTrainingDate).toISOString()
+          : null,
+        ausbildungDurationYears: t.ausbildungDurationYears ?? 3,
+        ausbildung_duration_years: t.ausbildungDurationYears ?? 3,
         progress: pct,
         isActive: Boolean(t.isActive),
         approvedReports: stats.approved,

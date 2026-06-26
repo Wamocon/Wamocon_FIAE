@@ -25,6 +25,7 @@ import { supabase } from '@/lib/supabase';
 import { FILE_UPLOAD } from '@/lib/constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useOnboarding } from '@/contexts/OnboardingContext';
+import { getAusbildungDurationLabel } from '@/lib/ausbildung/duration';
 
 type TrainerStats = {
   trainees: number;
@@ -277,6 +278,9 @@ export function Profile() {
     return <Clock className="text-muted-foreground h-4 w-4" />;
   };
 
+  const durationYears = profile.ausbildung_duration_years ?? 3;
+  const durationLabel = getAusbildungDurationLabel(durationYears);
+
   return (
     <div className="bg-background min-h-full p-6">
       {/* Profile Header */}
@@ -432,6 +436,17 @@ export function Profile() {
               </div>
             )}
           </div>
+          {profile.role === 'trainee' && (
+            <div>
+              <label className="text-muted-foreground mb-2 block text-sm font-medium">
+                {t('trainee.detail.durationYears')}
+              </label>
+              <div className="bg-muted border-border text-foreground flex items-center gap-2 rounded-2xl border px-4 py-3">
+                <GraduationCap className="text-accent h-4 w-4" />
+                <span>{durationLabel}</span>
+              </div>
+            </div>
+          )}
           {/* Birth Date - For Trainees Only */}
           {profile.role === 'trainee' && (
             <div>

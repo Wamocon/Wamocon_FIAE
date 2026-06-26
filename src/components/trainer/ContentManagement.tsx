@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -336,9 +337,11 @@ export function ContentManagement() {
                 <div className="from-accent to-primary flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br">
                   <BookOpen className="text-foreground h-6 w-6" />
                 </div>
-                <img
+                <Image
                   src="/WMC_Logo_1.png"
                   alt={course.title}
+                  width={160}
+                  height={48}
                   className="h-12 w-40 rounded-2xl object-cover"
                 />
               </div>

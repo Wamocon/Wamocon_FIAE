@@ -98,13 +98,12 @@ export async function POST(request: NextRequest) {
       !traineeId ||
       !trainerId ||
       !weekNumber ||
-      !year ||
-      !ausbildungsjahr
+      !year
     ) {
       return NextResponse.json(
         {
           error:
-            'Missing required fields: activityReportId, traineeId, trainerId, weekNumber, year, ausbildungsjahr',
+            'Missing required fields: activityReportId, traineeId, trainerId, weekNumber, year',
         },
         { status: 400 }
       );
@@ -194,18 +193,20 @@ export async function POST(request: NextRequest) {
       }
     } else {
       let organizationId = body.organizationId as string | undefined;
+      let calculatedAusbildungsjahr = Number(ausbildungsjahr) || 1;
 
-      // Multi-tenant tables require organizationId. Derive it from the linked activity report
-      // so trainer-side save payloads remain backward compatible.
-      if (!organizationId) {
-        const reportRows = await db
-          .select({ organizationId: activityReports.organizationId })
-          .from(activityReports)
-          .where(eq(activityReports.id, activityReportId as any))
-          .limit(1);
+      const reportRows = await db
+        .select({
+          organizationId: activityReports.organizationId,
+          ausbildungsjahr: activityReports.ausbildungsjahr,
+        })
+        .from(activityReports)
+        .where(eq(activityReports.id, activityReportId as any))
+        .limit(1);
 
-        organizationId = reportRows[0]?.organizationId ?? undefined;
-      }
+      organizationId = organizationId || reportRows[0]?.organizationId || undefined;
+      calculatedAusbildungsjahr =
+        reportRows[0]?.ausbildungsjahr ?? calculatedAusbildungsjahr;
 
       if (!organizationId) {
         return NextResponse.json(
@@ -225,7 +226,7 @@ export async function POST(request: NextRequest) {
         activityReportId,
         weekNumber,
         year,
-        ausbildungsjahr,
+        ausbildungsjahr: calculatedAusbildungsjahr,
         trainerRating: trainerRatingStr as any,
         trainerComment: trainerComment || null,
         trainerApprovedAt: now,
