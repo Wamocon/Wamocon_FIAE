@@ -124,7 +124,7 @@ function generateDocumentHash(report: ReportData): string {
  *
  * Layout follows the IHK Frankfurt recommended format per BBiG §13 Nr. 7:
  *  – Company letterhead with WAMOCON logo
- *  – Structured metadata block (Azubi, Ausbilder, Beruf, Ausbildungsjahr, KW, Zeitraum)
+ *  – Structured metadata block (Azubi, Ausbilder, Beruf, Ausbildungsphase, KW, Zeitraum)
  *  – Activity table with planned/actual hours
  *  – Trainer comment section
  *  – Bestätigungen (confirmations) section per BBiG § 13 Satz 2
@@ -295,7 +295,7 @@ export async function generateActivityReportPDF(
   setColor(COLORS.primary);
   metaY += 6;
 
-  // Row 2: Ausbilder | Ausbildungsjahr
+  // Row 2: Ausbilder | Ausbildungsphase
   doc.setFont('helvetica', 'bold');
   setColor(COLORS.primary);
   doc.text('Ausbilder/in:', col1X, metaY);
@@ -303,9 +303,9 @@ export async function generateActivityReportPDF(
   doc.text(report.reviewerName || 'Nicht zugewiesen', col1ValX, metaY);
 
   doc.setFont('helvetica', 'bold');
-  doc.text('Ausbildungsjahr:', col2X, metaY);
+  doc.text('Ausbildungsphase:', col2X, metaY);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${report.ausbildungsjahr}. Ausbildungsjahr`, col2ValX, metaY);
+  doc.text(`Phase ${report.ausbildungsjahr}`, col2ValX, metaY);
   metaY += 8;
 
   // Row 3: Ausbildungsbetrieb | Kalenderwoche

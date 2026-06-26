@@ -13,6 +13,7 @@ import { randomBytes } from 'crypto';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { generateCertificateText } from '@/lib/arbeitszeugnis/textGenerator';
 import { getBaseUrlFromRequest } from '@/lib/url';
+import { getTrainingYearDateRange } from '@/lib/ausbildung/duration';
 
 /**
  * POST /api/trainer/arbeitszeugnis/issue/[traineeId]
@@ -23,7 +24,7 @@ import { getBaseUrlFromRequest } from '@/lib/url';
  * - Generated text based on grades
  *
  * Body:
- * - ausbildungsjahr: Training year (1, 2, or 3)
+ * - ausbildungsjahr: Training phase (1 or 2), 0 for the full final period
  * - certificateType: 'INTERIM' or 'FINAL'
  * - customSummary: Trainer's personal summary text
  * - gender: 'male' | 'female' | 'neutral'
@@ -81,6 +82,7 @@ export async function POST(
     const traineeProfile = await db
       .select({
         startDate: profiles.startOfTrainingDate,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
         fullName: profiles.fullName,
         birthDate: profiles.birthDate,
       })
@@ -96,8 +98,16 @@ export async function POST(
 
     let yearStart: Date;
     let yearEnd: Date;
+    const certificateAusbildungsjahr =
+      certificateType === 'FINAL'
+        ? 0
+        : ausbildungsjahr === 3
+          ? 3
+          : ausbildungsjahr === 2
+            ? 2
+            : 1;
 
-    if (startDate && endDate) {
+    if (certificateType !== 'FINAL' && startDate && endDate) {
       yearStart = new Date(startDate);
       yearEnd = new Date(endDate);
       if (yearEnd.getUTCHours() === 0 && yearEnd.getUTCMinutes() === 0) {
@@ -106,13 +116,13 @@ export async function POST(
     } else {
       const startOfTraining =
         traineeProfile[0].startDate || new Date('2025-08-01');
-
-      yearStart = new Date(startOfTraining);
-      yearStart.setFullYear(yearStart.getFullYear() + (ausbildungsjahr - 1));
-
-      yearEnd = new Date(yearStart);
-      yearEnd.setFullYear(yearEnd.getFullYear() + 1);
-      yearEnd.setDate(yearEnd.getDate() - 1);
+      const range = getTrainingYearDateRange(
+        startOfTraining,
+        certificateAusbildungsjahr,
+        traineeProfile[0].ausbildungDurationYears
+      );
+      yearStart = range.startDate;
+      yearEnd = range.endDate;
     }
 
     // Fetch all graded use case entries for snapshot
@@ -250,7 +260,8 @@ export async function POST(
       traineeId,
       traineeName: traineeProfile[0].fullName,
       traineeBirthDate: traineeBirthDate || traineeProfile[0].birthDate || null,
-      ausbildungsjahr,
+      ausbildungsjahr: certificateAusbildungsjahr,
+      ausbildungDurationYears: traineeProfile[0].ausbildungDurationYears ?? 3,
       periodStart: yearStart.toISOString(),
       periodEnd: yearEnd.toISOString(),
       components,
@@ -270,7 +281,7 @@ export async function POST(
         issueDate: new Date(),
         periodStart: yearStart,
         periodEnd: yearEnd,
-        ausbildungsjahr,
+        ausbildungsjahr: certificateAusbildungsjahr,
         generatedText,
         customSummary,
         snapshotData,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { profiles, quizzes, quizSubmissions, enablerQuizLinks, enablers, courses, courseMembers } from '@/db/migrations/schemas/schema';
+import { getTrainerScope } from '@/lib/trainer-scope';
 
 // GET /api/trainer/quiz-submissions?trainerProfileId=...&onlyPending=true
 export async function GET(req: NextRequest) {
@@ -11,11 +12,23 @@ export async function GET(req: NextRequest) {
     const onlyPending = searchParams.get('onlyPending') === 'true';
     if (!trainerProfileId) return NextResponse.json({ error: 'Missing trainerProfileId' }, { status: 400 });
 
-    // Primary: trainees assigned to trainer
-    const assignedTrainees = await db
+    const scope = await getTrainerScope(trainerProfileId);
+    if (!scope) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const traineeConditions: any[] = [eq(profiles.role, 'TRAINEE' as any)];
+    if (!scope.isPlatformOwner && scope.organizationId) {
+      traineeConditions.push(eq(profiles.organizationId, scope.organizationId as any));
+    } else if (!scope.isPlatformOwner) {
+      traineeConditions.push(inArray(profiles.assignedTrainerId, scope.profileIds as any));
+    }
+
+    // Primary: all trainees in the trainer's organization
+    const organizationTrainees = await db
       .select({ id: profiles.id, fullName: profiles.fullName })
       .from(profiles)
-      .where(and(eq(profiles.role, 'TRAINEE' as any), eq(profiles.assignedTrainerId, trainerProfileId as any)));
+      .where(and(...traineeConditions));
 
     // Union with trainees from trainer's courses (created or co-trainer)
     const createdCourses = await db
@@ -40,7 +53,7 @@ export async function GET(req: NextRequest) {
     }
 
     const traineeIds = Array.from(new Set([...
-      assignedTrainees.map(t => String(t.id)),
+      organizationTrainees.map(t => String(t.id)),
       ...courseTraineeIds,
     ]));
 

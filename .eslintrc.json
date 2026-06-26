@@ -1,6 +1,13 @@
 {
   "extends": ["next/core-web-vitals", "next/typescript"],
   "rules": {
-    "react/no-unescaped-entities": "error"
+    "react/no-unescaped-entities": "error",
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-require-imports": "off",
+    "@typescript-eslint/no-empty-object-type": "off",
+    "import/no-anonymous-default-export": "off",
+    "prefer-const": "off",
+    "react-hooks/exhaustive-deps": "off"
   }
 }

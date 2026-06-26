@@ -158,7 +158,7 @@ export function GradeInputSection({
                                     </span>
                                     {entry.comment && (
                                         <span className="text-sm text-muted-foreground italic">
-                                            "{entry.comment}"
+                                            {`"${entry.comment}"`}
                                         </span>
                                     )}
                                 </div>

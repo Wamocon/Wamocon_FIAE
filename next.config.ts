@@ -8,8 +8,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   eslint: {
-    // Pre-existing ESLint warnings in legacy files; TypeScript strict checking is enabled
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   experimental: {
     // Tree-shake specific heavy packages — only bundles the imports actually used
@@ -29,6 +28,7 @@ const nextConfig: NextConfig = {
   // Webpack configuration for react-pdf
   webpack: config => {
     config.resolve.alias.canvas = false;
+    config.cache = false;
     return config;
   },
 };

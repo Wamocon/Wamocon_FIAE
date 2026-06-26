@@ -9,11 +9,13 @@ import db from '@/db';
 import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import {
   activityReports,
-  activityReportEntries,
+  activityReportUseCaseEntries,
   profiles,
 } from '@/db/migrations/schemas/schema';
-import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+  getTrainerScope,
+  isTraineeVisibleToTrainer,
+} from '@/lib/trainer-scope';
 
 // GET /api/trainer/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
@@ -27,124 +29,153 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
     }
 
-    const [trainerOrgId, isPlatformOwner] = await Promise.all([
-      getUserOrgId(trainerId),
-      verifyPlatformOwner(trainerId),
-    ]);
+    const scope = await getTrainerScope(trainerId);
+    if (!scope) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
 
-    const cacheKey = `trainer_activity_reports_${trainerId}_${status || 'all'}_${traineeId || 'all'}`;
-    const cached = await apiCache.getOrFetch(
-      cacheKey,
-      async () => {
-        const traineeConditions: any[] = [
-          eq(profiles.assignedTrainerId, trainerId as any),
-          eq(profiles.role, 'TRAINEE'),
-        ];
-        if (!isPlatformOwner && trainerOrgId) {
-          traineeConditions.push(eq(profiles.organizationId, trainerOrgId as any));
-        }
+    const traineeConditions: any[] = [eq(profiles.role, 'TRAINEE')];
+    if (scope.canSeeOrgWide) {
+      if (!scope.isPlatformOwner && scope.organizationId) {
+        traineeConditions.push(
+          eq(profiles.organizationId, scope.organizationId as any)
+        );
+      }
+    } else {
+      const traineeAccessFilters: any[] = [
+        inArray(profiles.assignedTrainerId, scope.profileIds as any),
+      ];
+      if (scope.organizationId) {
+        traineeAccessFilters.push(
+          eq(profiles.organizationId, scope.organizationId as any)
+        );
+      }
+      traineeConditions.push(or(...traineeAccessFilters)!);
+    }
 
-        const trainees = await db
-          .select({ id: profiles.id, fullName: profiles.fullName })
-          .from(profiles)
-          .where(and(...traineeConditions));
+    if (!scope.canSeeOrgWide && traineeId) {
+      const [requestedTrainee] = await db
+        .select({
+          assignedTrainerId: profiles.assignedTrainerId,
+          organizationId: profiles.organizationId,
+        })
+        .from(profiles)
+        .where(eq(profiles.id, traineeId as any));
 
-        const traineeIds = trainees.map(t => t.id);
-        const traineeMap = new Map(trainees.map(t => [t.id, t.fullName]));
+      if (
+        !requestedTrainee ||
+        !isTraineeVisibleToTrainer(scope, requestedTrainee)
+      ) {
+        return NextResponse.json(
+          { error: 'Trainee is not assigned to this trainer' },
+          { status: 403 }
+        );
+      }
+    }
 
-        if (traineeIds.length === 0) {
-          return { reports: [], meta: { total: 0, pending: 0 } };
-        }
+    const trainees = await db
+      .select({
+        id: profiles.id,
+        fullName: profiles.fullName,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
+        organizationId: profiles.organizationId,
+        assignedTrainerId: profiles.assignedTrainerId,
+      })
+      .from(profiles)
+      .where(and(...traineeConditions));
 
-        // Build conditions
-        const conditions: any[] = [];
-        if (traineeId && traineeIds.includes(traineeId)) {
-          conditions.push(eq(activityReports.traineeId, traineeId as any));
-        } else {
-          conditions.push(
-            or(
-              ...traineeIds.map(id => eq(activityReports.traineeId, id as any))
-            )!
-          );
-        }
-        if (
-          status &&
-          ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'].includes(status)
-        ) {
-          conditions.push(eq(activityReports.status, status as any));
-        } else {
-          conditions.push(
-            or(
-              eq(activityReports.status, 'SUBMITTED'),
-              eq(activityReports.status, 'APPROVED'),
-              eq(activityReports.status, 'REJECTED')
-            )!
-          );
-        }
+    const traineeIds = trainees.map(t => String(t.id));
+    const traineeMap = new Map(trainees.map(t => [t.id, t]));
 
-        const reports = await db
-          .select()
-          .from(activityReports)
-          .where(and(...conditions))
-          .orderBy(desc(activityReports.submittedAt));
+    if (traineeIds.length === 0) {
+      return NextResponse.json(
+        { reports: [], meta: { total: 0, pending: 0 } },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
 
-        // FIX N+1: Batch-fetch ALL entries for ALL reports in ONE query
-        const reportIds = reports.map(r => r.id);
-        const allEntries =
-          reportIds.length > 0
-            ? await db
-                .select()
-                .from(activityReportEntries)
-                .where(
-                  inArray(activityReportEntries.reportId, reportIds as any)
-                )
-            : [];
+    // Build conditions
+    const conditions: any[] = [];
+    if (traineeId && traineeIds.includes(traineeId)) {
+      conditions.push(eq(activityReports.traineeId, traineeId as any));
+    } else {
+      conditions.push(inArray(activityReports.traineeId, traineeIds as any));
+    }
+    if (
+      status &&
+      ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'].includes(status)
+    ) {
+      conditions.push(eq(activityReports.status, status as any));
+    } else {
+      conditions.push(
+        or(
+          eq(activityReports.status, 'SUBMITTED'),
+          eq(activityReports.status, 'APPROVED'),
+          eq(activityReports.status, 'REJECTED')
+        )!
+      );
+    }
 
-        // Group entries by reportId
-        const entriesByReport = new Map<string, typeof allEntries>();
-        for (const entry of allEntries) {
-          const rid = String(entry.reportId);
-          const arr = entriesByReport.get(rid) || [];
-          arr.push(entry);
-          entriesByReport.set(rid, arr);
-        }
+    const reports = await db
+      .select()
+      .from(activityReports)
+      .where(and(...conditions))
+      .orderBy(desc(activityReports.submittedAt));
 
-        const enrichedReports = reports.map(report => {
-          const entries = entriesByReport.get(String(report.id)) || [];
-          const totalHours = entries.reduce(
-            (acc, e) =>
-              acc +
-              (e.betrieblicheStunden || 0) +
-              (e.unterweisungenStunden || 0) +
-              (e.berufsschulStunden || 0),
-            0
-          );
-          return {
-            ...report,
-            traineeName: traineeMap.get(report.traineeId) || 'Unknown',
-            entryCount: entries.length,
-            totalHours,
-            isPending: report.status === 'SUBMITTED',
-          };
-        });
+    // FIX N+1: Batch-fetch ALL entries for ALL reports in ONE query
+    const reportIds = reports.map(r => r.id);
+    const allEntries =
+      reportIds.length > 0
+        ? await db
+            .select()
+            .from(activityReportUseCaseEntries)
+            .where(
+              inArray(activityReportUseCaseEntries.reportId, reportIds as any)
+            )
+        : [];
 
-        const pending = enrichedReports.filter(
-          r => r.status === 'SUBMITTED'
-        ).length;
+    // Group entries by reportId
+    const entriesByReport = new Map<string, typeof allEntries>();
+    for (const entry of allEntries) {
+      const rid = String(entry.reportId);
+      const arr = entriesByReport.get(rid) || [];
+      arr.push(entry);
+      entriesByReport.set(rid, arr);
+    }
 
-        return {
-          reports: enrichedReports,
-          meta: {
-            total: enrichedReports.length,
-            pending,
-            assignedTrainees: trainees.length,
-          },
-        };
+    const enrichedReports = reports.map(report => {
+      const entries = entriesByReport.get(String(report.id)) || [];
+      const totalHours = entries.reduce(
+        (acc, e) => acc + (Number(e.actualHours) || 0),
+        0
+      );
+      return {
+        ...report,
+        traineeName: traineeMap.get(report.traineeId)?.fullName || 'Unknown',
+        traineeAusbildungDurationYears:
+          traineeMap.get(report.traineeId)?.ausbildungDurationYears ?? 3,
+        entryCount: entries.length,
+        totalHours,
+        hasOverbooking: entries.some(e => Boolean(e.isOverbooked)),
+        isPending: report.status === 'SUBMITTED',
+      };
+    });
+
+    const pending = enrichedReports.filter(
+      r => r.status === 'SUBMITTED'
+    ).length;
+
+    return NextResponse.json(
+      {
+        reports: enrichedReports,
+        meta: {
+          total: enrichedReports.length,
+          pending,
+          assignedTrainees: trainees.length,
+        },
       },
-      ApiCache.TTL.SHORT // 2 minutes – reports change more frequently
+      { headers: { 'Cache-Control': 'no-store' } }
     );
-
-    return NextResponse.json(cached, { headers: cacheHeaders.short });
   } catch (e) {
     console.error('List trainer reports error:', e);
     return NextResponse.json(

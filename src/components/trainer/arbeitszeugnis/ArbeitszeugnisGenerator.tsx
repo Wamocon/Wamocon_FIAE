@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import toast from 'react-hot-toast';
@@ -28,6 +29,7 @@ import QRCode from 'qrcode';
 
 import { SkillRadarChart, renderRadarChartForPDF } from './SkillRadarChart';
 import { EvidenceSection } from './EvidenceSection';
+import { normalizeDurationYears } from '@/lib/ausbildung/duration';
 
 interface Trainee {
   id: string;
@@ -38,6 +40,10 @@ interface Trainee {
   email: string;
   avatar_url?: string;
   birth_date?: string;
+  training_start_date?: string | null;
+  startOfTrainingDate?: string | null;
+  ausbildungDurationYears?: number | null;
+  ausbildung_duration_years?: number | null;
   progress?: number;
   isActive?: boolean;
   approvedReports?: number;
@@ -197,12 +203,36 @@ export function ArbeitszeugnisGenerator() {
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
 
+  const selectedDurationYears = normalizeDurationYears(
+    selectedTraineeData?.ausbildungDurationYears ??
+      selectedTraineeData?.ausbildung_duration_years
+  );
+  const effectiveAusbildungsjahr =
+    certificateType === 'FINAL' ? 0 : ausbildungsjahr;
+
+  const yearOptions = Array.from(
+    { length: selectedDurationYears },
+    (_, index) => index + 1
+  );
+
+  const formatTrainingYearTitle = (year: number) =>
+    `${year}. ${t('arbeitszeugnis.trainingYear')}`;
+
+  const formatFullPeriod = () =>
+    t('arbeitszeugnis.fullPeriodRange').replace(
+      '{years}',
+      String(selectedDurationYears)
+    );
+
   const evidenceQuery = useMemo(() => {
+    if (certificateType === 'FINAL') {
+      return '?ausbildungsjahr=0';
+    }
     if (mode === 'CUSTOM' && customStart && customEnd) {
       return `?startDate=${customStart}&endDate=${customEnd}`;
     }
     return `?ausbildungsjahr=${ausbildungsjahr}`;
-  }, [mode, customStart, customEnd, ausbildungsjahr]);
+  }, [certificateType, mode, customStart, customEnd, ausbildungsjahr]);
 
   const radarRef = useRef<HTMLDivElement>(null);
 
@@ -242,8 +272,13 @@ export function ArbeitszeugnisGenerator() {
       setError(null);
 
       try {
-        let query = `?ausbildungsjahr=${ausbildungsjahr}`;
-        if (mode === 'CUSTOM' && customStart && customEnd) {
+        let query = `?ausbildungsjahr=${effectiveAusbildungsjahr}`;
+        if (
+          certificateType !== 'FINAL' &&
+          mode === 'CUSTOM' &&
+          customStart &&
+          customEnd
+        ) {
           query = `?startDate=${customStart}&endDate=${customEnd}`;
         }
 
@@ -290,7 +325,7 @@ export function ArbeitszeugnisGenerator() {
         // Fetch existing certificates for this trainee/period
         try {
           const certRes = await fetch(
-            `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${ausbildungsjahr}`,
+            `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${effectiveAusbildungsjahr}`,
             { cache: 'no-store' }
           );
           if (certRes.ok) {
@@ -332,6 +367,8 @@ export function ArbeitszeugnisGenerator() {
     mode,
     customStart,
     customEnd,
+    certificateType,
+    effectiveAusbildungsjahr,
     step,
     selectedTraineeData?.full_name,
     t,
@@ -384,11 +421,16 @@ export function ArbeitszeugnisGenerator() {
   };
 
   const handleContinueToReview = () => {
-    if (mode === 'CUSTOM' && (!customStart || !customEnd)) {
+    if (
+      certificateType !== 'FINAL' &&
+      mode === 'CUSTOM' &&
+      (!customStart || !customEnd)
+    ) {
       setError(t('arbeitszeugnis.invalidPeriod'));
       return;
     }
     if (
+      certificateType !== 'FINAL' &&
       mode === 'CUSTOM' &&
       customStart &&
       customEnd &&
@@ -513,7 +555,7 @@ export function ArbeitszeugnisGenerator() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ausbildungsjahr,
+            ausbildungsjahr: effectiveAusbildungsjahr,
             certificateType,
             customSummary: summary,
             overallAssessment,
@@ -594,7 +636,8 @@ export function ArbeitszeugnisGenerator() {
         signerName: profile?.full_name || 'Ausbilder',
         gender: gender,
         certificateType,
-        ausbildungsjahr,
+        ausbildungsjahr: effectiveAusbildungsjahr,
+        ausbildungDurationYears: selectedDurationYears,
         summary: summary,
         radarImage: radarImageBase64,
         logoImage: logoImageBase64,
@@ -639,7 +682,7 @@ export function ArbeitszeugnisGenerator() {
     setRedownloading(true);
     try {
       const certRes = await fetch(
-        `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${ausbildungsjahr}`,
+        `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${effectiveAusbildungsjahr}`,
         { cache: 'no-store' }
       );
       if (!certRes.ok) throw new Error('Failed to fetch certificate');
@@ -728,6 +771,9 @@ export function ArbeitszeugnisGenerator() {
         certificateType:
           (cert.certificateType as 'INTERIM' | 'FINAL') || certificateType,
         ausbildungsjahr: cert.ausbildungsjahr ?? ausbildungsjahr,
+        ausbildungDurationYears:
+          (snapshot.ausbildungDurationYears as number | null) ??
+          selectedDurationYears,
         summary: cert.customSummary || undefined,
         overallAssessment: (snapshot.overallAssessment as string) || undefined,
         radarImage: (snapshot.radarImage as string) || undefined,
@@ -858,6 +904,10 @@ export function ArbeitszeugnisGenerator() {
             certificateType:
               (cert.certificateType as 'INTERIM' | 'FINAL') || 'INTERIM',
             ausbildungsjahr: cert.ausbildungsjahr ?? undefined,
+            ausbildungDurationYears:
+              (snapshot.ausbildungDurationYears as number | null) ??
+              (cert.ausbildungDurationYears as number | null) ??
+              null,
             summary: cert.customSummary || undefined,
             overallAssessment:
               (snapshot.overallAssessment as string) || undefined,
@@ -1211,8 +1261,14 @@ export function ArbeitszeugnisGenerator() {
           </div>
 
           {mode === 'YEAR' ? (
-            <div className="grid grid-cols-3 gap-3">
-              {[1, 2, 3].map(year => (
+            <div
+              className={`grid gap-3 ${
+                selectedDurationYears === 2
+                  ? 'grid-cols-2'
+                  : 'grid-cols-1 sm:grid-cols-3'
+              }`}
+            >
+              {yearOptions.map(year => (
                 <button
                   key={year}
                   onClick={() => setAusbildungsjahr(year)}
@@ -1223,7 +1279,9 @@ export function ArbeitszeugnisGenerator() {
                   }`}
                 >
                   <p className="text-2xl font-bold">{year}.</p>
-                  <p className="text-sm">{t('arbeitszeugnis.trainingYear')}</p>
+                  <p className="text-sm font-semibold">
+                    {t('arbeitszeugnis.trainingYear')}
+                  </p>
                 </button>
               ))}
             </div>
@@ -1334,9 +1392,11 @@ export function ArbeitszeugnisGenerator() {
                 (selectedTraineeData && getTraineeName(selectedTraineeData))}
             </h2>
             <p className="text-muted-foreground text-sm">
-              {mode === 'YEAR'
-                ? `${ausbildungsjahr}. ${t('arbeitszeugnis.trainingYear')}`
-                : `${customStart} - ${customEnd}`}
+              {certificateType === 'FINAL'
+                ? formatFullPeriod()
+                : mode === 'YEAR'
+                  ? formatTrainingYearTitle(ausbildungsjahr)
+                  : `${customStart} - ${customEnd}`}
               {' • '}
               {certificateType === 'INTERIM'
                 ? t('arbeitszeugnis.interim')
@@ -1496,9 +1556,12 @@ export function ArbeitszeugnisGenerator() {
                         PDF erneut herunterladen
                       </button>
                     </div>
-                    <img
+                    <Image
                       src={certificateQrImage}
                       alt="QR Code"
+                      width={64}
+                      height={64}
+                      unoptimized
                       className="border-border h-16 w-16 rounded border"
                       title={existingCertificate?.qrVerificationUrl || ''}
                     />

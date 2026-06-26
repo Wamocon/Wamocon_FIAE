@@ -8,6 +8,14 @@ import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
+  getPhaseMonthRange,
+  normalizeDurationYears,
+  type AusbildungDurationYears,
+  type TrainingPhase,
+} from '@/lib/ausbildung/duration';
+import { getISOWeekDates, getISOWeekInfo } from '@/lib/date/iso-week';
+import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
   ClipboardList,
   Plus,
   Calendar,
@@ -83,7 +91,7 @@ interface ReportUseCaseEntry {
 }
 
 export default function TraineeActivityReportsPage() {
-  const { profile, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading, refreshProfile } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -95,9 +103,20 @@ export default function TraineeActivityReportsPage() {
     if (profile.role !== 'trainee') router.push('/trainer/activity-reports');
   }, [profile?.id, authLoading, router]);
 
+  useEffect(() => {
+    if (!profile?.id || authLoading) return;
+    void refreshProfile().finally(() => {
+      queryClient.invalidateQueries({
+        predicate: query =>
+          typeof query.queryKey[0] === 'string' &&
+          query.queryKey[0].startsWith('/api/activity-reports'),
+      });
+    });
+  }, [profile?.id, authLoading, refreshProfile, queryClient]);
+
   // Data fetching via React Query (cached, deduped, auto-refresh on focus)
   const reportsUrl = profile?.id
-    ? `/api/activity-reports?userId=${profile.id}`
+    ? `/api/activity-reports?userId=${profile.id}&limit=500`
     : null;
   const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>(
     '/api/training-components'
@@ -109,13 +128,43 @@ export default function TraineeActivityReportsPage() {
     data: reportData,
     isLoading: reportsLoading,
     error: reportsError,
-  } = useApiQuery<{ reports: ActivityReport[] }>(reportsUrl);
+  } = useApiQuery<{ reports: ActivityReport[] }>(reportsUrl, {
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: 'always',
+  });
 
   const components = compData?.components || [];
-  const useCases = ucData?.useCases || [];
+  const useCases = useMemo(
+    () =>
+      (ucData?.useCases || []).map(useCase => ({
+        ...useCase,
+        plannedHours: normalizePlannedHours({
+          plannedHours: useCase.plannedHours,
+        }),
+      })),
+    [ucData?.useCases]
+  );
   const reports = reportData?.reports || [];
   const loading = reportsLoading;
   const error = reportsError?.message || null;
+  const profileDurationYears =
+    (profile as { ausbildungDurationYears?: number | null } | null)
+      ?.ausbildungDurationYears ?? profile?.ausbildung_duration_years;
+  const durationYears = normalizeDurationYears(
+    profileDurationYears
+  );
+
+  const formatPhaseLabel = (phase: number) => {
+    if (phase === 3) return t('reports.integrativePhase');
+    const range = getPhaseMonthRange(durationYears, phase as TrainingPhase);
+    return t('reports.phaseRange')
+      .replace('{phase}', String(phase))
+      .replace('{start}', String(range.startMonth))
+      .replace('{end}', String(range.endMonth));
+  };
 
   // State
   const [filterStatus, setFilterStatus] = useState<
@@ -153,17 +202,7 @@ export default function TraineeActivityReportsPage() {
     return grouped;
   }, [useCases]);
 
-  // Get current ISO week number (proper ISO 8601 calculation)
-  const getCurrentWeek = () => {
-    const now = new Date();
-    const d = new Date(
-      Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
-    );
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  };
+  const getCurrentReportPeriod = () => getISOWeekInfo();
 
   // Get status badge
   const getStatusBadge = (status: string) => {
@@ -539,7 +578,7 @@ export default function TraineeActivityReportsPage() {
                           {report.year}
                         </h3>
                         <p className="text-muted-foreground text-sm">
-                          {report.ausbildungsjahr}. {t('reports.trainingYear')}
+                          {formatPhaseLabel(report.ausbildungsjahr)}
                         </p>
                       </div>
                     </div>
@@ -622,14 +661,17 @@ export default function TraineeActivityReportsPage() {
           components={components}
           useCasesByComponent={useCasesByComponent}
           currentWeek={
-            editingReport ? editingReport.weekNumber : getCurrentWeek()
+            editingReport
+              ? editingReport.weekNumber
+              : getCurrentReportPeriod().week
           }
           currentYear={
-            editingReport ? editingReport.year : new Date().getFullYear()
+            editingReport ? editingReport.year : getCurrentReportPeriod().year
           }
           initialReport={editingReport}
           initialEntries={editingEntries}
           existingReports={reports}
+          durationYears={durationYears}
           userId={profile?.id || ''}
           onClose={() => {
             setShowCreateModal(false);
@@ -672,6 +714,7 @@ function CreateReportModal({
   initialReport,
   initialEntries,
   existingReports,
+  durationYears,
   userId,
   onClose,
   onCreated,
@@ -683,6 +726,7 @@ function CreateReportModal({
   initialReport?: ActivityReport | null;
   initialEntries?: ReportUseCaseEntry[];
   existingReports: ActivityReport[];
+  durationYears: AusbildungDurationYears;
   userId: string;
   onClose: () => void;
   onCreated: () => void;
@@ -690,7 +734,7 @@ function CreateReportModal({
   const { t } = useLanguage();
   const [weekNumber, setWeekNumber] = useState(currentWeek);
   const [year, setYear] = useState(currentYear);
-  const [ausbildungsjahr, setAusbildungsjahr] = useState(
+  const [ausbildungsjahr] = useState(
     initialReport?.ausbildungsjahr || 1
   );
   const [entries, setEntries] = useState<
@@ -713,6 +757,14 @@ function CreateReportModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const formatModalPhaseLabel = (phase: TrainingPhase) => {
+    const range = getPhaseMonthRange(durationYears, phase);
+    return t('reports.phaseRange')
+      .replace('{phase}', String(phase))
+      .replace('{start}', String(range.startMonth))
+      .replace('{end}', String(range.endMonth));
+  };
 
   // Use case hour tracking for overbooking prevention
   const [useCaseHours, setUseCaseHours] = useState<
@@ -881,10 +933,9 @@ function CreateReportModal({
   // Validation helpers
   const periodValid =
     weekNumber >= 1 &&
-    weekNumber <= 52 &&
+    weekNumber <= 53 &&
     year >= 2020 &&
-    year <= 2030 &&
-    !!ausbildungsjahr;
+    year <= 2100;
 
   const entriesValid =
     entries.length > 0 &&
@@ -947,7 +998,7 @@ function CreateReportModal({
 
       if (!periodValid) {
         setError(
-          'Bitte geben Sie eine gültige Kalenderwoche (1-52) und Jahr an.'
+          'Bitte geben Sie eine gültige Kalenderwoche (1-53) und Jahr an.'
         );
         setSaving(false);
         return;
@@ -971,22 +1022,10 @@ function CreateReportModal({
         return;
       }
 
-      // Calculate period start and end based on ISO week number
-      // Get January 4th (always in ISO week 1)
-      const jan4 = new Date(year, 0, 4);
-      const dayOfWeek = jan4.getDay() || 7;
-
-      // Get Monday of week 1
-      const week1Monday = new Date(jan4);
-      week1Monday.setDate(jan4.getDate() - dayOfWeek + 1);
-
-      // Calculate target week's Monday
-      const periodStart = new Date(week1Monday);
-      periodStart.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
-
-      // Sunday of the same week (6 days after Monday)
-      const periodEnd = new Date(periodStart);
-      periodEnd.setDate(periodStart.getDate() + 6);
+      const { start: periodStart, end: periodEnd } = getISOWeekDates(
+        weekNumber,
+        year
+      );
 
       const url = initialReport
         ? `/api/activity-reports/${initialReport.id}`
@@ -1084,7 +1123,7 @@ function CreateReportModal({
           )}
 
           {/* Period Selection */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-foreground mb-2 block text-sm font-medium">
                 {t('reports.calendarWeek')}
@@ -1092,7 +1131,7 @@ function CreateReportModal({
               <input
                 type="number"
                 min={1}
-                max={52}
+                max={53}
                 value={weekNumber}
                 onChange={e => setWeekNumber(Number(e.target.value))}
                 className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2"
@@ -1105,7 +1144,7 @@ function CreateReportModal({
               <input
                 type="number"
                 min={2020}
-                max={2030}
+                max={2100}
                 value={year}
                 onChange={e => setYear(Number(e.target.value))}
                 className="bg-background border-border text-foreground w-full rounded-lg border px-3 py-2"
@@ -1510,10 +1549,10 @@ function CreateReportModal({
               {t('reports.addActivity')}
             </h3>
             <div className="border-border max-h-96 space-y-2 overflow-y-auto rounded-lg border p-2">
-              {/* Section 1: 1. - 18. Monat */}
+              {/* Section 1: duration-aware module phase 1 */}
               <div className="mb-4">
                 <h4 className="text-muted-foreground mb-2 px-2 text-sm font-bold tracking-wider uppercase">
-                  {t('reports.monthRange1')}
+                  {formatModalPhaseLabel(1)}
                 </h4>
                 {components
                   .filter(c => c.trainingYear === 1)
@@ -1532,10 +1571,10 @@ function CreateReportModal({
                   ))}
               </div>
 
-              {/* Section 2: 19. - 36. Monat */}
+              {/* Section 2: duration-aware module phase 2 */}
               <div className="mb-4">
                 <h4 className="text-muted-foreground mb-2 px-2 text-sm font-bold tracking-wider uppercase">
-                  {t('reports.monthRange2')}
+                  {formatModalPhaseLabel(2)}
                 </h4>
                 {components
                   .filter(c => c.trainingYear === 2)
@@ -1557,7 +1596,7 @@ function CreateReportModal({
               {/* Section 3: Integrative */}
               <div className="mb-4">
                 <h4 className="text-muted-foreground mb-2 px-2 text-sm font-bold tracking-wider uppercase">
-                  {t('reports.monthRange3')}
+                  {t('reports.integrativePhase')}
                 </h4>
                 {components
                   .filter(c => c.trainingYear === 3 || !c.trainingYear) // Fallback for any others
@@ -1767,8 +1806,81 @@ function ReportDetailModal({
     }
   };
 
+  const handleSubmitDraftReport = async () => {
+    if (!profile?.id || report.status !== 'DRAFT') return;
+
+    const missingNotes = entries.filter(
+      entry => !entry.notes || entry.notes.trim().length === 0
+    );
+    const missingGrades = entries.filter(entry => !entry.traineeGrade);
+    const missingSkills = COMPETENCY_AREAS_DETAIL.filter(
+      area => !skillSelfRatings[area]
+    );
+
+    if (missingNotes.length > 0 || missingGrades.length > 0 || missingSkills.length > 0) {
+      toast.error('Bitte fülle Notizen, Selbstbewertungen und Kompetenzbewertungen vollständig aus.');
+      return;
+    }
+
+    setSavingSkills(true);
+    try {
+      const res = await fetch(`/api/activity-reports/${report.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: profile.id,
+          weekNumber: report.weekNumber,
+          year: report.year,
+          ausbildungsjahr: report.ausbildungsjahr,
+          periodStart: report.periodStart,
+          periodEnd: report.periodEnd,
+          entries: entries.map(entry => ({
+            useCaseId: entry.useCaseId,
+            plannedHours: entry.plannedHours,
+            actualHours: entry.actualHours,
+            isOverbooked: entry.isOverbooked,
+            notes: entry.notes,
+            traineeGrade: entry.traineeGrade,
+          })),
+          skillSelfRatings,
+          submit: true,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || t('reports.error.save'));
+      }
+
+      toast.success(t('reports.status.submitted'));
+      onUpdated();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || t('reports.error.save'));
+    } finally {
+      setSavingSkills(false);
+    }
+  };
+
   const getUseCaseById = (id: string) => useCases.find(uc => uc.id === id);
   const getComponentById = (id: string) => components.find(c => c.id === id);
+  const detailProfileDurationYears =
+    (profile as { ausbildungDurationYears?: number | null } | null)
+      ?.ausbildungDurationYears ?? profile?.ausbildung_duration_years;
+  const detailDurationYears = normalizeDurationYears(
+    detailProfileDurationYears
+  );
+  const formatDetailPhaseLabel = (phase: number) => {
+    if (phase === 3) return t('reports.integrativePhase');
+    const range = getPhaseMonthRange(
+      detailDurationYears,
+      phase as TrainingPhase
+    );
+    return t('reports.phaseRange')
+      .replace('{phase}', String(phase))
+      .replace('{start}', String(range.startMonth))
+      .replace('{end}', String(range.endMonth));
+  };
 
   const areaLabels: Record<string, string> = {
     FACHKOMPETENZ: t('reports.fachkompetenz'),
@@ -1792,7 +1904,7 @@ function ReportDetailModal({
             </h2>
             <p className="text-muted-foreground mt-1 text-sm">
               {t('reports.week')} {report.weekNumber} / {report.year} &middot;{' '}
-              {report.ausbildungsjahr}. {t('reports.trainingYear')}
+              {formatDetailPhaseLabel(report.ausbildungsjahr)}
             </p>
           </div>
           <button
@@ -2122,7 +2234,17 @@ function ReportDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="border-border/50 flex justify-end border-t p-6">
+        <div className="border-border/50 flex justify-end gap-3 border-t p-6">
+          {report.status === 'DRAFT' && (
+            <button
+              onClick={handleSubmitDraftReport}
+              disabled={savingSkills}
+              className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" />
+              {t('common.submit')}
+            </button>
+          )}
           <button
             onClick={onClose}
             className="bg-muted text-foreground hover:bg-muted/80 rounded-lg px-4 py-2 transition-colors"

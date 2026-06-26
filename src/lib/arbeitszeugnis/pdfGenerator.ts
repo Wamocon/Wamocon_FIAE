@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import QRCode from 'qrcode';
+import { getAusbildungDurationLabel } from '@/lib/ausbildung/duration';
 
 interface CertificateData {
   traineeName: string;
@@ -23,6 +24,7 @@ interface CertificateData {
   gender: 'male' | 'female' | 'neutral';
   certificateType?: 'INTERIM' | 'FINAL';
   ausbildungsjahr?: number;
+  ausbildungDurationYears?: number | null;
   summary?: string;
   overallAssessment?: string;
   manualOverallGrade?: number | null;
@@ -151,6 +153,10 @@ export async function generateArbeitszeugnisPDF(
   const getGradeWord = (grade: number): string => {
     return getGradeText(grade);
   };
+
+  const normalizedDurationYears =
+    data.ausbildungDurationYears === 2 ? 2 : 3;
+  const durationLabel = getAusbildungDurationLabel(normalizedDurationYears);
 
   const addSectionTitle = (title: string, yPos: number): number => {
     doc.setFontSize(12);
@@ -283,6 +289,9 @@ export async function generateArbeitszeugnisPDF(
     ? formatDate(data.traineeBirthDate)
     : '[Geburtsdatum]';
   doc.text(`geboren am ${formattedBirthDate}.`, margin, y);
+  y += 6;
+
+  doc.text(`Gesamtausbildung: ${durationLabel}`, margin, y);
   y += 15;
 
   // Evaluation scope — phrased as a formal performance assessment covering the

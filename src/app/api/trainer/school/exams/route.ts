@@ -3,6 +3,7 @@ import db from '@/db';
 import { eq, desc, and } from 'drizzle-orm';
 import { schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
+import { getTrainingPhase } from '@/lib/ausbildung/duration';
 
 // GET /api/trainer/school/exams?trainerId=...&traineeId=...
 export async function GET(req: NextRequest) {
@@ -89,16 +90,19 @@ export async function POST(req: NextRequest) {
         const [trainee] = await db
             .select({
                 fullName: profiles.fullName,
-                startOfTrainingDate: profiles.startOfTrainingDate
+                startOfTrainingDate: profiles.startOfTrainingDate,
+                ausbildungDurationYears: profiles.ausbildungDurationYears
             })
             .from(profiles)
             .where(eq(profiles.id, traineeId));
 
-        // Calculate ausbildungsjahr based on start date
         const now = new Date();
         const startDate = trainee?.startOfTrainingDate || now;
-        const yearDiff = now.getFullYear() - startDate.getFullYear();
-        const ausbildungsjahr = Math.min(Math.max(yearDiff + 1, 1), 3);
+        const ausbildungsjahr = getTrainingPhase(
+            startDate,
+            trainee?.ausbildungDurationYears,
+            new Date(examDate)
+        );
         const schuljahr = `${now.getFullYear()}/${now.getFullYear() + 1}`;
 
         const [exam] = await db

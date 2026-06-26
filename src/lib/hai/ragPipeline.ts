@@ -39,6 +39,10 @@ import {
 import { fetchDataContext } from './dataContext';
 import type { UserRole } from './dataContext';
 import { detectActionIntent, executeAction, ActionIntent } from './actions';
+import {
+  filterSearchResultsForTrainingScope,
+  type HaiTrainingScope,
+} from './trainingScope';
 
 // ============================================================================
 // TYPES
@@ -72,6 +76,8 @@ export interface PipelineContext {
   conversationSummary?: string;
   /** Cross-session memory: key facts + summaries from other chats */
   crossSessionMemory?: string;
+  /** Duration-aware content scope for trainee-facing answers */
+  trainingScope?: HaiTrainingScope;
 }
 
 export interface QuizState {
@@ -482,7 +488,10 @@ export async function processMessage(
           { topK: 5, minSimilarity: 0.45, userId: context.userId }
         );
 
-        searchResults = searchContext.results;
+        searchResults = filterSearchResultsForTrainingScope(
+          searchContext.results,
+          context.trainingScope
+        );
       } catch (vectorError) {
         console.warn(
           'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
@@ -507,6 +516,7 @@ export async function processMessage(
           {
             currentEnablerId: context.currentEnablerId,
             currentCourseId: context.currentCourseId,
+            trainingScope: context.trainingScope,
           }
         );
         if (pageIndexResult.pdfContext) {
@@ -579,6 +589,7 @@ export async function processMessage(
       userRole: context.userRole,
       conversationSummary: context.conversationSummary,
       crossSessionMemory: context.crossSessionMemory,
+      trainingScope: context.trainingScope,
     });
 
     // Step 5: Convert previous messages to provider format
@@ -772,7 +783,10 @@ export async function processMessageStream(
           },
           { topK: 5, minSimilarity: 0.45, userId: context.userId }
         );
-        searchResults = searchContext.results;
+        searchResults = filterSearchResultsForTrainingScope(
+          searchContext.results,
+          context.trainingScope
+        );
       } catch (vectorError) {
         console.warn(
           'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
@@ -797,6 +811,7 @@ export async function processMessageStream(
           {
             currentEnablerId: context.currentEnablerId,
             currentCourseId: context.currentCourseId,
+            trainingScope: context.trainingScope,
           }
         );
         if (pageIndexResult.pdfContext) {
@@ -867,6 +882,7 @@ export async function processMessageStream(
       userRole: context.userRole,
       conversationSummary: context.conversationSummary,
       crossSessionMemory: context.crossSessionMemory,
+      trainingScope: context.trainingScope,
     });
 
     // Convert messages to provider format

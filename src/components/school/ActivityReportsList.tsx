@@ -21,6 +21,11 @@ import {
   RefreshCw,
   ArrowLeft,
 } from 'lucide-react';
+import {
+  getPhaseMonthRange,
+  normalizeDurationYears,
+  type TrainingPhase,
+} from '@/lib/ausbildung/duration';
 
 interface ActivityReport {
   id: string;
@@ -91,6 +96,18 @@ export function ActivityReportsList() {
     searchParams.get('report')
   );
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const durationYears = normalizeDurationYears(
+    profile?.ausbildung_duration_years
+  );
+
+  const formatPhaseLabel = (phase: number) => {
+    if (phase === 3) return t('reports.integrativePhase');
+    const range = getPhaseMonthRange(durationYears, phase as TrainingPhase);
+    return t('reports.phaseRange')
+      .replace('{phase}', String(phase))
+      .replace('{start}', String(range.startMonth))
+      .replace('{end}', String(range.endMonth));
+  };
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -343,7 +360,7 @@ export function ActivityReportsList() {
                       <p className="text-muted-foreground text-sm">
                         {formatWeekPeriod(report.periodStart, report.periodEnd)}
                         <span className="mx-2">•</span>
-                        {report.ausbildungsjahr}. {t('reports.trainingYear')}
+                        {formatPhaseLabel(report.ausbildungsjahr)}
                       </p>
                     </div>
                   </div>
@@ -405,6 +422,18 @@ function ActivityReportDetail({
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const durationYears = normalizeDurationYears(
+    profile?.ausbildung_duration_years
+  );
+
+  const formatPhaseLabel = (phase: number) => {
+    if (phase === 3) return t('reports.integrativePhase');
+    const range = getPhaseMonthRange(durationYears, phase as TrainingPhase);
+    return t('reports.phaseRange')
+      .replace('{phase}', String(phase))
+      .replace('{start}', String(range.startMonth))
+      .replace('{end}', String(range.endMonth));
+  };
 
   // Form state
   const [betrieblicheTaetigkeit, setBetrieblicheTaetigkeit] = useState('');
@@ -581,6 +610,8 @@ function ActivityReportDetail({
             <p className="text-muted-foreground text-sm">
               {new Date(report.periodStart).toLocaleDateString('de-DE')} -{' '}
               {new Date(report.periodEnd).toLocaleDateString('de-DE')}
+              {' - '}
+              {formatPhaseLabel(report.ausbildungsjahr)}
             </p>
           </div>
         </div>

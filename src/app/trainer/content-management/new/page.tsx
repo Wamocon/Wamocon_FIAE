@@ -10,15 +10,6 @@ export default function NewCoursePage() {
   const { profile, isPlatformOwner, loading: authLoading } = useAuth();
   const { t } = useLanguage();
 
-  if (authLoading) return null;
-  if (!isPlatformOwner) {
-    return (
-      <div className="bg-background flex min-h-full items-center justify-center">
-        <p className="text-muted-foreground">{t('access.contentManagement')}</p>
-      </div>
-    );
-  }
-
   const [title, setTitle] = useState('');
   const [year, setYear] = useState<'1' | '2' | '3' | ''>('');
   const [chapter, setChapter] = useState<string>('');
@@ -28,6 +19,15 @@ export default function NewCoursePage() {
   const [error, setError] = useState<string | null>(null);
 
   // No lessons in the new schema; handled as Enablers/Use Cases at course level
+
+  if (authLoading) return null;
+  if (!isPlatformOwner) {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <p className="text-muted-foreground">{t('access.contentManagement')}</p>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -27,6 +27,10 @@ import {
   type PerPageExtractionResult,
 } from './pdfExtractor';
 import type { SearchResult } from './vectorSearch';
+import {
+  isMetadataAllowedForTrainingScope,
+  type HaiTrainingScope,
+} from './trainingScope';
 
 // ============================================================================
 // TYPES
@@ -120,6 +124,7 @@ export async function fetchPageIndexContext(
   options?: {
     currentEnablerId?: string;
     currentCourseId?: string;
+    trainingScope?: HaiTrainingScope;
   }
 ): Promise<PageIndexContext> {
   const startTime = Date.now();
@@ -264,7 +269,11 @@ interface CandidatePDF {
  */
 async function findCandidatePDFs(
   vectorResults: SearchResult[],
-  options?: { currentEnablerId?: string; currentCourseId?: string }
+  options?: {
+    currentEnablerId?: string;
+    currentCourseId?: string;
+    trainingScope?: HaiTrainingScope;
+  }
 ): Promise<CandidatePDF[]> {
   const candidates: CandidatePDF[] = [];
   const seenIds = new Set<string>();
@@ -294,9 +303,10 @@ async function findCandidatePDFs(
       const result = await haiDb.execute(sql`
         SELECT 
           cd.id, cd.title, cd.file_name, cd.storage_url,
-          cd.enabler_id, e.title AS enabler_title
+          cd.enabler_id, e.title AS enabler_title, c.year AS course_year
         FROM content_documents cd
         LEFT JOIN enablers e ON cd.enabler_id = e.id
+        LEFT JOIN courses c ON e.course_id = c.id
         WHERE cd.enabler_id IN (${sql.join(enablerIdArray.map(id => sql`${id}::uuid`), sql`, `)})
           AND cd.storage_url IS NOT NULL
           AND cd.mime_type = 'application/pdf'
@@ -305,6 +315,16 @@ async function findCandidatePDFs(
       `);
 
       for (const row of result as any[]) {
+        if (
+          !isMetadataAllowedForTrainingScope(
+            { year: row.course_year },
+            'course',
+            options?.trainingScope
+          )
+        ) {
+          continue;
+        }
+
         if (!seenIds.has(row.id)) {
           seenIds.add(row.id);
           candidates.push({
@@ -330,7 +350,7 @@ async function findCandidatePDFs(
       const result = await haiDb.execute(sql`
         SELECT 
           cd.id, cd.title, cd.file_name, cd.storage_url,
-          cd.use_case_id, uc.title AS use_case_title
+          cd.use_case_id, uc.title AS use_case_title, uc.year, uc.training_stage
         FROM content_documents cd
         JOIN use_cases uc ON cd.use_case_id = uc.id
         WHERE uc.course_id IN (${sql.join(courseIdArray.map(id => sql`${id}::uuid`), sql`, `)})
@@ -341,6 +361,19 @@ async function findCandidatePDFs(
       `);
 
       for (const row of result as any[]) {
+        if (
+          !isMetadataAllowedForTrainingScope(
+            {
+              year: row.year,
+              trainingStage: row.training_stage,
+            },
+            'use_case',
+            options?.trainingScope
+          )
+        ) {
+          continue;
+        }
+
         if (!seenIds.has(row.id)) {
           seenIds.add(row.id);
           candidates.push({

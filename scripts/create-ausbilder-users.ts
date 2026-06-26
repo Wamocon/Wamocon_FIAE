@@ -127,7 +127,7 @@ async function main() {
     const { error: linkError } = await admin
       .from('profiles')
       .update({
-        trainer_id: trainerProfile.data.id,
+        assigned_trainer_id: trainerProfile.data.id,
       })
       .eq('id', traineeProfile.data.id);
 

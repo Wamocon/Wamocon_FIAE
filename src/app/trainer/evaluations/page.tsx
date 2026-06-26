@@ -236,7 +236,7 @@ export default function TrainerEvaluationsPage() {
                                                                 KW {item.evaluation.weekNumber} / {item.evaluation.year}
                                                             </span>
                                                             <span className="text-xs bg-slate-500/10 px-2 py-0.5 rounded">
-                                                                {item.evaluation.ausbildungsjahr}. Lehrjahr
+                                                                Phase {item.evaluation.ausbildungsjahr}
                                                             </span>
                                                             {item.evaluation.selfRating && (
                                                                 <span className="flex items-center gap-1.5 pl-2 border-l border-border/50">
@@ -338,7 +338,7 @@ export default function TrainerEvaluationsPage() {
                                             </div>
 
                                             <div className="flex items-center gap-6">
-                                                {/* Ausbildungsjahr averages */}
+                                                {/* Phase averages */}
                                                 <div className="flex items-center gap-4">
                                                     {[1, 2, 3].map((aj) => {
                                                         const data = trainee.byAusbildungsjahr[aj];
@@ -348,7 +348,7 @@ export default function TrainerEvaluationsPage() {
                                                                 <div className={`text-lg font-bold ${getGradeColor(data.average)}`}>
                                                                     {data.average?.toFixed(1) || '–'}
                                                                 </div>
-                                                                <div className="text-xs text-muted-foreground">{aj}. Jahr</div>
+                                                                <div className="text-xs text-muted-foreground">Phase {aj}</div>
                                                             </div>
                                                         );
                                                     })}

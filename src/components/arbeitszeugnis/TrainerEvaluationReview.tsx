@@ -258,7 +258,7 @@ export default function TrainerEvaluationReview({
                 <Calendar className="h-3.5 w-3.5" />
                 KW {evaluation.weekNumber} / {evaluation.year}
               </span>
-              <span>{evaluation.ausbildungsjahr}. Ausbildungsjahr</span>
+              <span>Phase {evaluation.ausbildungsjahr}</span>
               {evaluation.selfSubmittedAt && (
                 <span className="text-muted-foreground flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />

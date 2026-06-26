@@ -78,9 +78,15 @@ type DashboardData = {
 const TRAINEE_DASHBOARD_CACHE_KEY = 'wmc_trainee_dashboard_cache';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5)
 
-const getCachedDashboard = (): DashboardData | null => {
+const getDashboardCacheKey = (
+  userId: string | undefined,
+  durationYears: number | null | undefined
+) =>
+  `${TRAINEE_DASHBOARD_CACHE_KEY}_${userId || 'anonymous'}_${durationYears || 3}`;
+
+const getCachedDashboard = (cacheKey: string): DashboardData | null => {
   try {
-    const cached = localStorage.getItem(TRAINEE_DASHBOARD_CACHE_KEY);
+    const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < CACHE_TTL) return data;
@@ -89,10 +95,10 @@ const getCachedDashboard = (): DashboardData | null => {
   return null;
 };
 
-const setCachedDashboard = (data: DashboardData) => {
+const setCachedDashboard = (cacheKey: string, data: DashboardData) => {
   try {
     localStorage.setItem(
-      TRAINEE_DASHBOARD_CACHE_KEY,
+      cacheKey,
       JSON.stringify({ data, timestamp: Date.now() })
     );
   } catch (_) {}
@@ -117,16 +123,20 @@ export default function TraineeDashboard() {
   const url = profile?.id
     ? `/api/trainee/dashboard?userId=${profile.id}`
     : null;
+  const dashboardCacheKey = getDashboardCacheKey(
+    profile?.id,
+    profile?.ausbildung_duration_years
+  );
 
   const { data, error: dataError } = useApiQuery<DashboardData>(url, {
     usePrefetch: true,
-    placeholderData: () => getCachedDashboard() ?? undefined,
+    placeholderData: () => getCachedDashboard(dashboardCacheKey) ?? undefined,
   });
 
   // Persist fresh data to localStorage for instant display on next visit
   useEffect(() => {
-    if (data) setCachedDashboard(data);
-  }, [data]);
+    if (data) setCachedDashboard(dashboardCacheKey, data);
+  }, [dashboardCacheKey, data]);
 
   // Derive state from the query response
   const modules = data?.modules ?? [];

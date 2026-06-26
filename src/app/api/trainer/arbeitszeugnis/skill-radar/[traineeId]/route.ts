@@ -11,6 +11,7 @@ import {
   mesSoftskillCriteria,
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
+import { getTrainingYearDateRange } from '@/lib/ausbildung/duration';
 
 /**
  * GET /api/trainer/arbeitszeugnis/skill-radar/[traineeId]
@@ -41,6 +42,7 @@ export async function GET(
       .select({
         startDate: profiles.startOfTrainingDate,
         fullName: profiles.fullName,
+        ausbildungDurationYears: profiles.ausbildungDurationYears,
       })
       .from(profiles)
       .where(eq(profiles.id, traineeId))
@@ -58,21 +60,13 @@ export async function GET(
     } else {
       const startOfTraining =
         traineeProfile[0]?.startDate || new Date('2025-08-01');
-
-      if (ausbildungsjahr === 0) {
-        // FINAL certificate: cover entire training period (all 3 years)
-        yearStart = new Date(startOfTraining);
-        yearEnd = new Date(startOfTraining);
-        yearEnd.setFullYear(yearEnd.getFullYear() + 3);
-        yearEnd.setDate(yearEnd.getDate() - 1);
-      } else {
-        yearStart = new Date(startOfTraining);
-        yearStart.setFullYear(yearStart.getFullYear() + (ausbildungsjahr - 1));
-
-        yearEnd = new Date(yearStart);
-        yearEnd.setFullYear(yearEnd.getFullYear() + 1);
-        yearEnd.setDate(yearEnd.getDate() - 1);
-      }
+      const range = getTrainingYearDateRange(
+        startOfTraining,
+        ausbildungsjahr,
+        traineeProfile[0]?.ausbildungDurationYears
+      );
+      yearStart = range.startDate;
+      yearEnd = range.endDate;
     }
 
     // Fetch graded entries grouped by component
@@ -169,7 +163,7 @@ export async function GET(
 
     // === FETCH SOFT SKILLS FOR RADAR ===
     const softSkillConditions =
-      customStartDate && customEndDate
+      (customStartDate && customEndDate) || ausbildungsjahr === 0
         ? eq(weeklyEvaluations.traineeId, traineeId)
         : and(
             eq(weeklyEvaluations.traineeId, traineeId),

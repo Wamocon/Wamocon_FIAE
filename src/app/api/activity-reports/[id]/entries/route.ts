@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
-import { activityReportUseCaseEntries, activityReports, gradeEditHistory, profiles } from '@/db/migrations/schemas/schema';
+import {
+    activityReportUseCaseEntries,
+    gradeEditHistory,
+    profiles,
+    trainingUseCases,
+} from '@/db/migrations/schemas/schema';
+import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
 
 // GET: Get report entries for a specific report
 export async function GET(
@@ -12,8 +18,31 @@ export async function GET(
         const { id } = await params;
 
         const entries = await db
-            .select()
+            .select({
+                id: activityReportUseCaseEntries.id,
+                reportId: activityReportUseCaseEntries.reportId,
+                useCaseId: activityReportUseCaseEntries.useCaseId,
+                plannedHours: activityReportUseCaseEntries.plannedHours,
+                actualHours: activityReportUseCaseEntries.actualHours,
+                isOverbooked: activityReportUseCaseEntries.isOverbooked,
+                notes: activityReportUseCaseEntries.notes,
+                traineeGrade: activityReportUseCaseEntries.traineeGrade,
+                trainerGrade: activityReportUseCaseEntries.trainerGrade,
+                releaseGrade: activityReportUseCaseEntries.releaseGrade,
+                gradeComment: activityReportUseCaseEntries.gradeComment,
+                releaseGradeComment: activityReportUseCaseEntries.releaseGradeComment,
+                isGradeApproved: activityReportUseCaseEntries.isGradeApproved,
+                gradeApprovedAt: activityReportUseCaseEntries.gradeApprovedAt,
+                releaseGradeAt: activityReportUseCaseEntries.releaseGradeAt,
+                createdAt: activityReportUseCaseEntries.createdAt,
+                updatedAt: activityReportUseCaseEntries.updatedAt,
+                useCaseDescription: trainingUseCases.description,
+            })
             .from(activityReportUseCaseEntries)
+            .leftJoin(
+                trainingUseCases,
+                eq(activityReportUseCaseEntries.useCaseId, trainingUseCases.id)
+            )
             .where(eq(activityReportUseCaseEntries.reportId, id as any))
             .orderBy(activityReportUseCaseEntries.createdAt);
 
@@ -21,7 +50,9 @@ export async function GET(
             id: e.id,
             reportId: e.reportId,
             useCaseId: e.useCaseId,
-            plannedHours: e.plannedHours,
+            plannedHours: normalizePlannedHours({
+                plannedHours: e.plannedHours,
+            }),
             actualHours: e.actualHours,
             isOverbooked: e.isOverbooked,
             notes: e.notes,

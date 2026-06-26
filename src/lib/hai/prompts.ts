@@ -7,6 +7,11 @@
  * @module lib/hai/prompts
  */
 
+import {
+  buildTrainingScopePrompt,
+  type HaiTrainingScope,
+} from './trainingScope';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -33,6 +38,8 @@ export interface PromptContext {
   conversationSummary?: string;
   /** Cross-session memory: key facts from user's other chats */
   crossSessionMemory?: string;
+  /** Duration-aware training scope for trainee-facing answers */
+  trainingScope?: HaiTrainingScope;
 }
 
 // ============================================================================
@@ -163,6 +170,11 @@ export function buildSystemPrompt(context: PromptContext): string {
 
   // Add mode-specific prompt
   parts.push(MODE_PROMPTS[context.mode]);
+
+  const trainingScopePrompt = buildTrainingScopePrompt(context.trainingScope);
+  if (trainingScopePrompt) {
+    parts.push(trainingScopePrompt);
+  }
 
   // Add conversation summary for long sessions (Phase 2B)
   if (context.conversationSummary) {

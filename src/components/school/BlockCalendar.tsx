@@ -23,6 +23,12 @@ import {
   Trash2,
   Clock,
 } from 'lucide-react';
+import {
+  getPhaseMonthRange,
+  normalizeDurationYears,
+  type AusbildungDurationYears,
+  type TrainingPhase,
+} from '@/lib/ausbildung/duration';
 
 interface Block {
   id: string;
@@ -228,6 +234,9 @@ export function BlockCalendar() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const durationYears = normalizeDurationYears(
+    profile?.ausbildung_duration_years
+  );
 
   // Initialize date on client side
   useEffect(() => {
@@ -951,6 +960,7 @@ export function BlockCalendar() {
       {selectedBlock && (
         <BlockDetailModal
           block={selectedBlock}
+          durationYears={durationYears}
           onClose={() => setSelectedBlock(null)}
           onDelete={handleDeleteBlock}
         />
@@ -986,10 +996,12 @@ export function BlockCalendar() {
 // Block Detail Modal
 function BlockDetailModal({
   block,
+  durationYears,
   onClose,
   onDelete,
 }: {
   block: Block;
+  durationYears: AusbildungDurationYears;
   onClose: () => void;
   onDelete: (blockId: string) => void;
 }) {
@@ -1014,6 +1026,15 @@ function BlockDetailModal({
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const formatPhaseLabel = (phase: number) => {
+    if (phase === 3) return t('reports.integrativePhase');
+    const range = getPhaseMonthRange(durationYears, phase as TrainingPhase);
+    return t('reports.phaseRange')
+      .replace('{phase}', String(phase))
+      .replace('{start}', String(range.startMonth))
+      .replace('{end}', String(range.endMonth));
   };
 
   const handleDelete = async () => {
@@ -1114,10 +1135,7 @@ function BlockDetailModal({
                 {t('calendar.block.trainingYear')}
               </p>
               <p className="text-foreground font-medium">
-                {t('calendar.block.yearFormat').replace(
-                  '{year}',
-                  String(block.ausbildungsjahr)
-                )}
+                {formatPhaseLabel(block.ausbildungsjahr)}
               </p>
             </div>
           </div>

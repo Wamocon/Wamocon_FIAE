@@ -26,6 +26,7 @@ import {
     profiles,
     enablers
 } from '@/db/migrations/schemas/schema';
+import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { getUserOrgId } from '@/lib/auth-helpers';
 
 // ============================================================================
@@ -420,8 +421,22 @@ async function createActivityReport(
         const periodEnd = new Date(periodStart);
         periodEnd.setDate(periodEnd.getDate() + 6);
 
-        // Determine training year (simplified - would need actual enrollment date)
-        const ausbildungsjahr = 1; // TODO: Calculate based on enrollment date
+        const [profile] = await db
+            .select({
+                startOfTrainingDate: profiles.startOfTrainingDate,
+                ausbildungDurationYears: profiles.ausbildungDurationYears,
+            })
+            .from(profiles)
+            .where(eq(profiles.id, userId))
+            .limit(1);
+
+        const ausbildungsjahr = profile?.startOfTrainingDate
+            ? getTrainingPhase(
+                profile.startOfTrainingDate,
+                profile.ausbildungDurationYears,
+                periodStart
+            )
+            : 1;
 
         const organizationId = await getUserOrgId(userId);
 

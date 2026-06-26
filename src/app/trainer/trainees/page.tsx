@@ -7,13 +7,16 @@ import toast from 'react-hot-toast';
 import { Users, Eye, UserCheck, UserX, Clock, CheckCircle2 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getAusbildungDurationLabel } from '@/lib/ausbildung/duration';
 
 type TraineeItem = {
   id: string;
   full_name: string;
   email?: string;
   avatar_url?: string | null;
+  ausbildungDurationYears?: number | null;
+  ausbildung_duration_years?: number | null;
   progress: number;
   coursesCount?: number;
   isActive?: boolean;
@@ -21,6 +24,12 @@ type TraineeItem = {
 };
 
 const TRAINER_LEVEL_ROLES = ['admin', 'temp_admin', 'trainer'];
+
+const getDurationYears = (trainee: TraineeItem) =>
+  trainee.ausbildungDurationYears ?? trainee.ausbildung_duration_years ?? 3;
+
+const getDurationLabel = (trainee: TraineeItem) =>
+  getAusbildungDurationLabel(getDurationYears(trainee));
 
 export default function TrainerTraineesPage() {
   const { profile, user, loading } = useAuth() as any;
@@ -251,60 +260,67 @@ export default function TrainerTraineesPage() {
         {filteredTrainees.map(trainee => (
           <div
             key={trainee.id}
-            className={`glass-effect rounded-3xl border p-6 shadow-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-xl ${
+            className={`glass-effect flex min-h-[330px] flex-col rounded-3xl border p-6 shadow-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-xl ${
               !trainee.trainerActivated
                 ? 'border-amber-500/40 ring-1 ring-amber-500/20'
                 : 'border-accent/30 hover:border-accent/50 hover:shadow-accent/5'
             }`}
           >
-            <div className="mb-4 flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                {trainee.avatar_url ? (
-                  <Image
-                    src={trainee.avatar_url}
-                    alt={trainee.full_name}
-                    width={64}
-                    height={64}
-                    className="border-accent/30 h-16 w-16 rounded-2xl border-2 object-cover shadow-lg"
-                  />
-                ) : (
-                  <div className="border-accent/30 bg-muted text-muted flex h-16 w-16 items-center justify-center rounded-2xl border-2 shadow-lg">
+            <div className="mb-4 grid min-h-[88px] grid-cols-[72px_1fr] gap-4">
+              <div className="flex justify-center">
+                <Avatar className="border-accent/30 h-16 w-16 rounded-2xl border-2 shadow-lg">
+                  {trainee.avatar_url ? (
+                    <AvatarImage
+                      src={trainee.avatar_url}
+                      alt={trainee.full_name}
+                      className="object-cover"
+                    />
+                  ) : null}
+                  <AvatarFallback className="text-muted rounded-2xl">
                     <Users className="h-6 w-6" />
-                  </div>
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-foreground truncate text-xl font-bold leading-7">
+                  {trainee.full_name}
+                </h3>
+                {trainee.email && (
+                  <p className="text-muted max-w-full truncate text-sm leading-5">
+                    {trainee.email}
+                  </p>
                 )}
-                <div>
-                  <h3 className="text-foreground text-xl font-bold">
-                    {trainee.full_name}
-                  </h3>
-                  {trainee.email && (
-                    <p className="text-muted text-sm truncate max-w-[180px]">{trainee.email}</p>
-                  )}
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="bg-accent/20 text-accent rounded-full px-3 py-0.5 text-xs font-medium">
-                      {t('roles.trainee')}
+                <div className="mt-2 flex min-h-7 flex-nowrap items-center gap-2 overflow-hidden">
+                  <span className="bg-accent/20 text-accent rounded-full px-3 py-0.5 text-xs font-medium">
+                    {t('roles.trainee')}
+                  </span>
+                  <span
+                    className="min-w-0 truncate rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-500"
+                    title={getDurationLabel(trainee)}
+                  >
+                    {getDurationLabel(trainee)}
+                  </span>
+                  {!trainee.trainerActivated ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
+                      <Clock className="h-3 w-3" />
+                      {t('trainee.management.pendingActivation')}
                     </span>
-                    {!trainee.trainerActivated ? (
-                      <span className="flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
-                        <Clock className="h-3 w-3" />
-                        {t('trainee.management.pendingActivation')}
-                      </span>
-                    ) : trainee.isActive ? (
-                      <span className="flex items-center gap-1 rounded-full border border-green-500/50 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-500">
-                        <CheckCircle2 className="h-3 w-3" />
-                        {t('common.active')}
-                      </span>
-                    ) : (
-                      <span className="rounded-full border border-red-500/50 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-500">
-                        {t('common.inactive')}
-                      </span>
-                    )}
-                  </div>
+                  ) : trainee.isActive ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-green-500/50 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-500">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {t('common.active')}
+                    </span>
+                  ) : (
+                    <span className="inline-flex shrink-0 rounded-full border border-red-500/50 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-500">
+                      {t('common.inactive')}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Progress */}
-            <div className="mb-4">
+            <div className="mb-4 mt-1">
               <div className="mb-2 flex items-center justify-between text-sm">
                 <span className="text-muted">
                   {t('trainee.management.overallProgress')}
@@ -342,7 +358,7 @@ export default function TrainerTraineesPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div className="mt-auto flex items-center gap-2">
               <button
                 onClick={() => router.push(`/trainer/trainees/${trainee.id}`)}
                 className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-4 py-2 text-sm font-medium transition-colors"

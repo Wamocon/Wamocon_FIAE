@@ -1415,7 +1415,13 @@ export default function LandingPage() {
           className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16"
         >
           <div className="via-background to-background pointer-events-none absolute inset-0 bg-linear-to-br from-red-950/40" />
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_50%_40%,rgba(220,38,38,0.08)_0%,transparent_65%)]" />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                'radial-gradient(ellipse 70% 55% at 50% 40%, rgba(220,38,38,0.08) 0%, transparent 65%)',
+            }}
+          />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.015]"
             style={{
@@ -2036,7 +2042,13 @@ export default function LandingPage() {
           id="universum"
           className="bg-background relative overflow-hidden py-24 md:py-36"
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_30%,rgba(220,38,38,0.05)_0%,transparent_70%)]" />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                'radial-gradient(ellipse 70% 50% at 50% 30%, rgba(220,38,38,0.05) 0%, transparent 70%)',
+            }}
+          />
           <div className="relative mx-auto max-w-275 px-5 text-center md:px-10">
             <Reveal>
               <span className="mb-5 inline-block rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-xs font-semibold tracking-wider text-red-500 uppercase">
@@ -2110,7 +2122,13 @@ export default function LandingPage() {
           id="preise"
           className="bg-background relative overflow-hidden py-24 md:py-36"
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_20%,rgba(220,38,38,0.07)_0%,transparent_65%)]" />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                'radial-gradient(ellipse 60% 50% at 50% 20%, rgba(220,38,38,0.07) 0%, transparent 65%)',
+            }}
+          />
           <div className="pointer-events-none absolute top-0 left-[15%] h-100 w-0.5 bg-linear-to-b from-transparent via-red-500/20 to-transparent" />
           <div className="pointer-events-none absolute top-0 right-[15%] h-100 w-0.5 bg-linear-to-b from-transparent via-red-500/10 to-transparent" />
 
@@ -2386,7 +2404,13 @@ export default function LandingPage() {
 
         {/* ── FINAL CTA ───────────────────────────────────────────────────────── */}
         <section className="bg-background relative overflow-hidden py-24 md:py-32">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_50%,rgba(220,38,38,0.1)_0%,transparent_70%)]" />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(220,38,38,0.1) 0%, transparent 70%)',
+            }}
+          />
           <div className="relative mx-auto max-w-180 px-5 text-center md:px-10">
             <Reveal>
               <span className="mb-5 inline-block rounded-full border border-red-500/25 bg-red-500/10 px-4 py-1.5 text-xs font-bold tracking-wider text-red-400 uppercase">

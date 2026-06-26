@@ -119,6 +119,13 @@ export const profiles = pgTable('profiles', {
   trainerActivated: boolean('trainer_activated').default(false).notNull(),
   startOfTrainingDate: timestamp('start_of_training_date'),
 
+  // Total planned duration of the apprenticeship in years.
+  // 3 years uses the standard 18+18 month phase split; 2 years compresses it
+  // to 12+12 months. Integrative components remain active for the full plan.
+  ausbildungDurationYears: integer('ausbildung_duration_years')
+    .notNull()
+    .default(3),
+
   // A trainee can be assigned to a specific trainer
   // Note: Do not add a self-referential FK here to avoid TS circular init errors.
   // You can enforce this in application logic or add the FK via a raw migration if needed.

@@ -18,14 +18,6 @@ export default function NewQuizPage() {
   const { isPlatformOwner, loading: authLoading } = useAuth();
   const { t } = useLanguage();
 
-  if (authLoading) return <PageLoader />;
-  if (!isPlatformOwner) {
-    return (
-      <div className="bg-background flex min-h-full items-center justify-center">
-          <p className="text-muted-foreground">{t('access.quizManagement')}</p>
-      </div>
-    );
-  }
   const [title, setTitle] = useState('');
   const [quizType, setQuizType] = useState<'mini' | 'big'>('mini');
   const [trainingYear, setTrainingYear] = useState<'1' | '2' | '3'>('1');
@@ -39,6 +31,12 @@ export default function NewQuizPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!isPlatformOwner) {
+      setLoading(false);
+      return;
+    }
+
     const load = async () => {
       try {
         setLoading(true);
@@ -64,7 +62,7 @@ export default function NewQuizPage() {
       }
     };
     load();
-  }, []);
+  }, [authLoading, isPlatformOwner, t]);
 
   const filteredModules = useMemo(
     () => modules.filter(m => String(m.training_year) === trainingYear),
@@ -102,6 +100,15 @@ export default function NewQuizPage() {
       setSaving(false);
     }
   };
+
+  if (authLoading) return <PageLoader />;
+  if (!isPlatformOwner) {
+    return (
+      <div className="bg-background flex min-h-full items-center justify-center">
+        <p className="text-muted-foreground">{t('access.quizManagement')}</p>
+      </div>
+    );
+  }
 
   if (loading) return <PageLoader />;
 

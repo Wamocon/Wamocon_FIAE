@@ -11,6 +11,7 @@ import {
   useCases,
   lernfelderSchema,
 } from '@/db/migrations/schemas/schema';
+import { getTrainerScope } from '@/lib/trainer-scope';
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,27 +21,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
     }
 
-    // Get ALL trainees (role = TRAINEE) - either assigned to this trainer or all trainees
-    const assignedTrainees = await db
+    const scope = await getTrainerScope(trainerId);
+    if (!scope) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const traineeConditions: any[] = [eq(profiles.role, 'TRAINEE')];
+    if (!scope.isPlatformOwner && scope.organizationId) {
+      traineeConditions.push(eq(profiles.organizationId, scope.organizationId as any));
+    } else if (!scope.isPlatformOwner) {
+      traineeConditions.push(inArray(profiles.assignedTrainerId, scope.profileIds as any));
+    }
+
+    // Get all trainees visible to this trainer through the organization scope.
+    const traineeRows = await db
       .select({ id: profiles.id, fullName: profiles.fullName })
       .from(profiles)
-      .where(and(eq(profiles.role, 'TRAINEE'), eq(profiles.assignedTrainerId, trainerId)));
-
-    // If no assigned trainees, get all trainees as fallback
-    let traineeRows = assignedTrainees;
-    if (traineeRows.length === 0) {
-      traineeRows = await db
-        .select({ id: profiles.id, fullName: profiles.fullName })
-        .from(profiles)
-        .where(eq(profiles.role, 'TRAINEE'));
-    }
+      .where(and(...traineeConditions));
     const traineeIds = traineeRows.map(t => t.id);
-
-    // Count all trainees in the system (for display purposes)
-    const [{ c: allTraineesCount = 0 } = { c: 0 }] = await db
-      .select({ c: count() })
-      .from(profiles)
-      .where(eq(profiles.role, 'TRAINEE'));
 
     // Active courses created by this trainer
     const [{ c: activeCourses = 0 } = { c: 0 }] = await db
@@ -224,7 +222,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       counts: {
-        trainees: Number(allTraineesCount) || traineeIds.length,
+        trainees: traineeIds.length,
         activeCourses: displayActiveCourses,
         totalCourses: displayCourses,
         totalEnablers: Number(totalEnablers) || 0,

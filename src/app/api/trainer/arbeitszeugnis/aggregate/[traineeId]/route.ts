@@ -11,6 +11,7 @@ import {
     mesSoftskillCriteria
 } from '@/db/migrations/schemas/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
+import { getTrainingYearDateRange } from '@/lib/ausbildung/duration';
 
 interface SoftSkillRating {
     criterionId: string;
@@ -68,28 +69,22 @@ export async function GET(
             // Calculate date range for the training year
             // Training typically starts August 1st
             const traineeProfile = await db
-                .select({ startDate: profiles.startOfTrainingDate })
+                .select({
+                    startDate: profiles.startOfTrainingDate,
+                    ausbildungDurationYears: profiles.ausbildungDurationYears,
+                })
                 .from(profiles)
                 .where(eq(profiles.id, traineeId))
                 .limit(1);
 
             const startOfTraining = traineeProfile[0]?.startDate || new Date('2025-08-01');
-
-            if (ausbildungsjahr === 0) {
-                // FINAL certificate: cover entire training period (all 3 years)
-                yearStart = new Date(startOfTraining);
-                yearEnd = new Date(startOfTraining);
-                yearEnd.setFullYear(yearEnd.getFullYear() + 3);
-                yearEnd.setDate(yearEnd.getDate() - 1);
-            } else {
-                // Calculate year boundaries for specific year
-                yearStart = new Date(startOfTraining);
-                yearStart.setFullYear(yearStart.getFullYear() + (ausbildungsjahr - 1));
-
-                yearEnd = new Date(yearStart);
-                yearEnd.setFullYear(yearEnd.getFullYear() + 1);
-                yearEnd.setDate(yearEnd.getDate() - 1);
-            }
+            const range = getTrainingYearDateRange(
+                startOfTraining,
+                ausbildungsjahr,
+                traineeProfile[0]?.ausbildungDurationYears
+            );
+            yearStart = range.startDate;
+            yearEnd = range.endDate;
         }
 
         // Fetch all graded use case entries for the trainee within the date range
@@ -283,7 +278,14 @@ export async function GET(
                 .from(weeklySoftskillRatings)
                 .innerJoin(weeklyEvaluations, eq(weeklySoftskillRatings.weeklyEvaluationId, weeklyEvaluations.id))
                 .innerJoin(mesSoftskillCriteria, eq(weeklySoftskillRatings.softskillCriterionId, mesSoftskillCriteria.id))
-                .where(eq(weeklyEvaluations.traineeId, traineeId));
+                .where(
+                    ausbildungsjahr === 0 || (customStartDate && customEndDate)
+                        ? eq(weeklyEvaluations.traineeId, traineeId)
+                        : and(
+                            eq(weeklyEvaluations.traineeId, traineeId),
+                            eq(weeklyEvaluations.ausbildungsjahr, ausbildungsjahr)
+                        )
+                );
             
             softSkillRatings = [...directRatings];
         } catch (e) {
@@ -426,6 +428,7 @@ export async function GET(
                 fullName: profiles.fullName,
                 email: profiles.email,
                 startDate: profiles.startOfTrainingDate,
+                ausbildungDurationYears: profiles.ausbildungDurationYears,
             })
             .from(profiles)
             .where(eq(profiles.id, traineeId))
@@ -436,6 +439,7 @@ export async function GET(
             traineeName: trainee[0]?.fullName || 'Unknown',
             traineeEmail: trainee[0]?.email || '',
             traineeStartDate: trainee[0]?.startDate,
+            ausbildungDurationYears: trainee[0]?.ausbildungDurationYears ?? 3,
             ausbildungsjahr,
             periodStart: yearStart.toISOString(),
             periodEnd: yearEnd.toISOString(),
