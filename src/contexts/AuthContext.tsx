@@ -218,18 +218,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ): Promise<Profile | null> => {
     try {
       const userEmail = email || user?.email || '';
+      const fullProfileSelect = `
+        id, full_name, role, avatar_url, assigned_trainer_id,
+        start_of_training_date, ausbildung_duration_years, birth_date,
+        is_active, trainer_activated, organization_id,
+        organizations (
+          id, name, slug, subscription_plan, is_platform_owner, is_active
+        )
+      `;
+      const legacyProfileSelect = `
+        id, full_name, role, avatar_url, assigned_trainer_id,
+        start_of_training_date, is_active, trainer_activated, organization_id,
+        organizations (
+          id, name, slug, subscription_plan, is_platform_owner, is_active
+        )
+      `;
 
       // Fetch profile + organization in one query
-      const { data, error } = await supabase
+      const profileResult = await supabase
         .from('profiles')
-        .select(
-          `id, full_name, role, avatar_url, assigned_trainer_id,
-           start_of_training_date, ausbildung_duration_years, birth_date, is_active,
-           trainer_activated, organization_id,
-           organizations (id, name, slug, subscription_plan, is_platform_owner, is_active)`
-        )
+        .select(fullProfileSelect)
         .eq('id', userId)
         .single();
+      let data: unknown = profileResult.data;
+      let error = profileResult.error;
+
+      const errorText = `${error?.message || ''} ${error?.details || ''}`;
+      const missingNewProfileColumn =
+        !!error &&
+        (/ausbildung_duration_years/i.test(errorText) ||
+          /birth_date/i.test(errorText) ||
+          /column/i.test(errorText));
+
+      if (missingNewProfileColumn) {
+        console.warn(
+          'Profile schema is missing newer columns; retrying legacy profile load.',
+          error
+        );
+        const legacyResult = await supabase
+          .from('profiles')
+          .select(legacyProfileSelect)
+          .eq('id', userId)
+          .single();
+        data = legacyResult.data;
+        error = legacyResult.error;
+      }
 
       if (error || !data) {
         console.error('Error loading profile:', error);
