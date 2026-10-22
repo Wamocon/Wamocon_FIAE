@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   pgTable,
   uuid,
@@ -13,6 +14,7 @@ import {
   pgSchema,
   varchar,
   vector,
+  check,
 } from 'drizzle-orm/pg-core';
 
 // --- SUPABASE AUTH HELPER ---
@@ -139,8 +141,41 @@ export const profiles = pgTable('profiles', {
 
 // --- 2. CONTENT MANAGEMENT TABLES ---
 
+export const TRAINING_CATALOG_IDS = {
+  FIAE: '00000000-0000-4000-8000-000000000001',
+  KFBM: '00000000-0000-4000-8000-000000000002',
+} as const;
+
+const defaultTrainingCatalogId = TRAINING_CATALOG_IDS.FIAE;
+
+export const trainingCatalogs = pgTable(
+  'training_catalogs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(),
+    title: text('title').notNull(),
+    description: text('description'),
+    durationYears: integer('duration_years').notNull().default(3),
+    isActive: boolean('is_active').notNull().default(false),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    durationYearsCheck: check(
+      'training_catalogs_duration_years_check',
+      sql`${table.durationYears} > 0`
+    ),
+  })
+);
+
 export const courses = pgTable('courses', {
   id: uuid('id').primaryKey().defaultRandom(),
+  trainingCatalogId: uuid('training_catalog_id')
+    .notNull()
+    .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+    .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
   title: text('title').notNull(),
   description: text('description'),
   year: integer('year'), // 1, 2, or 3
@@ -256,6 +291,73 @@ export const useCases = pgTable('use_cases', {
     .defaultNow()
     .$onUpdate(() => new Date()),
 });
+
+export const trainingCatalogLearningFields = pgTable(
+  'training_catalog_learning_fields',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .references(() => trainingCatalogs.id, { onDelete: 'cascade' }),
+    code: text('code').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    trainingYear: integer('training_year').notNull(),
+    hoursBudget: integer('hours_budget'),
+    orderIndex: integer('order_index').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    catalogCodeUnique: unique(
+      'training_catalog_learning_fields_catalog_code_unique'
+    ).on(table.trainingCatalogId, table.code),
+    catalogOrderUnique: unique(
+      'training_catalog_learning_fields_catalog_order_unique'
+    ).on(table.trainingCatalogId, table.orderIndex),
+    trainingYearCheck: check(
+      'training_catalog_learning_fields_training_year_check',
+      sql`${table.trainingYear} between 1 and 3`
+    ),
+    hoursBudgetCheck: check(
+      'training_catalog_learning_fields_hours_budget_check',
+      sql`${table.hoursBudget} is null or ${table.hoursBudget} >= 0`
+    ),
+  })
+);
+
+export const trainingCatalogContentMappings = pgTable(
+  'training_catalog_content_mappings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    learningFieldId: uuid('learning_field_id')
+      .notNull()
+      .references(() => trainingCatalogLearningFields.id, {
+        onDelete: 'cascade',
+      }),
+    enablerId: uuid('enabler_id').references(() => enablers.id, {
+      onDelete: 'cascade',
+    }),
+    useCaseId: uuid('use_case_id').references(() => useCases.id, {
+      onDelete: 'cascade',
+    }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => ({
+    learningFieldEnablerUnique: unique(
+      'training_catalog_content_mappings_learning_field_enabler_unique'
+    ).on(table.learningFieldId, table.enablerId),
+    learningFieldUseCaseUnique: unique(
+      'training_catalog_content_mappings_learning_field_use_case_unique'
+    ).on(table.learningFieldId, table.useCaseId),
+    exactlyOneContentCheck: check(
+      'training_catalog_content_mappings_exactly_one_content_check',
+      sql`(${table.enablerId} is not null) <> (${table.useCaseId} is not null)`
+    ),
+  })
+);
 
 // --- Content Documents (PDFs for Flipbook Viewer) ---
 
@@ -1127,17 +1229,30 @@ export const activityReportEntries = pgTable('activity_report_entries', {
 
 // === TRAINING COMPONENTS (LFA Curriculum) ===
 // Master data for Ausbildungsrahmenplan components (§4 Absatz 2, 3, 7)
-export const trainingComponents = pgTable('training_components', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(), // e.g., "§4.2.1", "§4.3.1"
-  title: text('title').notNull(),
-  description: text('description'),
-  totalWeeks: real('total_weeks').notNull(), // Zeitrichtwert in Wochen
-  totalHours: real('total_hours').notNull(), // totalWeeks * 40
-  trainingYear: integer('training_year'), // 1, 2, or 3 (null = all years)
-  orderIndex: integer('order_index').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const trainingComponents = pgTable(
+  'training_components',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+      .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
+    code: text('code').notNull(), // e.g., "§4.2.1", "§4.3.1"
+    title: text('title').notNull(),
+    description: text('description'),
+    totalWeeks: real('total_weeks').notNull(), // Zeitrichtwert in Wochen
+    totalHours: real('total_hours').notNull(), // totalWeeks * 40
+    trainingYear: integer('training_year'), // 1, 2, or 3 (null = all years)
+    orderIndex: integer('order_index').notNull().default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => ({
+    catalogCodeUnique: unique('training_components_catalog_code_unique').on(
+      table.trainingCatalogId,
+      table.code
+    ),
+  })
+);
 
 // === TRAINING USE CASES ===
 // Individual skills/tasks within each component
@@ -1197,6 +1312,7 @@ export const activityReportUseCaseEntries = pgTable(
 
 export type Organization = typeof organizations.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
+export type TrainingCatalog = typeof trainingCatalogs.$inferSelect;
 export type Course = typeof courses.$inferSelect;
 export type CourseMember = typeof courseMembers.$inferSelect;
 export type Skill = typeof skills.$inferSelect;
@@ -1238,6 +1354,10 @@ export type SchoolExam = typeof schoolExams.$inferSelect;
 export type SchoolExamResult = typeof schoolExamResults.$inferSelect;
 export type Lernfeld = typeof lernfelder.$inferSelect;
 export type LernfeldMapping = typeof lernfeldMappings.$inferSelect;
+export type TrainingCatalogLearningField =
+  typeof trainingCatalogLearningFields.$inferSelect;
+export type TrainingCatalogContentMapping =
+  typeof trainingCatalogContentMappings.$inferSelect;
 export type ActivityReport = typeof activityReports.$inferSelect;
 export type ActivityReportEntry = typeof activityReportEntries.$inferSelect;
 

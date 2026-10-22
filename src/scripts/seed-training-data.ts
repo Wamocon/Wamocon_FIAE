@@ -1,7 +1,11 @@
 import 'dotenv/config';
 import db from '../db';
-import { trainingComponents, trainingUseCases } from '../db/migrations/schemas/schema';
-import { eq } from 'drizzle-orm';
+import {
+    TRAINING_CATALOG_IDS,
+    trainingComponents,
+    trainingUseCases,
+} from '../db/migrations/schemas/schema';
+import { eq, inArray } from 'drizzle-orm';
 
 /**
  * LFA Training Data Seed
@@ -416,12 +420,27 @@ async function main() {
     console.log('Deleting existing data...');
 
     try {
-        // Delete existing data to avoid duplicates
-        await db.delete(trainingUseCases);
-        await db.delete(trainingComponents);
+        await db.transaction(async (tx) => {
+            const existingComponents = await tx
+                .select({ id: trainingComponents.id })
+                .from(trainingComponents)
+                .where(eq(trainingComponents.trainingCatalogId, TRAINING_CATALOG_IDS.FIAE));
+            const componentIds = existingComponents.map((component) => component.id);
+
+            if (componentIds.length > 0) {
+                await tx
+                    .delete(trainingUseCases)
+                    .where(inArray(trainingUseCases.componentId, componentIds));
+            }
+
+            await tx
+                .delete(trainingComponents)
+                .where(eq(trainingComponents.trainingCatalogId, TRAINING_CATALOG_IDS.FIAE));
+        });
         console.log('Existing data cleared.\n');
-    } catch (e) {
-        console.log('No existing data to clear or error:', e);
+    } catch (error) {
+        console.error('Failed to clear FIAE training data:', error);
+        throw error;
     }
 
     try {
@@ -429,7 +448,10 @@ async function main() {
         console.log('Inserting ' + componentsData.length + ' training components...\n');
 
         for (const c of componentsData) {
-            await db.insert(trainingComponents).values(c);
+            await db.insert(trainingComponents).values({
+                ...c,
+                trainingCatalogId: TRAINING_CATALOG_IDS.FIAE,
+            });
             let phaseStr = '';
             if (c.trainingYear === 1) phaseStr = ' (1-18 Mo)';
             else if (c.trainingYear === 2) phaseStr = ' (19-36 Mo)';
@@ -440,7 +462,10 @@ async function main() {
         console.log('');
 
         // Get all components
-        const allComponents = await db.select().from(trainingComponents);
+        const allComponents = await db
+            .select()
+            .from(trainingComponents)
+            .where(eq(trainingComponents.trainingCatalogId, TRAINING_CATALOG_IDS.FIAE));
         console.log(`Total components in database: ${allComponents.length}\n`);
 
         // Insert use cases for each component
