@@ -67,6 +67,41 @@ export function pinSchema(text, schema) {
   return kept + SCHEMA_KEYS.map(k => `${k}="${schema}"`).join('\n') + '\n';
 }
 
+/**
+ * Lines "::add-mask::<value>" for every value of the pulled Vercel environment
+ * that may be a secret, so no later log line can show it. Public values
+ * (NEXT_PUBLIC_*), Vercel's own variables and the schema pin are not masked
+ * (masking "public_preview" would garble every log). Values shorter than 8
+ * characters are skipped. A password inside a URL is masked on its own as well.
+ * Only the lines are returned, never a key name next to a value.
+ */
+export function maskLines(env) {
+  const values = new Set();
+  for (const [key, value] of env) {
+    if (
+      key.startsWith('NEXT_PUBLIC_') ||
+      key.startsWith('VERCEL_') ||
+      SCHEMA_KEYS.includes(key) ||
+      key === 'NODE_ENV'
+    ) {
+      continue;
+    }
+    if (value.length >= 8) values.add(value);
+    try {
+      const url = new URL(value);
+      if (url.password) {
+        values.add(url.password);
+        values.add(decodeURIComponent(url.password));
+      }
+    } catch {
+      // not a URL
+    }
+  }
+  return [...values]
+    .filter(v => v.length >= 4 && !/[\r\n]/.test(v))
+    .map(v => `::add-mask::${v}`);
+}
+
 /** User name of a connection string, null if it cannot be read. */
 export function connectionUser(connectionString) {
   try {
@@ -122,9 +157,16 @@ function main() {
   const file = arg('--file');
   if (!SCHEMA_BY_TARGET[target ?? ''] || !file) {
     console.error(
-      'Usage: node scripts/db/deploy-env.mjs --target preview|production --file <env file> [--github-env]'
+      'Usage: node scripts/db/deploy-env.mjs --target preview|production --file <env file> [--github-env|--mask-only]'
     );
     process.exit(2);
+  }
+  if (args.includes('--mask-only')) {
+    // First step after "vercel pull": nothing of the pulled environment may reach a log
+    for (const line of maskLines(parseEnv(readFileSync(file, 'utf8')))) {
+      console.log(line);
+    }
+    return;
   }
   const schema = SCHEMA_BY_TARGET[target];
   const pinned = pinSchema(readFileSync(file, 'utf8'), schema);

@@ -93,6 +93,14 @@ runs:
         export GITHUB_ACTIONS="" GITHUB_REPOSITORY=""
         vercel pull --yes --environment="$TARGET" --token="$VERCEL_TOKEN"
 
+    # Everything pulled from the Vercel project is masked in all following log lines
+    # (the build and the deploy print a lot), before anything else reads the file.
+    - name: Mask the pulled values
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: node scripts/db/deploy-env.mjs --target "$TARGET" --file ".vercel/.env.${TARGET}.local" --mask-only
+
     # Fixes the schema (whatever the Vercel project says) and aborts if the
     # database role does not fit: Preview must connect as app_preview.
     - name: Pin the database schema and check the database role
@@ -141,13 +149,11 @@ runs:
           deploy_ok=true
         fi
 
-        echo "=========================================="
-        echo " FULL VERCEL DEPLOY LOG"
-        echo "=========================================="
-        cat vercel-deploy.log || true
-        echo "=========================================="
-
+        # The full log is NOT printed (it may contain values of the project). Only on a
+        # failure the last lines are shown, with the pulled values masked.
         if [ "$deploy_ok" != "true" ]; then
+          echo "Vercel deploy failed, last lines of the log:"
+          tail -n 30 vercel-deploy.log || true
           echo "### Deployment failed (${TARGET})" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi

@@ -65,6 +65,7 @@ Der Remote-Workflow hat keinen `ref`-Input, setzt bei leerem `db_schema` den Wer
 4. Die App prüft beim Start der Datenbank- und Supabase-Clients auf dem Server (`assertDbConfig`), ob Rolle und Schema zusammenpassen. Das Preview-Schema ohne passende Verbindungszeichenfolge schlägt sicher fehl.
 5. Die Rolle `app_preview` hat ihren `search_path` auf Rollenebene (`public_preview, extensions`) und keine Rechte auf `public`. Der rollenbasierte `search_path` ist hinter dem Pooler robuster als ein Startparameter und schlägt sicher fehl.
 6. Ohne gesetzte Variablen läuft die App wie bisher auf `public`.
+7. Das Deployment gibt keine Werte aus dem Vercel-Projekt aus: Nach `vercel pull` werden alle Werte (außer `NEXT_PUBLIC_*`, `VERCEL_*` und dem Schema) mit `::add-mask::` maskiert, bevor gebaut wird. Das vollständige Vercel-Protokoll wird nicht mehr ausgegeben, nur bei einem Fehler die letzten 30 Zeilen. Ausgaben der Datenbank-Skripte maskieren die Verbindungszeichenfolge und ihr Passwort.
 
 `NEXT_PUBLIC_*` wird beim Build eingebacken. Jedes Deployment bekommt deshalb einen eigenen Build, nichts wird zwischen Preview und Production hochgestuft.
 

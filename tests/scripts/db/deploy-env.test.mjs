@@ -1,9 +1,11 @@
 // Tests for scripts/db/deploy-env.mjs (pure logic).
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   SCHEMA_BY_TARGET,
   isPreviewRole,
+  maskLines,
   checkDeployEnv,
   connectionUser,
   parseEnv,
@@ -127,4 +129,54 @@ test('Preview refuses the migration role as the app role, Production refuses bot
     checkDeployEnv({ target: 'production', env: envProd }).length,
     1
   );
+});
+
+test('maskLines masks secrets and the password of a URL, not public values or the schema pin', () => {
+  const env = parseEnv(
+    [
+      'DB_CONNECTION_STRING="postgresql://app_preview.abcdefgh:Pw%2Fsecret99@h:5432/postgres"',
+      'SUPABASE_SECRET_KEY="sb_secret_abcdefghijkl"',
+      'NEXT_PUBLIC_SUPABASE_URL="https://abcdefgh.supabase.co"',
+      'NEXT_PUBLIC_DB_SCHEMA="public_preview"',
+      'SUPABASE_DB_SCHEMA="public_preview"',
+      'VERCEL_ENV="preview"',
+      'SHORT="abc"',
+      'NODE_ENV="production"',
+    ].join('\n')
+  );
+  const lines = maskLines(env);
+  assert.ok(lines.every(l => l.startsWith('::add-mask::')));
+  const values = lines.map(l => l.slice('::add-mask::'.length));
+  assert.ok(values.includes('sb_secret_abcdefghijkl'));
+  assert.ok(
+    values.includes(
+      'postgresql://app_preview.abcdefgh:Pw%2Fsecret99@h:5432/postgres'
+    )
+  );
+  assert.ok(values.includes('Pw%2Fsecret99') || values.includes('Pw/secret99'));
+  assert.ok(!values.some(v => v.includes('supabase.co')));
+  assert.ok(!values.includes('public_preview'));
+  assert.ok(!values.includes('abc'));
+  assert.ok(!values.includes('preview'));
+  // no key name next to a value
+  assert.ok(
+    !lines.some(l => /SUPABASE_SECRET_KEY|DB_CONNECTION_STRING/.test(l))
+  );
+});
+
+test('the deploy action masks first and never prints the full Vercel log', () => {
+  const action = readFileSync(
+    '.github/actions/vercel-deploy/action.yml',
+    'utf8'
+  )
+    .split('\n')
+    .filter(l => !/^\s*#/.test(l))
+    .join('\n');
+  const mask = action.indexOf('--mask-only');
+  const pin = action.indexOf('--github-env');
+  const build = action.indexOf('vercel build');
+  assert.ok(mask > 0 && mask < pin && pin < build);
+  assert.ok(!/cat vercel-deploy\.log/.test(action));
+  assert.ok(!/FULL VERCEL DEPLOY LOG/.test(action));
+  assert.ok(/tail -n \d+ vercel-deploy\.log/.test(action));
 });
