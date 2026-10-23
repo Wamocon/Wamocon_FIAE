@@ -49,7 +49,23 @@ begin
   end if;
 end
 $$;
-alter role app_preview_migrator with nosuperuser nocreatedb nocreaterole noinherit nobypassrls connection limit 5;
+-- The attributes are fixed when the role is created. ALTER ROLE must NOT name SUPERUSER or
+-- NOSUPERUSER: PostgreSQL then demands the SUPERUSER attribute of the caller, and the Supabase
+-- role postgres has none (permission denied to alter role). So the attributes are not
+-- re-applied here, they are ASSERTED instead. A role that exists with other attributes (for
+-- example created by hand) stops the script instead of being used as the security boundary.
+alter role app_preview_migrator with connection limit 5;
+do $$
+begin
+  if exists (
+    select 1 from pg_roles
+     where rolname = 'app_preview_migrator'
+       and (rolsuper or rolcreatedb or rolcreaterole or rolbypassrls or rolinherit or not rolcanlogin)
+  ) then
+    raise exception 'app_preview_migrator exists with unexpected attributes (must be: login, nosuperuser, nocreatedb, nocreaterole, noinherit, nobypassrls). Drop and recreate it, or fix it as a superuser.';
+  end if;
+end
+$$;
 alter role app_preview_migrator set search_path = public_preview, extensions;
 alter role app_preview_migrator set statement_timeout = '300s';
 alter role app_preview_migrator set idle_in_transaction_session_timeout = '60s';
