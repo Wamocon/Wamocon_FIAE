@@ -10,9 +10,9 @@ import {
 } from '../../../scripts/db/deploy-env.mjs';
 
 const PREVIEW_URL =
-  'postgresql://app_preview.abcdefgh:pw@aws-0-eu.pooler.supabase.com:5432/postgres';
+  'postgresql://app_preview.abcdefgh:PLACEHOLDER@aws-0-eu.pooler.supabase.com:5432/postgres';
 const PROD_URL =
-  'postgresql://postgres.abcdefgh:pw@aws-0-eu.pooler.supabase.com:5432/postgres';
+  'postgresql://postgres.abcdefgh:PLACEHOLDER@aws-0-eu.pooler.supabase.com:5432/postgres';
 
 test('schema is derived from the target only', () => {
   assert.equal(SCHEMA_BY_TARGET.preview, 'public_preview');
@@ -68,7 +68,7 @@ test('preview with the production role is refused', () => {
   const errors = checkDeployEnv({ target: 'preview', env });
   assert.equal(errors.length, 1);
   assert.ok(errors[0].includes('app_preview'));
-  assert.ok(!errors[0].includes('pw'));
+  assert.ok(!errors[0].includes('PLACEHOLDER'));
 });
 
 test('preview with a wrong schema value is refused', () => {

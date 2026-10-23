@@ -8,9 +8,9 @@ import {
 } from '@/lib/db-schema';
 
 const PREVIEW_URL =
-  'postgresql://app_preview.abcdefghijklmnopqrst:secret@aws-0-eu.pooler.supabase.com:5432/postgres';
+  'postgresql://app_preview.abcdefghijklmnopqrst:PLACEHOLDER@aws-0-eu.pooler.supabase.com:5432/postgres';
 const PROD_URL =
-  'postgresql://postgres.abcdefghijklmnopqrst:secret@aws-0-eu.pooler.supabase.com:5432/postgres';
+  'postgresql://postgres.abcdefghijklmnopqrst:PLACEHOLDER@aws-0-eu.pooler.supabase.com:5432/postgres';
 
 describe('lib/db-schema resolveDbSchema', () => {
   it('falls back to public without any variable', () => {
@@ -112,7 +112,7 @@ describe('lib/db-schema assertRoleMatchesSchema', () => {
     try {
       assertRoleMatchesSchema(PROD_URL, 'public_preview');
     } catch (e) {
-      expect((e as Error).message).not.toContain('secret');
+      expect((e as Error).message).not.toContain('PLACEHOLDER');
     }
   });
 });
