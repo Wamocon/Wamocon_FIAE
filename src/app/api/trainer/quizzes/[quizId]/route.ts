@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -16,6 +17,9 @@ export async function GET(
   ctx: { params: Promise<{ quizId: string }> }
 ) {
   try {
+    const session = await requireTrainer(_req);
+    if (isErrorResponse(session)) return session;
+
     const { quizId } = await ctx.params;
     const [qz] = await db
       .select()
@@ -81,13 +85,13 @@ export async function DELETE(
   ctx: { params: Promise<{ quizId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { quizId } = await ctx.params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
@@ -159,6 +163,9 @@ export async function PATCH(
   ctx: { params: Promise<{ quizId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { quizId } = await ctx.params;
     const body = await req.json();
     const title = body?.title as string | undefined;
@@ -169,13 +176,8 @@ export async function PATCH(
       correct_index: number;
     }>;
     const assignedTraineeIds = (body?.assigned_trainee_ids || []) as string[];
-    const trainerId = (body?.trainer_id || body?.trainerId) as
-      | string
-      | undefined;
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
@@ -256,12 +258,6 @@ export async function PATCH(
           .where(eq(quizAssignments.quizId, quizId as any));
 
         if (assignedTraineeIds.length > 0) {
-          if (!trainerId) {
-            console.error(
-              'Cannot assign trainees: trainerId missing in request body'
-            );
-            throw new Error('trainerId required to assign trainees');
-          }
 
           const values = assignedTraineeIds.map(tid => ({
             quizId: quizId as any,

@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, count, eq, inArray, ilike } from 'drizzle-orm';
@@ -17,17 +18,14 @@ import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 // The trainerProfileId is verified for authentication but not used for filtering
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
-    const trainerProfileId = searchParams.get('trainerProfileId');
+    const trainerProfileId = session.id;
     const q = searchParams.get('q')?.trim();
     const year = searchParams.get('year');
     const examPart = searchParams.get('examPart');
-    if (!trainerProfileId) {
-      return NextResponse.json(
-        { error: 'Missing trainerProfileId' },
-        { status: 400 }
-      );
-    }
 
     const cacheKey = `trainer_courses_${trainerProfileId}_${q || ''}_${year || ''}_${examPart || ''}`;
     const data = await apiCache.getOrFetch(
@@ -133,6 +131,9 @@ export async function GET(req: NextRequest) {
 // Create a course with optional skills
 export async function POST(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const body = await req.json();
     const title: string | undefined = body?.title;
     const year: number | undefined = body?.year ? Number(body.year) : undefined;
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
     const examPart: number | undefined = body?.examPart
       ? Number(body.examPart)
       : undefined;
-    const createdById: string | undefined = body?.createdById;
+    const createdById = session.id;
     const skillNames: string[] = Array.isArray(body?.skills) ? body.skills : [];
     if (!title || !createdById) {
       return NextResponse.json(

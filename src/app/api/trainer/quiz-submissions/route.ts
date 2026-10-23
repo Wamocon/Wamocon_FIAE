@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -7,10 +8,12 @@ import { getTrainerScope } from '@/lib/trainer-scope';
 // GET /api/trainer/quiz-submissions?trainerProfileId=...&onlyPending=true
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
-    const trainerProfileId = searchParams.get('trainerProfileId');
+    const trainerProfileId = session.id;
     const onlyPending = searchParams.get('onlyPending') === 'true';
-    if (!trainerProfileId) return NextResponse.json({ error: 'Missing trainerProfileId' }, { status: 400 });
 
     const scope = await getTrainerScope(trainerProfileId);
     if (!scope) {

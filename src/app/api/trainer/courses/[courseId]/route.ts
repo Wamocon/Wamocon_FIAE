@@ -1,7 +1,8 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 import {
   courses,
@@ -18,6 +19,9 @@ export async function GET(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(_req);
+    if (isErrorResponse(session)) return session;
+
     const { courseId } = await params;
     const [course] = await db
       .select()
@@ -83,13 +87,13 @@ export async function PATCH(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     // Verify course exists
     const [courseRow] = await db
@@ -102,16 +106,6 @@ export async function PATCH(
 
     // Shared curriculum model: any valid trainer can edit any course
     console.log('[PATCH /course] Checking trainer:', trainerId);
-    if (!(await verifyTrainer(trainerId))) {
-      console.log(
-        '[PATCH /course] Trainer verification failed for:',
-        trainerId
-      );
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
@@ -227,13 +221,13 @@ export async function DELETE(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     // Verify course exists
     const [courseRow] = await db
@@ -245,12 +239,6 @@ export async function DELETE(
     }
 
     // Shared curriculum model: any valid trainer can delete any course
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(

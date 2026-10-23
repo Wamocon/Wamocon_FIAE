@@ -1,7 +1,13 @@
+import {
+  requireTrainer,
+  isErrorResponse,
+  scopeOrg,
+  orgScopeCondition,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { workCertificates, profiles } from '@/db/migrations/schemas/schema';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 /**
  * POST /api/trainer/arbeitszeugnis/regenerate
@@ -14,13 +20,18 @@ import { eq, sql } from 'drizzle-orm';
  */
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireTrainer(request);
+    if (isErrorResponse(session)) return session;
+
     const body = await request.json().catch(() => ({}));
     const { certificateId } = body;
 
-    // Get all certificates (or a specific one)
-    const conditions = certificateId
-      ? eq(workCertificates.id, certificateId)
-      : undefined;
+    // Get all certificates (or a specific one), limited to the caller's
+    // organization (the super admin sees all organizations)
+    const conditions = and(
+      certificateId ? eq(workCertificates.id, certificateId) : undefined,
+      orgScopeCondition(profiles.organizationId, scopeOrg(session))
+    );
 
     const certificates = await db
       .select({
@@ -29,6 +40,7 @@ export async function POST(request: NextRequest) {
         snapshotData: workCertificates.snapshotData,
       })
       .from(workCertificates)
+      .innerJoin(profiles, eq(workCertificates.traineeId, profiles.id))
       .where(conditions);
 
     if (certificates.length === 0) {

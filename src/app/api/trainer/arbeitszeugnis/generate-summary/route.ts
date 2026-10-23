@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import { chatWithFallback } from '@/lib/hai/providers';
 
@@ -41,6 +42,9 @@ const gradeText: Record<number, string> = {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireTrainer(request);
+    if (isErrorResponse(session)) return session;
+
     const body: GenerateSummaryBody = await request.json();
     const {
       traineeName,

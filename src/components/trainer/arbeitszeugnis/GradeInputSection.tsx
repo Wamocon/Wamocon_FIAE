@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { Star, Check, AlertCircle, Save } from 'lucide-react';
 
@@ -66,7 +67,7 @@ export function GradeInputSection({
                     comment: e.comment || undefined,
                 }));
 
-            const res = await fetch('/api/trainer/arbeitszeugnis/grade', {
+            const res = await authFetch('/api/trainer/arbeitszeugnis/grade', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ reportId, grades }),

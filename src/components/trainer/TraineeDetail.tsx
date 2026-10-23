@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -137,10 +138,9 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         const trainerId = profile?.id;
         if (!trainerId) return;
 
-        const res = await fetch(
-          `/api/trainer/trainees/${traineeId}?requesterId=${trainerId}`,
-          { cache: 'no-store' }
-        );
+        const res = await authFetch(`/api/trainer/trainees/${traineeId}`, {
+          cache: 'no-store',
+        });
         if (!res.ok) throw new Error(t('trainee.detail.loadError'));
         const data = await res.json();
         setTrainee(data.trainee);
@@ -154,8 +154,8 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
             data.trainee?.ausbildung_duration_years ?? 3,
         });
         // Load overview
-        const oRes = await fetch(
-          `/api/trainer/trainees/${traineeId}/overview?requesterId=${trainerId}`,
+        const oRes = await authFetch(
+          `/api/trainer/trainees/${traineeId}/overview`,
           { cache: 'no-store' }
         );
         if (oRes.ok) {
@@ -296,14 +296,13 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       setSaving(true);
       setError(null);
       const payload: any = {
-        trainer_id: profile.id,
         full_name: edit.full_name,
         avatar_url: edit.avatar_url,
       };
       if (edit.start_of_training_date)
         payload.start_of_training_date = edit.start_of_training_date;
       payload.ausbildung_duration_years = edit.ausbildung_duration_years;
-      const res = await fetch(`/api/trainer/trainees/${trainee.id}`, {
+      const res = await authFetch(`/api/trainer/trainees/${trainee.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -408,25 +407,24 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
 
     try {
       const payload: any = { itemType, itemId, isActive };
-      if (
-        profile &&
-        ['admin', 'temp_admin', 'trainer'].includes(profile.role) &&
-        profile?.id
-      )
-        payload.trainerId = profile.id;
-
-      const res = await fetch(`/api/trainer/trainees/${trainee.id}/activate`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const res = await authFetch(
+        `/api/trainer/trainees/${trainee.id}/activate`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
 
       if (!res.ok) throw new Error('Failed to toggle active state');
 
       // Background refresh to ensure consistency
-      const oRes = await fetch(`/api/trainer/trainees/${trainee.id}/overview`, {
-        cache: 'no-store',
-      });
+      const oRes = await authFetch(
+        `/api/trainer/trainees/${trainee.id}/overview`,
+        {
+          cache: 'no-store',
+        }
+      );
       if (oRes.ok) {
         const oData = await oRes.json();
         setOverview(normalizeOverview(oData));
@@ -435,9 +433,12 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
       console.error(e);
       toast.error(t('error.unknown'));
       // Revert: full reload on error
-      const oRes = await fetch(`/api/trainer/trainees/${trainee.id}/overview`, {
-        cache: 'no-store',
-      });
+      const oRes = await authFetch(
+        `/api/trainer/trainees/${trainee.id}/overview`,
+        {
+          cache: 'no-store',
+        }
+      );
       if (oRes.ok) {
         const oData = await oRes.json();
         setOverview(normalizeOverview(oData));

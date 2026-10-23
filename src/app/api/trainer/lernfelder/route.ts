@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lernfelderSchema, useCases } from '@/db/migrations/schemas/schema';
@@ -8,8 +9,11 @@ import { verifyPlatformOwner } from '@/lib/auth-helpers';
  * GET /api/trainer/lernfelder
  * List all Lernfelder with a count of related use cases.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const list = await db
       .select()
       .from(lernfelderSchema)
@@ -48,10 +52,10 @@ export async function GET() {
  */
 export async function POST(req: NextRequest) {
   try {
-    const trainerId = req.nextUrl.searchParams.get('trainerId');
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
+    const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },

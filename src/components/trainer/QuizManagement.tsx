@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -305,8 +306,8 @@ export function QuizManagement() {
       setLoading(true);
       // Fetch quiz details and members in parallel instead of sequentially
       const [res, memRes] = await Promise.all([
-        fetch(`/api/trainer/quizzes/${id}`, { cache: 'no-store' }),
-        fetch(`/api/trainer/quiz-members?quizId=${id}`, { cache: 'no-store' }),
+        authFetch(`/api/trainer/quizzes/${id}`, { cache: 'no-store' }),
+        authFetch(`/api/trainer/quiz-members?quizId=${id}`, { cache: 'no-store' }),
       ]);
       if (!res.ok) throw new Error(t('quiz.managementLoadQuizError'));
       const data = await res.json();
@@ -384,7 +385,6 @@ export function QuizManagement() {
     try {
       setSaving(true);
       const payload = {
-        trainer_id: profile.id,
         title: title.trim(),
         is_active: isActive,
         quiz_type: 'big' as const,
@@ -396,16 +396,16 @@ export function QuizManagement() {
         assigned_trainee_ids: assigned,
       };
       if (editMode && editId) {
-        const res = await fetch(`/api/trainer/quizzes/${editId}`, {
+        const res = await authFetch(`/api/trainer/quizzes/${editId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...payload, trainerId: profile.id }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(t('quiz.managementSaveError'));
         // Sync collaborators: diff current vs selected
         await syncQuizMembers(editId, collaborators, profile.id);
       } else {
-        const res = await fetch(`/api/trainer/quizzes`, {
+        const res = await authFetch(`/api/trainer/quizzes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -432,7 +432,7 @@ export function QuizManagement() {
     // Optimistic: remove from list immediately
     setQuizzes(prev => prev.filter(q => q.id !== id));
     try {
-      const res = await fetch(`/api/trainer/quizzes/${id}`, {
+      const res = await authFetch(`/api/trainer/quizzes/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error(t('quiz.managementDeleteError'));
@@ -449,7 +449,7 @@ export function QuizManagement() {
     if (!profile) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/trainer/quizzes?trainerId=${profile.id}`, { cache: 'no-store' });
+      const res = await authFetch(`/api/trainer/quizzes`, { cache: 'no-store' });
       if (!res.ok) throw new Error(t('quiz.managementLoadQuizzesError'));
       const data = await res.json();
       const items: QuizListItem[] = (data.quizzes || []).filter(
@@ -466,8 +466,8 @@ export function QuizManagement() {
   const loadTrainees = async () => {
     if (!profile) return;
     try {
-      const res = await fetch(
-        `/api/trainer/trainees?trainerProfileId=${profile.id}`,
+      const res = await authFetch(
+        `/api/trainer/trainees`,
         { cache: 'no-store' }
       );
       if (!res.ok) return;
@@ -484,7 +484,7 @@ export function QuizManagement() {
   const loadTrainers = async () => {
     if (!profile) return;
     try {
-      const res = await fetch(`/api/trainer/trainers?excludeId=${profile.id}`, { cache: 'no-store' });
+      const res = await authFetch(`/api/trainer/trainers?excludeId=${profile.id}`, { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
       const opts: ComboOption[] = (data.trainers || []).map((t: any) => ({
@@ -503,7 +503,7 @@ export function QuizManagement() {
     addedById: string
   ) {
     try {
-      const curRes = await fetch(`/api/trainer/quiz-members?quizId=${quizId}`, { cache: 'no-store' });
+      const curRes = await authFetch(`/api/trainer/quiz-members?quizId=${quizId}`, { cache: 'no-store' });
       const cur = curRes.ok ? await curRes.json() : { members: [] };
       const currentIds: string[] = Array.isArray(cur.members)
         ? cur.members.map((m: any) => String(m.trainerId))
@@ -515,20 +515,19 @@ export function QuizManagement() {
 
       await Promise.all(
         toAdd.map(trainerId =>
-          fetch(`/api/trainer/quiz-members`, {
+          authFetch(`/api/trainer/quiz-members`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               quiz_id: quizId,
               trainer_id: trainerId,
-              added_by_id: addedById,
             }),
           })
         )
       );
       await Promise.all(
         toRemove.map(trainerId =>
-          fetch(`/api/trainer/quiz-members`, {
+          authFetch(`/api/trainer/quiz-members`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ quiz_id: quizId, trainer_id: trainerId }),

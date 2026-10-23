@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, count, eq, inArray, or } from 'drizzle-orm';
@@ -13,15 +14,11 @@ import { getTrainerScope } from '@/lib/trainer-scope';
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
-    const trainerId =
-      searchParams.get('trainerProfileId') || searchParams.get('trainerAuthId');
-    if (!trainerId) {
-      return NextResponse.json(
-        { error: 'Missing trainer id' },
-        { status: 400 }
-      );
-    }
+    const trainerId = session.id;
 
     const scope = await getTrainerScope(trainerId);
     if (!scope) {

@@ -1,3 +1,5 @@
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
@@ -11,6 +13,9 @@ interface RouteParams {
 // PUT /api/trainer/school/exams/[examId]/grade
 export async function PUT(req: NextRequest, { params }: RouteParams) {
     try {
+        const session = await requireTrainer(req);
+        if (isErrorResponse(session)) return session;
+
         const { examId } = await params;
         const body = await req.json();
         const { points, maxPoints } = body;
@@ -39,6 +44,9 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (!exam) {
             return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
         }
+
+        const access = await requireTraineeAccess(session, String(exam.traineeId));
+        if (isErrorResponse(access)) return access;
 
         const organizationId = await getUserOrgId(String(exam.traineeId));
 

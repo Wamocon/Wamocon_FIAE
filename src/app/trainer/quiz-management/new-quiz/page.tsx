@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,7 +41,7 @@ export default function NewQuizPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/trainer/content?limit=999', {
+        const res = await authFetch('/api/trainer/content?limit=999', {
           cache: 'no-store',
         });
         if (!res.ok) throw new Error(t('quiz.form.loadModulesError'));
@@ -87,7 +88,7 @@ export default function NewQuizPage() {
         module_id: moduleId || undefined,
         lesson_id: lessonId || undefined,
       };
-      const res = await fetch('/api/trainer/quizzes', {
+      const res = await authFetch('/api/trainer/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

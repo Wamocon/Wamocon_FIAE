@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -93,8 +94,7 @@ export function ContentManagement() {
       if (searchTerm.trim()) params.set('q', searchTerm.trim());
       if (selectedYear) params.set('year', selectedYear);
       if (selectedExamPart) params.set('examPart', selectedExamPart);
-      params.set('trainerProfileId', profile.id);
-      const res = await fetch(`/api/trainer/courses?${params.toString()}`, {
+      const res = await authFetch(`/api/trainer/courses?${params.toString()}`, {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Failed to load content');
@@ -121,7 +121,7 @@ export function ContentManagement() {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainer/profiles?role=TRAINEE&q=${encodeURIComponent(q)}`,
           { signal: controller.signal, cache: 'no-store' }
         );
@@ -174,8 +174,8 @@ export function ContentManagement() {
     try {
       for (const courseId of assignCourseIds) {
         for (const trainee of selectedTrainees) {
-          const res = await fetch(
-            `/api/trainer/courses/${courseId}/members?trainerId=${profile.id}`,
+          const res = await authFetch(
+            `/api/trainer/courses/${courseId}/members`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -467,8 +467,8 @@ export function ContentManagement() {
                       const prevCourses = courses;
                       setCourses(prev => prev.filter(c => c.id !== course.id));
                       try {
-                        const res = await fetch(
-                          `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
+                        const res = await authFetch(
+                          `/api/trainer/courses/${course.id}`,
                           { method: 'DELETE' }
                         );
                         if (!res.ok) throw new Error(t('content.error.delete'));
@@ -579,8 +579,8 @@ export function ContentManagement() {
                         const prevCourses = courses;
                         setCourses(prev => prev.filter(c => c.id !== course.id));
                         try {
-                          const res = await fetch(
-                            `/api/trainer/courses/${course.id}?trainerId=${profile?.id || ''}`,
+                          const res = await authFetch(
+                            `/api/trainer/courses/${course.id}`,
                             { method: 'DELETE' }
                           );
                           if (!res.ok) throw new Error(t('content.error.delete'));
@@ -1103,8 +1103,8 @@ export function ContentManagement() {
                     setEnSubmitting(true);
                     try {
                       // Create Lesson (active)
-                      const res = await fetch(
-                        `/api/trainer/courses/${activeCourseId}/enablers?trainerId=${profile.id}`,
+                      const res = await authFetch(
+                        `/api/trainer/courses/${activeCourseId}/enablers`,
                         {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -1132,14 +1132,13 @@ export function ContentManagement() {
 
                       // Create quiz if defined
                       if (cleaned.length) {
-                        const rq = await fetch(
+                        const rq = await authFetch(
                           `/api/trainer/enablers/${enablerId}/quiz`,
                           {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                               title: `Quiz: ${enTitle.trim()}`,
-                              createdById: profile.id,
                               questions: cleaned,
                             }),
                           }
@@ -1149,8 +1148,8 @@ export function ContentManagement() {
                       }
 
                       // Refresh course list
-                      const r = await fetch(
-                        `/api/trainer/courses?trainerProfileId=${profile.id}&year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`
+                      const r = await authFetch(
+                        `/api/trainer/courses?year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`
                       );
                       const fresh = await r.json();
                       setCourses(fresh.courses || []);
@@ -1283,8 +1282,8 @@ export function ContentManagement() {
                     }
                     setUcSubmitting(true);
                     try {
-                      const res = await fetch(
-                        `/api/trainer/courses/${activeCourseId}/use-cases?trainerId=${profile.id}`,
+                      const res = await authFetch(
+                        `/api/trainer/courses/${activeCourseId}/use-cases`,
                         {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -1303,8 +1302,8 @@ export function ContentManagement() {
                         throw new Error(t('content.error.createUseCase'));
 
                       // Refresh list
-                      const r = await fetch(
-                        `/api/trainer/courses?trainerProfileId=${profile.id}&year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`
+                      const r = await authFetch(
+                        `/api/trainer/courses?year=${selectedYear}&q=${encodeURIComponent(searchTerm)}`
                       );
                       const fresh = await r.json();
                       setCourses(fresh.courses || []);

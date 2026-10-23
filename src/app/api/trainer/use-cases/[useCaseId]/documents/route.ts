@@ -1,10 +1,12 @@
 'use strict';
 
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { contentDocuments, useCases } from '@/db/migrations/schemas/schema';
-import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET documents for a use case
 export async function GET(
@@ -12,6 +14,9 @@ export async function GET(
   { params }: { params: Promise<{ useCaseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { useCaseId } = await params;
 
     // Verify use case exists
@@ -49,13 +54,13 @@ export async function POST(
   { params }: { params: Promise<{ useCaseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     // Verify use case exists
     const [useCase] = await db
@@ -70,12 +75,6 @@ export async function POST(
     }
 
     // Shared curriculum: any valid trainer can upload documents
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     const body = await req.json();
     const {
@@ -165,14 +164,14 @@ export async function DELETE(
   { params }: { params: Promise<{ useCaseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { useCaseId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
     const documentId = searchParams.get('documentId');
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
     if (!documentId) {
       return NextResponse.json(
         { error: 'Missing documentId' },
@@ -193,12 +192,6 @@ export async function DELETE(
     }
 
     // Shared curriculum: any valid trainer can delete documents
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     const [doc] = await db
       .select()
@@ -243,9 +236,7 @@ export async function DELETE(
       const supabaseUrl =
         process.env.SUPABASE_URL_INTERNAL ||
         process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey =
-        process.env.SUPABASE_SERVICE_ROLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const supabaseKey = getSupabaseSecretKey() || getSupabasePublicKey();
 
       if (supabaseUrl && supabaseKey && doc.storageUrl) {
         const supabase = createClient(supabaseUrl, supabaseKey);

@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -60,7 +61,7 @@ export default function LernfeldDetailPage({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/trainer/lernfelder/${id}`, { cache: 'no-store' })
+    authFetch(`/api/trainer/lernfelder/${id}`, { cache: 'no-store' })
       .then(res => {
         if (!res.ok) throw new Error('Not found');
         return res.json();
@@ -83,17 +84,14 @@ export default function LernfeldDetailPage({
     if (!editTitle || !lernfeld) return;
     setSubmitting(true);
     try {
-      const res = await fetch(
-        `/api/trainer/lernfelder/${id}?trainerId=${profile?.id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: editTitle,
-            description: editDescription,
-          }),
-        }
-      );
+      const res = await authFetch(`/api/trainer/lernfelder/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDescription,
+        }),
+      });
       if (res.ok) {
         const data = await res.json();
         setLernfeld(prev => (prev ? { ...prev, ...data.lernfeld } : null));
@@ -109,10 +107,9 @@ export default function LernfeldDetailPage({
   const handleDelete = async () => {
     if (!confirm(t('lernfelder.deleteConfirm'))) return;
     try {
-      const res = await fetch(
-        `/api/trainer/lernfelder/${id}?trainerId=${profile?.id}`,
-        { method: 'DELETE' }
-      );
+      const res = await authFetch(`/api/trainer/lernfelder/${id}`, {
+        method: 'DELETE',
+      });
       if (res.ok) {
         router.push('/trainer/school');
       }

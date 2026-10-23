@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../../../helpers/renderWithProviders';
 import TraineeDashboard from '@/components/dashboard/TraineeDashboard';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,7 +63,7 @@ describe('TraineeDashboard', () => {
 
     it('shows loading state initially', async () => {
         (global.fetch as jest.Mock).mockImplementation(() => new Promise(() => { }));
-        render(<TraineeDashboard />);
+        renderWithProviders(<TraineeDashboard />);
         // Needs waitFor because component might mount with loading false initially or effect runs
         await waitFor(() => {
             expect(screen.getByText('Mein Lernpfad')).toBeInTheDocument();
@@ -75,7 +76,7 @@ describe('TraineeDashboard', () => {
             json: async () => mockDashboardData
         });
 
-        render(<TraineeDashboard />);
+        renderWithProviders(<TraineeDashboard />);
 
         await waitFor(() => {
             expect(screen.getByText('Next Lesson')).toBeInTheDocument();
@@ -88,7 +89,7 @@ describe('TraineeDashboard', () => {
             json: async () => mockDashboardData
         });
 
-        render(<TraineeDashboard />);
+        renderWithProviders(<TraineeDashboard />);
 
         await waitFor(() => {
             const nextLessonBtn = screen.getByText('Next Lesson');
