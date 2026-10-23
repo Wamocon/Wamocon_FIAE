@@ -18,6 +18,7 @@ import {
   uniqueIndex,
   foreignKey,
   smallint,
+  date,
 } from 'drizzle-orm/pg-core';
 
 // --- SUPABASE AUTH HELPER ---
@@ -35,6 +36,9 @@ export const userRole = pgEnum('user_role', [
   'TEMP_ADMIN',
   'TRAINER',
   'TRAINEE',
+  // Platform owner admin (ADMIN of the platform owner organization after the
+  // 20261020001600 backfill). Added by 20261020001500.
+  'SUPER_ADMIN',
 ]);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
 export const quizType = pgEnum('quiz_type', ['LESSON', 'GLOBAL']);
@@ -160,6 +164,17 @@ export const trainingCatalogs = pgTable(
     description: text('description'),
     durationYears: integer('duration_years').notNull().default(3),
     isActive: boolean('is_active').notNull().default(false),
+    // Informational occupation key and regulation version (for example 2025)
+    occupationCode: text('occupation_code'),
+    regulationVersion: text('regulation_version'),
+    // Number of elective components a trainee picks (KfBM: 2 of 9)
+    electivePickCount: integer('elective_pick_count').notNull().default(0),
+    // Catalog configuration. Documented keys and validation:
+    // src/lib/catalog/settings.ts
+    settings: jsonb('settings')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at')
       .defaultNow()
@@ -169,6 +184,29 @@ export const trainingCatalogs = pgTable(
     durationYearsCheck: check(
       'training_catalogs_duration_years_check',
       sql`${table.durationYears} > 0`
+    ),
+    occupationRegulationUnique: unique(
+      'training_catalogs_occupation_regulation_unique'
+    ).on(table.occupationCode, table.regulationVersion),
+    electivePickCountCheck: check(
+      'training_catalogs_elective_pick_count_check',
+      sql`${table.electivePickCount} >= 0`
+    ),
+    settingsObjectCheck: check(
+      'training_catalogs_settings_object_check',
+      sql`jsonb_typeof(${table.settings}) = 'object'`
+    ),
+    settingsThresholdCheck: check(
+      'training_catalogs_settings_threshold_check',
+      sql`${table.settings} -> 'shortening_threshold' is null or jsonb_typeof(${table.settings} -> 'shortening_threshold') = 'number'`
+    ),
+    settingsSchoolOrgCheck: check(
+      'training_catalogs_settings_school_org_check',
+      sql`${table.settings} ->> 'school_organization' is null or ${table.settings} ->> 'school_organization' in ('block', 'weekdays')`
+    ),
+    settingsPhaseMonthsCheck: check(
+      'training_catalogs_settings_phase_months_check',
+      sql`${table.settings} -> 'phase_months' is null or (jsonb_typeof(${table.settings} -> 'phase_months') = 'array' and jsonb_array_length(${table.settings} -> 'phase_months') = 2)`
     ),
   })
 );
@@ -1395,6 +1433,10 @@ export const trainingComponents = pgTable(
     // Training phase 1 or 2; NULL = integrative (whole training). Backfilled
     // from trainingYear (1 -> 1, 2 -> 2, 3 and NULL -> NULL).
     phase: smallint('phase'),
+    // pflicht = compulsory, wahl = elective, integrativ = whole training
+    kind: text('kind', { enum: ['pflicht', 'wahl', 'integrativ'] })
+      .notNull()
+      .default('pflicht'),
     orderIndex: integer('order_index').notNull().default(0),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
@@ -1402,6 +1444,14 @@ export const trainingComponents = pgTable(
     phaseCheck: check(
       'training_components_phase_check',
       sql`${table.phase} is null or ${table.phase} in (1, 2)`
+    ),
+    kindCheck: check(
+      'training_components_kind_check',
+      sql`${table.kind} in ('pflicht', 'wahl', 'integrativ')`
+    ),
+    integrativePhaseCheck: check(
+      'training_components_integrative_phase_check',
+      sql`${table.kind} <> 'integrativ' or ${table.phase} is null`
     ),
     catalogCodeUnique: unique('training_components_catalog_code_unique').on(
       table.trainingCatalogId,
@@ -1412,6 +1462,119 @@ export const trainingComponents = pgTable(
       table.id,
       table.trainingCatalogId
     ),
+  })
+);
+
+// === ORGANIZATION CATALOGS ===
+// Which training catalogs (occupations) an organization may use. Existing
+// organizations are enabled for FIAE; new organizations get the FIAE row from
+// a database trigger.
+export const organizationCatalogs = pgTable(
+  'organization_catalogs',
+  {
+    organizationId: uuid('organization_id').notNull(),
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    isEnabled: boolean('is_enabled').notNull().default(true),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    pk: primaryKey({
+      name: 'organization_catalogs_organization_id_training_catalog_id_pk',
+      columns: [table.organizationId, table.trainingCatalogId],
+    }),
+    organizationFk: foreignKey({
+      name: 'organization_catalogs_organization_id_organizations_id_fk',
+      columns: [table.organizationId],
+      foreignColumns: [organizations.id],
+    }).onDelete('cascade'),
+    trainingCatalogFk: foreignKey({
+      name: 'organization_catalogs_training_catalog_id_fk',
+      columns: [table.trainingCatalogId],
+      foreignColumns: [trainingCatalogs.id],
+    }).onDelete('restrict'),
+  })
+);
+
+// === TRAINEE ENROLLMENTS ===
+// A trainee has exactly one occupation per enrollment (one row per trainee and
+// catalog). profiles.start_of_training_date / ausbildung_duration_years stay
+// the source of truth for the running app until the app switches over.
+export const traineeEnrollments = pgTable(
+  'trainee_enrollments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    traineeId: uuid('trainee_id').notNull(),
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    startDate: date('start_date', { mode: 'string' }),
+    durationYears: integer('duration_years').notNull().default(3), // 2 or 3
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    traineeFk: foreignKey({
+      name: 'trainee_enrollments_trainee_id_profiles_id_fk',
+      columns: [table.traineeId],
+      foreignColumns: [profiles.id],
+    }).onDelete('cascade'),
+    trainingCatalogFk: foreignKey({
+      name: 'trainee_enrollments_training_catalog_id_training_catalogs_id_fk',
+      columns: [table.trainingCatalogId],
+      foreignColumns: [trainingCatalogs.id],
+    }).onDelete('restrict'),
+    traineeCatalogUnique: unique(
+      'trainee_enrollments_trainee_catalog_unique'
+    ).on(table.traineeId, table.trainingCatalogId),
+    // Target of composite foreign keys (elective choices)
+    idCatalogUnique: unique('trainee_enrollments_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
+    durationYearsCheck: check(
+      'trainee_enrollments_duration_years_check',
+      sql`${table.durationYears} in (2, 3)`
+    ),
+  })
+);
+
+// === TRAINEE ELECTIVE CHOICES ===
+// Elective components (kind = wahl) a trainee picked for an enrollment. A
+// deferred constraint trigger keeps the number of picks at or below
+// training_catalogs.elective_pick_count and rejects non-elective components.
+// trainingCatalogId is derived from the enrollment by a database trigger.
+export const traineeElectiveChoices = pgTable(
+  'trainee_elective_choices',
+  {
+    enrollmentId: uuid('enrollment_id').notNull(),
+    componentId: uuid('component_id').notNull(),
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => ({
+    pk: primaryKey({
+      name: 'trainee_elective_choices_enrollment_id_component_id_pk',
+      columns: [table.enrollmentId, table.componentId],
+    }),
+    enrollmentCatalogFk: foreignKey({
+      name: 'trainee_elective_choices_enrollment_catalog_fk',
+      columns: [table.enrollmentId, table.trainingCatalogId],
+      foreignColumns: [
+        traineeEnrollments.id,
+        traineeEnrollments.trainingCatalogId,
+      ],
+    }).onDelete('cascade'),
+    componentCatalogFk: foreignKey({
+      name: 'trainee_elective_choices_component_catalog_fk',
+      columns: [table.componentId, table.trainingCatalogId],
+      foreignColumns: [
+        trainingComponents.id,
+        trainingComponents.trainingCatalogId,
+      ],
+    }).onDelete('restrict'),
   })
 );
 
@@ -1474,6 +1637,9 @@ export const activityReportUseCaseEntries = pgTable(
 export type Organization = typeof organizations.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type TrainingCatalog = typeof trainingCatalogs.$inferSelect;
+export type OrganizationCatalog = typeof organizationCatalogs.$inferSelect;
+export type TraineeEnrollment = typeof traineeEnrollments.$inferSelect;
+export type TraineeElectiveChoice = typeof traineeElectiveChoices.$inferSelect;
 export type Course = typeof courses.$inferSelect;
 export type CourseMember = typeof courseMembers.$inferSelect;
 export type Skill = typeof skills.$inferSelect;
