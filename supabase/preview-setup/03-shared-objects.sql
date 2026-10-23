@@ -12,7 +12,7 @@
 --           in user with a profile in public_preview upload, change and delete
 --           files under preview/<user id>/ in the shared buckets avatar and
 --           content. Production paths are not touched.
---           (3) creates the schema preview_support with one helper function.
+--           (3) adds one helper function to the schema preview_support (created by 01).
 --           Additive. Reversible (see the end of the file).
 --
 -- DESIGN NOTE: the profile check is a function with DYNAMIC SQL, so the storage
@@ -44,8 +44,8 @@ $$;
 -- 2. Helper: does the user have a profile in public_preview? Dynamic SQL on purpose
 --    (no dependency on the table). SECURITY DEFINER with a fixed search_path; only
 --    signed in users may call it, and it answers only about the caller's own id.
+-- the schema preview_support exists since 01-preview-role.sql (wrappers of auth.uid() and friends)
 create schema if not exists preview_support;
-revoke all on schema preview_support from public;
 grant usage on schema preview_support to authenticated;
 
 create or replace function preview_support.has_preview_profile(uid uuid)
