@@ -5,6 +5,7 @@
  * This exports in FK-safe order so data can be imported without violating constraints.
  * 
  * Tables exported (in order):
+ * 0. training_catalogs - Reference list of catalogs (only if the table exists)
  * 1. skills - Standalone skill definitions
  * 2. courses - Course definitions (createdById stored but needs remapping on import)
  * 3. course_skills - Many-to-many course-skill links
@@ -54,6 +55,30 @@ function ensureDir(dirPath: string): void {
   }
 }
 
+/** Column names of a public table (empty set if the table does not exist). */
+async function getTableColumns(tableName: string): Promise<Set<string>> {
+  const rows = (await db.execute(
+    sql.raw(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = '${tableName}'`
+    )
+  )) as unknown as { column_name: string }[];
+  return new Set(Array.from(rows, row => row.column_name));
+}
+
+/**
+ * Select-list suffix (", col1, col2") for those of the wanted columns that
+ * exist in the source database. The catalog columns only exist after the
+ * training catalog migration series (20261020*); older databases are
+ * exported without them and are imported as FIAE.
+ */
+function optionalColumns(available: Set<string>, wanted: string[]): string {
+  return wanted
+    .filter(column => available.has(column))
+    .map(column => `, ${column}`)
+    .join('');
+}
+
 async function exportTable<T>(
   tableName: string,
   query: string,
@@ -96,6 +121,35 @@ async function main() {
     warnings: [],
   };
 
+  // Catalog columns exist only after the training catalog migration series.
+  const columns = {
+    courses: await getTableColumns('courses'),
+    enablers: await getTableColumns('enablers'),
+    use_cases: await getTableColumns('use_cases'),
+    quizzes: await getTableColumns('quizzes'),
+    training_catalogs: await getTableColumns('training_catalogs'),
+  };
+
+  if (!columns.courses.has('training_catalog_id')) {
+    manifest.warnings.push(
+      'Source database has no training catalog columns (migration series 20261020* not applied). All rows are imported as FIAE.'
+    );
+  }
+
+  // 0. Export training catalogs (reference only: the import never creates
+  // catalogs, they come from the migration with fixed ids)
+  if (columns.training_catalogs.size > 0) {
+    await exportTable(
+      'training_catalogs',
+      `SELECT id, code, title, description, duration_years, is_active${optionalColumns(
+        columns.training_catalogs,
+        ['occupation_code', 'regulation_version', 'elective_pick_count', 'settings']
+      )}
+       FROM training_catalogs ORDER BY code`,
+      manifest
+    );
+  }
+
   // 1. Export skills (no FK dependencies)
   await exportTable(
     'skills',
@@ -106,8 +160,11 @@ async function main() {
   // 2. Export courses (store createdById for reference, will need remapping on import)
   await exportTable(
     'courses',
-    `SELECT id, title, description, year, chapter, created_by_id, 
-            is_active, is_published, created_at, updated_at 
+    `SELECT id, title, description, year, chapter, created_by_id,
+            is_active, is_published, created_at, updated_at${optionalColumns(
+              columns.courses,
+              ['training_catalog_id', 'code']
+            )}
      FROM courses ORDER BY year, chapter, title`,
     manifest
   );
@@ -124,8 +181,11 @@ async function main() {
     'enablers',
     `SELECT id, course_id, title, order_index, description_text, ppt_url, 
             video_url, scenario_text, hint_text, scenario_image_url, scenarios,
-            duration_value, duration_unit, is_active, activated_at, 
-            created_at, updated_at 
+            duration_value, duration_unit, is_active, activated_at,
+            created_at, updated_at${optionalColumns(columns.enablers, [
+              'training_catalog_id',
+              'code',
+            ])}
      FROM enablers ORDER BY course_id, order_index`,
     manifest
   );
@@ -135,7 +195,10 @@ async function main() {
     'use_cases',
     `SELECT id, course_id, title, description_text, order_index, 
             duration_value, duration_unit, is_active, activated_at,
-            year, training_stage, lernfelder, created_at, updated_at
+            year, training_stage, lernfelder, created_at, updated_at${optionalColumns(
+              columns.use_cases,
+              ['training_catalog_id', 'code', 'enabler_id']
+            )}
      FROM use_cases ORDER BY course_id, order_index`,
     manifest
   );
@@ -160,8 +223,11 @@ async function main() {
   // 7. Export quizzes (store createdById for reference, will need remapping on import)
   await exportTable(
     'quizzes',
-    `SELECT id, title, quiz_type, created_by_id, is_active, 
-            created_at, updated_at 
+    `SELECT id, title, quiz_type, created_by_id, is_active,
+            created_at, updated_at${optionalColumns(columns.quizzes, [
+              'training_catalog_id',
+              'training_component_id',
+            ])}
      FROM quizzes ORDER BY title`,
     manifest
   );

@@ -5,7 +5,15 @@
  * Uses UPSERT (ON CONFLICT DO UPDATE) for idempotent re-runs.
  * 
  * IMPORTANT: Run this on the TARGET database (set DB_CONNECTION_STRING accordingly)
- * 
+ *
+ * Training catalogs: courses and quizzes keep their training_catalog_id
+ * (rows of older exports are FIAE), courses/enablers/use cases keep their
+ * code, use cases their enabler_id and global quizzes their
+ * training_component_id. The import never creates catalogs or components;
+ * they must exist in the target (catalogs come from the migration series
+ * supabase/migrations/20261020*). Content of a non-FIAE catalog is refused if
+ * the target has no catalog columns.
+ *
  * The --trainer-id parameter is REQUIRED and specifies which trainer profile ID
  * should own the imported courses and quizzes in the target database.
  * 
@@ -98,6 +106,140 @@ function escapeArray(value: string[] | null | undefined): string {
   return `ARRAY[${value.map(v => escapeString(v)).join(',')}]::text[]`;
 }
 
+// --- Training catalog support -------------------------------------------
+// The catalog columns (training_catalog_id, code, enabler_id,
+// training_component_id) exist only after the training catalog migration
+// series (supabase/migrations/20261020*). Older exports and older target
+// databases are handled: missing catalog ids in the export mean FIAE, and
+// target databases without the columns are only accepted for FIAE content.
+
+const FIAE_CATALOG_ID = '00000000-0000-4000-8000-000000000001';
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type TargetColumns = Record<
+  'courses' | 'enablers' | 'use_cases' | 'quizzes',
+  Set<string>
+>;
+
+let targetColumns: TargetColumns = {
+  courses: new Set(),
+  enablers: new Set(),
+  use_cases: new Set(),
+  quizzes: new Set(),
+};
+
+async function getTableColumns(tableName: string): Promise<Set<string>> {
+  const rows = (await db.execute(
+    sql.raw(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = '${tableName}'`
+    )
+  )) as unknown as { column_name: string }[];
+  return new Set(Array.from(rows, row => row.column_name));
+}
+
+interface ExtraColumn {
+  name: string;
+  value: string;
+  updateOnConflict: boolean;
+}
+
+/** SQL fragments for the optional catalog columns of an upsert. */
+function renderExtraColumns(extras: ExtraColumn[]): {
+  insertColumns: string;
+  insertValues: string;
+  updateAssignments: string;
+} {
+  return {
+    insertColumns: extras.map(extra => `, ${extra.name}`).join(''),
+    insertValues: extras.map(extra => `, ${extra.value}`).join(''),
+    updateAssignments: extras
+      .filter(extra => extra.updateOnConflict)
+      .map(extra => `,\n          ${extra.name} = EXCLUDED.${extra.name}`)
+      .join(''),
+  };
+}
+
+function uuidOrNull(value: string | null | undefined): string {
+  if (value === null || value === undefined) return 'NULL';
+  if (!UUID_PATTERN.test(value)) {
+    throw new Error(`invalid uuid in export file: ${value}`);
+  }
+  return `'${value}'::uuid`;
+}
+
+/** Catalog id of an exported row; rows of older exports are FIAE. */
+function catalogIdOf(row: { training_catalog_id?: string | null }): string {
+  return row.training_catalog_id ?? FIAE_CATALOG_ID;
+}
+
+let targetColumnsKnown = true;
+
+async function detectTargetColumns(): Promise<void> {
+  try {
+    targetColumns = {
+      courses: await getTableColumns('courses'),
+      enablers: await getTableColumns('enablers'),
+      use_cases: await getTableColumns('use_cases'),
+      quizzes: await getTableColumns('quizzes'),
+    };
+  } catch (err: any) {
+    if (!DRY_RUN) throw err;
+    targetColumnsKnown = false;
+    console.log(
+      `   ⚠️  Dry run without database access (${err.message}); catalog columns are not checked.`
+    );
+  }
+}
+
+/**
+ * Refuse to import catalog content that the target cannot hold: ids must be
+ * valid, the target needs the catalog columns for non-FIAE content, and every
+ * referenced catalog must exist in the target (the import never creates
+ * catalogs, they come from the migration with fixed ids).
+ */
+async function preflightCatalogs(): Promise<void> {
+  const referenced = new Set<string>();
+  for (const fileName of ['courses.json', 'quizzes.json']) {
+    for (const row of readJsonFile<{ training_catalog_id?: string | null }>(
+      fileName
+    )) {
+      if (row.training_catalog_id) referenced.add(row.training_catalog_id);
+    }
+  }
+
+  for (const catalogId of referenced) {
+    if (!UUID_PATTERN.test(catalogId)) {
+      throw new Error(`invalid training_catalog_id in export: ${catalogId}`);
+    }
+  }
+
+  const foreign = [...referenced].filter(id => id !== FIAE_CATALOG_ID);
+  if (foreign.length === 0 || !targetColumnsKnown) return;
+
+  if (!targetColumns.courses.has('training_catalog_id')) {
+    throw new Error(
+      `The export contains content of other training catalogs (${foreign.join(', ')}) but the target database has no catalog columns. Apply the migration series supabase/migrations/20261020* first.`
+    );
+  }
+
+  const found = (await db.execute(
+    sql.raw(
+      `SELECT id FROM training_catalogs WHERE id IN (${foreign
+        .map(id => `'${id}'`)
+        .join(', ')})`
+    )
+  )) as unknown as { id: string }[];
+  const foundIds = new Set(Array.from(found, row => row.id));
+  const missing = foreign.filter(id => !foundIds.has(id));
+  if (missing.length > 0) {
+    throw new Error(
+      `Training catalogs missing in the target database: ${missing.join(', ')}.`
+    );
+  }
+}
+
 async function importSkills(): Promise<ImportResult> {
   const stats: ImportStats = { inserted: 0, updated: 0, skipped: 0, errors: [] };
   const skills = readJsonFile<{ id: string; name: string }>('skills.json');
@@ -132,11 +274,30 @@ async function importCourses(): Promise<ImportResult> {
 
   for (const course of courses) {
     try {
+      // Catalog columns exist only in migrated target databases. The catalog
+      // of an existing course is never changed by an import.
+      const extras: ExtraColumn[] = [];
+      if (targetColumns.courses.has('training_catalog_id')) {
+        extras.push({
+          name: 'training_catalog_id',
+          value: uuidOrNull(catalogIdOf(course)),
+          updateOnConflict: false,
+        });
+      }
+      if (targetColumns.courses.has('code')) {
+        extras.push({
+          name: 'code',
+          value: escapeString(course.code),
+          updateOnConflict: true,
+        });
+      }
+      const extra = renderExtraColumns(extras);
+
       // Use the provided trainer ID instead of the original created_by_id
       const query = `
         INSERT INTO courses (
           id, title, description, year, chapter, created_by_id,
-          is_active, is_published, created_at, updated_at
+          is_active, is_published, created_at, updated_at${extra.insertColumns}
         )
         VALUES (
           '${course.id}',
@@ -148,7 +309,7 @@ async function importCourses(): Promise<ImportResult> {
           ${escapeBool(course.is_active)},
           ${escapeBool(course.is_published)},
           ${escapeTimestamp(course.created_at)},
-          ${escapeTimestamp(course.updated_at)}
+          ${escapeTimestamp(course.updated_at)}${extra.insertValues}
         )
         ON CONFLICT (id) DO UPDATE SET
           title = EXCLUDED.title,
@@ -157,7 +318,7 @@ async function importCourses(): Promise<ImportResult> {
           chapter = EXCLUDED.chapter,
           is_active = EXCLUDED.is_active,
           is_published = EXCLUDED.is_published,
-          updated_at = NOW()
+          updated_at = NOW()${extra.updateAssignments}
       `;
 
       if (!DRY_RUN) {
@@ -209,12 +370,24 @@ async function importEnablers(): Promise<ImportResult> {
       const isActive = SKIP_ACTIVATE ? false : enabler.is_active;
       const activatedAt = SKIP_ACTIVATE ? null : enabler.activated_at;
 
+      // enablers.training_catalog_id is derived from the course by a database
+      // trigger and is not written here.
+      const extras: ExtraColumn[] = [];
+      if (targetColumns.enablers.has('code')) {
+        extras.push({
+          name: 'code',
+          value: escapeString(enabler.code),
+          updateOnConflict: true,
+        });
+      }
+      const extra = renderExtraColumns(extras);
+
       const query = `
         INSERT INTO enablers (
           id, course_id, title, order_index, description_text,
           ppt_url, video_url,
           duration_value, duration_unit, is_active, activated_at,
-          created_at, updated_at
+          created_at, updated_at${extra.insertColumns}
         )
         VALUES (
           '${enabler.id}',
@@ -224,13 +397,12 @@ async function importEnablers(): Promise<ImportResult> {
           ${escapeString(enabler.description_text)},
           ${escapeString(enabler.ppt_url)},
           ${escapeString(enabler.video_url)},
-          ${escapeString(enabler.video_url)},
           ${escapeInt(enabler.duration_value)},
           ${enabler.duration_unit ? `'${enabler.duration_unit}'` : 'NULL'},
           ${escapeBool(isActive)},
           ${escapeTimestamp(activatedAt)},
           ${escapeTimestamp(enabler.created_at)},
-          ${escapeTimestamp(enabler.updated_at)}
+          ${escapeTimestamp(enabler.updated_at)}${extra.insertValues}
         )
         ON CONFLICT (id) DO UPDATE SET
           title = EXCLUDED.title,
@@ -238,12 +410,11 @@ async function importEnablers(): Promise<ImportResult> {
           description_text = EXCLUDED.description_text,
           ppt_url = EXCLUDED.ppt_url,
           video_url = EXCLUDED.video_url,
-          video_url = EXCLUDED.video_url,
           duration_value = EXCLUDED.duration_value,
           duration_unit = EXCLUDED.duration_unit,
           is_active = EXCLUDED.is_active,
           activated_at = EXCLUDED.activated_at,
-          updated_at = NOW()
+          updated_at = NOW()${extra.updateAssignments}
       `;
 
       if (!DRY_RUN) {
@@ -269,11 +440,31 @@ async function importUseCases(): Promise<ImportResult> {
       const isActive = SKIP_ACTIVATE ? false : uc.is_active;
       const activatedAt = SKIP_ACTIVATE ? null : uc.activated_at;
 
+      // use_cases.training_catalog_id is derived from the course by a database
+      // trigger. enabler_id (1:1 link, must be in the same course) is written
+      // explicitly; imported enablers come first in the import order.
+      const extras: ExtraColumn[] = [];
+      if (targetColumns.use_cases.has('code')) {
+        extras.push({
+          name: 'code',
+          value: escapeString(uc.code),
+          updateOnConflict: true,
+        });
+      }
+      if (targetColumns.use_cases.has('enabler_id')) {
+        extras.push({
+          name: 'enabler_id',
+          value: uuidOrNull(uc.enabler_id),
+          updateOnConflict: true,
+        });
+      }
+      const extra = renderExtraColumns(extras);
+
       const query = `
         INSERT INTO use_cases (
           id, course_id, title, description_text, order_index,
           duration_value, duration_unit, is_active, activated_at,
-          year, training_stage, lernfelder, created_at, updated_at
+          year, training_stage, lernfelder, created_at, updated_at${extra.insertColumns}
         )
         VALUES (
           '${uc.id}',
@@ -289,7 +480,7 @@ async function importUseCases(): Promise<ImportResult> {
           ${escapeInt(uc.training_stage)},
           ${uc.lernfelder ? escapeArray(uc.lernfelder) : 'NULL'},
           ${escapeTimestamp(uc.created_at)},
-          ${escapeTimestamp(uc.updated_at)}
+          ${escapeTimestamp(uc.updated_at)}${extra.insertValues}
         )
         ON CONFLICT (id) DO UPDATE SET
           title = EXCLUDED.title,
@@ -302,7 +493,7 @@ async function importUseCases(): Promise<ImportResult> {
           year = EXCLUDED.year,
           training_stage = EXCLUDED.training_stage,
           lernfelder = EXCLUDED.lernfelder,
-          updated_at = NOW()
+          updated_at = NOW()${extra.updateAssignments}
       `;
 
       if (!DRY_RUN) {
@@ -392,10 +583,29 @@ async function importQuizzes(): Promise<ImportResult> {
 
   for (const quiz of quizzes) {
     try {
+      // Catalog and component binding of global quizzes (migrated targets
+      // only). The component must already exist in the target database.
+      const extras: ExtraColumn[] = [];
+      if (targetColumns.quizzes.has('training_catalog_id')) {
+        extras.push({
+          name: 'training_catalog_id',
+          value: uuidOrNull(catalogIdOf(quiz)),
+          updateOnConflict: false,
+        });
+      }
+      if (targetColumns.quizzes.has('training_component_id')) {
+        extras.push({
+          name: 'training_component_id',
+          value: uuidOrNull(quiz.training_component_id),
+          updateOnConflict: false,
+        });
+      }
+      const extra = renderExtraColumns(extras);
+
       const query = `
         INSERT INTO quizzes (
           id, title, quiz_type, created_by_id, is_active,
-          created_at, updated_at
+          created_at, updated_at${extra.insertColumns}
         )
         VALUES (
           '${quiz.id}',
@@ -404,7 +614,7 @@ async function importQuizzes(): Promise<ImportResult> {
           '${TRAINER_ID}',
           ${escapeBool(quiz.is_active)},
           ${escapeTimestamp(quiz.created_at)},
-          ${escapeTimestamp(quiz.updated_at)}
+          ${escapeTimestamp(quiz.updated_at)}${extra.insertValues}
         )
         ON CONFLICT (id) DO UPDATE SET
           title = EXCLUDED.title,
@@ -615,6 +825,21 @@ async function main() {
       console.error(`❌ Error verifying trainer: ${err.message}`);
       process.exit(1);
     }
+  }
+
+  // Detect the catalog columns of the target and refuse content the target
+  // cannot hold (see preflightCatalogs).
+  try {
+    await detectTargetColumns();
+    await preflightCatalogs();
+    console.log(
+      `   Catalog columns in target: ${
+        targetColumns.courses.has('training_catalog_id') ? 'yes' : 'no (FIAE only)'
+      }\n`
+    );
+  } catch (err: any) {
+    console.error(`❌ Error: ${err.message}`);
+    process.exit(1);
   }
 
   const results: ImportResult[] = [];
