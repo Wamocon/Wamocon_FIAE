@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   SCHEMA_BY_TARGET,
+  SENSITIVE_PLACEHOLDER,
   isPreviewRole,
   maskLines,
   checkDeployEnv,
@@ -90,6 +91,39 @@ test('production with the preview role is refused, with the production role pass
     pinSchema(`DB_CONNECTION_STRING="${PROD_URL}"`, 'public')
   );
   assert.deepEqual(checkDeployEnv({ target: 'production', env: good }), []);
+});
+
+test('preview accepts the Vercel placeholder of a Sensitive variable, the role is left to the application', () => {
+  assert.equal(SENSITIVE_PLACEHOLDER, '[SENSITIVE]');
+  const env = parseEnv(
+    pinSchema(
+      `DB_CONNECTION_STRING="${SENSITIVE_PLACEHOLDER}"`,
+      'public_preview'
+    )
+  );
+  assert.deepEqual(checkDeployEnv({ target: 'preview', env }), []);
+});
+
+test('production never accepts the placeholder: its connection must be readable', () => {
+  const env = parseEnv(
+    pinSchema(`DB_CONNECTION_STRING="${SENSITIVE_PLACEHOLDER}"`, 'public')
+  );
+  const errors = checkDeployEnv({ target: 'production', env });
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0].includes('cannot be parsed'));
+});
+
+test('the placeholder lets nothing else through: a readable wrong role and a wrong schema are still refused', () => {
+  const wrongRole = parseEnv(
+    pinSchema(`DB_CONNECTION_STRING="${PROD_URL}"`, 'public_preview')
+  );
+  assert.equal(checkDeployEnv({ target: 'preview', env: wrongRole }).length, 1);
+  const wrongSchema = parseEnv(
+    `DB_CONNECTION_STRING="${SENSITIVE_PLACEHOLDER}"\nNEXT_PUBLIC_DB_SCHEMA="public"\nSUPABASE_DB_SCHEMA="public"\n`
+  );
+  assert.ok(
+    checkDeployEnv({ target: 'preview', env: wrongSchema }).length >= 1
+  );
 });
 
 test('a missing connection string and an unknown target are errors', () => {
