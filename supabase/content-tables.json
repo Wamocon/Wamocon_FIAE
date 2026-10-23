@@ -1,0 +1,167 @@
+{
+  "$comment": "Allowlist for scripts/db/content-sync.mjs. ONLY training content (curriculum, courses, enablers, use cases, quizzes) is ever synchronised between public_preview and public. Never user data: no profiles, organizations, submissions, progress, certificates, evaluations, notifications, hai_embeddings. The order follows the foreign keys (parents first). key = columns that identify a row across both schemas (stable keys); until the stable code columns exist, the keys marked status=provisional are natural keys. A foreign key column listed in remap is translated through the key of the parent table (the ids differ between the schemas). lookups = tables that are only READ to translate ids (matched by email or slug), their rows are never copied. update: always | newer | never (default newer = only if updated_at in the source is newer). optional=true: the table may be missing in one schema (created by a migration of another branch), it is then skipped with a note.",
+  "version": 1,
+  "lookups": {
+    "profiles": { "matchOn": ["email"], "pk": "id" },
+    "organizations": { "matchOn": ["slug"], "pk": "id" }
+  },
+  "tables": [
+    {
+      "name": "training_catalogs",
+      "key": ["code"],
+      "optional": true,
+      "status": "provisional",
+      "note": "Created by the training catalog migration of another branch (202610200001_training_catalog_curriculum.sql); not in schema.ts on master yet."
+    },
+    {
+      "name": "courses",
+      "key": ["title", "year", "chapter"],
+      "status": "provisional",
+      "note": "No stable code column yet; replace the key by [code] once it exists.",
+      "remap": {
+        "created_by_id": {
+          "table": "profiles",
+          "onMissing": "owner"
+        },
+        "training_catalog_id": {
+          "table": "training_catalogs",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "enablers",
+      "key": ["course_id", "title"],
+      "status": "provisional",
+      "remap": {
+        "course_id": { "table": "courses", "onMissing": "skip" }
+      }
+    },
+    {
+      "name": "use_cases",
+      "key": ["course_id", "title"],
+      "status": "provisional",
+      "remap": {
+        "course_id": { "table": "courses", "onMissing": "skip" }
+      }
+    },
+    {
+      "name": "content_documents",
+      "key": ["title", "file_name", "document_type"],
+      "status": "provisional",
+      "note": "Metadata rows only (no file bytes, storage objects are shared). is_indexed_by_hai is not copied, hai_embeddings is never synchronised. Files uploaded from Preview live under the storage prefix preview/ and keep that path.",
+      "exclude": ["is_indexed_by_hai"],
+      "remap": {
+        "enabler_id": { "table": "enablers", "onMissing": "skip" },
+        "use_case_id": { "table": "use_cases", "onMissing": "skip" },
+        "course_id": { "table": "courses", "onMissing": "skip" },
+        "organization_id": { "table": "organizations", "onMissing": "null" },
+        "uploaded_by_id": { "table": "profiles", "onMissing": "null" }
+      }
+    },
+    {
+      "name": "quizzes",
+      "key": ["title", "quiz_type"],
+      "status": "provisional",
+      "remap": {
+        "created_by_id": { "table": "profiles", "onMissing": "owner" }
+      }
+    },
+    {
+      "name": "enabler_quizzes",
+      "key": ["enabler_id"],
+      "status": "provisional",
+      "remap": {
+        "enabler_id": { "table": "enablers", "onMissing": "skip" },
+        "quiz_id": { "table": "quizzes", "onMissing": "skip" }
+      }
+    },
+    {
+      "name": "enabler_quiz_links",
+      "key": ["enabler_id", "difficulty"],
+      "status": "provisional",
+      "remap": {
+        "enabler_id": { "table": "enablers", "onMissing": "skip" },
+        "quiz_id": { "table": "quizzes", "onMissing": "skip" }
+      }
+    },
+    {
+      "name": "questions",
+      "key": ["quiz_id", "question_text"],
+      "status": "provisional",
+      "remap": {
+        "quiz_id": { "table": "quizzes", "onMissing": "skip" }
+      }
+    },
+    {
+      "name": "options",
+      "key": ["question_id", "option_text"],
+      "status": "provisional",
+      "remap": {
+        "question_id": { "table": "questions", "onMissing": "skip" }
+      }
+    },
+    {
+      "name": "lernfelder",
+      "key": ["code"],
+      "status": "provisional",
+      "note": "schema.ts defines pgTable('lernfelder') twice (lernfelder with code, lernfelderSchema with label). The first definition (code) is assumed."
+    },
+    {
+      "name": "lernfeld_mappings",
+      "key": ["lernfeld_id", "enabler_id", "use_case_id"],
+      "status": "provisional",
+      "remap": {
+        "lernfeld_id": { "table": "lernfelder", "onMissing": "skip" },
+        "enabler_id": { "table": "enablers", "onMissing": "skip" },
+        "use_case_id": { "table": "use_cases", "onMissing": "skip" }
+      }
+    },
+    {
+      "name": "training_components",
+      "key": ["code"],
+      "status": "provisional",
+      "note": "The training catalog migration changes the unique constraint to (training_catalog_id, code); then set the key to [training_catalog_id, code].",
+      "remap": {
+        "training_catalog_id": {
+          "table": "training_catalogs",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "training_use_cases",
+      "key": ["component_id", "letter"],
+      "status": "provisional",
+      "remap": {
+        "component_id": { "table": "training_components", "onMissing": "skip" }
+      }
+    },
+    {
+      "name": "training_catalog_learning_fields",
+      "key": ["training_catalog_id", "code"],
+      "optional": true,
+      "status": "provisional",
+      "remap": {
+        "training_catalog_id": {
+          "table": "training_catalogs",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "training_catalog_content_mappings",
+      "key": ["learning_field_id", "enabler_id", "use_case_id"],
+      "optional": true,
+      "status": "provisional",
+      "remap": {
+        "learning_field_id": {
+          "table": "training_catalog_learning_fields",
+          "onMissing": "skip"
+        },
+        "enabler_id": { "table": "enablers", "onMissing": "skip" },
+        "use_case_id": { "table": "use_cases", "onMissing": "skip" }
+      }
+    }
+  ]
+}
