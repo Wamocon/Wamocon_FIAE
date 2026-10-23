@@ -2056,5 +2056,20 @@
   "admin.users.deleteFailed": "Benutzer konnte nicht gelöscht werden",
 
   "common.delete": "Löschen",
-  "common.confirmDelete": "Löschen bestätigen"
+  "common.confirmDelete": "Löschen bestätigen",
+
+  "catalogs.title": "Ausbildungsberufe",
+  "catalogs.subtitle": "Wählen Sie Ihren Beruf. Die Plattform zeigt Inhalte, Phasen und Regeln passend zu Ihrer Ausbildung.",
+  "catalogs.loading": "Die Berufe werden geladen",
+  "catalogs.empty": "Zurzeit sind keine Ausbildungsberufe freigeschaltet.",
+  "catalogs.error": "Die Berufe konnten nicht geladen werden. Bitte versuchen Sie es später erneut.",
+  "catalogs.retry": "Erneut versuchen",
+  "catalogs.duration": "{years} Jahre Ausbildungsdauer",
+  "catalogs.phases": "Phasen: {first} und {second} Monate",
+  "catalogs.school.block": "Berufsschule im Blockunterricht",
+  "catalogs.school.weekdays": "Berufsschule an festen Wochentagen",
+  "catalogs.regulation": "Ordnungsfassung {version}",
+  "catalogs.signIn": "Zur Anmeldung",
+  "catalogs.backHome": "Zur Startseite",
+  "catalogs.listLabel": "Verfügbare Ausbildungsberufe"
 }

@@ -2054,5 +2054,20 @@
   "admin.users.userDeleted": "User deleted",
   "admin.users.deleteFailed": "Failed to delete user",
 
-  "common.confirmDelete": "Confirm Delete"
+  "common.confirmDelete": "Confirm Delete",
+
+  "catalogs.title": "Training occupations",
+  "catalogs.subtitle": "Choose your occupation. The platform shows content, phases and rules that fit your training.",
+  "catalogs.loading": "Loading the occupations",
+  "catalogs.empty": "No training occupations are available at the moment.",
+  "catalogs.error": "The occupations could not be loaded. Please try again later.",
+  "catalogs.retry": "Try again",
+  "catalogs.duration": "{years} years of training",
+  "catalogs.phases": "Phases: {first} and {second} months",
+  "catalogs.school.block": "Vocational school in blocks",
+  "catalogs.school.weekdays": "Vocational school on fixed weekdays",
+  "catalogs.regulation": "Regulation version {version}",
+  "catalogs.signIn": "Go to sign in",
+  "catalogs.backHome": "Back to home",
+  "catalogs.listLabel": "Available training occupations"
 }
