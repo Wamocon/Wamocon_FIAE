@@ -41,7 +41,12 @@ angewendet, nur auf einer lokalen Wegwerf-Datenbank geprüft (siehe unten).
   dem App-Release angewendet werden darf.
 - Zugriffsschutz: Alle Policies der Katalogtabellen und neuen Tabellen gelten nur
   für `authenticated`. Kein anonymes Lesen, keine Policy mit `USING (true)` für
-  public oder anon.
+  public oder anon. Katalog, Lernfelder und Zuordnungen sind nur für aktive,
+  für die eigene Organisation freigegebene Kataloge lesbar. Die Tabellen
+  `organization_catalogs`, `trainee_enrollments` und `trainee_elective_choices`
+  sind für die API-Rollen nur lesbar (kein INSERT, UPDATE, DELETE, TRUNCATE), die
+  Altbestände der Lernfelder sind gesperrt. TRUNCATE ist auf den Katalogtabellen
+  für authenticated entzogen.
 - Seed (`seed-training-data.ts`, `seed-lernfelder.ts`) sowie Export und Import der
   Inhalte tragen die Katalogspalten. Der Seed löscht nur FIAE-Daten und verschluckt
   keine Fehler mehr.
@@ -97,7 +102,15 @@ angewendet, nur auf einer lokalen Wegwerf-Datenbank geprüft (siehe unten).
 - Verhaltensänderungen: Wiederholte Lernfeld-Labels werden abgelehnt (bei der
   Migration mit dem Suffix "#2" versehen); das Löschen eines Enablers oder Use Cases
   entfernt dessen Lernfeld-Zuordnung; Lesezugriff auf Katalog- und Lernfeldtabellen
-  nur für angemeldete Benutzer.
+  nur für angemeldete Benutzer mit freigegebenem, aktivem Katalog; ein doppeltes
+  Label in der Lernfeld-Route ergibt 409.
+- Reihenfolge: PR 89 (`20261023200000`, Spaltenrechte auf profiles) muss vor
+  `20261020001500` angewendet sein; die Dateien prüfen das. Das SUPER_ADMIN-Gate
+  der Datei `20261024000000` ist technisch erzwungen (PR 89 plus Freigabe
+  per `comment on type public.user_role`), die Datei bricht sonst ab.
+- Rollenprüfungen der App (Server und Browser) laufen über
+  `src/lib/auth/roles.ts`, SUPER_ADMIN hat überall mindestens die Rechte von ADMIN.
+- Hinweis: "Keine Produktivdaten geändert" gilt nur ohne Anwendung der Reihe.
 - Migrationsreihenfolge und Rollout: siehe Runbook. Die Datei 20261024000000
   (SUPER_ADMIN-Backfill) erst nach dem passenden App-Release.
 

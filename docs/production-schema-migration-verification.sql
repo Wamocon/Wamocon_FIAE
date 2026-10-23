@@ -402,6 +402,19 @@ where schemaname = 'public'
   )
   and (roles && array['public', 'anon']::name[]);
 
+-- C8b. Postcheck: the API roles cannot write the enrollment tables and cannot
+-- truncate the catalog tables (every value must be false).
+select
+  has_table_privilege('authenticated', 'public.trainee_enrollments', 'INSERT') as enroll_insert,
+  has_table_privilege('authenticated', 'public.trainee_enrollments', 'UPDATE') as enroll_update,
+  has_table_privilege('authenticated', 'public.trainee_enrollments', 'DELETE') as enroll_delete,
+  has_table_privilege('authenticated', 'public.trainee_enrollments', 'TRUNCATE') as enroll_truncate,
+  has_table_privilege('authenticated', 'public.trainee_elective_choices', 'INSERT') as choices_insert,
+  has_table_privilege('authenticated', 'public.organization_catalogs', 'INSERT') as org_catalogs_insert,
+  has_table_privilege('authenticated', 'public.training_catalogs', 'TRUNCATE') as catalogs_truncate,
+  has_table_privilege('anon', 'public.lernfelder_legacy', 'SELECT') as anon_reads_legacy,
+  has_table_privilege('anon', 'public.training_catalogs', 'SELECT') as anon_reads_catalogs;
+
 -- C9. Postcheck: enrollments and organization catalogs backfilled.
 select
   (select count(*) from public.trainee_enrollments) as enrollments,

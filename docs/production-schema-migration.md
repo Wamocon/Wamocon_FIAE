@@ -143,14 +143,40 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
 - `enablers.training_catalog_id` und `use_cases.training_catalog_id` werden per
   Trigger aus dem Kurs abgeleitet. Ein Kurs mit Inhalt kann seinen Katalog nicht
   wechseln.
-- Lesezugriff auf die Katalog- und Lernfeldtabellen nur noch für angemeldete
-  Benutzer (Rolle `authenticated`); anonymes Lesen über die Supabase-API
-  entfällt für die View `lernfelder`. Die App ist nicht betroffen
-  (BYPASSRLS-Verbindung, kein Lesen dieser Tabellen mit dem anon-Schlüssel).
+- Lesezugriff auf `training_catalogs`, `training_catalog_learning_fields` und
+  `training_catalog_content_mappings` nur für angemeldete Benutzer (Rolle
+  `authenticated`) und nur für aktive Kataloge, die für die eigene Organisation in
+  `organization_catalogs` freigegeben sind (Funktion
+  `can_read_training_catalog`); der Plattformbesitzer sieht alles. Ein inaktiver
+  Katalog (KfBM vor dem Release) bleibt für Kundenorganisationen unsichtbar.
+  Schreiben dürfen nur Plattformbesitzer; TRUNCATE, REFERENCES und TRIGGER sind
+  für anon und authenticated entzogen (TRUNCATE ignoriert RLS). Die App ist nicht
+  betroffen (BYPASSRLS-Verbindung, kein Lesen mit dem anon-Schlüssel).
+- Die Altbestände `lernfelder_legacy` und `lernfeld_mappings_legacy` sind für
+  anon und authenticated gesperrt (alle Policies entfernt, alle Rechte entzogen),
+  ebenso der anonyme Zugriff auf die Views `lernfelder` und `lernfeld_mappings`.
+  Vorher waren die Altbestände anonym lesbar (`lf_select_all`, `lfm_select_all`).
 - Neue Tabellen `organization_catalogs`, `trainee_enrollments`,
-  `trainee_elective_choices`: RLS an, nur `authenticated`, Lesen mit
-  Organisationsbezug (`get_user_org_id()`), Schreiben Plattform-Owner bzw.
-  Organisation. Keine Policy mit `USING (true)`, kein anonymer Zugriff.
+  `trainee_elective_choices`: RLS an, nur Lesen für `authenticated` mit
+  Organisationsbezug (`get_user_org_id()`). INSERT, UPDATE, DELETE, TRUNCATE,
+  REFERENCES und TRIGGER sind für anon und authenticated entzogen, geschrieben
+  wird nur serverseitig (Rolle postgres bzw. service_role). Keine Policy mit
+  `USING (true)`, kein anonymer Zugriff.
+- Ableitungs-Trigger (Katalog aus Kurs, Lernfeld, Einschreibung) laufen als
+  SECURITY DEFINER mit festem search_path; EXECUTE auf die neuen Funktionen ist
+  für PUBLIC und anon entzogen.
+- Wahlkomponenten: Das Limit gilt auch bei späteren Änderungen. Das Senken von
+  `elective_pick_count` unter bestehende Wahlen und der Wechsel der Art
+  (`kind`) einer gewählten Wahlkomponente werden abgelehnt.
+- Lernfeld-Routen: Ein doppeltes Label ergibt `409` mit klarer Meldung statt
+  `500`; eine Label-Änderung berechnet das Ausbildungsjahr neu; die
+  Reihenfolge-Nummer wird unter einem Advisory-Lock vergeben.
+- Preview: Die Dateien der Reihe wurden mit `scripts/db/preview-rewrite.mjs`
+  (PR 86) umgeschrieben und auf einem Schema `public_preview` einer
+  Wegwerf-Datenbank ausgeführt; Katalog-Prüfungen nutzen
+  `to_regclass('public.<Tabelle>')`, `pg_attribute`, `pg_policy` und
+  `connamespace` statt des Schemawerts als Zeichenkette. Gate und
+  Rollenprüfungen sind mit `-- preview:skip` gerahmt.
 - `trainee_enrollments` ist eine Momentaufnahme der Profile. Maßgeblich bleiben
   bis zur Umstellung der App `profiles.start_of_training_date` und
   `profiles.ausbildung_duration_years`.
