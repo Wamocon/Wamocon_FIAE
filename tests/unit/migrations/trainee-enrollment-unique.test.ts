@@ -170,7 +170,9 @@ describe('trainee enrollment unique index migration: no data is changed', () => 
     expect(choices).toMatch(
       /references public\.trainee_enrollments \(id, training_catalog_id\)/
     );
-    expect(statements).not.toMatch(/trainee_enrollments_trainee_catalog_unique/);
+    expect(statements).not.toMatch(
+      /trainee_enrollments_trainee_catalog_unique/
+    );
     expect(statements).not.toMatch(/trainee_enrollments_id_catalog_unique/);
   });
 });
