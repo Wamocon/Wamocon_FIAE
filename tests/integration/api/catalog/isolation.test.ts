@@ -519,6 +519,60 @@ describe('catalog isolation', () => {
       expect(mock.filters('select', 'courses').params).toContain(FIAE);
     });
 
+    it('occupation separation: a KfBM trainee gets 403 on ?catalog=FIAE', async () => {
+      // The organization has both occupations enabled, the trainee is
+      // enrolled in KfBM only
+      const { mock, mod } = await load('trainee/courses', {
+        profiles: [traineeProfile],
+        organizationCatalogs: both,
+        traineeEnrollments: [
+          { trainingCatalogId: KFBM, startDate: '2026-08-01' },
+        ],
+        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        courses: [],
+      });
+      const res = await mod.GET(
+        req('http://localhost/api/trainee/courses?traineeId=t1&catalog=FIAE')
+      );
+      expect(res.status).toBe(403);
+      // no course query ran for the foreign occupation
+      expect(mock.filters('select', 'courses').sql).toBe('');
+    });
+
+    it('occupation separation: a FIAE trainee in the same organization only sees FIAE', async () => {
+      const { mock, mod } = await load('trainee/courses', {
+        profiles: [traineeProfile],
+        organizationCatalogs: both,
+        traineeEnrollments: [
+          { trainingCatalogId: FIAE, startDate: '2026-08-01' },
+        ],
+        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        courses: [],
+      });
+      const res = await mod.GET(
+        req('http://localhost/api/trainee/courses?traineeId=t1')
+      );
+      expect(res.status).toBe(200);
+      const filter = mock.filters('select', 'courses');
+      expect(filter.params).toContain(FIAE);
+      expect(filter.params).not.toContain(KFBM);
+
+      // asking for the other occupation of the organization is rejected too
+      const other = await load('trainee/courses', {
+        profiles: [traineeProfile],
+        organizationCatalogs: both,
+        traineeEnrollments: [
+          { trainingCatalogId: FIAE, startDate: '2026-08-01' },
+        ],
+        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        courses: [],
+      });
+      const denied = await other.mod.GET(
+        req('http://localhost/api/trainee/courses?traineeId=t1&catalog=KFBM')
+      );
+      expect(denied.status).toBe(403);
+    });
+
     it('an unknown trainee id is rejected (fail closed)', async () => {
       const { mod } = await load('trainee/courses', {
         profiles: [],

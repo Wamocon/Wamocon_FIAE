@@ -5,6 +5,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isAdminRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { CatalogActivationPanel } from '@/components/admin/CatalogActivationPanel';
+import { OrganizationCatalogsEditor } from '@/components/admin/OrganizationCatalogsEditor';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import toast from 'react-hot-toast';
 import {
   Building2,
@@ -59,6 +62,9 @@ const emptyForm: OrgForm = {
 export default function AdminOrganizationsPage() {
   const { profile, user, loading, isAdmin } = useAuth() as any;
   const { t } = useLanguage();
+  const isSuperAdmin = useIsSuperAdmin();
+  // Counts catalog changes, so the editors of all organization cards reload
+  const [catalogVersion, setCatalogVersion] = useState(0);
   const [orgs, setOrgs] = useState<OrgItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -348,6 +354,13 @@ export default function AdminOrganizationsPage() {
         </div>
       )}
 
+      {/* Training occupations (platform admin only) */}
+      {isSuperAdmin && (
+        <CatalogActivationPanel
+          onChanged={() => setCatalogVersion(v => v + 1)}
+        />
+      )}
+
       {/* Org List */}
       {error && <div className="text-sm text-red-500">{error}</div>}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -411,6 +424,14 @@ export default function AdminOrganizationsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Training occupations of the organization (platform admin only) */}
+            {isSuperAdmin && (
+              <OrganizationCatalogsEditor
+                organizationId={org.id}
+                refreshKey={catalogVersion}
+              />
+            )}
 
             {/* Contact */}
             {(org.contactPerson || org.contactEmail) && (
