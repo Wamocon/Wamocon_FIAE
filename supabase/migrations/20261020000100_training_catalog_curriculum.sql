@@ -1,12 +1,30 @@
--- Add an occupation-specific training catalog without changing existing
--- course, content, or training-use-case records.
-begin;
+-- Add an occupation-specific training catalog foundation.
+--
+-- Existing courses and training components are assigned to the FIAE catalog
+-- through a constant column default. PostgreSQL stores that default in the
+-- catalog (no table rewrite, no UPDATE of existing rows), so every existing
+-- row reads as FIAE immediately after this file ran.
+--
+-- This file is part of the KfBM catalog migration series
+-- (20261020000100 ... 20261020001600). It has never been applied to any
+-- database. It must run exactly once; a second run stops in the precheck.
+--
+-- Pipeline notes: no explicit BEGIN/COMMIT (the pipeline wraps each file),
+-- objects are schema-qualified with public., no roles, no extensions.
 
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
 
 do $$
 begin
+  -- ALTER TABLE ... ON DELETE SET NULL (column list) and security_invoker
+  -- views, both used later in this series, need PostgreSQL 15 or newer.
+  if current_setting('server_version_num')::integer < 150000 then
+    raise exception
+      'PostgreSQL 15 or newer is required for the training catalog migration series (found %).',
+      current_setting('server_version');
+  end if;
+
   if to_regclass('public.courses') is null
      or to_regclass('public.training_components') is null
      or to_regclass('public.enablers') is null
@@ -18,6 +36,12 @@ begin
   if to_regprocedure('public.is_platform_owner()') is null then
     raise exception
       'Required RLS helper public.is_platform_owner() is missing.';
+  end if;
+
+  -- Guard against an accidental second run (or a partially applied state).
+  if to_regclass('public.training_catalogs') is not null then
+    raise exception
+      'public.training_catalogs already exists; this migration was already applied. Stop and verify the target schema.';
   end if;
 end $$;
 
@@ -48,17 +72,10 @@ values
     false
   );
 
+-- courses: constant default, no backfill UPDATE needed.
 alter table public.courses
-  add column training_catalog_id uuid;
-
-update public.courses
-set training_catalog_id = '00000000-0000-4000-8000-000000000001'
-where training_catalog_id is null;
-
-alter table public.courses
-  alter column training_catalog_id
-    set default '00000000-0000-4000-8000-000000000001',
-  alter column training_catalog_id set not null,
+  add column training_catalog_id uuid not null
+    default '00000000-0000-4000-8000-000000000001',
   add constraint courses_training_catalog_id_training_catalogs_id_fk
     foreign key (training_catalog_id)
     references public.training_catalogs (id)
@@ -67,24 +84,42 @@ alter table public.courses
 create index courses_training_catalog_id_idx
   on public.courses (training_catalog_id);
 
+-- training_components: constant default, no backfill UPDATE needed.
 alter table public.training_components
-  add column training_catalog_id uuid;
-
-update public.training_components
-set training_catalog_id = '00000000-0000-4000-8000-000000000001'
-where training_catalog_id is null;
-
-alter table public.training_components
-  alter column training_catalog_id
-    set default '00000000-0000-4000-8000-000000000001',
-  alter column training_catalog_id set not null,
+  add column training_catalog_id uuid not null
+    default '00000000-0000-4000-8000-000000000001',
   add constraint training_components_training_catalog_id_training_catalogs_id_fk
     foreign key (training_catalog_id)
     references public.training_catalogs (id)
     on delete restrict;
 
+-- Replace the global unique(code) by unique(training_catalog_id, code). The
+-- old constraint is looked up by definition so a differently named one on the
+-- target database is dropped as well.
+do $$
+declare
+  old_constraint record;
+begin
+  for old_constraint in
+    select c.conname
+    from pg_constraint c
+    where c.conrelid = 'public.training_components'::regclass
+      and c.contype = 'u'
+      and c.conkey = array[(
+        select a.attnum
+        from pg_attribute a
+        where a.attrelid = 'public.training_components'::regclass
+          and a.attname = 'code'
+      )]
+  loop
+    execute format(
+      'alter table public.training_components drop constraint %I',
+      old_constraint.conname
+    );
+  end loop;
+end $$;
+
 alter table public.training_components
-  drop constraint training_components_code_unique,
   add constraint training_components_catalog_code_unique
     unique (training_catalog_id, code);
 
@@ -111,6 +146,8 @@ create table public.training_catalog_learning_fields (
     unique (training_catalog_id, order_index)
 );
 
+-- Constraint names stay below the 63 character identifier limit; a longer
+-- name would be truncated silently and no longer match the Drizzle schema.
 create table public.training_catalog_content_mappings (
   id uuid primary key default gen_random_uuid(),
   learning_field_id uuid not null
@@ -122,9 +159,9 @@ create table public.training_catalog_content_mappings (
   created_at timestamp not null default now(),
   constraint training_catalog_content_mappings_exactly_one_content_check
     check ((enabler_id is not null) <> (use_case_id is not null)),
-  constraint training_catalog_content_mappings_learning_field_enabler_unique
+  constraint training_catalog_content_mappings_lf_enabler_unique
     unique (learning_field_id, enabler_id),
-  constraint training_catalog_content_mappings_learning_field_use_case_unique
+  constraint training_catalog_content_mappings_lf_use_case_unique
     unique (learning_field_id, use_case_id)
 );
 
@@ -160,5 +197,3 @@ comment on table public.training_catalog_learning_fields is
   'Learning fields owned by a training catalog, independent of other occupations using the same codes.';
 comment on table public.training_catalog_content_mappings is
   'Links one catalog learning field to one enabler or use case.';
-
-commit;

@@ -346,11 +346,12 @@ export const trainingCatalogContentMappings = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => ({
+    // Constraint names must stay below the 63 character identifier limit.
     learningFieldEnablerUnique: unique(
-      'training_catalog_content_mappings_learning_field_enabler_unique'
+      'training_catalog_content_mappings_lf_enabler_unique'
     ).on(table.learningFieldId, table.enablerId),
     learningFieldUseCaseUnique: unique(
-      'training_catalog_content_mappings_learning_field_use_case_unique'
+      'training_catalog_content_mappings_lf_use_case_unique'
     ).on(table.learningFieldId, table.useCaseId),
     exactlyOneContentCheck: check(
       'training_catalog_content_mappings_exactly_one_content_check',
