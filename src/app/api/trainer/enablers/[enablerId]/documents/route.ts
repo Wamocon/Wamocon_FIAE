@@ -3,6 +3,7 @@ import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { contentDocuments, enablers } from '@/db/migrations/schemas/schema';
 import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { DB_OPTION } from '@/lib/db-schema';
 
 // GET documents for an enabler
 export async function GET(
@@ -187,7 +188,9 @@ export async function DELETE(
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
       if (supabaseUrl && supabaseKey && doc.storageUrl) {
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        const supabase = createClient(supabaseUrl, supabaseKey, {
+          db: DB_OPTION,
+        });
         // Extract path from URL: https://xxx.supabase.co/storage/v1/object/public/content/userId/file.pdf
         const urlParts = doc.storageUrl.split(
           '/storage/v1/object/public/content/'

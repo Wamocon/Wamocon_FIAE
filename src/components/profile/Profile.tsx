@@ -22,6 +22,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { withStoragePrefix } from '@/lib/db-schema';
 import { FILE_UPLOAD } from '@/lib/constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -201,7 +202,10 @@ export function Profile() {
 
     try {
       setIsUploading(true);
-      const path = `${profile.id}/${Date.now()}_${file.name}`;
+      // Preview uploads go under preview/ in the shared bucket
+      const path = withStoragePrefix(
+        `${profile.id}/${Date.now()}_${file.name}`
+      );
       const { error: uploadError } = await supabase.storage
         .from('avatar')
         .upload(path, file, {

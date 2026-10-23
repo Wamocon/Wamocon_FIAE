@@ -4,6 +4,7 @@ import db from '@/db';
 import { profiles, notifications } from '@/db/migrations/schemas/schema';
 import { and, eq } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { DB_OPTION, signupMetadata } from '@/lib/db-schema';
 
 function deriveNameFromEmail(email: string) {
   const local = (email || '').split('@')[0] || '';
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
+      db: DB_OPTION,
     });
 
     // Create user with admin API (no email confirmation required)
@@ -78,7 +80,8 @@ export async function POST(request: Request) {
         email: email.trim(),
         password,
         email_confirm: true, // Auto-confirm email
-        user_metadata: { full_name, role },
+        // signupMetadata() marks users created from Preview (env=preview) for the auth triggers
+        user_metadata: { full_name, role, ...signupMetadata() },
       });
 
     if (signUpError) {

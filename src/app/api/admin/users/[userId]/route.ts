@@ -4,6 +4,7 @@ import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { verifyAdmin } from '@/lib/auth-helpers';
+import { DB_OPTION } from '@/lib/db-schema';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
@@ -181,6 +182,7 @@ export async function DELETE(
     if (supabaseUrl && serviceRoleKey) {
       const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
+        db: DB_OPTION,
       });
       await supabaseAdmin.auth.admin.deleteUser(userId);
     }

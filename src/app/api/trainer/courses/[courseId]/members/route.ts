@@ -9,11 +9,15 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
+import { DB_OPTION } from '@/lib/db-schema';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient(url, key, {
+    auth: { persistSession: false },
+    db: DB_OPTION,
+  });
 }
 
 /**

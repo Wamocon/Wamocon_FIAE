@@ -13,6 +13,7 @@ import { eq, and } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
 import { profiles, organizations } from '@/db/migrations/schemas/schema';
 import { withDbRetry } from '@/lib/db-retry';
+import { DB_OPTION } from '@/lib/db-schema';
 
 const PRIVILEGED_ROLES = ['ADMIN', 'TEMP_ADMIN', 'TRAINER'] as const;
 const ADMIN_ROLES = ['ADMIN', 'TEMP_ADMIN'] as const;
@@ -31,7 +32,10 @@ export function toHaiRole(role?: string | null): 'TRAINER' | 'TRAINEE' {
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient(url, key, {
+    auth: { persistSession: false },
+    db: DB_OPTION,
+  });
 }
 
 /**

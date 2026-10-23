@@ -12,6 +12,7 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { prefetch } from '@/lib/prefetch';
+import { DB_SCHEMA, signupMetadata } from '@/lib/db-schema';
 import type {
   RealtimeChannel,
   RealtimePostgresChangesPayload,
@@ -387,7 +388,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             'postgres_changes',
             {
               event: 'UPDATE',
-              schema: 'public',
+              schema: DB_SCHEMA,
               table: 'profiles',
               filter: `id=eq.${userId}`,
             },
@@ -730,6 +731,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           full_name: fullName,
           role,
+          // env=preview in Preview, so the auth triggers route the new user
+          ...signupMetadata(),
         },
       },
     });

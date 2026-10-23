@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { DB_OPTION } from '@/lib/db-schema';
 
 // Lazy initialization to avoid build-time errors when env vars are not set
 let _supabase: SupabaseClient | null = null;
@@ -17,7 +18,7 @@ function getSupabaseClient(): SupabaseClient {
     throw new Error('Supabase URL and Anon Key are required');
   }
 
-  _supabase = createClient(supabaseUrl, supabaseAnonKey);
+  _supabase = createClient(supabaseUrl, supabaseAnonKey, { db: DB_OPTION });
   return _supabase;
 }
 
