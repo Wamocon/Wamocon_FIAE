@@ -36,6 +36,12 @@ const mockSupabase: any = {
 
 jest.mock('@/lib/supabase', () => ({ __esModule: true, supabase: mockSupabase }));
 
+// A non-public path makes AuthProvider load the profile (public paths skip it)
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+  usePathname: () => '/trainee/dashboard',
+}));
+
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 function Consumer() {
@@ -61,7 +67,10 @@ describe('AuthContext', () => {
       </AuthProvider>
     );
     await waitFor(() => expect(screen.getByTestId('uid').textContent).toBe('u1'));
-    expect(screen.getByTestId('role').textContent).toBe('trainee');
+    // The profile is loaded asynchronously after the session user is set
+    await waitFor(() =>
+      expect(screen.getByTestId('role').textContent).toBe('trainee')
+    );
   });
 
   it('signOut clears profile and user state', async () => {
@@ -78,8 +87,9 @@ describe('AuthContext', () => {
     expect(screen.getByTestId('role').textContent).toBe('');
   });
 
-  it('signOut error propagates and state may remain unchanged', async () => {
-  mockSupabase.auth.signOut = ((..._args: any[]) => Promise.reject(new Error('fail'))) as any;
+  it('signOut clears local state even if the remote signOut fails', async () => {
+    mockSupabase.auth.signOut = ((..._args: any[]) => Promise.reject(new Error('fail'))) as any;
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const user = userEvent.setup();
     render(
       <AuthProvider>
@@ -88,7 +98,9 @@ describe('AuthContext', () => {
     );
     await waitFor(() => expect(screen.getByTestId('uid').textContent).toBe('u1'));
     await expect(user.click(screen.getByText('logout'))).resolves.toBeUndefined();
-    // Since signOut threw, the context method rejects before clearing state; assert user still present
-    expect(screen.getByTestId('uid').textContent).toBe('u1');
+    // The remote failure is logged, the local session is cleared regardless
+    await waitFor(() => expect(screen.getByTestId('uid').textContent).toBe(''));
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });

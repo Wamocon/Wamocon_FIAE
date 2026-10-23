@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { createTableDb } from '../../../helpers/mockDb';
 
 function makeGet(url: string) {
     return { url } as any;
@@ -20,120 +21,57 @@ describe('API: Trainer Dashboard', () => {
         jest.clearAllMocks();
     });
 
+    it('400 if no trainer id is given', async () => {
+        const { db } = createTableDb();
+        const GET = await importHandlerWithDb(db);
+        const res = await GET(makeGet('http://localhost/api/trainer/dashboard'));
+        expect(res.status).toBe(400);
+    });
+
     it('GET /api/trainer/dashboard returns summary', async () => {
-        // Sequence of queries (TrainerDashboard):
-        // 1. createdCourses
-        // 2. memberCourses
-        // 3. directlyAssigned (profiles)
-        // 4. courseTrainees (courseMembers) -> if courses > 0
-        // 5. extras (profiles) -> if needed (skipped if all covered)
-        // 6. trainerEnablers
-        // 7. completedMap (enablerCompletions)
-        // 8. createdQuizRows
-        // 9. memberQuizRows
-        // 10. pendingQuiz
-        // 11. pendingLessonQuiz
-        // 12. pendingUseCases
-        // 13. pendingEnablers
-        // 14. pendingActivityReports
-        // 15. compRows (trend)
-        // 16. subRows (trend)
-        // 17. trainerCourses (chart)
-        // 18. enablerCounts (chart)
-        // 19. compByCourseAndTrainee (chart)
+        const { db } = createTableDb({
+            // Trainee lookup and the trainer's own org lookup share this table
+            profiles: [
+                { id: 't1', fullName: 'Trainee 1', avatarUrl: null, isActive: true, organizationId: 'org1' },
+                { id: 't2', fullName: 'Trainee 2', avatarUrl: null, isActive: true, organizationId: 'org1' },
+            ],
+            courses: [{ id: 'c1', title: 'Course 1' }],
+            courseMembers: [],
+            enablers: [
+                { id: 'e1', courseId: 'c1', scenarioPdfUrl: null },
+                { id: 'e2', courseId: 'c1', scenarioPdfUrl: null },
+            ],
+            useCases: [],
+            // e2 needs a passed quiz: t1 passed it, t2 did not
+            enablerQuizLinks: [{ enablerId: 'e2', quizId: 'q1' }],
+            quizSubmissions: {
+                sequence: [
+                    [{ traineeId: 't1', quizId: 'q1', score: 80, submittedAt: new Date() }],
+                    [{ c: 1 }], // pending quiz reviews
+                    [{ c: 0 }], // pending lesson quiz reviews
+                ],
+            },
+            enablerSubmissions: { sequence: [[], [{ c: 0 }]] },
+            useCaseSubmissions: [{ c: 0 }],
+            activityReports: [{ c: 0 }],
+            enablerCompletions: [],
+        });
 
-        const sequence: any[] = [
-            // 1. createdCourses
-            [{ id: 'c1' }],
-            // 2. memberCourses
-            [],
-            // 3. directlyAssigned
-            [{ id: 't1', fullName: 'Trainee 1', avatarUrl: null }],
-            // 4. courseTrainees (courseMembers)
-            [{ userId: 't2' }],
-            // 5. extras (profiles for t2) - triggered because t2 is not in directlyAssigned
-            [{ id: 't2', fullName: 'Trainee 2', avatarUrl: null }],
-
-            // 6. trainerEnablers
-            [{ id: 'e1' }, { id: 'e2' }],
-
-            // 7. completedMap (enablerCompletions)
-            [{ traineeId: 't1', c: 1 }, { traineeId: 't2', c: 0 }],
-
-            // 8. createdQuizRows
-            [{ id: 'q1' }],
-            // 9. memberQuizRows
-            [],
-
-            // 10. pendingQuiz
-            [{ c: 1 }],
-            // 11. pendingLessonQuiz
-            [{ c: 0 }],
-            // 12. pendingUseCases
-            [{ c: 0 }],
-            // 13. pendingEnablers
-            [{ c: 0 }],
-            // 14. pendingActivityReports
-            [{ c: 0 }],
-
-            // 15. compRows (trend)
-            [{ at: new Date() }],
-            // 16. subRows (trend)
-            [],
-
-            // 17. trainerCourses
-            [{ id: 'c1', title: 'Course 1' }],
-            // 18. enablerCounts
-            [{ courseId: 'c1', c: 2 }],
-            // 19. compByCourseAndTrainee
-            [{ traineeId: 't1', courseId: 'c1', c: 1 }],
-        ];
-
-        let idx = 0;
-        const mockDb = {
-            select: jest.fn().mockImplementation(() => ({
-                from: () => ({
-                    where: () => {
-                        const ret = sequence[idx++];
-                        if (ret && (ret.groupBy || ret.orderBy)) return ret; // Mock chain handling
-                        return { // Chain support
-                            groupBy: () => ret,
-                            orderBy: () => ret,
-                            innerJoin: () => ({ where: () => ret })
-                        }
-                    },
-                    innerJoin: () => ({
-                        where: () => sequence[idx++]
-                    })
-                }),
-            })),
-        };
-
-        // Chain mock
-        const chain = {
-            select: jest.fn().mockReturnThis(),
-            from: jest.fn().mockReturnThis(),
-            where: jest.fn().mockReturnThis(),
-            and: jest.fn().mockReturnThis(),
-            innerJoin: jest.fn().mockReturnThis(),
-            groupBy: jest.fn().mockReturnThis(),
-            orderBy: jest.fn().mockReturnThis(),
-            then: (resolve: any) => resolve(sequence[idx++])
-        };
-        mockDb.select = jest.fn().mockReturnValue(chain);
-
-        const GET = await importHandlerWithDb(mockDb);
+        const GET = await importHandlerWithDb(db);
         const res = await GET(makeGet('http://localhost/api/trainer/dashboard?trainerAuthId=tr1'));
 
         expect(res.status).toBe(200);
         const body = await res.json();
 
-        expect(body.trainees).toHaveLength(2); // t1, t2
-        // t1 has 1 completion out of 2 enablers = 50%
-        expect(body.trainees.find((t: any) => t.id === 't1').progress).toBe(50);
-        // t2 has 0 = 0%
-        expect(body.trainees.find((t: any) => t.id === 't2').progress).toBe(0);
+        expect(body.trainees).toHaveLength(2);
+        // t1 completed both enablers (quiz passed), t2 only the one without quiz
+        expect(body.trainees.find((t: any) => t.id === 't1').progress).toBe(100);
+        expect(body.trainees.find((t: any) => t.id === 't2').progress).toBe(50);
 
         expect(body.counts.pendingQuiz).toBe(1);
+        expect(body.counts.pendingReviews).toBe(1);
+        expect(body.charts.moduleProgress).toEqual([
+            { name: 'Course 1', completed: 0, inProgress: 0, notStarted: 2 },
+        ]);
     });
 });

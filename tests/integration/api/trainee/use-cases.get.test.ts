@@ -33,6 +33,8 @@ describe('API: GET /api/trainee/use-cases/[useCaseId]', () => {
         { id: 'l1', submissionId: 's2', url: 'https://a', description: 'A' },
         { id: 'l2', submissionId: 's2', url: 'https://b', description: 'B' },
       ],
+      // course title lookup
+      [{ id: 'c1', title: 'Course One' }],
     ];
     let idx = 0;
     const mockDb = {
@@ -45,7 +47,7 @@ describe('API: GET /api/trainee/use-cases/[useCaseId]', () => {
     );
     const body = await (res as any).json();
     expect((res as any).status).toBe(200);
-    expect(body.useCase).toMatchObject({ id: 'u1', title: 'UC', descriptionText: 'Desc', isActive: true });
+    expect(body.useCase).toMatchObject({ id: 'u1', title: 'UC', descriptionText: 'Desc', isActive: true, courseTitle: 'Course One' });
     expect(body.submission).toMatchObject({ id: 's2', submissionText: 'New', status: 'APPROVED' });
     expect(body.submission.links).toHaveLength(2);
   });

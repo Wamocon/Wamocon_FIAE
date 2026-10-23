@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { createTableDb } from '../../../helpers/mockDb';
 
 function makeGet(url: string) {
   return { url } as any;
@@ -27,63 +28,34 @@ describe('API: Trainee Courses', () => {
     jest.clearAllMocks();
   });
 
-  it('GET /api/trainee/courses lists courses for trainee', async () => {
-    // Call order:
-    // 1) courseMembers by trainee -> 2 memberships
-    // 2) courses inArray -> 2 courses
-    // 3) enablers for those courses with orderBy -> 3 enablers
-    const sequence: any[] = [
-      // memberships
-      [
+  it('GET /api/trainee/courses lists courses with strict progress', async () => {
+    const { db } = createTableDb({
+      courseMembers: [
         { userId: 't1', courseId: 'c1' },
         { userId: 't1', courseId: 'c2' },
       ],
-      // courses rows
-      [
+      courses: [
         { id: 'c1', title: 'Course 1', year: 2024, chapter: 'A' },
         { id: 'c2', title: 'Course 2', year: 2025, chapter: 'B' },
       ],
-      // enablers rows (with orderBy)
-      {
-        withOrderBy: true, data: [
-          { id: 'e1', courseId: 'c1', title: 'E1', orderIndex: 1, isActive: true },
-          { id: 'e2', courseId: 'c2', title: 'E2', orderIndex: 1, isActive: true },
-          { id: 'e3', courseId: 'c1', title: 'E3', orderIndex: 2, isActive: true },
-        ]
-      },
-    ];
-    let idx = 0;
-    const mockDb = {
-      select: jest.fn().mockImplementation(() => ({
-        from: () => ({
-          where: () => {
-            const ret = sequence[idx++];
-            if (ret && ret.withOrderBy) {
-              return { orderBy: () => ret.data };
-            }
-            return ret;
-          },
-        }),
-      })),
-    };
+      enablers: [
+        { id: 'e1', courseId: 'c1', scenarioPdfUrl: null },
+        { id: 'e2', courseId: 'c2', scenarioPdfUrl: null },
+        { id: 'e3', courseId: 'c1', scenarioPdfUrl: null },
+      ],
+      // e1 needs a passed quiz, the trainee scored 80, so it counts as done
+      enablerQuizLinks: [{ enablerId: 'e1', quizId: 'q1' }],
+      quizSubmissions: [{ quizId: 'q1', score: 80 }],
+    });
 
-    const GET = await importListHandlerWithDb(mockDb);
+    const GET = await importListHandlerWithDb(db);
     const res = await GET(makeGet('http://localhost/api/trainee/courses?traineeId=t1'));
     const body = await (res as any).json();
     expect((res as any).status).toBe(200);
     expect(body).toEqual({
       courses: [
-        {
-          id: 'c1', title: 'Course 1', year: 2024, chapter: 'A', enablers: [
-            { id: 'e1', title: 'E1' },
-            { id: 'e3', title: 'E3' },
-          ]
-        },
-        {
-          id: 'c2', title: 'Course 2', year: 2025, chapter: 'B', enablers: [
-            { id: 'e2', title: 'E2' },
-          ]
-        },
+        { id: 'c1', title: 'Course 1', year: 2024, chapter: 'A', progress: 100, enablerCount: 2, completedCount: 2 },
+        { id: 'c2', title: 'Course 2', year: 2025, chapter: 'B', progress: 100, enablerCount: 1, completedCount: 1 },
       ],
     });
   });

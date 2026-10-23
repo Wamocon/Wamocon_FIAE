@@ -28,6 +28,33 @@ jest.mock('next/dynamic', () => ({
 	},
 }));
 
+// unstable_cache needs the Next.js incrementalCache request context, which does
+// not exist in unit tests. Run the wrapped function directly instead.
+jest.mock('next/cache', () => ({
+	__esModule: true,
+	unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+	revalidateTag: jest.fn(),
+	revalidatePath: jest.fn(),
+}));
+
+// jsdom does not implement matchMedia, which ThemeContext relies on
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+	Object.defineProperty(window, 'matchMedia', {
+		writable: true,
+		configurable: true,
+		value: (query: string) => ({
+			matches: false,
+			media: query,
+			onchange: null,
+			addListener: jest.fn(),
+			removeListener: jest.fn(),
+			addEventListener: jest.fn(),
+			removeEventListener: jest.fn(),
+			dispatchEvent: jest.fn(),
+		}),
+	});
+}
+
 // Mock process.env
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock-key';
