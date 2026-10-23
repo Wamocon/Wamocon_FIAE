@@ -1,0 +1,180 @@
+# =============================================================================
+# Release to Production: migrate public, sync content, deploy
+# =============================================================================
+# Process step 4: a GitHub release is published (stable releases only, no
+# prereleases, no drafts). Order, enforced by "needs":
+#   guard         the release commit must be part of master (no approval)
+#   migrate       structure migration of public (supabase db push)
+#   content-sync  training content only (supabase/content-tables.json), additive
+#   deploy        Production build of exactly this commit
+#
+# Nothing in this workflow runs for a merge to master. A merge migrates and
+# deploys Preview only (deploy-preview.yml).
+#
+# Protection:
+#   - Environment "Production": set Required reviewers under Settings ->
+#     Environments -> Production (a one-time human setting). GitHub asks per job
+#     that uses the environment, so a release needs up to three approvals
+#     (migrate, content-sync, deploy).
+#   - All jobs build the commit of the release event (github.sha), not a
+#     branch name, so they cannot drift apart.
+#   - Only one release run at a time, a running one is never cancelled (a half
+#     applied migration would be worse). If a later job fails, "Re-run failed
+#     jobs" continues; every step is repeatable.
+#   - The baseline guard stops the run if db push would apply a legacy file again.
+#
+# NOTE: releases created by a workflow with the default GITHUB_TOKEN do NOT
+# start this workflow (GitHub does not trigger workflows from events caused by
+# GITHUB_TOKEN). Publish releases by hand or with a personal token / app.
+#
+# Secrets (environment "Production"): SUPABASE_ACCESS_TOKEN, VERCEL_TOKEN,
+# VERCEL_ORG_ID, VERCEL_PROJECT_ID. Variables: SUPABASE_PROJECT_REF_PROD,
+# CONTENT_SYNC_OWNER_EMAIL (optional, profile that becomes the creator of
+# synchronised courses and quizzes).
+# =============================================================================
+
+name: Release Production
+
+on:
+  release:
+    types: [released]
+
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Release commit is part of master
+    if: github.event.release.prerelease == false && github.event.release.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Release commit must be reachable from master
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git fetch --no-tags origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "::error::The release commit is not part of master. Production releases are made from master only."
+            exit 1
+          fi
+          echo "Release $RELEASE_TAG at $GITHUB_SHA is part of master."
+
+  migrate:
+    name: Migrate public (structure)
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Check migration files
+        run: node scripts/db/migration-check.mjs
+
+      - uses: ./.github/actions/db-setup
+        with:
+          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+
+      - name: Compare ledger and files
+        run: node scripts/db/supabase-retry.mjs migration list --linked
+
+      # pipefail: if the CLI fails (also after the retries), the step fails.
+      - name: Dry run
+        id: dry
+        run: |
+          set -o pipefail
+          node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee dry-run.txt
+          if grep -q "up to date" dry-run.txt; then echo "pending=no" >> "$GITHUB_OUTPUT"; else echo "pending=yes" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Baseline guard
+        run: node scripts/db/baseline-guard.mjs --plan dry-run.txt
+
+      - name: Apply migrations to public
+        if: steps.dry.outputs.pending == 'yes'
+        run: node scripts/db/supabase-retry.mjs db push --linked
+
+      - name: Verify nothing is open any more
+        if: steps.dry.outputs.pending == 'yes'
+        run: |
+          set -o pipefail
+          node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee after.txt
+          grep -q "up to date" after.txt || { echo "::error::Something is still open after applying."; exit 1; }
+
+      - name: Reload the PostgREST schema cache
+        if: steps.dry.outputs.pending == 'yes'
+        run: node scripts/db/supabase-retry.mjs db query --linked "notify pgrst, 'reload schema'"
+
+      - name: Summary
+        if: always()
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          {
+            echo "### Migration public (release $RELEASE_TAG)"
+            echo '```'
+            tail -8 dry-run.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  content-sync:
+    name: Sync training content (public_preview to public)
+    needs: migrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      CONTENT_SYNC_OWNER_EMAIL: ${{ vars.CONTENT_SYNC_OWNER_EMAIL }}
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/db-setup
+        with:
+          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+
+      # Additive, never destructive, allowlist only. See scripts/db/content-sync.mjs.
+      - name: Sync training content
+        run: node scripts/db/content-sync.mjs --linked --apply --direction preview-to-production
+
+  deploy:
+    name: Deploy to Production
+    needs: content-sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Production
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      # The target is fixed to production: environment AND database schema (public).
+      - uses: ./.github/actions/vercel-deploy
+        with:
+          target: production
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}

@@ -1,0 +1,74 @@
+# =============================================================================
+# Composite action: migrate the schema public_preview
+# =============================================================================
+# Steps: check the migration files, show the plan, apply (optional), reload the
+# PostgREST schema cache. The caller job provides SUPABASE_ACCESS_TOKEN as job
+# environment variable and has checked out the repository with fetch-depth 0.
+#
+# Only public_preview is touched. public (Production) is migrated exclusively by
+# the release workflow. Preview migrations of all branches go to the same schema,
+# so the script takes a database lock and the callers use concurrency groups
+# that never cancel a running migration. See docs/release-prozess.md.
+# =============================================================================
+name: Migrate public_preview
+description: Check migration files, plan and apply them to public_preview only
+inputs:
+  project-ref:
+    description: Supabase project reference (repository variable)
+    required: true
+  apply:
+    description: "'true' applies, anything else only shows the plan"
+    required: false
+    default: 'true'
+  compare-with-master:
+    description: "'true' checks the migration files against the merge base with master"
+    required: false
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Check migration files
+      shell: bash
+      env:
+        COMPARE: ${{ inputs.compare-with-master }}
+      run: |
+        if [ "$COMPARE" = "true" ]; then
+          git fetch --no-tags origin master
+          BASE=$(git merge-base HEAD FETCH_HEAD)
+          node scripts/db/migration-check.mjs --base "$BASE"
+        else
+          node scripts/db/migration-check.mjs
+        fi
+        node scripts/db/preview-migrate.mjs check
+
+    - uses: ./.github/actions/db-setup
+      with:
+        project-ref: ${{ inputs.project-ref }}
+
+    - name: Plan for public_preview
+      shell: bash
+      run: node scripts/db/preview-migrate.mjs apply --linked --plan-only | tee plan.txt
+
+    - name: Apply to public_preview
+      if: inputs.apply == 'true'
+      shell: bash
+      run: node scripts/db/preview-migrate.mjs apply --linked | tee applied.txt
+
+    - name: Reload the PostgREST schema cache
+      if: inputs.apply == 'true'
+      shell: bash
+      run: node scripts/db/supabase-retry.mjs db query --linked "notify pgrst, 'reload schema'"
+
+    - name: Summary
+      if: always()
+      shell: bash
+      env:
+        APPLY: ${{ inputs.apply }}
+      run: |
+        {
+          echo "### Migration public_preview"
+          if [ "$APPLY" = "true" ]; then echo "Mode: apply"; else echo "Mode: plan only"; fi
+          echo '```'
+          cat applied.txt 2>/dev/null || cat plan.txt 2>/dev/null || true
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"

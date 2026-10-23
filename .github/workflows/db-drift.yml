@@ -1,0 +1,94 @@
+# =============================================================================
+# Database drift check (read only)
+# =============================================================================
+# Trigger : - daily at 04:17 UTC (runs on the default branch master)
+#           - manually: Actions -> "Database Drift" -> Run workflow
+#
+# Purpose : The migration workflows only start when a file under
+#           supabase/migrations/ changes. This run finds what slipped past
+#           them and what is on master but missing in a schema:
+#           1. scripts/db/drift-check.mjs: ledger of public and public_preview
+#              against the files on master (migration without file, file not
+#              applied, file changed after it was applied to public_preview).
+#              A file that is merged but not yet released is only a note.
+#           2. scripts/db/preview-compare.mjs: structure of public against
+#              public_preview as soon as both have applied the same migrations.
+#
+# Limits  : - If public_preview runs ahead of public because of open branches,
+#             the structure comparison is skipped and reported as a warning.
+#           - The run changes nothing: only SELECT and a schema-only dump. It
+#             repairs nothing either; whoever finds a deviation writes the
+#             missing migration as a file in a pull request.
+#           - GitHub switches scheduled workflows off after 60 days without
+#             repository activity; start it manually once then.
+#
+# Secrets : SUPABASE_ACCESS_TOKEN (environment "Preview", so the run does not
+#           wait for the approval of "Production"; it writes nowhere).
+#           Variable SUPABASE_PROJECT_REF_PROD.
+# =============================================================================
+
+name: Database Drift
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: db-drift
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Check drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Preview
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/db-setup
+        with:
+          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+
+      - name: Ledger against files
+        id: ledger
+        continue-on-error: true
+        shell: bash
+        run: node scripts/db/drift-check.mjs --linked 2>&1 | tee drift.txt; exit "${PIPESTATUS[0]}"
+
+      - name: Structure of public against public_preview
+        id: structure
+        continue-on-error: true
+        shell: bash
+        run: node scripts/db/preview-compare.mjs --linked --only-if-same-state 2>&1 | tee compare.txt; exit "${PIPESTATUS[0]}"
+
+      - name: Summary
+        if: always()
+        env:
+          LEDGER: ${{ steps.ledger.outcome }}
+          STRUCTURE: ${{ steps.structure.outcome }}
+        run: |
+          {
+            echo "### Database drift"
+            echo "- Ledger against files: $LEDGER"
+            echo "- Structure comparison: $STRUCTURE"
+            echo '```'
+            cat drift.txt compare.txt 2>/dev/null | tail -30 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # continue-on-error keeps both steps running; the run fails here if one was red.
+      - name: Result
+        if: steps.ledger.outcome == 'failure' || steps.structure.outcome == 'failure'
+        run: |
+          echo "::error::Drift found, details in the steps above and in the summary."
+          exit 1

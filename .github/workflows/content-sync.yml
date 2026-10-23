@@ -1,0 +1,103 @@
+# =============================================================================
+# Content sync (manual): training content between public_preview and public
+# =============================================================================
+# The release workflow runs this sync automatically after the structure
+# migration of public. This workflow is for starting it by hand, for example to
+# repeat it or to look at what a release would change.
+#
+# Trigger : manually only: Actions -> "Content Sync" -> Run workflow.
+#           The default is a DRY RUN: the sync runs inside a transaction that is
+#           rolled back and shows the exact counts. "apply" commits it.
+#
+# Version : the latest published release (gh release view), like the manual
+#           Production deploy. The workflow first WAITS (up to 20 minutes)
+#           until public has the migrations of that release.
+#
+# Rules   : scripts/db/content-sync.mjs (header) and supabase/content-tables.json.
+#           In short: only training content, additive, never deleting, user data
+#           is never touched. Direction preview-to-production is the release
+#           direction; production-to-preview seeds Preview with released content.
+#
+# Secrets : SUPABASE_ACCESS_TOKEN (environment "Production"). Variables
+#           SUPABASE_PROJECT_REF_PROD, CONTENT_SYNC_OWNER_EMAIL (optional).
+# =============================================================================
+
+name: Content Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Really apply (off = dry run, nothing is changed)'
+        required: true
+        default: false
+        type: boolean
+      direction:
+        description: 'preview-to-production (release direction) or production-to-preview (seed Preview with released content)'
+        required: true
+        default: preview-to-production
+        type: choice
+        options:
+          - preview-to-production
+          - production-to-preview
+
+concurrency:
+  group: content-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Content sync ${{ inputs.apply && 'apply' || 'dry run' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: Production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      CONTENT_SYNC_OWNER_EMAIL: ${{ vars.CONTENT_SYNC_OWNER_EMAIL }}
+      APPLY: ${{ inputs.apply }}
+      DIRECTION: ${{ inputs.direction }}
+    steps:
+      - name: Determine the latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease --jq 'if .isDraft or .isPrerelease then empty else .tagName end')
+          if [ -z "$tag" ] || ! printf '%s' "$tag" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$'; then
+            echo "::error::No usable published release found."
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: refs/tags/${{ steps.release.outputs.tag }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/db-setup
+        with:
+          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+
+      - name: Wait until public has the migrations of the release
+        run: |
+          for attempt in $(seq 1 40); do
+            node scripts/db/supabase-retry.mjs db push --linked --dry-run > state.txt 2>&1 || true
+            if grep -q "up to date" state.txt; then echo "public is on the migration state of the release."; exit 0; fi
+            echo "Migrations still open (attempt $attempt of 40), waiting 30 seconds ..."
+            sleep 30
+          done
+          echo "::error::public still lacks migrations after 20 minutes. Content sync aborted; check the release run."
+          cat state.txt
+          exit 1
+
+      - name: Content sync
+        run: |
+          if [ "$APPLY" = "true" ]; then
+            node scripts/db/content-sync.mjs --linked --direction "$DIRECTION" --apply
+          else
+            node scripts/db/content-sync.mjs --linked --direction "$DIRECTION"
+          fi
