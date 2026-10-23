@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres, { Sql } from 'postgres';
 import 'dotenv/config';
 // Relative import on purpose: this module is also loaded by tsx scripts (seed, migrations).
-import { DB_SCHEMA, assertRoleMatchesSchema } from '../lib/db-schema';
+import { DB_SCHEMA, assertDbConfig } from '../lib/db-schema';
 
 // Ensure we don't create a new connection pool on every import (dev/hot-reload, API routes)
 declare global {
@@ -28,7 +28,7 @@ function getDb(): ReturnType<typeof drizzle> {
   // Preview deployment connects as the role app_preview whose search_path is
   // public_preview (no rights on public). This fails closed if role and schema
   // do not fit. Without NEXT_PUBLIC_DB_SCHEMA everything runs on public as before.
-  assertRoleMatchesSchema(process.env.DB_CONNECTION_STRING, DB_SCHEMA);
+  assertDbConfig(DB_SCHEMA, process.env.DB_CONNECTION_STRING, true);
 
   // Tune pool size to avoid exhausting local Postgres connection limits.
   // postgres-js creates connections lazily; max is the upper bound.

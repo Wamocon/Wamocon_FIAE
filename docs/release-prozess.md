@@ -60,9 +60,9 @@ Der Remote-Workflow hat keinen `ref`-Input, setzt bei leerem `db_schema` den Wer
 ## 4. Schutz vor Schema-Verwechslung
 
 1. Der Preview-Deploy setzt `NEXT_PUBLIC_DB_SCHEMA` und `SUPABASE_DB_SCHEMA` immer fest auf `public_preview`, Production fest auf `public`. Die Werte aus dem Vercel-Projekt werden überschrieben, `scripts/db/deploy-env.mjs` prüft das Ergebnis und bricht bei Abweichung ab.
-2. Dasselbe Skript prüft die Datenbank-Rolle in `DB_CONNECTION_STRING`: Preview muss als `app_preview` verbinden, Production darf es nicht.
-3. `next.config.ts` bricht den Build ab, wenn ein Vercel-Production-Build nicht `public` oder ein Vercel-Preview-Build nicht `public_preview` nutzt. Ungültige Werte brechen jeden Build ab.
-4. Die App prüft beim ersten Datenbankzugriff, ob Rolle und Schema zusammenpassen (`assertRoleMatchesSchema`).
+2. Dasselbe Skript prüft die Datenbank-Rolle in `DB_CONNECTION_STRING` exakt: Preview muss als `app_preview` oder `app_preview.<Projekt-Referenz>` verbinden. Namen, die nur so beginnen (`app_preview_migrator`, `app_previewx`), werden abgelehnt. Production darf keine der Preview-Rollen nutzen.
+3. `next.config.ts` bricht den Build ab, wenn ein Vercel-Production-Build nicht `public` oder ein Vercel-Preview-Build nicht `public_preview` nutzt. Auch ohne `VERCEL_ENV` (lokaler Build, Docker, anderes CI) wird `public_preview` nur mit einer `DB_CONNECTION_STRING` der Rolle `app_preview` akzeptiert. Ungültige Werte brechen jeden Build ab.
+4. Die App prüft beim Start der Datenbank- und Supabase-Clients auf dem Server (`assertDbConfig`), ob Rolle und Schema zusammenpassen. Das Preview-Schema ohne passende Verbindungszeichenfolge schlägt sicher fehl.
 5. Die Rolle `app_preview` hat ihren `search_path` auf Rollenebene (`public_preview, extensions`) und keine Rechte auf `public`. Der rollenbasierte `search_path` ist hinter dem Pooler robuster als ein Startparameter und schlägt sicher fehl.
 6. Ohne gesetzte Variablen läuft die App wie bisher auf `public`.
 

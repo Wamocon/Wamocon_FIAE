@@ -1,9 +1,11 @@
 import { getSupabasePublicKey } from '@/lib/env';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { DB_OPTION } from '@/lib/db-schema';
+import { DB_OPTION, assertDbConfig } from '@/lib/db-schema';
 
 export async function createClient() {
+  // The database role of this deployment has to fit the schema
+  assertDbConfig();
     const cookieStore = await cookies();
 
     return createServerClient(

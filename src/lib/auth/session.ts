@@ -18,7 +18,7 @@
 import { getSupabasePublicKey } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { DB_OPTION } from '@/lib/db-schema';
+import { DB_OPTION, assertDbConfig } from '@/lib/db-schema';
 import { createHash } from 'crypto';
 import { eq, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
@@ -112,6 +112,8 @@ async function verifyAccessToken(
   }
 
   try {
+    // The database role of this deployment has to fit the schema
+    assertDbConfig();
     const supa = createClient(supabaseUrl, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       db: DB_OPTION,

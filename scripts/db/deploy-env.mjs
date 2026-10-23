@@ -25,6 +25,11 @@ export const SCHEMA_BY_TARGET = {
 export const SCHEMA_KEYS = ['NEXT_PUBLIC_DB_SCHEMA', 'SUPABASE_DB_SCHEMA'];
 export const PREVIEW_ROLE = 'app_preview';
 
+/** Exactly app_preview or app_preview.<project ref>, not app_preview_migrator and not other prefixes. */
+export function isPreviewRole(user) {
+  return /^app_preview(\.[a-z0-9]+)?$/.test(user);
+}
+
 const LINE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/;
 
 function unquote(value) {
@@ -94,12 +99,14 @@ export function checkDeployEnv({ target, env }) {
     const user = connectionUser(connection);
     if (user === null) {
       errors.push('DB_CONNECTION_STRING cannot be parsed as a URL with a user');
-    } else if (target === 'preview' && !user.startsWith(PREVIEW_ROLE)) {
+    } else if (target === 'preview' && !isPreviewRole(user)) {
       errors.push(
-        `Preview must connect as the role ${PREVIEW_ROLE} (user name starts with ${PREVIEW_ROLE}), not as another role`
+        `Preview must connect as the role ${PREVIEW_ROLE} (exactly ${PREVIEW_ROLE} or ${PREVIEW_ROLE}.<project ref>), not as another role, also not as the migration role`
       );
     } else if (target === 'production' && user.startsWith(PREVIEW_ROLE)) {
-      errors.push(`Production must not connect as the role ${PREVIEW_ROLE}`);
+      errors.push(
+        `Production must not connect as a Preview role (${PREVIEW_ROLE}, ${PREVIEW_ROLE}_migrator)`
+      );
     }
   }
   return errors;

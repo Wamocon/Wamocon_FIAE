@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   SCHEMA_BY_TARGET,
+  isPreviewRole,
   checkDeployEnv,
   connectionUser,
   parseEnv,
@@ -93,4 +94,37 @@ test('a missing connection string and an unknown target are errors', () => {
   const env = parseEnv(pinSchema('', 'public'));
   assert.equal(checkDeployEnv({ target: 'production', env }).length, 1);
   assert.equal(checkDeployEnv({ target: 'staging', env }).length, 1);
+});
+
+test('the Preview role is checked exactly', () => {
+  assert.ok(isPreviewRole('app_preview'));
+  assert.ok(isPreviewRole('app_preview.abcdefgh'));
+  for (const user of [
+    'app_preview_migrator',
+    'app_preview_migrator.abcdefgh',
+    'app_previewx',
+    'app_preview.',
+    'postgres.abcdefgh',
+  ]) {
+    assert.equal(isPreviewRole(user), false, user);
+  }
+});
+
+test('Preview refuses the migration role as the app role, Production refuses both', () => {
+  const migrator =
+    'postgresql://app_preview_migrator.abcdefgh:PLACEHOLDER@h:5432/postgres';
+  const envPreview = parseEnv(
+    pinSchema(`DB_CONNECTION_STRING="${migrator}"`, 'public_preview')
+  );
+  assert.equal(
+    checkDeployEnv({ target: 'preview', env: envPreview }).length,
+    1
+  );
+  const envProd = parseEnv(
+    pinSchema(`DB_CONNECTION_STRING="${migrator}"`, 'public')
+  );
+  assert.equal(
+    checkDeployEnv({ target: 'production', env: envProd }).length,
+    1
+  );
 });

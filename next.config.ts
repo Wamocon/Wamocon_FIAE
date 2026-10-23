@@ -11,7 +11,11 @@ const dbSchema = resolveDbSchema({
   NEXT_PUBLIC_DB_SCHEMA: process.env.NEXT_PUBLIC_DB_SCHEMA,
   SUPABASE_DB_SCHEMA: process.env.SUPABASE_DB_SCHEMA,
 });
-assertSchemaMatchesEnvironment(dbSchema, process.env.VERCEL_ENV);
+assertSchemaMatchesEnvironment(
+  dbSchema,
+  process.env.VERCEL_ENV,
+  process.env.DB_CONNECTION_STRING
+);
 
 const nextConfig: NextConfig = {
   // NEXT_PUBLIC_* is inlined at build time, so each deployment needs its own build.

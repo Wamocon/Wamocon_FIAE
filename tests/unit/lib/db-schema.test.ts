@@ -1,7 +1,10 @@
 import { describe, it, expect } from '@jest/globals';
 import {
+  assertDbConfig,
   assertRoleMatchesSchema,
   assertSchemaMatchesEnvironment,
+  isAnyPreviewDbRole,
+  isPreviewDbRole,
   resolveDbSchema,
   withStoragePrefix,
 } from '@/lib/db-schema';
@@ -49,9 +52,9 @@ describe('lib/db-schema resolveDbSchema', () => {
 });
 
 describe('lib/db-schema assertSchemaMatchesEnvironment', () => {
-  it('does not check outside of Vercel', () => {
+  it('does not check the schema public outside of Vercel', () => {
     expect(() =>
-      assertSchemaMatchesEnvironment('public_preview', undefined)
+      assertSchemaMatchesEnvironment('public', undefined)
     ).not.toThrow();
     expect(() =>
       assertSchemaMatchesEnvironment('public', 'development')
@@ -125,5 +128,112 @@ describe('lib/db-schema storage prefix', () => {
       'preview/u1/file.pdf'
     );
     expect(withStoragePrefix('u1/file.pdf', 'public')).toBe('u1/file.pdf');
+  });
+});
+
+describe('lib/db-schema exact role names', () => {
+  it('accepts exactly app_preview and app_preview.<project ref>', () => {
+    expect(isPreviewDbRole('app_preview')).toBe(true);
+    expect(isPreviewDbRole('app_preview.abcdefghijklmnopqrst')).toBe(true);
+  });
+
+  it('rejects names that merely start with app_preview, also the migration role', () => {
+    for (const user of [
+      'app_preview_migrator',
+      'app_preview_migrator.abcdefghijklmnopqrst',
+      'app_previewx',
+      'app_preview.',
+      'app_preview.ABC',
+      'xapp_preview',
+      'app_preview.a.b',
+      'postgres',
+    ]) {
+      expect(isPreviewDbRole(user)).toBe(false);
+    }
+    expect(isAnyPreviewDbRole('app_preview_migrator.ref')).toBe(true);
+    expect(isAnyPreviewDbRole('postgres.ref')).toBe(false);
+  });
+
+  it('the Preview schema refuses the migration role and lookalikes', () => {
+    const url = user =>
+      `postgresql://${user}:PLACEHOLDER@aws-0-eu.pooler.supabase.com:5432/postgres`;
+    expect(() =>
+      assertRoleMatchesSchema(
+        url('app_preview_migrator.abcdefghij'),
+        'public_preview'
+      )
+    ).toThrow(/exactly/);
+    expect(() =>
+      assertRoleMatchesSchema(url('app_previewx'), 'public_preview')
+    ).toThrow(/exactly/);
+    expect(() =>
+      assertRoleMatchesSchema(url('app_preview'), 'public_preview')
+    ).not.toThrow();
+  });
+
+  it('Production refuses every Preview role', () => {
+    const url = user => `postgresql://${user}:PLACEHOLDER@h:5432/postgres`;
+    expect(() =>
+      assertRoleMatchesSchema(url('app_preview_migrator'), 'public')
+    ).toThrow(/must not be used/);
+    expect(() =>
+      assertRoleMatchesSchema(url('app_preview.abc'), 'public')
+    ).toThrow(/must not be used/);
+  });
+});
+
+describe('lib/db-schema build guard without VERCEL_ENV', () => {
+  it('the Preview schema outside of Vercel needs the Preview role in DB_CONNECTION_STRING', () => {
+    expect(() =>
+      assertSchemaMatchesEnvironment('public_preview', undefined)
+    ).toThrow(/needs DB_CONNECTION_STRING/);
+    expect(() =>
+      assertSchemaMatchesEnvironment('public_preview', undefined, PROD_URL)
+    ).toThrow(/exactly/);
+    expect(() =>
+      assertSchemaMatchesEnvironment('public_preview', 'development', PROD_URL)
+    ).toThrow(/exactly/);
+    expect(() =>
+      assertSchemaMatchesEnvironment('public_preview', undefined, PREVIEW_URL)
+    ).not.toThrow();
+  });
+
+  it('the schema public needs nothing without VERCEL_ENV', () => {
+    expect(() =>
+      assertSchemaMatchesEnvironment('public', undefined)
+    ).not.toThrow();
+  });
+
+  it('a Vercel preview build keeps working with the pinned schema', () => {
+    expect(() =>
+      assertSchemaMatchesEnvironment('public_preview', 'preview')
+    ).not.toThrow();
+  });
+});
+
+describe('lib/db-schema assertDbConfig (start of the clients)', () => {
+  it('does nothing in the browser', () => {
+    expect(() =>
+      assertDbConfig('public_preview', undefined, false)
+    ).not.toThrow();
+  });
+
+  it('fails closed for the Preview schema without a connection string', () => {
+    expect(() => assertDbConfig('public_preview', undefined, true)).toThrow(
+      /needs DB_CONNECTION_STRING/
+    );
+  });
+
+  it('public without a connection string is fine, with a Preview role it fails', () => {
+    expect(() => assertDbConfig('public', undefined, true)).not.toThrow();
+    expect(() => assertDbConfig('public', PROD_URL, true)).not.toThrow();
+    expect(() => assertDbConfig('public', PREVIEW_URL, true)).toThrow();
+  });
+
+  it('the Preview schema needs exactly the Preview role', () => {
+    expect(() =>
+      assertDbConfig('public_preview', PREVIEW_URL, true)
+    ).not.toThrow();
+    expect(() => assertDbConfig('public_preview', PROD_URL, true)).toThrow();
   });
 });
