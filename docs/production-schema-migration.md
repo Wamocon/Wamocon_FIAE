@@ -50,17 +50,28 @@ column needs a safe default.
 ## Runbook: Ausbildungskatalog-Migrationsreihe (KfBM-Umbau)
 
 Dieser Abschnitt gilt für die Dateien `supabase/migrations/20261024000100` bis
-`20261024001500` und `20261025000000` (PR 83). Die Migration von `202606260001` oben ist bereits in
-Produktion angewendet und bleibt unverändert. Die Reihe ist bisher auf keiner
-Datenbank angewendet worden. Sie wurde nur auf einer lokalen Wegwerf-Datenbank
-(PostgreSQL 15 mit Stubs für `auth` und `storage`) geprüft, nicht auf einer
-Kopie der Produktion.
+`20261024001500`, `20261025000000` und die Sicherheitsdatei `20261025000100`
+(PR 83). Die Migration von `202606260001` oben ist bereits in Produktion
+angewendet und bleibt unverändert. Die Reihe ist in Produktion noch nicht
+angewendet. Geprüft ist sie auf einer lokalen Wegwerf-Datenbank (PostgreSQL 15
+mit Stubs für `auth` und `storage`) und, Stand 23.10.2026, in der
+Preview-Umgebung gegen den Strukturklon der Produktion (echte Struktur, 60
+Tabellen, 95 Policies): Alle Dateien laufen dort durch. Die Preview-Tabellen sind
+leer, die Datenanteile (Kopie der Lernfelder, Einschreibungs-Backfill) sind dort
+also nur strukturell geprüft, nicht mit den echten Zeilen.
 
 ## Gemessener Ausgangszustand (Produktion, nur lesend geprüft)
 
 - 26 Kurse, 189 Enabler, 88 Use Cases; nur 4 Kurse haben gleich viele Enabler
   und Use Cases. Deshalb gibt es keine automatische Zuordnung von
   `use_cases.enabler_id`: Alle bestehenden FIAE-Use-Cases behalten `NULL`.
+- `lernfelder` trägt neben den Spalten von Drizzle 0026 fünf leere Zusatzspalten
+  (`code`, `training_year`, `hours_budget`, `is_common`, `order_index`): 12 Zeilen
+  LF-1 bis LF-12, alle Zusatzspalten NULL, `is_common` überall `true`,
+  `lernfeld_mappings` leer. Die Datei 000500 akzeptiert die Spalten, solange sie
+  leer sind, und bricht bei einem Wert ab.
+- Alle 246 Objekte in `public` gehören `postgres`. Auf dem Schema `public` hält
+  `PUBLIC` das Recht `CREATE` (ACL `=UC`), das die Datei `20261025000100` entzieht.
 - Die Tabelle `training_catalogs` existiert nicht, die Spalte
   `profiles.ausbildung_duration_years` existiert.
 - Es gibt keinen Trigger auf `auth.users`.
@@ -85,6 +96,7 @@ Kopie der Produktion.
 | 001000 bis 001400 | `organization_catalogs`, `trainee_enrollments` (mit FIAE-Backfill), `training_components.kind`, `trainee_elective_choices` |
 | 001500 | Enum-Wert `SUPER_ADMIN` (eigene Datei) |
 | 20261025000000 | Backfill ADMIN der Plattform-Organisation zu SUPER_ADMIN, **technisch gesperrt** bis PR 89 angewendet ist und der App-Release bestätigt wurde (siehe Reihenfolge, Punkt 5) |
+| 20261025000100 | Sicherheitsdatei: `revoke create on schema public from public`. Eine einzige Anweisung, ändert keine Daten. Sie liegt hinter dem Backfill und wird deshalb erst nach dessen Freigabe angewendet (Punkt 6). Rückweg: `grant create on schema public to public;` |
 
 Daten werden verändert in: 000300 (UPDATE enablers, use_cases, mappings),
 000500 (Kopie der Lernfelder), 000700 (UPDATE training_components), 001000
@@ -124,6 +136,10 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
    oder ohne PR 89 bricht die Datei mit einer klaren Meldung ab, die Pipeline
    hält an dieser Stelle an (das Gate ist technisch, nicht nur ein Kommentar).
    Rückweg: `update public.profiles set role = 'ADMIN' where role = 'SUPER_ADMIN';`
+   Danach läuft die Sicherheitsdatei `20261025000100` (Widerruf von `CREATE` auf
+   `public` für `PUBLIC`), weil sie hinter dem Backfill einsortiert ist. Vorcheck
+   und Nachcheck: `04-verify.sql`, Abfrage 4 (`create_priv` auf `public`) muss von
+   `true` auf `false` wechseln.
 7. **Nachchecks** (Abschnitt "Katalogreihe, Nachchecks" in der Verifikations-SQL):
    Zeilenzahlen der Bestandstabellen unverändert, alle Kurse und Komponenten im
    Katalog FIAE, `lernfelder` (View) liefert so viele Zeilen wie
