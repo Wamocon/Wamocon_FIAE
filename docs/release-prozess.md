@@ -48,7 +48,7 @@ Zwei Begrenzungen beim Push auf einen Branch: Der Lauf startet nur, wenn sich `s
 | `scripts/db/*.mjs`                                             | Prüfung, Umschreiben, Preview-Migration, Drift, Vergleich, Inhaltsabgleich                      |
 | `supabase/content-tables.json`                                 | Allowlist des Inhaltsabgleichs                                                                  |
 | `supabase/legacy-migrations.txt`, `supabase/known-drift.txt`   | Bekannte Altlasten (mit Begründung)                                                             |
-| `supabase/preview-setup/01` bis `04`                           | SQL-Vorlagen für die einmalige Preview-Einrichtung                                              |
+| `supabase/preview-setup/01` bis `03`                           | SQL-Vorlagen für die einmalige Preview-Einrichtung                                              |
 | `src/lib/db-schema.ts`                                         | Zentrale Schema-Auswahl der App                                                                 |
 
 Das alte `deploy.yml` (Aufruf des Remote-Workflows `Wamocon/github_workflow`) ist ersetzt.
@@ -83,7 +83,7 @@ Es werden nur Namen genannt, nie Werte.
 | `SUPABASE_PROJECT_REF_PROD` | Variable (Repository)           | Repository                             | Projekt-Referenz, nicht hartkodiert und kein Secret                          |
 | `CONTENT_SYNC_OWNER_EMAIL`  | Variable (Repository), optional | Repository                             | Profil, das als Ersteller synchronisierter Kurse und Quizze eingetragen wird |
 
-Hinweis: Beim ersten Lauf auf dem Branch war bereits ein `SUPABASE_ACCESS_TOKEN` sichtbar (als Organisations- oder Repository-Secret). Bitte prüfen, ob er für dieses Projekt gedacht ist, und ihn auf die Environments begrenzen. Ohne die Variable `SUPABASE_PROJECT_REF_PROD` bricht jeder Lauf vor dem ersten Datenbankzugriff ab.
+Hinweis: `SUPABASE_ACCESS_TOKEN` gehört nur in die Environments `Production` und `Preview`, nicht als Repository-weites oder Organisations-Secret (Beim ersten Lauf auf dem Branch war bereits ein Token sichtbar, bitte prüfen und auf die Environments begrenzen). Ohne die Variable `SUPABASE_PROJECT_REF_PROD` bricht jeder Lauf vor dem ersten Datenbankzugriff ab.
 
 ### Vercel-Projekt (Laufzeit der App, nicht GitHub)
 
@@ -111,7 +111,7 @@ Die Workflows führen nichts davon aus. Solange Secrets und Variablen fehlen, sc
 3. **Baseline der Production-Migrationen abgleichen.** Die 56 Drizzle-Dateien unter `src/db/migrations/drizzle` sind Historie und keine abspielbare Kette, sie bleiben unangetastet. Die Datei `202606260001_schema_only_ausbildung_duration.sql` ist von Hand in Production angewendet worden. Damit `supabase db push` sie nicht ein zweites Mal ausführt, gleicht ein Mensch das Ledger einmal ab (nicht ausgeführt durch dieses Paket):
    1. `supabase link --project-ref <Projekt-Referenz>`
    2. `supabase migration list --linked` und den Stand von lokalen Dateien und Ledger vergleichen.
-   3. Für die bereits angewendete Datei `supabase migration repair --status applied 202606260001`. Wurde sie über das Supabase-Werkzeug mit einem Zeitstempel als Version eingetragen, diesen Eintrag mit `supabase migration repair --status reverted <Version>` entfernen.
+   3. Gemessen am 23.10.2026 (nur lesend): Das Ledger `supabase_migrations.schema_migrations` reicht bis Version `20260227143256`, die Datei `202606260001` fehlt dort, obwohl ihre Spalte `profiles.ausbildung_duration_years` in Production existiert. Deshalb `supabase migration repair --status applied 202606260001`. Ein Drizzle-Ledger gibt es nicht, die Tabelle `training_catalogs` fehlt noch (die Katalog-Migrationen sind nirgends angewendet).
    4. `supabase db push --linked --dry-run` muss "Remote database is up to date." melden. Erst dann das erste Release.
 
    Solange das nicht erledigt ist, stoppt der Baseline-Guard (`scripts/db/baseline-guard.mjs`) den Release-Lauf.
@@ -119,23 +119,25 @@ Die Workflows führen nichts davon aus. Solange Secrets und Variablen fehlen, sc
 4. **Preview einrichten.**
    1. `supabase/preview-setup/01-preview-role.sql` im SQL-Editor ausführen (Schema, Rechte, Rolle `app_preview`). Danach das Passwort der Rolle von Hand setzen (siehe Kommentar in der Datei) und nirgends ablegen.
    2. In Vercel für die Umgebung Preview `DB_CONNECTION_STRING` mit dem Benutzer `app_preview.<Projekt-Referenz>` eintragen, dazu die Supabase-Schlüssel (Abschnitt 5).
-   3. Workflow "Preview Reset" mit Modus `plan` starten, Ausgabe prüfen, dann mit `execute`. Das klont die Struktur von `public` (nur Struktur, keine Zeilen) und führt `03-preview-side.sql` aus.
-   4. `supabase/preview-setup/02-production-side.sql` ausführen. Das ist die einzige Änderung an Production: feste `search_path` der Hilfsfunktionen `get_user_org_id` und `is_platform_owner` sowie die Bedingung am Auth-Trigger, damit Preview-Nutzer (Anmelde-Metadatum `env=preview`) in Production übersprungen werden. Vorher Sicherung, Abschnitt 0 der Datei zuerst lesen.
-   5. `supabase/preview-setup/04-verify.sql` ausführen und die erwarteten Ergebnisse vergleichen.
+   3. Workflow "Preview Reset" mit Modus `plan` starten, Ausgabe prüfen, dann mit `execute`. Das klont die Struktur von `public` (nur Struktur, keine Zeilen) und führt `02-preview-side.sql` aus (Hilfsfunktionen mit festem `search_path`, Realtime, Storage-Richtlinien für das Präfix `preview/`).
+   4. `supabase/preview-setup/03-verify.sql` ausführen und die erwarteten Ergebnisse vergleichen.
+   5. Es gibt keine Änderung an Production und keinen Trigger. Gemessen am 23.10.2026 (nur lesend): Auf `auth.users` existiert kein Trigger, Profile entstehen über `/api/auth/sync-profile` in dem Schema, mit dem die jeweilige Bereitstellung verbunden ist. Ein Anmelde-Metadatum oder ein Zwillings-Trigger ist deshalb nicht nötig, und ein zusätzlicher Trigger auf der geteilten Tabelle `auth.users` könnte jede Anmeldung blockieren. Eine frühere Vorlage `02-production-side.sql` ist gestrichen.
    6. Inhalt in Preview: Seed, Import oder Inhaltsabgleich in Richtung `production-to-preview` (zuerst als Trockenlauf).
 5. **Releases von Hand veröffentlichen.** Mit dem `GITHUB_TOKEN` eines Workflows erzeugte Releases lösen keine Workflows aus (GitHub-Regel). Ein Release muss von einer Person oder mit einem persönlichen Token beziehungsweise einer GitHub-App erstellt werden. Releases entstehen nur aus `master`, der Release-Lauf prüft das.
+6. **Vercel baut nicht mehr selbst.** Die Datei `vercel.json` setzt `git.deploymentEnabled` auf `false`. Das Vercel-Projekt `wamocon-fiae-svfz` (Production-Branch `master`) deployt dann weder Branches noch `master` automatisch, alle Deployments laufen über die Workflows. Gemessen am 23.10.2026 hatte das Projekt keinen Ignored Build Step und baute jeden Branch als Preview und `master` als Production. **Reihenfolge:** Wird dieser Pull Request gemergt, bevor Secrets, Variablen und Environments eingerichtet sind, deployt nichts mehr automatisch. Deshalb erst die Schritte 1 bis 5, dann mergen. `vercel.json` liegt im Repository und gilt für jedes Vercel-Projekt, das mit diesem Repository verbunden ist. Das zweite Projekt `wamocon-lfa` (baut nur den Branch `staging`) wird von diesem Paket nicht angefasst, würde mit der Datei aber ebenfalls nicht mehr automatisch bauen. Bitte vor dem Merge klären, ob `staging` weiter automatisch gebaut werden soll.
+7. **Werte der Variablen (keine Geheimnisse).** `SUPABASE_PROJECT_REF_PROD` = `ngpsgwwlnlliphfgtrya` (Supabase-Projekt FIEA-Production, Region eu-west-1), `VERCEL_PROJECT_ID` = `prj_nbHzAS4oCNAgHaJh1gb8rfSAndHA`, `VERCEL_ORG_ID` = `team_3KLIxWWTDEzyuitA2oGwAorz`. Im Supabase-Dashboard (Data API, "Exposed schemas") ist heute `public, graphql_public, test` eingetragen: `public_preview` hinzufügen und das leere Schema `test` entfernen (Schritt 1). Das Token `SUPABASE_ACCESS_TOKEN` gehört in die Environments `Production` und `Preview`, nicht als Repository-Secret.
 
 ## 7. Einschränkungen
 
 Bitte vor dem Einsatz lesen. Die Preview-Umgebung ist bewusst günstig gebaut und hat Grenzen.
 
 - **Geteiltes Preview-Schema.** Alle Branches und Pull Requests migrieren dasselbe `public_preview`. Die Migration eines noch ungeprüften Branches läuft dort vor dem Review. Zwei Branches mit unvereinbaren Migrationen stören sich gegenseitig. Gegenmaßnahmen: Datenbanksperre pro Migration, Verlauf mit Prüfsumme (eine nachträglich geänderte, schon angewendete Datei bricht den Lauf ab), Warnung bei Migrationen anderer Branches, Concurrency-Gruppen, die nie abbrechen. Wenn nichts mehr hilft: Workflow "Preview Reset". Er löscht alle Preview-Daten.
-- **Geteilte Auth.** Preview und Production nutzen dieselben Supabase-Nutzer. Ein Preview-Nutzer ist ein echter Auth-Nutzer, der durch das Metadatum `env=preview` nur in `public_preview` ein Profil bekommt. Dieselbe E-Mail-Adresse kann nicht gleichzeitig ein Konto in Production und eines in Preview haben. Passwörter und Sitzungen gelten für beide Anwendungen.
-- **Geteilter Storage.** Die Buckets `avatar` und `content` sind geteilt. Uploads aus Preview landen unter dem Präfix `preview/`, die Richtlinien dafür legt `03-preview-side.sql` an. Dateien, die über den Inhaltsabgleich nach Production gelangen, behalten ihren Pfad unter `preview/`.
-- **Clusterweite Objekte.** Rollen, Publikationen (Realtime) und Erweiterungen gibt es nur einmal. Migrationen, die sie ändern, werden für Preview abgelehnt, die Realtime-Mitgliedschaft der Preview-Tabellen setzt `03-preview-side.sql`.
+- **Geteilte Auth.** Preview und Production nutzen dieselben Supabase-Nutzer. Ein Preview-Nutzer ist ein echter Auth-Nutzer. Sein Profil entsteht beim ersten Aufruf von `/api/auth/sync-profile` in `public_preview`, weil die Preview-Bereitstellung nur mit diesem Schema verbunden ist. Dieselbe E-Mail-Adresse kann nicht gleichzeitig ein Konto in Production und eines in Preview haben. Passwörter und Sitzungen gelten für beide Anwendungen.
+- **Geteilter Storage.** Die Buckets `avatar` und `content` sind geteilt. Uploads aus Preview landen unter dem Präfix `preview/`, die Richtlinien dafür legt `02-preview-side.sql` an. Dateien, die über den Inhaltsabgleich nach Production gelangen, behalten ihren Pfad unter `preview/`.
+- **Clusterweite Objekte.** Rollen, Publikationen (Realtime) und Erweiterungen gibt es nur einmal. Migrationen, die sie ändern, werden für Preview abgelehnt, die Realtime-Mitgliedschaft der Preview-Tabellen setzt `02-preview-side.sql`.
 - **Preview läuft Production voraus.** `public_preview` hat Migrationen, die `public` noch nicht hat. Das ist gewollt. Der Drift-Check meldet es nur als Hinweis.
 - **Migrationen müssen rückwärtskompatibel sein.** Zwischen Migration und Deployment läuft kurz die alte App gegen das neue Schema. Erst erweitern, später aufräumen.
-- **Rolle `app_preview`** umgeht Row Level Security (wie `postgres` für Production), hat aber keine Rechte auf `public`. `04-verify.sql` belegt das.
+- **Rolle `app_preview`** umgeht Row Level Security (wie `postgres` für Production), hat aber keine Rechte auf `public`. `03-verify.sql` belegt das.
 - **Inhaltsabgleich.** Siehe Abschnitt 8, die Schlüssel sind vorläufig.
 
 ## 8. Inhaltsabgleich
