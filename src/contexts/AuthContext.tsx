@@ -76,7 +76,6 @@ interface AuthContextType {
     trainer_auth_id?: string | null;
   }) => Promise<void>;
   refreshProfile: () => Promise<void>;
-  switchRole: (role: 'trainee' | 'trainer') => Promise<void>;
   changePassword: (newPassword: string) => Promise<void>;
   isPlatformOwner: boolean;
   isAdmin: boolean;
@@ -856,19 +855,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await loadProfile(user.id);
   }, [user]);
 
-  const stableSwitchRole = useCallback(
-    async (role: 'trainee' | 'trainer') => {
-      if (!profile) return;
-      const dbRole = role.toUpperCase();
-      await supabase
-        .from('profiles')
-        .update({ role: dbRole, updated_at: new Date().toISOString() })
-        .eq('id', profile.id);
-      if (user) await loadProfile(user.id);
-    },
-    [profile, user]
-  );
-
   const changePassword = useCallback(async (newPassword: string) => {
     if (!newPassword || newPassword.length < 8) {
       throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
@@ -910,7 +896,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut: stableSignOut,
       updateProfile,
       refreshProfile,
-      switchRole: stableSwitchRole,
       changePassword,
       isPlatformOwner,
       isAdmin,
