@@ -121,7 +121,7 @@ test('setup script: structure only, ledger seeded, no row copy', () => {
     shared: ['create trigger a_preview after insert on auth.users;'],
     postClone: '-- post clone',
   });
-  assert.ok(script.includes('create schema public_preview;'));
+  assert.ok(script.includes('create schema if not exists public_preview;'));
   assert.ok(
     script.includes(
       'create table supabase_migrations.preview_schema_migrations'

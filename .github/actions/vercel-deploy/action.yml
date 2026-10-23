@@ -1,0 +1,164 @@
+# =============================================================================
+# Composite action: build and deploy to Vercel (Preview or Production)
+# =============================================================================
+# Local replacement for the reusable workflow Wamocon/github_workflow
+# deploy.yml@main. Decision: a local copy instead of the remote workflow,
+# because the remote workflow has no ref input, falls back to the schema
+# "public" when db_schema is empty (a Preview deployment would then use
+# Production data) and also creates Vercel projects and writes secrets with a
+# personal access token (ORG_PAT). Here:
+#   - the database schema is derived from the target and is NOT an input:
+#       preview    -> public_preview
+#       production -> public
+#   - the ref is controlled by the checkout step of the calling job
+#   - the Vercel CLI is pinned, no project provisioning, no ORG_PAT
+#   - the pulled Vercel environment is rewritten and checked before the build
+#     (schema and database role, scripts/db/deploy-env.mjs)
+#
+# NEXT_PUBLIC_* is baked into the bundle at build time, so every deployment is
+# built on its own (vercel build), never promoted from another environment.
+#
+# How it works: builds locally with the Vercel CLI, so Vercel never sees the
+# GitHub repository owner (no "team seat" errors on a personal account in a
+# GitHub organisation). The git linkage is removed on purpose.
+# =============================================================================
+name: Vercel deploy
+description: Build and deploy the checked out ref to Vercel (preview or production)
+inputs:
+  target:
+    description: preview or production (decides environment AND database schema)
+    required: true
+  vercel-token:
+    description: Vercel access token
+    required: true
+  vercel-org-id:
+    description: Vercel organisation (team) id
+    required: true
+  vercel-project-id:
+    description: Vercel project id
+    required: true
+  vercel-cli-version:
+    description: Pinned Vercel CLI version
+    required: false
+    default: '64.7.0'
+outputs:
+  url:
+    description: Deployment URL
+    value: ${{ steps.deploy.outputs.url }}
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        VERCEL_TOKEN: ${{ inputs.vercel-token }}
+        VERCEL_ORG_ID: ${{ inputs.vercel-org-id }}
+        VERCEL_PROJECT_ID: ${{ inputs.vercel-project-id }}
+      run: |
+        case "$TARGET" in
+          preview|production) ;;
+          *) echo "::error::target must be preview or production."; exit 1 ;;
+        esac
+        for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+          if [ -z "${!name}" ]; then
+            echo "::error::$name is not set (see docs/release-prozess.md)."
+            exit 1
+          fi
+        done
+
+    # actions/setup-node v4.4.0
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: 22
+
+    - name: Install the pinned Vercel CLI
+      shell: bash
+      env:
+        VERCEL_CLI_VERSION: ${{ inputs.vercel-cli-version }}
+      run: npm install --global "vercel@${VERCEL_CLI_VERSION}"
+
+    - name: Remove git linkage
+      shell: bash
+      run: rm -rf .git
+
+    - name: Pull Vercel environment
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        VERCEL_TOKEN: ${{ inputs.vercel-token }}
+        VERCEL_ORG_ID: ${{ inputs.vercel-org-id }}
+        VERCEL_PROJECT_ID: ${{ inputs.vercel-project-id }}
+      run: |
+        export GITHUB_ACTIONS="" GITHUB_REPOSITORY=""
+        vercel pull --yes --environment="$TARGET" --token="$VERCEL_TOKEN"
+
+    # Fixes the schema (whatever the Vercel project says) and aborts if the
+    # database role does not fit: Preview must connect as app_preview.
+    - name: Pin the database schema and check the database role
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: node scripts/db/deploy-env.mjs --target "$TARGET" --file ".vercel/.env.${TARGET}.local" --github-env
+
+    - name: Build
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        VERCEL_TOKEN: ${{ inputs.vercel-token }}
+        VERCEL_ORG_ID: ${{ inputs.vercel-org-id }}
+        VERCEL_PROJECT_ID: ${{ inputs.vercel-project-id }}
+        # Fixed again here, independent of the file: never an input, never empty.
+        NEXT_PUBLIC_DB_SCHEMA: ${{ inputs.target == 'production' && 'public' || 'public_preview' }}
+        SUPABASE_DB_SCHEMA: ${{ inputs.target == 'production' && 'public' || 'public_preview' }}
+      run: |
+        export GITHUB_ACTIONS="" GITHUB_REPOSITORY=""
+        echo "Database schema of this build: $NEXT_PUBLIC_DB_SCHEMA"
+        if [ "$TARGET" = "production" ]; then
+          vercel build --prod --token="$VERCEL_TOKEN"
+        else
+          vercel build --token="$VERCEL_TOKEN"
+        fi
+
+    - name: Deploy
+      id: deploy
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        VERCEL_TOKEN: ${{ inputs.vercel-token }}
+        VERCEL_ORG_ID: ${{ inputs.vercel-org-id }}
+        VERCEL_PROJECT_ID: ${{ inputs.vercel-project-id }}
+      run: |
+        export GITHUB_ACTIONS="" GITHUB_REPOSITORY=""
+        set -euo pipefail
+
+        PROD_FLAG=""
+        [ "$TARGET" = "production" ] && PROD_FLAG="--prod"
+
+        rm -f vercel-deploy.log
+        deploy_ok=false
+        if vercel deploy --prebuilt $PROD_FLAG --yes --archive=tgz --token="$VERCEL_TOKEN" > vercel-deploy.log 2>&1; then
+          deploy_ok=true
+        fi
+
+        echo "=========================================="
+        echo " FULL VERCEL DEPLOY LOG"
+        echo "=========================================="
+        cat vercel-deploy.log || true
+        echo "=========================================="
+
+        if [ "$deploy_ok" != "true" ]; then
+          echo "### Deployment failed (${TARGET})" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+        fi
+
+        DEPLOY_URL=$(grep -Eo 'https://[^[:space:]]+\.vercel\.app' vercel-deploy.log | sed 's/Building.*//' | grep -v '^$' | tail -n 1 || true)
+        SCHEMA="public_preview"
+        [ "$TARGET" = "production" ] && SCHEMA="public"
+        {
+          echo "### Deployed to Vercel"
+          echo "**Target:** ${TARGET}"
+          echo "**Database schema:** ${SCHEMA}"
+          [ -n "$DEPLOY_URL" ] && echo "**URL:** ${DEPLOY_URL}"
+        } >> "$GITHUB_STEP_SUMMARY"
+        echo "url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"

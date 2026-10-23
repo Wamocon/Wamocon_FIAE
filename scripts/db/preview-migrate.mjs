@@ -237,7 +237,7 @@ const LEDGER_TABLE = `create table ${LEDGER} (
 // Empty schema with rights like public. The Preview role (if it exists)
 // gets rights on public_preview only; see supabase/preview-setup.
 export const EMPTY_SCHEMA_SQL = `
-create schema ${PREVIEW_SCHEMA};
+create schema if not exists ${PREVIEW_SCHEMA};
 comment on schema ${PREVIEW_SCHEMA} is 'Structural copy of public for Preview deployments';
 grant usage on schema ${PREVIEW_SCHEMA} to postgres, anon, authenticated, service_role;
 alter default privileges for role postgres in schema ${PREVIEW_SCHEMA} grant all on tables to postgres, anon, authenticated, service_role;
@@ -296,6 +296,7 @@ function state(target) {
   const [z] = query(
     target,
     `select to_regnamespace('${PREVIEW_SCHEMA}') is not null as schema_exists,
+    coalesce((select count(*) from pg_class c where c.relnamespace = to_regnamespace('${PREVIEW_SCHEMA}') and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')), 0)::int as object_count,
     to_regclass('${LEDGER}') is not null as ledger_exists,
     to_regclass('supabase_migrations.schema_migrations') is not null as production_ledger_exists`
   );
@@ -370,9 +371,10 @@ function setup(target, list, { probe }) {
     console.log(`${PREVIEW_SCHEMA} is already set up.`);
     return;
   }
-  if (s.schema_exists) {
+  // An empty schema (created by supabase/preview-setup/01-preview-role.sql) is fine
+  if (s.schema_exists && s.object_count > 0) {
     throw new Error(
-      `${PREVIEW_SCHEMA} exists without a history. Rebuild it: ${REBUILD_COMMAND}`
+      `${PREVIEW_SCHEMA} exists with objects but without a history. Rebuild it: ${REBUILD_COMMAND}`
     );
   }
   if (!s.production_ledger_exists) {
