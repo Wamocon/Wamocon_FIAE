@@ -505,6 +505,25 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['useCaseId'],
   },
   {
+    route: 'admin/catalogs/[catalogId]',
+    method: 'PATCH',
+    guard: 'superAdmin',
+    params: ['catalogId'],
+  },
+  { route: 'admin/catalogs', method: 'GET', guard: 'superAdmin', params: [] },
+  {
+    route: 'admin/organizations/[orgId]/catalogs',
+    method: 'GET',
+    guard: 'admin',
+    params: ['orgId'],
+  },
+  {
+    route: 'admin/organizations/[orgId]/catalogs',
+    method: 'PUT',
+    guard: 'superAdmin',
+    params: ['orgId'],
+  },
+  {
     route: 'admin/organizations/[orgId]',
     method: 'GET',
     guard: 'admin',
@@ -528,6 +547,18 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     method: 'POST',
     guard: 'superAdmin',
     params: [],
+  },
+  {
+    route: 'admin/users/[userId]/enrollment',
+    method: 'GET',
+    guard: 'admin',
+    params: ['userId'],
+  },
+  {
+    route: 'admin/users/[userId]/enrollment',
+    method: 'PUT',
+    guard: 'superAdmin',
+    params: ['userId'],
   },
   {
     route: 'admin/users/[userId]',

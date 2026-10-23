@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { TRAINER_LEVEL_ROLES } from '@/lib/auth/roles';
+import { TRAINER_LEVEL_ROLES, normalizeRole, ROLE } from '@/lib/auth/roles';
+import { getTrainingCatalogCodes } from '@/lib/catalog/admin';
 import { profiles, organizations, notifications } from '@/db/migrations/schemas/schema';
 import { sendCredentialsEmail } from '@/lib/email';
 import { DB_OPTION } from '@/lib/db-schema';
@@ -48,6 +49,20 @@ export async function GET(req: NextRequest) {
       .where(orgScopeCondition(profiles.organizationId, scope) ?? sql`1=1`)
       .orderBy(profiles.createdAt);
 
+    // The occupation of every trainee comes from its own lookup over the
+    // trainee ids (no join). The list works without it, so a failing lookup
+    // is only logged and leaves the code empty.
+    let catalogCodes = new Map<string, string>();
+    try {
+      catalogCodes = await getTrainingCatalogCodes(
+        rows
+          .filter(r => normalizeRole(r.role) === ROLE.TRAINEE)
+          .map(r => String(r.id))
+      );
+    } catch (err) {
+      console.error('Admin list users: catalog lookup failed', err);
+    }
+
     return NextResponse.json({
       users: rows.map(r => ({
         id: r.id,
@@ -63,6 +78,7 @@ export async function GET(req: NextRequest) {
         orgName: r.orgName,
         orgSlug: r.orgSlug,
         createdAt: r.createdAt,
+        trainingCatalogCode: catalogCodes.get(String(r.id)) ?? null,
       })),
     });
   } catch (e) {

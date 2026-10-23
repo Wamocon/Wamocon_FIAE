@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { canModifyRole, canManageAdmins, isAdminRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { TraineeEnrollmentDialog } from '@/components/admin/TraineeEnrollmentDialog';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import toast from 'react-hot-toast';
 import {
   Users,
@@ -36,6 +38,7 @@ type UserItem = {
   orgName: string | null;
   orgSlug: string | null;
   createdAt: string;
+  trainingCatalogCode?: string | null;
 };
 
 type OrgOption = {
@@ -54,6 +57,8 @@ const ROLE_CONFIG: Record<string, { labelKey: string; icon: typeof Shield; color
 export default function AdminUsersPage() {
   const { profile, loading } = useAuth() as any;
   const { t } = useLanguage();
+  const isSuperAdmin = useIsSuperAdmin();
+  const [enrollmentUser, setEnrollmentUser] = useState<UserItem | null>(null);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -460,6 +465,9 @@ export default function AdminUsersPage() {
                 <th className="text-muted px-6 py-4 text-left font-medium">{t('admin.users.user')}</th>
                 <th className="text-muted px-6 py-4 text-left font-medium">{t('admin.users.role')}</th>
                 <th className="text-muted px-6 py-4 text-left font-medium">{t('admin.users.organization')}</th>
+                {isSuperAdmin && (
+                  <th className="text-muted px-6 py-4 text-left font-medium">{t('admin.catalogs.column')}</th>
+                )}
                 <th className="text-muted px-6 py-4 text-left font-medium">{t('admin.users.status')}</th>
                 <th className="text-muted px-6 py-4 text-right font-medium">{t('admin.users.actions')}</th>
               </tr>
@@ -527,6 +535,15 @@ export default function AdminUsersPage() {
                         </span>
                       )}
                     </td>
+                    {isSuperAdmin && (
+                      <td className="px-6 py-4">
+                        {upperRole === 'TRAINEE' && (
+                          <span className="bg-accent/10 text-foreground inline-flex rounded-full px-2.5 py-1 text-xs font-medium">
+                            {u.trainingCatalogCode || t('common.unassigned')}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <span
@@ -549,6 +566,14 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {isSuperAdmin && upperRole === 'TRAINEE' && (
+                          <button
+                            onClick={() => setEnrollmentUser(u)}
+                            className="text-muted hover:text-foreground hover:bg-accent/10 rounded-lg px-3 py-1.5 text-xs transition-colors"
+                          >
+                            {t('admin.catalogs.changeOccupation')}
+                          </button>
+                        )}
                         {!isProtected && !isSelf && (
                           <>
                             {isEditing ? (
@@ -609,6 +634,18 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {isSuperAdmin && enrollmentUser && (
+        <TraineeEnrollmentDialog
+          trainee={{
+            id: enrollmentUser.id,
+            name: enrollmentUser.fullName || enrollmentUser.email,
+            organizationId: enrollmentUser.organizationId,
+          }}
+          onClose={() => setEnrollmentUser(null)}
+          onSaved={loadUsers}
+        />
+      )}
     </div>
   );
 }
