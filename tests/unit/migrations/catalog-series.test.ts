@@ -93,6 +93,8 @@ describe('catalog migration series files', () => {
       '20261023100100_security_close_hai_policies.sql',
       '20261023100200_security_close_anonymous_content_reads.sql',
       '20261023200000_security_profiles_column_privileges.sql',
+      '20261023300000_security_profiles_protect_columns.sql',
+      '20261023300100_security_profiles_protect_columns_v2.sql',
     ]);
     const newest = hardening[hardening.length - 1];
     for (const file of seriesFiles) {

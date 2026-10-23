@@ -127,6 +127,11 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
    mit `supabase migration list` prüfen, dass die zwölfstellige Version
    `202606260001` im Ledger korrekt geführt wird und die neuen vierzehnstelligen
    Versionen danach einsortiert werden. Gegebenenfalls `supabase migration repair`.
+   **Freigabe:** Die Release-Pipeline wendet die Reihe nur an, wenn der Eigentümer
+   die Repository-Variable `KFBM_ROLLOUT_APPROVED` auf `true` gesetzt hat (Schritt
+   "Rollout gate" im Release-Workflow). Vorher bricht ein Release, dessen Plan eine
+   Datei ab Version `20261024000100` enthält, vor dem Anwenden ab, es ändert sich
+   nichts. Die Variable steht bis zum Rollout auf `false`.
 5. **App deployen.** Die bestehenden Abfragen laufen unverändert weiter
    (`lernfelder` und `lernfeld_mappings` sind kompatible Views). Alle
    Rollenprüfungen der App behandeln `SUPER_ADMIN` mindestens wie `ADMIN`.
