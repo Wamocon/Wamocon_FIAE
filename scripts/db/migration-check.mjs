@@ -65,6 +65,26 @@ function withoutComments(sql) {
     .replace(/'(?:[^']|'')*'/g, "''");
 }
 
+/** Splits at commas outside of parentheses (the sub commands of an ALTER TABLE). */
+function topLevelCommas(text) {
+  const parts = [];
+  let depth = 0;
+  let current = '';
+  for (const c of text) {
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    if (c === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+    } else current += c;
+  }
+  parts.push(current);
+  return parts;
+}
+
+const ALTER_TABLE_HEAD =
+  /^\s*alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:"(?:[^"]|"")+"|[\w$]+)(?:\s*\.\s*(?:"(?:[^"]|"")+"|[\w$]+))?(?:\s*\*)?/i;
+
 export function destructiveStatements(sql) {
   const s = withoutComments(sql);
   const hits = [];
@@ -72,9 +92,24 @@ export function destructiveStatements(sql) {
     hits.push(m[0].replace(/\s+/g, ' ').toUpperCase());
   }
   hits.push(...[...s.matchAll(/\btruncate\b/gi)].map(() => 'TRUNCATE'));
+  hits.push(...[...s.matchAll(/\bdrop\s+owned\b/gi)].map(() => 'DROP OWNED'));
   for (const stmt of s.split(';')) {
     if (/\bdelete\s+from\b/i.test(stmt) && !/\bwhere\b/i.test(stmt)) {
       hits.push('DELETE without WHERE');
+    }
+    // "alter table t drop c" drops a column without the word COLUMN. Only
+    // "drop constraint" is no column drop; "alter column c drop default" starts
+    // with ALTER and is not matched.
+    if (ALTER_TABLE_HEAD.test(stmt)) {
+      const rest = stmt.replace(ALTER_TABLE_HEAD, '');
+      for (const part of topLevelCommas(rest)) {
+        if (
+          /^\s*drop\b/i.test(part) &&
+          !/^\s*drop\s+constraint\b/i.test(part)
+        ) {
+          hits.push('DROP COLUMN');
+        }
+      }
     }
   }
   return hits;

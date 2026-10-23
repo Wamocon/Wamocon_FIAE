@@ -202,7 +202,7 @@ Nicht aufgenommen, weil nicht in der Vorgabe genannt: `skills`, `course_skills`,
 
 - Datei `supabase/migrations/<14 Ziffern>_<name>.sql`, Name in Kleinbuchstaben. Zwei Altdateien mit 12 Ziffern stehen in `supabase/legacy-migrations.txt`.
 - Neue Migrationen müssen neuer sein als jede Migration auf `master`. Bereits vorhandene Dateien werden nie geändert, umbenannt oder gelöscht.
-- Zerstörende Anweisungen (`drop table`, `drop column`, `drop schema`, `truncate`, `delete` ohne `where`) brauchen die Zeile `-- migration:destructive-ok`.
+- Zerstörende Anweisungen (Tabelle oder Schema entfernen, `alter table ... drop <Name>` auch ohne das Wort `column`, `drop owned`, `truncate`, `delete` ohne `where`) brauchen die Zeile `-- migration:destructive-ok`. `alter table ... drop constraint` zählt nicht dazu. Die Prüfung läuft im Pull Request gegen `master` und im Release-Lauf gegen das vorherige Release (neue Dateien seit dem letzten Release).
 - Jede Migration wird für `public_preview` umgeschrieben (`public.` wird zu `public_preview.`, `begin` und `commit` werden entfernt). Was sich nicht sicher umschreiben lässt (Rollen, Publikationen, Änderungen an `auth`), lehnt die Prüfung ab. Einen Abschnitt, der für Preview nicht laufen soll, rahmen die Zeilen `-- preview:skip` und `-- preview:end`.
 - Katalogabfragen brauchen ein Schema, Erweiterungen `if not exists` und `with schema extensions`.
 

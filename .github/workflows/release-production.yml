@@ -96,8 +96,22 @@ jobs:
       # The commit must be part of master, checked again inside this job
       - uses: ./.github/actions/require-master
 
-      - name: Check migration files
-        run: node scripts/db/migration-check.mjs
+      # New files since the previous release: newer than every released migration, no change of
+      # released files, no destructive statement without approval, rewritable for Preview.
+      - name: Check migration files against the previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          prev=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 10 --json tagName --jq '.[].tagName' | grep -vxF "$RELEASE_TAG" | head -n 1 || true)
+          if [ -n "$prev" ] && printf '%s' "$prev" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$'; then
+            git fetch --no-tags origin "refs/tags/$prev:refs/tags/$prev"
+            echo "Previous release: $prev"
+            node scripts/db/migration-check.mjs --base "refs/tags/$prev"
+          else
+            echo "::warning::No previous release found, checking names and the Preview rewrite only."
+            node scripts/db/migration-check.mjs
+          fi
 
       - uses: ./.github/actions/db-setup
         with:

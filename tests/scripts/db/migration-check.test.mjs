@@ -1,5 +1,6 @@
 // Tests for scripts/db/migration-check.mjs (pure logic, no git, no database).
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   check,
@@ -201,4 +202,61 @@ test('a new 14 digit migration is newer than a legacy 12 digit one', () => {
     base: { files: ['202610200001_catalog.sql'], changed: [] },
   });
   assert.ok(errors.some(e => e.includes('not newer')));
+});
+
+test('alter table ... drop <name> without COLUMN is destructive', () => {
+  for (const sql of [
+    'alter table public.t drop old_col;',
+    'ALTER TABLE IF EXISTS ONLY public.t DROP old_col;',
+    'alter table t add x int, drop y;',
+    'alter table "my table" drop "Old Col";',
+    'alter table t drop if exists old_col;',
+    'alter table t alter column a set not null, drop b;',
+  ]) {
+    assert.ok(destructiveStatements(sql).includes('DROP COLUMN'), sql);
+  }
+});
+
+test('drop owned is destructive', () => {
+  assert.ok(
+    destructiveStatements('drop owned by app_role;').includes('DROP OWNED')
+  );
+});
+
+test('harmless alter table statements are not destructive', () => {
+  for (const sql of [
+    'alter table t drop constraint c;',
+    'alter table t alter column a drop not null;',
+    'alter table t alter column a drop default;',
+    'alter table t add column drop_flag int;',
+    'alter table t add constraint c check (a > 0), add column b int;',
+    'alter table t alter column a type numeric(10, 2);',
+    'alter table t add column d int default (1 + 2);',
+  ]) {
+    assert.deepEqual(destructiveStatements(sql), [], sql);
+  }
+});
+
+test('a new migration with an undeclared drop is rejected, with the approval it passes', () => {
+  const files = ['20261001000000_old.sql', '20261027000000_new.sql'];
+  const base = { files: [files[0]], changed: [] };
+  const run = sql => check({ files, contents: { [files[1]]: sql }, base });
+  assert.ok(
+    run('alter table public.t drop old_col;').some(e =>
+      e.includes('destructive')
+    )
+  );
+  assert.deepEqual(
+    run('-- migration:destructive-ok\nalter table public.t drop old_col;'),
+    []
+  );
+});
+
+test('the release workflow checks the migration files against the previous release', () => {
+  const release = readFileSync(
+    '.github/workflows/release-production.yml',
+    'utf8'
+  );
+  assert.ok(release.includes('gh release list'));
+  assert.ok(release.includes('migration-check.mjs --base "refs/tags/$prev"'));
 });
