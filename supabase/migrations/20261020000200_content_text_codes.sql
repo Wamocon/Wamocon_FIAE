@@ -21,10 +21,10 @@ begin
   if to_regclass('public.training_catalogs') is null
      or not exists (
        select 1
-       from information_schema.columns
-       where table_schema = 'public'
-         and table_name = 'courses'
-         and column_name = 'training_catalog_id'
+       from pg_attribute a
+       where a.attrelid = to_regclass('public.courses')
+         and a.attname = 'training_catalog_id'
+         and not a.attisdropped
      ) then
     raise exception
       'Run 20261020000100_training_catalog_curriculum.sql first (training catalog columns are missing).';
@@ -41,6 +41,7 @@ begin
     select 1 from pg_constraint
     where conname = 'courses_code_format_check'
       and conrelid = 'public.courses'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.courses
       add constraint courses_code_format_check
@@ -51,6 +52,7 @@ begin
     select 1 from pg_constraint
     where conname = 'enablers_code_format_check'
       and conrelid = 'public.enablers'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.enablers
       add constraint enablers_code_format_check
@@ -61,6 +63,7 @@ begin
     select 1 from pg_constraint
     where conname = 'use_cases_code_format_check'
       and conrelid = 'public.use_cases'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.use_cases
       add constraint use_cases_code_format_check

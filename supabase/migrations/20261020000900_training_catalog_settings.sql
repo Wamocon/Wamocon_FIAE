@@ -40,6 +40,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalogs_occupation_regulation_unique'
       and conrelid = 'public.training_catalogs'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalogs
       add constraint training_catalogs_occupation_regulation_unique
@@ -50,6 +51,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalogs_elective_pick_count_check'
       and conrelid = 'public.training_catalogs'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalogs
       add constraint training_catalogs_elective_pick_count_check
@@ -60,6 +62,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalogs_settings_object_check'
       and conrelid = 'public.training_catalogs'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalogs
       add constraint training_catalogs_settings_object_check
@@ -70,6 +73,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalogs_settings_threshold_check'
       and conrelid = 'public.training_catalogs'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalogs
       add constraint training_catalogs_settings_threshold_check
@@ -83,6 +87,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalogs_settings_school_org_check'
       and conrelid = 'public.training_catalogs'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalogs
       add constraint training_catalogs_settings_school_org_check
@@ -96,6 +101,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalogs_settings_phase_months_check'
       and conrelid = 'public.training_catalogs'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalogs
       add constraint training_catalogs_settings_phase_months_check

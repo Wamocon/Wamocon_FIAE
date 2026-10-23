@@ -67,40 +67,40 @@ begin
   end if;
 
   if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'lernfelder'
-      and column_name = 'code'
+    select 1 from pg_attribute a
+    where a.attrelid = to_regclass('public.lernfelder')
+      and a.attname = 'code'
+      and not a.attisdropped
   ) then
     raise exception
       'public.lernfelder still has the old seed shape (column code). Apply the drizzle migration 0026_add_lernfelder_table first.';
   end if;
 
   if (
-    select count(*) from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'lernfelder'
-      and column_name in ('id', 'title', 'description', 'label', 'created_at', 'updated_at')
+    select count(*) from pg_attribute a
+    where a.attrelid = to_regclass('public.lernfelder')
+      and a.attname in ('id', 'title', 'description', 'label', 'created_at', 'updated_at')
+      and not a.attisdropped
   ) <> 6 then
     raise exception
       'public.lernfelder does not have the expected columns (id, title, description, label, created_at, updated_at).';
   end if;
 
   if (
-    select count(*) from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'lernfeld_mappings'
-      and column_name in ('id', 'lernfeld_id', 'enabler_id', 'use_case_id', 'created_at')
+    select count(*) from pg_attribute a
+    where a.attrelid = to_regclass('public.lernfeld_mappings')
+      and a.attname in ('id', 'lernfeld_id', 'enabler_id', 'use_case_id', 'created_at')
+      and not a.attisdropped
   ) <> 5 then
     raise exception
       'public.lernfeld_mappings does not have the expected columns (id, lernfeld_id, enabler_id, use_case_id, created_at).';
   end if;
 
   if not exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'training_catalog_content_mappings'
-      and column_name = 'training_catalog_id'
+    select 1 from pg_attribute a
+    where a.attrelid = to_regclass('public.training_catalog_content_mappings')
+      and a.attname = 'training_catalog_id'
+      and not a.attisdropped
   ) then
     raise exception
       'Run the files 20261020000100 to 20261020000400 first (catalog consistency columns are missing).';
@@ -377,10 +377,9 @@ declare
 begin
   foreach legacy_table in array array['lernfelder_legacy', 'lernfeld_mappings_legacy'] loop
     for legacy_policy in
-      select p.policyname
-      from pg_policies p
-      where p.schemaname = 'public'
-        and p.tablename = legacy_table
+      select pol.polname as policyname
+      from pg_policy pol
+      where pol.polrelid = to_regclass(format('public.%I', legacy_table))
     loop
       execute format(
         'drop policy %I on public.%I',

@@ -22,6 +22,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_components_kind_check'
       and conrelid = 'public.training_components'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_components
       add constraint training_components_kind_check
@@ -43,6 +44,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_components_integrative_phase_check'
       and conrelid = 'public.training_components'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_components
       add constraint training_components_integrative_phase_check

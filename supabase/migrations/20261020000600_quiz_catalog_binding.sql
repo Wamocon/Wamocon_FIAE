@@ -19,6 +19,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_components_id_catalog_unique'
       and conrelid = 'public.training_components'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     raise exception
       'Run the files 20261020000100 to 20261020000400 first (training_components_id_catalog_unique is missing).';
@@ -39,6 +40,7 @@ begin
     select 1 from pg_constraint
     where conname = 'quizzes_training_catalog_id_training_catalogs_id_fk'
       and conrelid = 'public.quizzes'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.quizzes
       add constraint quizzes_training_catalog_id_training_catalogs_id_fk
@@ -51,6 +53,7 @@ begin
     select 1 from pg_constraint
     where conname = 'quizzes_component_catalog_fk'
       and conrelid = 'public.quizzes'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.quizzes
       add constraint quizzes_component_catalog_fk

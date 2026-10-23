@@ -140,6 +140,19 @@ describe('catalog migration series files', () => {
       expect(unqualified).toEqual([]);
     });
 
+    it('uses no catalog lookup that the Preview rewrite cannot place', () => {
+      // information_schema / pg_policies lookups by the schema value 'public'
+      // are error prone for the schema public_preview; the series uses
+      // to_regclass('public.<table>') with pg_attribute / pg_policy instead.
+      expect(sql).not.toMatch(/table_schema\s*=\s*'public'/i);
+      expect(sql).not.toMatch(/schemaname\s*=\s*'public'/i);
+      expect(sql).not.toMatch(/nspname\s*=\s*'public'/i);
+      // a constraint lookup by name always carries its namespace
+      for (const lookup of sql.matchAll(/where conname = '[^']+'[\s\S]*?;/g)) {
+        expect(lookup[0]).toMatch(/connamespace/);
+      }
+    });
+
     it('keeps every identifier within the 63 character limit', () => {
       const tooLong = identifiersOf(sql).filter(
         name => name.length > MAX_IDENTIFIER_LENGTH

@@ -27,10 +27,10 @@ begin
   if to_regclass('public.training_catalog_content_mappings') is null
      or not exists (
        select 1
-       from information_schema.columns
-       where table_schema = 'public'
-         and table_name = 'courses'
-         and column_name = 'training_catalog_id'
+       from pg_attribute a
+       where a.attrelid = to_regclass('public.courses')
+         and a.attname = 'training_catalog_id'
+         and not a.attisdropped
      ) then
     raise exception
       'Run 20261020000100_training_catalog_curriculum.sql first (training catalog tables are missing).';
@@ -45,6 +45,7 @@ begin
     select 1 from pg_constraint
     where conname = 'courses_id_catalog_unique'
       and conrelid = 'public.courses'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.courses
       add constraint courses_id_catalog_unique
@@ -55,6 +56,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_components_id_catalog_unique'
       and conrelid = 'public.training_components'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_components
       add constraint training_components_id_catalog_unique
@@ -65,6 +67,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalog_learning_fields_id_catalog_unique'
       and conrelid = 'public.training_catalog_learning_fields'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalog_learning_fields
       add constraint training_catalog_learning_fields_id_catalog_unique
@@ -120,6 +123,7 @@ begin
     select 1 from pg_constraint
     where conname = 'enablers_id_catalog_unique'
       and conrelid = 'public.enablers'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.enablers
       add constraint enablers_id_catalog_unique
@@ -130,6 +134,7 @@ begin
     select 1 from pg_constraint
     where conname = 'use_cases_id_catalog_unique'
       and conrelid = 'public.use_cases'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.use_cases
       add constraint use_cases_id_catalog_unique
@@ -222,6 +227,7 @@ begin
     select 1 from pg_constraint
     where conname = 'enablers_course_catalog_fk'
       and conrelid = 'public.enablers'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.enablers
       add constraint enablers_course_catalog_fk
@@ -235,6 +241,7 @@ begin
     select 1 from pg_constraint
     where conname = 'use_cases_course_catalog_fk'
       and conrelid = 'public.use_cases'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.use_cases
       add constraint use_cases_course_catalog_fk
@@ -248,6 +255,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalog_content_mappings_learning_field_catalog_fk'
       and conrelid = 'public.training_catalog_content_mappings'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalog_content_mappings
       add constraint training_catalog_content_mappings_learning_field_catalog_fk
@@ -262,6 +270,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalog_content_mappings_enabler_catalog_fk'
       and conrelid = 'public.training_catalog_content_mappings'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalog_content_mappings
       add constraint training_catalog_content_mappings_enabler_catalog_fk
@@ -275,6 +284,7 @@ begin
     select 1 from pg_constraint
     where conname = 'training_catalog_content_mappings_use_case_catalog_fk'
       and conrelid = 'public.training_catalog_content_mappings'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.training_catalog_content_mappings
       add constraint training_catalog_content_mappings_use_case_catalog_fk

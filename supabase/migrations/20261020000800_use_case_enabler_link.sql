@@ -33,6 +33,7 @@ begin
     select 1 from pg_constraint
     where conname = 'enablers_id_course_unique'
       and conrelid = 'public.enablers'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.enablers
       add constraint enablers_id_course_unique
@@ -49,6 +50,7 @@ begin
     select 1 from pg_constraint
     where conname = 'use_cases_enabler_id_unique'
       and conrelid = 'public.use_cases'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.use_cases
       add constraint use_cases_enabler_id_unique
@@ -59,6 +61,7 @@ begin
     select 1 from pg_constraint
     where conname = 'use_cases_enabler_course_fk'
       and conrelid = 'public.use_cases'::regclass
+      and connamespace = 'public'::regnamespace
   ) then
     alter table public.use_cases
       add constraint use_cases_enabler_course_fk
