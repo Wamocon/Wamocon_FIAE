@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { DB_OPTION } from '@/lib/db-schema';
 
 export default function ResetPasswordPage() {
   const { t } = useLanguage();
@@ -30,7 +31,9 @@ export default function ResetPasswordPage() {
   ) {
     router.replace('/login');
   }
-  const supabase = createClientComponentClient();
+  const supabase = createClientComponentClient({
+    options: { db: DB_OPTION },
+  });
   const processedRef = useRef(false); // prevent double-verification in React strict/dev
 
   useEffect(() => {

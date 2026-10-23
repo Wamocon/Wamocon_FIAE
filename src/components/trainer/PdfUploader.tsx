@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Upload, X, FileText, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/lib/supabase';
+import { withStoragePrefix } from '@/lib/db-schema';
 import { FILE_UPLOAD } from '@/lib/constants';
 
 interface PdfUploaderProps {
@@ -59,7 +60,10 @@ export function PdfUploader({
             // Generate unique path
             const timestamp = Date.now();
             const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-            const path = `${userId}/${timestamp}_${safeName}`;
+            // Preview uploads go under preview/ in the shared bucket
+            const path = withStoragePrefix(
+                `${userId}/${timestamp}_${safeName}`
+            );
 
             // Upload to Supabase Storage
             const { error: uploadError } = await supabase.storage

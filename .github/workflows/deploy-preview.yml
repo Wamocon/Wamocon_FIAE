@@ -1,0 +1,129 @@
+# =============================================================================
+# Preview deploy: migration on public_preview AND deployment to Vercel Preview
+# =============================================================================
+# Process steps 2, 3 and 5 (Preview):
+#   2. Pull request opened, then every push into it: migrate public_preview and
+#      deploy the merge result of the pull request to Preview.
+#   3. Pull request merged (push to master): migrate public_preview and deploy
+#      master to Preview. NO deployment to Production, NO migration of public.
+#   5. Manually: Actions -> "Preview Deploy" -> Run workflow. The branch is
+#      chosen with the input "branch". The migration of that branch runs only
+#      if "run_migration" is switched on.
+#
+# The database schema of the Preview build is FIXED to public_preview by the
+# deploy action (scripts/db/deploy-env.mjs) and cannot be set from outside. The
+# build aborts if the Vercel Preview environment does not connect as the role
+# app_preview.
+#
+# Secrets (environment "Preview"): PREVIEW_DB_URL (role app_preview_migrator,
+# rights on public_preview only), VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+# The Supabase access token of Production is not used by Preview jobs.
+# Pull requests from forks are skipped (no secrets there, and no foreign code
+# may reach the Preview environment). pull_request_target is never used.
+#
+# NEXT_PUBLIC_* is baked in at build time, so every deployment is built on its
+# own. Nothing is promoted from Preview to Production.
+# =============================================================================
+
+name: Preview Deploy
+
+on:
+  pull_request:
+    branches:
+      - master
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy to Preview'
+        required: true
+        default: master
+        type: string
+      run_migration:
+        description: 'Also migrate public_preview with the migrations of this branch'
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Migrate public_preview
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' || inputs.run_migration == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Preview
+    env:
+      PREVIEW_DB_URL: ${{ secrets.PREVIEW_DB_URL }}
+    steps:
+      - name: Validate the branch input
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          if ! printf '%s' "$BRANCH" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$'; then
+            echo "::error::Invalid branch name."
+            exit 1
+          fi
+
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || '' }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/preview-migrate
+        with:
+          apply: 'true'
+          # On master there is nothing to compare against, the PR gate did that.
+          compare-with-master: ${{ github.event_name != 'push' }}
+
+  deploy:
+    name: Deploy to Preview
+    needs: migrate
+    # Also when the migration was skipped on purpose (manual start without migration),
+    # but never after a failed or cancelled migration and never for forks.
+    if: >-
+      always() && !cancelled() &&
+      (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Preview
+    steps:
+      - name: Validate the branch input
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          if ! printf '%s' "$BRANCH" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$'; then
+            echo "::error::Invalid branch name."
+            exit 1
+          fi
+
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || '' }}
+          persist-credentials: false
+
+      # The target is fixed to preview: environment AND database schema (public_preview).
+      - uses: ./.github/actions/vercel-deploy
+        id: deploy
+        with:
+          target: preview
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}

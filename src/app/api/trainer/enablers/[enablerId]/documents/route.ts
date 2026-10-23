@@ -2,6 +2,7 @@ import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
+import { DB_OPTION } from '@/lib/db-schema';
 import { eq } from 'drizzle-orm';
 import { contentDocuments, enablers } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
@@ -178,7 +179,9 @@ export async function DELETE(
       const supabaseKey = getSupabaseSecretKey() || getSupabasePublicKey();
 
       if (supabaseUrl && supabaseKey && doc.storageUrl) {
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        const supabase = createClient(supabaseUrl, supabaseKey, {
+          db: DB_OPTION,
+        });
         // Extract path from URL: https://xxx.supabase.co/storage/v1/object/public/content/userId/file.pdf
         const urlParts = doc.storageUrl.split(
           '/storage/v1/object/public/content/'

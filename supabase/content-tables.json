@@ -1,0 +1,370 @@
+{
+  "$comment": "Allowlist for scripts/db/content-sync.mjs. ONLY training content (curriculum, courses, enablers, use cases, quizzes) is ever synchronised between public_preview and public. Never user data: no profiles, organizations, submissions, progress, certificates, evaluations, notifications, hai_embeddings. The order follows the foreign keys (parents first). key = columns that identify a row across both schemas (stable keys); until the stable code columns exist, the keys marked status=provisional are natural keys. columns = the explicit list of columns that are copied; a column that is not listed is never copied (is_indexed_by_hai is deliberately missing). A listed column that is a foreign key to a user table (profiles, organizations, auth) needs a remap rule, otherwise the sync aborts. remap translates a foreign key column through the key of the parent table (the ids differ between the schemas). lookups = tables that are only READ to translate ids (matched by email or slug), their rows are never copied. update: always | newer | never, only used with --update configured (the release run always uses --update never, i.e. insert only). optional=true: the table may be missing in one schema (created by a migration of another branch), it is then skipped with a note.",
+  "version": 1,
+  "lookups": {
+    "profiles": {
+      "matchOn": ["email"],
+      "pk": "id"
+    },
+    "organizations": {
+      "matchOn": ["slug"],
+      "pk": "id"
+    }
+  },
+  "tables": [
+    {
+      "name": "training_catalogs",
+      "key": ["code"],
+      "columns": [
+        "code",
+        "title",
+        "description",
+        "duration_years",
+        "is_active",
+        "created_at",
+        "updated_at"
+      ],
+      "optional": true,
+      "status": "provisional",
+      "note": "Created by the training catalog migration of another branch (202610200001_training_catalog_curriculum.sql); not in schema.ts on master yet."
+    },
+    {
+      "name": "courses",
+      "key": ["title", "year", "chapter"],
+      "columns": [
+        "title",
+        "description",
+        "year",
+        "chapter",
+        "exam_part",
+        "lernfelder",
+        "created_by_id",
+        "training_catalog_id",
+        "is_active",
+        "is_published",
+        "created_at",
+        "updated_at"
+      ],
+      "status": "provisional",
+      "note": "No stable code column yet; replace the key by [code] once it exists.",
+      "remap": {
+        "created_by_id": {
+          "table": "profiles",
+          "onMissing": "owner"
+        },
+        "training_catalog_id": {
+          "table": "training_catalogs",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "enablers",
+      "key": ["course_id", "title"],
+      "columns": [
+        "course_id",
+        "title",
+        "order_index",
+        "description_text",
+        "ppt_url",
+        "video_url",
+        "scenario_pdf_url",
+        "duration_value",
+        "duration_unit",
+        "is_active",
+        "activated_at",
+        "created_at",
+        "updated_at"
+      ],
+      "status": "provisional",
+      "remap": {
+        "course_id": {
+          "table": "courses",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "use_cases",
+      "key": ["course_id", "title"],
+      "columns": [
+        "course_id",
+        "title",
+        "description_text",
+        "order_index",
+        "duration_value",
+        "duration_unit",
+        "is_active",
+        "activated_at",
+        "year",
+        "training_stage",
+        "lernfelder",
+        "created_at",
+        "updated_at"
+      ],
+      "status": "provisional",
+      "remap": {
+        "course_id": {
+          "table": "courses",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "content_documents",
+      "key": ["title", "file_name", "document_type"],
+      "columns": [
+        "enabler_id",
+        "use_case_id",
+        "course_id",
+        "organization_id",
+        "title",
+        "description",
+        "document_type",
+        "visibility",
+        "file_name",
+        "file_size",
+        "mime_type",
+        "storage_url",
+        "storage_path",
+        "page_count",
+        "order_index",
+        "uploaded_by_id",
+        "created_at",
+        "updated_at"
+      ],
+      "status": "provisional",
+      "note": "Metadata rows only (no file bytes, storage objects are shared). is_indexed_by_hai is not copied, hai_embeddings is never synchronised. Files uploaded from Preview live under the storage prefix preview/ and keep that path.",
+      "remap": {
+        "enabler_id": {
+          "table": "enablers",
+          "onMissing": "skip"
+        },
+        "use_case_id": {
+          "table": "use_cases",
+          "onMissing": "skip"
+        },
+        "course_id": {
+          "table": "courses",
+          "onMissing": "skip"
+        },
+        "organization_id": {
+          "table": "organizations",
+          "onMissing": "null"
+        },
+        "uploaded_by_id": {
+          "table": "profiles",
+          "onMissing": "null"
+        }
+      }
+    },
+    {
+      "name": "quizzes",
+      "key": ["title", "quiz_type"],
+      "columns": [
+        "title",
+        "quiz_type",
+        "created_by_id",
+        "is_active",
+        "created_at",
+        "updated_at"
+      ],
+      "status": "provisional",
+      "remap": {
+        "created_by_id": {
+          "table": "profiles",
+          "onMissing": "owner"
+        }
+      }
+    },
+    {
+      "name": "enabler_quizzes",
+      "key": ["enabler_id"],
+      "columns": ["enabler_id", "quiz_id"],
+      "status": "provisional",
+      "remap": {
+        "enabler_id": {
+          "table": "enablers",
+          "onMissing": "skip"
+        },
+        "quiz_id": {
+          "table": "quizzes",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "enabler_quiz_links",
+      "key": ["enabler_id", "difficulty"],
+      "columns": ["enabler_id", "quiz_id", "difficulty"],
+      "status": "provisional",
+      "remap": {
+        "enabler_id": {
+          "table": "enablers",
+          "onMissing": "skip"
+        },
+        "quiz_id": {
+          "table": "quizzes",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "questions",
+      "key": ["quiz_id", "question_text"],
+      "columns": [
+        "quiz_id",
+        "question_text",
+        "question_type",
+        "expected_answer",
+        "order_index"
+      ],
+      "status": "provisional",
+      "remap": {
+        "quiz_id": {
+          "table": "quizzes",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "options",
+      "key": ["question_id", "option_text"],
+      "columns": ["question_id", "option_text", "is_correct", "explanation"],
+      "status": "provisional",
+      "remap": {
+        "question_id": {
+          "table": "questions",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "lernfelder",
+      "key": ["code"],
+      "columns": [
+        "code",
+        "title",
+        "description",
+        "training_year",
+        "hours_budget",
+        "is_common",
+        "order_index",
+        "created_at"
+      ],
+      "status": "provisional",
+      "note": "schema.ts defines pgTable('lernfelder') twice (lernfelder with code, lernfelderSchema with label). The first definition (code) is assumed."
+    },
+    {
+      "name": "lernfeld_mappings",
+      "key": ["lernfeld_id", "enabler_id", "use_case_id"],
+      "columns": ["lernfeld_id", "enabler_id", "use_case_id", "created_at"],
+      "status": "provisional",
+      "remap": {
+        "lernfeld_id": {
+          "table": "lernfelder",
+          "onMissing": "skip"
+        },
+        "enabler_id": {
+          "table": "enablers",
+          "onMissing": "skip"
+        },
+        "use_case_id": {
+          "table": "use_cases",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "training_components",
+      "key": ["code"],
+      "columns": [
+        "code",
+        "title",
+        "description",
+        "total_weeks",
+        "total_hours",
+        "training_year",
+        "order_index",
+        "training_catalog_id",
+        "created_at"
+      ],
+      "status": "provisional",
+      "note": "The training catalog migration changes the unique constraint to (training_catalog_id, code); then set the key to [training_catalog_id, code].",
+      "remap": {
+        "training_catalog_id": {
+          "table": "training_catalogs",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "training_use_cases",
+      "key": ["component_id", "letter"],
+      "columns": [
+        "component_id",
+        "letter",
+        "description",
+        "planned_hours",
+        "order_index",
+        "created_at"
+      ],
+      "status": "provisional",
+      "remap": {
+        "component_id": {
+          "table": "training_components",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "training_catalog_learning_fields",
+      "key": ["training_catalog_id", "code"],
+      "columns": [
+        "training_catalog_id",
+        "code",
+        "title",
+        "description",
+        "training_year",
+        "hours_budget",
+        "order_index",
+        "created_at",
+        "updated_at"
+      ],
+      "optional": true,
+      "status": "provisional",
+      "remap": {
+        "training_catalog_id": {
+          "table": "training_catalogs",
+          "onMissing": "skip"
+        }
+      }
+    },
+    {
+      "name": "training_catalog_content_mappings",
+      "key": ["learning_field_id", "enabler_id", "use_case_id"],
+      "columns": [
+        "learning_field_id",
+        "enabler_id",
+        "use_case_id",
+        "created_at"
+      ],
+      "optional": true,
+      "status": "provisional",
+      "remap": {
+        "learning_field_id": {
+          "table": "training_catalog_learning_fields",
+          "onMissing": "skip"
+        },
+        "enabler_id": {
+          "table": "enablers",
+          "onMissing": "skip"
+        },
+        "use_case_id": {
+          "table": "use_cases",
+          "onMissing": "skip"
+        }
+      }
+    }
+  ]
+}

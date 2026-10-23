@@ -1,6 +1,27 @@
 import type { NextConfig } from 'next';
+import {
+  assertSchemaMatchesEnvironment,
+  resolveDbSchema,
+} from './src/lib/db-schema';
+
+// Database schema of this build: public (Production) or public_preview
+// (Preview). Invalid values and a Vercel production/preview build with the
+// wrong schema abort the build. Without any variable the schema is public.
+const dbSchema = resolveDbSchema({
+  NEXT_PUBLIC_DB_SCHEMA: process.env.NEXT_PUBLIC_DB_SCHEMA,
+  SUPABASE_DB_SCHEMA: process.env.SUPABASE_DB_SCHEMA,
+});
+assertSchemaMatchesEnvironment(
+  dbSchema,
+  process.env.VERCEL_ENV,
+  process.env.DB_CONNECTION_STRING
+);
 
 const nextConfig: NextConfig = {
+  // NEXT_PUBLIC_* is inlined at build time, so each deployment needs its own build.
+  env: {
+    NEXT_PUBLIC_DB_SCHEMA: dbSchema,
+  },
   images: {
     domains: ['localhost', 'thzssnabxgchzbsnbgoh.supabase.co'],
   },

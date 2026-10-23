@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { DB_OPTION } from '@/lib/db-schema';
 
 export default function ForgotPasswordPage() {
   const { t } = useLanguage();
@@ -16,7 +17,9 @@ export default function ForgotPasswordPage() {
     message?: string;
   }>({ type: 'idle' });
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createClientComponentClient({
+    options: { db: DB_OPTION },
+  });
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

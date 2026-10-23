@@ -41,7 +41,11 @@
     "import:use-cases": "tsx scripts/bulk-import-use-case-pdfs.ts",
     "import:use-cases:dry-run": "tsx scripts/bulk-import-use-case-pdfs.ts --dry-run",
     "import:use-cases:quick": "tsx scripts/bulk-import-use-case-pdfs.ts --hai-skip",
-    "import:use-cases:scan": "tsx scripts/bulk-import-use-case-pdfs.ts --scan-only"
+    "import:use-cases:scan": "tsx scripts/bulk-import-use-case-pdfs.ts --scan-only",
+    "test:scripts": "node --test \"tests/scripts/**/*.test.mjs\"",
+    "db:migrations:check": "node scripts/db/migration-check.mjs",
+    "db:preview:check": "node scripts/db/preview-migrate.mjs check",
+    "db:content:dry-run": "node scripts/db/content-sync.mjs --linked"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",

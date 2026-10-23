@@ -1,0 +1,62 @@
+# =============================================================================
+# Composite action: database tooling for PRODUCTION jobs (token and project link)
+# =============================================================================
+# PRODUCTION jobs only (environment Production). Preview jobs must not use this
+# action: they have no Production token and use ./.github/actions/cli-setup with
+# a connection string instead.
+#
+# Installs Node, installs the PINNED Supabase CLI and links the project. The
+# caller job must provide SUPABASE_ACCESS_TOKEN as job environment variable
+# (from the secrets of its environment), the project reference is passed as an
+# input (repository variable, not a secret, not hard coded).
+#
+# Runs inside the caller job, so environment secrets work reliably. The repo
+# must be checked out before (the action itself lives in the repository).
+#
+# Pinned: scripts/db/preview-cli.mjs depends on "db query --output-format json"
+# and "--agent no"; a new output format once broke CI silently in another
+# project. Raise the version only together with a trial run of
+#   node scripts/db/preview-migrate.mjs apply --linked --plan-only
+# =============================================================================
+name: Database tooling
+description: Node, pinned Supabase CLI and project link for the database scripts
+inputs:
+  project-ref:
+    description: Supabase project reference (repository variable)
+    required: true
+  supabase-cli-version:
+    description: Pinned Supabase CLI version
+    required: false
+    default: '2.118.0'
+runs:
+  using: composite
+  steps:
+    - name: Required configuration present?
+      shell: bash
+      env:
+        PROJECT_REF: ${{ inputs.project-ref }}
+      run: |
+        if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+          echo "::error::Secret SUPABASE_ACCESS_TOKEN is missing in the environment of this job (see docs/release-prozess.md)."
+          exit 1
+        fi
+        if [ -z "$PROJECT_REF" ]; then
+          echo "::error::Repository variable SUPABASE_PROJECT_REF_PROD is not set (see docs/release-prozess.md)."
+          exit 1
+        fi
+        if ! printf '%s' "$PROJECT_REF" | grep -Eq '^[a-z0-9]{15,30}$'; then
+          echo "::error::The project reference does not look like a Supabase reference."
+          exit 1
+        fi
+
+    - uses: ./.github/actions/cli-setup
+      with:
+        supabase-cli-version: ${{ inputs.supabase-cli-version }}
+
+    # All CLI calls that talk to the database go through scripts/db/supabase-retry.mjs:
+    # it repeats ONLY a rejected login (cli_login_postgres), see its header.
+    - name: Link the project
+      shell: bash
+      env:
+        PROJECT_REF: ${{ inputs.project-ref }}
+      run: node scripts/db/supabase-retry.mjs link --project-ref "$PROJECT_REF"

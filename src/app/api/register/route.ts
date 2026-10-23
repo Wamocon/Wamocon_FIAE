@@ -1,6 +1,8 @@
 import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { DB_OPTION } from '@/lib/db-schema';
+import { blockInPreview } from '@/lib/preview-guard';
 import db from '@/db';
 import { profiles, notifications } from '@/db/migrations/schemas/schema';
 import { and, eq } from 'drizzle-orm';
@@ -24,6 +26,10 @@ function deriveNameFromEmail(email: string) {
 
 export async function POST(request: Request) {
   try {
+    // auth.admin.createUser would create an account in the shared Production auth
+    const blocked = blockInPreview();
+    if (blocked) return blocked;
+
     const rate = checkRateLimit(
       `register:${getClientIp(request.headers)}`,
       REGISTER_LIMIT
@@ -117,6 +123,7 @@ export async function POST(request: Request) {
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
+      db: DB_OPTION,
     });
 
     // Create user with admin API (no email confirmation required)
