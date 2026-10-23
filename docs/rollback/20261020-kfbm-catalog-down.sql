@@ -196,6 +196,25 @@ begin
     alter table public.lernfeld_mappings_legacy rename to lernfeld_mappings;
     comment on table public.lernfelder is null;
     comment on table public.lernfeld_mappings is null;
+
+    -- Restore the state before the migration: the original policies of drizzle
+    -- 0016 and the grants of the API roles (the migration dropped them). Note:
+    -- this brings back the anonymous read access the migration closed; revoke
+    -- it again afterwards if the rollback is only partial.
+    create policy lf_select_all on public.lernfelder
+      for select using (true);
+    create policy lf_manage_platform_owner on public.lernfelder
+      for all using (public.is_platform_owner());
+    create policy lfm_select_all on public.lernfeld_mappings
+      for select using (true);
+    create policy lfm_manage_platform_owner on public.lernfeld_mappings
+      for all using (public.is_platform_owner());
+    if exists (select 1 from pg_roles where rolname = 'anon') then
+      grant all on public.lernfelder, public.lernfeld_mappings to anon;
+    end if;
+    if exists (select 1 from pg_roles where rolname = 'authenticated') then
+      grant all on public.lernfelder, public.lernfeld_mappings to authenticated;
+    end if;
   end if;
 end $$;
 
@@ -237,5 +256,9 @@ alter table public.courses
   drop column if exists training_catalog_id;
 
 drop table if exists public.training_catalogs;
+
+-- Helper of the organization bound read policies (20261020001000); the tables
+-- whose policies used it are gone by now.
+drop function if exists public.can_read_training_catalog(uuid);
 
 commit;

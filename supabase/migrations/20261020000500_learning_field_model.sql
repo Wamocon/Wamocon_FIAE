@@ -364,6 +364,44 @@ comment on table public.lernfelder_legacy is
 comment on table public.lernfeld_mappings_legacy is
   'Backup of the legacy lernfeld_mappings table from before the catalog learning field model. Replaced by the compatibility view public.lernfeld_mappings. Drop in a later cleanup.';
 
+-- The legacy tables are backups only. Their original policies (select for
+-- public with USING (true), drizzle 0016) made them readable for anonymous API
+-- callers. Drop every policy, keep row level security enabled (no policy means
+-- no access for the API roles) and revoke the privileges of anon and
+-- authenticated. The server (postgres, BYPASSRLS) is not affected.
+do $$
+declare
+  legacy_table text;
+  legacy_policy record;
+  api_role text;
+begin
+  foreach legacy_table in array array['lernfelder_legacy', 'lernfeld_mappings_legacy'] loop
+    for legacy_policy in
+      select p.policyname
+      from pg_policies p
+      where p.schemaname = 'public'
+        and p.tablename = legacy_table
+    loop
+      execute format(
+        'drop policy %I on public.%I',
+        legacy_policy.policyname, legacy_table
+      );
+    end loop;
+    execute format(
+      'alter table public.%I enable row level security',
+      legacy_table
+    );
+    foreach api_role in array array['anon', 'authenticated'] loop
+      if exists (select 1 from pg_roles where rolname = api_role) then
+        execute format(
+          'revoke all on public.%I from %I',
+          legacy_table, api_role
+        );
+      end if;
+    end loop;
+  end loop;
+end $$;
+
 -- security_invoker: the base table policies (select all, manage as platform
 -- owner) apply to the caller, exactly like they did for the old table.
 create view public.lernfelder
@@ -472,6 +510,16 @@ where m.training_catalog_id = '00000000-0000-4000-8000-000000000001';
 
 comment on view public.lernfeld_mappings is
   'Compatibility view over the FIAE rows of training_catalog_content_mappings. New code should use training_catalog_content_mappings.';
+
+-- No anonymous access to the compatibility views (they are security_invoker
+-- views over tables whose policies are limited to authenticated users).
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on public.lernfelder from anon;
+    revoke all on public.lernfeld_mappings from anon;
+  end if;
+end $$;
 
 -- 4. Post checks ---------------------------------------------------------------
 
