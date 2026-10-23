@@ -345,6 +345,112 @@ describe('catalog isolation', () => {
       });
     });
 
+    it('a taken learning field label answers 409, not 500', async () => {
+      const conflict = Object.assign(new Error('failed query'), {
+        cause: {
+          code: '23505',
+          constraint_name:
+            'training_catalog_learning_fields_catalog_code_unique',
+        },
+      });
+      const base = createTableDb({
+        trainingCatalogs: catalogs,
+        organizationCatalogs: kfbmOnly,
+      });
+      const db = {
+        ...base.db,
+        transaction: async () => {
+          throw conflict;
+        },
+      };
+      const { mod } = await load(
+        'trainer/lernfelder',
+        {},
+        {
+          session: trainer(),
+          db,
+        }
+      );
+      const res = await mod.POST(
+        req('http://localhost/api/trainer/lernfelder', {
+          method: 'POST',
+          body: { title: 'Duplicate', label: 'LF-7' },
+        })
+      );
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toMatch(/already exists/);
+    });
+
+    it('another unique violation is still a server error', async () => {
+      const other = Object.assign(new Error('failed query'), {
+        cause: { code: '23505', constraint_name: 'something_else_unique' },
+      });
+      const base = createTableDb({
+        trainingCatalogs: catalogs,
+        organizationCatalogs: kfbmOnly,
+      });
+      const db = {
+        ...base.db,
+        transaction: async () => {
+          throw other;
+        },
+      };
+      const errorSpy = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const { mod } = await load(
+        'trainer/lernfelder',
+        {},
+        {
+          session: trainer(),
+          db,
+        }
+      );
+      const res = await mod.POST(
+        req('http://localhost/api/trainer/lernfelder', {
+          method: 'POST',
+          body: { title: 'X', label: 'LF-9' },
+        })
+      );
+      expect(res.status).toBe(500);
+      errorSpy.mockRestore();
+    });
+
+    it('creating a learning field takes the advisory lock for its catalog', async () => {
+      const { mock, mod } = await load(
+        'trainer/lernfelder',
+        { organizationCatalogs: kfbmOnly },
+        { session: trainer() }
+      );
+      await mod.POST(
+        req('http://localhost/api/trainer/lernfelder', {
+          method: 'POST',
+          body: { title: 'Locked', label: 'LF-2' },
+        })
+      );
+      expect(mock.db.transaction).toHaveBeenCalledTimes(1);
+      expect(mock.db.execute).toHaveBeenCalled();
+    });
+
+    it('a label change recalculates the training year', async () => {
+      const { mock, mod } = await load(
+        'trainer/lernfelder/[id]',
+        { organizationCatalogs: kfbmOnly },
+        { session: trainer() }
+      );
+      const res = await mod.PATCH(
+        req('http://localhost/api/trainer/lernfelder/lf1', {
+          method: 'PATCH',
+          body: { label: 'LF-8' },
+        }),
+        { params: Promise.resolve({ id: 'lf1' }) }
+      );
+      expect(res.status).toBe(200);
+      expect(
+        mock.writes('update', 'training_catalog_learning_fields')[0]
+      ).toMatchObject({ code: 'LF-8', trainingYear: 2 });
+    });
+
     it('fails closed when the catalog lookup breaks (503, no data)', async () => {
       const failing = {
         select: jest.fn(() => {

@@ -11,7 +11,12 @@ import {
   allowedCatalogCondition,
   requireCatalogScope,
 } from '@/lib/catalog/scope';
-import { legacyLearningFieldSelect } from '@/lib/catalog/learning-fields';
+import {
+  LEARNING_FIELD_LABEL_CONFLICT,
+  isLearningFieldLabelConflict,
+  labelTrainingYear,
+  legacyLearningFieldSelect,
+} from '@/lib/catalog/learning-fields';
 
 /**
  * GET /api/trainer/lernfelder/[id]
@@ -108,7 +113,11 @@ export async function PATCH(
       .set({
         ...(title !== undefined ? { title } : {}),
         ...(description !== undefined ? { description } : {}),
-        ...(label !== undefined ? { code: label } : {}),
+        // a new label (for example LF-3 to LF-8) moves the learning field to
+        // the training year of its new number
+        ...(label !== undefined
+          ? { code: label, trainingYear: labelTrainingYear(String(label)) }
+          : {}),
         updatedAt: new Date(),
       })
       .where(
@@ -124,6 +133,12 @@ export async function PATCH(
     }
     return NextResponse.json({ lernfeld: updated });
   } catch (e) {
+    if (isLearningFieldLabelConflict(e)) {
+      return NextResponse.json(
+        { error: LEARNING_FIELD_LABEL_CONFLICT },
+        { status: 409 }
+      );
+    }
     console.error('Update lernfeld error', e);
     return NextResponse.json(
       { error: 'Internal Server Error' },

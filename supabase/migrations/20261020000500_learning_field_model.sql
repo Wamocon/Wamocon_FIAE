@@ -169,6 +169,7 @@ begin
       l.updated_at,
       coalesce(nullif(btrim(l.label), ''), 'LF-' || substr(l.id::text, 1, 8))
         as base_code,
+      (btrim(l.label) = '') as is_blank,
       nullif(substring(l.label from '(?i)^\s*LF[\s._-]*([0-9]{1,3})'), '')::integer
         as lf_number,
       coalesce(
@@ -217,7 +218,12 @@ begin
     f.code,
     f.title,
     f.description,
-    public.lernfeld_label_training_year(f.base_code),
+    -- a generated code (blank label) must not be parsed: its id fragment may
+    -- start with digits
+    case
+      when f.is_blank then 1
+      else public.lernfeld_label_training_year(f.base_code)
+    end,
     null,
     f.pos + coalesce((
       select max(lf.order_index)
@@ -429,6 +435,10 @@ set search_path = ''
 as $$
 begin
   if tg_op = 'INSERT' then
+    -- order_index = max + 1 must not race with a parallel insert
+    perform pg_advisory_xact_lock(
+      hashtext('training_catalog_learning_fields:00000000-0000-4000-8000-000000000001')
+    );
     insert into public.training_catalog_learning_fields (
       id,
       training_catalog_id,
@@ -464,6 +474,13 @@ begin
     set code = new.label,
         title = new.title,
         description = new.description,
+        -- a changed label (LF-3 to LF-8) moves the learning field to the year
+        -- of its new number
+        training_year = case
+          when new.label is distinct from old.label
+            then public.lernfeld_label_training_year(new.label)
+          else lf.training_year
+        end,
         updated_at = new.updated_at
     where lf.id = old.id
       and lf.training_catalog_id = '00000000-0000-4000-8000-000000000001'

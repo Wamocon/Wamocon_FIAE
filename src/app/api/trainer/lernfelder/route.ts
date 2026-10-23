@@ -9,9 +9,10 @@ import { arrayContains, count, and, eq } from 'drizzle-orm';
 import { verifyPlatformOwner } from '@/lib/auth-helpers';
 import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
 import {
-  labelTrainingYear,
+  LEARNING_FIELD_LABEL_CONFLICT,
+  createLearningField,
+  isLearningFieldLabelConflict,
   legacyLearningFieldSelect,
-  nextLearningFieldOrderIndex,
 } from '@/lib/catalog/learning-fields';
 
 /**
@@ -98,20 +99,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [inserted] = await db
-      .insert(learningFields)
-      .values({
-        trainingCatalogId: scope.activeCatalogId,
-        code: label,
-        title,
-        description,
-        trainingYear: labelTrainingYear(String(label)),
-        orderIndex: await nextLearningFieldOrderIndex(scope.activeCatalogId),
-      })
-      .returning(legacyLearningFieldSelect);
+    const inserted = await createLearningField({
+      catalogId: scope.activeCatalogId,
+      label: String(label),
+      title,
+      description,
+    });
 
     return NextResponse.json({ lernfelder: inserted });
   } catch (e) {
+    if (isLearningFieldLabelConflict(e)) {
+      return NextResponse.json(
+        { error: LEARNING_FIELD_LABEL_CONFLICT },
+        { status: 409 }
+      );
+    }
     console.error('Create lernfelder error', e);
     return NextResponse.json(
       { error: 'Internal Server Error' },
