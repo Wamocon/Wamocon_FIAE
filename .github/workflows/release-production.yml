@@ -23,6 +23,12 @@
 #     jobs" continues; every step is repeatable.
 #   - The baseline guard stops the run if db push would apply a legacy file again.
 #
+# Human settings that belong to this protection (docs/release-prozess.md): a tag
+# ruleset that only maintainers may create release tags (v*), and for the
+# environment Production "Deployment branches and tags" restricted to master and
+# the tag pattern v*. The workflow file of a tag is part of the tag itself, so the
+# checks in this file alone do not replace those settings.
+#
 # NOTE: releases created by a workflow with the default GITHUB_TOKEN do NOT
 # start this workflow (GitHub does not trigger workflows from events caused by
 # GITHUB_TOKEN). Publish releases by hand or with a personal token / app.
@@ -84,7 +90,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
+
+      # The commit must be part of master, checked again inside this job
+      - uses: ./.github/actions/require-master
 
       - name: Check migration files
         run: node scripts/db/migration-check.mjs
@@ -148,7 +158,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
+
+      # The commit must be part of master, checked again inside this job
+      - uses: ./.github/actions/require-master
 
       - uses: ./.github/actions/db-setup
         with:
@@ -169,7 +183,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
+
+      # The commit must be part of master, checked again inside this job
+      - uses: ./.github/actions/require-master
 
       # The target is fixed to production: environment AND database schema (public).
       - uses: ./.github/actions/vercel-deploy

@@ -51,6 +51,9 @@ permissions:
 jobs:
   sync:
     name: Content sync ${{ inputs.apply && 'apply' || 'dry run' }}
+    # Only the workflow file of master may start it; the release tag it checks out
+    # must be part of master as well (require-master below)
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: Production
@@ -76,7 +79,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: refs/tags/${{ steps.release.outputs.tag }}
+          fetch-depth: 0
           persist-credentials: false
+
+      - uses: ./.github/actions/require-master
 
       - uses: ./.github/actions/db-setup
         with:

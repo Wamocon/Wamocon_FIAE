@@ -41,6 +41,8 @@ permissions:
 jobs:
   deploy:
     name: Deploy latest release to Production
+    # Only the workflow file of master may start it
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     environment: Production
@@ -80,15 +82,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Release commit must be reachable from master
-        env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-        run: |
-          git fetch --no-tags origin master
-          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
-            echo "::error::Release $RELEASE_TAG is not part of master. Production releases are made from master only."
-            exit 1
-          fi
+      # The release tag must point to a commit that is part of master
+      - uses: ./.github/actions/require-master
 
       - uses: ./.github/actions/db-setup
         with:

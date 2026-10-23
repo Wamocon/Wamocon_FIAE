@@ -188,3 +188,37 @@ test('drift check without public (Preview only) reports file and checksum findin
   });
   assert.deepEqual(ok.errors, []);
 });
+
+test('every Production job checks that the commit is part of master', () => {
+  for (const [path, name] of [
+    ['.github/workflows/release-production.yml', 'migrate'],
+    ['.github/workflows/release-production.yml', 'content-sync'],
+    ['.github/workflows/release-production.yml', 'deploy'],
+    ['.github/workflows/content-sync.yml', 'sync'],
+    ['.github/workflows/deploy-production.yml', 'deploy'],
+  ]) {
+    const block = job(path, name);
+    assert.ok(
+      block.includes('./.github/actions/require-master'),
+      `${path} ${name}`
+    );
+    assert.ok(/fetch-depth:\s*0/.test(block), `${path} ${name}: full history`);
+  }
+  const action = code(read('.github/actions/require-master/action.yml'));
+  assert.ok(action.includes('git merge-base --is-ancestor'));
+  assert.ok(action.includes('is-shallow-repository'));
+});
+
+test('manual Production workflows only start from the workflow file of master', () => {
+  for (const [path, name] of [
+    ['.github/workflows/content-sync.yml', 'sync'],
+    ['.github/workflows/deploy-production.yml', 'deploy'],
+    ['.github/workflows/preview-reset.yml', 'snapshot'],
+    ['.github/workflows/db-drift.yml', 'production-drift'],
+  ]) {
+    assert.ok(
+      job(path, name).includes("github.ref == 'refs/heads/master'"),
+      `${path} ${name}`
+    );
+  }
+});
