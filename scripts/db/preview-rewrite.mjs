@@ -180,8 +180,10 @@ const QUALIFIED_SCHEMAS = [
 /**
  * Closes up schema qualifications so no rule can be bypassed by formatting:
  * comments become a space, "public . profiles" and public /* x *\/ . profiles
- * become public.profiles, "auth"."users" and auth."users" become auth.users
- * (shared schemas only, so the quoting of other names is kept).
+ * become public.profiles, and the schema part is unquoted: pg_dump quotes every
+ * name, so "public"."courses" and "auth"."users" become public."courses" and
+ * auth.users. The schema names of this list are plain lower case words, so
+ * unquoting them does not change their meaning.
  */
 export function normalizeQualifiers(sql) {
   const list = QUALIFIED_SCHEMAS.join('|');
@@ -192,13 +194,49 @@ export function normalizeQualifiers(sql) {
   return noComments
     .replace(
       new RegExp(`(?<![\\w$"])("?)(${list})\\1\\s*\\.\\s*(?=["A-Za-z_])`, 'g'),
-      '$1$2$1.'
+      '$2.'
     )
-    .replace(new RegExp(`"(${shared})"\\.`, 'g'), '$1.')
     .replace(
       new RegExp(`\\b(${shared})\\."([a-z_][a-z0-9_$]*)"`, 'g'),
       '$1.$2'
     );
+}
+
+/**
+ * Text for the block rules (detection only, never executed): normalised
+ * qualifications, every quoted plain lower case name unquoted ("delete" and
+ * "auth"."users" read as delete and auth.users), spaces around dots closed up
+ * for every schema, not only the listed ones. Names that need their quotes
+ * (upper case letters, spaces, special characters) keep them.
+ */
+export function canonicalize(sql) {
+  return normalizeQualifiers(sql)
+    .replace(/"([a-z_][a-z0-9_$]*)"/g, '$1')
+    .replace(/(?<=[\w$"])\s*\.\s*(?=["A-Za-z_])/g, '.');
+}
+
+// Objects of extensions that live in the schema public (pgvector: the type
+// vector). They cannot be cloned, a database has one copy of an extension, and
+// public_preview must keep pointing at it: public.vector stays public.vector.
+export const DEFAULT_EXTENSION_OBJECTS = ['vector', 'halfvec', 'sparsevec'];
+
+const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Hides public.<extension object> from the schema rename, restore() puts it back. */
+function protectExtensionRefs(text, names) {
+  const kept = [];
+  if (!names || names.length === 0) return { text, restore: s => s };
+  const re = new RegExp(
+    `(?<![\\w$"])public\\.("?)(${names.map(escapeRegExp).join('|')})\\1(?![\\w$])`,
+    'g'
+  );
+  return {
+    text: text.replace(re, m => {
+      kept.push(m);
+      return `\u0001${kept.length - 1}\u0001`;
+    }),
+    restore: s => s.replace(/\u0001(\d+)\u0001/g, (_, i) => kept[Number(i)]),
+  };
 }
 
 const REFERENCE_TO_PUBLIC = /(?<![\w$"])public\./i;
@@ -305,6 +343,10 @@ const TRIGGER_ON_SHARED_ANY = R(
 const POLICY_ON_SHARED_ANY = R(
   String.raw`\b(?:create|alter|drop|comment\s+on)\s+policy\b[^;]*?\bon\s+(?:only\s+)?${SHARED}\.`
 );
+// A qualification of a schema other than public: plain or quoted name, any quoted
+// name (spaces, upper case), then a dot and the start of a name. "public" itself
+// never occurs quoted here, normalizeQualifiers unquotes it.
+const OTHER_SCHEMA = String.raw`(?!public\s*\.)(?:"(?:[^"]|"")+"|[a-z_][\w$]*)\s*\.\s*["\w$]`;
 const FORBIDDEN = [
   [
     R(
@@ -337,14 +379,12 @@ const FORBIDDEN = [
   [
     // any other schema than public: writes only belong into public (public_preview)
     R(
-      String.raw`\b(?:insert\s+into|delete\s+from|merge\s+into|truncate(?:\s+table)?|lock(?:\s+table)?)\s+(?:only\s+)?(?!public\.)"?[a-z_][\w$]*"?\s*\.\s*"?[a-z_]|\bupdate\s+(?:only\s+)?(?!public\.)(?!set\b)"?[a-z_][\w$]*"?\s*\.\s*"?[a-z_]`
+      String.raw`\b(?:insert\s+into|delete\s+from|merge\s+into|truncate(?:\s+table)?|lock(?:\s+table)?)\s+(?:only\s+)?${OTHER_SCHEMA}|\bupdate\s+(?:only\s+)?(?!set\b)${OTHER_SCHEMA}`
     ),
     'writes to or locks a table of another schema than public',
   ],
   [
-    R(
-      String.raw`\b(?:truncate|lock)\b[^;]*,\s*(?!public\.)"?[a-z_][\w$]*"?\s*\.\s*"?[a-z_]`
-    ),
+    R(String.raw`\b(?:truncate|lock)\b[^;]*,\s*${OTHER_SCHEMA}`),
     'truncates or locks a table of another schema than public',
   ],
   [
@@ -378,7 +418,7 @@ const FORBIDDEN = [
     'pg_cron lives in a shared schema, jobs of a branch must not be scheduled',
   ],
   [
-    R(String.raw`\breferences\s+(?:only\s+)?(?!public\.)"?[a-z_][\w$]*"?\s*\.`),
+    R(String.raw`\breferences\s+(?:only\s+)?${OTHER_SCHEMA}`),
     'foreign key to a table of another schema than public; the Preview role has no rights there. Frame it with "-- preview:skip" ... "-- preview:end" if it is needed in Production only',
   ],
   [
@@ -497,13 +537,25 @@ const TRANSACTION_CONTROL =
 /** Statements whose strings are plain text, never executed. */
 const TEXT_ONLY = /^\s*comment\s+on\b/i;
 
+// The four read-only helpers of auth. The Preview migration role has no USAGE on the
+// schema auth (the project owner cannot grant it), so the clone calls the SECURITY DEFINER
+// wrappers of the schema preview_support instead (01-preview-role.sql). Same result, the
+// claims of the current request.
+const AUTH_HELPER_CALL = /(?<![\w$"])auth\.(uid|role|jwt|email)\s*\(/g;
+export const AUTH_HELPER_WRAPPER = name => `preview_support.auth_${name}(`;
+
 /**
  * @param {string} sql content of a migration file
+ * @param {{ extensionObjects?: string[] }} [options] extensionObjects: names of objects of extensions
+ *   that live in public (default: the pgvector types), they keep pointing at public
  * @returns {{ sql: string, errors: string[] }}
  *   sql: migration rewritten for public_preview
  *   errors: statements that are rejected or cannot be rewritten safely
  */
-export function rewrite(sql) {
+export function rewrite(
+  sql,
+  { extensionObjects = DEFAULT_EXTENSION_OBJECTS } = {}
+) {
   const errors = [];
   let source;
   try {
@@ -529,7 +581,7 @@ export function rewrite(sql) {
 
     // Everything is checked, also function bodies, DO blocks, strings (dynamic
     // SQL) and CTEs. Only the text of "comment on" is skipped.
-    const detection = detectionText(statement, {
+    const detection = detectionText(canonicalize(statement), {
       body: !TEXT_ONLY.test(statement),
     });
     const forbidden = FORBIDDEN.find(([r]) => r.test(detection));
@@ -538,7 +590,10 @@ export function rewrite(sql) {
       continue;
     }
 
-    const next = renameSchema(statement);
+    const protectedRefs = protectExtensionRefs(statement, extensionObjects);
+    const next = protectedRefs
+      .restore(renameSchema(protectedRefs.text))
+      .replace(AUTH_HELPER_CALL, (_, name) => AUTH_HELPER_WRAPPER(name));
     if (/'public'/.test(stripComments(next))) {
       errors.push(
         `'public' as a value, e.g. as schema in format() or quote_ident(); this cannot be rewritten safely. Write public.name directly: ${short}`
@@ -636,17 +691,38 @@ const DUMP_SKIP = [
   // role owns everything it creates
   /^\s*alter\s+[^;]*\bowner\s+to\b/i,
   /^\s*alter\s+default\s+privileges\b/i,
-  // foreign keys to auth.* and other schemas: the Preview role has no REFERENCES there
-  /^\s*alter\s+table\b[^;]*\bforeign\s+key\b[^;]*\breferences\s+"?(?!public"?\.)[a-z_][\w$]*"?\s*\./i,
 ];
+
+const FK_TO_OTHER_SCHEMA =
+  /^\s*alter\s+table\b[^;]*\bforeign\s+key\b[^;]*\breferences\s+(?!public\s*\.)(?:"(?:[^"]|"")+"|[a-z_][\w$]*)\s*\./i;
 
 /**
  * Rewrites a structure-only dump of public for public_preview. Only the
- * structure is copied, never rows. Returns the same shape as rewrite().
+ * structure is copied, never rows. Returns the same shape as rewrite(), plus
+ * notes: foreign keys to tables of other schemas (auth.users) are left out of
+ * the clone, the Preview role has no REFERENCES right there. Policies and
+ * functions that call auth.uid() stay.
+ * @param {string} dump
+ * @param {{ extensionObjects?: string[] }} [options]
+ * @returns {{ sql: string, errors: string[], notes: string[] }}
  */
-export function rewriteDump(dump) {
-  const kept = statements(dump).filter(
-    s => !DUMP_SKIP.some(r => r.test(normalizeQualifiers(s)))
-  );
-  return rewrite(kept.join(''));
+export function rewriteDump(dump, options = {}) {
+  const notes = [];
+  const kept = [];
+  for (const s of statements(dump)) {
+    const canonical = canonicalize(s);
+    if (FK_TO_OTHER_SCHEMA.test(canonical)) {
+      const name = /\badd\s+constraint\s+([^\s]+)/i.exec(canonical)?.[1] ?? '?';
+      const table =
+        /\balter\s+table\s+(?:only\s+)?([^\s]+)/i.exec(canonical)?.[1] ?? '?';
+      const target = /\breferences\s+([^\s(]+)/i.exec(canonical)?.[1] ?? '?';
+      notes.push(
+        `left out foreign key ${name} on ${table} (references ${target}, no REFERENCES right there)`
+      );
+      continue;
+    }
+    if (DUMP_SKIP.some(r => r.test(canonical))) continue;
+    kept.push(s);
+  }
+  return { ...rewrite(kept.join(''), options), notes };
 }
