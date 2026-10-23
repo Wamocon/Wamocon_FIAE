@@ -2,6 +2,7 @@
 // equal after every migration; only the schema name and the Preview names of
 // shared objects (bucket ids and cron jobs with suffix -preview) may differ.
 //
+// PRODUCTION job only (needs the Supabase access token): the Preview roles cannot read public.
 // Usage: node scripts/db/preview-compare.mjs --linked | --local | --db-url <url> [--only-if-same-state]
 //   --only-if-same-state: only compare if public and public_preview have applied
 //   the same migrations. Preview runs ahead of public (migrations of open
@@ -14,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cli, query, targetFrom } from './preview-cli.mjs';
+import { LEDGER } from './preview-migrate.mjs';
 import { PREVIEW_SCHEMA } from './preview-rewrite.mjs';
 
 const HEAD = /^-- Name: (.+); Type: (.+); Schema: (.*?); Owner: (.*)$/;
@@ -142,7 +144,7 @@ function main() {
         query(target, `select version from ${table}`).map(r => r.version);
       const decision = decideComparison(
         versions('supabase_migrations.schema_migrations'),
-        versions('supabase_migrations.preview_schema_migrations'),
+        versions(LEDGER),
         { inCi: Boolean(process.env.GITHUB_ACTIONS) }
       );
       for (const line of decision.lines) console.log(line);

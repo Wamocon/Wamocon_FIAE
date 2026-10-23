@@ -2,58 +2,72 @@
 // scripts/db/preview-rewrite.mjs). Runs in the Preview workflows (branch push,
 // pull request, push to master) and in the manual reset workflow.
 //
+// SECURITY MODEL. The Preview jobs never see a Production token. They connect
+// with the database role app_preview_migrator (connection string in the secret
+// PREVIEW_DB_URL of the environment Preview, passed with --db-url-env). That role
+// owns public_preview and the schema preview_meta and has no rights on public,
+// auth, storage or any other schema, and no BYPASSRLS
+// (supabase/preview-setup/01-preview-role.sql). Unreviewed branch SQL therefore
+// can only damage public_preview. The rewrite rules are an early warning, not
+// the boundary.
+//
+// The structure of public is read in a SEPARATE Production job (command
+// snapshot, needs the Supabase access token) and handed over as a file. The
+// Preview job never reads public.
+//
 // Preview runs ahead of public: public is only migrated by a release. Because
 // all open branches share one public_preview, the following applies:
-//   - history with checksum in supabase_migrations.preview_schema_migrations
+//   - history with checksum in preview_meta.schema_migrations
 //   - if an already applied migration file is changed later, the run aborts
 //     (public_preview would silently contain the old state)
 //   - migrations that only another branch brought along are reported
 //   - a database lock lets only one migration run at a time
 //
-// No production data is ever copied: setup and rebuild clone the STRUCTURE of
-// public (schema-only dump), never rows. Preview content comes from seeds,
-// imports or the content sync (scripts/db/content-sync.mjs).
+// No production data is ever copied: rebuild clones the STRUCTURE of public
+// (schema-only dump), never rows. Preview content comes from seeds, imports or
+// the content sync (scripts/db/content-sync.mjs).
 //
-// Usage (target: --linked | --local | --db-url <url>):
+// Usage (target: --db-url-env <NAME> | --db-url <url> | --linked | --local):
 //   node scripts/db/preview-migrate.mjs check
 //       rewrite all migrations without a database; error if one cannot be rewritten
-//   node scripts/db/preview-migrate.mjs setup --linked [--probe]
-//       public_preview does not exist yet: create it with the structure of
-//       public (schema-only dump), seed the history with the ledger of public,
-//       run supabase/preview-setup/02-preview-side.sql. --probe rolls back.
-//   node scripts/db/preview-migrate.mjs apply --linked [--plan-only]
+//   node scripts/db/preview-migrate.mjs snapshot --linked --out <dir>
+//       PRODUCTION job, read only: schema-only dump of public and its migration
+//       ledger into <dir> (public-structure.sql, public-ledger.json)
+//   node scripts/db/preview-migrate.mjs apply --db-url-env PREVIEW_DB_URL [--plan-only]
 //       apply open migrations in order, each in its own transaction
-//   node scripts/db/preview-migrate.mjs rebuild --linked [--execute]
-//       drop public_preview and clone it again from public, then apply the
-//       migrations of this checkout (use master) that public does not have yet.
-//       Without --execute only the plan is shown. Deletes all Preview data.
+//   node scripts/db/preview-migrate.mjs rebuild --db-url-env PREVIEW_DB_URL --snapshot <dir> [--execute]
+//       empty public_preview, clone the structure from the snapshot, seed the
+//       ledger with the ledger of public, then apply the migrations of this
+//       checkout (use master) that public does not have yet. Also the first-time
+//       setup. Without --execute only the plan is shown. Deletes all Preview data.
 
 import { createHash } from 'node:crypto';
 import {
   existsSync,
-  mkdtempSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
+  writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cli, query, targetFrom } from './preview-cli.mjs';
-import { readLegacy } from './migration-check.mjs';
+import { readLegacyEntries } from './migration-check.mjs';
 import { PREVIEW_SCHEMA, rewrite, rewriteDump } from './preview-rewrite.mjs';
 
 const FOLDER = 'supabase/migrations';
 const LEGACY_FILE = 'supabase/legacy-migrations.txt';
 const KNOWN_DRIFT_FILE = 'supabase/known-drift.txt';
 const POST_CLONE_FILE = 'supabase/preview-setup/02-preview-side.sql';
-const LEDGER = 'supabase_migrations.preview_schema_migrations';
+// Schema preview_meta is created and owned by the Preview migration role (01-preview-role.sql)
+export const LEDGER = 'preview_meta.schema_migrations';
 const NAME = /^(\d{12,14})_([a-z0-9_]+)\.sql$/;
-const PROBE_MARKER = 'preview-probe-ok';
-const REBUILD_COMMAND =
-  'node scripts/db/preview-migrate.mjs rebuild --linked (docs/release-prozess.md)';
-// Role of the Preview app connection; created by supabase/preview-setup/01-preview-role.sql
+const REBUILD_COMMAND = 'workflow "Preview Reset" (docs/release-prozess.md)';
+const SNAPSHOT_STRUCTURE = 'public-structure.sql';
+const SNAPSHOT_LEDGER = 'public-ledger.json';
+// Roles created by supabase/preview-setup/01-preview-role.sql
 export const PREVIEW_ROLE = 'app_preview';
+export const PREVIEW_MIGRATOR_ROLE = 'app_preview_migrator';
 
 const q = value => `'${String(value).replace(/'/g, "''")}'`;
 const inCi = Boolean(process.env.GITHUB_ACTIONS);
@@ -150,7 +164,11 @@ function readList(path) {
 }
 
 function loadMigrations() {
-  const legacy = new Set(readLegacy(readList(LEGACY_FILE)));
+  const baselineFiles = new Set(
+    readLegacyEntries(readList(LEGACY_FILE))
+      .filter(e => e.state === 'applied')
+      .map(e => e.file)
+  );
   const names = readdirSync(FOLDER)
     .filter(f => NAME.test(f))
     .sort();
@@ -159,7 +177,9 @@ function loadMigrations() {
   );
   return names.map(file => {
     const [, version, name] = NAME.exec(file);
-    const isLegacy = legacy.has(file);
+    // A baseline file is already part of public and therefore of the structure
+    // clone. A pending legacy file is applied to Preview like any other.
+    const isLegacy = baselineFiles.has(file);
     return {
       file,
       version,
@@ -167,7 +187,7 @@ function loadMigrations() {
       isLegacy,
       raw: contents[file],
       checksum: checksum(contents[file]),
-      // Legacy files are baseline (never applied to Preview), so no rewrite needed
+      // Baseline files are never applied to Preview, so no rewrite is needed
       ...(isLegacy ? { sql: '', errors: [] } : rewrite(contents[file])),
     };
   });
@@ -192,28 +212,22 @@ function checkAll(list) {
  * one statement, so the script runs via EXECUTE in a DO block; an error rolls
  * everything back.
  */
-function runScript(target, text, { probe = false, onlyIfOpen = null } = {}) {
+function runScript(target, text, { onlyIfOpen = null } = {}) {
   if (/\$pv_(?:outer|script)\$/.test(text)) {
     throw new Error(
       'Migration contains the reserved marker $pv_outer$ or $pv_script$.'
     );
   }
-  const end = probe ? `raise exception '${PROBE_MARKER}';` : '';
   // Lock against parallel runs (several branches share public_preview); whoever
   // waited skips a migration that the other run applied in the meantime.
   const guard = onlyIfOpen
     ? `if to_regclass('${LEDGER}') is not null and exists (select 1 from ${LEDGER} where version = ${q(onlyIfOpen)}) then return; end if;`
     : '';
-  try {
-    query(
-      target,
-      `do $pv_outer$ begin perform pg_advisory_xact_lock(hashtext('public_preview_migrations')); ${guard} execute $pv_script$\n${text}\n$pv_script$; ${end} end $pv_outer$;`,
-      { emptyAllowed: true }
-    );
-  } catch (e) {
-    if (probe && e.message.includes(PROBE_MARKER)) return;
-    throw e;
-  }
+  query(
+    target,
+    `do $pv_outer$ begin perform pg_advisory_xact_lock(hashtext('public_preview_migrations')); ${guard} execute $pv_script$\n${text}\n$pv_script$; end $pv_outer$;`,
+    { emptyAllowed: true }
+  );
 }
 
 const LEDGER_TABLE = `create table ${LEDGER} (
@@ -223,22 +237,11 @@ const LEDGER_TABLE = `create table ${LEDGER} (
   applied_at timestamptz not null default now()
 );`;
 
-// Empty schema with rights like public. The Preview role (if it exists)
-// gets rights on public_preview only; see supabase/preview-setup.
-export const EMPTY_SCHEMA_SQL = `
-create schema if not exists ${PREVIEW_SCHEMA};
-comment on schema ${PREVIEW_SCHEMA} is 'Structural copy of public for Preview deployments';
-grant usage on schema ${PREVIEW_SCHEMA} to postgres, anon, authenticated, service_role;
-alter default privileges for role postgres in schema ${PREVIEW_SCHEMA} grant all on tables to postgres, anon, authenticated, service_role;
-alter default privileges for role postgres in schema ${PREVIEW_SCHEMA} grant all on sequences to postgres, anon, authenticated, service_role;
-alter default privileges for role postgres in schema ${PREVIEW_SCHEMA} grant all on functions to postgres, anon, authenticated, service_role;
-create schema if not exists supabase_migrations;`;
-
 /**
- * Rights of the Preview role on public_preview. Objects created by the CLI
- * login role are not covered by default privileges of postgres, so the
- * grants are repeated after every setup and apply. A no-op while the role
- * does not exist yet.
+ * Rights of the Preview app role on public_preview. Default privileges cover
+ * new objects of the migration role (01-preview-role.sql); the grants are
+ * repeated after every rebuild and apply as a safety net. A no-op while the
+ * role does not exist yet.
  */
 export function ensureGrantsSql(role = PREVIEW_ROLE, schema = PREVIEW_SCHEMA) {
   return `do $pv_grants$ begin
@@ -252,9 +255,65 @@ end $pv_grants$;`;
 }
 
 /**
- * Builds the setup script (pure): empty schema, history ledger seeded with the
- * ledger of public, structure of public (rewritten dump), shared objects of
- * the applied migrations, grants and the post clone file.
+ * Removes everything inside public_preview and its history ledger. The schema
+ * itself, its owner, its grants and its default privileges are kept (they were
+ * set by a human with 01-preview-role.sql, the migration role cannot recreate
+ * them). If an object outside public_preview still depends on public_preview,
+ * everything aborts instead of silently dropping it by cascade. Touches nothing
+ * outside of public_preview and preview_meta.
+ */
+export function purgeSql() {
+  const s = PREVIEW_SCHEMA;
+  return `do $pv_purge$
+declare
+  z record;
+  foreign_objects text;
+begin
+  select string_agg(distinct o.type || ' ' || o.identity, ', ') into foreign_objects
+  from pg_depend d
+  cross join lateral pg_identify_object(d.classid, d.objid, d.objsubid) o
+  cross join lateral pg_identify_object(d.refclassid, d.refobjid, 0) r
+  where d.deptype = 'n' and r.schema = ${q(s)}
+    and coalesce(o.schema, substring(o.identity from '(?:^| )(?:on|for) "?([^".]+)')) is distinct from ${q(s)};
+  if foreign_objects is not null then
+    raise exception 'Rebuild aborted: these objects outside ${s} depend on it: %', foreign_objects;
+  end if;
+  for z in
+    select c.relname, c.relkind from pg_class c
+    where c.relnamespace = ${q(s)}::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f') and not c.relispartition
+  loop
+    execute format('drop %s %I.%I cascade',
+      case z.relkind when 'v' then 'view' when 'm' then 'materialized view' when 'f' then 'foreign table' else 'table' end,
+      ${q(s)}, z.relname);
+  end loop;
+  for z in
+    select c.relname from pg_class c
+    where c.relnamespace = ${q(s)}::regnamespace and c.relkind = 'S'
+  loop
+    execute format('drop sequence if exists %I.%I cascade', ${q(s)}, z.relname);
+  end loop;
+  for z in
+    select p.oid::regprocedure::text as signature, p.prokind from pg_proc p
+    where p.pronamespace = ${q(s)}::regnamespace
+  loop
+    execute format('drop %s if exists %s cascade',
+      case z.prokind when 'p' then 'procedure' when 'a' then 'aggregate' else 'function' end, z.signature);
+  end loop;
+  for z in
+    select t.typname, t.typtype from pg_type t
+    where t.typnamespace = ${q(s)}::regnamespace and t.typtype in ('e', 'd', 'r', 'm', 'c')
+      and t.typcategory <> 'A' and not exists (select 1 from pg_class c where c.reltype = t.oid)
+  loop
+    execute format('drop %s if exists %I.%I cascade', case z.typtype when 'd' then 'domain' else 'type' end, ${q(s)}, z.typname);
+  end loop;
+  execute 'drop table if exists ${LEDGER}';
+end $pv_purge$;`;
+}
+
+/**
+ * Builds the rebuild script (pure): empty public_preview, history ledger seeded
+ * with the ledger of public, structure of public (rewritten dump), grants and
+ * the post clone file.
  */
 export function buildSetupScript({
   baseline,
@@ -267,7 +326,7 @@ export function buildSetupScript({
     return `(${q(b.version)}, ${q(local?.name ?? b.name ?? '')}, ${local ? q(local.checksum) : 'null'})`;
   });
   return [
-    EMPTY_SCHEMA_SQL,
+    purgeSql(),
     LEDGER_TABLE,
     rows.length > 0
       ? `insert into ${LEDGER} (version, name, checksum) values ${rows.join(', ')};`
@@ -284,40 +343,63 @@ function state(target) {
     target,
     `select to_regnamespace('${PREVIEW_SCHEMA}') is not null as schema_exists,
     coalesce((select count(*) from pg_class c where c.relnamespace = to_regnamespace('${PREVIEW_SCHEMA}') and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')), 0)::int as object_count,
-    to_regclass('${LEDGER}') is not null as ledger_exists,
-    to_regclass('supabase_migrations.schema_migrations') is not null as production_ledger_exists`
+    to_regnamespace('preview_meta') is not null as meta_exists,
+    case when to_regnamespace('preview_meta') is not null then to_regclass('${LEDGER}') is not null else false end as ledger_exists`
   );
   if (!z) throw new Error('No answer from the database to the state query.');
   return z;
 }
 
-function dumpPublicStructure(target) {
-  const dir = mkdtempSync(join(tmpdir(), 'preview-dump-'));
-  try {
-    const file = join(dir, 'public.sql');
-    // schema-only is the default of "db dump": no rows are exported
-    cli(['db', 'dump', ...target, '-s', 'public', '-f', file]);
-    return readFileSync(file, 'utf8');
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-function cloneScript(target, list) {
-  const production = query(
+/**
+ * PRODUCTION job, read only: structure of public (schema-only dump, no rows) and
+ * its migration ledger, written into a directory for the Preview job.
+ */
+function snapshot(target, out) {
+  mkdirSync(out, { recursive: true });
+  const ledger = query(
     target,
     'select version, name from supabase_migrations.schema_migrations order by version'
   );
+  // schema-only is the default of "db dump": no rows are exported
+  cli([
+    'db',
+    'dump',
+    ...target,
+    '-s',
+    'public',
+    '-f',
+    join(out, SNAPSHOT_STRUCTURE),
+  ]);
+  writeFileSync(join(out, SNAPSHOT_LEDGER), JSON.stringify(ledger, null, 2));
+  console.log(
+    `Snapshot of public: ${ledger.length} ledger version(s), structure written (no rows).`
+  );
+}
+
+function readSnapshot(dir) {
+  const structure = join(dir, SNAPSHOT_STRUCTURE);
+  const ledger = join(dir, SNAPSHOT_LEDGER);
+  if (!existsSync(structure) || !existsSync(ledger)) {
+    throw new Error(
+      `Snapshot incomplete in ${dir}: ${SNAPSHOT_STRUCTURE} and ${SNAPSHOT_LEDGER} are required (command snapshot, Production job).`
+    );
+  }
+  return {
+    dump: readFileSync(structure, 'utf8'),
+    production: JSON.parse(readFileSync(ledger, 'utf8')),
+  };
+}
+
+function cloneScript(snap, list) {
   const known = readLegacyDrift();
-  const rp = rebuildPlan(list, production, [], known);
+  const rp = rebuildPlan(list, snap.production, [], known);
   if (rp.missingFiles.length > 0) {
     throw new Error(
       `Applied in public, but no file here: ${rp.missingFiles.join(', ')}. ` +
         `Update the branch or list the version in ${KNOWN_DRIFT_FILE} with a reason.`
     );
   }
-  const dump = dumpPublicStructure(target);
-  const result = rewriteDump(dump);
+  const result = rewriteDump(snap.dump);
   if (result.errors.length > 0) {
     throw new Error(
       `The structure dump of public cannot be rewritten:\n${result.errors.map(e => `  - ${e}`).join('\n')}`
@@ -346,37 +428,11 @@ function readLegacyDrift() {
     .filter(l => /^\d{12,14}$/.test(l));
 }
 
-function setup(target, list, { probe }) {
-  const s = state(target);
-  if (s.schema_exists && s.ledger_exists) {
-    console.log(`${PREVIEW_SCHEMA} is already set up.`);
-    return;
-  }
-  // An empty schema (created by supabase/preview-setup/01-preview-role.sql) is fine
-  if (s.schema_exists && s.object_count > 0) {
-    throw new Error(
-      `${PREVIEW_SCHEMA} exists with objects but without a history. Rebuild it: ${REBUILD_COMMAND}`
-    );
-  }
-  if (!s.production_ledger_exists) {
-    throw new Error(
-      'supabase_migrations.schema_migrations is missing, the state of public is unknown.'
-    );
-  }
-  const { text } = cloneScript(target, list);
-  runScript(target, text, { probe });
-  console.log(
-    probe
-      ? 'PROBE: everything rolled back.'
-      : `${PREVIEW_SCHEMA} set up (structure only, no rows).`
-  );
-}
-
 function apply(target, list, { planOnly }) {
   const s = state(target);
   if (!s.schema_exists || !s.ledger_exists) {
     throw new Error(
-      `${PREVIEW_SCHEMA} is not set up (command: setup, or the preview-reset workflow).`
+      `${PREVIEW_SCHEMA} is not set up. Run ${REBUILD_COMMAND} after the one-time human setup (supabase/preview-setup/01-preview-role.sql).`
     );
   }
   // to_jsonb: also reads the checksum from a history that does not have the column yet
@@ -469,63 +525,35 @@ function apply(target, list, { planOnly }) {
   if (p.open.length > 0) runScript(target, ensureGrantsSql());
 }
 
-/**
- * Removes public_preview, its history and the Preview twins on shared objects
- * (triggers and policies with suffix _preview on auth and storage, cron jobs
- * with suffix -preview). If an object outside public_preview still depends on
- * public_preview, everything aborts instead of silently dropping it by cascade.
- * Shared buckets and their files stay untouched.
- */
-export function abortSql() {
-  const s = PREVIEW_SCHEMA;
-  return `do $pv_abort$
-declare
-  foreign_objects text;
-begin
-  if to_regnamespace(${q(s)}) is not null then
-    select string_agg(distinct o.type || ' ' || o.identity, ', ') into foreign_objects
-    from pg_depend d
-    cross join lateral pg_identify_object(d.classid, d.objid, d.objsubid) o
-    cross join lateral pg_identify_object(d.refclassid, d.refobjid, 0) r
-    where d.deptype = 'n' and r.schema = ${q(s)}
-      and coalesce(o.schema, substring(o.identity from '(?:^| )(?:on|for) "?([^".]+)')) is distinct from ${q(s)};
-    if foreign_objects is not null then
-      raise exception 'Rebuild aborted: these objects outside ${s} depend on it: %', foreign_objects;
-    end if;
-    execute 'drop schema ${s} cascade';
-  end if;
-  execute 'drop table if exists ${LEDGER}';
-end $pv_abort$;`;
-}
-
-function rebuild(target, list, { execute }) {
+function rebuild(target, list, { execute, snapshotDir }) {
+  const snap = readSnapshot(snapshotDir);
   const s = state(target);
-  if (!s.production_ledger_exists) {
+  if (!s.schema_exists) {
     throw new Error(
-      'supabase_migrations.schema_migrations is missing, the state of public is unknown.'
+      `${PREVIEW_SCHEMA} does not exist. A human creates it once with supabase/preview-setup/01-preview-role.sql (the migration role cannot create schemas).`
     );
   }
-  const production = query(
-    target,
-    'select version, name from supabase_migrations.schema_migrations order by version'
-  );
+  if (!s.meta_exists) {
+    throw new Error(
+      'The schema preview_meta does not exist (supabase/preview-setup/01-preview-role.sql).'
+    );
+  }
   const preview = s.ledger_exists
     ? query(target, `select version from ${LEDGER} order by version`).map(
         r => r.version
       )
     : [];
-  const rp = rebuildPlan(list, production, preview, readLegacyDrift());
+  const rp = rebuildPlan(list, snap.production, preview, readLegacyDrift());
   if (rp.missingFiles.length > 0) {
     throw new Error(
       `Applied in public, but no file here: ${rp.missingFiles.join(', ')}. Check out master first.`
     );
   }
-  const local = new Map(list.map(m => [m.version, m]));
   const pending = list.filter(
     m => !m.isLegacy && !rp.baseline.some(b => b.version === m.version)
   );
   console.log(
-    `Rebuild ${PREVIEW_SCHEMA}: structure of public (schema-only dump, no rows), ledger of public (${rp.baseline.length} version(s)).`
+    `Rebuild ${PREVIEW_SCHEMA}: structure of public (schema-only snapshot, no rows), ledger of public (${rp.baseline.length} version(s)).`
   );
   console.log(
     `  then applied from this checkout (not yet in public): ${pending.map(m => m.file).join(', ') || 'nothing'}`
@@ -539,10 +567,13 @@ function rebuild(target, list, { execute }) {
     );
   }
   console.log(
-    '  removed: schema, history, triggers and policies ending in _preview on auth/storage, cron jobs ending in -preview'
+    `  emptied: everything inside ${PREVIEW_SCHEMA} and its ledger (the schema, its owner and its grants stay)`
   );
   console.log(
-    '  stay: public, all Production objects, shared buckets with their files, all Production data'
+    '  untouched: public, auth, storage, all Production objects and data, shared buckets with their files'
+  );
+  console.log(
+    '  afterwards a human re-runs supabase/preview-setup/03-shared-objects.sql if realtime membership is needed'
   );
   if (!execute) {
     console.log(
@@ -550,22 +581,27 @@ function rebuild(target, list, { execute }) {
     );
     return;
   }
-  const { text } = cloneScript(target, list);
-  runScript(target, `${abortSql()}\n${text}`);
-  console.log(`${PREVIEW_SCHEMA} dropped and cloned again (structure only).`);
+  const { text } = cloneScript(snap, list);
+  runScript(target, text);
+  console.log(`${PREVIEW_SCHEMA} emptied and cloned again (structure only).`);
   apply(target, list, { planOnly: false });
   runScript(target, "notify pgrst, 'reload schema';");
   console.log(
-    `${PREVIEW_SCHEMA} rebuilt. Content: run the content sync or the seed (no rows were copied). Local: ${local.size} migration files.`
+    `${PREVIEW_SCHEMA} rebuilt. Content: run the content sync or the seed (no rows were copied).`
   );
+}
+
+function argValue(args, name) {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : null;
 }
 
 function main() {
   const args = process.argv.slice(2);
   const command = args[0];
-  if (!['check', 'setup', 'apply', 'rebuild'].includes(command)) {
+  if (!['check', 'snapshot', 'apply', 'rebuild'].includes(command)) {
     console.error(
-      'Usage: node scripts/db/preview-migrate.mjs check|setup|apply|rebuild [--linked|--local|--db-url <url>]'
+      'Usage: node scripts/db/preview-migrate.mjs check|snapshot|apply|rebuild [--db-url-env NAME|--linked|--local|--db-url <url>]'
     );
     process.exit(2);
   }
@@ -578,12 +614,21 @@ function main() {
     }
     const target = targetFrom(args);
     if (!target)
-      throw new Error('Target missing: --linked, --local or --db-url <url>');
-    if (command === 'setup')
-      setup(target, list, { probe: args.includes('--probe') });
-    else if (command === 'rebuild')
-      rebuild(target, list, { execute: args.includes('--execute') });
-    else apply(target, list, { planOnly: args.includes('--plan-only') });
+      throw new Error(
+        'Target missing: --db-url-env <NAME>, --linked, --local or --db-url <url>'
+      );
+    if (command === 'snapshot') {
+      const out = argValue(args, '--out');
+      if (!out) throw new Error('--out <dir> is required');
+      snapshot(target, out);
+    } else if (command === 'rebuild') {
+      const snapshotDir = argValue(args, '--snapshot');
+      if (!snapshotDir) throw new Error('--snapshot <dir> is required');
+      rebuild(target, list, {
+        execute: args.includes('--execute'),
+        snapshotDir,
+      });
+    } else apply(target, list, { planOnly: args.includes('--plan-only') });
   } catch (e) {
     console.error(
       inCi

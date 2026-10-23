@@ -7,10 +7,51 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/** --linked | --local | --db-url <url> as CLI arguments, otherwise null. */
+// Secrets that must never reach a log line or an error message
+const MASKED = new Set();
+
+/** Replaces every known secret value in a text by ***. */
+export function mask(text) {
+  let out = String(text);
+  for (const secret of MASKED) out = out.split(secret).join('***');
+  return out;
+}
+
+/** Registers a connection string (and its password) for masking. */
+export function remember(connectionString) {
+  MASKED.add(connectionString);
+  try {
+    const url = new URL(connectionString);
+    if (url.password) {
+      MASKED.add(url.password);
+      MASKED.add(decodeURIComponent(url.password));
+    }
+  } catch {
+    // not a URL, the whole string is masked anyway
+  }
+}
+
+/**
+ * --db-url-env <NAME> | --db-url <url> | --local | --linked as CLI arguments,
+ * otherwise null. --db-url-env reads the connection string from the environment
+ * variable NAME, so the value never appears in a command line of a workflow.
+ */
 export function targetFrom(args) {
+  if (args.includes('--db-url-env')) {
+    const name = args[args.indexOf('--db-url-env') + 1];
+    const value = name ? process.env[name] : undefined;
+    if (!value) {
+      throw new Error(
+        `Environment variable ${name ?? '(missing name)'} is not set (secret of the environment, see docs/release-prozess.md).`
+      );
+    }
+    remember(value);
+    return ['--db-url', value];
+  }
   if (args.includes('--db-url')) {
-    return ['--db-url', args[args.indexOf('--db-url') + 1]];
+    const value = args[args.indexOf('--db-url') + 1];
+    remember(value);
+    return ['--db-url', value];
   }
   if (args.includes('--local')) return ['--local'];
   if (args.includes('--linked')) return ['--linked'];
@@ -53,7 +94,7 @@ function once(parameters) {
         ''
       )
       .trim();
-    throw new Error(message || e.message);
+    throw new Error(mask(message || e.message));
   }
 }
 

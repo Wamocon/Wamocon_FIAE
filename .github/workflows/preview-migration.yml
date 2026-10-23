@@ -19,9 +19,12 @@
 #           only one migration run at a time; concurrency groups never cancel a
 #           running migration.
 #
-# Secrets : SUPABASE_ACCESS_TOKEN (environment "Preview"), variable
-#           SUPABASE_PROJECT_REF_PROD (repository variable). Pull requests from
-#           forks never run this (no secrets there).
+# Secrets : PREVIEW_DB_URL (environment "Preview"), the connection string of the
+#           role app_preview_migrator. This role owns public_preview and has no
+#           rights on public, auth or storage, so unreviewed branch SQL can only
+#           damage public_preview. The Supabase access token of Production is NOT
+#           used here and must not be stored in the environment "Preview".
+#           Pull requests from forks never run this (no secrets there).
 # =============================================================================
 
 name: Preview Migration
@@ -87,7 +90,7 @@ jobs:
     timeout-minutes: 20
     environment: Preview
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PREVIEW_DB_URL: ${{ secrets.PREVIEW_DB_URL }}
     steps:
       # actions/checkout v4.4.0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -97,5 +100,4 @@ jobs:
 
       - uses: ./.github/actions/preview-migrate
         with:
-          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
           apply: ${{ github.event_name == 'push' || inputs.plan_only == false }}

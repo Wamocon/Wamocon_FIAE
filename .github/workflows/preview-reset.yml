@@ -4,26 +4,32 @@
 # Trigger : manually only: Actions -> "Preview Reset" -> Run workflow.
 #           The default mode is "plan": it only shows what WOULD happen.
 #
-# What it does (mode execute):
-#   1. drops public_preview and the Preview twins (triggers and policies with
-#      suffix _preview on auth and storage, cron jobs with suffix -preview)
-#   2. clones the STRUCTURE of public (schema-only dump, no rows) rewritten for
-#      public_preview and takes over the migration ledger of public
-#   3. runs supabase/preview-setup/02-preview-side.sql (helper functions,
-#      realtime, storage prefix policies)
-#   4. applies the migrations of master that public does not have yet
+# Two jobs, two trust levels:
+#   snapshot  environment "Production" (Supabase access token, reviewers): reads
+#             the schema-only structure of public and its migration ledger, READ
+#             ONLY, and hands them over as a file. No data, no rows.
+#   rebuild   environment "Preview" (PREVIEW_DB_URL, role app_preview_migrator, no
+#             Production token): empties public_preview, clones the structure from
+#             the snapshot, seeds the ledger, runs
+#             supabase/preview-setup/02-preview-side.sql and applies the migrations
+#             of master that public does not have yet.
+# The Preview job never reads public and never sees the Production token.
+#
 # No production data is copied. Content comes from seed, import or the content
-# sync. All Preview data is deleted. public is only read.
+# sync. All Preview data is deleted. public, auth and storage are not touched.
 #
 # It is also the first-time setup of public_preview, after a human ran
-# supabase/preview-setup/01-preview-role.sql.
+# supabase/preview-setup/01-preview-role.sql and set the two role passwords.
+# AFTER every reset a human re-runs supabase/preview-setup/03-shared-objects.sql
+# (realtime membership of the recreated tables).
 #
 # When to run: migrations of closed branches linger in public_preview; a
 # migration of a branch that was changed after it was applied; a broken state.
 # Do not run it while other Preview runs are active (they wait on the database
 # lock, but their changes would be discarded).
 #
-# Secrets : SUPABASE_ACCESS_TOKEN (environment "Preview"). Variable
+# Secrets : SUPABASE_ACCESS_TOKEN (environment "Production", snapshot job only),
+#           PREVIEW_DB_URL (environment "Preview", rebuild job only). Variable
 #           SUPABASE_PROJECT_REF_PROD.
 # =============================================================================
 
@@ -49,13 +55,46 @@ permissions:
   contents: read
 
 jobs:
-  reset:
+  snapshot:
+    name: Snapshot of the structure of public (read only)
+    # Only from master: the workflow file and the scripts come from the chosen ref
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: master
+          persist-credentials: false
+
+      - uses: ./.github/actions/db-setup
+        with:
+          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+
+      - name: Read the structure of public
+        shell: bash
+        run: node scripts/db/preview-migrate.mjs snapshot --linked --out preview-snapshot
+
+      # actions/upload-artifact v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-snapshot
+          path: preview-snapshot
+          retention-days: 1
+          if-no-files-found: error
+
+  rebuild:
     name: Preview reset (${{ inputs.mode }})
+    needs: snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: Preview
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PREVIEW_DB_URL: ${{ secrets.PREVIEW_DB_URL }}
       MODE: ${{ inputs.mode }}
     steps:
       # Always master: public_preview is rebuilt to the state of master.
@@ -65,28 +104,51 @@ jobs:
           ref: master
           persist-credentials: false
 
+      - name: Connection string present?
+        shell: bash
+        run: |
+          if [ -z "${PREVIEW_DB_URL:-}" ]; then
+            echo "::error::Secret PREVIEW_DB_URL is missing in the environment Preview (see docs/release-prozess.md)."
+            exit 1
+          fi
+
       - name: Check migration files
+        shell: bash
         run: |
           node scripts/db/migration-check.mjs
           node scripts/db/preview-migrate.mjs check
 
-      - uses: ./.github/actions/db-setup
+      - uses: ./.github/actions/cli-setup
+
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+          name: preview-snapshot
+          path: preview-snapshot
 
       - name: Rebuild plan
-        run: node scripts/db/preview-migrate.mjs rebuild --linked | tee plan.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/db/preview-migrate.mjs rebuild --db-url-env PREVIEW_DB_URL --snapshot preview-snapshot | tee plan.txt
 
       - name: Rebuild public_preview
         if: env.MODE == 'execute'
-        run: node scripts/db/preview-migrate.mjs rebuild --linked --execute | tee rebuild.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/db/preview-migrate.mjs rebuild --db-url-env PREVIEW_DB_URL --snapshot preview-snapshot --execute | tee rebuild.txt
 
       - name: Summary
         if: always()
+        shell: bash
         run: |
           {
             echo "### Preview reset ($MODE)"
             echo '```'
             cat rebuild.txt 2>/dev/null || cat plan.txt 2>/dev/null || true
             echo '```'
+            if [ "$MODE" = "execute" ]; then
+              echo "Next: a human re-runs supabase/preview-setup/03-shared-objects.sql (realtime membership)."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

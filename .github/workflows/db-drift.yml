@@ -1,30 +1,37 @@
 # =============================================================================
 # Database drift check (read only)
 # =============================================================================
-# Trigger : - daily at 04:17 UTC (runs on the default branch master)
-#           - manually: Actions -> "Database Drift" -> Run workflow
+# Two jobs, two trust levels. DECISION (documented in docs/release-prozess.md):
+# the daily run only looks at the Preview side, because the comparison with
+# public needs the Production token and the environment "Production" asks a
+# reviewer for every job. A daily run that waits for an approval every day would
+# be ignored, and a Production token in an unattended scheduled job is exactly
+# what the security review forbade. So:
 #
-# Purpose : The migration workflows only start when a file under
-#           supabase/migrations/ changes. This run finds what slipped past
-#           them and what is on master but missing in a schema:
-#           1. scripts/db/drift-check.mjs: ledger of public and public_preview
-#              against the files on master (migration without file, file not
-#              applied, file changed after it was applied to public_preview).
-#              A file that is merged but not yet released is only a note.
-#           2. scripts/db/preview-compare.mjs: structure of public against
-#              public_preview as soon as both have applied the same migrations.
+#   preview-drift     (daily 04:17 UTC and manually, environment "Preview",
+#                      PREVIEW_DB_URL, NO Production token)
+#                      scripts/db/drift-check.mjs --preview-only: ledger of
+#                      public_preview against the files on master (file not applied,
+#                      file changed after it was applied).
+#   production-drift  (manually only, input compare_production = true,
+#                      environment "Production" with reviewers, token)
+#                      scripts/db/drift-check.mjs: ledger of public against the files
+#                      on master (migration without file, file not applied), and
+#                      scripts/db/preview-compare.mjs: structure of public against
+#                      public_preview once both have applied the same migrations.
+#                      Run it after a release or when something looks wrong.
 #
 # Limits  : - If public_preview runs ahead of public because of open branches,
 #             the structure comparison is skipped and reported as a warning.
-#           - The run changes nothing: only SELECT and a schema-only dump. It
-#             repairs nothing either; whoever finds a deviation writes the
+#           - Both jobs change nothing: only SELECT and a schema-only dump. They
+#             repair nothing either; whoever finds a deviation writes the
 #             missing migration as a file in a pull request.
 #           - GitHub switches scheduled workflows off after 60 days without
 #             repository activity; start it manually once then.
 #
-# Secrets : SUPABASE_ACCESS_TOKEN (environment "Preview", so the run does not
-#           wait for the approval of "Production"; it writes nowhere).
-#           Variable SUPABASE_PROJECT_REF_PROD.
+# Secrets : PREVIEW_DB_URL (environment "Preview"); SUPABASE_ACCESS_TOKEN
+#           (environment "Production", production-drift only). Variable
+#           SUPABASE_PROJECT_REF_PROD.
 # =============================================================================
 
 name: Database Drift
@@ -33,6 +40,12 @@ on:
   schedule:
     - cron: '17 4 * * *'
   workflow_dispatch:
+    inputs:
+      compare_production:
+        description: 'Also compare public with the files and with public_preview (needs the approval of the environment Production)'
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: db-drift
@@ -42,11 +55,52 @@ permissions:
   contents: read
 
 jobs:
-  drift:
-    name: Check drift
+  preview-drift:
+    name: Preview drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Preview
+    env:
+      PREVIEW_DB_URL: ${{ secrets.PREVIEW_DB_URL }}
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Connection string present?
+        shell: bash
+        run: |
+          if [ -z "${PREVIEW_DB_URL:-}" ]; then
+            echo "::error::Secret PREVIEW_DB_URL is missing in the environment Preview (see docs/release-prozess.md)."
+            exit 1
+          fi
+
+      - uses: ./.github/actions/cli-setup
+
+      - name: Ledger of public_preview against the files
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/db/drift-check.mjs --db-url-env PREVIEW_DB_URL --preview-only 2>&1 | tee drift.txt
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Database drift (Preview)"
+            echo '```'
+            tail -30 drift.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  production-drift:
+    name: Production drift (manual)
+    if: github.event_name == 'workflow_dispatch' && inputs.compare_production == true && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: Preview
+    environment: Production
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
@@ -78,7 +132,7 @@ jobs:
           STRUCTURE: ${{ steps.structure.outcome }}
         run: |
           {
-            echo "### Database drift"
+            echo "### Database drift (Production)"
             echo "- Ledger against files: $LEDGER"
             echo "- Structure comparison: $STRUCTURE"
             echo '```'

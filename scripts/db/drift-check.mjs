@@ -22,13 +22,19 @@
 // Known legacy cases are listed with a reason in supabase/known-drift.txt (one
 // version per line, then "# reason") and are not reported.
 //
-// Usage: node scripts/db/drift-check.mjs --linked | --local | --db-url <url> [--strict]
+// Two modes:
+//   default        PRODUCTION job (Supabase access token, --linked): all four findings.
+//   --preview-only PREVIEW job (--db-url-env PREVIEW_DB_URL, no Production token):
+//                  findings 3 and 4 only. The Preview role has no rights on public
+//                  and on supabase_migrations, so public is not compared there.
+//
+// Usage: node scripts/db/drift-check.mjs --linked | --local | --db-url <url> | --db-url-env <NAME> [--strict] [--preview-only]
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { query, targetFrom } from './preview-cli.mjs';
-import { checksum } from './preview-migrate.mjs';
+import { LEDGER, checksum } from './preview-migrate.mjs';
 
 const FOLDER = 'supabase/migrations';
 const KNOWN_FILE = 'supabase/known-drift.txt';
@@ -64,9 +70,10 @@ export function driftFindings({
   const notes = [];
   const exempt = new Set(known);
   const fileVersions = new Set(files.map(f => f.version));
-  const inPublic = new Set(applied);
+  const inPublic = new Set(applied ?? []);
 
-  for (const v of [...inPublic].sort()) {
+  // applied === null: the Preview job does not see public
+  for (const v of applied === null ? [] : [...inPublic].sort()) {
     if (!fileVersions.has(v) && !exempt.has(v)) {
       errors.push(
         `Migration ${v} is applied in public, but there is no file for it on master. It was executed without a migration file ` +
@@ -74,7 +81,7 @@ export function driftFindings({
       );
     }
   }
-  for (const f of files) {
+  for (const f of applied === null ? [] : files) {
     if (exempt.has(f.version) || inPublic.has(f.version)) continue;
     const text = `${f.file} is on master, but not applied in public (merged and not released yet, skipped, or the release run failed).`;
     if (strict) errors.push(text);
@@ -83,7 +90,7 @@ export function driftFindings({
 
   if (preview === null) {
     errors.push(
-      'public_preview has no migration history (supabase_migrations.preview_schema_migrations is missing). Run the preview-reset workflow.'
+      `public_preview has no migration history (${LEDGER} is missing). Run the preview-reset workflow.`
     );
   } else {
     const inPreview = new Map(preview.map(p => [p.version, p.checksum]));
@@ -134,7 +141,7 @@ function main() {
   const target = targetFrom(args);
   if (!target) {
     console.error(
-      'Usage: node scripts/db/drift-check.mjs --linked|--local|--db-url <url> [--strict]'
+      'Usage: node scripts/db/drift-check.mjs --linked|--local|--db-url <url>|--db-url-env <NAME> [--strict] [--preview-only]'
     );
     process.exit(2);
   }
@@ -143,18 +150,21 @@ function main() {
     const known = existsSync(KNOWN_FILE)
       ? readKnown(readFileSync(KNOWN_FILE, 'utf8'))
       : [];
-    const applied = query(
-      target,
-      'select version from supabase_migrations.schema_migrations order by version'
-    ).map(r => r.version);
+    const previewOnly = args.includes('--preview-only');
+    const applied = previewOnly
+      ? null
+      : query(
+          target,
+          'select version from supabase_migrations.schema_migrations order by version'
+        ).map(r => r.version);
     const exists = query(
       target,
-      "select to_regclass('supabase_migrations.preview_schema_migrations') is not null as present"
+      `select to_regclass('${LEDGER}') is not null as present`
     )[0]?.present;
     const preview = exists
       ? query(
           target,
-          "select version, to_jsonb(v) ->> 'checksum' as checksum from supabase_migrations.preview_schema_migrations v"
+          `select version, to_jsonb(v) ->> 'checksum' as checksum from ${LEDGER} v`
         )
       : null;
 
@@ -168,7 +178,9 @@ function main() {
     for (const n of notes) console.log(`Note: ${n}`);
     if (errors.length === 0) {
       console.log(
-        `Drift check: ${files.length} migration files, public (${applied.length}) and public_preview agree.`
+        previewOnly
+          ? `Drift check (Preview only): ${files.length} migration files and public_preview agree.`
+          : `Drift check: ${files.length} migration files, public (${applied.length}) and public_preview agree.`
       );
       return;
     }

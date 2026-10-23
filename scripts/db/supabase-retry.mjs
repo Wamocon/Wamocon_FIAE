@@ -16,7 +16,13 @@
 // stay separate, so the call can still end in "| tee file.txt" and "grep".
 
 import { spawnSync } from 'node:child_process';
-import { LOGIN_REJECTED, cliProgram, sleep } from './preview-cli.mjs';
+import {
+  LOGIN_REJECTED,
+  cliProgram,
+  mask,
+  remember,
+  sleep,
+} from './preview-cli.mjs';
 
 const parameters = process.argv.slice(2);
 if (parameters.length === 0) {
@@ -24,6 +30,12 @@ if (parameters.length === 0) {
     'Usage: node scripts/db/supabase-retry.mjs <arguments of the Supabase CLI>'
   );
   process.exit(2);
+}
+
+// A connection string given with --db-url never reaches a log line
+if (parameters.includes('--db-url')) {
+  const value = parameters[parameters.indexOf('--db-url') + 1];
+  if (value) remember(value);
 }
 
 const attempts = Number(process.env.SUPABASE_CLI_RETRIES ?? 4);
@@ -40,15 +52,15 @@ for (let attempt = 1; ; attempt++) {
   const err = r.stderr ?? '';
   const rejected = r.status !== 0 && LOGIN_REJECTED.test(`${out}${err}`);
   if (rejected && attempt < attempts) {
-    process.stderr.write(err);
+    process.stderr.write(mask(err));
     console.error(
       `Database login rejected (attempt ${attempt} of ${attempts}), probably a concurrent run. Retrying in ${pause * attempt} seconds.`
     );
     sleep(pause * attempt);
     continue;
   }
-  process.stdout.write(out);
-  process.stderr.write(err);
+  process.stdout.write(mask(out));
+  process.stderr.write(mask(err));
   if (r.error) {
     console.error(`The Supabase CLI could not be started: ${r.error.message}`);
   }

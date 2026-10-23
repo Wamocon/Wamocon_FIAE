@@ -1,6 +1,10 @@
 # =============================================================================
-# Composite action: database tooling for the workflows
+# Composite action: database tooling for PRODUCTION jobs (token and project link)
 # =============================================================================
+# PRODUCTION jobs only (environment Production). Preview jobs must not use this
+# action: they have no Production token and use ./.github/actions/cli-setup with
+# a connection string instead.
+#
 # Installs Node, installs the PINNED Supabase CLI and links the project. The
 # caller job must provide SUPABASE_ACCESS_TOKEN as job environment variable
 # (from the secrets of its environment), the project reference is passed as an
@@ -45,15 +49,9 @@ runs:
           exit 1
         fi
 
-    # actions/setup-node v4.4.0
-    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+    - uses: ./.github/actions/cli-setup
       with:
-        node-version: 22
-
-    # supabase/setup-cli v1.7.3
-    - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb
-      with:
-        version: ${{ inputs.supabase-cli-version }}
+        supabase-cli-version: ${{ inputs.supabase-cli-version }}
 
     # All CLI calls that talk to the database go through scripts/db/supabase-retry.mjs:
     # it repeats ONLY a rejected login (cli_login_postgres), see its header.

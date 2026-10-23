@@ -15,8 +15,9 @@
 # build aborts if the Vercel Preview environment does not connect as the role
 # app_preview.
 #
-# Secrets (environment "Preview"): SUPABASE_ACCESS_TOKEN, VERCEL_TOKEN,
-# VERCEL_ORG_ID, VERCEL_PROJECT_ID. Variable: SUPABASE_PROJECT_REF_PROD.
+# Secrets (environment "Preview"): PREVIEW_DB_URL (role app_preview_migrator,
+# rights on public_preview only), VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+# The Supabase access token of Production is not used by Preview jobs.
 # Pull requests from forks are skipped (no secrets there, and no foreign code
 # may reach the Preview environment). pull_request_target is never used.
 #
@@ -64,7 +65,7 @@ jobs:
     timeout-minutes: 20
     environment: Preview
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PREVIEW_DB_URL: ${{ secrets.PREVIEW_DB_URL }}
     steps:
       - name: Validate the branch input
         if: github.event_name == 'workflow_dispatch'
@@ -85,7 +86,6 @@ jobs:
 
       - uses: ./.github/actions/preview-migrate
         with:
-          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
           apply: 'true'
           # On master there is nothing to compare against, the PR gate did that.
           compare-with-master: ${{ github.event_name != 'push' }}

@@ -3,13 +3,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  EMPTY_SCHEMA_SQL,
+  LEDGER,
+  PREVIEW_MIGRATOR_ROLE,
   PREVIEW_ROLE,
-  abortSql,
   buildSetupScript,
   checksum,
   ensureGrantsSql,
   plan,
+  purgeSql,
   rebuildPlan,
 } from '../../../scripts/db/preview-migrate.mjs';
 
@@ -120,19 +121,18 @@ test('setup script: structure only, ledger seeded, no row copy', () => {
     dumpSql: 'create table public_preview.t (id int);',
     postClone: '-- post clone',
   });
-  assert.ok(script.includes('create schema if not exists public_preview;'));
-  assert.ok(
-    script.includes(
-      'create table supabase_migrations.preview_schema_migrations'
-    )
-  );
+  // the schema itself is created by a human (01-preview-role.sql), the script empties it
+  assert.ok(!/create schema/i.test(script));
+  assert.ok(script.includes('do $pv_purge$'));
+  assert.ok(script.includes(`create table ${LEDGER}`));
+  assert.equal(LEDGER, 'preview_meta.schema_migrations');
   assert.ok(script.includes("('20261001000000', 'a', 'abc')"));
   assert.ok(script.includes("('20260626103015', 'm''cp', null)"));
   assert.ok(script.includes('create table public_preview.t (id int);'));
   assert.ok(script.includes('-- post clone'));
-  // order: schema, ledger, dump, grants, post clone
+  // order: purge, ledger, dump, grants, post clone
   assert.ok(
-    script.indexOf('create schema') <
+    script.indexOf('do $pv_purge$') <
       script.indexOf('create table public_preview.t')
   );
   assert.ok(
@@ -145,11 +145,6 @@ test('setup script: structure only, ledger seeded, no row copy', () => {
   assert.ok(!/session_replication_role/i.test(script));
 });
 
-test('empty schema SQL grants rights like public, but nothing on public', () => {
-  assert.ok(EMPTY_SCHEMA_SQL.includes('in schema public_preview'));
-  assert.ok(!/on schema public\b(?!_)/i.test(EMPTY_SCHEMA_SQL));
-});
-
 test('grants for the Preview role only touch public_preview and only if the role exists', () => {
   const sql = ensureGrantsSql();
   assert.ok(sql.includes(`rolname = '${PREVIEW_ROLE}'`));
@@ -157,12 +152,19 @@ test('grants for the Preview role only touch public_preview and only if the role
   assert.ok(!/in schema public\b(?!_)/.test(sql));
 });
 
-test('abort SQL drops only public_preview and refuses foreign dependents', () => {
-  const sql = abortSql();
-  assert.ok(sql.includes('drop schema public_preview cascade'));
+test('purge SQL empties public_preview only, keeps the schema and refuses foreign dependents', () => {
+  const sql = purgeSql();
+  assert.ok(sql.includes("'public_preview'"));
+  // contents are dropped, the schema itself stays (the migration role cannot recreate it)
+  assert.ok(!/drop schema/i.test(sql));
+  assert.ok(sql.includes(`drop table if exists ${LEDGER}`));
   assert.ok(sql.includes('Rebuild aborted'));
-  assert.ok(!/drop schema public cascade/i.test(sql));
-  assert.ok(!/drop table[^;]*public\./i.test(sql));
-  // the Preview role has no rights on auth, storage or cron: nothing there is touched
-  assert.ok(!/(auth|storage|cron)\./.test(sql));
+  // nothing of public, auth, storage or cron is touched
+  assert.ok(!/\b(auth|storage|cron|supabase_migrations)\./.test(sql));
+  assert.ok(!/\bpublic\./.test(sql));
+  assert.ok(!/'public'/.test(sql));
+});
+
+test('the migration role is named like in the SQL template', () => {
+  assert.equal(PREVIEW_MIGRATOR_ROLE, 'app_preview_migrator');
 });
