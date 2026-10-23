@@ -2,6 +2,7 @@ import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { and, eq } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -191,7 +192,7 @@ export async function POST(
         .from(courses)
         .where(eq(courses.id, courseId as any));
       const courseName = courseInfo?.title || 'einem Kurs';
-      const isTrainer = ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(role);
+      const isTrainer = isTrainerLevelRole(role);
 
       try {
         await db.insert(notifications).values({
@@ -320,7 +321,7 @@ export async function DELETE(
         title: 'Aus Kurs entfernt',
         message: `Du wurdest aus dem Kurs "${courseName}" entfernt.`,
         linkUrl:
-          ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(memberToRemove.role)
+          isTrainerLevelRole(memberToRemove.role)
             ? '/trainer/courses'
             : '/trainee/modules',
         context: { courseId },

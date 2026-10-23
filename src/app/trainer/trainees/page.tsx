@@ -2,6 +2,7 @@
 
 import { authFetch } from '@/lib/authFetch';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -23,8 +24,6 @@ type TraineeItem = {
   isActive?: boolean;
   trainerActivated?: boolean;
 };
-
-const TRAINER_LEVEL_ROLES = ['admin', 'temp_admin', 'trainer'];
 
 const getDurationYears = (trainee: TraineeItem) =>
   trainee.ausbildungDurationYears ?? trainee.ausbildung_duration_years ?? 3;
@@ -56,7 +55,7 @@ export default function TrainerTraineesPage() {
   }, [profile, user, t]);
 
   useEffect(() => {
-    if (profile && TRAINER_LEVEL_ROLES.includes(profile.role)) loadTrainees();
+    if (profile && isTrainerLevelRole(profile.role)) loadTrainees();
   }, [profile, loadTrainees]);
 
   const toggleActivation = useCallback(
@@ -122,7 +121,7 @@ export default function TrainerTraineesPage() {
     );
   }
 
-  if (!TRAINER_LEVEL_ROLES.includes(profile.role)) {
+  if (!isTrainerLevelRole(profile.role)) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <div className="text-center">

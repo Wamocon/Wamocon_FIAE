@@ -1,6 +1,7 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
+import { TRAINER_LEVEL_ROLES } from '@/lib/auth/roles';
 import { eq, ilike, and, ne, inArray } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
@@ -16,8 +17,9 @@ export async function GET(req: NextRequest) {
     const requesterId = session.id;
 
 
-    const trainerRoles = ['TRAINER', 'ADMIN', 'TEMP_ADMIN'] as const;
-    const conditions: any[] = [inArray(profiles.role, trainerRoles)];
+    const conditions: any[] = [
+      inArray(profiles.role, [...TRAINER_LEVEL_ROLES]),
+    ];
 
     const isPO = await verifyPlatformOwner(requesterId);
     if (!isPO) {

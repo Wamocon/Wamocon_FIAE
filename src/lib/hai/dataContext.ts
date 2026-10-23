@@ -35,6 +35,7 @@ import {
     notifications,
 } from '@/db/migrations/schemas/schema';
 import { toHaiRole } from '@/lib/auth-helpers';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { buildHaiTrainingScope } from './trainingScope';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
 
@@ -1106,7 +1107,7 @@ function formatDate(date: Date): string {
 
 function formatSnapshot(snapshot: UserSnapshot): string {
     const lines: string[] = [
-        `**Nutzer:** ${snapshot.fullName} (${['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(snapshot.role) ? 'Ausbilder' : 'Azubi'})`,
+        `**Nutzer:** ${snapshot.fullName} (${isTrainerLevelRole(snapshot.role) ? 'Ausbilder' : 'Azubi'})`,
         `**Gesamtfortschritt:** ${snapshot.overallProgressPercent}%`,
     ];
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
@@ -19,11 +20,9 @@ export default function LoginForm() {
   const { profile, signIn } = useAuth();
   const { t } = useLanguage();
 
-  const TRAINER_LEVEL_ROLES = ['admin', 'temp_admin', 'trainer'];
-
   useEffect(() => {
     if (profile) {
-      if (TRAINER_LEVEL_ROLES.includes(profile.role))
+      if (isTrainerLevelRole(profile.role))
         router.push('/trainer/dashboard');
       else router.push('/trainee/dashboard');
     }

@@ -5,6 +5,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 import { requireContentScope } from '@/lib/catalog/scope';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import {
   courses,
   courseMembers,
@@ -293,7 +294,7 @@ export async function DELETE(
           type: 'COURSE_DELETED',
           title: 'Kurs gelöscht',
           message: `Der Kurs "${courseName}" wurde gelöscht.`,
-          linkUrl: ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(m.role)
+          linkUrl: isTrainerLevelRole(m.role)
             ? '/trainer/courses'
             : '/trainee/modules',
           context: { courseId },

@@ -8,7 +8,8 @@ import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { TRAINER_LEVEL_ROLES } from '@/lib/auth/roles';
 import { profiles, organizations, notifications } from '@/db/migrations/schemas/schema';
 import { sendCredentialsEmail } from '@/lib/email';
 import crypto from 'crypto';
@@ -202,7 +203,11 @@ export async function POST(req: NextRequest) {
         .select({ id: profiles.id })
         .from(profiles)
         .where(
-          sql`${profiles.organizationId} = ${organizationId} AND ${profiles.role} IN ('TRAINER', 'TEMP_ADMIN', 'ADMIN') AND ${profiles.isActive} = true`
+          and(
+            eq(profiles.organizationId, organizationId),
+            inArray(profiles.role, [...TRAINER_LEVEL_ROLES]),
+            eq(profiles.isActive, true)
+          )
         );
 
       for (const trainer of orgTrainers) {

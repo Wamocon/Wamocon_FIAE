@@ -2,6 +2,7 @@
 
 import { authFetch } from '@/lib/authFetch';
 import { useAuth } from '@/contexts/AuthContext';
+import { canModifyRole, canManageAdmins, isAdminRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -42,9 +43,8 @@ type OrgOption = {
   name: string;
 };
 
-const ADMIN_ROLES = ['admin', 'temp_admin'];
-
 const ROLE_CONFIG: Record<string, { labelKey: string; icon: typeof Shield; color: string }> = {
+  SUPER_ADMIN: { labelKey: 'roles.superAdmin', icon: ShieldCheck, color: 'text-red-400 bg-red-500/10' },
   ADMIN: { labelKey: 'roles.admin', icon: ShieldCheck, color: 'text-red-400 bg-red-500/10' },
   TEMP_ADMIN: { labelKey: 'roles.tempAdmin', icon: Shield, color: 'text-orange-400 bg-orange-500/10' },
   TRAINER: { labelKey: 'roles.trainer', icon: UserCog, color: 'text-blue-400 bg-blue-500/10' },
@@ -106,7 +106,7 @@ export default function AdminUsersPage() {
   }, [profile]);
 
   useEffect(() => {
-    if (profile && ADMIN_ROLES.includes(profile.role)) {
+    if (profile && isAdminRole(profile.role)) {
       loadUsers();
       loadOrgs();
     }
@@ -203,7 +203,7 @@ export default function AdminUsersPage() {
     );
   }
 
-  if (!profile || !ADMIN_ROLES.includes(profile.role)) {
+  if (!profile || !isAdminRole(profile.role)) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <p className="text-muted-foreground">{t('common.accessDenied')}</p>
@@ -212,7 +212,7 @@ export default function AdminUsersPage() {
   }
 
   const callerRole = (profile.role || '').toUpperCase();
-  const isFullAdmin = callerRole === 'ADMIN';
+  const isFullAdmin = canManageAdmins({ role: callerRole });
 
   const filteredUsers = users.filter(u => {
     if (filterRole && u.role?.toUpperCase() !== filterRole) return false;
@@ -469,7 +469,7 @@ export default function AdminUsersPage() {
                 const upperRole = (u.role || '').toUpperCase();
                 const rc = ROLE_CONFIG[upperRole] || ROLE_CONFIG.TRAINEE;
                 const RoleIcon = rc.icon;
-                const isProtected = upperRole === 'ADMIN' && !isFullAdmin;
+                const isProtected = !canModifyRole({ role: callerRole }, upperRole);
                 const isSelf = u.id === profile.id;
                 const isEditing = editingUser === u.id;
 
