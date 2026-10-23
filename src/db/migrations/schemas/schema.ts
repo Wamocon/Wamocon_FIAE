@@ -16,6 +16,7 @@ import {
   vector,
   check,
   uniqueIndex,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
 
 // --- SUPABASE AUTH HELPER ---
@@ -214,6 +215,11 @@ export const courses = pgTable(
     catalogCodeUnique: uniqueIndex('courses_catalog_code_unique')
       .on(table.trainingCatalogId, table.code)
       .where(sql`${table.code} is not null`),
+    // Target of composite foreign keys that keep content in the same catalog
+    idCatalogUnique: unique('courses_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
   })
 );
 
@@ -270,6 +276,11 @@ export const enablers = pgTable(
     courseId: uuid('course_id')
       .notNull()
       .references(() => courses.id, { onDelete: 'cascade' }),
+    // Derived from the course by a database trigger; the composite foreign
+    // key below keeps it identical to courses.training_catalog_id.
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`)),
     // Stable text code, unique per course, NULL for legacy rows
     code: text('code'),
     title: text('title').notNull(),
@@ -300,6 +311,15 @@ export const enablers = pgTable(
     courseCodeUnique: uniqueIndex('enablers_course_code_unique')
       .on(table.courseId, table.code)
       .where(sql`${table.code} is not null`),
+    idCatalogUnique: unique('enablers_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
+    courseCatalogFk: foreignKey({
+      name: 'enablers_course_catalog_fk',
+      columns: [table.courseId, table.trainingCatalogId],
+      foreignColumns: [courses.id, courses.trainingCatalogId],
+    }).onDelete('cascade'),
   })
 );
 
@@ -310,6 +330,11 @@ export const useCases = pgTable(
     courseId: uuid('course_id')
       .notNull()
       .references(() => courses.id, { onDelete: 'cascade' }),
+    // Derived from the course by a database trigger; the composite foreign
+    // key below keeps it identical to courses.training_catalog_id.
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`)),
     // Stable text code, unique per course, NULL for legacy rows
     code: text('code'),
     title: text('title').notNull(),
@@ -337,6 +362,15 @@ export const useCases = pgTable(
     courseCodeUnique: uniqueIndex('use_cases_course_code_unique')
       .on(table.courseId, table.code)
       .where(sql`${table.code} is not null`),
+    idCatalogUnique: unique('use_cases_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
+    courseCatalogFk: foreignKey({
+      name: 'use_cases_course_catalog_fk',
+      columns: [table.courseId, table.trainingCatalogId],
+      foreignColumns: [courses.id, courses.trainingCatalogId],
+    }).onDelete('cascade'),
   })
 );
 
@@ -365,6 +399,9 @@ export const trainingCatalogLearningFields = pgTable(
     catalogOrderUnique: unique(
       'training_catalog_learning_fields_catalog_order_unique'
     ).on(table.trainingCatalogId, table.orderIndex),
+    idCatalogUnique: unique(
+      'training_catalog_learning_fields_id_catalog_unique'
+    ).on(table.id, table.trainingCatalogId),
     trainingYearCheck: check(
       'training_catalog_learning_fields_training_year_check',
       sql`${table.trainingYear} between 1 and 3`
@@ -391,9 +428,30 @@ export const trainingCatalogContentMappings = pgTable(
     useCaseId: uuid('use_case_id').references(() => useCases.id, {
       onDelete: 'cascade',
     }),
+    // Derived from the learning field by a database trigger. The composite
+    // foreign keys below make a mapping across catalogs impossible.
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => ({
+    learningFieldCatalogFk: foreignKey({
+      name: 'training_catalog_content_mappings_learning_field_catalog_fk',
+      columns: [table.learningFieldId, table.trainingCatalogId],
+      foreignColumns: [
+        trainingCatalogLearningFields.id,
+        trainingCatalogLearningFields.trainingCatalogId,
+      ],
+    }).onDelete('cascade'),
+    enablerCatalogFk: foreignKey({
+      name: 'training_catalog_content_mappings_enabler_catalog_fk',
+      columns: [table.enablerId, table.trainingCatalogId],
+      foreignColumns: [enablers.id, enablers.trainingCatalogId],
+    }).onDelete('cascade'),
+    useCaseCatalogFk: foreignKey({
+      name: 'training_catalog_content_mappings_use_case_catalog_fk',
+      columns: [table.useCaseId, table.trainingCatalogId],
+      foreignColumns: [useCases.id, useCases.trainingCatalogId],
+    }).onDelete('cascade'),
     // Constraint names must stay below the 63 character identifier limit.
     learningFieldEnablerUnique: unique(
       'training_catalog_content_mappings_lf_enabler_unique'
@@ -1299,6 +1357,11 @@ export const trainingComponents = pgTable(
     catalogCodeUnique: unique('training_components_catalog_code_unique').on(
       table.trainingCatalogId,
       table.code
+    ),
+    // Target of composite foreign keys (for example quizzes)
+    idCatalogUnique: unique('training_components_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
     ),
   })
 );
