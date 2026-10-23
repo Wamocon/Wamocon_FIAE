@@ -53,7 +53,12 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cli, query, targetFrom } from './preview-cli.mjs';
 import { readLegacyEntries } from './migration-check.mjs';
-import { PREVIEW_SCHEMA, rewrite, rewriteDump } from './preview-rewrite.mjs';
+import {
+  DEFAULT_EXTENSION_OBJECTS,
+  PREVIEW_SCHEMA,
+  rewrite,
+  rewriteDump,
+} from './preview-rewrite.mjs';
 
 const FOLDER = 'supabase/migrations';
 const LEGACY_FILE = 'supabase/legacy-migrations.txt';
@@ -65,6 +70,7 @@ const NAME = /^(\d{12,14})_([a-z0-9_]+)\.sql$/;
 const REBUILD_COMMAND = 'workflow "Preview Reset" (docs/release-prozess.md)';
 const SNAPSHOT_STRUCTURE = 'public-structure.sql';
 const SNAPSHOT_LEDGER = 'public-ledger.json';
+const SNAPSHOT_EXTENSIONS = 'public-extension-objects.json';
 // Roles created by supabase/preview-setup/01-preview-role.sql
 export const PREVIEW_ROLE = 'app_preview';
 export const PREVIEW_MIGRATOR_ROLE = 'app_preview_migrator';
@@ -320,6 +326,7 @@ export function buildSetupScript({
   localByVersion,
   dumpSql,
   postClone = '',
+  searchPath = previewSearchPath(false),
 }) {
   const rows = baseline.map(b => {
     const local = localByVersion.get(b.version);
@@ -331,11 +338,31 @@ export function buildSetupScript({
     rows.length > 0
       ? `insert into ${LEDGER} (version, name, checksum) values ${rows.join(', ')};`
       : '',
-    `set local search_path = ${PREVIEW_SCHEMA}, extensions;`,
+    `set local search_path = ${searchPath};`,
+    // pg_dump writes functions before the tables they read; the dump skips its own SET lines
+    'set local check_function_bodies = off;',
     dumpSql,
     ensureGrantsSql(),
     postClone,
   ].join('\n');
+}
+
+/**
+ * search_path of the Preview scripts. pgvector lives in the schema public in the
+ * real project (the type public.vector), so public has to be on the path to find
+ * it; the Preview roles have no rights on any table of public, so this opens no
+ * data. Without an extension in public the path stays public_preview, extensions.
+ */
+export function previewSearchPath(extensionInPublic) {
+  return `${PREVIEW_SCHEMA}, extensions${extensionInPublic ? ', public' : ''}`;
+}
+
+function extensionInPublic(target) {
+  const [z] = query(
+    target,
+    "select exists (select 1 from pg_extension e where e.extnamespace = 'public'::regnamespace) as in_public"
+  );
+  return Boolean(z?.in_public);
 }
 
 function state(target) {
@@ -354,6 +381,21 @@ function state(target) {
  * PRODUCTION job, read only: structure of public (schema-only dump, no rows) and
  * its migration ledger, written into a directory for the Preview job.
  */
+// Names of the types, functions, relations and operator classes in public that belong to an extension
+const EXTENSION_OBJECTS_SQL = `select distinct name from (
+  select t.typname::text as name from pg_depend d join pg_type t on t.oid = d.objid
+    where d.deptype = 'e' and d.classid = 'pg_type'::regclass and t.typnamespace = 'public'::regnamespace
+  union all
+  select p.proname::text from pg_depend d join pg_proc p on p.oid = d.objid
+    where d.deptype = 'e' and d.classid = 'pg_proc'::regclass and p.pronamespace = 'public'::regnamespace
+  union all
+  select c.relname::text from pg_depend d join pg_class c on c.oid = d.objid
+    where d.deptype = 'e' and d.classid = 'pg_class'::regclass and c.relnamespace = 'public'::regnamespace
+  union all
+  select o.opcname::text from pg_depend d join pg_opclass o on o.oid = d.objid
+    where d.deptype = 'e' and d.classid = 'pg_opclass'::regclass and o.opcnamespace = 'public'::regnamespace
+) x order by 1`;
+
 function snapshot(target, out) {
   mkdirSync(out, { recursive: true });
   const ledger = query(
@@ -371,8 +413,17 @@ function snapshot(target, out) {
     join(out, SNAPSHOT_STRUCTURE),
   ]);
   writeFileSync(join(out, SNAPSHOT_LEDGER), JSON.stringify(ledger, null, 2));
+  // Objects of extensions that live in public (pgvector: the type vector) cannot be
+  // cloned and keep pointing at public in the clone. Only names, no data.
+  const extensionObjects = query(target, EXTENSION_OBJECTS_SQL).map(
+    r => r.name
+  );
+  writeFileSync(
+    join(out, SNAPSHOT_EXTENSIONS),
+    JSON.stringify(extensionObjects, null, 2)
+  );
   console.log(
-    `Snapshot of public: ${ledger.length} ledger version(s), structure written (no rows).`
+    `Snapshot of public: ${ledger.length} ledger version(s), ${extensionObjects.length} extension object name(s), structure written (no rows).`
   );
 }
 
@@ -384,13 +435,24 @@ function readSnapshot(dir) {
       `Snapshot incomplete in ${dir}: ${SNAPSHOT_STRUCTURE} and ${SNAPSHOT_LEDGER} are required (command snapshot, Production job).`
     );
   }
+  const extensions = join(dir, SNAPSHOT_EXTENSIONS);
+  // An older snapshot has no list: the pgvector types are the known case
+  const extensionObjects = [
+    ...new Set([
+      ...DEFAULT_EXTENSION_OBJECTS,
+      ...(existsSync(extensions)
+        ? JSON.parse(readFileSync(extensions, 'utf8'))
+        : []),
+    ]),
+  ];
   return {
     dump: readFileSync(structure, 'utf8'),
     production: JSON.parse(readFileSync(ledger, 'utf8')),
+    extensionObjects,
   };
 }
 
-function cloneScript(snap, list) {
+function cloneScript(snap, list, searchPath) {
   const known = readLegacyDrift();
   const rp = rebuildPlan(list, snap.production, [], known);
   if (rp.missingFiles.length > 0) {
@@ -399,7 +461,10 @@ function cloneScript(snap, list) {
         `Update the branch or list the version in ${KNOWN_DRIFT_FILE} with a reason.`
     );
   }
-  const result = rewriteDump(snap.dump);
+  const result = rewriteDump(snap.dump, {
+    extensionObjects: snap.extensionObjects,
+  });
+  for (const note of result.notes) console.log(`Note: ${note}`);
   if (result.errors.length > 0) {
     throw new Error(
       `The structure dump of public cannot be rewritten:\n${result.errors.map(e => `  - ${e}`).join('\n')}`
@@ -417,6 +482,7 @@ function cloneScript(snap, list) {
       localByVersion: local,
       dumpSql: result.sql,
       postClone,
+      searchPath,
     }),
   };
 }
@@ -442,6 +508,7 @@ function apply(target, list, { planOnly }) {
   );
   const candidates = list.filter(m => !m.isLegacy);
   const p = plan(candidates, applied);
+  const searchPath = previewSearchPath(extensionInPublic(target));
 
   if (p.changed.length > 0) {
     throw new Error(
@@ -451,9 +518,12 @@ function apply(target, list, { planOnly }) {
         `(new version number) or rebuild ${PREVIEW_SCHEMA} from public: ${REBUILD_COMMAND}`
     );
   }
-  if (p.foreign.length > 0) {
+  // Ledger rows of the historical baseline without a file are known (supabase/known-drift.txt)
+  const knownDrift = new Set(readLegacyDrift());
+  const foreign = p.foreign.filter(v => !knownDrift.has(v));
+  if (foreign.length > 0) {
     warn(
-      `${PREVIEW_SCHEMA} contains migrations that are missing in this state (other branches or deleted files): ${p.foreign.join(', ')}. ` +
+      `${PREVIEW_SCHEMA} contains migrations that are missing in this state (other branches or deleted files): ${foreign.join(', ')}. ` +
         `If they come from closed branches they stay, with their twins, until someone rebuilds ${PREVIEW_SCHEMA}: ${REBUILD_COMMAND}`
     );
   }
@@ -506,7 +576,7 @@ function apply(target, list, { planOnly }) {
   }
   for (const m of p.open) {
     const text = [
-      `set local search_path = ${PREVIEW_SCHEMA}, extensions;`,
+      `set local search_path = ${searchPath};`,
       // loads pgvector so functions may "set hnsw.* = ..."
       "do $pv$ begin if to_regtype('extensions.vector') is not null then perform '[1]'::extensions.vector; end if; end $pv$;",
       m.sql,
@@ -581,7 +651,8 @@ function rebuild(target, list, { execute, snapshotDir }) {
     );
     return;
   }
-  const { text } = cloneScript(snap, list);
+  const searchPath = previewSearchPath(extensionInPublic(target));
+  const { text } = cloneScript(snap, list, searchPath);
   runScript(target, text);
   console.log(`${PREVIEW_SCHEMA} emptied and cloned again (structure only).`);
   apply(target, list, { planOnly: false });

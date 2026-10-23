@@ -217,15 +217,15 @@ test('structure dump: only structure is rewritten, schema level statements are d
   assert.ok(!/create schema/i.test(r.sql));
   assert.ok(!/alter publication/i.test(r.sql));
   assert.ok(!/set statement_timeout/i.test(r.sql));
-  assert.ok(r.sql.includes('CREATE TYPE "public_preview"."user_role"'));
+  assert.ok(r.sql.includes('CREATE TYPE public_preview."user_role"'));
   assert.ok(
-    r.sql.includes('CREATE TABLE IF NOT EXISTS "public_preview"."profiles"')
+    r.sql.includes('CREATE TABLE IF NOT EXISTS public_preview."profiles"')
   );
-  assert.ok(r.sql.includes('"public_preview"."user_role" NOT NULL'));
+  assert.ok(r.sql.includes('public_preview."user_role" NOT NULL'));
   assert.ok(r.sql.includes('SET "search_path" TO \'public_preview\''));
   assert.ok(r.sql.includes('public_preview.profiles'));
   assert.ok(
-    r.sql.includes('GRANT ALL ON TABLE "public_preview"."profiles" TO "anon"')
+    r.sql.includes('GRANT ALL ON TABLE public_preview."profiles" TO "anon"')
   );
   // ownership, default privileges and foreign keys to auth.* are not replayed
   assert.ok(!/OWNER TO/i.test(r.sql));
