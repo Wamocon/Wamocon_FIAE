@@ -102,6 +102,12 @@ export function maskLines(env) {
     .map(v => `::add-mask::${v}`);
 }
 
+/**
+ * What `vercel pull` writes for a Sensitive variable: Vercel never hands out the
+ * value of such a variable, not even to the project's own deploy token.
+ */
+export const SENSITIVE_PLACEHOLDER = '[SENSITIVE]';
+
 /** User name of a connection string, null if it cannot be read. */
 export function connectionUser(connectionString) {
   try {
@@ -130,6 +136,12 @@ export function checkDeployEnv({ target, env }) {
     errors.push(
       `DB_CONNECTION_STRING is not set in the Vercel environment for ${target}`
     );
+  } else if (target === 'preview' && connection === SENSITIVE_PLACEHOLDER) {
+    // The Preview connection is a Sensitive variable (write-only in Vercel), so the
+    // role cannot be read here. The application checks it itself when the database
+    // client starts (assertDbConfig in src/lib/db-schema.ts) and refuses to run the
+    // schema public_preview with any role but app_preview. Production stays strict:
+    // its connection must be readable, so a Production deploy cannot skip the check.
   } else {
     const user = connectionUser(connection);
     if (user === null) {
@@ -181,6 +193,18 @@ function main() {
       process.env.GITHUB_ENV,
       SCHEMA_KEYS.map(k => `${k}=${schema}`).join('\n') + '\n'
     );
+  }
+  if (
+    target === 'preview' &&
+    parseEnv(pinned).get('DB_CONNECTION_STRING') === SENSITIVE_PLACEHOLDER
+  ) {
+    console.log(
+      `::notice::DB_CONNECTION_STRING is a Sensitive variable, Vercel does not hand out its value, so the role is not checked here. The application checks it at start and refuses any role but app_preview.`
+    );
+    console.log(
+      `Deploy environment for ${target}: database schema pinned to ${schema}, role check left to the application.`
+    );
+    return;
   }
   console.log(
     `Deploy environment for ${target}: database schema pinned to ${schema}, role check passed.`
