@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,14 +43,13 @@ export default function NewCoursePage() {
         year: Number(year),
         chapter: chapter ? Number(chapter) : undefined,
         examPart: examPart ? Number(examPart) : undefined,
-        createdById: profile?.id,
         skills: skills
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean),
       };
 
-      const res = await fetch('/api/trainer/courses', {
+      const res = await authFetch('/api/trainer/courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

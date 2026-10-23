@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -27,11 +28,13 @@ export async function GET(
   { params }: { params: Promise<{ traineeId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { traineeId } = await params;
 
     const { searchParams } = new URL(req.url);
-    const requesterId =
-      searchParams.get('requesterId') || searchParams.get('trainerId');
+    const requesterId = session.id;
     if (requesterId && (await verifyTrainer(requesterId))) {
       const isPO = await verifyPlatformOwner(requesterId);
       if (!isPO) {

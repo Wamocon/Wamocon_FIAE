@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lessons, subLessons } from '@/db/migrations/schemas/schema';
@@ -6,11 +7,11 @@ import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ lessonId: string }> }) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { lessonId } = await params;
-    const trainerId = req.nextUrl.searchParams.get('trainerId');
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
+    const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },
@@ -35,11 +36,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ le
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ lessonId: string }> }) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { lessonId } = await params;
-    const trainerId = req.nextUrl.searchParams.get('trainerId');
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
+    const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },

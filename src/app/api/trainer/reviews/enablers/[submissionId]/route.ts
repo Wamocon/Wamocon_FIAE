@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
@@ -6,7 +7,7 @@ import {
   enablerSubmissions,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 
 export async function PATCH(
@@ -14,13 +15,13 @@ export async function PATCH(
   { params }: { params: Promise<{ submissionId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { submissionId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     const body = await req.json();
     const status: 'PENDING' | 'APPROVED' | 'REJECTED' | undefined =
@@ -57,12 +58,6 @@ export async function PATCH(
       );
     }
 
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     const organizationId = await getUserOrgId(trainerId);
     const isPO = await verifyPlatformOwner(trainerId);

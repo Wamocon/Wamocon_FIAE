@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, max } from 'drizzle-orm';
@@ -6,13 +7,16 @@ import {
   courseMembers,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(_req);
+    if (isErrorResponse(session)) return session;
+
     const { useCases } = await import('@/db/migrations/schemas/schema');
     const { courseId } = await params;
     const list = await db
@@ -40,14 +44,14 @@ export async function POST(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { useCases } = await import('@/db/migrations/schemas/schema');
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     // Verify course exists
     const [courseRow] = await db
@@ -59,12 +63,6 @@ export async function POST(
     }
 
     // Shared curriculum: any valid trainer can create use cases
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(

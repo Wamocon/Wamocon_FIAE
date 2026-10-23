@@ -2,7 +2,15 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
 const emails = ['trainer1@test.com', 'trainer2@test.com'];
-const password = 'trainer';
+const password = (() => {
+  const value = process.env.TEST_USER_PASSWORD;
+  if (!value) {
+    throw new Error(
+      'Missing TEST_USER_PASSWORD (set it in .env.local, never commit it)'
+    );
+  }
+  return value;
+})();
 
 function getSupabaseUrl() {
   return (

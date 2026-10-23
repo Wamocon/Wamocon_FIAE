@@ -4,6 +4,7 @@
  * GET /api/trainer/activity-reports - List pending reports for approval
  */
 
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, inArray, or } from 'drizzle-orm';
@@ -20,14 +21,13 @@ import {
 // GET /api/trainer/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
     const status = searchParams.get('status');
     const traineeId = searchParams.get('traineeId');
-
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     const scope = await getTrainerScope(trainerId);
     if (!scope) {

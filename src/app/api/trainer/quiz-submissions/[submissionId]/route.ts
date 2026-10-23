@@ -1,20 +1,24 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { quizSubmissions, notifications } from '@/db/migrations/schemas/schema';
-import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 
 // PATCH /api/trainer/quiz-submissions/[submissionId]
 // Body: { is_reviewed: boolean, trainer_feedback?: string, reviewer_id?: string }
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissionId: string }> }) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { submissionId } = await ctx.params;
     if (!submissionId) return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
     const body = await req.json();
     const is_reviewed = body?.is_reviewed !== undefined ? Boolean(body.is_reviewed) : undefined;
     const trainer_feedback = (body?.trainer_feedback || body?.trainerFeedback || '').trim();
-    const reviewer_id = body?.reviewer_id || body?.reviewerId || undefined;
+    const reviewer_id = session.id;
 
     if (is_reviewed === undefined && !trainer_feedback) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
@@ -22,9 +26,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissio
 
     // Verify caller is a trainer
     if (reviewer_id) {
-      if (!(await verifyTrainer(reviewer_id))) {
-        return NextResponse.json({ error: 'Forbidden - not a trainer' }, { status: 403 });
-      }
     }
 
     const update: any = {};

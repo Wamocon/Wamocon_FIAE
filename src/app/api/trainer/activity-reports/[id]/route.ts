@@ -5,6 +5,7 @@
  * PUT /api/trainer/activity-reports/[id] - Approve or reject report
  */
 
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
@@ -23,9 +24,12 @@ interface RouteParams {
 // GET /api/trainer/activity-reports/[id]
 export async function GET(req: NextRequest, { params }: RouteParams) {
     try {
+        const session = await requireTrainer(req);
+        if (isErrorResponse(session)) return session;
+
         const { id } = await params;
         const { searchParams } = new URL(req.url);
-        const requesterId = searchParams.get('requesterId') || searchParams.get('trainerId');
+        const requesterId = session.id;
 
         // Get report
         const [report] = await db
@@ -95,9 +99,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 // Body: { action: 'approve' | 'reject', trainerId, feedback? }
 export async function PUT(req: NextRequest, { params }: RouteParams) {
     try {
+        const session = await requireTrainer(req);
+        if (isErrorResponse(session)) return session;
+
         const { id } = await params;
         const body = await req.json();
-        const { action, trainerId, feedback } = body;
+        const { action, feedback } = body;
+        const trainerId = session.id;
 
         // Validation
         if (!action || !['approve', 'reject'].includes(action)) {

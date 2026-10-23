@@ -1,4 +1,5 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../../../helpers/renderWithProviders';
 import TrainerDashboard from '@/components/dashboard/TrainerDashboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -39,7 +40,7 @@ describe('TrainerDashboard', () => {
         // Clear cache
         localStorage.clear();
 
-        render(<TrainerDashboard />);
+        renderWithProviders(<TrainerDashboard />);
 
         // We expect the dashboard structure to be present
         // Use waitFor because of useEffect setting mounted
@@ -69,13 +70,11 @@ describe('TrainerDashboard', () => {
             json: async () => mockData
         });
 
-        render(<TrainerDashboard />);
+        renderWithProviders(<TrainerDashboard />);
 
         await waitFor(() => {
             // Check for counts, not names as dashboard summarizes data
-            expect(screen.getByText('1')).toBeInTheDocument(); // Active trainees count (mockData has 1 trainee in array matching logic? No we pass array)
-            // Wait, logic: trainees.length. 
-            // In mockData above: trainees array has 1 element. So it renders 1.
+            expect(screen.getByText('(1)')).toBeInTheDocument(); // Trainees overview count
             expect(screen.getByText('5')).toBeInTheDocument(); // Pending reviews
         });
     });
@@ -88,14 +87,14 @@ describe('TrainerDashboard', () => {
         };
 
         localStorage.setItem(
-            'wmc_trainer_dashboard_cache',
+            'wmc_trainer_dashboard_cache_v4',
             JSON.stringify({ data: cachedData, timestamp: Date.now() })
         );
 
-        render(<TrainerDashboard />);
+        renderWithProviders(<TrainerDashboard />);
 
         await waitFor(() => {
-            expect(screen.getByText('99')).toBeInTheDocument();
+            expect(screen.getByText('(99)')).toBeInTheDocument();
         });
     });
 });

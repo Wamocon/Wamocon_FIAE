@@ -1,5 +1,6 @@
 'use client';
 
+import { getSupabasePublicKey } from '@/lib/env';
 import {
   createContext,
   useCallback,
@@ -149,10 +150,8 @@ function buildDashboardUrl(
   profileId?: string
 ): string {
   if (TRAINER_LEVEL_ROLES.includes(role as UserRole)) {
-    const params = new URLSearchParams();
-    params.set('trainerAuthId', userId);
-    if (profileId) params.set('trainerProfileId', profileId);
-    return `/api/trainer/dashboard?${params.toString()}`;
+    // The server derives the trainer from the session
+    return '/api/trainer/dashboard';
   }
   return `/api/trainee/dashboard?userId=${profileId || userId}`;
 }
@@ -607,7 +606,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (sdkResult.error) {
       try {
         const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/token?grant_type=password`;
-        const apikey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+        const apikey = getSupabasePublicKey() as string;
         const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', apikey },

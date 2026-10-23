@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -70,7 +71,7 @@ export default function AdminOrganizationsPage() {
   const loadOrgs = useCallback(async () => {
     if (!profile) return;
     try {
-      const res = await fetch(`/api/admin/organizations?adminId=${profile.id}`, {
+      const res = await authFetch(`/api/admin/organizations`, {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(t('admin.org.failedLoad'));
@@ -114,10 +115,10 @@ export default function AdminOrganizationsPage() {
     setSaving(true);
     try {
       const url = editingOrg
-        ? `/api/admin/organizations/${editingOrg.id}?adminId=${profile.id}`
-        : `/api/admin/organizations?adminId=${profile.id}`;
+        ? `/api/admin/organizations/${editingOrg.id}`
+        : `/api/admin/organizations`;
       const method = editingOrg ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -141,8 +142,8 @@ export default function AdminOrganizationsPage() {
     if (org.isPlatformOwner) return;
     setTogglingIds(prev => new Set(prev).add(org.id));
     try {
-      const res = await fetch(
-        `/api/admin/organizations/${org.id}?adminId=${profile.id}`,
+      const res = await authFetch(
+        `/api/admin/organizations/${org.id}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -169,8 +170,8 @@ export default function AdminOrganizationsPage() {
 
     setDeletingIds(prev => new Set(prev).add(org.id));
     try {
-      const res = await fetch(
-        `/api/admin/organizations/${org.id}?adminId=${profile.id}`,
+      const res = await authFetch(
+        `/api/admin/organizations/${org.id}`,
         { method: 'DELETE' }
       );
       if (!res.ok) {

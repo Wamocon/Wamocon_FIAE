@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, count, eq, inArray, sql } from 'drizzle-orm';
@@ -8,7 +9,7 @@ import {
   courseMembers,
   activityReports,
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 /**
  * GET /api/trainer/trainees/with-stats
@@ -24,20 +25,13 @@ import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-hel
  */
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
-    const trainerId =
-      searchParams.get('trainerProfileId') || searchParams.get('trainerAuthId');
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json(
-        { error: 'Missing trainer id' },
-        { status: 400 }
-      );
-    }
 
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
 
     const isPlatformOwnerUser = await verifyPlatformOwner(trainerId);
     const trainerOrgId = await getUserOrgId(trainerId);

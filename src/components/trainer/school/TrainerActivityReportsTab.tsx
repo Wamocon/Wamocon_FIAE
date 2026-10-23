@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -72,8 +73,8 @@ export function TrainerActivityReportsTab() {
     async function loadReports() {
       setLoading(true);
       try {
-        const res = await fetch(
-          `/api/trainer/school/activity-reports?trainerId=${trainerId}&status=${statusFilter}`,
+        const res = await authFetch(
+          `/api/trainer/school/activity-reports?status=${statusFilter}`,
           { cache: 'no-store' }
         );
         if (res.ok) {
@@ -96,10 +97,10 @@ export function TrainerActivityReportsTab() {
   ) => {
     if (!profile?.id) return;
     try {
-      const res = await fetch(`/api/trainer/activity-reports/${reportId}`, {
+      const res = await authFetch(`/api/trainer/activity-reports/${reportId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, trainerId: profile.id, feedback }),
+        body: JSON.stringify({ action, feedback }),
       });
       if (res.ok) {
         setReports(prev => prev.filter(r => r.id !== reportId));
@@ -274,7 +275,7 @@ function ReviewModal({
     async function fetchEntries() {
       setLoadingEntries(true);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainer/arbeitszeugnis/grade?reportId=${report.id}`,
           { cache: 'no-store' }
         );

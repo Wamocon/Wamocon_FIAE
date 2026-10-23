@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -132,10 +133,10 @@ export default function NewEnablerQuizPage() {
               .filter(q => q.questionText && (q as any).questionType === 'TEXT' ? true : (q as any).options.every((o: string) => o));
             setSubmitting(true);
             try {
-              const r = await fetch(`/api/trainer/enablers/${enablerId}/quizzes`, {
+              const r = await authFetch(`/api/trainer/enablers/${enablerId}/quizzes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: title.trim(), createdById: profile.id, difficulty, isActive, questions: cleaned }),
+                body: JSON.stringify({ title: title.trim(), difficulty, isActive, questions: cleaned }),
               });
               if (!r.ok) throw new Error(t('enablerQuiz.saveFailed'));
               router.back();

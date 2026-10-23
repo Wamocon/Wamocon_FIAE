@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -43,10 +44,7 @@ export default function TrainerTraineesPage() {
   const loadTrainees = useCallback(async () => {
     if (!profile || !user) return;
     try {
-      const params = new URLSearchParams();
-      if (user.id) params.set('trainerAuthId', user.id);
-      if (profile.id) params.set('trainerProfileId', profile.id);
-      const res = await fetch(`/api/trainer/trainees?${params.toString()}`, {
+      const res = await authFetch('/api/trainer/trainees', {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(t('trainee.management.loadError'));
@@ -71,11 +69,10 @@ export default function TrainerTraineesPage() {
       );
       setTogglingIds(prev => new Set(prev).add(trainee.id));
       try {
-        const res = await fetch(`/api/trainer/trainees/${trainee.id}`, {
+        const res = await authFetch(`/api/trainer/trainees/${trainee.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            trainer_id: profile?.id,
             trainer_activated: !previous,
           }),
         });

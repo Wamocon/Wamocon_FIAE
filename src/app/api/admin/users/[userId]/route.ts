@@ -1,9 +1,11 @@
+import { requireAdmin, isErrorResponse, scopeOrg, isInOrgScope } from '@/lib/auth/session';
+import { canManageAdmins, canModifyRole } from '@/lib/auth/roles';
+import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
-import { verifyAdmin } from '@/lib/auth-helpers';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
@@ -13,33 +15,31 @@ export async function PATCH(
 ) {
   try {
     const { userId } = await params;
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    // The caller's identity comes from the bearer token, never from the URL
+    const session = await requireAdmin(req);
+    if (isErrorResponse(session)) return session;
 
     const [targetUser] = await db
-      .select({ id: profiles.id, email: profiles.email, role: profiles.role })
+      .select({
+        id: profiles.id,
+        email: profiles.email,
+        role: profiles.role,
+        organizationId: profiles.organizationId,
+      })
       .from(profiles)
       .where(eq(profiles.id, userId as any))
       .limit(1);
 
-    if (!targetUser) {
+    // Users of other organizations are invisible to org admins
+    if (
+      !targetUser ||
+      !isInOrgScope(scopeOrg(session), targetUser.organizationId)
+    ) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     // Protect the ADMIN: only ADMIN can modify ADMIN, and the env-configured ADMIN cannot be demoted
-    const [callerProfile] = await db
-      .select({ role: profiles.role, email: profiles.email })
-      .from(profiles)
-      .where(eq(profiles.id, adminId as any))
-      .limit(1);
-
-    const callerRole = callerProfile?.role?.toUpperCase();
-    const targetRole = targetUser.role?.toUpperCase();
-
-    if (targetRole === 'ADMIN' && callerRole !== 'ADMIN') {
+    if (!canModifyRole(session, targetUser.role)) {
       return NextResponse.json(
         { error: 'Only ADMIN can modify another ADMIN' },
         { status: 403 }
@@ -70,7 +70,7 @@ export async function PATCH(
         return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
       }
       // TEMP_ADMIN cannot promote to ADMIN or modify ADMIN users
-      if (callerRole === 'TEMP_ADMIN' && newRole === 'ADMIN') {
+      if (newRole === 'ADMIN' && !canManageAdmins(session)) {
         return NextResponse.json(
           { error: 'TEMP_ADMIN cannot promote users to ADMIN' },
           { status: 403 }
@@ -81,8 +81,20 @@ export async function PATCH(
 
     if (typeof body.isActive === 'boolean') updates.isActive = body.isActive;
     if (typeof body.trainerActivated === 'boolean') updates.trainerActivated = body.trainerActivated;
-    if (typeof body.organizationId === 'string') updates.organizationId = body.organizationId;
-    if (body.organizationId === null) updates.organizationId = null;
+    // Moving a user to another organization is a platform-wide action
+    if (
+      (typeof body.organizationId === 'string' ||
+        body.organizationId === null) &&
+      body.organizationId !== targetUser.organizationId
+    ) {
+      if (!session.isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only the platform admin can move users between organizations' },
+          { status: 403 }
+        );
+      }
+      updates.organizationId = body.organizationId;
+    }
     if (typeof body.fullName === 'string') {
       const trimmed = body.fullName.trim();
       const parts = trimmed.split(/\s+/);
@@ -124,23 +136,30 @@ export async function DELETE(
 ) {
   try {
     const { userId } = await params;
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    // The caller's identity comes from the bearer token, never from the URL
+    const session = await requireAdmin(req);
+    if (isErrorResponse(session)) return session;
 
-    if (adminId === userId) {
+    if (session.id === userId) {
       return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });
     }
 
     const [targetUser] = await db
-      .select({ id: profiles.id, email: profiles.email, role: profiles.role })
+      .select({
+        id: profiles.id,
+        email: profiles.email,
+        role: profiles.role,
+        organizationId: profiles.organizationId,
+      })
       .from(profiles)
       .where(eq(profiles.id, userId as any))
       .limit(1);
 
-    if (!targetUser) {
+    // Users of other organizations are invisible to org admins
+    if (
+      !targetUser ||
+      !isInOrgScope(scopeOrg(session), targetUser.organizationId)
+    ) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -158,16 +177,7 @@ export async function DELETE(
       );
     }
 
-    const [callerProfile] = await db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, adminId as any))
-      .limit(1);
-
-    const callerRole = callerProfile?.role?.toUpperCase();
-    const targetRole = targetUser.role?.toUpperCase();
-
-    if (targetRole === 'ADMIN' && callerRole !== 'ADMIN') {
+    if (!canModifyRole(session, targetUser.role)) {
       return NextResponse.json(
         { error: 'Only ADMIN can delete another ADMIN' },
         { status: 403 }
@@ -177,7 +187,7 @@ export async function DELETE(
     await db.delete(profiles).where(eq(profiles.id, userId as any));
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const serviceRoleKey = getSupabaseSecretKey();
     if (supabaseUrl && serviceRoleKey) {
       const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },

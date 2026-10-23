@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { weeklyEvaluations, profiles } from '@/db/migrations/schemas/schema';
@@ -6,13 +7,13 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 // GET: Get annual performance summaries for all trainees (trainer view)
 export async function GET(request: NextRequest) {
     try {
+        const session = await requireTrainer(request);
+        if (isErrorResponse(session)) return session;
+
         const { searchParams } = new URL(request.url);
-        const trainerId = searchParams.get('trainerId');
+        const trainerId = session.id;
         const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : new Date().getFullYear();
 
-        if (!trainerId) {
-            return NextResponse.json({ error: 'trainerId is required' }, { status: 400 });
-        }
 
         // Get all trainees that have evaluations with this trainer
         const traineeEvaluations = await db

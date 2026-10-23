@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, count, eq, inArray } from 'drizzle-orm';
@@ -8,24 +9,19 @@ import {
   enablerCompletions,
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
-import {
-  verifyTrainer,
-  getUserOrgId,
-  verifyPlatformOwner,
-} from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ traineeId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { traineeId } = await params;
     const { searchParams } = new URL(req.url);
-    const requesterId =
-      searchParams.get('trainerId') || searchParams.get('requesterId');
-    if (!requesterId || !(await verifyTrainer(requesterId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const requesterId = session.id;
 
     const isPO = await verifyPlatformOwner(requesterId);
     if (!isPO) {
@@ -112,20 +108,12 @@ export async function PATCH(
   { params }: { params: Promise<{ traineeId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { traineeId } = await params;
     const body = await req.json();
-    const trainer_id = (body?.trainer_id || body?.trainerId) as
-      | string
-      | undefined;
-    if (!trainer_id)
-      return NextResponse.json(
-        { error: 'trainer_id required' },
-        { status: 400 }
-      );
-
-    if (!(await verifyTrainer(trainer_id))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const trainer_id = session.id;
 
     const [trainee] = await db
       .select({

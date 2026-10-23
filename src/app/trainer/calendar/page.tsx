@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -166,9 +167,7 @@ export default function TrainerCalendarPage() {
   const queryClient = useQueryClient();
 
   // Data fetching via React Query
-  const traineesUrl = profile?.id
-    ? `/api/trainer/trainees?trainerProfileId=${profile.id}`
-    : null;
+  const traineesUrl = profile?.id ? `/api/trainer/trainees` : null;
   const { data: traineesData } = useApiQuery<{ trainees: Trainee[] }>(
     traineesUrl
   );
@@ -278,11 +277,10 @@ export default function TrainerCalendarPage() {
     if (!profile?.id || !selectedTraineeId) return;
 
     try {
-      const res = await fetch('/api/trainer/blocks', {
+      const res = await authFetch('/api/trainer/blocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trainerId: profile.id,
           traineeId: selectedTraineeId,
           ...blockData,
         }),
