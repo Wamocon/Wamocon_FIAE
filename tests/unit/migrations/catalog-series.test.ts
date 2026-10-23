@@ -134,6 +134,30 @@ describe('catalog migration series files', () => {
     });
   });
 
+  it('keeps the enrollment and organization catalog tables read only for the API roles', () => {
+    const files = [
+      '20261020001000_organization_catalogs.sql',
+      '20261020001100_trainee_enrollments.sql',
+      '20261020001400_trainee_elective_choices.sql',
+    ];
+    for (const file of files) {
+      const sql = readSql(file);
+      // the revoke covers all write privileges for anon and authenticated
+      expect(sql).toMatch(
+        /revoke insert, update, delete, truncate, references, trigger on public\.\w+ from %I/
+      );
+      expect(sql).toMatch(/array\['anon', 'authenticated'\]/);
+      // no policy that allows writing (FOR ALL, INSERT, UPDATE or DELETE)
+      const policies = sql
+        .split(/\bcreate\s+policy\b/i)
+        .slice(1)
+        .map(chunk => chunk.split(';')[0]);
+      for (const policy of policies) {
+        expect(policy).toMatch(/\bfor\s+select\b/i);
+      }
+    }
+  });
+
   it('adds enum values only in their own file', () => {
     const filesWithAddValue = seriesFiles.filter(name =>
       /\badd\s+value\b/i.test(readSql(name))

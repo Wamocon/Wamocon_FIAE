@@ -8,8 +8,9 @@
 --
 -- RLS follows the pattern of public.organizations, but only for logged in
 -- users (role authenticated, never public or anon): members read the rows of
--- their own organization (get_user_org_id()), only the platform owner changes
--- them. There is no policy with USING (true).
+-- their own organization (get_user_org_id()), the platform owner reads all.
+-- There is no policy with USING (true) and no write policy; the API roles have
+-- no INSERT, UPDATE, DELETE or TRUNCATE privilege, the server writes.
 
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
@@ -47,16 +48,27 @@ create policy organization_catalogs_select_own_org
     or public.is_platform_owner()
   );
 
+-- Earlier drafts had a write policy for the platform owner; writing is now
+-- server side only (privileges below), so no write policy exists.
 drop policy if exists organization_catalogs_manage_platform_owner
   on public.organization_catalogs;
-create policy organization_catalogs_manage_platform_owner
-  on public.organization_catalogs for all to authenticated
-  using (public.is_platform_owner());
 
--- No anonymous access (only if the Supabase role exists). The server role
--- bypasses RLS (BYPASSRLS), like service_role.
+-- Read only for the API roles.
+-- Writes happen only on the server (role postgres with BYPASSRLS, or
+-- service_role); anon and authenticated may only read. Revoked only for roles
+-- that exist, so the file also runs on plain PostgreSQL.
 do $$
+declare
+  api_role text;
 begin
+  foreach api_role in array array['anon', 'authenticated'] loop
+    if exists (select 1 from pg_roles where rolname = api_role) then
+      execute format(
+        'revoke insert, update, delete, truncate, references, trigger on public.organization_catalogs from %I',
+        api_role
+      );
+    end if;
+  end loop;
   if exists (select 1 from pg_roles where rolname = 'anon') then
     revoke all on public.organization_catalogs from anon;
   end if;

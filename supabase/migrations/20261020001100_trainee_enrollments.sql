@@ -9,9 +9,10 @@
 -- start_date is nullable like profiles.start_of_training_date. duration_years
 -- follows the existing check of profiles.ausbildung_duration_years (2 or 3).
 --
--- RLS follows the org isolation pattern of the other org scoped tables: rows
--- are visible and changeable for members of the trainee's organization
--- (get_user_org_id()) and for the platform owner.
+-- RLS: rows are readable for members of the trainee's organization
+-- (get_user_org_id()) and for the platform owner. Nobody writes through the API
+-- roles: INSERT, UPDATE, DELETE and TRUNCATE are revoked for anon and
+-- authenticated, the server (postgres, service_role) writes.
 
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
@@ -50,7 +51,7 @@ alter table public.trainee_enrollments enable row level security;
 drop policy if exists trainee_enrollments_org_isolation
   on public.trainee_enrollments;
 create policy trainee_enrollments_org_isolation
-  on public.trainee_enrollments for all to authenticated
+  on public.trainee_enrollments for select to authenticated
   using (
     exists (
       select 1
@@ -61,10 +62,22 @@ create policy trainee_enrollments_org_isolation
     or public.is_platform_owner()
   );
 
--- No anonymous access (only if the Supabase role exists). The server role
--- bypasses RLS (BYPASSRLS), like service_role. There is no USING (true) policy.
+-- Read only for the API roles (own organization through the policy).
+-- Writes happen only on the server (role postgres with BYPASSRLS, or
+-- service_role); anon and authenticated may only read. Revoked only for roles
+-- that exist, so the file also runs on plain PostgreSQL.
 do $$
+declare
+  api_role text;
 begin
+  foreach api_role in array array['anon', 'authenticated'] loop
+    if exists (select 1 from pg_roles where rolname = api_role) then
+      execute format(
+        'revoke insert, update, delete, truncate, references, trigger on public.trainee_enrollments from %I',
+        api_role
+      );
+    end if;
+  end loop;
   if exists (select 1 from pg_roles where rolname = 'anon') then
     revoke all on public.trainee_enrollments from anon;
   end if;
