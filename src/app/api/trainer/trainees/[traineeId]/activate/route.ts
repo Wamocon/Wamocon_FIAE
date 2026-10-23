@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
@@ -14,14 +15,18 @@ type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ traineeId: string }> }) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { traineeId } = await params;
     const body = await req.json();
-    const { itemType, itemId, isActive, trainerId } = body as {
+    const { itemType, itemId, isActive } = body as {
       itemType: ItemType;
       itemId: string;
       isActive: boolean;
-      trainerId?: string;
     };
+    // The acting trainer is the authenticated user, never a client value
+    const trainerId = session.id;
 
     if (trainerId) {
       const [t] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any)).limit(1);

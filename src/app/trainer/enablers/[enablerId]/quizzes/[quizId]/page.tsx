@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -70,7 +71,7 @@ export default function EditEnablerQuizPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const r = await fetch(
+        const r = await authFetch(
           `/api/trainer/enablers/${enablerId}/quizzes/${quizId}`,
           { cache: 'no-store' }
         );
@@ -113,7 +114,7 @@ export default function EditEnablerQuizPage() {
               onClick={async () => {
                 if (!confirm(t('trainer.enablerQuiz.deleteConfirm'))) return;
                 try {
-                  const r = await fetch(
+                  const r = await authFetch(
                     `/api/trainer/enablers/${enablerId}/quizzes/${quizId}`,
                     { method: 'DELETE' }
                   );
@@ -501,7 +502,6 @@ export default function EditEnablerQuizPage() {
                 setSaving(true);
                 try {
                   const payload = {
-                    trainerId: profile.id,
                     title,
                     isActive,
                     difficulty,
@@ -523,7 +523,7 @@ export default function EditEnablerQuizPage() {
                           }
                     ),
                   };
-                  const r = await fetch(
+                  const r = await authFetch(
                     `/api/trainer/enablers/${enablerId}/quizzes/${quizId}`,
                     {
                       method: 'PATCH',

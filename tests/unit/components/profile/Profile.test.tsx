@@ -1,10 +1,14 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { renderWithProviders } from '../../../helpers/renderWithProviders';
 import { Profile } from '@/components/profile/Profile';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 // Mock dependencies
 jest.mock('@/contexts/AuthContext');
+jest.mock('@/contexts/OnboardingContext', () => ({
+    useOnboarding: () => ({ restartTour: jest.fn() }),
+}));
 jest.mock('@/lib/supabase', () => ({
     supabase: {
         auth: {
@@ -33,13 +37,13 @@ describe('Profile', () => {
     });
 
     it('renders profile information', () => {
-        render(<Profile />);
+        renderWithProviders(<Profile />);
         expect(screen.getAllByText('Test Usesr').length).toBeGreaterThan(0);
         expect(screen.getByTestId('user-email')).toHaveTextContent('test@example.com');
     });
 
     it('toggles edit mode', async () => {
-        render(<Profile />);
+        renderWithProviders(<Profile />);
         await waitFor(() => {
             const editBtn = screen.getByLabelText('Profil bearbeiten');
             fireEvent.click(editBtn);

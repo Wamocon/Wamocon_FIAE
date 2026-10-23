@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -134,14 +135,14 @@ export default function TrainerActivityReportsPage() {
 
       const [reportsRes, traineesRes, useCasesRes, componentsRes] =
         await Promise.all([
-          fetch(`/api/trainer/activity-reports?trainerId=${userId}`, {
+          authFetch(`/api/trainer/activity-reports`, {
             cache: 'no-store',
           }),
-          fetch(`/api/trainer/trainees?trainerProfileId=${userId}`, {
+          authFetch(`/api/trainer/trainees`, {
             cache: 'no-store',
           }),
-          fetch('/api/training-use-cases', { cache: 'no-store' }),
-          fetch('/api/training-components', { cache: 'no-store' }),
+          authFetch('/api/training-use-cases', { cache: 'no-store' }),
+          authFetch('/api/training-components', { cache: 'no-store' }),
         ]);
 
       const [reportsData, traineesData, useCasesData, componentsData] =
@@ -226,7 +227,7 @@ export default function TrainerActivityReportsPage() {
   const loadReportEntries = async (reportId: string) => {
     try {
       setLoadingEntries(true);
-      const res = await fetch(`/api/activity-reports/${reportId}/entries`);
+      const res = await authFetch(`/api/activity-reports/${reportId}/entries`);
       if (res.ok) {
         const data = await res.json();
         setReportEntries(data.entries || []);
@@ -247,7 +248,7 @@ export default function TrainerActivityReportsPage() {
     if (!selectedReport || !profile) return;
 
     try {
-      const res = await fetch(`/api/activity-reports/${selectedReport.id}`, {
+      const res = await authFetch(`/api/activity-reports/${selectedReport.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'APPROVED', userId: profile.id }),
@@ -266,7 +267,7 @@ export default function TrainerActivityReportsPage() {
     if (!selectedReport || !profile) return;
 
     try {
-      const res = await fetch(`/api/activity-reports/${selectedReport.id}`, {
+      const res = await authFetch(`/api/activity-reports/${selectedReport.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -289,7 +290,7 @@ export default function TrainerActivityReportsPage() {
     if (!confirm(t('trainer.reports.deleteConfirm'))) return;
 
     try {
-      const res = await fetch(`/api/activity-reports/${reportId}`, {
+      const res = await authFetch(`/api/activity-reports/${reportId}`, {
         method: 'DELETE',
       });
 
@@ -309,7 +310,7 @@ export default function TrainerActivityReportsPage() {
   ) => {
     try {
       // 1. Get all evaluations to find the ID
-      const resLists = await fetch(`/api/trainee/evaluations?userId=${userId}`);
+      const resLists = await authFetch(`/api/trainee/evaluations?userId=${userId}`);
       if (!resLists.ok) return null;
       const { evaluations } = await resLists.json();
       const evaluation = evaluations.find(
@@ -319,7 +320,7 @@ export default function TrainerActivityReportsPage() {
       if (!evaluation) return null;
 
       // 2. Get full details including Soft Skills
-      const resDetails = await fetch(
+      const resDetails = await authFetch(
         `/api/trainer/evaluations/${evaluation.id}`
       );
       if (!resDetails.ok) return null;
@@ -334,7 +335,7 @@ export default function TrainerActivityReportsPage() {
     if (!selectedReport) return;
     try {
       // Fetch entries fresh from API for reliability
-      const entriesRes = await fetch(
+      const entriesRes = await authFetch(
         `/api/activity-reports/${selectedReport.id}/entries`
       );
       const entriesData = entriesRes.ok
@@ -443,7 +444,7 @@ export default function TrainerActivityReportsPage() {
       // Export all filtered reports one by one
       for (const report of filteredReports) {
         // Fetch entries for this report
-        const entriesRes = await fetch(
+        const entriesRes = await authFetch(
           `/api/activity-reports/${report.id}/entries`
         );
         const entriesData = entriesRes.ok
@@ -1062,14 +1063,14 @@ function ReportReviewModal({
     setLoadingSoftskills(true);
     try {
       // Load criteria
-      const criteriaRes = await fetch('/api/softskill-criteria');
+      const criteriaRes = await authFetch('/api/softskill-criteria');
       if (criteriaRes.ok) {
         const data = await criteriaRes.json();
         setSoftskillCriteria(data.criteria || []);
       }
 
       // Load existing ratings for this report
-      const ratingsRes = await fetch(
+      const ratingsRes = await authFetch(
         `/api/weekly-evaluations?activityReportId=${report.id}`
       );
       if (ratingsRes.ok) {
@@ -1172,7 +1173,7 @@ function ReportReviewModal({
         }));
 
       if (gradesToSave.length > 0) {
-        const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
+        const res = await authFetch(`/api/activity-reports/${report.id}/entries`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1213,7 +1214,7 @@ function ReportReviewModal({
         }));
 
       // Save trainer ratings
-      const res = await fetch('/api/weekly-evaluations', {
+      const res = await authFetch('/api/weekly-evaluations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { modules, lessons } from '@/db/migrations/schemas/schema';
@@ -6,18 +7,18 @@ import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const body = await req.json();
     const title: string | undefined = body?.title;
     const training_year: number | undefined = typeof body?.training_year === 'number' ? body.training_year : Number(body?.training_year);
     const order_index: number | undefined = body?.order_index ? Number(body.order_index) : undefined;
-    const created_by: string | undefined = body?.created_by;
+    const created_by: string = session.id;
     const inputLessons: Array<{ title: string; order_index?: number; duration_weeks?: number }> | undefined = Array.isArray(body?.lessons)
       ? body.lessons
       : undefined;
 
-    if (!created_by) {
-      return NextResponse.json({ error: 'Missing created_by (trainer ID)' }, { status: 400 });
-    }
     if (!(await verifyPlatformOwner(created_by))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },

@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,7 +36,7 @@ export default function EnablerQuizBuilderPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/trainer/enablers/${enablerId}/quiz`, {
+        const res = await authFetch(`/api/trainer/enablers/${enablerId}/quiz`, {
           cache: 'no-store',
         });
         if (!res.ok) throw new Error('Fehler beim Laden');
@@ -113,12 +114,11 @@ export default function EnablerQuizBuilderPage() {
 
     try {
       setSaving(true);
-      const res = await fetch(`/api/trainer/enablers/${enablerId}/quiz`, {
+      const res = await authFetch(`/api/trainer/enablers/${enablerId}/quiz`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim(),
-          createdById: profile.id,
           questions: cleaned,
         }),
       });

@@ -1,3 +1,4 @@
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { Copy, Check, Star } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -32,7 +33,7 @@ export function EvidenceSection({
     async function loadEvidence() {
       setLoading(true);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainer/arbeitszeugnis/evidence/${traineeId}${query}`,
           { cache: 'no-store' }
         );

@@ -1,21 +1,28 @@
+import {
+  requireAdmin,
+  isErrorResponse,
+  scopeOrg,
+  orgScopeCondition,
+} from '@/lib/auth/session';
+import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
 import { eq, sql } from 'drizzle-orm';
 import { profiles, organizations, notifications } from '@/db/migrations/schemas/schema';
-import { verifyAdmin } from '@/lib/auth-helpers';
 import { sendCredentialsEmail } from '@/lib/email';
 import crypto from 'crypto';
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    // The caller's identity comes from the bearer token, never from the URL
+    const session = await requireAdmin(req);
+    if (isErrorResponse(session)) return session;
 
-    const orgFilter = searchParams.get('orgId');
+    // Org admins only see their own organization, the super admin sees all
+    // and may narrow the list with ?orgId=
+    const { searchParams } = new URL(req.url);
+    const scope = scopeOrg(session, searchParams.get('orgId'));
 
     const rows = await db
       .select({
@@ -35,7 +42,7 @@ export async function GET(req: NextRequest) {
       })
       .from(profiles)
       .leftJoin(organizations, eq(profiles.organizationId, organizations.id))
-      .where(orgFilter ? eq(profiles.organizationId, orgFilter as any) : sql`1=1`)
+      .where(orgScopeCondition(profiles.organizationId, scope) ?? sql`1=1`)
       .orderBy(profiles.createdAt);
 
     return NextResponse.json({
@@ -69,11 +76,9 @@ function generatePassword(length = 12): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    // The caller's identity comes from the bearer token, never from the URL
+    const session = await requireAdmin(req);
+    if (isErrorResponse(session)) return session;
 
     const body = await req.json();
     const { email, fullName, role, organizationId, sendEmail } = body as {
@@ -89,6 +94,11 @@ export async function POST(req: NextRequest) {
         { error: 'email, fullName, role, and organizationId are required' },
         { status: 400 }
       );
+    }
+
+    // Org admins can only create users in their own organization
+    if (!session.isSuperAdmin && organizationId !== session.organizationId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -123,7 +133,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabaseUrl = process.env.SUPABASE_URL || process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const serviceRoleKey = getSupabaseSecretKey();
     if (!supabaseUrl || !serviceRoleKey) {
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
     }

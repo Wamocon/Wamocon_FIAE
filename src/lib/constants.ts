@@ -1,3 +1,5 @@
+import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
+
 // App Configuration
 export const APP_CONFIG = {
   name: 'LFA-Lernplattform',
@@ -19,8 +21,9 @@ export const API_CONFIG = {
 // Supabase Configuration
 export const SUPABASE_CONFIG = {
   url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  // publishable (formerly anon) key and secret (formerly service role) key
+  anonKey: getSupabasePublicKey()!,
+  serviceRoleKey: getSupabaseSecretKey()!,
 };
 
 // Navigation Links

@@ -1,15 +1,29 @@
+import {
+  requireTrainer,
+  isErrorResponse,
+  scopeOrg,
+  orgScopeCondition,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, ilike, or } from 'drizzle-orm';
-import { profiles, userRole } from '@/db/migrations/schemas/schema';
+import { profiles } from '@/db/migrations/schemas/schema';
 
 // GET /api/trainer/profiles?role=TRAINER|TRAINEE&q=text
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
     const role = searchParams.get('role');
     const q = searchParams.get('q')?.trim();
-    const where: any[] = [];
+    // Everyone but the super admin only finds profiles of their own organization
+    const orgCondition = orgScopeCondition(
+      profiles.organizationId,
+      scopeOrg(session)
+    );
+    const where: any[] = orgCondition ? [orgCondition] : [];
     if (role === 'TRAINER' || role === 'TRAINEE') where.push(eq(profiles.role, role as any));
     if (q) where.push(or(ilike(profiles.fullName, `%${q}%`), ilike(profiles.email, `%${q}%`)) as any);
 

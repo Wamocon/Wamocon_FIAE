@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -173,10 +174,9 @@ export function TrainerCalendarTab() {
     if (!profile?.id) return;
     async function loadTrainees() {
       try {
-        const res = await fetch(
-          `/api/trainer/trainees?trainerProfileId=${profile?.id}`,
-          { cache: 'no-store' }
-        );
+        const res = await authFetch(`/api/trainer/trainees`, {
+          cache: 'no-store',
+        });
         if (res.ok) {
           const data = await res.json();
           setTrainees(data.trainees || []);
@@ -214,7 +214,7 @@ export function TrainerCalendarTab() {
     async function loadBlocks() {
       setLoading(true);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainer/blocks?traineeId=${selectedTraineeId}&year=${selectedYear}`,
           { cache: 'no-store' }
         );
@@ -398,11 +398,10 @@ export function TrainerCalendarTab() {
   const handleAddBlock = async (blockData: any) => {
     if (!profile?.id) return;
     try {
-      const res = await fetch('/api/trainer/blocks', {
+      const res = await authFetch('/api/trainer/blocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trainerId: profile.id,
           traineeIds: blockData.traineeIds || [selectedTraineeId],
           ...blockData,
         }),
@@ -423,7 +422,7 @@ export function TrainerCalendarTab() {
 
   const handleDeleteBlock = async (blockId: string) => {
     try {
-      const res = await fetch(`/api/trainer/blocks/${blockId}`, {
+      const res = await authFetch(`/api/trainer/blocks/${blockId}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error(t('calendar.error.deleteBlock'));
@@ -439,7 +438,7 @@ export function TrainerCalendarTab() {
     updates: Partial<Block>
   ) => {
     try {
-      const res = await fetch(`/api/trainer/blocks/${blockId}`, {
+      const res = await authFetch(`/api/trainer/blocks/${blockId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),

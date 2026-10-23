@@ -1,3 +1,4 @@
+import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
@@ -5,12 +6,10 @@ import { profiles, organizations } from '@/db/migrations/schemas/schema';
 import { and, eq, ne } from 'drizzle-orm';
 import { mergeProfileReferences } from '@/lib/profile-identity';
 
-const WAMOCON_ORG_ID = '00000000-0000-0000-0000-000000000001';
-
 function getAdminClient() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const serviceKey = getSupabaseSecretKey() || '';
   return createClient(url, serviceKey, { auth: { persistSession: false } });
 }
 
@@ -24,18 +23,13 @@ function deriveNameFromEmail(email: string) {
   return capitalized || local;
 }
 
-function isAdminEmail(email: string): boolean {
-  const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  return !!adminEmail && email === adminEmail;
-}
-
 export async function POST(request: Request) {
   try {
     const supabaseUrl =
       process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.SUPABASE_URL ||
       process.env.SUPABASE_URL_INTERNAL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const anonKey = getSupabasePublicKey();
     if (!supabaseUrl || !anonKey) {
       return NextResponse.json(
         { error: 'Server misconfigured: missing Supabase URL or anon key' },
@@ -92,23 +86,14 @@ export async function POST(request: Request) {
     const existing = existingProfile[0];
 
     // --- Role determination ---
-    // Priority: ADMIN_EMAIL env > existing DB role > user metadata > TRAINEE default
-    let role: string;
-    if (isAdminEmail(email)) {
-      role = 'ADMIN';
-    } else if (existing?.role) {
-      role = existing.role;
-    } else {
-      const metaRole = user.user_metadata?.role?.toUpperCase?.();
-      role = metaRole === 'TRAINER' ? 'TRAINER' : 'TRAINEE';
-    }
+    // The role comes from the database only. user_metadata.role and the
+    // ADMIN_EMAIL address are client-controllable or guessable, so they never
+    // grant a role. New profiles start as TRAINEE; admins promote them.
+    const role: string = existing?.role ?? 'TRAINEE';
 
     // --- Organization assignment ---
-    // Preserve existing org; ADMIN_EMAIL always belongs to wamocon org
-    let organizationId: string | null = existing?.organizationId ?? null;
-    if (isAdminEmail(email) && !organizationId) {
-      organizationId = WAMOCON_ORG_ID;
-    }
+    // Preserve the existing organization
+    const organizationId: string | null = existing?.organizationId ?? null;
 
     // --- Activation state ---
     // Preserve existing flags. For new profiles created via self-registration:
@@ -117,7 +102,9 @@ export async function POST(request: Request) {
     // - trainer_activated defaults to true for TRAINER/ADMIN/TEMP_ADMIN
     const isNewProfile = !existing;
     const trainerActivated = isNewProfile
-      ? role === 'TRAINEE' ? false : true
+      ? role === 'TRAINEE'
+        ? false
+        : true
       : existing.trainerActivated;
 
     const full_name =
@@ -179,6 +166,18 @@ export async function POST(request: Request) {
     const lastName = nameParts.slice(1).join(' ') || '';
 
     if (existing && existing.id !== user.id) {
+      // Merging attaches this login to a pre-created profile and its role, so
+      // the e-mail address must be verified first.
+      const emailConfirmed = Boolean(
+        user.email_confirmed_at ||
+        (user as { confirmed_at?: string }).confirmed_at
+      );
+      if (!emailConfirmed) {
+        return NextResponse.json(
+          { error: 'E-Mail-Adresse nicht bestätigt' },
+          { status: 403 }
+        );
+      }
       const temporaryEmail = `profile-merge-${user.id}@local.invalid`;
       await db.transaction(async tx => {
         await tx
@@ -224,10 +223,8 @@ export async function POST(request: Request) {
             fullName: full_name,
             firstName,
             lastName,
-            role: isAdminEmail(email) ? ('ADMIN' as any) : (role as any),
-            organizationId: isAdminEmail(email)
-              ? WAMOCON_ORG_ID
-              : organizationId,
+            role: role as any,
+            organizationId,
             isActive: true,
             trainerActivated,
             assignedTrainerId: assignedTrainerId ?? null,
@@ -266,9 +263,6 @@ export async function POST(request: Request) {
             fullName: full_name,
             firstName,
             lastName,
-            ...(isAdminEmail(email)
-              ? { role: 'ADMIN' as any, organizationId: WAMOCON_ORG_ID }
-              : {}),
           },
         });
     } catch (drizzleErr: unknown) {
@@ -279,9 +273,7 @@ export async function POST(request: Request) {
           .from(profiles)
           .where(and(eq(profiles.email, email), ne(profiles.id, user.id)))
           .limit(1);
-        const preservedRole = isAdminEmail(email)
-          ? 'ADMIN'
-          : (orphan[0]?.role ?? role);
+        const preservedRole = orphan[0]?.role ?? role;
         if (!orphan[0]?.id) throw drizzleErr;
 
         await db.transaction(async tx => {
@@ -296,16 +288,12 @@ export async function POST(request: Request) {
               role: preservedRole as any,
               assignedTrainerId: assignedTrainerId ?? undefined,
               isActive: true,
-              organizationId: isAdminEmail(email)
-                ? WAMOCON_ORG_ID
-                : organizationId,
+              organizationId,
               trainerActivated,
             })
             .onConflictDoNothing();
           await mergeProfileReferences(tx, orphan[0].id, user.id);
-          await tx
-            .delete(profiles)
-            .where(eq(profiles.id, orphan[0].id as any));
+          await tx.delete(profiles).where(eq(profiles.id, orphan[0].id as any));
           await tx
             .update(profiles)
             .set({
@@ -315,9 +303,7 @@ export async function POST(request: Request) {
               lastName,
               role: preservedRole as any,
               isActive: true,
-              organizationId: isAdminEmail(email)
-                ? WAMOCON_ORG_ID
-                : organizationId,
+              organizationId,
               trainerActivated,
               assignedTrainerId: assignedTrainerId ?? null,
             })
@@ -332,10 +318,10 @@ export async function POST(request: Request) {
             full_name,
             first_name: firstName,
             last_name: lastName,
-            role: isAdminEmail(email) ? 'ADMIN' : role,
+            role,
             is_active: true,
             assigned_trainer_id: assignedTrainerId,
-            organization_id: isAdminEmail(email) ? WAMOCON_ORG_ID : organizationId,
+            organization_id: organizationId,
             trainer_activated: trainerActivated,
           },
           { onConflict: 'id' }

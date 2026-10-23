@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -10,7 +11,7 @@ import {
   courseMembers,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer, getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET: List quizzes for an enabler grouped by difficulty
 export async function GET(
@@ -18,6 +19,9 @@ export async function GET(
   { params }: { params: Promise<{ enablerId: string }> }
 ) {
   try {
+    const session = await requireTrainer(_req);
+    if (isErrorResponse(session)) return session;
+
     const { enablerId } = await params;
     const [enabler] = await db
       .select({ id: enablers.id })
@@ -74,10 +78,13 @@ export async function POST(
   { params }: { params: Promise<{ enablerId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { enablerId } = await params;
     const body = await req.json();
     const title: string | undefined = body?.title;
-    const createdById: string | undefined = body?.createdById;
+    const createdById = session.id;
     const difficulty: 'LOW' | 'MEDIUM' | 'HIGH' | undefined = body?.difficulty;
     const isActive: boolean = !!body?.isActive;
     const items: Array<any> = Array.isArray(body?.questions)
@@ -102,12 +109,6 @@ export async function POST(
     }
 
     // Shared curriculum: any valid trainer can create quizzes
-    if (!(await verifyTrainer(createdById))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     if (!(await verifyPlatformOwner(createdById))) {
       return NextResponse.json(

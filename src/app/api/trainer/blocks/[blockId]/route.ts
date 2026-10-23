@@ -5,6 +5,8 @@
  * PATCH  /api/trainer/blocks/[blockId] - Update a trainer-created block
  */
 
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
@@ -26,6 +28,9 @@ export async function DELETE(
     { params }: { params: Promise<{ blockId: string }> }
 ) {
     try {
+        const session = await requireTrainer(req);
+        if (isErrorResponse(session)) return session;
+
         const { blockId } = await params;
 
         if (!blockId) {
@@ -41,6 +46,9 @@ export async function DELETE(
         if (!block) {
             return NextResponse.json({ error: 'Block not found' }, { status: 404 });
         }
+
+        const access = await requireTraineeAccess(session, String(block.traineeId));
+        if (isErrorResponse(access)) return access;
 
         // Only allow deletion of trainer-created blocks
         if (block.blockType !== 'TRAINER_BLOCKER') {
@@ -84,6 +92,9 @@ export async function PATCH(
     { params }: { params: Promise<{ blockId: string }> }
 ) {
     try {
+        const session = await requireTrainer(req);
+        if (isErrorResponse(session)) return session;
+
         const { blockId } = await params;
         const body = await req.json();
 
@@ -100,6 +111,9 @@ export async function PATCH(
         if (!existingBlock) {
             return NextResponse.json({ error: 'Block not found' }, { status: 404 });
         }
+
+        const access = await requireTraineeAccess(session, String(existingBlock.traineeId));
+        if (isErrorResponse(access)) return access;
 
         // Only allow editing of trainer-created blocks
         if (existingBlock.blockType !== 'TRAINER_BLOCKER') {

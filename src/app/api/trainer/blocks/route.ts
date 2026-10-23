@@ -5,6 +5,8 @@
  * POST /api/trainer/blocks - Create blocker for trainee
  */
 
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
@@ -52,6 +54,9 @@ function getISOWeek(date: Date): number {
 // GET /api/trainer/blocks?traineeId=...&year=...
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
     const traineeId = searchParams.get('traineeId');
     const year = searchParams.get('year');
@@ -59,6 +64,9 @@ export async function GET(req: NextRequest) {
     if (!traineeId) {
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
     }
+
+    const access = await requireTraineeAccess(session, traineeId);
+    if (isErrorResponse(access)) return access;
 
     // Build query conditions
     const conditions = [eq(ausbildungBlocks.traineeId, traineeId as any)];
@@ -94,12 +102,14 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/trainer/blocks
-// Body: { trainerId, traineeIds, blockType, startDate, endDate, title?, notes?, description?, sendInvitation? } (Updated for Multi-Select)
+// Body: { traineeIds, blockType, startDate, endDate, title?, notes?, description?, sendInvitation? } (Updated for Multi-Select)
 export async function POST(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const body = await req.json();
     const {
-      trainerId,
       traineeId, // Backward compatibility or single
       traineeIds: providedTraineeIds, // New array support
       startDate,
@@ -112,12 +122,10 @@ export async function POST(req: NextRequest) {
       examSubType,
     } = body;
 
+    // The acting trainer is the authenticated user, never a client value
+    const trainerId = session.id;
+
     // Validation
-    if (!trainerId)
-      return NextResponse.json(
-        { error: 'trainerId required' },
-        { status: 400 }
-      );
 
     // Resolve trainee IDs list
     const targetTraineeIds =
@@ -178,6 +186,12 @@ export async function POST(req: NextRequest) {
 
     for (const tid of targetTraineeIds) {
       try {
+        const access = await requireTraineeAccess(session, String(tid));
+        if (isErrorResponse(access)) {
+          errors.push(`Trainee ${tid} not accessible`);
+          continue;
+        }
+
         const [trainee] = await db
           .select({
             firstName: profiles.firstName,

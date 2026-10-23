@@ -1,3 +1,5 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -34,11 +36,20 @@ export async function POST(
   { params }: { params: Promise<{ traineeId: string }> }
 ) {
   try {
+    const session = await requireTrainer(request);
+    if (isErrorResponse(session)) return session;
+
     const { traineeId } = await params;
 
     if (!traineeId) {
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
     }
+
+    const access = await requireTraineeAccess(session, traineeId);
+    if (isErrorResponse(access)) return access;
+
+    // The issuing trainer is the authenticated user, never a client value
+    const trainerId = session.id;
 
     const body = await request.json();
     const {
@@ -51,7 +62,6 @@ export async function POST(
       radarImage,
       startDate,
       endDate,
-      trainerId,
       traineeBirthDate,
       softSkills,
     } = body;

@@ -3,21 +3,38 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
+import {
+  fakeSession,
+  mockSession,
+  mockTraineeAccess,
+} from '../../../../helpers/mockNext';
+
 const mockDb = {
   select: jest.fn(),
   insert: jest.fn(),
 };
 
-const mockGenerateCertificateText = jest.fn().mockReturnValue('Generated certificate text');
+const mockGenerateCertificateText = jest
+  .fn()
+  .mockReturnValue('Generated certificate text');
 
-async function importHandler() {
+async function importHandler(
+  session: ReturnType<typeof fakeSession> | null = fakeSession(),
+  access: 'ok' | 'forbidden' | 'missing' = 'ok'
+) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockSession(session);
+  mockTraineeAccess(access);
   jest.doMock('@/lib/arbeitszeugnis/textGenerator', () => ({
     generateCertificateText: mockGenerateCertificateText,
   }));
-  const mod = await import('../../../../../src/app/api/trainer/arbeitszeugnis/issue/[traineeId]/route');
-  return mod.POST as (req: Request, ctx: { params: Promise<{ traineeId: string }> }) => Promise<Response>;
+  const mod =
+    await import('../../../../../src/app/api/trainer/arbeitszeugnis/issue/[traineeId]/route');
+  return mod.POST as (
+    req: Request,
+    ctx: { params: Promise<{ traineeId: string }> }
+  ) => Promise<Response>;
 }
 
 describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
@@ -25,20 +42,63 @@ describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
     jest.clearAllMocks();
   });
 
-  it('should return 400 when overallAssessment is missing', async () => {
-    const POST = await importHandler();
-    const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123', {
+  const issueRequest = () =>
+    new Request(
+      'http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123',
+      {
         method: 'POST',
         body: JSON.stringify({
           ausbildungsjahr: 1,
           certificateType: 'FINAL',
-          customSummary: '',
-          overallAssessment: '',
+          overallAssessment: 'Gut gemacht.',
           manualOverallGrade: 2,
-          gender: 'male',
+          // A client-sent trainer id must never be used
+          trainerId: 'someone-else',
         }),
-      }),
+      }
+    );
+  const ctx = { params: Promise.resolve({ traineeId: 'trainee-123' }) };
+
+  it('401 without a session', async () => {
+    const POST = await importHandler(null);
+    const res = await POST(issueRequest(), ctx);
+    expect(res.status).toBe(401);
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('403 for a trainee session', async () => {
+    const POST = await importHandler(
+      fakeSession({ role: 'TRAINEE', isTrainerLevel: false })
+    );
+    const res = await POST(issueRequest(), ctx);
+    expect(res.status).toBe(403);
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('403 when the trainee belongs to another organization', async () => {
+    const POST = await importHandler(fakeSession(), 'forbidden');
+    const res = await POST(issueRequest(), ctx);
+    expect(res.status).toBe(403);
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('should return 400 when overallAssessment is missing', async () => {
+    const POST = await importHandler();
+    const res = await POST(
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ausbildungsjahr: 1,
+            certificateType: 'FINAL',
+            customSummary: '',
+            overallAssessment: '',
+            manualOverallGrade: 2,
+            gender: 'male',
+          }),
+        }
+      ),
       { params: Promise.resolve({ traineeId: 'trainee-123' }) }
     );
 
@@ -50,17 +110,20 @@ describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
   it('should return 400 when manualOverallGrade is invalid', async () => {
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123', {
-        method: 'POST',
-        body: JSON.stringify({
-          ausbildungsjahr: 1,
-          certificateType: 'FINAL',
-          customSummary: '',
-          overallAssessment: 'Gut gemacht.',
-          manualOverallGrade: 7,
-          gender: 'male',
-        }),
-      }),
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ausbildungsjahr: 1,
+            certificateType: 'FINAL',
+            customSummary: '',
+            overallAssessment: 'Gut gemacht.',
+            manualOverallGrade: 7,
+            gender: 'male',
+          }),
+        }
+      ),
       { params: Promise.resolve({ traineeId: 'trainee-123' }) }
     );
 
@@ -80,17 +143,20 @@ describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
 
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/issue/unknown-trainee', {
-        method: 'POST',
-        body: JSON.stringify({
-          ausbildungsjahr: 1,
-          certificateType: 'FINAL',
-          customSummary: '',
-          overallAssessment: 'Gut gemacht.',
-          manualOverallGrade: 2,
-          gender: 'male',
-        }),
-      }),
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/issue/unknown-trainee',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ausbildungsjahr: 1,
+            certificateType: 'FINAL',
+            customSummary: '',
+            overallAssessment: 'Gut gemacht.',
+            manualOverallGrade: 2,
+            gender: 'male',
+          }),
+        }
+      ),
       { params: Promise.resolve({ traineeId: 'unknown-trainee' }) }
     );
 

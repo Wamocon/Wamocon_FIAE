@@ -57,8 +57,8 @@ export default function TrainerEvaluationsPage() {
 
     // Data fetching via React Query — only the active tab's URL is non-null
     const evalStatus = activeTab === 'pending' ? 'SUBMITTED' : activeTab === 'reviewed' ? 'APPROVED' : '';
-    const evalUrl = profile?.id && activeTab !== 'annual' ? `/api/trainer/evaluations?trainerId=${profile.id}&status=${evalStatus}` : null;
-    const annualUrl = profile?.id && activeTab === 'annual' ? `/api/trainer/annual-overview?trainerId=${profile.id}` : null;
+    const evalUrl = profile?.id && activeTab !== 'annual' ? `/api/trainer/evaluations?status=${evalStatus}` : null;
+    const annualUrl = profile?.id && activeTab === 'annual' ? `/api/trainer/annual-overview` : null;
 
     const { data: evalData, isLoading: evalLoading } = useApiQuery<{ evaluations: EvaluationItem[]; pendingCount: number }>(evalUrl);
     const { data: annualData, isLoading: annualLoading } = useApiQuery<{ summaries: TraineeSummary[]; totals: { trainees: number; pendingReviews: number; warningsCount: number } }>(annualUrl);
@@ -260,7 +260,6 @@ export default function TrainerEvaluationsPage() {
                                                 <TrainerEvaluationReview
                                                     evaluation={item.evaluation}
                                                     trainee={item.trainee}
-                                                    trainerId={profile?.id}
                                                     onApprove={handleRefresh}
                                                     onReject={handleRefresh}
                                                     onSave={handleRefresh}

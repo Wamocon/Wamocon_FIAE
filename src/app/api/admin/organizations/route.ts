@@ -1,17 +1,23 @@
+import {
+  requireAdmin,
+  requireSuperAdmin,
+  isErrorResponse,
+  scopeOrg,
+  orgScopeCondition,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, sql } from 'drizzle-orm';
 import { organizations, profiles } from '@/db/migrations/schemas/schema';
-import { verifyAdmin } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    // The caller's identity comes from the bearer token, never from the URL
+    const session = await requireAdmin(req);
+    if (isErrorResponse(session)) return session;
 
+    // Org admins only see their own organization, the super admin sees all
+    const scope = scopeOrg(session);
     const orgs = await db
       .select({
         id: organizations.id,
@@ -30,6 +36,7 @@ export async function GET(req: NextRequest) {
         updatedAt: organizations.updatedAt,
       })
       .from(organizations)
+      .where(orgScopeCondition(organizations.id, scope))
       .orderBy(organizations.name);
 
     const orgIds = orgs.map(o => o.id);
@@ -43,6 +50,7 @@ export async function GET(req: NextRequest) {
           count: sql<number>`count(*)::int`,
         })
         .from(profiles)
+        .where(orgScopeCondition(profiles.organizationId, scope))
         .groupBy(profiles.organizationId, profiles.role);
 
       for (const r of rows) {
@@ -72,11 +80,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    // Creating organizations is a platform-wide action
+    const session = await requireSuperAdmin(req);
+    if (isErrorResponse(session)) return session;
 
     const body = await req.json();
     const { name, slug, subscriptionPlan, maxTraineeSeats, maxTrainerSeats, contactEmail, contactPerson, notes, logoUrl } = body;
