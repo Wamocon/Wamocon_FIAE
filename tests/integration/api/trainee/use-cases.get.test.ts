@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { mockCatalogScope } from '../../../helpers/mockNext';
 
 function makeGet(url: string) {
   return { url } as any;
@@ -10,6 +11,7 @@ function makeGet(url: string) {
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockCatalogScope();
   const mod = await import('@/app/api/trainee/use-cases/[useCaseId]/route');
   return mod.GET as (
     req: any,

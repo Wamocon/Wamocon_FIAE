@@ -1,6 +1,7 @@
 'use strict';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { eq, and, or, ne, sql } from 'drizzle-orm';
 import { contentDocuments, useCases, courseMembers, profiles } from '@/db/migrations/schemas/schema';
@@ -26,6 +27,10 @@ export async function GET(
         if (!traineeId) {
             return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
         }
+
+        // The content must lie inside the catalog scope of the trainee
+        const catalogScope = await requireContentScopeForUser(traineeId, req, 'useCase', useCaseId);
+        if (catalogScope instanceof Response) return catalogScope;
 
         // Verify trainee role
         const [trainee] = await db

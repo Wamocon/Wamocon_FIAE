@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Zeitplan für KfBM-Content-Finalisierung, LFA-Integration, Content-Import, Tests und Systemdemo."
+    />
+    <title>LFA × KfBM – Plan bis zur Systemdemo</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #050505;
+        --panel: #111111;
+        --panel-2: #191919;
+        --line: #353535;
+        --text: #f5f5f5;
+        --muted: #b8b8b8;
+        --cyan: #f40e0e;
+        --blue: #ff4545;
+        --amber: #c80c0c;
+        --green: #d0d0d0;
+        --red: #f40e0e;
+        --radius: 18px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(ellipse at 12% 0%, #351010 0, transparent 34rem),
+          radial-gradient(ellipse at 100% 18%, #240909 0, transparent 32rem),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--cyan);
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 52px 0 72px;
+      }
+
+      .eyebrow,
+      .tag {
+        color: var(--cyan);
+        font-size: 0.76rem;
+        font-weight: 750;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 900px;
+        margin: 12px 0 18px;
+        font-size: clamp(2.4rem, 6vw, 4.6rem);
+        letter-spacing: -0.055em;
+        line-height: 1.02;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(1.45rem, 3vw, 2rem);
+        letter-spacing: -0.03em;
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .intro {
+        max-width: 800px;
+        color: var(--muted);
+        font-size: 1.08rem;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) minmax(250px, 0.8fr);
+        gap: 18px;
+        margin-top: 30px;
+      }
+
+      .panel,
+      .stat,
+      .phase-card,
+      .work-card,
+      .decision {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(145deg, #202020, #111111);
+      }
+
+      .decision {
+        padding: 22px 24px;
+        border-color: var(--cyan);
+        background:
+          linear-gradient(120deg, #3a1010 0%, #211010 46%, #151515 100%);
+      }
+
+      .decision .tag {
+        color: var(--amber);
+      }
+
+      .decision h2 {
+        margin: 8px 0;
+      }
+
+      .decision p,
+      .panel p,
+      .work-card p,
+      .phase-card p {
+        color: var(--muted);
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .stat {
+        min-height: 120px;
+        padding: 18px;
+      }
+
+      .stat strong {
+        display: block;
+        margin: 5px 0 2px;
+        font-size: 1.65rem;
+        letter-spacing: -0.04em;
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      section {
+        margin-top: 54px;
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .section-heading p {
+        max-width: 560px;
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      .timeline-shell {
+        overflow: hidden;
+        padding: 22px;
+      }
+
+      .timeline {
+        display: grid;
+        grid-template-columns: 190px repeat(10, minmax(58px, 1fr)) minmax(
+            130px,
+            1.5fr
+          );
+        min-width: 1020px;
+        gap: 7px;
+      }
+
+      .timeline-wrap {
+        overflow-x: auto;
+      }
+
+      .day,
+      .track-label,
+      .bar {
+        min-height: 44px;
+        border-radius: 9px;
+      }
+
+      .day {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 5px 6px;
+        background: #202020;
+        color: var(--muted);
+        text-align: center;
+        font-size: 0.71rem;
+      }
+
+      .day strong {
+        color: var(--text);
+        font-size: 0.76rem;
+      }
+
+      .track-label {
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        color: var(--text);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+
+      .track-label.content {
+        border-left: 3px solid var(--cyan);
+      }
+
+      .track-label.build {
+        border-left: 3px solid var(--blue);
+      }
+
+      .track-label.demo {
+        border-left: 3px solid var(--amber);
+      }
+
+      .bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+        color: #ffffff;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .bar.content {
+        background: linear-gradient(90deg, #bf0b0b, #f40e0e);
+      }
+
+      .bar.build {
+        background: linear-gradient(90deg, #8f0808, #d20c0c);
+      }
+
+      .bar.demo {
+        background: linear-gradient(90deg, #5b0a0a, #a20b0b);
+      }
+
+      .day.milestone-day {
+        border: 1px solid var(--cyan);
+      }
+
+      .bar.demo-milestone {
+        border: 1px solid #ff6666;
+        background: linear-gradient(90deg, #8f0808, #d20c0c);
+      }
+
+      .bar.buffer {
+        border: 1px dashed #777777;
+        background: #252525;
+        color: #eeeeee;
+      }
+
+      .parallel-note {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        margin-top: 16px;
+        padding: 13px 15px;
+        border-radius: 12px;
+        background: #222222;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .parallel-note strong {
+        color: var(--text);
+      }
+
+      .work-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+
+      .work-card {
+        padding: 20px;
+      }
+
+      .work-card .tag {
+        display: block;
+        margin-bottom: 9px;
+      }
+
+      .work-card ul,
+      .phase-card ul {
+        margin: 12px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+
+      li + li {
+        margin-top: 5px;
+      }
+
+      .phases {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+
+      .phase-card {
+        position: relative;
+        min-height: 210px;
+        padding: 19px;
+      }
+
+      .phase-card::before {
+        position: absolute;
+        top: 0;
+        right: 19px;
+        left: 19px;
+        height: 3px;
+        border-radius: 0 0 4px 4px;
+        background: var(--blue);
+        content: "";
+      }
+
+      .phase-card.demo-phase::before {
+        background: var(--amber);
+      }
+
+      .phase-card.buffer-phase::before {
+        background: var(--green);
+      }
+
+      .phase-date {
+        display: block;
+        margin-bottom: 12px;
+        color: var(--cyan);
+        font-size: 0.78rem;
+        font-weight: 750;
+      }
+
+      .demo-phase .phase-date {
+        color: var(--amber);
+      }
+
+      .buffer-phase .phase-date {
+        color: var(--green);
+      }
+
+      .effort {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #292020;
+        color: var(--text);
+        font-size: 0.76rem;
+        font-weight: 750;
+      }
+
+      .reality {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .reality .panel {
+        padding: 23px;
+      }
+
+      .reality h3 {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--red);
+      }
+
+      .status-dot.good {
+        background: #d0d0d0;
+      }
+
+      .gate-list {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .gate {
+        min-height: 94px;
+        padding: 13px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #161616;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .gate strong {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text);
+      }
+
+      .risks {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+
+      .risk {
+        padding: 17px;
+        border-left: 3px solid var(--amber);
+        border-radius: 0 12px 12px 0;
+        background: #171313;
+      }
+
+      .risk strong {
+        display: block;
+        margin-bottom: 5px;
+      }
+
+      .risk p {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        margin-top: 48px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      @media (max-width: 850px) {
+        .hero-grid,
+        .reality {
+          grid-template-columns: 1fr;
+        }
+
+        .work-grid,
+        .phases,
+        .risks {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .stats {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      @media (max-width: 560px) {
+        .page {
+          width: min(100% - 28px, 1180px);
+          padding-top: 32px;
+        }
+
+        .section-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .work-grid,
+        .phases,
+        .risks,
+        .gate-list {
+          grid-template-columns: 1fr;
+        }
+
+        .stats {
+          grid-template-columns: 1fr;
+        }
+
+        .timeline-shell {
+          padding: 14px;
+        }
+
+        footer {
+          flex-direction: column;
+        }
+      }
+
+      @media print {
+        :root {
+          color-scheme: light;
+          --bg: #fff;
+          --panel: #fff;
+          --text: #172033;
+          --muted: #49566b;
+          --line: #ccd3dd;
+        }
+
+        body {
+          background: #fff;
+          color: #172033;
+          print-color-adjust: exact;
+        }
+
+        .page {
+          width: 100%;
+          padding: 20px;
+        }
+
+        .panel,
+        .stat,
+        .phase-card,
+        .work-card,
+        .decision {
+          break-inside: avoid;
+          background: #f4f4f4;
+        }
+
+        section {
+          margin-top: 32px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <div class="eyebrow">Projektplan · Stand 20. Oktober 2026</div>
+        <h1>LFA × KfBM<br />Vom Content-Finish zur Systemdemo</h1>
+        <p class="intro">
+          FIAE ist fertig entwickelt. Jetzt werden KfBM-Content und
+          LFA-Ausbildungskatalog integriert, der Bestand importiert und getestet.
+          Alle Arbeitspakete enden am 30. Oktober; die Systemdemo findet am
+          26. November statt.
+        </p>
+
+        <div class="hero-grid">
+          <div class="decision">
+            <span class="tag">Planbewertung · konditional realistisch</span>
+            <h2>Vollständige Integration bis 30.10. – mit parallelen Teams.</h2>
+            <p>
+              Umsetzung und Bugfixing/Nachtest laufen gebündelt vom 20.–23.10.
+              und decken noch nicht den nachfolgenden Import von 226
+              Content-Paaren samt Szenarien und Quizzen ab. Das Ziel ist
+              erreichbar, wenn Import und Tests vom 27.–30.10. parallel zur
+              Demo-Vorbereitung laufen und genügend getrennte Kapazität
+              verfügbar ist.
+            </p>
+          </div>
+          <div class="stats" aria-label="Kernzahlen des Plans">
+            <div class="stat">
+              <span>KfBM Content-Reviews</span>
+              <strong>4,5 PT</strong>
+              <span>Use Cases, Quizze, Global-Quizze</span>
+            </div>
+            <div class="stat">
+              <span>Umsetzung & Bugfixing</span>
+              <strong>5 PT</strong>
+              <span>gebündelt · 20.–23.10.</span>
+            </div>
+            <div class="stat">
+              <span>Content-Import</span>
+              <strong>226</strong>
+              <span>Enabler-/Use-Case-Paare + Szenarien</span>
+            </div>
+            <div class="stat">
+              <span>Global-Quizze</span>
+              <strong>26</strong>
+              <span>K18 ausgeschlossen</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section aria-labelledby="timeline-title">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">Gemeinsame Zeitschiene</div>
+            <h2 id="timeline-title">19. Oktober–26. November</h2>
+          </div>
+          <p>
+            Jede Arbeitspaketgruppe hat eine eigene Zeile. Die Umsetzung läuft
+            parallel zur laufenden Content-Finalisierung bis 23.10.; Import,
+            statische Tests sowie Abnahme und FIAE-Regression folgen ab 27.10.
+            Der Systemdemo-Meilenstein ist am 26.11.
+          </p>
+        </div>
+        <div class="panel timeline-shell">
+          <div class="timeline-wrap" role="region" aria-label="Projektzeitplan">
+            <div class="timeline">
+              <div style="grid-row: 1; grid-column: 1"></div>
+              <div class="day" style="grid-row: 1; grid-column: 2">
+                <strong>Mo</strong>19.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 3">
+                <strong>Di</strong>20.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 4">
+                <strong>Mi</strong>21.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 5">
+                <strong>Do</strong>22.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 6">
+                <strong>Fr</strong>23.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 7">
+                <strong>Mo</strong>26.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 8">
+                <strong>Di</strong>27.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 9">
+                <strong>Mi</strong>28.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 10">
+                <strong>Do</strong>29.10.
+              </div>
+              <div class="day" style="grid-row: 1; grid-column: 11">
+                <strong>Fr</strong>30.10.
+              </div>
+              <div
+                class="day milestone-day"
+                style="grid-row: 1; grid-column: 12"
+              >
+                <strong>Do</strong>26.11. · Demo
+              </div>
+
+              <div
+                class="track-label content"
+                style="grid-row: 2; grid-column: 1"
+              >
+                Content-Finalisierung
+              </div>
+              <div class="bar content" style="grid-row: 2; grid-column: 2 / span 2">
+                Use-Case-Review
+              </div>
+              <div class="bar content" style="grid-row: 2; grid-column: 4 / span 2">
+                Quiz-Review
+              </div>
+              <div class="bar content" style="grid-row: 2; grid-column: 6">
+                Global-Quiz-Review
+              </div>
+
+              <div
+                class="track-label build"
+                style="grid-row: 3; grid-column: 1"
+              >
+                Architekturumbau & Bugfixing
+              </div>
+              <div class="bar build" style="grid-row: 3; grid-column: 3 / span 4">
+                Umsetzung, Bugfixing & Nachtest
+              </div>
+
+              <div
+                class="track-label content"
+                style="grid-row: 4; grid-column: 1"
+              >
+                Import & Statischer Test
+              </div>
+              <div class="bar content" style="grid-row: 4; grid-column: 8 / span 3">
+                Import & Statischer Test
+              </div>
+
+              <div
+                class="track-label build"
+                style="grid-row: 5; grid-column: 1"
+              >
+                Abnahmetests & FIAE-Regression
+              </div>
+              <div class="bar build" style="grid-row: 5; grid-column: 8 / span 4">
+                Abnahmetests & FIAE-Regression
+              </div>
+
+              <div
+                class="track-label demo"
+                style="grid-row: 6; grid-column: 1"
+              >
+                Demo-Vorbereitung
+              </div>
+              <div class="bar demo" style="grid-row: 6; grid-column: 7">
+                Strukturaufbau & Drehbuch
+              </div>
+              <div class="bar demo" style="grid-row: 6; grid-column: 8 / span 3">
+                Präsentationsvorbereitung
+              </div>
+              <div
+                class="bar demo-milestone"
+                style="grid-row: 6; grid-column: 12"
+              >
+                System Demo
+              </div>
+
+              <div
+                class="bar build"
+                style="grid-row: 7; grid-column: 11"
+              >
+                Abnahme & Abschluss
+              </div>
+            </div>
+          </div>
+          <div class="parallel-note">
+            <span aria-hidden="true">↗</span>
+            <p>
+              <strong>Kapazitätsbedingung:</strong> In Woche 1 fallen
+              4,5 PT KfBM-Reviews und 5 PT Umsetzung/Bugfixing an. Vom
+              27.–30.10. laufen Import und statische Tests parallel zu den
+              Abnahmetests, der FIAE-Regression und der Demo-Vorbereitung.
+              Getrennte oder ausreichend parallelisierte Verantwortlichkeiten
+              sind nötig; andernfalls ist der 30.10.-Termin gefährdet.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="content-title">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">19.–23. Oktober · Qualität zuerst</div>
+            <h2 id="content-title">KfBM-Content-Finalisierung bis Freitag EoB</h2>
+          </div>
+          <p>
+            Die Reihenfolge bündelt fachliche Reviews. Offene Mängel und
+            Freigaben werden pro Arbeitspaket sichtbar festgehalten.
+          </p>
+        </div>
+        <div class="work-grid">
+          <article class="work-card">
+            <span class="tag">19.–20. Oktober</span>
+            <h3>Use-Case-Review</h3>
+            <p>226 KfBM Use Cases; geplant: 2 Personentage.</p>
+            <ul>
+              <li>Inhalt, Vollständigkeit und Konsistenz prüfen.</li>
+              <li>Befunde priorisieren und Verantwortliche festlegen.</li>
+              <li>Review-Status und Restpunkte nachvollziehbar erfassen.</li>
+            </ul>
+          </article>
+          <article class="work-card">
+            <span class="tag">21.–22. Oktober</span>
+            <h3>Quiz-Review</h3>
+            <p>Geplant: 1,5 Personentage.</p>
+            <ul>
+              <li>Fragen, Antwortoptionen und richtige Lösung prüfen.</li>
+              <li>Begründungen und fachliche Passung kontrollieren.</li>
+              <li>Änderungen vor der Freigabe nachtesten.</li>
+            </ul>
+          </article>
+          <article class="work-card">
+            <span class="tag">23. Oktober · EoB</span>
+            <h3>Global-Quiz-Review</h3>
+            <p>Geplant: 1 Personentag; Abschlussziel Freitag.</p>
+            <ul>
+              <li>Fragenbestand und Lösungen abschließend reviewen.</li>
+              <li>Freigabestatus und verbleibende Ausnahmen dokumentieren.</li>
+              <li>0,5 PT Reserve nicht als zusätzliche Review-Zeit verplanen.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="mapping-title">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">Bestätigter KfBM-Umfang</div>
+            <h2 id="mapping-title">Mapping als Curriculum-Grundlage</h2>
+          </div>
+          <p>
+            Die Mapping-Arbeitsmappe liefert Berufsbildpositionen, Zuordnungen
+            zu Schuljahren/Lernfeldern und Erläuterungen. KfBM-Inhalte werden
+            über diese fachliche Zuordnung ins neue Berufs-Curriculum
+            eingehängt.
+          </p>
+        </div>
+        <div class="work-grid">
+          <article class="work-card">
+            <span class="tag">Referenzdaten</span>
+            <h3>25 Themenkomplexe · 239 Positionen</h3>
+            <p>
+              K18 mit 13 Positionen ist ausdrücklich out of scope. Die
+              verbleibenden 226 Positionen bilden 226 Enabler-/Use-Case-Paare.
+            </p>
+          </article>
+          <article class="work-card">
+            <span class="tag">Curriculum</span>
+            <h3>13 Lernfelder · 3 Ausbildungsjahre</h3>
+            <p>
+              LF1–4 gehören zu Jahr 1, LF5–8 zu Jahr 2 und LF9–13 zu Jahr 3.
+              Mehrere Lernfelder können derselben Berufsbildposition bzw. einem
+              Inhalt zugeordnet sein; alle-Lernfelder-Zuordnungen sind ebenfalls
+              abzubilden.
+            </p>
+          </article>
+          <article class="work-card">
+            <span class="tag">Komponenten & Prüfungen</span>
+            <h3>K6, K24 und K25 werden geteilt</h3>
+            <p>
+              Laut aktueller Projektzählung: 27 Komponentenpositionen
+              einschließlich K18; K18 bleibt out of scope, 26 Komponenten
+              werden importiert. K6, K24 und K25 werden in je zwei Teile
+              gesplittet. Die Monate 1–18/19–36 aus der Referenz-PDF nicht ohne
+              bestätigte Regel als Prüfungsphasen interpretieren.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="delivery-title">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">19.–30. Oktober · Lieferumfang</div>
+            <h2 id="delivery-title">Integration, Import und Abnahme</h2>
+          </div>
+          <p>
+            Die finale Systemdemo ist am 26.11. Vom 27.–30.10. laufen
+            KfBM-Import/statische Tests und Abnahmetests samt FIAE-Regression
+            parallel zur Präsentationsvorbereitung.
+          </p>
+        </div>
+        <div class="phases">
+          <article class="phase-card">
+            <span class="phase-date">20.–23. Oktober · 5 PT</span>
+            <h3>Umsetzung, Bugfixing & Nachtest</h3>
+            <ul>
+              <li>FIAE als fertige Fachrichtung erhalten; KfBM als zweite einhängen.</li>
+              <li>Beruf/Curriculum, Komponenten, Lernfelder und Inhaltsbeziehungen abbilden.</li>
+              <li>Fehler beheben und KfBM-Zuordnungen sowie den Importpfad nachtesten.</li>
+            </ul>
+            <span class="effort">Gebündeltes Arbeitspaket · 5 PT</span>
+          </article>
+          <article class="phase-card">
+            <span class="phase-date">27.–29. Oktober · Import & statischer Test</span>
+            <h3>KfBM-Import und statische Prüfung</h3>
+            <ul>
+              <li>226 Enabler, 226 Use Cases und 226 Szenarien übernehmen.</li>
+              <li>678 Quizze aus drei Schwierigkeitsstufen sowie 26 Global-Quizze importieren.</li>
+              <li>Bestand, Metadaten, Lösungen und Beruf/LF-Zuordnungen statisch prüfen.</li>
+            </ul>
+            <span class="effort">Importweg nach Musterlauf bestätigen</span>
+          </article>
+          <article class="phase-card">
+            <span class="phase-date">27.–30. Oktober · Abnahme & FIAE-Regression</span>
+            <h3>Abnahme- und Regressionstests</h3>
+            <ul>
+              <li>KfBM-End-to-End-Abläufe, Anzeige, Zuordnungen und Berechtigungen abnehmen.</li>
+              <li>FIAE-Regression durchführen und die unveränderte Erreichbarkeit absichern.</li>
+              <li>Fehlerliste schließen oder Restpunkte bis zum Go/No-Go dokumentieren.</li>
+            </ul>
+            <span class="effort">Testlauf parallel zum Import · Abschluss 30.10.</span>
+          </article>
+          <article class="phase-card demo-phase">
+            <span class="phase-date">26. Oktober · 1 PT</span>
+            <h3>Strukturaufbau & Drehbuch</h3>
+            <ul>
+              <li>Storyline, Zielgruppe und Ablauf für den 26.11. festlegen.</li>
+              <li>FIAE/KfBM-Parität und Berufsauswahl hervorheben.</li>
+              <li>Demo-Daten, Testkonten und Fallback definieren.</li>
+            </ul>
+            <span class="effort">Parallel zum Import starten</span>
+          </article>
+          <article class="phase-card demo-phase">
+            <span class="phase-date">27.–29. Oktober · 3 PT</span>
+            <h3>Präsentationsvorbereitung</h3>
+            <ul>
+              <li>Integration, geladene Inhalte und bestandene Tests zeigen.</li>
+              <li>26 Global-Quizze, 226 Content-Paare und 13 Lernfelder belegen.</li>
+              <li>Offene Monats-/Prüfungsregeln transparent markieren.</li>
+            </ul>
+            <span class="effort">Inhalte erst nach Abnahme als fertig zeigen</span>
+          </article>
+          <article class="phase-card buffer-phase">
+            <span class="phase-date">30. Oktober · Abschluss</span>
+            <h3>Projektpaket einfrieren</h3>
+            <ul>
+              <li>Importmanifest, Testergebnisse und bekannte Einschränkungen sichern.</li>
+              <li>Präsentation an den tatsächlich getesteten Stand anpassen.</li>
+              <li>Demo-Version für Vorbereitung bis 26.11. einfrieren.</li>
+            </ul>
+            <span class="effort">Interner Abschluss · EoB</span>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="reality-title">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">Realitätscheck</div>
+            <h2 id="reality-title">Der Zeitplan steht und fällt mit Importkapazität</h2>
+          </div>
+          <p>
+            KI beschleunigt Umsetzung, ersetzt aber weder fachliche
+            Entscheidungen noch Sicherheitsprüfung, Datenmigration und
+            Regressionstests.
+          </p>
+        </div>
+        <div class="reality">
+          <article class="panel" style="padding: 23px">
+            <h3><span class="status-dot"></span>Umsetzung ist nicht der Gesamtaufwand</h3>
+            <p>
+              Die 5 PT vom 20.–23.10. umfassen Umsetzung, Fehlerbehebung und
+              Nachtest. Dazu kommen die parallele Content-Finalisierung und der
+              eigentliche Massenimport mit 226 Szenarien und 704 Quizzen.
+              Import, statische Prüfung, Abnahme und FIAE-Regression sind
+              eigenständige Lieferpakete;
+              dafür ist keine belastbare Personentag-Schätzung ohne Musterlauf
+              und Dateiinventar bestätigt.
+            </p>
+          </article>
+          <article class="panel" style="padding: 23px">
+            <h3><span class="status-dot good"></span>Bis 30.10. machbar: bei Parallelisierung</h3>
+            <p>
+              Die Abnahme bis 30.10. ist plausibel, wenn Review und
+              Umsetzung/Bugfixing in Woche 1 sowie Import, Tests und
+              Demoaufbereitung in Woche 2 parallel besetzt werden. Bei einer
+              Person oder rein manuellem Einzelupload ist der Termin ohne
+              gemessene Uploadleistung nicht abgesichert. Die Demo selbst ist
+              am 26.11.
+            </p>
+          </article>
+        </div>
+        <div class="gate-list" aria-label="Abnahmekriterien für den Demo-Schnitt">
+          <div class="gate">
+            <strong>1 · Bestandsmanifest</strong>
+            226 1:1-Enabler-/Use-Case-Paare, 226 Szenarien, 678 Schwierigkeits-
+            und 26 Global-Quizze nachvollziehbar gelistet.
+          </div>
+          <div class="gate">
+            <strong>2 · Mapping & Berufstrennung</strong>
+            KfBM-Inhalte den richtigen Komponenten/Lernfeldern zugeordnet;
+            FIAE bleibt unverändert erreichbar.
+          </div>
+          <div class="gate">
+            <strong>3 · Upload geprüft</strong>
+            Word→PDF, korrekte Dokumenttypen, Anzeige, Lösungen und
+            Berechtigungen per Datei-Stichprobe verifiziert.
+          </div>
+          <div class="gate">
+            <strong>4 · Go/No-Go bis 30.10.</strong>
+            Testergebnisse dokumentiert, K18 ausgeschlossen, offene
+            Ausbildungs-/Prüfungsmonate nicht als bestätigt dargestellt.
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="risks-title">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">Voraussetzungen und Risiken</div>
+            <h2 id="risks-title">Vor Start verbindlich absichern</h2>
+          </div>
+        </div>
+        <div class="risks">
+          <article class="risk">
+            <strong>Parallele Kapazität</strong>
+            <p>
+              Woche 1 umfasst 9,5 PT Reviews plus 5 PT Umsetzung/Bugfixing.
+              Vom 27.–30.10. müssen Import/statische Tests, Abnahme/FIAE-
+              Regression und Demo-Vorbereitung parallel laufen; dafür sind
+              getrennte oder explizit parallelisierte Verantwortliche nötig.
+            </p>
+          </article>
+          <article class="risk">
+            <strong>Fachliche Quellen</strong>
+            <p>
+              Die Excel-Mappingdatei ist die Projekt-Crosswalk-Quelle; die
+              vollständige PDF-Fassung trägt den Stand 18.09.2024 und enthält
+              davor einen älteren 2023-Ausschnitt. Die Monats-/
+              Prüfungsphasenzuordnung der geteilten K-Komponenten bleibt
+              ungeklärt und muss konfigurierbar bleiben.
+            </p>
+          </article>
+          <article class="risk">
+            <strong>Demo-Qualität</strong>
+            <p>
+              Zuerst ein Muster pro Dokumenttyp konvertieren und hochladen,
+              Uploadrate messen und anschließend den Umfang batchweise
+              abarbeiten. Am 30.10. nur als getestet freigegebene Inhalte in
+              Präsentation und Demo-Snapshot übernehmen.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        <span>
+          Grundlage: KfBM-Projektbriefing, Mapping-Arbeitsmappe und
+          „Liste der Entsprechungen“, Stand 18.09.2024.
+        </span>
+        <span>
+          Ziel: alle Arbeitspakete bis 30.10.2026 EoB · Systemdemo: 26.11.2026.
+        </span>
+      </footer>
+    </main>
+  </body>
+</html>

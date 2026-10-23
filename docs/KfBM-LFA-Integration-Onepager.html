@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Projekt-Onepager zum aktuellen Stand und Vorgehen der KfBM-Integration in das LFA-Lernzentrum."
+    />
+    <title>LFA × KfBM · Integrations-Onepager</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --red: #f40e0e;
+        --bg: #080808;
+        --panel: #151515;
+        --panel-soft: #202020;
+        --line: #393939;
+        --text: #f5f5f5;
+        --muted: #c1c1c1;
+        --green: #b8e2c4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      main {
+        width: min(1120px, calc(100% - 36px));
+        margin: 22px auto;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding-bottom: 14px;
+        border-bottom: 2px solid var(--red);
+      }
+
+      .eyebrow {
+        color: #ff7777;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 5px 0;
+        font-size: clamp(25px, 3vw, 34px);
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+      }
+
+      header p {
+        max-width: 770px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .date {
+        flex: 0 0 auto;
+        align-self: flex-start;
+        padding: 8px 11px;
+        border: 1px solid var(--red);
+        border-radius: 8px;
+        background: #260c0c;
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .status {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      article,
+      .principle,
+      .gate {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+      }
+
+      .status article {
+        padding: 11px 13px;
+      }
+
+      .done {
+        border-left: 4px solid var(--red);
+      }
+
+      .todo {
+        border-left: 4px solid #777;
+      }
+
+      h2 {
+        margin: 0 0 6px;
+        font-size: 15px;
+      }
+
+      h3 {
+        margin: 0 0 5px;
+        font-size: 12px;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      ul {
+        margin: 5px 0 0;
+        padding-left: 17px;
+      }
+
+      li {
+        margin: 2px 0;
+      }
+
+      .status p,
+      .status li,
+      .principle p,
+      .gate p,
+      .sequence p {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+
+      section {
+        margin-top: 13px;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 7px;
+      }
+
+      .section-title p {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .principles {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+
+      .principle {
+        padding: 10px;
+      }
+
+      .principle h3::before {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin: 0 6px 1px 0;
+        border-radius: 50%;
+        background: var(--red);
+        content: '';
+      }
+
+      .sequence {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+
+      .sequence article {
+        padding: 10px;
+      }
+
+      .sequence time {
+        display: block;
+        margin-bottom: 4px;
+        color: #ff7777;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .sequence .target {
+        border-color: var(--red);
+        background: linear-gradient(140deg, #321010, var(--panel));
+      }
+
+      .sequence .buffer time {
+        color: var(--green);
+      }
+
+      .gates {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .gate {
+        padding: 9px 10px;
+        background: var(--panel-soft);
+      }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 10px;
+        color: #aaa;
+        font-size: 9px;
+      }
+
+      @media (max-width: 760px) {
+        header,
+        .section-title,
+        footer {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .status,
+        .principles,
+        .sequence,
+        .gates {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @page {
+        size: A4 landscape;
+        margin: 10mm;
+      }
+
+      @media print {
+        :root {
+          color-scheme: light;
+          --bg: #fff;
+          --panel: #f5f5f5;
+          --panel-soft: #ededed;
+          --line: #ccc;
+          --text: #171717;
+          --muted: #3f3f3f;
+        }
+
+        body {
+          background: #fff;
+          color: #171717;
+          font-size: 10px;
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+
+        main {
+          width: 100%;
+          margin: 0;
+        }
+
+        .status,
+        section {
+          margin-top: 9px;
+        }
+
+        article,
+        .principle,
+        .gate {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <div class="eyebrow">Lernzentrum LFA · Projektstatus & Vorgehen</div>
+          <h1>KfBM als zweite Fachrichtung integrieren</h1>
+          <p>
+            FIAE bleibt produktiver, unveränderter Referenzpfad. KfBM wird mit
+            eigenem Ausbildungskatalog, Curriculum und Content in dieselbe
+            Plattform eingebunden. Gemeinsame Plattformlogik bleibt gemeinsam;
+            fachliche Daten und Zuordnungen bleiben je Beruf getrennt.
+          </p>
+        </div>
+        <div class="date">Stand 22.10.2026<br />Branch: feat/ausbildungskatalog-curriculum</div>
+      </header>
+
+      <div class="status">
+        <article class="done">
+          <h2>Erledigte Grundlage</h2>
+          <ul>
+            <li>
+              Additive Katalogtabellen für FIAE/KfBM sowie Katalogbezüge für
+              Kurse und Ausbildungskomponenten modelliert.
+            </li>
+            <li>
+              Eigenständige Katalog-Lernfelder und Zuordnungen zu Enablern oder
+              Use Cases ergänzt.
+            </li>
+            <li>
+              Migration ordnet bestehende Kurse/Komponenten FIAE zu; KfBM ist
+              angelegt, aber inaktiv.
+            </li>
+            <li>
+              FIAE-Seed löscht bzw. befüllt nur FIAE-Komponenten; Type-Check,
+              ESLint und gezielter FIAE-Kursdetailtest erfolgreich.
+            </li>
+          </ul>
+        </article>
+        <article class="todo">
+          <h2>Was noch nicht fertig ist</h2>
+          <ul>
+            <li>
+              Migration ist nicht angewendet; kein Produktivschema und keine
+              Produktivdaten geändert.
+            </li>
+            <li>
+              UI, APIs und Nutzerkontext filtern noch nicht durchgängig nach
+              Ausbildungskatalog.
+            </li>
+            <li>
+              KfBM-Lernfelder, Mapping-Import, Komponenten und 226
+              Content-Paare/Szenarien/Quizze sind noch nicht importiert oder
+              abgenommen.
+            </li>
+            <li>
+              HAI-Spracherkennung und Sprachausgabe fehlen; KfBM-Wissensindex
+              und Damicon-Vergleich sind offen.
+            </li>
+          </ul>
+        </article>
+      </div>
+
+      <section aria-labelledby="architecture">
+        <div class="section-title">
+          <h2 id="architecture">Änderungen für die vollständige Integration</h2>
+          <p>Schrittweise freigeben; keine Umschaltung des produktiven FIAE ohne Regression.</p>
+        </div>
+        <div class="principles">
+          <article class="principle">
+            <h3>Katalogkontext</h3>
+            <p>
+              Berufsauswahl in Nutzer-/Organisationskontext, APIs, Kursen und
+              Komponenten konsistent führen; FIAE-Datensätze eindeutig erhalten.
+            </p>
+          </article>
+          <article class="principle">
+            <h3>Curriculum & Mapping</h3>
+            <p>
+              KfBM: 13 Lernfelder mit Ausbildungsjahr, Komponenten und
+              verifizierten Mapping-Zuordnungen; K18 bleibt ausgeschlossen.
+            </p>
+          </article>
+          <article class="principle">
+            <h3>Content & Import</h3>
+            <p>
+              Kennungsbasierter Import für 226 Enabler-/Use-Case-Paare,
+              Szenarien und Quizze samt Manifest, Wiederanlauf und Prüfsummen.
+            </p>
+          </article>
+          <article class="principle">
+            <h3>HAI & Betrieb</h3>
+            <p>
+              Berufssicheres RAG mit Quellen und Rollenrechten; danach
+              Sprachein-/ausgabe, Browserfallback, Qualitäts- und Datenschutztests.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="next">
+        <div class="section-title">
+          <h2 id="next">Nächste Gates</h2>
+          <p>Ziel aus Projektplanung: regulärer Abschluss 30.10.; Reserve bis 04.11.2026.</p>
+        </div>
+        <div class="sequence">
+          <article>
+            <time>1 · Testmigration</time>
+            <h3>Schema & FIAE-Schutz</h3>
+            <p>Migration auf separater Datenbank prüfen; Constraints, RLS, Seed-Isolation, Rollback und FIAE-Regression nachweisen.</p>
+          </article>
+          <article>
+            <time>2 · Vertikaler KfBM-Schnitt</time>
+            <h3>Ein Lernfeld bis Content</h3>
+            <p>Ein KfBM-Lernfeld mit Mapping, Komponente, Kurs, Enabler/Use Case und HAI-Quelle end-to-end durchspielen.</p>
+          </article>
+          <article>
+            <time>3 · Skalieren & testen</time>
+            <h3>Import, HAI, Abnahme</h3>
+            <p>Freigegebene Inhalte batchweise importieren; KfBM-HAI-Quellen prüfen sowie KfBM- und FIAE-Regression ausführen.</p>
+          </article>
+          <article class="target">
+            <time>4 · Go/No-Go</time>
+            <h3>30.10. mit Reserve bis 04.11.</h3>
+            <p>Keine Produktivfreigabe ohne vollständiges Manifest, bestandene Tests, dokumentierte Restpunkte und explizite Freigabe.</p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="safety">
+        <div class="section-title">
+          <h2 id="safety">Freigabeprinzipien</h2>
+        </div>
+        <div class="gates">
+          <div class="gate">
+            <h3>FIAE zuerst schützen</h3>
+            <p>FIAE bleibt der Default; Schema-Rollout ist additiv und mit Rückfallplan.</p>
+          </div>
+          <div class="gate">
+            <h3>Keine ungeprüfte Produktivmigration</h3>
+            <p>Änderungen erst nach Testdatenbank, Review und dokumentierter Freigabe ausrollen.</p>
+          </div>
+          <div class="gate">
+            <h3>Inhalte nachweisen</h3>
+            <p>Mapping und Import anhand Originalquellen, Manifest und Stichproben fachlich bestätigen.</p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <span>
+          Technischer Stand aus Branch und lokalen Prüfungen; tatsächliche
+          KfBM-Integration und Produktivfreigabe sind noch ausstehend.
+        </span>
+        <span>LFA · KfBM · 22.10.2026</span>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -2,6 +2,7 @@
 
 import { authFetch } from '@/lib/authFetch';
 import { useAuth } from '@/contexts/AuthContext';
+import { isAdminRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -44,7 +45,6 @@ type OrgForm = {
   notes: string;
 };
 
-const ADMIN_ROLES = ['admin', 'temp_admin'];
 const emptyForm: OrgForm = {
   name: '',
   slug: '',
@@ -83,7 +83,7 @@ export default function AdminOrganizationsPage() {
   }, [profile, t]);
 
   useEffect(() => {
-    if (profile && ADMIN_ROLES.includes(profile.role)) loadOrgs();
+    if (profile && isAdminRole(profile.role)) loadOrgs();
   }, [profile, loadOrgs]);
 
   const openCreate = () => {
@@ -199,7 +199,7 @@ export default function AdminOrganizationsPage() {
     );
   }
 
-  if (!profile || !ADMIN_ROLES.includes(profile.role)) {
+  if (!profile || !isAdminRole(profile.role)) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <p className="text-muted-foreground">{t('common.accessDenied')}</p>

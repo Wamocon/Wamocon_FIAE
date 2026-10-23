@@ -2,6 +2,7 @@
 
 import { Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { TrainerSchoolView } from '@/components/trainer/TrainerSchoolView';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -24,7 +25,7 @@ function SchoolPageContent() {
     );
   }
 
-  if (!['trainer', 'admin', 'temp_admin'].includes(profile.role)) {
+  if (!isTrainerLevelRole(profile.role)) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
         <LoadingSpinner size="lg" />

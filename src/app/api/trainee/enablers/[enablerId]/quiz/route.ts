@@ -9,6 +9,7 @@ import {
   quizzes,
   courseMembers,
 } from '@/db/migrations/schemas/schema';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
 // GET trainee-facing enabler quiz (requires membership and enabler active)
 // query: traineeId
@@ -22,6 +23,10 @@ export async function GET(
     const { enablerId } = await params;
     if (!traineeId)
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    // The content must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'enabler', enablerId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const [enabler] = await db
       .select({

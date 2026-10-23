@@ -19,11 +19,19 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { cacheHeaders } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+  catalogCondition,
+  requireCatalogScope,
+  type CatalogScope,
+} from '@/lib/catalog/scope';
 
 // Passing score threshold
 const PASS_THRESHOLD = 50;
 
-async function fetchTrainerDashboardData(trainerId: string) {
+async function fetchTrainerDashboardData(
+  trainerId: string,
+  scope: CatalogScope
+) {
   try {
     const [trainerOrgId, isPlatformOwner] = await Promise.all([
       getUserOrgId(trainerId),
@@ -35,7 +43,12 @@ async function fetchTrainerDashboardData(trainerId: string) {
       db
         .select({ id: courses.id, title: courses.title })
         .from(courses)
-        .where(eq(courses.createdById, trainerId)),
+        .where(
+          and(
+            eq(courses.createdById, trainerId),
+            catalogCondition(courses.trainingCatalogId, scope)
+          )
+        ),
       db
         .select({
           courseId: courseMembers.courseId,
@@ -46,7 +59,8 @@ async function fetchTrainerDashboardData(trainerId: string) {
         .where(
           and(
             eq(courseMembers.userId, trainerId),
-            eq(courseMembers.role, 'TRAINER')
+            eq(courseMembers.role, 'TRAINER'),
+            catalogCondition(courses.trainingCatalogId, scope)
           )
         ),
     ]);
@@ -83,29 +97,29 @@ async function fetchTrainerDashboardData(trainerId: string) {
     const [trainerEnablers, useCaseRows] = await Promise.all([
       courseIds.length
         ? db
-          .select({
-            id: enablers.id,
-            courseId: enablers.courseId,
-            scenarioPdfUrl: enablers.scenarioPdfUrl,
-          })
-          .from(enablers)
-          .where(
-            and(
-              inArray(enablers.courseId, courseIds as any),
-              eq(enablers.isActive, true)
+            .select({
+              id: enablers.id,
+              courseId: enablers.courseId,
+              scenarioPdfUrl: enablers.scenarioPdfUrl,
+            })
+            .from(enablers)
+            .where(
+              and(
+                inArray(enablers.courseId, courseIds as any),
+                eq(enablers.isActive, true)
+              )
             )
-          )
         : Promise.resolve([]),
       courseIds.length
         ? db
-          .select({ id: useCases.id, courseId: useCases.courseId })
-          .from(useCases)
-          .where(
-            and(
-              inArray(useCases.courseId, courseIds as any),
-              eq(useCases.isActive, true)
+            .select({ id: useCases.id, courseId: useCases.courseId })
+            .from(useCases)
+            .where(
+              and(
+                inArray(useCases.courseId, courseIds as any),
+                eq(useCases.isActive, true)
+              )
             )
-          )
         : Promise.resolve([]),
     ]);
 
@@ -145,124 +159,124 @@ async function fetchTrainerDashboardData(trainerId: string) {
     ] = await Promise.all([
       hasEnablers
         ? db
-          .select({
-            enablerId: enablerQuizLinks.enablerId,
-            quizId: enablerQuizLinks.quizId,
-          })
-          .from(enablerQuizLinks)
-          .where(inArray(enablerQuizLinks.enablerId, enablerIds as any))
+            .select({
+              enablerId: enablerQuizLinks.enablerId,
+              quizId: enablerQuizLinks.quizId,
+            })
+            .from(enablerQuizLinks)
+            .where(inArray(enablerQuizLinks.enablerId, enablerIds as any))
         : Promise.resolve([]),
       // Merged: quiz scores + timestamps (was quizSubRows + trendSubRows)
       hasTrainees
         ? db
-          .select({
-            traineeId: quizSubmissions.traineeId,
-            quizId: quizSubmissions.quizId,
-            score: quizSubmissions.score,
-            submittedAt: quizSubmissions.submittedAt,
-          })
-          .from(quizSubmissions)
-          .where(inArray(quizSubmissions.traineeId, traineeIds))
+            .select({
+              traineeId: quizSubmissions.traineeId,
+              quizId: quizSubmissions.quizId,
+              score: quizSubmissions.score,
+              submittedAt: quizSubmissions.submittedAt,
+            })
+            .from(quizSubmissions)
+            .where(inArray(quizSubmissions.traineeId, traineeIds))
         : Promise.resolve([]),
       hasTrainees && hasEnablers
         ? db
-          .select({
-            traineeId: enablerSubmissions.traineeId,
-            enablerId: enablerSubmissions.enablerId,
-          })
-          .from(enablerSubmissions)
-          .where(
-            and(
-              inArray(enablerSubmissions.traineeId, traineeIds as any),
-              inArray(enablerSubmissions.enablerId, enablerIds as any),
-              eq(enablerSubmissions.status, 'APPROVED')
+            .select({
+              traineeId: enablerSubmissions.traineeId,
+              enablerId: enablerSubmissions.enablerId,
+            })
+            .from(enablerSubmissions)
+            .where(
+              and(
+                inArray(enablerSubmissions.traineeId, traineeIds as any),
+                inArray(enablerSubmissions.enablerId, enablerIds as any),
+                eq(enablerSubmissions.status, 'APPROVED')
+              )
             )
-          )
         : Promise.resolve([]),
       hasTrainees && useCaseIds.length > 0
         ? db
-          .select({
-            traineeId: useCaseSubmissions.traineeId,
-            useCaseId: useCaseSubmissions.useCaseId,
-          })
-          .from(useCaseSubmissions)
-          .where(
-            and(
-              inArray(useCaseSubmissions.traineeId, traineeIds as any),
-              inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
-              eq(useCaseSubmissions.status, 'APPROVED')
+            .select({
+              traineeId: useCaseSubmissions.traineeId,
+              useCaseId: useCaseSubmissions.useCaseId,
+            })
+            .from(useCaseSubmissions)
+            .where(
+              and(
+                inArray(useCaseSubmissions.traineeId, traineeIds as any),
+                inArray(useCaseSubmissions.useCaseId, useCaseIds as any),
+                eq(useCaseSubmissions.status, 'APPROVED')
+              )
             )
-          )
         : Promise.resolve([]),
       hasTrainees
         ? db
-          .select({ c: count() })
-          .from(quizSubmissions)
-          .where(
-            and(
-              eq(quizSubmissions.isReviewed, false),
-              inArray(quizSubmissions.traineeId, traineeIds)
+            .select({ c: count() })
+            .from(quizSubmissions)
+            .where(
+              and(
+                eq(quizSubmissions.isReviewed, false),
+                inArray(quizSubmissions.traineeId, traineeIds)
+              )
             )
-          )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-          .select({ c: count() })
-          .from(quizSubmissions)
-          .innerJoin(
-            enablerQuizLinks,
-            eq(quizSubmissions.quizId, enablerQuizLinks.quizId)
-          )
-          .where(
-            and(
-              eq(quizSubmissions.isReviewed, false),
-              inArray(quizSubmissions.traineeId, traineeIds)
+            .select({ c: count() })
+            .from(quizSubmissions)
+            .innerJoin(
+              enablerQuizLinks,
+              eq(quizSubmissions.quizId, enablerQuizLinks.quizId)
             )
-          )
+            .where(
+              and(
+                eq(quizSubmissions.isReviewed, false),
+                inArray(quizSubmissions.traineeId, traineeIds)
+              )
+            )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-          .select({ c: count() })
-          .from(useCaseSubmissions)
-          .where(
-            and(
-              eq(useCaseSubmissions.status, 'PENDING'),
-              inArray(useCaseSubmissions.traineeId, traineeIds)
+            .select({ c: count() })
+            .from(useCaseSubmissions)
+            .where(
+              and(
+                eq(useCaseSubmissions.status, 'PENDING'),
+                inArray(useCaseSubmissions.traineeId, traineeIds)
+              )
             )
-          )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-          .select({ c: count() })
-          .from(enablerSubmissions)
-          .where(
-            and(
-              eq(enablerSubmissions.status, 'PENDING'),
-              inArray(enablerSubmissions.traineeId, traineeIds)
+            .select({ c: count() })
+            .from(enablerSubmissions)
+            .where(
+              and(
+                eq(enablerSubmissions.status, 'PENDING'),
+                inArray(enablerSubmissions.traineeId, traineeIds)
+              )
             )
-          )
         : Promise.resolve([{ c: 0 }]),
       hasTrainees
         ? db
-          .select({ c: count() })
-          .from(activityReports)
-          .where(
-            and(
-              eq(activityReports.status, 'SUBMITTED'),
-              inArray(activityReports.traineeId, traineeIds)
+            .select({ c: count() })
+            .from(activityReports)
+            .where(
+              and(
+                eq(activityReports.status, 'SUBMITTED'),
+                inArray(activityReports.traineeId, traineeIds)
+              )
             )
-          )
         : Promise.resolve([{ c: 0 }]),
       // Merged: enabler completions for trend + module chart (was trendCompRows + compByCourseRows)
       hasTrainees
         ? db
-          .select({
-            traineeId: enablerCompletions.traineeId,
-            enablerId: enablerCompletions.enablerId,
-            completedAt: enablerCompletions.completedAt,
-          })
-          .from(enablerCompletions)
-          .where(inArray(enablerCompletions.traineeId, traineeIds))
+            .select({
+              traineeId: enablerCompletions.traineeId,
+              enablerId: enablerCompletions.enablerId,
+              completedAt: enablerCompletions.completedAt,
+            })
+            .from(enablerCompletions)
+            .where(inArray(enablerCompletions.traineeId, traineeIds))
         : Promise.resolve([]),
     ]);
 
@@ -453,10 +467,13 @@ export async function GET(req: NextRequest) {
     const session = await requireTrainer(req);
     if (isErrorResponse(session)) return session;
 
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
-    const data = await fetchTrainerDashboardData(trainerId);
+    const data = await fetchTrainerDashboardData(trainerId, scope);
 
     return NextResponse.json(data, { headers: cacheHeaders.none });
   } catch (e) {

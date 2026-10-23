@@ -4,6 +4,7 @@ import db from '@/db';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { profiles, quizzes, quizSubmissions, enablerQuizLinks, enablers, courses, courseMembers } from '@/db/migrations/schemas/schema';
 import { getTrainerScope } from '@/lib/trainer-scope';
+import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
 
 // GET /api/trainer/quiz-submissions?trainerProfileId=...&onlyPending=true
 export async function GET(req: NextRequest) {
@@ -14,6 +15,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const trainerProfileId = session.id;
     const onlyPending = searchParams.get('onlyPending') === 'true';
+
+    const catalogScope = await requireCatalogScope(session, req);
+    if (isErrorResponse(catalogScope)) return catalogScope;
 
     const scope = await getTrainerScope(trainerProfileId);
     if (!scope) {
@@ -82,9 +86,13 @@ export async function GET(req: NextRequest) {
       .innerJoin(quizzes, eq(quizSubmissions.quizId, quizzes.id))
       .leftJoin(enablerQuizLinks, eq(enablerQuizLinks.quizId, quizSubmissions.quizId))
       .leftJoin(enablers, eq(enablers.id, enablerQuizLinks.enablerId))
-  .where(onlyPending
-        ? and(inArray(quizSubmissions.traineeId, traineeIds as any), eq(quizSubmissions.isReviewed, false as any))
-        : inArray(quizSubmissions.traineeId, traineeIds as any))
+      .where(
+        and(
+          inArray(quizSubmissions.traineeId, traineeIds as any),
+          catalogCondition(quizzes.trainingCatalogId, catalogScope),
+          onlyPending ? eq(quizSubmissions.isReviewed, false as any) : undefined
+        )
+      )
       .orderBy(desc(quizSubmissions.submittedAt))
       .limit(200);
 

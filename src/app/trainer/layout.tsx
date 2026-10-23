@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -40,11 +41,9 @@ const TrainerLayoutComponent = ({
     }
   }, [loading, user, profile]);
 
-  const TRAINER_LEVEL_ROLES = ['admin', 'temp_admin', 'trainer'];
-
   // Memoize authentication check to prevent unnecessary re-renders
   const isAuthenticated = useMemo(() => {
-    return user && profile && TRAINER_LEVEL_ROLES.includes(profile.role);
+    return user && profile && isTrainerLevelRole(profile.role);
   }, [user, profile]);
 
   // Determine if we're still in a loading state
@@ -54,7 +53,7 @@ const TrainerLayoutComponent = ({
   const shouldRedirect = useMemo(() => {
     if (isLoading) return false;
     if (!user) return true;
-    if (profile && !TRAINER_LEVEL_ROLES.includes(profile.role)) return true;
+    if (profile && !isTrainerLevelRole(profile.role)) return true;
     return false;
   }, [isLoading, user, profile]);
 

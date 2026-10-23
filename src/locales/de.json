@@ -258,6 +258,7 @@
   "roles.trainer": "Ausbilder",
   "roles.admin": "Admin",
   "roles.tempAdmin": "Temp-Admin",
+  "roles.superAdmin": "Super-Admin",
   "trainee.management.title": "Auszubildende",
   "trainee.management.description": "Verwalten Sie Ihre Auszubildenden und verfolgen Sie deren Fortschritt",
   "trainee.management.loading": "Lade Auszubildende...",

@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { normalizeRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   LayoutDashboard,
@@ -354,7 +355,9 @@ export function Sidebar({
               <p className="text-muted-foreground text-xs capitalize">
                 {profile.role === 'trainee'
                   ? t('roles.trainee')
-                  : profile.role === 'admin'
+                  : normalizeRole(profile.role) === 'SUPER_ADMIN'
+                    ? t('roles.superAdmin')
+                    : profile.role === 'admin'
                     ? t('roles.admin')
                     : profile.role === 'temp_admin'
                       ? t('roles.tempAdmin')

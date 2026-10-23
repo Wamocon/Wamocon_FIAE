@@ -11,6 +11,7 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { requireContentScope } from '@/lib/catalog/scope';
 
 export async function GET(
   _req: NextRequest,
@@ -21,6 +22,8 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { quizId } = await ctx.params;
+    const catalogScope = await requireContentScope(session, _req, 'quiz', quizId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const [qz] = await db
       .select()
       .from(quizzes)
@@ -89,6 +92,8 @@ export async function DELETE(
     if (isErrorResponse(session)) return session;
 
     const { quizId } = await ctx.params;
+    const catalogScope = await requireContentScope(session, req, 'quiz', quizId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -167,6 +172,8 @@ export async function PATCH(
     if (isErrorResponse(session)) return session;
 
     const { quizId } = await ctx.params;
+    const catalogScope = await requireContentScope(session, req, 'quiz', quizId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const body = await req.json();
     const title = body?.title as string | undefined;
     const is_active = body?.is_active as boolean | undefined;

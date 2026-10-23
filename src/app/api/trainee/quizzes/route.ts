@@ -8,6 +8,11 @@ import {
   quizSubmissions,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import {
+  catalogCacheKey,
+  catalogCondition,
+  requireCatalogScopeForUser,
+} from '@/lib/catalog/scope';
 
 // Return only GLOBAL (big) quizzes assigned to this trainee
 export async function GET(req: NextRequest) {
@@ -18,8 +23,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const scope = await requireCatalogScopeForUser(userId, req);
+    if (scope instanceof Response) return scope;
+
     const data = await apiCache.getOrFetch(
-      `trainee_quizzes_${userId}`,
+      `trainee_quizzes_${userId}_${catalogCacheKey(scope)}`,
       async () => {
         // Assigned GLOBAL quizzes for this trainee
         const rows = await db
@@ -29,7 +37,8 @@ export async function GET(req: NextRequest) {
           .where(
             and(
               eq(quizAssignments.traineeId, userId as any),
-              eq(quizzes.quizType, 'GLOBAL' as any)
+              eq(quizzes.quizType, 'GLOBAL' as any),
+              catalogCondition(quizzes.trainingCatalogId, scope)
             )
           )
           .orderBy(desc(quizzes.createdAt));

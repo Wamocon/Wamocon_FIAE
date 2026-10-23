@@ -6,7 +6,12 @@ export interface User {
   updated_at: string;
 }
 
-export type UserRole = 'admin' | 'temp_admin' | 'trainer' | 'trainee';
+export type UserRole =
+  | 'super_admin'
+  | 'admin'
+  | 'temp_admin'
+  | 'trainer'
+  | 'trainee';
 
 export interface Profile {
   id: string;

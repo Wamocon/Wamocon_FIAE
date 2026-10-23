@@ -7,6 +7,7 @@ import {
 } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { eq, sql } from 'drizzle-orm';
 import { organizations, profiles } from '@/db/migrations/schemas/schema';
 
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
         const oid = r.orgId ?? '';
         if (!counts[oid]) counts[oid] = { trainers: 0, trainees: 0 };
         const upper = String(r.role).toUpperCase();
-        if (['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(upper)) {
+        if (isTrainerLevelRole(upper)) {
           counts[oid].trainers += r.count;
         } else if (upper === 'TRAINEE') {
           counts[oid].trainees += r.count;

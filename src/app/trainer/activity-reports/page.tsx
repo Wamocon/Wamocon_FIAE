@@ -4,6 +4,7 @@ import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -216,7 +217,7 @@ export default function TrainerActivityReportsPage() {
 
     // Trainer-level roles (trainer, admin, temp_admin) may review reports.
     // Only actual trainees are redirected to their own view.
-    if (!['trainer', 'admin', 'temp_admin'].includes(profile.role)) {
+    if (!isTrainerLevelRole(profile.role)) {
       router.push('/trainee/activity-reports');
       return;
     }

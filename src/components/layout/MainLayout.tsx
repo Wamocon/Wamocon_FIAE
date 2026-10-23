@@ -11,7 +11,12 @@ interface User {
   email: string;
 }
 
-type UserRole = 'admin' | 'temp_admin' | 'trainer' | 'trainee';
+type UserRole =
+  | 'super_admin'
+  | 'admin'
+  | 'temp_admin'
+  | 'trainer'
+  | 'trainee';
 
 interface Profile {
   id: string;

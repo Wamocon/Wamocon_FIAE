@@ -35,7 +35,9 @@ import {
     notifications,
 } from '@/db/migrations/schemas/schema';
 import { toHaiRole } from '@/lib/auth-helpers';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { buildHaiTrainingScope } from './trainingScope';
+import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
 
 // ============================================================================
 // TYPES
@@ -285,16 +287,24 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
             ausbildungDurationYears: user[0].ausbildungDurationYears,
         });
 
+        // Only content of the user's catalogs (fail closed: no scope, no progress)
+        const catalogScope = await getCatalogScopeForUserId(userId);
+        const snapshotCatalogIds = sql.join(
+            (catalogScope?.allowedCatalogIds ?? []).map(id => sql`${id}::uuid`),
+            sql`, `
+        );
+
         // Get overall progress (completed enablers / total active enablers across enrolled courses)
-        const progressResult = await db.execute(sql`
+        const progressResult = catalogScope ? await db.execute(sql`
             SELECT
                 COUNT(DISTINCT ec.enabler_id) AS completed,
                 COUNT(DISTINCT e.id) AS total
             FROM course_members cm
             JOIN enablers e ON e.course_id = cm.course_id AND e.is_active = true
+                AND e.training_catalog_id IN (${snapshotCatalogIds})
             LEFT JOIN enabler_completions ec ON ec.enabler_id = e.id AND ec.trainee_id = ${userId}
             WHERE cm.user_id = ${userId}
-        `);
+        `) : [];
 
         const row = (progressResult as any[])[0] || { completed: 0, total: 0 };
         const completed = Number(row.completed) || 0;
@@ -350,6 +360,10 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
  */
 export async function fetchTraineeProgress(userId: string): Promise<CourseProgress[]> {
     try {
+        // Only content of the user's catalogs (fail closed: no scope, no content)
+        const catalogScope = await getCatalogScopeForUserId(userId);
+        if (!catalogScope) return [];
+
         // Get all courses the trainee is enrolled in
         const enrolledCourses = await db
             .select({
@@ -361,6 +375,7 @@ export async function fetchTraineeProgress(userId: string): Promise<CourseProgre
             .where(and(
                 eq(courseMembers.userId, userId),
                 eq(courses.isActive, true),
+                inArray(courses.trainingCatalogId, catalogScope.allowedCatalogIds),
             ));
 
         if (enrolledCourses.length === 0) return [];
@@ -722,6 +737,14 @@ export async function fetchTraineeSubmissions(userId: string): Promise<Submissio
  */
 export async function fetchUseCaseProgress(userId: string): Promise<UseCaseProgress[]> {
     try {
+        // Only content of the user's catalogs (fail closed: no scope, no content)
+        const catalogScope = await getCatalogScopeForUserId(userId);
+        if (!catalogScope) return [];
+        const catalogIds = sql.join(
+            catalogScope.allowedCatalogIds.map(id => sql`${id}::uuid`),
+            sql`, `
+        );
+
         const results = await db.execute(sql`
             SELECT
                 c.title AS course_title,
@@ -729,7 +752,7 @@ export async function fetchUseCaseProgress(userId: string): Promise<UseCaseProgr
                 COUNT(DISTINCT CASE WHEN ucs.status = 'APPROVED' THEN uc.id END) AS completed,
                 COUNT(DISTINCT CASE WHEN ucs.status = 'PENDING' THEN uc.id END) AS pending
             FROM course_members cm
-            JOIN courses c ON c.id = cm.course_id
+            JOIN courses c ON c.id = cm.course_id AND c.training_catalog_id IN (${catalogIds})
             JOIN use_cases uc ON uc.course_id = c.id AND uc.is_active = true
             LEFT JOIN use_case_submissions ucs ON ucs.use_case_id = uc.id AND ucs.trainee_id = ${userId}
             WHERE cm.user_id = ${userId}
@@ -1084,7 +1107,7 @@ function formatDate(date: Date): string {
 
 function formatSnapshot(snapshot: UserSnapshot): string {
     const lines: string[] = [
-        `**Nutzer:** ${snapshot.fullName} (${['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(snapshot.role) ? 'Ausbilder' : 'Azubi'})`,
+        `**Nutzer:** ${snapshot.fullName} (${isTrainerLevelRole(snapshot.role) ? 'Ausbilder' : 'Azubi'})`,
         `**Gesamtfortschritt:** ${snapshot.overallProgressPercent}%`,
     ];
 

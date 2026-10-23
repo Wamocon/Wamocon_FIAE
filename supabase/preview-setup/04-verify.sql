@@ -38,9 +38,10 @@ select r.rolname, n.nspname, c.relname, p.priv
 --    EXPECTED: usage = false on auth and storage. usage on public is true because PUBLIC
 --    (everybody) holds it, that alone gives no access to a table.
 --    WATCH create on public: if it says true, PUBLIC holds CREATE on the schema public
---    (seen in the local image of the Supabase Postgres, ACL "=UC"). Then both roles can
---    create objects in public, which is a gap. The fix is a decision for Production:
---    revoke create on schema public from public (this template does not do it).
+--    (measured read-only in Production, ACL "=UC"). Then both roles can create objects
+--    in public, which is a gap. The migration 20261025000100_security_revoke_public_create.sql
+--    removes it and is applied to Production with the catalog rollout; until then this
+--    says true, afterwards false.
 select r.rolname, n.nspname,
        has_schema_privilege(r.rolname, n.nspname, 'usage')  as usage_priv,
        has_schema_privilege(r.rolname, n.nspname, 'create') as create_priv
@@ -114,11 +115,11 @@ select (select count(*) from supabase_migrations.schema_migrations) as public_le
        (select count(*) from preview_meta.schema_migrations) as preview_ledger;
 
 -- 14. Extensions and where they live. pgvector in public is why public is on the
---     search_path of both Preview roles. EXPECTED: review. In the local Supabase image
---     (supautils) ANY login role, even a fresh one without privileges, could run
---     "drop extension vector cascade" (tried, rolled back). Check this on the hosted
---     project with a throwaway role and a rolled back transaction before relying on the
---     role boundary; see docs/release-prozess.md, "Einschränkungen".
+--     search_path of both Preview roles. EXPECTED: review. In the Supabase image
+--     (supautils) ANY login role, even a fresh one without privileges, can drop or alter
+--     a privileged extension such as vector (tried locally, rolled back), and an event
+--     trigger cannot stop it (tested: no event arrives for DROP EXTENSION). The role
+--     boundary does not cover this; see docs/release-prozess.md, "Einschränkungen".
 select e.extname, e.extnamespace::regnamespace::text as schema, e.extowner::regrole::text as owner
   from pg_extension e
  where e.extname not in ('plpgsql')

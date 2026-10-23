@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
+import { mockCatalogScope } from '../../../helpers/mockNext';
 
 function makePost(url: string, body: any) {
   return {
@@ -14,6 +15,7 @@ function makePost(url: string, body: any) {
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockCatalogScope();
   const mod =
     await import('@/app/api/trainee/enablers/[enablerId]/quiz/submit/route');
   return mod.POST as (

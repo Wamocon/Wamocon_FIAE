@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { requireContentScope } from '@/lib/catalog/scope';
 
 export async function GET(
   _req: NextRequest,
@@ -14,6 +15,8 @@ export async function GET(
 
     const { useCases } = await import('@/db/migrations/schemas/schema');
     const { useCaseId } = await params;
+    const catalogScope = await requireContentScope(session, _req, 'useCase', useCaseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const [row] = await db
       .select()
       .from(useCases)
@@ -40,6 +43,8 @@ export async function PATCH(
     const { useCases, courseMembers, notifications } =
       await import('@/db/migrations/schemas/schema');
     const { useCaseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'useCase', useCaseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -149,6 +154,8 @@ export async function DELETE(
 
     const { useCases } = await import('@/db/migrations/schemas/schema');
     const { useCaseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'useCase', useCaseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 

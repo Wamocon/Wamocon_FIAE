@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { authFetch } from '@/lib/authFetch';
 import {
   BookOpen,
   ChevronDown,
@@ -75,7 +76,7 @@ export function LernfeldNotes() {
       setError(null);
       try {
         const [lfRes, notesRes] = await Promise.all([
-          fetch('/api/trainee/school/lernfelder', { cache: 'no-store' }),
+          authFetch('/api/trainee/school/lernfelder', { cache: 'no-store' }),
           fetch(`/api/trainee/knowledge-notes?traineeId=${profile.id}`, {
             cache: 'no-store',
           }),

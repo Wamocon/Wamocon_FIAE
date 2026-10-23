@@ -10,6 +10,7 @@ import {
   quizzes,
 } from '@/db/migrations/schemas/schema';
 import { verifyPlatformOwner } from '@/lib/auth-helpers';
+import { requireContentScope, ensureContentInScope } from '@/lib/catalog/scope';
 
 // GET: quiz detail for editing/view
 export async function GET(
@@ -21,6 +22,8 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { quizId } = await params;
+    const catalogScope = await requireContentScope(session, _req, 'quiz', quizId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const [link] = await db
       .select()
       .from(enablerQuizLinks)
@@ -79,6 +82,10 @@ export async function PATCH(
     if (isErrorResponse(session)) return session;
 
     const { enablerId, quizId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'enabler', enablerId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
+    const denied_quiz = await ensureContentInScope(catalogScope, 'quiz', quizId);
+    if (denied_quiz) return denied_quiz;
     const body = await req.json();
     const trainerId = session.id;
 
@@ -180,6 +187,10 @@ export async function DELETE(
     if (isErrorResponse(session)) return session;
 
     const { enablerId, quizId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'enabler', enablerId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
+    const denied_quiz = await ensureContentInScope(catalogScope, 'quiz', quizId);
+    if (denied_quiz) return denied_quiz;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 

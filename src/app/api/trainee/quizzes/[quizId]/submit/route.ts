@@ -16,6 +16,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
 // POST: submit answers for a quiz attempt
 // Body: { traineeId: string, answers: [{ questionId, selectedOptionId? , textAnswer? }] }
@@ -32,6 +33,10 @@ export async function POST(
       : [];
     if (!traineeId || answers.length === 0)
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+    // The quiz must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'quiz', quizId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const organizationId = await getUserOrgId(traineeId);
 
@@ -390,6 +395,10 @@ export async function GET(
     );
     if (!traineeId)
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    // The quiz must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'quiz', quizId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const [quiz] = await db
       .select()

@@ -16,4 +16,3 @@
 # file is renamed.
 
 202606260001_schema_only_ausbildung_duration.sql  applied  # applied to production by hand (MCP); part of the baseline
-202610200001_training_catalog_curriculum.sql      pending  # not applied anywhere yet; another branch renames it to a 14 digit version, then delete this line

@@ -1,12 +1,25 @@
 /**
- * Seed script for Lernfelder (LF1-LF12a) master data
+ * Seed script for the FIAE Lernfelder (LF1-LF12a)
  * Based on official KMK Rahmenlehrplan for Lernzentrum für Auszubildende
+ *
+ * Writes into the catalog learning field model
+ * (training_catalog_learning_fields, FIAE catalog). The legacy table
+ * `lernfelder` is only a compatibility view since the catalog migration series
+ * and is no longer seeded directly.
+ *
+ * The trainingYear values below are also the source of the year assignment in
+ * supabase/migrations/20261024000500_learning_field_model.sql (LF1-LF5 year 1,
+ * LF6-LF9 and LF10a year 2, LF11a-LF12a year 3).
  *
  * Run with: npx tsx -r dotenv/config scripts/seed-lernfelder.ts
  */
 
+import { eq } from 'drizzle-orm';
 import db from '../src/db';
-import { lernfelder } from '../src/db/migrations/schemas/schema';
+import {
+  TRAINING_CATALOG_IDS,
+  trainingCatalogLearningFields,
+} from '../src/db/migrations/schemas/schema';
 
 // Official FIAE Lernfelder based on 2020 curriculum reform
 const LERNFELDER_DATA = [
@@ -141,19 +154,39 @@ async function seedLernfelder() {
   console.log('🎓 Seeding Lernfelder (LF1-LF12a) for FIAE...\n');
 
   try {
-    // Check if already seeded
-    const existing = await db.select().from(lernfelder);
+    // Check if the FIAE catalog already has learning fields (seeded or
+    // migrated from the legacy lernfelder table)
+    const existing = await db
+      .select({ id: trainingCatalogLearningFields.id })
+      .from(trainingCatalogLearningFields)
+      .where(
+        eq(
+          trainingCatalogLearningFields.trainingCatalogId,
+          TRAINING_CATALOG_IDS.FIAE
+        )
+      );
     if (existing.length > 0) {
       console.log(
-        `⚠️  Found ${existing.length} existing Lernfelder. Skipping seed.`
+        `⚠️  Found ${existing.length} existing FIAE Lernfelder. Skipping seed.`
       );
       console.log('   To re-seed, delete existing records first.');
       return;
     }
 
-    // Insert all Lernfelder
+    // Insert all Lernfelder into the FIAE catalog
     for (const lf of LERNFELDER_DATA) {
-      await db.insert(lernfelder).values(lf);
+      await db
+        .insert(trainingCatalogLearningFields)
+        .values({
+          trainingCatalogId: TRAINING_CATALOG_IDS.FIAE,
+          code: lf.code,
+          title: lf.title,
+          description: lf.description,
+          trainingYear: lf.trainingYear,
+          hoursBudget: lf.hoursBudget,
+          orderIndex: lf.orderIndex,
+        })
+        .onConflictDoNothing();
       console.log(`✅ ${lf.code}: ${lf.title}`);
     }
 

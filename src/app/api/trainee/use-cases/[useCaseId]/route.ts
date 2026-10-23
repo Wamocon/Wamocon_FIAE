@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, courses } from '@/db/migrations/schemas/schema';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
 // GET trainee-facing use-case detail; optionally include latest submission by trainee
 // query: traineeId
@@ -11,6 +12,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ useC
     const traineeId = searchParams.get('traineeId');
     const { useCaseId } = await params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    // The content must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'useCase', useCaseId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const [u] = await db.select().from(useCases).where(eq(useCases.id, useCaseId as any));
     if (!u || !u.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
