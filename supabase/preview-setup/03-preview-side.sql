@@ -31,8 +31,21 @@ $$;
 -- 2. Twin trigger: only users created from Preview (env=preview) get their
 --    profile in public_preview. The Production trigger skips exactly these users
 --    (02-production-side.sql), so every user is handled by exactly one trigger.
+--    GUARDED: only created when Production has the trigger on_auth_user_created.
+--    On 2026-10-23 it had none (profiles come from /api/auth/sync-profile), and an
+--    extra trigger on the shared auth.users could block sign-ups for everybody.
 do $$
 begin
+  if not exists (
+    select 1 from pg_trigger
+     where tgrelid = 'auth.users'::regclass
+       and tgname = 'on_auth_user_created'
+       and not tgisinternal
+  ) then
+    execute 'drop trigger if exists on_auth_user_created_preview on auth.users';
+    raise notice 'Production has no on_auth_user_created trigger, no twin trigger is created.';
+    return;
+  end if;
   if to_regprocedure('public_preview.handle_new_user()') is null then
     raise exception 'public_preview.handle_new_user() is missing: clone the structure first (workflow Preview Reset).';
   end if;

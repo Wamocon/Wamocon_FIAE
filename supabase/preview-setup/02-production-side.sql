@@ -5,7 +5,7 @@
 --           reading the current state (section 0) and after a backup. Not run by
 --           any workflow.
 -- EFFECT:   (a) fixes the search_path of the two RLS helper functions in public,
---           (b) lets the Production auth trigger skip users that were created
+--           (b) lets an EXISTING Production auth trigger skip users that were created
 --           from Preview. Both are small and reversible (see the end of the file).
 --
 -- WHY (b): Preview and Production share ONE auth (same users table). A user
@@ -29,14 +29,29 @@ alter function public.get_user_org_id() set search_path = public, pg_temp;
 alter function public.is_platform_owner() set search_path = public, pg_temp;
 
 -- 2. Production trigger skips Preview users. Same function, one added condition.
-begin;
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row
-  when ((new.raw_user_meta_data ->> 'env') is distinct from 'preview')
-  execute function public.handle_new_user();
-commit;
+--    GUARDED: a read-only measurement on 2026-10-23 found NO trigger on
+--    auth.users in Production (profiles are created by /api/auth/sync-profile).
+--    This block only changes an existing on_auth_user_created and never creates
+--    a new trigger, because a failing trigger on auth.users blocks every sign-up.
+do $$
+begin
+  if exists (
+    select 1 from pg_trigger
+     where tgrelid = 'auth.users'::regclass
+       and tgname = 'on_auth_user_created'
+       and not tgisinternal
+  ) then
+    drop trigger on_auth_user_created on auth.users;
+    create trigger on_auth_user_created
+      after insert on auth.users
+      for each row
+      when ((new.raw_user_meta_data ->> 'env') is distinct from 'preview')
+      execute function public.handle_new_user();
+  else
+    raise notice 'No on_auth_user_created trigger on auth.users, nothing to change.';
+  end if;
+end
+$$;
 
 -- UNDO (only if needed):
 --   alter function public.get_user_org_id() reset search_path;

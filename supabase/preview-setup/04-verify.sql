@@ -24,7 +24,8 @@ select c.relname, p.priv
 select has_schema_privilege('app_preview', 'public_preview', 'usage') as usage_on_preview;
 
 -- 4. Both auth triggers exist and are mutually exclusive by the sign-up metadata.
---    EXPECTED: on_auth_user_created with "is distinct from 'preview'" and
+--    EXPECTED if Production has the trigger (none existed on 2026-10-23, an empty
+--    result is then correct): on_auth_user_created with "is distinct from 'preview'" and
 --              on_auth_user_created_preview with "= 'preview'"
 select tgname, pg_get_triggerdef(oid) as definition
   from pg_trigger
