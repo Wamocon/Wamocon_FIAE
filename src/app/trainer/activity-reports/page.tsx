@@ -1,12 +1,13 @@
 'use client';
 
 import { authFetch } from '@/lib/authFetch';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
+import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   getPhaseMonthRange,
@@ -110,6 +111,12 @@ export default function TrainerActivityReportsPage() {
   const { profile, loading: authLoading } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
+  // The lists belong to the occupation of the user (?catalog= only for an
+  // occupation other than FIAE, so FIAE requests stay unchanged)
+  const { ready: catalogReady, withCatalog } = useRequestCatalog(!!profile?.id);
+  // loadData keeps its identity, it always reads the current occupation here
+  const withCatalogRef = useRef(withCatalog);
+  withCatalogRef.current = withCatalog;
 
   const [reports, setReports] = useState<ActivityReport[]>([]);
   const [trainees, setTrainees] = useState<Record<string, TraineeProfile>>({});
@@ -142,8 +149,12 @@ export default function TrainerActivityReportsPage() {
           authFetch(`/api/trainer/trainees`, {
             cache: 'no-store',
           }),
-          authFetch('/api/training-use-cases', { cache: 'no-store' }),
-          authFetch('/api/training-components', { cache: 'no-store' }),
+          authFetch(withCatalogRef.current('/api/training-use-cases'), {
+            cache: 'no-store',
+          }),
+          authFetch(withCatalogRef.current('/api/training-components'), {
+            cache: 'no-store',
+          }),
         ]);
 
       const [reportsData, traineesData, useCasesData, componentsData] =
@@ -222,8 +233,9 @@ export default function TrainerActivityReportsPage() {
       return;
     }
 
+    if (!catalogReady) return;
     loadData(profile.id);
-  }, [profile?.id, authLoading, loadData]);
+  }, [profile?.id, authLoading, loadData, catalogReady]);
 
   const loadReportEntries = async (reportId: string) => {
     try {
