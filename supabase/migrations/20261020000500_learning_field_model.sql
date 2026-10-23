@@ -504,6 +504,39 @@ begin
 end;
 $$;
 
+-- The view write function runs as the caller (RLS of the base table applies).
+-- No EXECUTE for PUBLIC and anon on the functions of this file. Trigger
+-- functions need no EXECUTE privilege when they fire, so nothing breaks.
+do $$
+declare
+  fn text;
+begin
+  foreach fn in array array[
+      'public.lernfelder_view_write()'
+  ] loop
+    execute format('revoke execute on function %s from public', fn);
+    if exists (select 1 from pg_roles where rolname = 'anon') then
+      execute format('revoke execute on function %s from anon', fn);
+    end if;
+  end loop;
+end $$;
+
+-- The label helper is a pure function and is called by the view trigger as the
+-- caller, so authenticated keeps EXECUTE; anon does not need it.
+revoke execute on function public.lernfeld_label_training_year(text) from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    grant execute on function public.lernfeld_label_training_year(text) to authenticated;
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.lernfeld_label_training_year(text) to service_role;
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke execute on function public.lernfeld_label_training_year(text) from anon;
+  end if;
+end $$;
+
 create trigger lernfelder_view_write
   instead of insert or update or delete
   on public.lernfelder

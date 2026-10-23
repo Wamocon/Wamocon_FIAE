@@ -232,6 +232,39 @@ describe('catalog migration series files', () => {
     }
   });
 
+  it('guards the catalog tables against TRUNCATE and the functions against anon', () => {
+    const first = readSql('20261020000100_training_catalog_curriculum.sql');
+    expect(first).toMatch(
+      /revoke truncate, references, trigger on public\.training_catalogs from authenticated/
+    );
+    expect(first).toMatch(
+      /revoke truncate, references, trigger on public\.training_catalog_content_mappings from authenticated/
+    );
+    // derivation triggers run as definer with a fixed search_path
+    const keys = readSql('20261020000300_catalog_consistency_keys.sql');
+    expect(
+      keys.match(/security definer\s+set search_path = ''/gi)
+    ).toHaveLength(2);
+    // every file that defines functions also revokes EXECUTE from anon
+    for (const file of [
+      '20261020000300_catalog_consistency_keys.sql',
+      '20261020000500_learning_field_model.sql',
+      '20261020001000_organization_catalogs.sql',
+      '20261020001400_trainee_elective_choices.sql',
+    ]) {
+      expect(readSql(file)).toMatch(/revoke execute on function %s from anon/);
+    }
+  });
+
+  it('keeps the elective limit when the rules change', () => {
+    const sql = readSql('20261020001400_trainee_elective_choices.sql');
+    expect(sql).toMatch(/after update of elective_pick_count/);
+    expect(sql).toMatch(/before update of kind/);
+    // precheck for the columns of 20261020001300 and 20261020000900
+    expect(sql).toMatch(/attname = 'kind'/);
+    expect(sql).toMatch(/attname = 'elective_pick_count'/);
+  });
+
   it('adds enum values only in their own file', () => {
     const filesWithAddValue = seriesFiles.filter(name =>
       /\badd\s+value\b/i.test(readSql(name))

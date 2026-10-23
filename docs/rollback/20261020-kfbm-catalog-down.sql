@@ -94,9 +94,19 @@ begin
   ) then
     update public.profiles set role = 'ADMIN' where role = 'SUPER_ADMIN';
   end if;
+  -- remove the approval token of the gated backfill
+  if obj_description('public.user_role'::regtype, 'pg_type') = 'super_admin_backfill=approved' then
+    comment on type public.user_role is null;
+  end if;
 end $$;
 
 -- 2. Elective choices, enrollments, organization catalogs (20261020001000 - 1400)
+drop trigger if exists training_components_kind_change_check
+  on public.training_components;
+drop trigger if exists training_catalogs_elective_pick_count_check
+  on public.training_catalogs;
+drop function if exists public.check_component_kind_change();
+drop function if exists public.check_elective_pick_count_change();
 drop table if exists public.trainee_elective_choices;
 drop function if exists public.check_trainee_elective_choice();
 drop function if exists public.set_training_catalog_from_enrollment();

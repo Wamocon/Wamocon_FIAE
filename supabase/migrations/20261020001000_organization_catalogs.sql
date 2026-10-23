@@ -158,6 +158,23 @@ begin
 end;
 $$;
 
+-- SECURITY DEFINER trigger function, not callable by the API roles.
+-- No EXECUTE for PUBLIC and anon on the functions of this file. Trigger
+-- functions need no EXECUTE privilege when they fire, so nothing breaks.
+do $$
+declare
+  fn text;
+begin
+  foreach fn in array array[
+      'public.enable_default_catalog_for_organization()'
+  ] loop
+    execute format('revoke execute on function %s from public', fn);
+    if exists (select 1 from pg_roles where rolname = 'anon') then
+      execute format('revoke execute on function %s from anon', fn);
+    end if;
+  end loop;
+end $$;
+
 drop trigger if exists organizations_enable_default_catalog
   on public.organizations;
 create trigger organizations_enable_default_catalog

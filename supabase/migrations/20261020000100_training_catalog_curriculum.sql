@@ -232,6 +232,13 @@ begin
     revoke all on public.training_catalog_learning_fields from anon;
     revoke all on public.training_catalog_content_mappings from anon;
   end if;
+  -- TRUNCATE (and REFERENCES, TRIGGER) are not governed by row level security:
+  -- authenticated must not hold them on the catalog tables.
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    revoke truncate, references, trigger on public.training_catalogs from authenticated;
+    revoke truncate, references, trigger on public.training_catalog_learning_fields from authenticated;
+    revoke truncate, references, trigger on public.training_catalog_content_mappings from authenticated;
+  end if;
 end $$;
 
 comment on table public.training_catalogs is

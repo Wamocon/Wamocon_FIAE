@@ -21,6 +21,26 @@
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
 
+-- Precheck: the elective rules need training_components.kind (20261020001300)
+-- and training_catalogs.elective_pick_count (20261020000900).
+do $$
+begin
+  if not exists (
+    select 1 from pg_attribute a
+    where a.attrelid = to_regclass('public.training_components')
+      and a.attname = 'kind'
+      and not a.attisdropped
+  ) or not exists (
+    select 1 from pg_attribute a
+    where a.attrelid = to_regclass('public.training_catalogs')
+      and a.attname = 'elective_pick_count'
+      and not a.attisdropped
+  ) or to_regclass('public.trainee_enrollments') is null then
+    raise exception
+      'Run 20261020000900, 20261020001100 and 20261020001300 first (kind, elective_pick_count or trainee_enrollments missing).';
+  end if;
+end $$;
+
 create table if not exists public.trainee_elective_choices (
   enrollment_id uuid not null,
   component_id uuid not null,
@@ -45,6 +65,7 @@ create index if not exists trainee_elective_choices_component_id_idx
 create or replace function public.set_training_catalog_from_enrollment()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 declare
@@ -75,6 +96,7 @@ create trigger trainee_elective_choices_set_catalog
 create or replace function public.check_trainee_elective_choice()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 declare
@@ -127,6 +149,91 @@ create constraint trigger trainee_elective_choices_limit
   deferrable initially deferred
   for each row
   execute function public.check_trainee_elective_choice();
+
+-- The limit must also hold when the rules change afterwards: lowering
+-- elective_pick_count below existing choices, or turning a chosen elective
+-- component into another kind, is rejected.
+create or replace function public.check_elective_pick_count_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from public.trainee_elective_choices c
+    where c.training_catalog_id = new.id
+    group by c.enrollment_id
+    having count(*) > new.elective_pick_count
+  ) then
+    raise exception
+      'Catalog % has enrollments with more than % elective choices; remove the choices first.',
+      new.code, new.elective_pick_count
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists training_catalogs_elective_pick_count_check
+  on public.training_catalogs;
+create trigger training_catalogs_elective_pick_count_check
+  after update of elective_pick_count
+  on public.training_catalogs
+  for each row
+  when (new.elective_pick_count < old.elective_pick_count)
+  execute function public.check_elective_pick_count_change();
+
+create or replace function public.check_component_kind_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from public.trainee_elective_choices c
+    where c.component_id = new.id
+  ) then
+    raise exception
+      'Component % is chosen as elective by trainees and cannot change its kind (% to %).',
+      new.code, old.kind, new.kind
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists training_components_kind_change_check
+  on public.training_components;
+create trigger training_components_kind_change_check
+  before update of kind
+  on public.training_components
+  for each row
+  when (old.kind is distinct from new.kind and old.kind = 'wahl')
+  execute function public.check_component_kind_change();
+
+-- Security definer trigger functions, not callable by the API roles.
+-- No EXECUTE for PUBLIC and anon on the functions of this file. Trigger
+-- functions need no EXECUTE privilege when they fire, so nothing breaks.
+do $$
+declare
+  fn text;
+begin
+  foreach fn in array array[
+      'public.set_training_catalog_from_enrollment()',
+      'public.check_trainee_elective_choice()',
+      'public.check_elective_pick_count_change()',
+      'public.check_component_kind_change()'
+  ] loop
+    execute format('revoke execute on function %s from public', fn);
+    if exists (select 1 from pg_roles where rolname = 'anon') then
+      execute format('revoke execute on function %s from anon', fn);
+    end if;
+  end loop;
+end $$;
 
 alter table public.trainee_elective_choices enable row level security;
 

@@ -158,6 +158,7 @@ create index if not exists training_catalog_content_mappings_catalog_idx
 create or replace function public.set_training_catalog_from_course()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 declare
@@ -179,6 +180,7 @@ $$;
 create or replace function public.set_training_catalog_from_learning_field()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 declare
@@ -293,6 +295,24 @@ begin
       on delete cascade
       not valid;
   end if;
+end $$;
+
+-- The derivation triggers run as the function owner (SECURITY DEFINER, fixed search_path) so they derive the catalog even when row level security hides the parent row from the caller.
+-- No EXECUTE for PUBLIC and anon on the functions of this file. Trigger
+-- functions need no EXECUTE privilege when they fire, so nothing breaks.
+do $$
+declare
+  fn text;
+begin
+  foreach fn in array array[
+      'public.set_training_catalog_from_course()',
+      'public.set_training_catalog_from_learning_field()'
+  ] loop
+    execute format('revoke execute on function %s from public', fn);
+    if exists (select 1 from pg_roles where rolname = 'anon') then
+      execute format('revoke execute on function %s from anon', fn);
+    end if;
+  end loop;
 end $$;
 
 comment on column public.enablers.training_catalog_id is
