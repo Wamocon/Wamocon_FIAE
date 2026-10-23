@@ -190,6 +190,35 @@ describe('catalog migration series files', () => {
     }
   });
 
+  it('closes the legacy learning field tables for the API roles', () => {
+    const sql = readSql('20261020000500_learning_field_model.sql');
+    expect(sql).toMatch(/lernfelder_legacy/);
+    expect(sql).toMatch(/drop policy %I on public\.%I/);
+    expect(sql).toMatch(/revoke all on public\.%I from %I/);
+    expect(sql).toMatch(/revoke all on public\.lernfelder from anon/);
+  });
+
+  it('binds catalog reads to active catalogs of the own organization', () => {
+    const first = readSql('20261020000100_training_catalog_curriculum.sql');
+    expect(first).not.toMatch(/for select to authenticated\s+using \(true\)/i);
+    expect(first).toMatch(/is_active or public\.is_platform_owner\(\)/);
+    const org = readSql('20261020001000_organization_catalogs.sql');
+    expect(org).toMatch(/function public\.can_read_training_catalog/);
+    expect(org).toMatch(/security definer\s+set search_path = ''/i);
+    expect(org).toMatch(/oc\.organization_id = public\.get_user_org_id\(\)/);
+    for (const table of [
+      'training_catalogs',
+      'training_catalog_learning_fields',
+      'training_catalog_content_mappings',
+    ]) {
+      expect(org).toMatch(
+        new RegExp(
+          `create policy ${table}_select_authenticated[\\s\\S]*?can_read_training_catalog`
+        )
+      );
+    }
+  });
+
   it('adds enum values only in their own file', () => {
     const filesWithAddValue = seriesFiles.filter(name =>
       /\badd\s+value\b/i.test(readSql(name))

@@ -174,12 +174,16 @@ create index training_catalog_content_mappings_use_case_id_idx
 -- Row level security. Decision: catalog content is NOT public. Existing
 -- policies of other content tables allow anonymous reads (known issue, fixed
 -- separately); the new tables do not repeat it. Reads need a logged in user
--- (role authenticated), writes only the platform owner. The server connects
--- as a BYPASSRLS role, and service_role bypasses RLS as well, so the
+-- (role authenticated) and only show ACTIVE catalogs (an inactive catalog like
+-- KfBM before its release stays invisible); writes only the platform owner. The
+-- file 20261020001000 (organization_catalogs) tightens the read policies
+-- further to the catalogs enabled for the caller's organization. The server
+-- connects as a BYPASSRLS role, and service_role bypasses RLS as well, so the
 -- app is not affected. No code reads these tables with the anon key.
 alter table public.training_catalogs enable row level security;
 create policy training_catalogs_select_authenticated
-  on public.training_catalogs for select to authenticated using (true);
+  on public.training_catalogs for select to authenticated
+  using (is_active or public.is_platform_owner());
 create policy training_catalogs_manage_platform_owner
   on public.training_catalogs for all to authenticated
   using (public.is_platform_owner());
@@ -187,7 +191,16 @@ create policy training_catalogs_manage_platform_owner
 alter table public.training_catalog_learning_fields enable row level security;
 create policy training_catalog_learning_fields_select_authenticated
   on public.training_catalog_learning_fields
-  for select to authenticated using (true);
+  for select to authenticated
+  using (
+    public.is_platform_owner()
+    or exists (
+      select 1
+      from public.training_catalogs c
+      where c.id = training_catalog_learning_fields.training_catalog_id
+        and c.is_active
+    )
+  );
 create policy training_catalog_learning_fields_manage_platform_owner
   on public.training_catalog_learning_fields
   for all to authenticated using (public.is_platform_owner());
@@ -195,7 +208,17 @@ create policy training_catalog_learning_fields_manage_platform_owner
 alter table public.training_catalog_content_mappings enable row level security;
 create policy training_catalog_content_mappings_select_authenticated
   on public.training_catalog_content_mappings
-  for select to authenticated using (true);
+  for select to authenticated
+  using (
+    public.is_platform_owner()
+    or exists (
+      select 1
+      from public.training_catalog_learning_fields lf
+      join public.training_catalogs c on c.id = lf.training_catalog_id
+      where lf.id = training_catalog_content_mappings.learning_field_id
+        and c.is_active
+    )
+  );
 create policy training_catalog_content_mappings_manage_platform_owner
   on public.training_catalog_content_mappings
   for all to authenticated using (public.is_platform_owner());

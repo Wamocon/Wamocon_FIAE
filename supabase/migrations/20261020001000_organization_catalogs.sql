@@ -48,6 +48,60 @@ create policy organization_catalogs_select_own_org
     or public.is_platform_owner()
   );
 
+-- Catalog reads are bound to the caller's organization: a user sees a catalog
+-- (and its learning fields and mappings) only if the catalog is active and
+-- enabled for the user's organization in organization_catalogs. The platform
+-- owner (including SUPER_ADMIN of the platform organization) sees everything.
+-- SECURITY DEFINER with a fixed search_path so the check does not depend on the
+-- caller's own rights on organization_catalogs; only authenticated may call it.
+create or replace function public.can_read_training_catalog(catalog_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.is_platform_owner()
+    or exists (
+      select 1
+      from public.training_catalogs c
+      join public.organization_catalogs oc on oc.training_catalog_id = c.id
+      where c.id = catalog_id
+        and c.is_active
+        and oc.is_enabled
+        and oc.organization_id = public.get_user_org_id()
+    );
+$$;
+
+revoke execute on function public.can_read_training_catalog(uuid) from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke execute on function public.can_read_training_catalog(uuid) from anon;
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    grant execute on function public.can_read_training_catalog(uuid) to authenticated;
+  end if;
+end $$;
+
+drop policy if exists training_catalogs_select_authenticated
+  on public.training_catalogs;
+create policy training_catalogs_select_authenticated
+  on public.training_catalogs for select to authenticated
+  using (public.can_read_training_catalog(id));
+
+drop policy if exists training_catalog_learning_fields_select_authenticated
+  on public.training_catalog_learning_fields;
+create policy training_catalog_learning_fields_select_authenticated
+  on public.training_catalog_learning_fields for select to authenticated
+  using (public.can_read_training_catalog(training_catalog_id));
+
+drop policy if exists training_catalog_content_mappings_select_authenticated
+  on public.training_catalog_content_mappings;
+create policy training_catalog_content_mappings_select_authenticated
+  on public.training_catalog_content_mappings for select to authenticated
+  using (public.can_read_training_catalog(training_catalog_id));
+
 -- Earlier drafts had a write policy for the platform owner; writing is now
 -- server side only (privileges below), so no write policy exists.
 drop policy if exists organization_catalogs_manage_platform_owner
