@@ -41,6 +41,28 @@ comment on schema public_preview is 'Structural copy of public for Preview deplo
 create schema if not exists preview_meta;
 comment on schema preview_meta is 'Migration history of public_preview';
 
+-- 1b. Wrappers for the four read-only helpers of auth. SECURITY DEFINER, owned by postgres, so
+--     they work for every caller, also inside SECURITY DEFINER functions that the migration
+--     role owns. They only read the claims of the current request (a session setting) and
+--     return them, nothing else. Fixed search_path.
+create schema if not exists preview_support;
+revoke all on schema preview_support from public;
+
+create or replace function preview_support.auth_uid() returns uuid
+  language sql stable security definer set search_path = pg_catalog, pg_temp
+  as $$ select auth.uid() $$;
+create or replace function preview_support.auth_role() returns text
+  language sql stable security definer set search_path = pg_catalog, pg_temp
+  as $$ select auth.role() $$;
+create or replace function preview_support.auth_jwt() returns jsonb
+  language sql stable security definer set search_path = pg_catalog, pg_temp
+  as $$ select auth.jwt() $$;
+create or replace function preview_support.auth_email() returns text
+  language sql stable security definer set search_path = pg_catalog, pg_temp
+  as $$ select auth.email() $$;
+
+revoke all on all functions in schema preview_support from public;
+
 -- 2. The migration role (the security boundary, see above)
 do $$
 begin
@@ -76,13 +98,18 @@ grant app_preview_migrator to postgres;
 alter schema public_preview owner to app_preview_migrator;
 alter schema preview_meta owner to app_preview_migrator;
 
--- The vector type and friends live in the extensions schema
+-- Types and functions of extensions in the schema extensions
 grant usage on schema extensions to app_preview_migrator;
 
 -- NO rights on public, auth, storage (what PUBLIC grants to everybody is checked in 04-verify.sql)
 revoke all on schema public from app_preview_migrator;
 revoke all on schema auth from app_preview_migrator;
 revoke all on schema storage from app_preview_migrator;
+-- The policies and functions of the clone call auth.uid(), auth.role(), auth.jwt() and
+-- auth.email(). Resolving the schema auth needs USAGE on it, which the project owner cannot
+-- hand out (postgres holds USAGE on auth without the grant option). So the Preview scripts
+-- rewrite these four calls to the wrappers of the schema preview_support (section 1b); the
+-- migration role never touches the schema auth.
 revoke all on all tables in schema public from app_preview_migrator;
 revoke all on all sequences in schema public from app_preview_migrator;
 revoke all on all functions in schema public from app_preview_migrator;
@@ -110,6 +137,22 @@ alter role app_preview set idle_in_transaction_session_timeout = '30s';
 -- Lets the project owner manage the role (as in the Supabase guide for custom Drizzle roles)
 grant app_preview to postgres;
 
+-- pgvector lives in the schema public in the real project (the type public.vector, its
+-- operators). To find it, public must be on the search_path of both roles. That opens no
+-- data: neither role has a table privilege in public, and the tables of public_preview come
+-- first on the path. Without an extension in public the path stays as set above.
+do $$
+declare
+  path text := 'public_preview, extensions';
+begin
+  if exists (select 1 from pg_extension e where e.extnamespace = 'public'::regnamespace) then
+    path := path || ', public';
+  end if;
+  execute format('alter role app_preview_migrator set search_path = %s', path);
+  execute format('alter role app_preview set search_path = %s', path);
+end
+$$;
+
 -- Passwords (do this by hand, NOT in a file). Generate two long random passwords in a
 -- password manager and run in the SQL editor only:
 --   alter role app_preview          with password '<long random password>';
@@ -120,6 +163,10 @@ grant app_preview to postgres;
 --   * GitHub (environment Preview): secret PREVIEW_DB_URL with the user
 --     app_preview_migrator.<project-ref> on the session pooler (port 5432).
 -- Never commit them.
+
+-- The wrappers (section 1b) for everybody who needs them
+grant usage on schema preview_support to postgres, anon, authenticated, service_role, app_preview_migrator, app_preview;
+grant execute on all functions in schema preview_support to postgres, anon, authenticated, service_role, app_preview_migrator, app_preview;
 
 -- 4. Rights of the objects the migration role creates in public_preview.
 --    The migration role owns them; the API roles and the app role get access
