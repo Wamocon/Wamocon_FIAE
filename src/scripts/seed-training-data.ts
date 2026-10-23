@@ -448,9 +448,17 @@ async function main() {
         console.log('Inserting ' + componentsData.length + ' training components...\n');
 
         for (const c of componentsData) {
+            // phase: 1 or 2, NULL = integrative (whole training); kind marks the
+            // integrative components. Same rule as the catalog migration
+            // 20261020000700 / 20261020001300 uses for the existing rows.
+            const phase = c.trainingYear === 1 || c.trainingYear === 2 ? c.trainingYear : null;
+            const kind = c.trainingYear === 3 ? 'integrativ' : 'pflicht';
+
             await db.insert(trainingComponents).values({
                 ...c,
                 trainingCatalogId: TRAINING_CATALOG_IDS.FIAE,
+                phase,
+                kind,
             });
             let phaseStr = '';
             if (c.trainingYear === 1) phaseStr = ' (1-18 Mo)';
@@ -493,8 +501,11 @@ async function main() {
             }
         }
 
-        // Get final counts
-        const finalUseCases = await db.select().from(trainingUseCases);
+        // Get final counts (FIAE catalog only)
+        const finalUseCases = await db
+            .select({ id: trainingUseCases.id })
+            .from(trainingUseCases)
+            .where(inArray(trainingUseCases.componentId, allComponents.map((comp) => comp.id)));
 
         console.log('\n========================================');
         console.log('SEED COMPLETE');
@@ -505,6 +516,7 @@ async function main() {
 
     } catch (err) {
         console.error('Error:', err);
+        process.exit(1);
     }
 
     process.exit(0);
