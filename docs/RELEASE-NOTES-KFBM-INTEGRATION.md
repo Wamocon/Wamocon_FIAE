@@ -50,6 +50,29 @@ angewendet, nur auf einer lokalen Wegwerf-Datenbank geprüft (siehe unten).
   `docs/production-schema-migration-verification.sql`.
 - Projekt-Onepager, Zeitplan und HAI-Vorgehen.
 
+## Katalogfilter in App und API (Paket 3.1)
+
+- Zentraler Helfer `src/lib/catalog/scope.ts`: Der Katalogbereich eines Nutzers
+  kommt aus Sitzung und Datenbank (Azubi: Einschreibung, sonst FIAE; Trainer,
+  Admin: in `organization_catalogs` aktivierte Kataloge; SUPER_ADMIN: alle). Die
+  aktive Auswahl über Header `x-catalog` oder Query `catalog` wird dagegen
+  geprüft, ein fremder oder unbekannter Wert ergibt 403. Bei einem Fehler gibt es
+  keinen Zugriff (503 bzw. 403), nie alle Kataloge.
+- Gefiltert sind die Routen auf Kurse, Enabler, Use Cases, Quizze (auch Global),
+  Lernfelder, die Trainer- und Azubi-Listen sowie der lesende HAI-Datenkontext.
+  Schreibzugriffe prüfen, dass das Elternobjekt im erlaubten Katalog liegt, neue
+  Datensätze erhalten den aktiven Katalog. Fremde Datensätze antworten mit 404.
+- Öffentliche Listen `/api/training-components` und `/api/training-use-cases`:
+  Parameter `catalog` (Code, Standard FIAE), nur aktive Kataloge, Katalog im
+  URL-Cache-Schlüssel, `X-Catalog` und `Vary` in den Antwortköpfen.
+- Cache-Schlüssel der authentifizierten Listen enthalten den Katalogbereich.
+- Die Lernfeld-Routen lesen und schreiben jetzt `training_catalog_learning_fields`
+  (Antwortform unverändert, `label` ist der Code). Ohne Sitzung gilt der aktive
+  öffentliche Katalog; die Oberfläche sendet das Token jetzt mit.
+- Noch nicht gefiltert (Azubi-eigene Daten oder späteres Paket): Aktivitätsnachweise,
+  Arbeitszeugnis-Routen, Trainer-Azubi-Übersichten, Feedback, Breadcrumb,
+  HAI-Chat, HAI-Index und HAI-Sync.
+
 ## Noch nicht Bestandteil dieser Änderung
 
 - Migration anwenden oder Schema in Produktion ausrollen.
