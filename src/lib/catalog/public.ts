@@ -6,14 +6,18 @@
  * `Vary`, so shared caches never mix catalogs.
  */
 
+import { NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
 import db from '@/db';
 import { trainingCatalogs } from '@/db/migrations/schemas/schema';
 import { withDbRetry } from '@/lib/db-retry';
+import { getSessionUser } from '@/lib/auth/session';
 import {
   CATALOG_QUERY_PARAM,
   FIAE_CATALOG_ID,
+  requireCatalogScope,
   type CatalogRequestLike,
+  type CatalogScope,
 } from '@/lib/catalog/scope';
 
 export type PublicCatalog = { id: string; code: string };
@@ -56,6 +60,42 @@ export async function resolvePublicCatalog(
   const row = rows[0];
   if (!row || row.isActive !== true) return null;
   return { id: String(row.id), code: String(row.code) };
+}
+
+/**
+ * Scope for read routes that have no identity parameter. With a valid session
+ * (Bearer token) the normal session scope applies. Without one, the caller is
+ * anonymous and gets exactly what the public lists give: one active catalog
+ * (`?catalog=CODE`, default FIAE), never an inactive or foreign selection.
+ */
+export async function requireOptionalSessionScope(
+  request: CatalogRequestLike & {
+    headers: { get(name: string): string | null };
+  }
+): Promise<CatalogScope | NextResponse> {
+  const session = await getSessionUser(request);
+  if (session) return requireCatalogScope(session, request);
+
+  try {
+    const catalog = await resolvePublicCatalog(request);
+    if (!catalog) {
+      return NextResponse.json(
+        { error: 'Training catalog not found' },
+        { status: 404 }
+      );
+    }
+    return {
+      allowedCatalogIds: [catalog.id],
+      activeCatalogId: catalog.id,
+      selected: true,
+    };
+  } catch (err) {
+    console.error('[catalog-scope] public catalog lookup failed:', err);
+    return NextResponse.json(
+      { error: 'Catalog scope unavailable' },
+      { status: 503 }
+    );
+  }
 }
 
 /** Headers of a public list response for one catalog. */

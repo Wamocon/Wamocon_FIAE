@@ -3,7 +3,11 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
-import { fakeSession, mockSession } from '../../../helpers/mockNext';
+import {
+  fakeSession,
+  mockCatalogScope,
+  mockSession,
+} from '../../../helpers/mockNext';
 
 function makeGet(url: string) {
   return { url } as any;
@@ -16,6 +20,7 @@ async function importHandlerWithDb(
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
   mockSession(session);
+  mockCatalogScope();
   const mod = await import('@/app/api/trainer/dashboard/route');
   return mod.GET as (req: any) => Promise<Response>;
 }

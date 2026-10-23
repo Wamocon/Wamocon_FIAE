@@ -3,7 +3,11 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
-import { fakeSession, mockSession } from '../../../helpers/mockNext';
+import {
+  fakeSession,
+  mockCatalogScope,
+  mockSession,
+} from '../../../helpers/mockNext';
 
 function makeGet(url: string) {
   return { url } as any;
@@ -31,6 +35,7 @@ async function importHandler(
     getTrainerScope: jest.fn().mockResolvedValue(trainerScope),
   }));
   mockSession(session);
+  mockCatalogScope();
   const mod = await import('@/app/api/trainer/profile/route');
   return mod.GET as (req: any) => Promise<Response>;
 }

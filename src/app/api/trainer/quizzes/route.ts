@@ -15,18 +15,28 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+  catalogCacheKey,
+  catalogCondition,
+  ensureContentInScope,
+  getContentCatalogId,
+  requireCatalogScope,
+} from '@/lib/catalog/scope';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await requireTrainer(req);
     if (isErrorResponse(session)) return session;
 
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
     const q = searchParams.get('q')?.trim();
     const year = searchParams.get('year');
 
-    const cacheKey = `trainer_quizzes_${trainerId}_${q || ''}_${year || ''}`;
+    const cacheKey = `trainer_quizzes_${trainerId}_${q || ''}_${year || ''}_${catalogCacheKey(scope)}`;
     const cached = await apiCache.getOrFetch(
       cacheKey,
       async () => {
@@ -60,7 +70,11 @@ export async function GET(req: NextRequest) {
               year && year !== 'all'
                 ? eq(courses.year, Number(year))
                 : (sql`true` as any);
-            return and(textFilter, yearFilter);
+            return and(
+              textFilter,
+              yearFilter,
+              catalogCondition(quizzes.trainingCatalogId, scope)
+            );
           })
           .groupBy(
             quizzes.id,
@@ -146,9 +160,27 @@ export async function POST(req: NextRequest) {
 
     const qt = quiz_type === 'mini' ? 'LESSON' : 'GLOBAL';
 
+    // A new quiz belongs to the active catalog; a mini quiz follows the
+    // catalog of its enabler, which must lie inside the caller's catalogs.
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+    let quizCatalogId = scope.activeCatalogId;
+    if (qt === 'LESSON' && enabler_id) {
+      const denied = await ensureContentInScope(
+        scope,
+        'enabler',
+        String(enabler_id)
+      );
+      if (denied) return denied;
+      quizCatalogId =
+        (await getContentCatalogId('enabler', String(enabler_id))) ??
+        quizCatalogId;
+    }
+
     const [qz] = await db
       .insert(quizzes)
       .values({
+        trainingCatalogId: quizCatalogId,
         title,
         quizType: qt,
         createdById: trainer_id,

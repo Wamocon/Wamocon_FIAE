@@ -1,13 +1,21 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { lernfelderSchema, useCases } from '@/db/migrations/schemas/schema';
-import { eq, arrayContains } from 'drizzle-orm';
+import {
+  trainingCatalogLearningFields as learningFields,
+  useCases,
+} from '@/db/migrations/schemas/schema';
+import { and, eq, arrayContains } from 'drizzle-orm';
 import { verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+  allowedCatalogCondition,
+  requireCatalogScope,
+} from '@/lib/catalog/scope';
+import { legacyLearningFieldSelect } from '@/lib/catalog/learning-fields';
 
 /**
  * GET /api/trainer/lernfelder/[id]
- * Get details of a specific Lernfeld.
+ * Get details of a specific Lernfeld (only inside the caller's catalogs).
  */
 export async function GET(
   _req: NextRequest,
@@ -17,11 +25,19 @@ export async function GET(
     const session = await requireTrainer(_req);
     if (isErrorResponse(session)) return session;
 
+    const scope = await requireCatalogScope(session, _req);
+    if (isErrorResponse(scope)) return scope;
+
     const { id } = await params;
     const [row] = await db
-      .select()
-      .from(lernfelderSchema)
-      .where(eq(lernfelderSchema.id, id));
+      .select(legacyLearningFieldSelect)
+      .from(learningFields)
+      .where(
+        and(
+          eq(learningFields.id, id),
+          allowedCatalogCondition(learningFields.trainingCatalogId, scope)
+        )
+      );
     if (!row) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -41,7 +57,12 @@ export async function GET(
         lernfelder: useCases.lernfelder,
       })
       .from(useCases)
-      .where(arrayContains(useCases.lernfelder, [row.label]));
+      .where(
+        and(
+          arrayContains(useCases.lernfelder, [row.label]),
+          eq(useCases.trainingCatalogId, row.trainingCatalogId)
+        )
+      );
 
     return NextResponse.json({
       lernfeld: row,
@@ -58,7 +79,7 @@ export async function GET(
 
 /**
  * PATCH /api/trainer/lernfelder/[id]
- * Update a Lernfeld.
+ * Update a Lernfeld (only inside the caller's catalogs).
  */
 export async function PATCH(
   req: NextRequest,
@@ -76,20 +97,31 @@ export async function PATCH(
         { status: 403 }
       );
     }
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+
     const body = await req.json();
     const { title, description, label } = body; // All optional
 
     const [updated] = await db
-      .update(lernfelderSchema)
+      .update(learningFields)
       .set({
         ...(title !== undefined ? { title } : {}),
         ...(description !== undefined ? { description } : {}),
-        ...(label !== undefined ? { label } : {}),
+        ...(label !== undefined ? { code: label } : {}),
         updatedAt: new Date(),
       })
-      .where(eq(lernfelderSchema.id, id))
-      .returning();
+      .where(
+        and(
+          eq(learningFields.id, id),
+          allowedCatalogCondition(learningFields.trainingCatalogId, scope)
+        )
+      )
+      .returning(legacyLearningFieldSelect);
 
+    if (!updated) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     return NextResponse.json({ lernfeld: updated });
   } catch (e) {
     console.error('Update lernfeld error', e);
@@ -102,7 +134,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/trainer/lernfelder/[id]
- * Delete a Lernfeld.
+ * Delete a Lernfeld (only inside the caller's catalogs).
  */
 export async function DELETE(
   req: NextRequest,
@@ -120,7 +152,17 @@ export async function DELETE(
         { status: 403 }
       );
     }
-    await db.delete(lernfelderSchema).where(eq(lernfelderSchema.id, id));
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+
+    await db
+      .delete(learningFields)
+      .where(
+        and(
+          eq(learningFields.id, id),
+          allowedCatalogCondition(learningFields.trainingCatalogId, scope)
+        )
+      );
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error('Delete lernfeld error', e);

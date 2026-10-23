@@ -11,47 +11,52 @@ import {
 // (?catalog=CODE, default FIAE). The catalog is part of the URL, so shared
 // caches keep the catalogs apart (see publicCatalogHeaders).
 export async function GET(req: Request) {
-    try {
-        const catalog = await resolvePublicCatalog(req);
-        if (!catalog) {
-            return NextResponse.json(
-                { error: 'Training catalog not found' },
-                { status: 404, headers: { 'Cache-Control': 'no-store' } }
-            );
-        }
-
-        const components = await db
-            .select()
-            .from(trainingComponents)
-            .where(eq(trainingComponents.trainingCatalogId, catalog.id))
-            .orderBy(trainingComponents.orderIndex);
-
-        // Transform to camelCase for frontend
-        const formattedComponents = components.map(c => ({
-            id: c.id,
-            code: c.code,
-            title: c.title,
-            description: c.description,
-            totalWeeks: c.totalWeeks,
-            totalHours: c.totalHours,
-            trainingYear: c.trainingYear,
-            orderIndex: c.orderIndex,
-            createdAt: c.createdAt,
-        }));
-
-        return NextResponse.json({ components: formattedComponents }, {
-            headers: publicCatalogHeaders(
-                catalog,
-                'public, s-maxage=300, stale-while-revalidate=59'
-            ),
-        });
-    } catch (error: any) {
-        // If table doesn't exist yet, return empty components
-        if (error?.cause?.code === '42P01') {
-            console.warn('Table training_components does not exist yet - returning empty components');
-            return NextResponse.json({ components: [] });
-        }
-        console.error('Error in training-components API:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    const catalog = await resolvePublicCatalog(req);
+    if (!catalog) {
+      return NextResponse.json(
+        { error: 'Training catalog not found' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } }
+      );
     }
+
+    const components = await db
+      .select()
+      .from(trainingComponents)
+      .where(eq(trainingComponents.trainingCatalogId, catalog.id))
+      .orderBy(trainingComponents.orderIndex);
+
+    // Transform to camelCase for frontend
+    const formattedComponents = components.map(c => ({
+      id: c.id,
+      code: c.code,
+      title: c.title,
+      description: c.description,
+      totalWeeks: c.totalWeeks,
+      totalHours: c.totalHours,
+      trainingYear: c.trainingYear,
+      orderIndex: c.orderIndex,
+      createdAt: c.createdAt,
+    }));
+
+    return NextResponse.json(
+      { components: formattedComponents },
+      {
+        headers: publicCatalogHeaders(
+          catalog,
+          'public, s-maxage=300, stale-while-revalidate=59'
+        ),
+      }
+    );
+  } catch (error: any) {
+    // If table doesn't exist yet, return empty components
+    if (error?.cause?.code === '42P01') {
+      console.warn(
+        'Table training_components does not exist yet - returning empty components'
+      );
+      return NextResponse.json({ components: [] });
+    }
+    console.error('Error in training-components API:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

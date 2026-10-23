@@ -12,11 +12,15 @@ import {
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await requireTrainer(req);
     if (isErrorResponse(session)) return session;
+
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
 
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
@@ -42,12 +46,26 @@ export async function GET(req: NextRequest) {
           eq(courseMembers.role, 'TRAINER')
         )
       );
-    const courseIds = Array.from(
+    const candidateCourseIds = Array.from(
       new Set([
         ...created.map(c => String(c.id)),
         ...member.map(m => String(m.courseId)),
       ])
     );
+    // Only courses of the caller's catalogs
+    const courseIds = candidateCourseIds.length
+      ? (
+          await db
+            .select({ id: courses.id })
+            .from(courses)
+            .where(
+              and(
+                inArray(courses.id, candidateCourseIds as any),
+                catalogCondition(courses.trainingCatalogId, scope)
+              )
+            )
+        ).map(c => String(c.id))
+      : [];
     if (!courseIds.length)
       return NextResponse.json({
         enablerSubmissions: [],
@@ -208,8 +226,12 @@ export async function GET(req: NextRequest) {
             .filter(p => p.organizationId === trainerOrgId)
             .map(p => String(p.id))
         );
-        enablerRows = enablerRows.filter(r => sameOrgTrainees.has(String(r.traineeId)));
-        useCaseRows = useCaseRows.filter(r => sameOrgTrainees.has(String(r.traineeId)));
+        enablerRows = enablerRows.filter(r =>
+          sameOrgTrainees.has(String(r.traineeId))
+        );
+        useCaseRows = useCaseRows.filter(r =>
+          sameOrgTrainees.has(String(r.traineeId))
+        );
       }
     }
 

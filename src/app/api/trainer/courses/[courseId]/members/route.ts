@@ -11,6 +11,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
+import { requireContentScope } from '@/lib/catalog/scope';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -40,6 +41,8 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -89,6 +92,8 @@ export async function POST(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -253,6 +258,8 @@ export async function DELETE(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const trainerId = session.id;

@@ -10,14 +10,18 @@ import {
   activityLog,
   enablers,
   useCases,
-  lernfelderSchema,
+  trainingCatalogLearningFields,
 } from '@/db/migrations/schemas/schema';
 import { getTrainerScope } from '@/lib/trainer-scope';
+import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await requireTrainer(req);
     if (isErrorResponse(session)) return session;
+
+    const catalogScope = await requireCatalogScope(session, req);
+    if (isErrorResponse(catalogScope)) return catalogScope;
 
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
@@ -45,13 +49,19 @@ export async function GET(req: NextRequest) {
     const [{ c: activeCourses = 0 } = { c: 0 }] = await db
       .select({ c: count() })
       .from(courses)
-      .where(and(eq(courses.createdById, trainerId), eq(courses.isActive, true)));
+      .where(
+        and(
+          eq(courses.createdById, trainerId),
+          eq(courses.isActive, true),
+          catalogCondition(courses.trainingCatalogId, catalogScope)
+        )
+      );
 
     // Total courses created by this trainer
     const [{ c: totalCourses = 0 } = { c: 0 }] = await db
       .select({ c: count() })
       .from(courses)
-      .where(eq(courses.createdById, trainerId));
+      .where(and(eq(courses.createdById, trainerId), catalogCondition(courses.trainingCatalogId, catalogScope)));
 
     // If trainer has no courses, count all courses as fallback
     let displayCourses = Number(totalCourses);
@@ -59,13 +69,14 @@ export async function GET(req: NextRequest) {
     if (displayCourses === 0) {
       const [{ c: allCourses = 0 } = { c: 0 }] = await db
         .select({ c: count() })
-        .from(courses);
+        .from(courses)
+        .where(catalogCondition(courses.trainingCatalogId, catalogScope));
       displayCourses = Number(allCourses);
 
       const [{ c: allActiveCourses = 0 } = { c: 0 }] = await db
         .select({ c: count() })
         .from(courses)
-        .where(eq(courses.isActive, true));
+        .where(and(eq(courses.isActive, true), catalogCondition(courses.trainingCatalogId, catalogScope)));
       displayActiveCourses = Number(allActiveCourses);
     }
 
@@ -74,12 +85,14 @@ export async function GET(req: NextRequest) {
       .select({ c: count() })
       .from(enablers)
       .innerJoin(courses, eq(enablers.courseId, courses.id))
-      .where(eq(courses.createdById, trainerId));
+      .where(and(eq(courses.createdById, trainerId), catalogCondition(courses.trainingCatalogId, catalogScope)));
 
     if (Number(totalEnablers) === 0) {
       const [{ c: allEnablers = 0 } = { c: 0 }] = await db
         .select({ c: count() })
-        .from(enablers);
+        .from(enablers)
+        .innerJoin(courses, eq(enablers.courseId, courses.id))
+        .where(catalogCondition(courses.trainingCatalogId, catalogScope));
       totalEnablers = allEnablers;
     }
 
@@ -88,19 +101,27 @@ export async function GET(req: NextRequest) {
       .select({ c: count() })
       .from(useCases)
       .innerJoin(courses, eq(useCases.courseId, courses.id))
-      .where(eq(courses.createdById, trainerId));
+      .where(and(eq(courses.createdById, trainerId), catalogCondition(courses.trainingCatalogId, catalogScope)));
 
     if (Number(totalUseCases) === 0) {
       const [{ c: allUseCases = 0 } = { c: 0 }] = await db
         .select({ c: count() })
-        .from(useCases);
+        .from(useCases)
+        .innerJoin(courses, eq(useCases.courseId, courses.id))
+        .where(catalogCondition(courses.trainingCatalogId, catalogScope));
       totalUseCases = allUseCases;
     }
 
-    // Total Lernfelder (global count)
+    // Total Lernfelder of the caller's catalogs
     const [{ c: totalLernfelder = 0 } = { c: 0 }] = await db
       .select({ c: count() })
-      .from(lernfelderSchema);
+      .from(trainingCatalogLearningFields)
+      .where(
+        catalogCondition(
+          trainingCatalogLearningFields.trainingCatalogId,
+          catalogScope
+        )
+      );
 
     // Pending reviews
     let pendingReviews = 0;

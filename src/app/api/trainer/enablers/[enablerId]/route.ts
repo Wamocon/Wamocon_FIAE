@@ -9,6 +9,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { requireContentScope } from '@/lib/catalog/scope';
 
 export async function GET(
   _req: NextRequest,
@@ -19,6 +20,8 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { enablerId } = await params;
+    const catalogScope = await requireContentScope(session, _req, 'enabler', enablerId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const [row] = await db
       .select()
       .from(enablers)
@@ -43,6 +46,8 @@ export async function PATCH(
     if (isErrorResponse(session)) return session;
 
     const { enablerId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'enabler', enablerId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -156,6 +161,8 @@ export async function DELETE(
     if (isErrorResponse(session)) return session;
 
     const { enablerId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'enabler', enablerId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 

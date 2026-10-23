@@ -207,3 +207,35 @@ export function mockTraineeAccess(
     };
   });
 }
+
+export const FIAE_CATALOG_ID = '00000000-0000-4000-8000-000000000001';
+
+/**
+ * Replace the catalog scope lookups of '@/lib/catalog/scope' so a route runs as
+ * a user of one catalog (default: FIAE, the only catalog before the KfBM
+ * integration) without catalog tables in the database mock. Pure helpers
+ * (catalogCondition, ...) stay real. Call it before importing the route.
+ */
+export function mockCatalogScope(
+  scope = {
+    allowedCatalogIds: [FIAE_CATALOG_ID],
+    activeCatalogId: FIAE_CATALOG_ID,
+    selected: false,
+  }
+) {
+  jest.doMock('@/lib/catalog/scope', () => {
+    const actual = jest.requireActual('@/lib/catalog/scope') as any;
+    return {
+      ...actual,
+      requireCatalogScope: async () => scope,
+      requireCatalogScopeForUser: async () => scope,
+      requireContentScope: async () => scope,
+      ensureContentInScope: async () => null,
+      getContentCatalogId: async () => scope.activeCatalogId,
+    };
+  });
+  jest.doMock('@/lib/catalog/public', () => {
+    const actual = jest.requireActual('@/lib/catalog/public') as any;
+    return { ...actual, requireOptionalSessionScope: async () => scope };
+  });
+}

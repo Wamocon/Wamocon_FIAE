@@ -327,6 +327,28 @@ export function catalogCondition(column: PgColumn, scope: CatalogScope): SQL {
   ) as SQL;
 }
 
+/**
+ * Condition limiting a column to everything the caller may access, ignoring a
+ * narrowing selection. Use it for writes and for lookups of a single record.
+ */
+export function allowedCatalogCondition(
+  column: PgColumn,
+  scope: CatalogScope
+): SQL {
+  const ids = scope.allowedCatalogIds;
+  return (
+    ids.length === 1 ? eq(column, ids[0] as any) : inArray(column, ids as any[])
+  ) as SQL;
+}
+
+/**
+ * Cache key part for the read scope, so cached data of one catalog is never
+ * served to a caller with another catalog (use in apiCache keys).
+ */
+export function catalogCacheKey(scope: CatalogScope): string {
+  return [...readCatalogIds(scope)].sort().join('+');
+}
+
 /** Combine an optional condition with the catalog condition. */
 export function withCatalog(
   column: PgColumn,
@@ -377,6 +399,23 @@ export async function getContentCatalogId(
       .limit(1)
   );
   return row?.trainingCatalogId ? String(row.trainingCatalogId) : null;
+}
+
+/**
+ * Scope of the caller plus the check that one content record lies inside it.
+ * Returns the scope, or a ready-made error response (403 for a rejected
+ * catalog selection, 404 for a record outside the scope, 503 fail closed).
+ */
+export async function requireContentScope(
+  subject: CatalogSubject,
+  request: CatalogRequestLike | null | undefined,
+  kind: CatalogContentKind,
+  id: string
+): Promise<CatalogScope | NextResponse> {
+  const scope = await requireCatalogScope(subject, request);
+  if (scope instanceof Response) return scope;
+  const denied = await ensureContentInScope(scope, kind, id);
+  return denied ?? scope;
 }
 
 /**
