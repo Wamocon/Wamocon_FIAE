@@ -73,7 +73,6 @@ interface AuthContextType {
     avatar_url?: string | null;
     birth_date?: string | null;
     training_start_date?: string | null;
-    trainer_auth_id?: string | null;
   }) => Promise<void>;
   refreshProfile: () => Promise<void>;
   changePassword: (newPassword: string) => Promise<void>;
@@ -832,20 +831,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       avatar_url?: string | null;
       birth_date?: string | null;
       training_start_date?: string | null;
-      trainer_auth_id?: string | null;
     }) => {
       if (!profile) return;
-      await supabase
+      // Only the fields that were passed are written, a missing field keeps its
+      // value. The database accepts exactly these columns from the browser
+      // (column privileges 20261023200000 and trigger 20261023300000).
+      const row: Record<string, string | null> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (updates.full_name !== undefined) row.full_name = updates.full_name;
+      if (updates.avatar_url !== undefined) row.avatar_url = updates.avatar_url;
+      if (updates.birth_date !== undefined) row.birth_date = updates.birth_date;
+      if (updates.training_start_date !== undefined) {
+        row.start_of_training_date = updates.training_start_date;
+      }
+      const { error } = await supabase
         .from('profiles')
-        .update({
-          full_name: updates.full_name,
-          avatar_url: updates.avatar_url ?? null,
-          birth_date: updates.birth_date ?? null,
-          start_of_training_date: updates.training_start_date ?? null,
-          assigned_trainer_id: updates.trainer_auth_id ?? null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(row)
         .eq('id', profile.id);
+      if (error) throw error;
       if (user) await loadProfile(user.id);
     },
     [profile, user]
