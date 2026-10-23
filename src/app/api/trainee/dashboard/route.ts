@@ -24,6 +24,7 @@ import {
   requireCatalogScopeForUser,
   type CatalogScope,
 } from '@/lib/catalog/scope';
+import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 import {
   getPhaseDeadline,
   getPhaseMonthRange,
@@ -452,8 +453,9 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
 
     const deadlines: any[] = [];
 
-    // Module phase deadlines: standard plans use 18+18 months, intensive plans
-    // use 12+12 months. Integrative phase 3 runs across the whole plan.
+    // Module phase deadlines: the phase plan of the occupation decides (FIAE
+    // 18+18 months, intensive plans 12+12, KfBM 15+21). Integrative phase 3
+    // runs across the whole plan.
     try {
       const [traineeProfile] = await db
         .select({
@@ -469,7 +471,17 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
         const durationYears = normalizeDurationYears(
           traineeProfile?.ausbildungDurationYears
         );
-        const currentStage = getTrainingPhase(startDate, durationYears);
+        const phasePlan = await loadPhasePlan(
+          scope.activeCatalogId,
+          durationYears
+        );
+        const phaseOneMonths = phasePlan.phaseMonths[0];
+        const currentStage = getTrainingPhase(
+          startDate,
+          durationYears,
+          new Date(),
+          phaseOneMonths
+        );
         const stageYears = Array.from(
           new Set(
             memberCourses
@@ -482,7 +494,11 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           if (stage === 3) {
             return `Integrative Fertigkeiten (1. bis ${durationYears * 12}. Ausbildungsmonat)`;
           }
-          const range = getPhaseMonthRange(durationYears, stage as TrainingPhase);
+          const range = getPhaseMonthRange(
+            durationYears,
+            stage as TrainingPhase,
+            phaseOneMonths
+          );
           return `Phase ${stage} (${range.startMonth}. bis ${range.endMonth}. Ausbildungsmonat)`;
         };
 
@@ -492,7 +508,8 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
           const dueDate = getPhaseDeadline(
             startDate,
             durationYears,
-            year as ContentStage
+            year as ContentStage,
+            phaseOneMonths
           );
           deadlines.push({
             label: getPhaseLabel(year as ContentStage),

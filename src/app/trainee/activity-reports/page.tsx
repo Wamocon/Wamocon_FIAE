@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
@@ -118,11 +119,14 @@ export default function TraineeActivityReportsPage() {
   const reportsUrl = profile?.id
     ? `/api/activity-reports?userId=${profile.id}&limit=500`
     : null;
+  // The lists belong to the occupation of the user (?catalog= only for an
+  // occupation other than FIAE, so FIAE requests stay unchanged)
+  const { ready: catalogReady, withCatalog } = useRequestCatalog(!!profile?.id);
   const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>(
-    '/api/training-components'
+    catalogReady ? withCatalog('/api/training-components') : null
   );
   const { data: ucData } = useApiQuery<{ useCases: TrainingUseCase[] }>(
-    '/api/training-use-cases'
+    catalogReady ? withCatalog('/api/training-use-cases') : null
   );
   const {
     data: reportData,
