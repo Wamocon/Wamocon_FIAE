@@ -1,3 +1,4 @@
+import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
@@ -182,9 +183,7 @@ export async function DELETE(
       const supabaseUrl =
         process.env.SUPABASE_URL_INTERNAL ||
         process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey =
-        process.env.SUPABASE_SERVICE_ROLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const supabaseKey = getSupabaseSecretKey() || getSupabasePublicKey();
 
       if (supabaseUrl && supabaseKey && doc.storageUrl) {
         const supabase = createClient(supabaseUrl, supabaseKey);

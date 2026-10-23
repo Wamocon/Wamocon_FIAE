@@ -1,3 +1,4 @@
+import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
@@ -12,7 +13,7 @@ import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const key = getSupabaseSecretKey() || '';
   return createClient(url, key, { auth: { persistSession: false } });
 }
 

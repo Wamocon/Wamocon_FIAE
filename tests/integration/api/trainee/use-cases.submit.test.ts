@@ -11,8 +11,12 @@ function makePost(url: string, body: any) {
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
-  const mod = await import('@/app/api/trainee/use-cases/[useCaseId]/submit/route');
-  return mod.POST as (req: any, ctx: { params: Promise<{ useCaseId: string }> }) => Promise<Response>;
+  const mod =
+    await import('@/app/api/trainee/use-cases/[useCaseId]/submit/route');
+  return mod.POST as (
+    req: any,
+    ctx: { params: Promise<{ useCaseId: string }> }
+  ) => Promise<Response>;
 }
 
 const useCaseRow = { id: 'u1', courseId: 'c1', isActive: true, title: 'UC' };
@@ -41,9 +45,13 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
       makePost('http://localhost/api/trainee/use-cases/u1/submit', {
         traineeId: 't1',
         submissionText: 'Hello',
-        links: [{ url: ' https://a ' }, { url: '' }, { url: 'https://b', description: 'B' }],
+        links: [
+          { url: ' https://a ' },
+          { url: '' },
+          { url: 'https://b', description: 'B' },
+        ],
       }),
-      { params: Promise.resolve({ useCaseId: 'u1' }) },
+      { params: Promise.resolve({ useCaseId: 'u1' }) }
     );
     expect((res as any).status).toBe(200);
     expect(await (res as any).json()).toEqual({ ok: true, submissionId: 's1' });
@@ -68,7 +76,13 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
         useCases: [useCaseRow],
         courseMembers: [memberRow],
         useCaseSubmissions: [
-          { id: 's1', traineeId: 't1', useCaseId: 'u1', attemptNumber: 1, submittedAt: '2024-01-01T00:00:00.000Z' },
+          {
+            id: 's1',
+            traineeId: 't1',
+            useCaseId: 'u1',
+            attemptNumber: 1,
+            submittedAt: '2024-01-01T00:00:00.000Z',
+          },
         ],
       },
       { useCaseSubmissions: [{ id: 's1' }] }
@@ -81,7 +95,7 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
         submissionText: 'Updated',
         links: [{ url: 'https://c' }],
       }),
-      { params: Promise.resolve({ useCaseId: 'u1' }) },
+      { params: Promise.resolve({ useCaseId: 'u1' }) }
     );
     expect((res as any).status).toBe(200);
     expect(await (res as any).json()).toEqual({ ok: true, submissionId: 's1' });
@@ -100,8 +114,10 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
     const { db } = createTableDb();
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/use-cases/u1/submit', { submissionText: 'X' }),
-      { params: Promise.resolve({ useCaseId: 'u1' }) },
+      makePost('http://localhost/api/trainee/use-cases/u1/submit', {
+        submissionText: 'X',
+      }),
+      { params: Promise.resolve({ useCaseId: 'u1' }) }
     );
     const body = await (res as any).json();
     expect((res as any).status).toBe(400);
@@ -116,8 +132,11 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
     });
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/use-cases/u1/submit', { traineeId: 't1', submissionText: 'X' }),
-      { params: Promise.resolve({ useCaseId: 'u1' }) },
+      makePost('http://localhost/api/trainee/use-cases/u1/submit', {
+        traineeId: 't1',
+        submissionText: 'X',
+      }),
+      { params: Promise.resolve({ useCaseId: 'u1' }) }
     );
     const body = await (res as any).json();
     expect((res as any).status).toBe(403);
@@ -128,8 +147,11 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
     const { db } = createTableDb({ profiles: [orgRow], useCases: [] });
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/use-cases/u1/submit', { traineeId: 't1', submissionText: 'X' }),
-      { params: Promise.resolve({ useCaseId: 'u1' }) },
+      makePost('http://localhost/api/trainee/use-cases/u1/submit', {
+        traineeId: 't1',
+        submissionText: 'X',
+      }),
+      { params: Promise.resolve({ useCaseId: 'u1' }) }
     );
     const body = await (res as any).json();
     expect((res as any).status).toBe(404);

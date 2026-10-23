@@ -1,3 +1,4 @@
+import { getSupabasePublicKey } from '@/lib/env';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Lazy initialization to avoid build-time errors when env vars are not set
@@ -11,10 +12,10 @@ function getSupabaseClient(): SupabaseClient {
   // Prefer an internal URL for server-side calls (inside Docker), fallback to public URL for browser.
   const isServer = typeof window === 'undefined';
   const supabaseUrl = (isServer ? process.env.SUPABASE_URL_INTERNAL : undefined) || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseAnonKey = getSupabasePublicKey();
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase URL and Anon Key are required');
+    throw new Error('Supabase URL and publishable (anon) key are required');
   }
 
   _supabase = createClient(supabaseUrl, supabaseAnonKey);

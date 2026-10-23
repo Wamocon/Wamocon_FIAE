@@ -15,6 +15,7 @@
  *   // session.id, session.role, session.organizationId are now trustworthy
  */
 
+import { getSupabasePublicKey } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
@@ -100,7 +101,7 @@ async function verifyAccessToken(
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
     process.env.SUPABASE_URL_INTERNAL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const anonKey = getSupabasePublicKey();
   if (!supabaseUrl || !anonKey) {
     return {
       ok: false,

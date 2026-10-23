@@ -14,11 +14,20 @@ function makePost(url: string, body: any) {
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
-  const mod = await import('@/app/api/trainee/enablers/[enablerId]/quiz/submit/route');
-  return mod.POST as (req: any, ctx: { params: Promise<{ enablerId: string }> }) => Promise<Response>;
+  const mod =
+    await import('@/app/api/trainee/enablers/[enablerId]/quiz/submit/route');
+  return mod.POST as (
+    req: any,
+    ctx: { params: Promise<{ enablerId: string }> }
+  ) => Promise<Response>;
 }
 
-const enablerRow = { id: 'e1', isActive: true, courseId: 'c1', title: 'Enabler 1' };
+const enablerRow = {
+  id: 'e1',
+  isActive: true,
+  courseId: 'c1',
+  title: 'Enabler 1',
+};
 const memberRow = { userId: 't1', courseId: 'c1' };
 const orgRow = { organizationId: 'org1' };
 
@@ -78,7 +87,9 @@ describe('API: POST /api/trainee/enablers/[enablerId]/quiz/submit', () => {
     });
     expect(writes('insert', 'quizSubmissionAnswers')[0]).toHaveLength(3);
     // Feedback correctness matches answers
-    const byQ = new Map<string, any>(body.feedback.map((f: any) => [String(f.questionId), f]));
+    const byQ = new Map<string, any>(
+      body.feedback.map((f: any) => [String(f.questionId), f])
+    );
     expect(byQ.get('q-1')!.correct).toBe(true);
     expect(byQ.get('q-2')!.correct).toBe(true);
     expect(byQ.get('q-3')!.correct).toBe(false);
@@ -93,7 +104,10 @@ describe('API: POST /api/trainee/enablers/[enablerId]/quiz/submit', () => {
     });
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/enablers/e1/quiz/submit', { traineeId: 't1', answers: [{ questionId: 'q', selectedOptionId: 'o' }] }),
+      makePost('http://localhost/api/trainee/enablers/e1/quiz/submit', {
+        traineeId: 't1',
+        answers: [{ questionId: 'q', selectedOptionId: 'o' }],
+      }),
       { params: Promise.resolve({ enablerId: 'e1' }) }
     );
     const body = await (res as any).json();
@@ -109,7 +123,10 @@ describe('API: POST /api/trainee/enablers/[enablerId]/quiz/submit', () => {
     });
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/enablers/e1/quiz/submit', { traineeId: 't1', answers: [{ questionId: 'q', selectedOptionId: 'o' }] }),
+      makePost('http://localhost/api/trainee/enablers/e1/quiz/submit', {
+        traineeId: 't1',
+        answers: [{ questionId: 'q', selectedOptionId: 'o' }],
+      }),
       { params: Promise.resolve({ enablerId: 'e1' }) }
     );
     const body = await (res as any).json();

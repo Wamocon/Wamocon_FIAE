@@ -6,9 +6,15 @@ import userEvent from '@testing-library/user-event';
 // We'll mock supabase client used in AuthContext
 const mockSupabase: any = {
   auth: {
-    getSession: (jest.fn() as any).mockResolvedValue({ data: { session: { user: { id: 'u1', email: 'u1@example.com' } } } }),
-    getUser: (jest.fn() as any).mockResolvedValue({ data: { user: { id: 'u1', email: 'u1@example.com' } } }),
-    onAuthStateChange: (jest.fn() as any).mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } }),
+    getSession: (jest.fn() as any).mockResolvedValue({
+      data: { session: { user: { id: 'u1', email: 'u1@example.com' } } },
+    }),
+    getUser: (jest.fn() as any).mockResolvedValue({
+      data: { user: { id: 'u1', email: 'u1@example.com' } },
+    }),
+    onAuthStateChange: (jest.fn() as any).mockReturnValue({
+      data: { subscription: { unsubscribe: jest.fn() } },
+    }),
     signOut: (jest.fn() as any).mockResolvedValue({}),
     signInWithPassword: jest.fn(),
     signUp: jest.fn(),
@@ -27,14 +33,19 @@ const mockSupabase: any = {
           },
           error: null,
         }),
-        maybeSingle: (jest.fn() as any).mockResolvedValue({ data: { id: 'u1' } }),
+        maybeSingle: (jest.fn() as any).mockResolvedValue({
+          data: { id: 'u1' },
+        }),
       }),
     }),
     update: jest.fn(),
   }),
 };
 
-jest.mock('@/lib/supabase', () => ({ __esModule: true, supabase: mockSupabase }));
+jest.mock('@/lib/supabase', () => ({
+  __esModule: true,
+  supabase: mockSupabase,
+}));
 
 // A non-public path makes AuthProvider load the profile (public paths skip it)
 jest.mock('next/navigation', () => ({
@@ -66,7 +77,9 @@ describe('AuthContext', () => {
         <Consumer />
       </AuthProvider>
     );
-    await waitFor(() => expect(screen.getByTestId('uid').textContent).toBe('u1'));
+    await waitFor(() =>
+      expect(screen.getByTestId('uid').textContent).toBe('u1')
+    );
     // The profile is loaded asynchronously after the session user is set
     await waitFor(() =>
       expect(screen.getByTestId('role').textContent).toBe('trainee')
@@ -80,7 +93,9 @@ describe('AuthContext', () => {
         <Consumer />
       </AuthProvider>
     );
-    await waitFor(() => expect(screen.getByTestId('uid').textContent).toBe('u1'));
+    await waitFor(() =>
+      expect(screen.getByTestId('uid').textContent).toBe('u1')
+    );
     await user.click(screen.getByText('logout'));
     // After signOut, AuthContext sets user/profile to null
     await waitFor(() => expect(screen.getByTestId('uid').textContent).toBe(''));
@@ -88,16 +103,23 @@ describe('AuthContext', () => {
   });
 
   it('signOut clears local state even if the remote signOut fails', async () => {
-    mockSupabase.auth.signOut = ((..._args: any[]) => Promise.reject(new Error('fail'))) as any;
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockSupabase.auth.signOut = ((..._args: any[]) =>
+      Promise.reject(new Error('fail'))) as any;
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
     const user = userEvent.setup();
     render(
       <AuthProvider>
         <Consumer />
       </AuthProvider>
     );
-    await waitFor(() => expect(screen.getByTestId('uid').textContent).toBe('u1'));
-    await expect(user.click(screen.getByText('logout'))).resolves.toBeUndefined();
+    await waitFor(() =>
+      expect(screen.getByTestId('uid').textContent).toBe('u1')
+    );
+    await expect(
+      user.click(screen.getByText('logout'))
+    ).resolves.toBeUndefined();
     // The remote failure is logged, the local session is cleared regardless
     await waitFor(() => expect(screen.getByTestId('uid').textContent).toBe(''));
     expect(consoleError).toHaveBeenCalled();

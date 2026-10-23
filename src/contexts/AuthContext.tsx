@@ -1,5 +1,6 @@
 'use client';
 
+import { getSupabasePublicKey } from '@/lib/env';
 import {
   createContext,
   useCallback,
@@ -607,7 +608,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (sdkResult.error) {
       try {
         const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/token?grant_type=password`;
-        const apikey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+        const apikey = getSupabasePublicKey() as string;
         const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', apikey },

@@ -1,3 +1,4 @@
+import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
@@ -8,7 +9,7 @@ import { mergeProfileReferences } from '@/lib/profile-identity';
 function getAdminClient() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const serviceKey = getSupabaseSecretKey() || '';
   return createClient(url, serviceKey, { auth: { persistSession: false } });
 }
 
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.SUPABASE_URL ||
       process.env.SUPABASE_URL_INTERNAL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const anonKey = getSupabasePublicKey();
     if (!supabaseUrl || !anonKey) {
       return NextResponse.json(
         { error: 'Server misconfigured: missing Supabase URL or anon key' },

@@ -11,11 +11,20 @@ function makePost(url: string, body: any) {
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
-  const mod = await import('@/app/api/trainee/enablers/[enablerId]/submit/route');
-  return mod.POST as (req: any, ctx: { params: Promise<{ enablerId: string }> }) => Promise<Response>;
+  const mod =
+    await import('@/app/api/trainee/enablers/[enablerId]/submit/route');
+  return mod.POST as (
+    req: any,
+    ctx: { params: Promise<{ enablerId: string }> }
+  ) => Promise<Response>;
 }
 
-const enablerRow = { id: 'e1', courseId: 'c1', isActive: true, title: 'Enabler 1' };
+const enablerRow = {
+  id: 'e1',
+  courseId: 'c1',
+  isActive: true,
+  title: 'Enabler 1',
+};
 const orgRow = { organizationId: 'org1' };
 
 describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
@@ -33,13 +42,20 @@ describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
     });
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/enablers/e1/submit', { traineeId: 't1', solutionText: 'Hello' }),
-      { params: Promise.resolve({ enablerId: 'e1' }) },
+      makePost('http://localhost/api/trainee/enablers/e1/submit', {
+        traineeId: 't1',
+        solutionText: 'Hello',
+      }),
+      { params: Promise.resolve({ enablerId: 'e1' }) }
     );
     const body = await (res as any).json();
     expect((res as any).status).toBe(200);
     expect(body).toEqual({
-      submission: { id: 'generated-1', solutionText: 'Hello', status: 'PENDING' },
+      submission: {
+        id: 'generated-1',
+        solutionText: 'Hello',
+        status: 'PENDING',
+      },
     });
     expect(writes('insert', 'enablerSubmissions')[0]).toMatchObject({
       enablerId: 'e1',
@@ -53,8 +69,22 @@ describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
 
   it('updates the latest submission on resubmit and bumps the attempt', async () => {
     const existing = [
-      { id: 'a', enablerId: 'e1', traineeId: 't1', status: 'REJECTED', attemptNumber: 1, submittedAt: '2023-01-01T00:00:00.000Z' },
-      { id: 'b', enablerId: 'e1', traineeId: 't1', status: 'REJECTED', attemptNumber: 2, submittedAt: '2024-01-01T00:00:00.000Z' },
+      {
+        id: 'a',
+        enablerId: 'e1',
+        traineeId: 't1',
+        status: 'REJECTED',
+        attemptNumber: 1,
+        submittedAt: '2023-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'b',
+        enablerId: 'e1',
+        traineeId: 't1',
+        status: 'REJECTED',
+        attemptNumber: 2,
+        submittedAt: '2024-01-01T00:00:00.000Z',
+      },
     ];
     const { db, writes } = createTableDb(
       {
@@ -63,16 +93,27 @@ describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
         courseMembers: [{ userId: 't1', courseId: 'c1' }],
         enablerSubmissions: existing,
       },
-      { enablerSubmissions: [{ id: 'b', solutionText: 'Updated', status: 'PENDING' }] }
+      {
+        enablerSubmissions: [
+          { id: 'b', solutionText: 'Updated', status: 'PENDING' },
+        ],
+      }
     );
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/enablers/e1/submit', { traineeId: 't1', solutionText: 'Updated' }),
-      { params: Promise.resolve({ enablerId: 'e1' }) },
+      makePost('http://localhost/api/trainee/enablers/e1/submit', {
+        traineeId: 't1',
+        solutionText: 'Updated',
+      }),
+      { params: Promise.resolve({ enablerId: 'e1' }) }
     );
     const body = await (res as any).json();
     expect((res as any).status).toBe(200);
-    expect(body.submission).toMatchObject({ id: 'b', solutionText: 'Updated', status: 'PENDING' });
+    expect(body.submission).toMatchObject({
+      id: 'b',
+      solutionText: 'Updated',
+      status: 'PENDING',
+    });
     expect(writes('update', 'enablerSubmissions')[0]).toMatchObject({
       solutionText: 'Updated',
       status: 'PENDING',
@@ -86,16 +127,27 @@ describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
       enablers: [enablerRow],
       courseMembers: [{ userId: 't1', courseId: 'c1' }],
       enablerSubmissions: [
-        { id: 'a', enablerId: 'e1', traineeId: 't1', status: 'PENDING', submittedAt: '2024-01-01T00:00:00.000Z' },
+        {
+          id: 'a',
+          enablerId: 'e1',
+          traineeId: 't1',
+          status: 'PENDING',
+          submittedAt: '2024-01-01T00:00:00.000Z',
+        },
       ],
     });
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/enablers/e1/submit', { traineeId: 't1', solutionText: 'X' }),
+      makePost('http://localhost/api/trainee/enablers/e1/submit', {
+        traineeId: 't1',
+        solutionText: 'X',
+      }),
       { params: Promise.resolve({ enablerId: 'e1' }) }
     );
     expect((res as any).status).toBe(400);
-    expect(await (res as any).json()).toEqual({ error: 'Submission already pending review' });
+    expect(await (res as any).json()).toEqual({
+      error: 'Submission already pending review',
+    });
   });
 
   it('403 if trainee not member of course', async () => {
@@ -106,7 +158,10 @@ describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
     });
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/enablers/e1/submit', { traineeId: 't1', solutionText: 'X' }),
+      makePost('http://localhost/api/trainee/enablers/e1/submit', {
+        traineeId: 't1',
+        solutionText: 'X',
+      }),
       { params: Promise.resolve({ enablerId: 'e1' }) }
     );
     const body = await (res as any).json();
@@ -118,7 +173,10 @@ describe('API: POST /api/trainee/enablers/[enablerId]/submit', () => {
     const { db } = createTableDb({ profiles: [orgRow], enablers: [] });
     const POST = await importHandlerWithDb(db);
     const res = await POST(
-      makePost('http://localhost/api/trainee/enablers/e1/submit', { traineeId: 't1', solutionText: 'X' }),
+      makePost('http://localhost/api/trainee/enablers/e1/submit', {
+        traineeId: 't1',
+        solutionText: 'X',
+      }),
       { params: Promise.resolve({ enablerId: 'e1' }) }
     );
     const body = await (res as any).json();
