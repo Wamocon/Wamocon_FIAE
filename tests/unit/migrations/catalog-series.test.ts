@@ -34,6 +34,11 @@ const seriesFiles = fs
   .filter(name => SERIES_PREFIXES.some(p => name.startsWith(p)))
   .sort();
 
+// Security hardening that travels with the same pull request and sorts behind the
+// catalog series. It is held to one statement below.
+const SECURITY_FILES = ['20261025000100_security_revoke_public_create.sql'];
+const catalogFiles = seriesFiles.filter(name => !SECURITY_FILES.includes(name));
+
 /** SQL without line comments (the files document themselves in comments). */
 function readSql(fileName: string): string {
   return fs
@@ -95,12 +100,22 @@ describe('catalog migration series files', () => {
     }
   });
 
-  it('keeps the SUPER_ADMIN backfill as the last file of the series', () => {
-    const last = seriesFiles[seriesFiles.length - 1];
+  it('keeps the SUPER_ADMIN backfill as the last file of the catalog series', () => {
+    const last = catalogFiles[catalogFiles.length - 1];
     expect(last).toBe('20261025000000_super_admin_backfill.sql');
-    expect(seriesFiles[seriesFiles.length - 2]).toBe(
+    expect(catalogFiles[catalogFiles.length - 2]).toBe(
       '20261024001500_user_role_super_admin_value.sql'
     );
+  });
+
+  it('puts the security files behind the backfill and keeps the revoke to one statement', () => {
+    for (const file of SECURITY_FILES) {
+      expect(seriesFiles).toContain(file);
+      expect(file > '20261025000000_super_admin_backfill.sql').toBe(true);
+    }
+    expect(
+      readSql('20261025000100_security_revoke_public_create.sql').trim()
+    ).toBe('revoke create on schema public from public;');
   });
 
   it('sorts the SUPER_ADMIN backfill after the PR 89 profile privileges', () => {
@@ -148,6 +163,8 @@ describe('catalog migration series files', () => {
     });
 
     it('keeps the lock and statement timeouts', () => {
+      // a single REVOKE of a schema privilege: no table lock, no long statement
+      if (SECURITY_FILES.includes(fileName)) return;
       expect(sql).toMatch(/set\s+local\s+lock_timeout\s*=\s*'5s'/i);
       expect(sql).toMatch(/set\s+local\s+statement_timeout\s*=\s*'60s'/i);
     });
