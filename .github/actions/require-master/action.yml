@@ -1,0 +1,35 @@
+# =============================================================================
+# Composite action: the checked out commit must be part of master
+# =============================================================================
+# Production jobs build and migrate exactly one commit. It must be reachable from
+# master, so a release or a manual run cannot ship a branch. The check happens in
+# the job (git merge-base --is-ancestor against a freshly fetched master), not
+# only in the guard of the workflow file, because the workflow file of a tag is
+# part of the tag itself.
+#
+# Requires a full checkout (fetch-depth: 0). A shallow clone is refused: with
+# missing history the ancestry check could give a wrong answer.
+#
+# This is defence in depth. The real protection is a human setting (tag ruleset
+# and deployment restrictions of the environment Production), see
+# docs/release-prozess.md.
+# =============================================================================
+name: Require master
+description: Fail unless the checked out commit is an ancestor of origin/master
+runs:
+  using: composite
+  steps:
+    - name: Commit must be part of master
+      shell: bash
+      run: |
+        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          echo "::error::The checkout is shallow, the ancestry check needs fetch-depth: 0."
+          exit 1
+        fi
+        git fetch --no-tags origin master
+        head=$(git rev-parse HEAD)
+        if ! git merge-base --is-ancestor "$head" FETCH_HEAD; then
+          echo "::error::Commit $head is not part of master. Production only runs master commits."
+          exit 1
+        fi
+        echo "Commit $head is part of master."

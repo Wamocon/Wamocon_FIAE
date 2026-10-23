@@ -1,0 +1,103 @@
+# =============================================================================
+# Preview migration: branch push -> migration on public_preview, NO deployment
+# =============================================================================
+# Process step 1: a branch is created and pushed. The migrations of the branch
+# are applied to public_preview (the Preview copy of the schema). Nothing is
+# deployed. public (Production) is never touched here.
+#
+# Trigger : - push to any branch except master, but only if supabase/migrations/**
+#             or the Preview scripts changed (paths filter) and only if there is
+#             NO open pull request for the branch: as soon as one exists, the
+#             pull_request run of "Preview Deploy" migrates and deploys, so
+#             nothing runs twice (job "gate").
+#           - manually: Actions -> "Preview Migration" -> Run workflow. Manually
+#             "plan_only" is ON by default: it shows what WOULD be applied.
+#
+# Limits  : All branches share ONE public_preview. A migration of an unreviewed
+#           branch therefore runs there BEFORE the review. See the section
+#           "Einschränkungen" in docs/release-prozess.md. A database lock lets
+#           only one migration run at a time; concurrency groups never cancel a
+#           running migration.
+#
+# Secrets : PREVIEW_DB_URL (environment "Preview"), the connection string of the
+#           role app_preview_migrator. This role owns public_preview and has no
+#           rights on public, auth or storage, so unreviewed branch SQL can only
+#           damage public_preview. The Supabase access token of Production is NOT
+#           used here and must not be stored in the environment "Preview".
+#           Pull requests from forks never run this (no secrets there).
+# =============================================================================
+
+name: Preview Migration
+
+on:
+  push:
+    branches-ignore:
+      - master
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/db/preview-*.mjs'
+      - 'scripts/db/migration-check.mjs'
+      - 'scripts/db/supabase-retry.mjs'
+  workflow_dispatch:
+    inputs:
+      plan_only:
+        description: 'Only show what would be applied (change nothing)'
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: preview-migration-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Open pull request?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.pr.outputs.skip }}
+    steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "push" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$open" -gt 0 ]; then
+            echo "::notice::An open pull request exists for $BRANCH. The pull request run of Preview Deploy migrates and deploys; this run is skipped."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  migrate:
+    name: public_preview ${{ (github.event_name == 'push' || inputs.plan_only == false) && 'migrate' || 'plan' }}
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Preview
+    env:
+      PREVIEW_DB_URL: ${{ secrets.PREVIEW_DB_URL }}
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/preview-migrate
+        with:
+          apply: ${{ github.event_name == 'push' || inputs.plan_only == false }}

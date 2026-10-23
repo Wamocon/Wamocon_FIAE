@@ -1,0 +1,57 @@
+# =============================================================================
+# Database checks for pull requests (no secrets, no database)
+# =============================================================================
+# Runs the unit tests of the database scripts and checks the migration files of
+# a pull request (naming, order, no change of applied files, destructive
+# statements, rewritable for public_preview). Runs for forks too, because it
+# needs no secrets and never touches a database.
+# =============================================================================
+
+name: Database Checks
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'supabase/**'
+      - 'scripts/db/**'
+      - 'tests/scripts/**'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+
+concurrency:
+  group: db-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Script tests and migration files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+
+      - name: Unit tests of the database scripts
+        run: node --test "tests/scripts/**/*.test.mjs"
+
+      - name: Migration files against master
+        run: |
+          git fetch --no-tags origin master
+          BASE=$(git merge-base HEAD FETCH_HEAD)
+          node scripts/db/migration-check.mjs --base "$BASE"
+
+      - name: Rewrite check for public_preview
+        run: node scripts/db/preview-migrate.mjs check
