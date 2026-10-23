@@ -1217,49 +1217,40 @@ export const schoolExamResults = pgTable('school_exam_results', {
     .$onUpdate(() => new Date()),
 });
 
-// === LERNFELDER (Master Data) ===
-// Pre-seeded reference data for LFA Lernfelder LF1-LF12a
+// === LERNFELDER (compatibility view) ===
+// The learning field model lives in trainingCatalogLearningFields and
+// trainingCatalogContentMappings (see above). The database keeps the legacy
+// names public.lernfelder and public.lernfeld_mappings as compatibility VIEWS
+// over the FIAE rows of those tables (label = code), writable through INSTEAD
+// OF triggers, so existing routes keep working unchanged. This is the single
+// Drizzle definition of the view shape; the former duplicate definition
+// `lernfelderSchema` is only a deprecated alias.
+// NOTE: these are views, not tables. They are declared with pgTable only to
+// keep insert/update/delete typing for the existing routes. Never let
+// drizzle-kit create or alter them; schema changes go through
+// supabase/migrations. New code should use trainingCatalogLearningFields.
 export const lernfelder = pgTable('lernfelder', {
   id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(), // "LF1", "LF10a", etc.
   title: text('title').notNull(),
   description: text('description'),
-
-  // Curriculum info
-  trainingYear: integer('training_year'), // 1, 2, or 3
-  hoursBudget: integer('hours_budget'), // Zeitrichtwert in Stunden
-  isCommon: boolean('is_common').default(true), // true = all IT, false = LFA-only (LF10a-12a)
-
-  // Ordering
-  orderIndex: integer('order_index'),
-
+  label: text('label').notNull(), // e.g. LF-1 (= training_catalog_learning_fields.code)
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at'),
 });
 
-// === LERNFELD MAPPINGS (Future: Content Linking) ===
-// Links Lernfelder to platform content (Enablers, UseCases)
-export const lernfeldMappings = pgTable(
-  'lernfeld_mappings',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    lernfeldId: uuid('lernfeld_id')
-      .notNull()
-      .references(() => lernfelder.id, { onDelete: 'cascade' }),
-    enablerId: uuid('enabler_id').references(() => enablers.id, {
-      onDelete: 'set null',
-    }),
-    useCaseId: uuid('use_case_id').references(() => useCases.id, {
-      onDelete: 'set null',
-    }),
+/** @deprecated Use `lernfelder` (same compatibility view) or trainingCatalogLearningFields. */
+export const lernfelderSchema = lernfelder;
 
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-  },
-  table => ({
-    // Each enabler/useCase can only be mapped once per Lernfeld
-    unqEnablerLf: unique().on(table.lernfeldId, table.enablerId),
-    unqUseCaseLf: unique().on(table.lernfeldId, table.useCaseId),
-  })
-);
+// === LERNFELD MAPPINGS (compatibility view) ===
+// View over the FIAE rows of trainingCatalogContentMappings. See the note on
+// `lernfelder` above. New code should use trainingCatalogContentMappings.
+export const lernfeldMappings = pgTable('lernfeld_mappings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  lernfeldId: uuid('lernfeld_id').notNull(),
+  enablerId: uuid('enabler_id'),
+  useCaseId: uuid('use_case_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 // === ACTIVITY REPORTS (IHK Ausbildungsnachweis) ===
 // Weekly training documentation with approval workflow
@@ -1488,15 +1479,6 @@ export type AnnualPerformanceSummary =
 export type WorkCertificate = typeof workCertificates.$inferSelect;
 export type CertificateTextTemplate =
   typeof certificateTextTemplates.$inferSelect;
-
-export const lernfelderSchema = pgTable('lernfelder', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  description: text('description'),
-  label: text('label').notNull(), // LF-1 to LF-12
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at'),
-});
 
 // --- 10. ARBEITSZEUGNIS MODULE TABLES ---
 // Module for automated work certificate generation based on weekly performance evaluations
