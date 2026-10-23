@@ -4,6 +4,7 @@ import { authFetch } from '@/lib/authFetch';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import toast from 'react-hot-toast';
@@ -573,7 +574,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
         <div className="p-8">
           {/* Edit form for trainers */}
           {profile &&
-            ['admin', 'temp_admin', 'trainer'].includes(profile.role) &&
+            isTrainerLevelRole(profile.role) &&
             trainee &&
             showEdit && (
               <div className="border-accent/30 bg-background mb-8 rounded-2xl border p-6">
@@ -799,11 +800,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                                       </div>
                                       <div className="flex items-center gap-2">
                                         {profile &&
-                                          [
-                                            'admin',
-                                            'temp_admin',
-                                            'trainer',
-                                          ].includes(profile.role) && (
+                                          isTrainerLevelRole(profile.role) && (
                                             <button
                                               onClick={() =>
                                                 toggleItem(
@@ -940,9 +937,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                           </div>
                           <div className="flex items-center gap-2">
                             {profile &&
-                              ['admin', 'temp_admin', 'trainer'].includes(
-                                profile.role
-                              ) && (
+                              isTrainerLevelRole(profile.role) && (
                                 <button
                                   onClick={() =>
                                     toggleItem('USE_CASE', u.id, !u.isActive)
@@ -1011,9 +1006,7 @@ export default function TraineeDetail({ traineeId }: TraineeDetailProps) {
                           </div>
                           <div className="flex items-center gap-2">
                             {profile &&
-                              ['admin', 'temp_admin', 'trainer'].includes(
-                                profile.role
-                              ) && (
+                              isTrainerLevelRole(profile.role) && (
                                 <button
                                   onClick={() =>
                                     toggleItem('GLOBAL_QUIZ', q.quizId, false)

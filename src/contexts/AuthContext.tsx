@@ -13,6 +13,7 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { prefetch } from '@/lib/prefetch';
+import { isAdminRole, isTrainerLevelRole } from '@/lib/auth/roles';
 import {
   DB_SCHEMA,
   IS_PREVIEW_SCHEMA,
@@ -23,7 +24,12 @@ import type {
   RealtimePostgresChangesPayload,
 } from '@supabase/supabase-js';
 
-export type UserRole = 'admin' | 'temp_admin' | 'trainer' | 'trainee';
+export type UserRole =
+  | 'super_admin'
+  | 'admin'
+  | 'temp_admin'
+  | 'trainer'
+  | 'trainee';
 export type SubscriptionPlan = 'LIGHT' | 'PRO';
 
 interface User {
@@ -140,10 +146,8 @@ const clearCachedAuth = () => {
   }
 };
 
-const TRAINER_LEVEL_ROLES: UserRole[] = ['admin', 'temp_admin', 'trainer'];
-
 function getDashboardPath(role: UserRole): string {
-  if (TRAINER_LEVEL_ROLES.includes(role)) return '/trainer/dashboard';
+  if (isTrainerLevelRole(role)) return '/trainer/dashboard';
   return '/trainee/dashboard';
 }
 
@@ -152,7 +156,7 @@ function buildDashboardUrl(
   role: string,
   profileId?: string
 ): string {
-  if (TRAINER_LEVEL_ROLES.includes(role as UserRole)) {
+  if (isTrainerLevelRole(role)) {
     // The server derives the trainer from the session
     return '/api/trainer/dashboard';
   }
@@ -881,7 +885,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const isAdmin = useMemo(
-    () => profile?.role === 'admin' || profile?.role === 'temp_admin',
+    () => isAdminRole(profile?.role),
     [profile]
   );
 

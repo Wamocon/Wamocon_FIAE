@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Onepager zum Vorgehen für KfBM-Integration und den Ausbau von HAI bis 04.11.2026."
+    />
+    <title>LFA × KfBM · HAI-Ausbau – Vorgehen</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --red: #f40e0e;
+        --red-dark: #8f0808;
+        --bg: #080808;
+        --panel: #151515;
+        --panel-light: #202020;
+        --line: #393939;
+        --text: #f5f5f5;
+        --muted: #c1c1c1;
+        --green: #b8e2c4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 14px;
+        line-height: 1.42;
+      }
+
+      .page {
+        width: min(1120px, calc(100% - 36px));
+        margin: 22px auto;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 0 0 18px;
+        border-bottom: 2px solid var(--red);
+      }
+
+      .eyebrow,
+      .section-label {
+        color: #ff7777;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 5px 0 4px;
+        font-size: clamp(26px, 3.2vw, 36px);
+        letter-spacing: -0.04em;
+        line-height: 1.08;
+      }
+
+      .subtitle {
+        max-width: 720px;
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .date-chip {
+        flex: 0 0 auto;
+        padding: 9px 12px;
+        border: 1px solid var(--red);
+        border-radius: 9px;
+        background: #260c0c;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .status {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        gap: 12px;
+        margin: 15px 0;
+      }
+
+      .status-card,
+      .feature,
+      .milestone,
+      .caveat {
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--panel);
+      }
+
+      .status-card {
+        padding: 13px 15px;
+      }
+
+      .status-card h2,
+      section h2 {
+        margin: 0 0 7px;
+        font-size: 16px;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .status-card p,
+      .feature p,
+      .milestone p,
+      .caveat p {
+        color: var(--muted);
+      }
+
+      .status-card ul,
+      .feature ul {
+        margin: 7px 0 0;
+        padding-left: 18px;
+      }
+
+      .status-card li,
+      .feature li {
+        margin: 2px 0;
+      }
+
+      .status-card.current {
+        border-left: 4px solid var(--red);
+      }
+
+      .status-card.gap {
+        border-left: 4px solid #888;
+      }
+
+      section {
+        margin-top: 16px;
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 8px;
+      }
+
+      .section-heading p {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+
+      .feature {
+        min-height: 112px;
+        padding: 12px;
+      }
+
+      .feature h3 {
+        margin: 0 0 5px;
+        font-size: 14px;
+      }
+
+      .feature h3::before {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        margin: 0 7px 1px 0;
+        border-radius: 50%;
+        background: var(--red);
+        content: '';
+      }
+
+      .feature p {
+        font-size: 12px;
+      }
+
+      .roadmap {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 9px;
+      }
+
+      .milestone {
+        position: relative;
+        padding: 12px;
+      }
+
+      .milestone time {
+        display: inline-block;
+        margin-bottom: 5px;
+        color: #ff7777;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      .milestone h3 {
+        margin: 0 0 5px;
+        font-size: 13px;
+      }
+
+      .milestone p {
+        font-size: 11.5px;
+      }
+
+      .milestone.target {
+        border-color: var(--red);
+        background: linear-gradient(140deg, #321010, var(--panel));
+      }
+
+      .milestone.buffer time {
+        color: var(--green);
+      }
+
+      .caveat {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 12px;
+        padding: 12px 14px;
+        background: var(--panel-light);
+      }
+
+      .caveat strong {
+        color: #fff;
+      }
+
+      .caveat p {
+        font-size: 11.5px;
+      }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 12px;
+        color: #a8a8a8;
+        font-size: 10px;
+      }
+
+      @media (max-width: 760px) {
+        .status,
+        .features,
+        .roadmap,
+        .caveat {
+          grid-template-columns: 1fr;
+        }
+
+        header,
+        footer,
+        .section-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+
+      @page {
+        size: A4 landscape;
+        margin: 10mm;
+      }
+
+      @media print {
+        :root {
+          color-scheme: light;
+          --bg: #fff;
+          --panel: #f5f5f5;
+          --panel-light: #ededed;
+          --line: #c9c9c9;
+          --text: #171717;
+          --muted: #3f3f3f;
+        }
+
+        body {
+          background: #fff;
+          color: #171717;
+          font-size: 11px;
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+
+        .page {
+          width: 100%;
+          margin: 0;
+        }
+
+        header {
+          padding-bottom: 10px;
+        }
+
+        h1 {
+          font-size: 27px;
+        }
+
+        .status,
+        section {
+          margin-top: 10px;
+        }
+
+        .status-card,
+        .feature,
+        .milestone,
+        .caveat {
+          break-inside: avoid;
+          box-shadow: none;
+        }
+
+        .feature {
+          min-height: 96px;
+          padding: 9px;
+        }
+
+        .milestone {
+          padding: 9px;
+        }
+
+        .caveat {
+          padding: 9px 11px;
+        }
+
+        footer {
+          margin-top: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <div>
+          <div class="eyebrow">Lernzentrum LFA · Vorgehen & Meilensteine</div>
+          <h1>KfBM integrieren. HAI gezielt ausbauen.</h1>
+          <p class="subtitle">
+            FIAE produktiv und stabil halten, KfBM vollständig in das Lernzentrum
+            aufnehmen und HAI um sichere Sprachbedienung sowie belastbares Wissen
+            über Plattform und Lerninhalte erweitern.
+          </p>
+        </div>
+        <div class="date-chip">Stand 21.10.2026<br />Ziel: spätestens 04.11.</div>
+      </header>
+
+      <div class="status" aria-label="Technischer Stand am 21. Oktober">
+        <article class="status-card current">
+          <h2>1 · Technischer Stand heute</h2>
+          <p>
+            FIAE ist produktiv. HAI besitzt bereits eine funktionsfähige
+            Chat- und Wissensbasis; parallel ist der KfBM-Architekturumbau
+            gestartet.
+          </p>
+          <ul>
+            <li>
+              HAI: Chat mit Streaming, austauschbare KI-Provider, RAG/Vektorsuche,
+              Quellenkontext und Live-Plattformdaten.
+            </li>
+            <li>
+              Umbau: Entwicklungsbranch mit Ausbildungskatalog-Schicht,
+              Katalog-Lernfeldern und Inhaltszuordnungen; FIAE bleibt Standard.
+            </li>
+            <li>
+              FIAE-Regressionsprüfung für Kursdetail erfolgreich; Änderungen
+              sind lokal und noch nicht auf Produktivdaten angewendet.
+            </li>
+          </ul>
+        </article>
+        <article class="status-card gap">
+          <h2>Was noch fehlt</h2>
+          <ul>
+            <li>Keine Sprachaufnahme/Spracherkennung und keine gesprochene Antwort.</li>
+            <li>
+              HAI indexiert heute vor allem aktive Kurse, Enablertexte und
+              Trainerlösungen; vollständiges KfBM-Mapping, Szenarien und Quizze
+              sind noch nicht als Wissensbasis bestätigt.
+            </li>
+            <li>
+              Neue Katalogmigration und KfBM-Import sind vorbereitet, aber noch
+              nicht gegen eine Testdatenbank abgenommen.
+            </li>
+          </ul>
+        </article>
+      </div>
+
+      <section aria-labelledby="functions-title">
+        <div class="section-heading">
+          <h2 id="functions-title">2 · Geplante Funktionen</h2>
+          <p>Gemeinsame Plattform, getrennte und kontrollierte Ausbildungskontexte.</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <h3>KfBM-Ausbildungskatalog</h3>
+            <p>
+              FIAE und KfBM unabhängig auswählbar; eigene Komponenten,
+              Lernfelder und Mapping-Zuordnungen. 13 Lernfelder, K18 ausgeschlossen.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Vollständiger Content-Import</h3>
+            <p>
+              226 Enabler-/Use-Case-Paare, 226 Szenarien, 678 Quizze und
+              26 Global-Quizze zuordnen, importieren und mit Manifest prüfen.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>HAI-Systemwissen</h3>
+            <p>
+              RAG für Plattformhilfe, Datenmodell, Abläufe und relevante
+              FIAE-/KfBM-Inhalte; nachvollziehbare Quellen, Rollen- und
+              Berufstrennung sowie laufende Re-Indexierung.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Sprachaufnahme</h3>
+            <p>
+              Mikrofonbedienung für Fragen, Transkription mit sichtbarer
+              Bestätigung vor dem Senden, verständliche Status- und
+              Berechtigungsanzeigen.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Gesprochene Antworten</h3>
+            <p>
+              Antwort vorlesen bzw. streamend ausgeben, Start/Stopp und
+              Stummschaltung anbieten; Text, Zitate und Tastaturbedienung
+              bleiben jederzeit verfügbar.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Qualität & Schutz</h3>
+            <p>
+              Fachliche Antworttests mit Quellen, Berechtigungs-/Datenschutztests,
+              Browser- und Fallbacktests. Damicon-Parität erst nach gemeinsam
+              festgelegtem Vergleich messbar abnehmen.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="roadmap-title">
+        <div class="section-heading">
+          <h2 id="roadmap-title">3 · Meilensteinplan</h2>
+          <p>Reguläres Ziel 30.10. · drei zusätzliche Arbeitstage Puffer bis 04.11.</p>
+        </div>
+        <div class="roadmap">
+          <article class="milestone">
+            <time datetime="2026-10-21">21.–23.10. · Umsetzung</time>
+            <h3>Katalogschicht & FIAE-Schutz</h3>
+            <p>
+              Migration auf Testsystem prüfen; FIAE-Zuordnung, Komponenten,
+              Tests und Rollback kontrollieren. KfBM-Lernfeldstruktur und
+              Importvertrag festlegen.
+            </p>
+          </article>
+          <article class="milestone">
+            <time datetime="2026-10-26">26.10. · Importfreigabe</time>
+            <h3>Musterlauf & HAI-Konzept</h3>
+            <p>
+              KfBM-Muster je Dokumenttyp importieren; Zuordnungen und
+              Indexierungsquellen festlegen. Sprachprovider, Browserunterstützung,
+              Datenschutz und Damicon-Vergleichskriterien entscheiden.
+            </p>
+          </article>
+          <article class="milestone">
+            <time datetime="2026-10-27">27.–29.10. · Integration</time>
+            <h3>KfBM-Import & HAI-MVP</h3>
+            <p>
+              Content batchweise importieren und statisch prüfen; KfBM-Wissen
+              indexieren. Sprachaufnahme und Vorlesen in einer begrenzten,
+              barrierearmen MVP-Variante integrieren.
+            </p>
+          </article>
+          <article class="milestone target">
+            <time datetime="2026-10-30">30.10. · Reguläres Ziel</time>
+            <h3>Abnahme & FIAE-Regression</h3>
+            <p>
+              KfBM End-to-End, Stichproben des Gesamtbestands, HAI-Antworten
+              mit Quellen, Sprachfunktionen und FIAE-Regression testen.
+              Testergebnisse, bekannte Grenzen und Demo-Stand sichern.
+            </p>
+          </article>
+          <article class="milestone buffer">
+            <time datetime="2026-11-02">02.–04.11. · Puffer</time>
+            <h3>Fehlerbehebung & Freigabe</h3>
+            <p>
+              Für unerwartete Import-, Wissens- oder Sprachprobleme: priorisierte
+              Bugfixes, Re-Indexierung, Nachtests und finale Go/No-Go-Freigabe
+              spätestens am 04.11.
+            </p>
+          </article>
+          <article class="milestone">
+            <time datetime="2026-11-04">Abnahmekriterien</time>
+            <h3>Fertig heißt nachgewiesen</h3>
+            <p>
+              FIAE unverändert erreichbar; KfBM-Bestand und Zuordnungen
+              abgeglichen; HAI liefert belegte, berufskontextgerechte Antworten;
+              Sprachfunktionen haben Text-Fallback und bestandene Tests.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <div class="caveat">
+        <p>
+          <strong>Terminbewertung:</strong> 30.10. ist ein ambitioniertes
+          Integrationsziel. Importvolumen, Provider-/Browserauswahl und ein
+          belastbarer Musterlauf bestimmen die Machbarkeit. 02.–04.11. sind
+          echte Reserve, nicht zusätzliche geplante Entwicklungszeit.
+        </p>
+        <p>
+          <strong>Abgrenzung:</strong> „Reifegrad Damicon“ ist ein Zielbild,
+          keine verifizierte Funktionsgleichheit. Vor dem Bau ist der konkrete
+          Damicon-Funktionsumfang zu benchmarken; Sicherheit, Quellenqualität und
+          FIAE-Produktivbetrieb haben Vorrang vor einem ungetesteten Feature-Umfang.
+        </p>
+      </div>
+
+      <footer>
+        <span>
+          Technischer Snapshot: Codebestand und Entwicklungsbranch am 21.10.2026;
+          keine Produktivmigration durchgeführt.
+        </span>
+        <span>LFA · KfBM-Integration & HAI</span>
+      </footer>
+    </main>
+  </body>
+</html>

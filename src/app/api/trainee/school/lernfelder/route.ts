@@ -1,21 +1,29 @@
 /**
  * Lernfelder API - Master data for LFA learning fields
  *
- * GET /api/trainee/school/lernfelder - List all Lernfelder
+ * GET /api/trainee/school/lernfelder - List the Lernfelder of the caller's
+ * catalog (session scope, or the active public catalog without a session).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { asc } from 'drizzle-orm';
-import { lernfelderSchema } from '@/db/migrations/schemas/schema';
+import { trainingCatalogLearningFields as learningFields } from '@/db/migrations/schemas/schema';
+import { catalogCondition } from '@/lib/catalog/scope';
+import { requireOptionalSessionScope } from '@/lib/catalog/public';
+import { legacyLearningFieldSelect } from '@/lib/catalog/learning-fields';
 
 // GET /api/trainee/school/lernfelder
 export async function GET(req: NextRequest) {
   try {
+    const scope = await requireOptionalSessionScope(req);
+    if (scope instanceof Response) return scope;
+
     const rows = await db
-      .select()
-      .from(lernfelderSchema)
-      .orderBy(asc(lernfelderSchema.label));
+      .select(legacyLearningFieldSelect)
+      .from(learningFields)
+      .where(catalogCondition(learningFields.trainingCatalogId, scope))
+      .orderBy(asc(learningFields.code));
 
     // Map DB fields to the format expected by the frontend
     const lernfelder = rows.map((lf, index) => ({

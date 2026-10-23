@@ -319,3 +319,113 @@ where schemaname = 'public'
     'work_certificates'
   )
 order by tablename, policyname;
+
+-- ============================================================================
+-- Catalog series (supabase/migrations/20261024*), read-only checks
+-- ============================================================================
+
+-- C1. Precheck: server version (at least 15 required), roles, catalog table
+-- must NOT exist before the series, ledger state.
+select
+  current_setting('server_version_num')::integer >= 150000 as postgres_15_or_newer,
+  exists (select 1 from pg_roles where rolname = 'anon') as role_anon_exists,
+  exists (select 1 from pg_roles where rolname = 'authenticated') as role_authenticated_exists,
+  to_regclass('public.training_catalogs') is null as catalog_table_missing_as_expected;
+
+select max(version) as last_ledger_version, count(*) as ledger_rows
+from supabase_migrations.schema_migrations;
+
+-- C1b. Precheck before 20261024001500: PR 89 must be applied. Must return false,
+-- otherwise authenticated can still change its own role.
+select has_column_privilege('authenticated', 'public.profiles', 'role', 'UPDATE')
+  as authenticated_can_update_role_must_be_false;
+
+-- C2. Precheck: course content counts (production reference, measured
+-- 2026-10-23: 26 courses, 189 enablers, 88 use cases).
+select
+  (select count(*) from public.courses) as courses,
+  (select count(*) from public.enablers) as enablers,
+  (select count(*) from public.use_cases) as use_cases,
+  (select count(*) from public.training_components) as training_components,
+  (select count(*) from public.quizzes) as quizzes,
+  (select count(*) from public.lernfelder) as lernfelder,
+  (select count(*) from public.lernfeld_mappings) as lernfeld_mappings,
+  (select count(*) from public.profiles where role = 'TRAINEE') as trainees;
+
+-- C3. Precheck: labels of lernfelder (the migration derives code and training
+-- year from them; unusual labels default to training year 1).
+select label, count(*) as occurrences
+from public.lernfelder
+group by label
+order by label;
+
+-- C4. Postcheck (after the series without 20261025000000): everything is FIAE.
+select 'courses' as table_name, training_catalog_id, count(*) from public.courses group by 2
+union all select 'enablers', training_catalog_id, count(*) from public.enablers group by 2
+union all select 'use_cases', training_catalog_id, count(*) from public.use_cases group by 2
+union all select 'training_components', training_catalog_id, count(*) from public.training_components group by 2
+union all select 'quizzes', training_catalog_id, count(*) from public.quizzes group by 2;
+
+-- C5. Postcheck: legacy and view row counts agree.
+select
+  (select count(*) from public.lernfelder) as lernfelder_view,
+  (select count(*) from public.lernfelder_legacy) as lernfelder_legacy,
+  (select count(*) from public.lernfeld_mappings) as mappings_view,
+  (select count(*) from public.lernfeld_mappings_legacy) as mappings_legacy;
+
+-- C6. Postcheck: all constraints validated (expect 0 rows).
+select conrelid::regclass as table_name, conname
+from pg_constraint
+where connamespace = 'public'::regnamespace
+  and not convalidated;
+
+-- C7. Postcheck: use case enabler link (all NULL for FIAE) and per course report.
+select count(*) filter (where enabler_id is not null) as linked_use_cases,
+       count(*) as use_cases
+from public.use_cases;
+
+select course_title, enabler_count, use_case_count, paired_count, status, needs_review
+from public.v_use_case_enabler_backfill_report
+order by course_title;
+
+-- C8. Postcheck: no policy of the new tables for public or anon (expect 0 rows).
+select tablename, policyname, roles, qual
+from pg_policies
+where schemaname = 'public'
+  and tablename in (
+    'training_catalogs',
+    'training_catalog_learning_fields',
+    'training_catalog_content_mappings',
+    'organization_catalogs',
+    'trainee_enrollments',
+    'trainee_elective_choices'
+  )
+  and (roles && array['public', 'anon']::name[]);
+
+-- C8b. Postcheck: the API roles cannot write the enrollment tables and cannot
+-- truncate the catalog tables (every value must be false).
+select
+  has_table_privilege('authenticated', 'public.trainee_enrollments', 'INSERT') as enroll_insert,
+  has_table_privilege('authenticated', 'public.trainee_enrollments', 'UPDATE') as enroll_update,
+  has_table_privilege('authenticated', 'public.trainee_enrollments', 'DELETE') as enroll_delete,
+  has_table_privilege('authenticated', 'public.trainee_enrollments', 'TRUNCATE') as enroll_truncate,
+  has_table_privilege('authenticated', 'public.trainee_elective_choices', 'INSERT') as choices_insert,
+  has_table_privilege('authenticated', 'public.organization_catalogs', 'INSERT') as org_catalogs_insert,
+  has_table_privilege('authenticated', 'public.training_catalogs', 'TRUNCATE') as catalogs_truncate,
+  has_table_privilege('anon', 'public.lernfelder_legacy', 'SELECT') as anon_reads_legacy,
+  has_table_privilege('anon', 'public.training_catalogs', 'SELECT') as anon_reads_catalogs;
+
+-- C9. Postcheck: enrollments and organization catalogs backfilled.
+select
+  (select count(*) from public.trainee_enrollments) as enrollments,
+  (select count(*) from public.profiles where role = 'TRAINEE') as trainees,
+  (select count(*) from public.organization_catalogs) as organization_catalogs,
+  (select count(*) from public.organizations) as organizations;
+
+-- C10. After 20261025000000 only: no ADMIN left in the platform owner organization.
+select p.role, count(*)
+from public.profiles p
+join public.organizations o on o.id = p.organization_id
+where o.is_platform_owner
+group by p.role
+order by p.role;

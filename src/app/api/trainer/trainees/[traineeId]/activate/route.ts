@@ -1,6 +1,7 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { and, eq } from 'drizzle-orm';
 import {
   profiles,
@@ -30,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
 
     if (trainerId) {
       const [t] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any)).limit(1);
-      if (!t || !['TRAINER', 'ADMIN', 'TEMP_ADMIN'].includes(t.role || ''))
+      if (!t || !isTrainerLevelRole(t.role))
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
       const isPO = await verifyPlatformOwner(trainerId);

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   pgTable,
   uuid,
@@ -13,6 +14,11 @@ import {
   pgSchema,
   varchar,
   vector,
+  check,
+  uniqueIndex,
+  foreignKey,
+  smallint,
+  date,
 } from 'drizzle-orm/pg-core';
 
 // --- SUPABASE AUTH HELPER ---
@@ -30,6 +36,9 @@ export const userRole = pgEnum('user_role', [
   'TEMP_ADMIN',
   'TRAINER',
   'TRAINEE',
+  // Platform owner admin (ADMIN of the platform owner organization after the
+  // 20261025000000 backfill). Added by 20261024001500.
+  'SUPER_ADMIN',
 ]);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
 export const quizType = pgEnum('quiz_type', ['LESSON', 'GLOBAL']);
@@ -139,28 +148,119 @@ export const profiles = pgTable('profiles', {
 
 // --- 2. CONTENT MANAGEMENT TABLES ---
 
-export const courses = pgTable('courses', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  description: text('description'),
-  year: integer('year'), // 1, 2, or 3
-  chapter: integer('chapter'), // For "capital 1 to n"
-  examPart: integer('exam_part'), // 1 = Abschlussprüfung Teil 1, 2 = Abschlussprüfung Teil 2
-  lernfelder: text('lernfelder').array().default([]), // e.g. ['LF-1', 'LF-5']
+export const TRAINING_CATALOG_IDS = {
+  FIAE: '00000000-0000-4000-8000-000000000001',
+  KFBM: '00000000-0000-4000-8000-000000000002',
+} as const;
 
-  // The main trainer who created the course
-  createdById: uuid('created_by_id')
-    .notNull()
-    .references(() => profiles.id),
+const defaultTrainingCatalogId = TRAINING_CATALOG_IDS.FIAE;
 
-  isActive: boolean('is_active').default(false),
-  isPublished: boolean('is_published').default(false), // For drafts
+export const trainingCatalogs = pgTable(
+  'training_catalogs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(),
+    title: text('title').notNull(),
+    description: text('description'),
+    durationYears: integer('duration_years').notNull().default(3),
+    isActive: boolean('is_active').notNull().default(false),
+    // Informational occupation key and regulation version (for example 2025)
+    occupationCode: text('occupation_code'),
+    regulationVersion: text('regulation_version'),
+    // Number of elective components a trainee picks (KfBM: 2 of 9)
+    electivePickCount: integer('elective_pick_count').notNull().default(0),
+    // Catalog configuration. Documented keys and validation:
+    // src/lib/catalog/settings.ts
+    settings: jsonb('settings')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    durationYearsCheck: check(
+      'training_catalogs_duration_years_check',
+      sql`${table.durationYears} > 0`
+    ),
+    occupationRegulationUnique: unique(
+      'training_catalogs_occupation_regulation_unique'
+    ).on(table.occupationCode, table.regulationVersion),
+    electivePickCountCheck: check(
+      'training_catalogs_elective_pick_count_check',
+      sql`${table.electivePickCount} >= 0`
+    ),
+    settingsObjectCheck: check(
+      'training_catalogs_settings_object_check',
+      sql`jsonb_typeof(${table.settings}) = 'object'`
+    ),
+    settingsThresholdCheck: check(
+      'training_catalogs_settings_threshold_check',
+      sql`${table.settings} -> 'shortening_threshold' is null or jsonb_typeof(${table.settings} -> 'shortening_threshold') = 'number'`
+    ),
+    settingsSchoolOrgCheck: check(
+      'training_catalogs_settings_school_org_check',
+      sql`${table.settings} ->> 'school_organization' is null or ${table.settings} ->> 'school_organization' in ('block', 'weekdays')`
+    ),
+    settingsPhaseMonthsCheck: check(
+      'training_catalogs_settings_phase_months_check',
+      sql`${table.settings} -> 'phase_months' is null or (jsonb_typeof(${table.settings} -> 'phase_months') = 'array' and jsonb_array_length(${table.settings} -> 'phase_months') = 2)`
+    ),
+  })
+);
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+// Format of the stable text codes on courses, enablers and use cases (for
+// example "K6.1"): 1 to 64 characters of letters, digits, '.', '_' and '-',
+// starting with a letter or digit. Mirrors the SQL CHECK constraints.
+export const CONTENT_CODE_PATTERN = '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$';
+
+export const courses = pgTable(
+  'courses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+      .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
+    // Stable text code (e.g. "K6.1"), unique per catalog, NULL for legacy rows
+    code: text('code'),
+    title: text('title').notNull(),
+    description: text('description'),
+    year: integer('year'), // 1, 2, or 3
+    chapter: integer('chapter'), // For "capital 1 to n"
+    examPart: integer('exam_part'), // 1 = Abschlussprüfung Teil 1, 2 = Abschlussprüfung Teil 2
+    lernfelder: text('lernfelder').array().default([]), // e.g. ['LF-1', 'LF-5']
+
+    // The main trainer who created the course
+    createdById: uuid('created_by_id')
+      .notNull()
+      .references(() => profiles.id),
+
+    isActive: boolean('is_active').default(false),
+    isPublished: boolean('is_published').default(false), // For drafts
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    codeFormatCheck: check(
+      'courses_code_format_check',
+      sql`${table.code} is null or ${table.code} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`
+    ),
+    catalogCodeUnique: uniqueIndex('courses_catalog_code_unique')
+      .on(table.trainingCatalogId, table.code)
+      .where(sql`${table.code} is not null`),
+    // Target of composite foreign keys that keep content in the same catalog
+    idCatalogUnique: unique('courses_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
+  })
+);
 
 // Many-to-many table linking courses to multiple trainers and trainees
 export const courseMembers = pgTable(
@@ -208,54 +308,234 @@ export const courseSkills = pgTable(
 
 // --- Course Content: Enablers & Use Cases ---
 
-export const enablers = pgTable('enablers', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  courseId: uuid('course_id')
-    .notNull()
-    .references(() => courses.id, { onDelete: 'cascade' }),
-  title: text('title').notNull(),
-  orderIndex: integer('order_index').notNull(), // To set the order of modules
+export const enablers = pgTable(
+  'enablers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    // Derived from the course by a database trigger; the composite foreign
+    // key below keeps it identical to courses.training_catalog_id.
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`)),
+    // Stable text code, unique per course, NULL for legacy rows
+    code: text('code'),
+    title: text('title').notNull(),
+    orderIndex: integer('order_index').notNull(), // To set the order of modules
 
-  // Content
-  descriptionText: text('description_text'),
-  pptUrl: text('ppt_url'), // Link to Supabase Storage
-  videoUrl: text('video_url'), // Link to Supabase Storage or external
-  scenarioPdfUrl: text('scenario_pdf_url'), // Link to Supabase Storage (PDF)
+    // Content
+    descriptionText: text('description_text'),
+    pptUrl: text('ppt_url'), // Link to Supabase Storage
+    videoUrl: text('video_url'), // Link to Supabase Storage or external
+    scenarioPdfUrl: text('scenario_pdf_url'), // Link to Supabase Storage (PDF)
 
-  // Settings
-  durationValue: integer('duration_value'),
-  durationUnit: durationUnit('duration_unit'),
-  isActive: boolean('is_active').default(false),
-  activatedAt: timestamp('activated_at'),
+    // Settings
+    durationValue: integer('duration_value'),
+    durationUnit: durationUnit('duration_unit'),
+    isActive: boolean('is_active').default(false),
+    activatedAt: timestamp('activated_at'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    codeFormatCheck: check(
+      'enablers_code_format_check',
+      sql`${table.code} is null or ${table.code} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`
+    ),
+    courseCodeUnique: uniqueIndex('enablers_course_code_unique')
+      .on(table.courseId, table.code)
+      .where(sql`${table.code} is not null`),
+    idCatalogUnique: unique('enablers_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
+    // Target of the composite foreign key use_cases (enabler_id, course_id)
+    idCourseUnique: unique('enablers_id_course_unique').on(
+      table.id,
+      table.courseId
+    ),
+    courseCatalogFk: foreignKey({
+      name: 'enablers_course_catalog_fk',
+      columns: [table.courseId, table.trainingCatalogId],
+      foreignColumns: [courses.id, courses.trainingCatalogId],
+    }).onDelete('cascade'),
+  })
+);
 
-export const useCases = pgTable('use_cases', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  courseId: uuid('course_id')
-    .notNull()
-    .references(() => courses.id, { onDelete: 'cascade' }),
-  title: text('title').notNull(),
-  descriptionText: text('description_text').notNull(),
-  orderIndex: integer('order_index').notNull(),
+export const useCases = pgTable(
+  'use_cases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    // Derived from the course by a database trigger; the composite foreign
+    // key below keeps it identical to courses.training_catalog_id.
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`)),
+    // Optional 1:1 link to the enabler of the same course (NOT NULL is
+    // enforced later, once v_use_case_enabler_backfill_report is clean)
+    enablerId: uuid('enabler_id'),
+    // Stable text code, unique per course, NULL for legacy rows
+    code: text('code'),
+    title: text('title').notNull(),
+    descriptionText: text('description_text').notNull(),
+    orderIndex: integer('order_index').notNull(),
 
-  durationValue: integer('duration_value'),
-  durationUnit: durationUnit('duration_unit'),
-  isActive: boolean('is_active').default(false),
-  activatedAt: timestamp('activated_at'),
-  year: integer('year').array(),
-  trainingStage: integer('training_stage').array(),
-  lernfelder: text('lernfelder').array(),
+    durationValue: integer('duration_value'),
+    durationUnit: durationUnit('duration_unit'),
+    isActive: boolean('is_active').default(false),
+    activatedAt: timestamp('activated_at'),
+    year: integer('year').array(),
+    trainingStage: integer('training_stage').array(),
+    lernfelder: text('lernfelder').array(),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    codeFormatCheck: check(
+      'use_cases_code_format_check',
+      sql`${table.code} is null or ${table.code} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`
+    ),
+    courseCodeUnique: uniqueIndex('use_cases_course_code_unique')
+      .on(table.courseId, table.code)
+      .where(sql`${table.code} is not null`),
+    idCatalogUnique: unique('use_cases_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
+    courseCatalogFk: foreignKey({
+      name: 'use_cases_course_catalog_fk',
+      columns: [table.courseId, table.trainingCatalogId],
+      foreignColumns: [courses.id, courses.trainingCatalogId],
+    }).onDelete('cascade'),
+    // 1:1 link to the enabler (names as in 20261024000800). In the database the
+    // key is ON DELETE SET NULL (enabler_id), which clears only the enabler
+    // link; Drizzle cannot express the column list, so the migration SQL is the
+    // source of truth for this key.
+    enablerIdUnique: unique('use_cases_enabler_id_unique').on(table.enablerId),
+    enablerCourseFk: foreignKey({
+      name: 'use_cases_enabler_course_fk',
+      columns: [table.enablerId, table.courseId],
+      foreignColumns: [enablers.id, enablers.courseId],
+    }).onDelete('set null'),
+  })
+);
+
+export const trainingCatalogLearningFields = pgTable(
+  'training_catalog_learning_fields',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    code: text('code').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    trainingYear: integer('training_year').notNull(),
+    hoursBudget: integer('hours_budget'),
+    orderIndex: integer('order_index').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    // Explicitly named like the database names it (the generated default
+    // name would exceed 63 characters).
+    catalogFk: foreignKey({
+      name: 'training_catalog_learning_fields_training_catalog_id_fkey',
+      columns: [table.trainingCatalogId],
+      foreignColumns: [trainingCatalogs.id],
+    }).onDelete('cascade'),
+    catalogCodeUnique: unique(
+      'training_catalog_learning_fields_catalog_code_unique'
+    ).on(table.trainingCatalogId, table.code),
+    catalogOrderUnique: unique(
+      'training_catalog_learning_fields_catalog_order_unique'
+    ).on(table.trainingCatalogId, table.orderIndex),
+    idCatalogUnique: unique(
+      'training_catalog_learning_fields_id_catalog_unique'
+    ).on(table.id, table.trainingCatalogId),
+    trainingYearCheck: check(
+      'training_catalog_learning_fields_training_year_check',
+      sql`${table.trainingYear} between 1 and 3`
+    ),
+    hoursBudgetCheck: check(
+      'training_catalog_learning_fields_hours_budget_check',
+      sql`${table.hoursBudget} is null or ${table.hoursBudget} >= 0`
+    ),
+  })
+);
+
+export const trainingCatalogContentMappings = pgTable(
+  'training_catalog_content_mappings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    learningFieldId: uuid('learning_field_id').notNull(),
+    enablerId: uuid('enabler_id'),
+    useCaseId: uuid('use_case_id'),
+    // Derived from the learning field by a database trigger. The composite
+    // foreign keys below make a mapping across catalogs impossible.
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => ({
+    // Single column keys, explicitly named like the database names them
+    // (Drizzle's generated default names would exceed 63 characters).
+    learningFieldFk: foreignKey({
+      name: 'training_catalog_content_mappings_learning_field_id_fkey',
+      columns: [table.learningFieldId],
+      foreignColumns: [trainingCatalogLearningFields.id],
+    }).onDelete('cascade'),
+    enablerFk: foreignKey({
+      name: 'training_catalog_content_mappings_enabler_id_fkey',
+      columns: [table.enablerId],
+      foreignColumns: [enablers.id],
+    }).onDelete('cascade'),
+    useCaseFk: foreignKey({
+      name: 'training_catalog_content_mappings_use_case_id_fkey',
+      columns: [table.useCaseId],
+      foreignColumns: [useCases.id],
+    }).onDelete('cascade'),
+    learningFieldCatalogFk: foreignKey({
+      name: 'training_catalog_content_mappings_learning_field_catalog_fk',
+      columns: [table.learningFieldId, table.trainingCatalogId],
+      foreignColumns: [
+        trainingCatalogLearningFields.id,
+        trainingCatalogLearningFields.trainingCatalogId,
+      ],
+    }).onDelete('cascade'),
+    enablerCatalogFk: foreignKey({
+      name: 'training_catalog_content_mappings_enabler_catalog_fk',
+      columns: [table.enablerId, table.trainingCatalogId],
+      foreignColumns: [enablers.id, enablers.trainingCatalogId],
+    }).onDelete('cascade'),
+    useCaseCatalogFk: foreignKey({
+      name: 'training_catalog_content_mappings_use_case_catalog_fk',
+      columns: [table.useCaseId, table.trainingCatalogId],
+      foreignColumns: [useCases.id, useCases.trainingCatalogId],
+    }).onDelete('cascade'),
+    // Constraint names must stay below the 63 character identifier limit.
+    learningFieldEnablerUnique: unique(
+      'training_catalog_content_mappings_lf_enabler_unique'
+    ).on(table.learningFieldId, table.enablerId),
+    learningFieldUseCaseUnique: unique(
+      'training_catalog_content_mappings_lf_use_case_unique'
+    ).on(table.learningFieldId, table.useCaseId),
+    exactlyOneContentCheck: check(
+      'training_catalog_content_mappings_exactly_one_content_check',
+      sql`(${table.enablerId} is not null) <> (${table.useCaseId} is not null)`
+    ),
+  })
+);
 
 // --- Content Documents (PDFs for Flipbook Viewer) ---
 
@@ -327,21 +607,49 @@ export const contentDocuments = pgTable('content_documents', {
 
 // --- 3. QUIZ & SUBMISSION TABLES ---
 
-export const quizzes = pgTable('quizzes', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  // ENABLER = "small quiz", GLOBAL = "big quiz"
-  quizType: quizType('quiz_type').notNull(),
-  createdById: uuid('created_by_id')
-    .notNull()
-    .references(() => profiles.id),
-  isActive: boolean('is_active').default(false),
+export const quizzes = pgTable(
+  'quizzes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    title: text('title').notNull(),
+    // ENABLER = "small quiz", GLOBAL = "big quiz"
+    quizType: quizType('quiz_type').notNull(),
+    createdById: uuid('created_by_id')
+      .notNull()
+      .references(() => profiles.id),
+    isActive: boolean('is_active').default(false),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+    // Occupation the quiz belongs to; existing quizzes are FIAE.
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+      .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
+    // Training component of a global quiz (one global quiz per component)
+    trainingComponentId: uuid('training_component_id'),
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    // A quiz can only be bound to a component of its own catalog.
+    componentCatalogFk: foreignKey({
+      name: 'quizzes_component_catalog_fk',
+      columns: [table.trainingComponentId, table.trainingCatalogId],
+      foreignColumns: [
+        trainingComponents.id,
+        trainingComponents.trainingCatalogId,
+      ],
+    }).onDelete('restrict'),
+    // At most one global quiz per training component
+    globalComponentUnique: uniqueIndex('quizzes_global_component_unique')
+      .on(table.trainingComponentId)
+      .where(
+        sql`${table.quizType} = 'GLOBAL' and ${table.trainingComponentId} is not null`
+      ),
+  })
+);
 
 // 1:1 relationship linking a "small quiz" to its enabler
 export const enablerQuizzes = pgTable('enabler_quizzes', {
@@ -1008,49 +1316,40 @@ export const schoolExamResults = pgTable('school_exam_results', {
     .$onUpdate(() => new Date()),
 });
 
-// === LERNFELDER (Master Data) ===
-// Pre-seeded reference data for LFA Lernfelder LF1-LF12a
+// === LERNFELDER (compatibility view) ===
+// The learning field model lives in trainingCatalogLearningFields and
+// trainingCatalogContentMappings (see above). The database keeps the legacy
+// names public.lernfelder and public.lernfeld_mappings as compatibility VIEWS
+// over the FIAE rows of those tables (label = code), writable through INSTEAD
+// OF triggers, so existing routes keep working unchanged. This is the single
+// Drizzle definition of the view shape; the former duplicate definition
+// `lernfelderSchema` is only a deprecated alias.
+// NOTE: these are views, not tables. They are declared with pgTable only to
+// keep insert/update/delete typing for the existing routes. Never let
+// drizzle-kit create or alter them; schema changes go through
+// supabase/migrations. New code should use trainingCatalogLearningFields.
 export const lernfelder = pgTable('lernfelder', {
   id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(), // "LF1", "LF10a", etc.
   title: text('title').notNull(),
   description: text('description'),
-
-  // Curriculum info
-  trainingYear: integer('training_year'), // 1, 2, or 3
-  hoursBudget: integer('hours_budget'), // Zeitrichtwert in Stunden
-  isCommon: boolean('is_common').default(true), // true = all IT, false = LFA-only (LF10a-12a)
-
-  // Ordering
-  orderIndex: integer('order_index'),
-
+  label: text('label').notNull(), // e.g. LF-1 (= training_catalog_learning_fields.code)
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at'),
 });
 
-// === LERNFELD MAPPINGS (Future: Content Linking) ===
-// Links Lernfelder to platform content (Enablers, UseCases)
-export const lernfeldMappings = pgTable(
-  'lernfeld_mappings',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    lernfeldId: uuid('lernfeld_id')
-      .notNull()
-      .references(() => lernfelder.id, { onDelete: 'cascade' }),
-    enablerId: uuid('enabler_id').references(() => enablers.id, {
-      onDelete: 'set null',
-    }),
-    useCaseId: uuid('use_case_id').references(() => useCases.id, {
-      onDelete: 'set null',
-    }),
+/** @deprecated Use `lernfelder` (same compatibility view) or trainingCatalogLearningFields. */
+export const lernfelderSchema = lernfelder;
 
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-  },
-  table => ({
-    // Each enabler/useCase can only be mapped once per Lernfeld
-    unqEnablerLf: unique().on(table.lernfeldId, table.enablerId),
-    unqUseCaseLf: unique().on(table.lernfeldId, table.useCaseId),
-  })
-);
+// === LERNFELD MAPPINGS (compatibility view) ===
+// View over the FIAE rows of trainingCatalogContentMappings. See the note on
+// `lernfelder` above. New code should use trainingCatalogContentMappings.
+export const lernfeldMappings = pgTable('lernfeld_mappings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  lernfeldId: uuid('lernfeld_id').notNull(),
+  enablerId: uuid('enabler_id'),
+  useCaseId: uuid('use_case_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 // === ACTIVITY REPORTS (IHK Ausbildungsnachweis) ===
 // Weekly training documentation with approval workflow
@@ -1127,17 +1426,167 @@ export const activityReportEntries = pgTable('activity_report_entries', {
 
 // === TRAINING COMPONENTS (LFA Curriculum) ===
 // Master data for Ausbildungsrahmenplan components (§4 Absatz 2, 3, 7)
-export const trainingComponents = pgTable('training_components', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(), // e.g., "§4.2.1", "§4.3.1"
-  title: text('title').notNull(),
-  description: text('description'),
-  totalWeeks: real('total_weeks').notNull(), // Zeitrichtwert in Wochen
-  totalHours: real('total_hours').notNull(), // totalWeeks * 40
-  trainingYear: integer('training_year'), // 1, 2, or 3 (null = all years)
-  orderIndex: integer('order_index').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const trainingComponents = pgTable(
+  'training_components',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+      .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
+    code: text('code').notNull(), // e.g., "§4.2.1", "§4.3.1"
+    title: text('title').notNull(),
+    description: text('description'),
+    totalWeeks: real('total_weeks').notNull(), // Zeitrichtwert in Wochen
+    totalHours: real('total_hours').notNull(), // totalWeeks * 40
+    trainingYear: integer('training_year'), // 1, 2, or 3 (null = all years)
+    // Training phase 1 or 2; NULL = integrative (whole training). Backfilled
+    // from trainingYear (1 -> 1, 2 -> 2, 3 and NULL -> NULL).
+    phase: smallint('phase'),
+    // pflicht = compulsory, wahl = elective, integrativ = whole training
+    kind: text('kind', { enum: ['pflicht', 'wahl', 'integrativ'] })
+      .notNull()
+      .default('pflicht'),
+    orderIndex: integer('order_index').notNull().default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => ({
+    phaseCheck: check(
+      'training_components_phase_check',
+      sql`${table.phase} is null or ${table.phase} in (1, 2)`
+    ),
+    kindCheck: check(
+      'training_components_kind_check',
+      sql`${table.kind} in ('pflicht', 'wahl', 'integrativ')`
+    ),
+    integrativePhaseCheck: check(
+      'training_components_integrative_phase_check',
+      sql`${table.kind} <> 'integrativ' or ${table.phase} is null`
+    ),
+    catalogCodeUnique: unique('training_components_catalog_code_unique').on(
+      table.trainingCatalogId,
+      table.code
+    ),
+    // Target of composite foreign keys (for example quizzes)
+    idCatalogUnique: unique('training_components_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
+  })
+);
+
+// === ORGANIZATION CATALOGS ===
+// Which training catalogs (occupations) an organization may use. Existing
+// organizations are enabled for FIAE; new organizations get the FIAE row from
+// a database trigger.
+export const organizationCatalogs = pgTable(
+  'organization_catalogs',
+  {
+    organizationId: uuid('organization_id').notNull(),
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    isEnabled: boolean('is_enabled').notNull().default(true),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    pk: primaryKey({
+      name: 'organization_catalogs_organization_id_training_catalog_id_pk',
+      columns: [table.organizationId, table.trainingCatalogId],
+    }),
+    organizationFk: foreignKey({
+      name: 'organization_catalogs_organization_id_organizations_id_fk',
+      columns: [table.organizationId],
+      foreignColumns: [organizations.id],
+    }).onDelete('cascade'),
+    trainingCatalogFk: foreignKey({
+      name: 'organization_catalogs_training_catalog_id_fk',
+      columns: [table.trainingCatalogId],
+      foreignColumns: [trainingCatalogs.id],
+    }).onDelete('restrict'),
+  })
+);
+
+// === TRAINEE ENROLLMENTS ===
+// A trainee has exactly one occupation per enrollment (one row per trainee and
+// catalog). profiles.start_of_training_date / ausbildung_duration_years stay
+// the source of truth for the running app until the app switches over.
+export const traineeEnrollments = pgTable(
+  'trainee_enrollments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    traineeId: uuid('trainee_id').notNull(),
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    startDate: date('start_date', { mode: 'string' }),
+    durationYears: integer('duration_years').notNull().default(3), // 2 or 3
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    traineeFk: foreignKey({
+      name: 'trainee_enrollments_trainee_id_profiles_id_fk',
+      columns: [table.traineeId],
+      foreignColumns: [profiles.id],
+    }).onDelete('cascade'),
+    trainingCatalogFk: foreignKey({
+      name: 'trainee_enrollments_training_catalog_id_training_catalogs_id_fk',
+      columns: [table.trainingCatalogId],
+      foreignColumns: [trainingCatalogs.id],
+    }).onDelete('restrict'),
+    traineeCatalogUnique: unique(
+      'trainee_enrollments_trainee_catalog_unique'
+    ).on(table.traineeId, table.trainingCatalogId),
+    // Target of composite foreign keys (elective choices)
+    idCatalogUnique: unique('trainee_enrollments_id_catalog_unique').on(
+      table.id,
+      table.trainingCatalogId
+    ),
+    durationYearsCheck: check(
+      'trainee_enrollments_duration_years_check',
+      sql`${table.durationYears} in (2, 3)`
+    ),
+  })
+);
+
+// === TRAINEE ELECTIVE CHOICES ===
+// Elective components (kind = wahl) a trainee picked for an enrollment. A
+// deferred constraint trigger keeps the number of picks at or below
+// training_catalogs.elective_pick_count and rejects non-elective components.
+// trainingCatalogId is derived from the enrollment by a database trigger.
+export const traineeElectiveChoices = pgTable(
+  'trainee_elective_choices',
+  {
+    enrollmentId: uuid('enrollment_id').notNull(),
+    componentId: uuid('component_id').notNull(),
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => ({
+    pk: primaryKey({
+      name: 'trainee_elective_choices_enrollment_id_component_id_pk',
+      columns: [table.enrollmentId, table.componentId],
+    }),
+    enrollmentCatalogFk: foreignKey({
+      name: 'trainee_elective_choices_enrollment_catalog_fk',
+      columns: [table.enrollmentId, table.trainingCatalogId],
+      foreignColumns: [
+        traineeEnrollments.id,
+        traineeEnrollments.trainingCatalogId,
+      ],
+    }).onDelete('cascade'),
+    componentCatalogFk: foreignKey({
+      name: 'trainee_elective_choices_component_catalog_fk',
+      columns: [table.componentId, table.trainingCatalogId],
+      foreignColumns: [
+        trainingComponents.id,
+        trainingComponents.trainingCatalogId,
+      ],
+    }).onDelete('restrict'),
+  })
+);
 
 // === TRAINING USE CASES ===
 // Individual skills/tasks within each component
@@ -1197,6 +1646,10 @@ export const activityReportUseCaseEntries = pgTable(
 
 export type Organization = typeof organizations.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
+export type TrainingCatalog = typeof trainingCatalogs.$inferSelect;
+export type OrganizationCatalog = typeof organizationCatalogs.$inferSelect;
+export type TraineeEnrollment = typeof traineeEnrollments.$inferSelect;
+export type TraineeElectiveChoice = typeof traineeElectiveChoices.$inferSelect;
 export type Course = typeof courses.$inferSelect;
 export type CourseMember = typeof courseMembers.$inferSelect;
 export type Skill = typeof skills.$inferSelect;
@@ -1238,6 +1691,10 @@ export type SchoolExam = typeof schoolExams.$inferSelect;
 export type SchoolExamResult = typeof schoolExamResults.$inferSelect;
 export type Lernfeld = typeof lernfelder.$inferSelect;
 export type LernfeldMapping = typeof lernfeldMappings.$inferSelect;
+export type TrainingCatalogLearningField =
+  typeof trainingCatalogLearningFields.$inferSelect;
+export type TrainingCatalogContentMapping =
+  typeof trainingCatalogContentMappings.$inferSelect;
 export type ActivityReport = typeof activityReports.$inferSelect;
 export type ActivityReportEntry = typeof activityReportEntries.$inferSelect;
 
@@ -1256,15 +1713,6 @@ export type AnnualPerformanceSummary =
 export type WorkCertificate = typeof workCertificates.$inferSelect;
 export type CertificateTextTemplate =
   typeof certificateTextTemplates.$inferSelect;
-
-export const lernfelderSchema = pgTable('lernfelder', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  description: text('description'),
-  label: text('label').notNull(), // LF-1 to LF-12
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at'),
-});
 
 // --- 10. ARBEITSZEUGNIS MODULE TABLES ---
 // Module for automated work certificate generation based on weekly performance evaluations

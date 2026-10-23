@@ -4,6 +4,8 @@ import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
+import { requireContentScope } from '@/lib/catalog/scope';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import {
   courses,
   courseMembers,
@@ -23,6 +25,8 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const scope = await requireContentScope(session, _req, 'course', courseId);
+    if (isErrorResponse(scope)) return scope;
     const [course] = await db
       .select()
       .from(courses)
@@ -94,6 +98,9 @@ export async function PATCH(
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
+    // The course must exist and lie inside the caller's catalogs
+    const scope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(scope)) return scope;
 
     // Verify course exists
     const [courseRow] = await db
@@ -121,7 +128,8 @@ export async function PATCH(
     if (typeof body?.title === 'string') updates.title = body.title;
     if (typeof body?.description === 'string')
       updates.description = body.description;
-    if (typeof body?.year !== 'undefined') updates.year = body.year === null ? null : Number(body.year);
+    if (typeof body?.year !== 'undefined')
+      updates.year = body.year === null ? null : Number(body.year);
     if (typeof body?.chapter !== 'undefined')
       updates.chapter = Number(body.chapter);
     if (typeof body?.examPart !== 'undefined')
@@ -228,6 +236,9 @@ export async function DELETE(
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
+    // The course must exist and lie inside the caller's catalogs
+    const scope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(scope)) return scope;
 
     // Verify course exists
     const [courseRow] = await db
@@ -283,8 +294,9 @@ export async function DELETE(
           type: 'COURSE_DELETED',
           title: 'Kurs gelöscht',
           message: `Der Kurs "${courseName}" wurde gelöscht.`,
-          linkUrl:
-            ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(m.role) ? '/trainer/courses' : '/trainee/modules',
+          linkUrl: isTrainerLevelRole(m.role)
+            ? '/trainer/courses'
+            : '/trainee/modules',
           context: { courseId },
           organizationId,
         }));

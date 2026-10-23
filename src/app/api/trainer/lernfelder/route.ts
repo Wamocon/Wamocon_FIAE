@@ -1,23 +1,38 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { lernfelderSchema, useCases } from '@/db/migrations/schemas/schema';
-import { eq, arrayContains, count, and } from 'drizzle-orm';
+import {
+  trainingCatalogLearningFields as learningFields,
+  useCases,
+} from '@/db/migrations/schemas/schema';
+import { arrayContains, count, and, eq } from 'drizzle-orm';
 import { verifyPlatformOwner } from '@/lib/auth-helpers';
+import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
+import {
+  LEARNING_FIELD_LABEL_CONFLICT,
+  createLearningField,
+  isLearningFieldLabelConflict,
+  legacyLearningFieldSelect,
+} from '@/lib/catalog/learning-fields';
 
 /**
  * GET /api/trainer/lernfelder
- * List all Lernfelder with a count of related use cases.
+ * List the Lernfelder of the caller's catalogs with a count of related use
+ * cases (of the same catalog).
  */
 export async function GET(req: NextRequest) {
   try {
     const session = await requireTrainer(req);
     if (isErrorResponse(session)) return session;
 
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+
     const list = await db
-      .select()
-      .from(lernfelderSchema)
-      .orderBy(lernfelderSchema.createdAt);
+      .select(legacyLearningFieldSelect)
+      .from(learningFields)
+      .where(catalogCondition(learningFields.trainingCatalogId, scope))
+      .orderBy(learningFields.createdAt);
 
     // Batch: get use case counts per lernfeld label using SQL arrayContains
     const countResults = await Promise.all(
@@ -25,15 +40,23 @@ export async function GET(req: NextRequest) {
         db
           .select({ c: count() })
           .from(useCases)
-          .where(arrayContains(useCases.lernfelder, [l.label]))
-          .then(rows => ({ label: l.label, count: Number(rows[0]?.c ?? 0) }))
+          .where(
+            and(
+              arrayContains(useCases.lernfelder, [l.label]),
+              eq(useCases.trainingCatalogId, l.trainingCatalogId)
+            )
+          )
+          .then(rows => ({
+            key: `${l.trainingCatalogId}:${l.label}`,
+            count: Number(rows[0]?.c ?? 0),
+          }))
       )
     );
-    const countMap = new Map(countResults.map(r => [r.label, r.count]));
+    const countMap = new Map(countResults.map(r => [r.key, r.count]));
 
     const result = list.map(l => ({
       ...l,
-      useCaseCount: countMap.get(l.label) || 0,
+      useCaseCount: countMap.get(`${l.trainingCatalogId}:${l.label}`) || 0,
     }));
 
     return NextResponse.json({ lernfelder: result });
@@ -48,7 +71,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/trainer/lernfelder
- * Create a new Lernfeld.
+ * Create a new Lernfeld in the active catalog.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -63,6 +86,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+
     const body = await req.json();
     const { title, description, label } = body;
 
@@ -73,17 +99,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [inserted] = await db
-      .insert(lernfelderSchema)
-      .values({
-        title,
-        description,
-        label,
-      })
-      .returning();
+    const inserted = await createLearningField({
+      catalogId: scope.activeCatalogId,
+      label: String(label),
+      title,
+      description,
+    });
 
     return NextResponse.json({ lernfelder: inserted });
   } catch (e) {
+    if (isLearningFieldLabelConflict(e)) {
+      return NextResponse.json(
+        { error: LEARNING_FIELD_LABEL_CONFLICT },
+        { status: 409 }
+      );
+    }
     console.error('Create lernfelder error', e);
     return NextResponse.json(
       { error: 'Internal Server Error' },

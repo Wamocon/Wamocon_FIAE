@@ -1,0 +1,24 @@
+-- Security hardening: PUBLIC must not create objects in the schema public.
+--
+-- Measured read-only on production on 2026-10-23:
+--   - ACL of the schema public: pg_database_owner=UC, PUBLIC (=UC), postgres=U,
+--     authenticated=U, service_role=U and one more login role with USAGE.
+--     The entry =UC gives CREATE to PUBLIC, so every login role may create
+--     objects in public, among them the two Preview roles (app_preview,
+--     app_preview_migrator).
+--   - All 246 objects of public (220 relations, 6 functions, 20 types) are owned
+--     by postgres. Nothing depends on the open CREATE.
+--
+-- Why it matters: a role that may create objects in public can plant a function
+-- or an operator that an unqualified call elsewhere picks up (search path
+-- attack). The Preview roles have public on their search_path, because pgvector
+-- lives there.
+--
+-- Effect: PUBLIC loses CREATE on public. The database owner keeps CREATE through
+-- pg_database_owner, USAGE of PUBLIC, anon, authenticated and service_role is not
+-- touched. No object and no data change. Safe to run twice.
+--
+-- Undo (only if something breaks):
+--   grant create on schema public to public;
+
+revoke create on schema public from public;

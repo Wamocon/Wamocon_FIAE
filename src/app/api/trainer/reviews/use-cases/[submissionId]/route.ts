@@ -9,6 +9,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
+import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
 
 export async function PATCH(
   req: NextRequest,
@@ -43,6 +44,16 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    // The reviewed content must lie inside the caller's catalogs
+    const catalogScope = await requireCatalogScope(session, req);
+    if (isErrorResponse(catalogScope)) return catalogScope;
+    const deniedUseCase = await ensureContentInScope(
+      catalogScope,
+      'useCase',
+      String(sub.useCaseId)
+    );
+    if (deniedUseCase) return deniedUseCase;
 
     const [uc] = await db
       .select()

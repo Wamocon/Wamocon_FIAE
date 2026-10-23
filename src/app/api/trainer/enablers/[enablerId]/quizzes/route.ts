@@ -12,6 +12,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getContentCatalogId, requireContentScope } from '@/lib/catalog/scope';
 
 // GET: List quizzes for an enabler grouped by difficulty
 export async function GET(
@@ -23,6 +24,13 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { enablerId } = await params;
+    const catalogScope = await requireContentScope(
+      session,
+      _req,
+      'enabler',
+      enablerId
+    );
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const [enabler] = await db
       .select({ id: enablers.id })
       .from(enablers)
@@ -82,6 +90,13 @@ export async function POST(
     if (isErrorResponse(session)) return session;
 
     const { enablerId } = await params;
+    const catalogScope = await requireContentScope(
+      session,
+      req,
+      'enabler',
+      enablerId
+    );
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const body = await req.json();
     const title: string | undefined = body?.title;
     const createdById = session.id;
@@ -150,9 +165,18 @@ export async function POST(
       }
 
       // Create quiz
+      // The quiz belongs to the catalog of its enabler
       const [qz] = await tx
         .insert(quizzes)
-        .values({ title, quizType: 'LESSON' as any, createdById, isActive })
+        .values({
+          title,
+          quizType: 'LESSON' as any,
+          createdById,
+          isActive,
+          trainingCatalogId:
+            (await getContentCatalogId('enabler', String(enablerId))) ??
+            catalogScope.activeCatalogId,
+        })
         .returning();
       await tx
         .insert(enablerQuizLinks)

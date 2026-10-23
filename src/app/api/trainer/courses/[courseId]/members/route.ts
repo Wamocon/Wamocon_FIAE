@@ -2,6 +2,7 @@ import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { and, eq } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
 import { DB_OPTION } from '@/lib/db-schema';
@@ -12,6 +13,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
+import { requireContentScope } from '@/lib/catalog/scope';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -44,6 +46,8 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -93,6 +97,8 @@ export async function POST(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -190,7 +196,7 @@ export async function POST(
         .from(courses)
         .where(eq(courses.id, courseId as any));
       const courseName = courseInfo?.title || 'einem Kurs';
-      const isTrainer = ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(role);
+      const isTrainer = isTrainerLevelRole(role);
 
       try {
         await db.insert(notifications).values({
@@ -257,6 +263,8 @@ export async function DELETE(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const trainerId = session.id;
@@ -317,7 +325,7 @@ export async function DELETE(
         title: 'Aus Kurs entfernt',
         message: `Du wurdest aus dem Kurs "${courseName}" entfernt.`,
         linkUrl:
-          ['ADMIN', 'TEMP_ADMIN', 'TRAINER'].includes(memberToRemove.role)
+          isTrainerLevelRole(memberToRemove.role)
             ? '/trainer/courses'
             : '/trainee/modules',
         context: { courseId },

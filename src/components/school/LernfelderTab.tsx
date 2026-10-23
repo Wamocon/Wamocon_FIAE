@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { authFetch } from '@/lib/authFetch';
 import { Layers, Search, BookOpen, ArrowRight } from 'lucide-react';
 
 export function LernfelderTab() {
@@ -14,7 +15,7 @@ export function LernfelderTab() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetch('/api/trainee/lernfelder', { cache: 'no-store' })
+    authFetch('/api/trainee/lernfelder', { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         setLernfelder(data.lernfelder || []);

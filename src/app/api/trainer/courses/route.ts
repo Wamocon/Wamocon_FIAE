@@ -12,6 +12,11 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+  catalogCacheKey,
+  catalogCondition,
+  requireCatalogScope,
+} from '@/lib/catalog/scope';
 
 // GET /api/trainer/courses?trainerProfileId=...
 // Returns ALL courses for any authenticated trainer (shared curriculum model)
@@ -21,19 +26,24 @@ export async function GET(req: NextRequest) {
     const session = await requireTrainer(req);
     if (isErrorResponse(session)) return session;
 
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+
     const { searchParams } = new URL(req.url);
     const trainerProfileId = session.id;
     const q = searchParams.get('q')?.trim();
     const year = searchParams.get('year');
     const examPart = searchParams.get('examPart');
 
-    const cacheKey = `trainer_courses_${trainerProfileId}_${q || ''}_${year || ''}_${examPart || ''}`;
+    const cacheKey = `trainer_courses_${trainerProfileId}_${q || ''}_${year || ''}_${examPart || ''}_${catalogCacheKey(scope)}`;
     const data = await apiCache.getOrFetch(
       cacheKey,
       async () => {
         // Build where conditions for search and year filters only
-        // All trainers can see ALL courses (shared curriculum model for training platforms)
-        const whereConditions: any[] = [];
+        // All trainers can see all courses of their catalogs (shared curriculum model)
+        const whereConditions: any[] = [
+          catalogCondition(courses.trainingCatalogId, scope),
+        ];
         if (q) whereConditions.push(ilike(courses.title, `%${q}%`));
         if (year && year !== 'all')
           whereConditions.push(eq(courses.year, Number(year)));
@@ -159,12 +169,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // New courses belong to the active catalog of the caller
+    const scope = await requireCatalogScope(session, req);
+    if (isErrorResponse(scope)) return scope;
+
     const organizationId = await getUserOrgId(createdById);
 
     const result = await db.transaction(async tx => {
       const [course] = await tx
         .insert(courses)
         .values({
+          trainingCatalogId: scope.activeCatalogId,
           title,
           year: year as any,
           chapter: chapter as any,

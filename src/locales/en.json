@@ -252,6 +252,7 @@
   "roles.trainer": "Trainer",
   "roles.admin": "Admin",
   "roles.tempAdmin": "Temp Admin",
+  "roles.superAdmin": "Super Admin",
   "trainee.management.title": "Trainees",
   "trainee.management.description": "Manage your trainees and track their progress",
   "trainee.management.loading": "Loading trainees...",

@@ -9,6 +9,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { requireContentScope } from '@/lib/catalog/scope';
 
 export async function GET(
   _req: NextRequest,
@@ -19,6 +20,8 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const catalogScope = await requireContentScope(session, _req, 'course', courseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const list = await db
       .select({
         id: enablers.id,
@@ -48,6 +51,8 @@ export async function POST(
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'course', courseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 

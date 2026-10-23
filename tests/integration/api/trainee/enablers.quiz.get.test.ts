@@ -2,11 +2,13 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { mockCatalogScope } from '../../../helpers/mockNext';
 
 // helper to import the route handler with a mocked DB
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockCatalogScope();
   const mod = await import('@/app/api/trainee/enablers/[enablerId]/quiz/route');
   return mod.GET as (req: any, ctx: { params: Promise<{ enablerId: string }> }) => Promise<Response>;
 }

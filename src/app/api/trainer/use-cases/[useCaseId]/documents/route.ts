@@ -8,6 +8,7 @@ import { DB_OPTION } from '@/lib/db-schema';
 import { eq } from 'drizzle-orm';
 import { contentDocuments, useCases } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { requireContentScope } from '@/lib/catalog/scope';
 
 // GET documents for a use case
 export async function GET(
@@ -19,6 +20,8 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { useCaseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'useCase', useCaseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
 
     // Verify use case exists
     const [useCase] = await db
@@ -59,6 +62,8 @@ export async function POST(
     if (isErrorResponse(session)) return session;
 
     const { useCaseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'useCase', useCaseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -169,6 +174,8 @@ export async function DELETE(
     if (isErrorResponse(session)) return session;
 
     const { useCaseId } = await params;
+    const catalogScope = await requireContentScope(session, req, 'useCase', useCaseId);
+    if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
     const documentId = searchParams.get('documentId');

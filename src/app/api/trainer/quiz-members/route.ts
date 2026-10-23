@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { and, eq } from 'drizzle-orm';
 import { profiles, quizMembers, quizzes } from '@/db/migrations/schemas/schema';
+import { isCatalogAllowed, requireCatalogScope } from '@/lib/catalog/scope';
 import {
   requireTrainer,
   isErrorResponse,
@@ -10,7 +12,6 @@ import {
   type SessionUser,
 } from '@/lib/auth/session';
 
-const TRAINER_LEVEL = ['TRAINER', 'TEMP_ADMIN', 'ADMIN'];
 
 /**
  * The caller may manage the members of a quiz when they created it, are a
@@ -18,12 +19,24 @@ const TRAINER_LEVEL = ['TRAINER', 'TEMP_ADMIN', 'ADMIN'];
  */
 async function canManageQuiz(session: SessionUser, quizId: string) {
   const [quiz] = await db
-    .select({ createdById: quizzes.createdById })
+    .select({
+      createdById: quizzes.createdById,
+      trainingCatalogId: quizzes.trainingCatalogId,
+    })
     .from(quizzes)
     .where(eq(quizzes.id, quizId as any))
     .limit(1);
   if (!quiz)
     return { ok: false as const, status: 404, error: 'Quiz not found' };
+
+  // The quiz must lie inside the caller's catalogs (same answer as not found)
+  const catalogScope = await requireCatalogScope(session);
+  if (catalogScope instanceof Response) {
+    return { ok: false as const, status: catalogScope.status, error: 'Forbidden' };
+  }
+  if (!isCatalogAllowed(catalogScope, quiz.trainingCatalogId)) {
+    return { ok: false as const, status: 404, error: 'Quiz not found' };
+  }
 
   if (session.isSuperAdmin || String(quiz.createdById) === session.id) {
     return { ok: true as const };
@@ -89,7 +102,7 @@ export async function POST(req: NextRequest) {
       .limit(1);
     if (
       !target ||
-      !TRAINER_LEVEL.includes(String(target.role)) ||
+      !isTrainerLevelRole(String(target.role)) ||
       !isInOrgScope(scopeOrg(session), target.organizationId)
     ) {
       return NextResponse.json({ error: 'Trainer not found' }, { status: 404 });

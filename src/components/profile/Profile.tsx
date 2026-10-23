@@ -3,6 +3,7 @@
 import { authFetch } from '@/lib/authFetch';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -581,7 +582,7 @@ export function Profile() {
           <div className="flex items-center justify-center py-8">
             <LoadingSpinner size="sm" />
           </div>
-        ) : ['admin', 'temp_admin', 'trainer'].includes(profile.role) ? (
+        ) : isTrainerLevelRole(profile.role) ? (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <div className="glass-effect border-accent/20 rounded-2xl border p-4 text-center">
@@ -672,7 +673,7 @@ export function Profile() {
         <h2 className="text-foreground mb-6 text-2xl font-bold">
           {t('profile.recentActivities')}
         </h2>
-        {['admin', 'temp_admin', 'trainer'].includes(profile.role) ? (
+        {isTrainerLevelRole(profile.role) ? (
           <div className="space-y-3">
             {statsLoading ? (
               <div className="flex items-center justify-center py-8">
