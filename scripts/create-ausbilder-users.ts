@@ -1,17 +1,27 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
+const testPassword = (() => {
+  const value = process.env.TEST_USER_PASSWORD;
+  if (!value) {
+    throw new Error(
+      'Missing TEST_USER_PASSWORD (set it in .env.local, never commit it)'
+    );
+  }
+  return value;
+})();
+
 // Test users to create
 const users = [
   {
     email: 'ausbilder@test.com',
-    password: 'ausbilder123',
+    password: testPassword,
     role: 'TRAINER' as const,
     full_name: 'Ausbilder',
   },
   {
     email: 'auszubildende@test.com',
-    password: 'auszubildende123',
+    password: testPassword,
     role: 'TRAINEE' as const,
     full_name: 'Auszubildende',
   },

@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 import { createClient } from '@supabase/supabase-js';
+import { readFileSync } from 'node:fs';
 
 type TargetUser = {
   email: string;
@@ -8,13 +9,13 @@ type TargetUser = {
   role: 'TRAINER' | 'TRAINEE';
 };
 
-const targets: TargetUser[] = [
-  { email: 'trainer1@gmail.com', password: '123123123', role: 'TRAINER' },
-  { email: 'trainer2@gmail.com', password: '123123123', role: 'TRAINER' },
-  { email: 'trainee1@gmail.com', password: '123123123', role: 'TRAINEE' },
-  { email: 'trainee2@gmail.com', password: '123123123', role: 'TRAINEE' },
-  { email: 'trainee3@gmail.com', password: '123123123', role: 'TRAINEE' },
-];
+const usersFile = process.env.PROD_USERS_FILE;
+if (!usersFile) {
+  throw new Error(
+    'Missing PROD_USERS_FILE (path to an untracked JSON file: [{ "email", "password", "role" }])'
+  );
+}
+const targets: TargetUser[] = JSON.parse(readFileSync(usersFile, 'utf8'));
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
