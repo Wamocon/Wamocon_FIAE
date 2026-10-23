@@ -5,10 +5,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Static checks of the profile column protection: the column privileges
- * (20261023200000) and the trigger (20261023300000) are two independent layers
- * and must name the same writable columns, and these must be the columns the
- * browser really writes. The SQL itself is verified on a throwaway database.
+ * Static checks of the profile protection: the column privileges
+ * (20261023200000, narrowed by 20261023300000) and the trigger (20261023300000)
+ * are two independent layers and must name the same writable columns, and these
+ * must be the columns the browser really writes. The SQL itself is verified on a
+ * throwaway database.
  */
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'supabase', 'migrations');
@@ -28,16 +29,26 @@ function identifiers(list: string): string[] {
   return [...list.matchAll(/[a-z][a-z_]*/g)].map(match => match[0]).sort();
 }
 
-describe('profiles column protection', () => {
+describe('profiles protection', () => {
   const privileges = readSql(PRIVILEGES);
   const trigger = readSql(TRIGGER);
-  const granted = /grant update \(([^)]+)\)/i.exec(privileges)?.[1] ?? '';
-  const allowed =
-    /allowed text\[\] := array\[([^\]]+)\]/i.exec(trigger)?.[1] ?? '';
+  const granted = identifiers(
+    /grant update \(([^)]+)\)/i.exec(privileges)?.[1] ?? ''
+  );
+  const revoked = identifiers(
+    /revoke update \(([^)]+)\) on table public\.profiles from authenticated/i.exec(
+      trigger
+    )?.[1] ?? ''
+  );
+  const allowed = identifiers(
+    /allowed text\[\] := array\[([^\]]+)\]/i.exec(trigger)?.[1] ?? ''
+  );
 
   it('names the same writable columns in the privileges and in the trigger', () => {
-    expect(identifiers(granted).length).toBeGreaterThan(0);
-    expect(identifiers(allowed)).toEqual(identifiers(granted));
+    const effective = granted.filter(column => !revoked.includes(column));
+    expect(granted.length).toBeGreaterThan(0);
+    expect(revoked).toEqual(['assigned_trainer_id']);
+    expect(allowed).toEqual(effective);
   });
 
   it('allows exactly the columns the browser writes in updateProfile', () => {
@@ -45,14 +56,20 @@ describe('profiles column protection', () => {
       path.join(process.cwd(), 'src', 'contexts', 'AuthContext.tsx'),
       'utf-8'
     );
-    const update = /\.from\('profiles'\)\s*\.update\(\{([\s\S]*?)\}\)/.exec(
-      source
-    )?.[1];
-    expect(update).toBeDefined();
-    const written = [...(update as string).matchAll(/^\s*([a-z_]+):/gm)]
+    const start = source.indexOf('const updateProfile = useCallback(');
+    expect(start).toBeGreaterThan(0);
+    const body = source.slice(start, source.indexOf('refreshProfile', start));
+    expect(body).toMatch(/\.from\('profiles'\)\s*\.update\(row\)/);
+    // the payload: the initial literal (updated_at) and the assignments row.<column> =
+    const written = [
+      ...(/const row[^=]*=\s*\{([\s\S]*?)\};/.exec(body)?.[1] ?? '').matchAll(
+        /^\s*([a-z_]+):/gm
+      ),
+      ...body.matchAll(/\brow\.([a-z_]+)\s*=/g),
+    ]
       .map(match => match[1])
       .sort();
-    expect(written).toEqual(identifiers(allowed));
+    expect(written).toEqual(allowed);
   });
 
   it('never allows the sensitive columns', () => {
@@ -63,30 +80,42 @@ describe('profiles column protection', () => {
       'trainer_activated',
       'email',
       'id',
+      'assigned_trainer_id',
     ]) {
-      expect(identifiers(allowed)).not.toContain(column);
+      expect(allowed).not.toContain(column);
     }
   });
 
-  it('fires before every update of every row of public.profiles', () => {
+  it('fires before every insert, update and delete of every row of public.profiles', () => {
     expect(trigger).toMatch(
-      /create trigger profiles_protect_columns\s+before update on public\.profiles\s+for each row\s+execute function public\.profiles_protect_columns\(\)/i
+      /create trigger profiles_protect_columns\s+before insert or update or delete on public\.profiles\s+for each row\s+execute function public\.profiles_protect_columns\(\)/i
     );
   });
 
   it('checks exactly the two API roles and refuses with SQLSTATE 42501', () => {
     expect(trigger).toMatch(/current_user in \('anon', 'authenticated'\)/);
     expect(trigger).toMatch(/errcode = '42501'/);
-    // the comparison covers every column except the allowed ones
+    // the update comparison covers every column except the allowed ones
     expect(trigger).toMatch(
       /\(to_jsonb\(new\) - allowed\) is distinct from \(to_jsonb\(old\) - allowed\)/
     );
   });
 
-  it('has a fixed search path, no EXECUTE for PUBLIC and is safe to run twice', () => {
+  it('refuses insert and delete for the API roles and lets a delete through for everybody else', () => {
+    expect(trigger).toMatch(/tg_op = 'UPDATE'/);
+    expect(trigger).toMatch(/Profiles cannot be % with the API credentials/);
+    // a before delete trigger that returns NEW (null) would drop the delete silently
+    expect(trigger).toMatch(/if tg_op = 'DELETE' then\s+return old;/);
+  });
+
+  it('stays SECURITY INVOKER: with SECURITY DEFINER current_user is the owner and the protection is off', () => {
+    expect(trigger).not.toMatch(/security definer/i);
+  });
+
+  it('has a fixed search path, takes EXECUTE from PUBLIC and the API roles and is safe to run twice', () => {
     expect(trigger).toMatch(/set search_path = ''/i);
     expect(trigger).toMatch(
-      /revoke execute on function public\.profiles_protect_columns\(\) from public/i
+      /revoke execute on function public\.profiles_protect_columns\(\) from public, anon, authenticated/i
     );
     expect(trigger).toMatch(/create or replace function/i);
     expect(trigger).toMatch(
