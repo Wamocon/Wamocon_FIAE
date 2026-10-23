@@ -1,0 +1,31 @@
+# =============================================================================
+# Composite action: Node and the PINNED Supabase CLI, nothing else
+# =============================================================================
+# For jobs that connect with a connection string (--db-url) and therefore need
+# neither the Supabase access token nor a project link. This is what the Preview
+# jobs use: they never see a Production token.
+#
+# Pinned: scripts/db/preview-cli.mjs depends on "db query --output-format json"
+# and "--agent no"; a new output format once broke CI silently in another
+# project. Raise the version only together with a trial run of
+#   node scripts/db/preview-migrate.mjs apply --db-url-env PREVIEW_DB_URL --plan-only
+# =============================================================================
+name: Supabase CLI
+description: Node and the pinned Supabase CLI, without token and without project link
+inputs:
+  supabase-cli-version:
+    description: Pinned Supabase CLI version
+    required: false
+    default: '2.118.0'
+runs:
+  using: composite
+  steps:
+    # actions/setup-node v4.4.0
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: 22
+
+    # supabase/setup-cli v1.7.3
+    - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb
+      with:
+        version: ${{ inputs.supabase-cli-version }}

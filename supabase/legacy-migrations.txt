@@ -1,0 +1,19 @@
+# Known legacy migration files with a 12 digit version prefix.
+#
+# scripts/db/migration-check.mjs requires <14 digits>_<name>.sql for every
+# migration. The files listed here are exempt, but only while they already exist
+# on the base branch (master). A NEW file with a 12 digit prefix is always an
+# error. Legacy files are treated as baseline: the Preview applier never runs
+# them against public_preview (the structure of public_preview is cloned from
+# public, which already contains their effect).
+#
+# Format: <file name>  <state>  # reason
+#   applied  already applied to production by hand. scripts/db/baseline-guard.mjs
+#            stops a release if "supabase db push" would apply this file again,
+#            which means the ledger baseline repair was not done yet.
+#   pending  not applied anywhere yet (default).
+# Add a line only with a reason in the pull request; remove it as soon as the
+# file is renamed.
+
+202606260001_schema_only_ausbildung_duration.sql  applied  # applied to production by hand (MCP); part of the baseline
+202610200001_training_catalog_curriculum.sql      pending  # not applied anywhere yet; another branch renames it to a 14 digit version, then delete this line

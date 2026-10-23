@@ -1,0 +1,107 @@
+# =============================================================================
+# Production deploy (manual): deploys the LAST published release
+# =============================================================================
+# Process step 5 (Production): Actions -> "Production Deploy" -> Run workflow.
+# This workflow NEVER runs automatically and NEVER deploys a branch. It
+# determines the tag of the latest release with "gh release view" (the latest
+# non-draft, non-prerelease release), checks that tag out and deploys it.
+#
+# Use it to redeploy the current release (for example after a failed deploy
+# job of the release run). It does not migrate and does not sync content: a
+# read-only check first makes sure the migrations of the release are already
+# applied to public (supabase db push --dry-run must say "up to date"),
+# otherwise the deployment is refused. To roll back to an older release, make
+# that release the latest one on GitHub, see docs/release-prozess.md.
+#
+# Protection: the input "confirm" must be "production" (guards against a wrong
+# click), environment "Production" with Required reviewers (human setting),
+# only one run at a time, never cancelled.
+#
+# Secrets (environment "Production"): SUPABASE_ACCESS_TOKEN, VERCEL_TOKEN,
+# VERCEL_ORG_ID, VERCEL_PROJECT_ID. Variable: SUPABASE_PROJECT_REF_PROD.
+# =============================================================================
+
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "production" to deploy the latest release to Production'
+        required: true
+        type: string
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy latest release to Production
+    # Only the workflow file of master may start it
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: Production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - name: Confirmation
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "production" ]; then
+            echo "::error::Type exactly \"production\" in the input confirm."
+            exit 1
+          fi
+
+      - name: Determine the latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease --jq 'if .isDraft or .isPrerelease then empty else .tagName end')
+          if [ -z "$tag" ]; then
+            echo "::error::No published stable release found. Create a release first."
+            exit 1
+          fi
+          if ! printf '%s' "$tag" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$'; then
+            echo "::error::Unexpected tag name."
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Latest release: $tag"
+
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: refs/tags/${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The release tag must point to a commit that is part of master
+      - uses: ./.github/actions/require-master
+
+      - uses: ./.github/actions/db-setup
+        with:
+          project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+
+      # Read only. Refuses the deployment if the migrations of this release are not applied yet.
+      - name: Migrations of the release are applied to public?
+        run: |
+          set -o pipefail
+          node scripts/db/supabase-retry.mjs db push --linked --dry-run | tee dry-run.txt
+          if ! grep -q "up to date" dry-run.txt; then
+            echo "::error::The migrations of this release are not applied to public yet (see the release run). Deployment refused."
+            exit 1
+          fi
+
+      - uses: ./.github/actions/vercel-deploy
+        with:
+          target: production
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}

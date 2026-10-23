@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
+import { DB_OPTION } from '@/lib/db-schema';
 import {
   courseMembers,
   profiles,
@@ -15,7 +16,10 @@ import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const key = getSupabaseSecretKey() || '';
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient(url, key, {
+    auth: { persistSession: false },
+    db: DB_OPTION,
+  });
 }
 
 /**

@@ -1,5 +1,6 @@
 import { getSupabasePublicKey } from '@/lib/env';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { DB_OPTION, assertDbConfig } from '@/lib/db-schema';
 
 // Lazy initialization to avoid build-time errors when env vars are not set
 let _supabase: SupabaseClient | null = null;
@@ -8,6 +9,9 @@ function getSupabaseClient(): SupabaseClient {
   if (_supabase) {
     return _supabase;
   }
+
+  // On the server the database role of this deployment has to fit the schema
+  assertDbConfig();
 
   // Prefer an internal URL for server-side calls (inside Docker), fallback to public URL for browser.
   const isServer = typeof window === 'undefined';
@@ -18,7 +22,7 @@ function getSupabaseClient(): SupabaseClient {
     throw new Error('Supabase URL and publishable (anon) key are required');
   }
 
-  _supabase = createClient(supabaseUrl, supabaseAnonKey);
+  _supabase = createClient(supabaseUrl, supabaseAnonKey, { db: DB_OPTION });
   return _supabase;
 }
 

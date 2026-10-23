@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { DB_SCHEMA } from '@/lib/db-schema';
 
 export type UINotification = {
   id: string;
@@ -60,7 +61,7 @@ export default function NotificationsBell() {
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: DB_SCHEMA,
           table: 'notifications',
           filter: `user_id=eq.${profile.id}`,
         },

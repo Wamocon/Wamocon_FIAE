@@ -11,6 +11,8 @@ import db from '@/db';
 import { eq, sql } from 'drizzle-orm';
 import { profiles, organizations, notifications } from '@/db/migrations/schemas/schema';
 import { sendCredentialsEmail } from '@/lib/email';
+import { DB_OPTION } from '@/lib/db-schema';
+import { blockInPreview } from '@/lib/preview-guard';
 import crypto from 'crypto';
 
 export async function GET(req: NextRequest) {
@@ -80,6 +82,10 @@ export async function POST(req: NextRequest) {
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
 
+    // auth.admin.createUser would create an account in the shared Production auth
+    const blocked = blockInPreview();
+    if (blocked) return blocked;
+
     const body = await req.json();
     const { email, fullName, role, organizationId, sendEmail } = body as {
       email: string;
@@ -142,6 +148,7 @@ export async function POST(req: NextRequest) {
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
+      db: DB_OPTION,
     });
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
