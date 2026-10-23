@@ -4,26 +4,78 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
+import { authFetch } from '@/lib/authFetch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
-export default function LoginForm() {
+type CatalogState = 'idle' | 'ready' | 'unknown' | 'unavailable';
+
+// catalogCode: the occupation the visitor chose on /ausbildung (?catalog=CODE).
+// Without it the form behaves exactly as before.
+export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [catalogTitle, setCatalogTitle] = useState<string | null>(null);
+  const [catalogState, setCatalogState] = useState<CatalogState>('idle');
   const router = useRouter();
   const { profile, signIn } = useAuth();
   const { t } = useLanguage();
 
+  // Name of the chosen occupation from the public list of the active ones.
+  useEffect(() => {
+    if (!catalogCode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/catalogs');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const found = (Array.isArray(data?.catalogs) ? data.catalogs : []).find(
+          (c: { code?: string }) => String(c.code).toUpperCase() === catalogCode
+        );
+        if (cancelled) return;
+        if (found) {
+          setCatalogTitle(found.title);
+          setCatalogState('ready');
+        } else {
+          setCatalogState('unknown');
+        }
+      } catch {
+        if (!cancelled) setCatalogState('unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogCode]);
+
+  // After the sign in the server says whether this account has the chosen
+  // occupation. It is a hint only: a failed check never undoes the sign in.
+  const checkCatalogAccess = async (code: string) => {
+    try {
+      const res = await authFetch(
+        `/api/me/catalogs?catalog=${encodeURIComponent(code)}`
+      );
+      if (res.status === 403) {
+        toast.error(
+          t('catalogs.login.notAllowed', { title: catalogTitle ?? code })
+        );
+      }
+    } catch {
+      // network error: nothing to tell the user
+    }
+  };
+
   useEffect(() => {
     if (profile) {
-      if (isTrainerLevelRole(profile.role))
-        router.push('/trainer/dashboard');
+      if (isTrainerLevelRole(profile.role)) router.push('/trainer/dashboard');
       else router.push('/trainee/dashboard');
     }
   }, [profile, router]);
@@ -35,6 +87,9 @@ export default function LoginForm() {
     try {
       await signIn(email.trim(), password);
       // redirect happens in the effect when profile is loaded
+      if (catalogCode && catalogState !== 'unknown') {
+        await checkCatalogAccess(catalogCode);
+      }
     } catch (err: any) {
       setError(err?.message || t('auth.loginFailed'));
     } finally {
@@ -65,6 +120,19 @@ export default function LoginForm() {
           >
             {t('auth.backToHome')}
           </button>
+          {catalogCode && catalogState === 'ready' && catalogTitle && (
+            <p
+              role="status"
+              className="text-foreground mt-4 text-sm font-medium"
+            >
+              {t('catalogs.login.banner', { title: catalogTitle })}
+            </p>
+          )}
+          {catalogCode && catalogState === 'unknown' && (
+            <p role="status" className="text-muted-foreground mt-4 text-sm">
+              {t('catalogs.login.unknown')}
+            </p>
+          )}
         </div>
         <div className="glass-effect-enhanced border-accent/30 rounded-2xl border-2 p-8 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -109,7 +177,11 @@ export default function LoginForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                  aria-label={
+                    showPassword
+                      ? t('auth.hidePassword')
+                      : t('auth.showPassword')
+                  }
                   className="text-muted hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 p-1 transition-colors"
                 >
                   {showPassword ? (

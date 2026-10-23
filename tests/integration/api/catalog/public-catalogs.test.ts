@@ -106,12 +106,12 @@ describe('GET /api/catalogs (public list of the active occupations)', () => {
     expect(body.catalogs[0].schoolOrganization).toBe('block');
   });
 
-  it('is cacheable by shared caches', async () => {
+  it('is not cached, so a newly activated occupation shows up at once', async () => {
+    // the middleware sets the same value for this route, so what the route says
+    // is what the client gets
     const { GET } = await load({ trainingCatalogs: [fiaeRow] });
     const res = await GET();
-    expect(res.headers.get('cache-control')).toBe(
-      'public, s-maxage=300, stale-while-revalidate=59'
-    );
+    expect(res.headers.get('cache-control')).toBe('private, no-cache');
   });
 
   it('answers with an empty list when no catalog is active', async () => {
