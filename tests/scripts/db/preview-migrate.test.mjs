@@ -118,7 +118,6 @@ test('setup script: structure only, ledger seeded, no row copy', () => {
     ],
     localByVersion: local,
     dumpSql: 'create table public_preview.t (id int);',
-    shared: ['create trigger a_preview after insert on auth.users;'],
     postClone: '-- post clone',
   });
   assert.ok(script.includes('create schema if not exists public_preview;'));
@@ -130,7 +129,6 @@ test('setup script: structure only, ledger seeded, no row copy', () => {
   assert.ok(script.includes("('20261001000000', 'a', 'abc')"));
   assert.ok(script.includes("('20260626103015', 'm''cp', null)"));
   assert.ok(script.includes('create table public_preview.t (id int);'));
-  assert.ok(script.includes('a_preview after insert on auth.users;'));
   assert.ok(script.includes('-- post clone'));
   // order: schema, ledger, dump, grants, post clone
   assert.ok(
@@ -159,12 +157,12 @@ test('grants for the Preview role only touch public_preview and only if the role
   assert.ok(!/in schema public\b(?!_)/.test(sql));
 });
 
-test('abort SQL removes only Preview twins and refuses foreign dependents', () => {
+test('abort SQL drops only public_preview and refuses foreign dependents', () => {
   const sql = abortSql();
-  assert.ok(sql.includes("t.tgname like '%\\_preview'"));
-  assert.ok(sql.includes("like '%-preview'"));
   assert.ok(sql.includes('drop schema public_preview cascade'));
   assert.ok(sql.includes('Rebuild aborted'));
   assert.ok(!/drop schema public cascade/i.test(sql));
-  assert.ok(!/drop table[^;]*\bpublic\./i.test(sql));
+  assert.ok(!/drop table[^;]*public\./i.test(sql));
+  // the Preview role has no rights on auth, storage or cron: nothing there is touched
+  assert.ok(!/(auth|storage|cron)\./.test(sql));
 });

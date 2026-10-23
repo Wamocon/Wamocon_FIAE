@@ -41,14 +41,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cli, query, targetFrom } from './preview-cli.mjs';
 import { readLegacy } from './migration-check.mjs';
-import {
-  PREVIEW_SCHEMA,
-  PREVIEW_SUFFIX,
-  bucketsFrom,
-  rewrite,
-  rewriteDump,
-  triggerFunctionsFrom,
-} from './preview-rewrite.mjs';
+import { PREVIEW_SCHEMA, rewrite, rewriteDump } from './preview-rewrite.mjs';
 
 const FOLDER = 'supabase/migrations';
 const LEGACY_FILE = 'supabase/legacy-migrations.txt';
@@ -164,8 +157,6 @@ function loadMigrations() {
   const contents = Object.fromEntries(
     names.map(f => [f, readFileSync(join(FOLDER, f), 'utf8')])
   );
-  const buckets = bucketsFrom(Object.values(contents));
-  const triggerFunctions = triggerFunctionsFrom(Object.values(contents));
   return names.map(file => {
     const [, version, name] = NAME.exec(file);
     const isLegacy = legacy.has(file);
@@ -177,9 +168,7 @@ function loadMigrations() {
       raw: contents[file],
       checksum: checksum(contents[file]),
       // Legacy files are baseline (never applied to Preview), so no rewrite needed
-      ...(isLegacy
-        ? { sql: '', shared: [], errors: [] }
-        : rewrite(contents[file], { buckets, triggerFunctions })),
+      ...(isLegacy ? { sql: '', errors: [] } : rewrite(contents[file])),
     };
   });
 }
@@ -271,7 +260,6 @@ export function buildSetupScript({
   baseline,
   localByVersion,
   dumpSql,
-  shared,
   postClone = '',
 }) {
   const rows = baseline.map(b => {
@@ -286,7 +274,6 @@ export function buildSetupScript({
       : '',
     `set local search_path = ${PREVIEW_SCHEMA}, extensions;`,
     dumpSql,
-    ...shared.map(s => (s.trim().endsWith(';') ? s : `${s};`)),
     ensureGrantsSql(),
     postClone,
   ].join('\n');
@@ -330,21 +317,16 @@ function cloneScript(target, list) {
     );
   }
   const dump = dumpPublicStructure(target);
-  const buckets = bucketsFrom(list.map(m => m.raw));
-  const result = rewriteDump(dump, { buckets });
+  const result = rewriteDump(dump);
   if (result.errors.length > 0) {
     throw new Error(
       `The structure dump of public cannot be rewritten:\n${result.errors.map(e => `  - ${e}`).join('\n')}`
     );
   }
   const local = new Map(list.map(m => [m.version, m]));
-  const appliedLocal = rp.baseline
-    .map(b => local.get(b.version))
-    .filter(m => m && !m.isLegacy);
-  const shared = appliedLocal.flatMap(m => m.shared);
   const postClone = readList(POST_CLONE_FILE);
   console.log(
-    `Structure: ${result.sql.length} characters of rewritten SQL, ledger ${rp.baseline.length} version(s), ${shared.length} shared statement(s), post clone file ${postClone ? 'present' : 'missing'}.`
+    `Structure: ${result.sql.length} characters of rewritten SQL, ledger ${rp.baseline.length} version(s), post clone file ${postClone ? 'present' : 'missing'}.`
   );
   return {
     rp,
@@ -352,7 +334,6 @@ function cloneScript(target, list) {
       baseline: rp.baseline,
       localByVersion: local,
       dumpSql: result.sql,
-      shared,
       postClone,
     }),
   };
@@ -499,25 +480,8 @@ export function abortSql() {
   const s = PREVIEW_SCHEMA;
   return `do $pv_abort$
 declare
-  z record;
   foreign_objects text;
 begin
-  for z in
-    select t.tgname, t.tgrelid::regclass::text as relation
-    from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname in ('auth', 'storage') and not t.tgisinternal and t.tgname like '%\\_preview'
-  loop
-    execute format('drop trigger %I on %s', z.tgname, z.relation);
-  end loop;
-  for z in
-    select policyname, schemaname, tablename from pg_policies
-    where schemaname in ('auth', 'storage') and policyname like '%\\_preview'
-  loop
-    execute format('drop policy %I on %I.%I', z.policyname, z.schemaname, z.tablename);
-  end loop;
-  if to_regclass('cron.job') is not null then
-    perform cron.unschedule(jobname) from cron.job where jobname like ${q(`%${PREVIEW_SUFFIX}`)};
-  end if;
   if to_regnamespace(${q(s)}) is not null then
     select string_agg(distinct o.type || ' ' || o.identity, ', ') into foreign_objects
     from pg_depend d

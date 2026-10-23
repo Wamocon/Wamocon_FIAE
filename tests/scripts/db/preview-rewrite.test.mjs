@@ -3,18 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  bucketsFrom,
   newMigrationChecks,
+  normalizeQualifiers,
   renameSchema,
   rewrite,
   rewriteDump,
   sections,
   statements,
-  triggerFunctionsFrom,
 } from '../../../scripts/db/preview-rewrite.mjs';
 
-const OPTIONS = { buckets: ['content', 'avatar', 'private-docs'] };
-const rw = sql => rewrite(sql, OPTIONS);
+const rw = sql => rewrite(sql);
 
 test('semicolon in a $-body does not split', () => {
   assert.equal(
@@ -147,37 +145,6 @@ test('rollback inside a migration is rejected', () => {
   assert.equal(rw('begin; select 1; rollback;').errors.length, 1);
 });
 
-test('auth trigger gets the suffix and the Preview function', () => {
-  const r = rw(
-    'drop trigger if exists on_auth_user_created on auth.users;\ncreate trigger on_auth_user_created\n  after insert on auth.users\n  for each row execute function public.handle_new_user();'
-  );
-  assert.ok(r.sql.includes('create trigger on_auth_user_created_preview'));
-  assert.ok(
-    r.sql.includes(
-      'drop trigger if exists on_auth_user_created_preview on auth.users'
-    )
-  );
-  assert.ok(r.sql.includes('public_preview.handle_new_user()'));
-  assert.equal(r.shared.length, 2);
-  assert.equal(r.errors.length, 0);
-});
-
-test('trigger function of an auth trigger gets the error shell', () => {
-  const sql =
-    'create or replace function public.handle_new_user() returns trigger language plpgsql as $$ begin insert into public.profiles (id) values (new.id); return new; end $$;\ncreate trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();';
-  const triggerFunctions = triggerFunctionsFrom([sql]);
-  assert.deepEqual(triggerFunctions, ['handle_new_user']);
-  const r = rewrite(sql, { triggerFunctions });
-  assert.ok(r.sql.includes('exception when others then'));
-  assert.ok(r.sql.includes('public_preview.profiles'));
-});
-
-test('a trigger function that is not plpgsql is rejected', () => {
-  const sql =
-    'create function public.f() returns trigger language sql as $$ select 1 $$;';
-  assert.equal(rewrite(sql, { triggerFunctions: ['f'] }).errors.length, 1);
-});
-
 test('trigger on a public table keeps its name', () => {
   assert.ok(
     rw(
@@ -190,55 +157,6 @@ test('disabling all triggers of an auth table is rejected', () => {
   assert.equal(
     rw('alter table auth.users disable trigger all;').errors.length,
     1
-  );
-});
-
-test('storage policy gets the suffix and the own bucket twin', () => {
-  const r = rw(
-    "create policy docs_insert on storage.objects for insert to authenticated with check (bucket_id = 'private-docs' and public.is_platform_owner());"
-  );
-  assert.ok(
-    r.sql.includes('create policy docs_insert_preview on storage.objects')
-  );
-  assert.ok(r.sql.includes("bucket_id = 'private-docs-preview'"));
-  assert.ok(r.sql.includes('public_preview.is_platform_owner'));
-});
-
-test('statements on shared buckets (content, avatar) are skipped for Preview', () => {
-  const r = rw(
-    "create policy content_read on storage.objects for select using (bucket_id = 'content');"
-  );
-  assert.equal(r.sql.trim(), '');
-  assert.equal(r.errors.length, 0);
-  const b = rw(
-    "insert into storage.buckets (id, name, public) values ('avatar', 'avatar', true);"
-  );
-  assert.equal(b.sql.trim(), '');
-});
-
-test('own bucket is created as twin', () => {
-  assert.ok(
-    rw(
-      "insert into storage.buckets (id, name, public) values ('private-docs', 'private-docs', false) on conflict (id) do nothing;"
-    ).sql.includes("('private-docs-preview', 'private-docs-preview', false)")
-  );
-});
-
-test('storage policy without bucket reference is rejected', () => {
-  assert.equal(
-    rw(
-      'create policy alle on storage.objects for select using (public.is_platform_owner());'
-    ).errors.length,
-    1
-  );
-});
-
-test('buckets are found in migrations', () => {
-  assert.deepEqual(
-    bucketsFrom([
-      "insert into storage.buckets (id, name) values ('a', 'a'), ('b', 'b');",
-    ]),
-    ['a', 'b']
   );
 });
 
@@ -262,16 +180,6 @@ test('forbidden statements are rejected', () => {
 
 test('"public" as a plain value in format() is rejected', () => {
   assert.equal(rw("select quote_ident('public') || '.t';").errors.length, 1);
-});
-
-test('cron jobs get the suffix and the Preview search_path', () => {
-  const r = rw(
-    "select cron.schedule('nightly', '0 3 * * *', $$ select public.cleanup() $$);"
-  );
-  assert.deepEqual(r.errors, []);
-  assert.ok(r.sql.includes("'nightly-preview'"));
-  assert.ok(r.sql.includes('set search_path = public_preview, extensions;'));
-  assert.ok(r.sql.includes('public_preview.cleanup()'));
 });
 
 test('preview:skip sections are removed', () => {
@@ -319,11 +227,10 @@ test('structure dump: only structure is rewritten, schema level statements are d
   assert.ok(
     r.sql.includes('GRANT ALL ON TABLE "public_preview"."profiles" TO "anon"')
   );
-  assert.ok(
-    /ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN schema "public_preview"/i.test(
-      r.sql
-    )
-  );
+  // ownership, default privileges and foreign keys to auth.* are not replayed
+  assert.ok(!/OWNER TO/i.test(r.sql));
+  assert.ok(!/ALTER DEFAULT PRIVILEGES/i.test(r.sql));
+  assert.ok(!/REFERENCES\s+"?auth/i.test(r.sql));
   assert.ok(!/\bINSERT INTO public\./.test(r.sql));
   // no data statements at all in the structure clone
   assert.ok(!/\bCOPY\b/.test(r.sql));

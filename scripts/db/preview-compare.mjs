@@ -14,25 +14,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cli, query, targetFrom } from './preview-cli.mjs';
-import {
-  PREVIEW_SCHEMA,
-  PREVIEW_SUFFIX,
-  SHELL_MARKER,
-} from './preview-rewrite.mjs';
+import { PREVIEW_SCHEMA } from './preview-rewrite.mjs';
 
 const HEAD = /^-- Name: (.+); Type: (.+); Schema: (.*?); Owner: (.*)$/;
-// 'content-preview' -> 'content'
-const PREVIEW_NAME = new RegExp(
-  String.raw`([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)${PREVIEW_SUFFIX}'`,
-  'g'
-);
 
 export function objects(dump) {
   const map = new Map();
   let key = null;
   // on both sides, because public may mention public_preview explicitly
-  const align = t =>
-    t.replaceAll(PREVIEW_SCHEMA, 'public').replace(PREVIEW_NAME, "$1'");
+  const align = t => t.replaceAll(PREVIEW_SCHEMA, 'public');
   for (const line of dump.split('\n')) {
     const head = HEAD.exec(line);
     if (head) {
@@ -53,9 +43,17 @@ export function objects(dump) {
     ) {
       continue;
     }
-    // The error shell of Preview trigger functions (preview-rewrite.mjs) is not part of the comparison
-    if (line.trimEnd().endsWith(SHELL_MARKER)) continue;
     map.get(key).push(align(line.trimEnd()));
+  }
+  // Foreign keys to tables of other schemas (auth.users) are not cloned into
+  // public_preview: the Preview role has no REFERENCES right there.
+  for (const [k, lines] of [...map]) {
+    if (
+      k.startsWith('FK CONSTRAINT ') &&
+      lines.some(l => /REFERENCES\s+"?(?!public)[a-z_]+"?\./i.test(l))
+    ) {
+      map.delete(k);
+    }
   }
   return new Map([...map].map(([k, v]) => [k, v.join('\n')]));
 }

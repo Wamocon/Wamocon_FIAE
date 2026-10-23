@@ -136,22 +136,22 @@ test('compare: differences are reported with kind and object', () => {
   ]);
 });
 
-test('compare: the error shell of Preview trigger functions is ignored', () => {
-  const shell = [
-    '-- Name: f(); Type: FUNCTION; Schema: public_preview; Owner: postgres',
-    'CREATE FUNCTION public_preview.f() AS $$',
-    'begin -- preview:shell',
-    '  select 1;',
-    'end; -- preview:shell',
-    '$$;',
-  ].join('\n');
-  const plain = [
-    '-- Name: f(); Type: FUNCTION; Schema: public; Owner: postgres',
-    'CREATE FUNCTION public.f() AS $$',
-    '  select 1;',
-    '$$;',
-  ].join('\n');
-  assert.deepEqual(differences(objects(plain), objects(shell)), []);
+test('compare: foreign keys to auth.* are not part of the comparison', () => {
+  const fk = schema =>
+    [
+      `-- Name: profiles profiles_id_fkey; Type: FK CONSTRAINT; Schema: ${schema}; Owner: postgres`,
+      `ALTER TABLE ONLY ${schema}.profiles`,
+      '    ADD CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id);',
+    ].join('\n');
+  // public has the key, public_preview cannot create it (no rights on auth)
+  assert.deepEqual(differences(objects(fk('public')), objects('')), []);
+  const own = schema =>
+    [
+      `-- Name: a a_b_fkey; Type: FK CONSTRAINT; Schema: ${schema}; Owner: postgres`,
+      `ALTER TABLE ONLY ${schema}.a`,
+      `    ADD CONSTRAINT a_b_fkey FOREIGN KEY (b) REFERENCES ${schema}.b(id);`,
+    ].join('\n');
+  assert.equal(differences(objects(own('public')), objects('')).length, 1);
 });
 
 test('compare: history difference and decision', () => {

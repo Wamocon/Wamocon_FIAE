@@ -23,12 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import {
-  bucketsFrom,
-  newMigrationChecks,
-  rewrite,
-  triggerFunctionsFrom,
-} from './preview-rewrite.mjs';
+import { newMigrationChecks, rewrite } from './preview-rewrite.mjs';
 
 const FOLDER = 'supabase/migrations';
 const LEGACY_FILE = 'supabase/legacy-migrations.txt';
@@ -135,11 +130,9 @@ export function check({ files, contents, legacy = [], base }) {
       .sort()
       .at(-1) ?? '0';
   const added = files.filter(f => !baseFiles.has(f));
-  const buckets = bucketsFrom(Object.values(contents));
-  const triggerFunctions = triggerFunctionsFrom(Object.values(contents));
   for (const f of added) {
     const sql = contents[f] ?? '';
-    for (const e of rewrite(sql, { buckets, triggerFunctions }).errors) {
+    for (const e of rewrite(sql).errors) {
       errors.push(
         `${f}: cannot be rewritten for public_preview (${e}). Phrase it differently or exclude it on purpose with "-- preview:skip" ... "-- preview:end".`
       );
