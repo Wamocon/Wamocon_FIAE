@@ -14,7 +14,9 @@ const mockDb = {
   insert: jest.fn(),
 };
 
-const mockGenerateCertificateText = jest.fn().mockReturnValue('Generated certificate text');
+const mockGenerateCertificateText = jest
+  .fn()
+  .mockReturnValue('Generated certificate text');
 
 async function importHandler(
   session: ReturnType<typeof fakeSession> | null = fakeSession(),
@@ -27,8 +29,12 @@ async function importHandler(
   jest.doMock('@/lib/arbeitszeugnis/textGenerator', () => ({
     generateCertificateText: mockGenerateCertificateText,
   }));
-  const mod = await import('../../../../../src/app/api/trainer/arbeitszeugnis/issue/[traineeId]/route');
-  return mod.POST as (req: Request, ctx: { params: Promise<{ traineeId: string }> }) => Promise<Response>;
+  const mod =
+    await import('../../../../../src/app/api/trainer/arbeitszeugnis/issue/[traineeId]/route');
+  return mod.POST as (
+    req: Request,
+    ctx: { params: Promise<{ traineeId: string }> }
+  ) => Promise<Response>;
 }
 
 describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
@@ -37,17 +43,20 @@ describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
   });
 
   const issueRequest = () =>
-    new Request('http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123', {
-      method: 'POST',
-      body: JSON.stringify({
-        ausbildungsjahr: 1,
-        certificateType: 'FINAL',
-        overallAssessment: 'Gut gemacht.',
-        manualOverallGrade: 2,
-        // A client-sent trainer id must never be used
-        trainerId: 'someone-else',
-      }),
-    });
+    new Request(
+      'http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ausbildungsjahr: 1,
+          certificateType: 'FINAL',
+          overallAssessment: 'Gut gemacht.',
+          manualOverallGrade: 2,
+          // A client-sent trainer id must never be used
+          trainerId: 'someone-else',
+        }),
+      }
+    );
   const ctx = { params: Promise.resolve({ traineeId: 'trainee-123' }) };
 
   it('401 without a session', async () => {
@@ -76,17 +85,20 @@ describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
   it('should return 400 when overallAssessment is missing', async () => {
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123', {
-        method: 'POST',
-        body: JSON.stringify({
-          ausbildungsjahr: 1,
-          certificateType: 'FINAL',
-          customSummary: '',
-          overallAssessment: '',
-          manualOverallGrade: 2,
-          gender: 'male',
-        }),
-      }),
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ausbildungsjahr: 1,
+            certificateType: 'FINAL',
+            customSummary: '',
+            overallAssessment: '',
+            manualOverallGrade: 2,
+            gender: 'male',
+          }),
+        }
+      ),
       { params: Promise.resolve({ traineeId: 'trainee-123' }) }
     );
 
@@ -98,17 +110,20 @@ describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
   it('should return 400 when manualOverallGrade is invalid', async () => {
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123', {
-        method: 'POST',
-        body: JSON.stringify({
-          ausbildungsjahr: 1,
-          certificateType: 'FINAL',
-          customSummary: '',
-          overallAssessment: 'Gut gemacht.',
-          manualOverallGrade: 7,
-          gender: 'male',
-        }),
-      }),
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/issue/trainee-123',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ausbildungsjahr: 1,
+            certificateType: 'FINAL',
+            customSummary: '',
+            overallAssessment: 'Gut gemacht.',
+            manualOverallGrade: 7,
+            gender: 'male',
+          }),
+        }
+      ),
       { params: Promise.resolve({ traineeId: 'trainee-123' }) }
     );
 
@@ -128,17 +143,20 @@ describe('API: POST /api/trainer/arbeitszeugnis/issue/[traineeId]', () => {
 
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/issue/unknown-trainee', {
-        method: 'POST',
-        body: JSON.stringify({
-          ausbildungsjahr: 1,
-          certificateType: 'FINAL',
-          customSummary: '',
-          overallAssessment: 'Gut gemacht.',
-          manualOverallGrade: 2,
-          gender: 'male',
-        }),
-      }),
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/issue/unknown-trainee',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ausbildungsjahr: 1,
+            certificateType: 'FINAL',
+            customSummary: '',
+            overallAssessment: 'Gut gemacht.',
+            manualOverallGrade: 2,
+            gender: 'male',
+          }),
+        }
+      ),
       { params: Promise.resolve({ traineeId: 'unknown-trainee' }) }
     );
 

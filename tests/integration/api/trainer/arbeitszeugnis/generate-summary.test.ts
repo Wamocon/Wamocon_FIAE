@@ -15,7 +15,8 @@ async function importHandler(
     chatWithFallback: mockChatWithFallback,
   }));
   mockSession(session);
-  const mod = await import('../../../../../src/app/api/trainer/arbeitszeugnis/generate-summary/route');
+  const mod =
+    await import('../../../../../src/app/api/trainer/arbeitszeugnis/generate-summary/route');
   return mod.POST as (req: Request) => Promise<Response>;
 }
 
@@ -25,10 +26,13 @@ describe('API: /api/trainer/arbeitszeugnis/generate-summary', () => {
   });
 
   const request = () =>
-    new Request('http://localhost/api/trainer/arbeitszeugnis/generate-summary', {
-      method: 'POST',
-      body: JSON.stringify({ traineeName: 'Max', manualOverallGrade: 2 }),
-    });
+    new Request(
+      'http://localhost/api/trainer/arbeitszeugnis/generate-summary',
+      {
+        method: 'POST',
+        body: JSON.stringify({ traineeName: 'Max', manualOverallGrade: 2 }),
+      }
+    );
 
   it('401 without a session', async () => {
     const POST = await importHandler(null);
@@ -55,27 +59,37 @@ describe('API: /api/trainer/arbeitszeugnis/generate-summary', () => {
 
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/generate-summary', {
-        method: 'POST',
-        body: JSON.stringify({
-          traineeName: 'Max Mustermann',
-          gender: 'male',
-          certificateType: 'FINAL',
-          overallAverage: 2.1,
-          manualOverallGrade: 2,
-          components: [
-            { title: 'Entwickeln', finalGrade: 2, averageGrade: 2, totalHours: 120 },
-          ],
-          softSkills: null,
-          summaryContext: '',
-          shorteningEligible: false,
-        }),
-      })
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/generate-summary',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            traineeName: 'Max Mustermann',
+            gender: 'male',
+            certificateType: 'FINAL',
+            overallAverage: 2.1,
+            manualOverallGrade: 2,
+            components: [
+              {
+                title: 'Entwickeln',
+                finalGrade: 2,
+                averageGrade: 2,
+                totalHours: 120,
+              },
+            ],
+            softSkills: null,
+            summaryContext: '',
+            shorteningEligible: false,
+          }),
+        }
+      )
     );
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.summary).toBe('Ausgezeichnete Leistung, Note 2 — gut. Weiter so!');
+    expect(body.summary).toBe(
+      'Ausgezeichnete Leistung, Note 2 — gut. Weiter so!'
+    );
     expect(body.provider).toBe('openai-compatible');
 
     expect(mockChatWithFallback).toHaveBeenCalledTimes(1);
@@ -88,17 +102,20 @@ describe('API: /api/trainer/arbeitszeugnis/generate-summary', () => {
   it('should return 400 when overall grade is missing', async () => {
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/generate-summary', {
-        method: 'POST',
-        body: JSON.stringify({
-          traineeName: 'Max Mustermann',
-          gender: 'male',
-          certificateType: 'FINAL',
-          overallAverage: null,
-          manualOverallGrade: null,
-          components: [],
-        }),
-      })
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/generate-summary',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            traineeName: 'Max Mustermann',
+            gender: 'male',
+            certificateType: 'FINAL',
+            overallAverage: null,
+            manualOverallGrade: null,
+            components: [],
+          }),
+        }
+      )
     );
 
     expect(res.status).toBe(400);
@@ -109,17 +126,20 @@ describe('API: /api/trainer/arbeitszeugnis/generate-summary', () => {
   it('should return 400 when traineeName is missing', async () => {
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/generate-summary', {
-        method: 'POST',
-        body: JSON.stringify({
-          traineeName: '',
-          gender: 'male',
-          certificateType: 'FINAL',
-          overallAverage: 2.1,
-          manualOverallGrade: 2,
-          components: [],
-        }),
-      })
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/generate-summary',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            traineeName: '',
+            gender: 'male',
+            certificateType: 'FINAL',
+            overallAverage: 2.1,
+            manualOverallGrade: 2,
+            components: [],
+          }),
+        }
+      )
     );
 
     expect(res.status).toBe(400);
@@ -135,17 +155,20 @@ describe('API: /api/trainer/arbeitszeugnis/generate-summary', () => {
 
     const POST = await importHandler();
     const res = await POST(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/generate-summary', {
-        method: 'POST',
-        body: JSON.stringify({
-          traineeName: 'Max Mustermann',
-          gender: 'male',
-          certificateType: 'FINAL',
-          overallAverage: 2.1,
-          manualOverallGrade: 2,
-          components: [],
-        }),
-      })
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/generate-summary',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            traineeName: 'Max Mustermann',
+            gender: 'male',
+            certificateType: 'FINAL',
+            overallAverage: 2.1,
+            manualOverallGrade: 2,
+            components: [],
+          }),
+        }
+      )
     );
 
     expect(res.status).toBe(500);

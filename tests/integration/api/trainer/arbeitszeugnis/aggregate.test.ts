@@ -15,11 +15,16 @@ async function importHandler(
   jest.resetModules();
   mockSession(session);
   mockTraineeAccess(access);
-  const mod = await import('../../../../../src/app/api/trainer/arbeitszeugnis/aggregate/[traineeId]/route');
-  return mod.GET as (req: Request, ctx: { params: Promise<{ traineeId: string }> }) => Promise<Response>;
+  const mod =
+    await import('../../../../../src/app/api/trainer/arbeitszeugnis/aggregate/[traineeId]/route');
+  return mod.GET as (
+    req: Request,
+    ctx: { params: Promise<{ traineeId: string }> }
+  ) => Promise<Response>;
 }
 
-const url = 'http://localhost/api/trainer/arbeitszeugnis/aggregate/trainee-123?ausbildungsjahr=1';
+const url =
+  'http://localhost/api/trainer/arbeitszeugnis/aggregate/trainee-123?ausbildungsjahr=1';
 const ctx = { params: Promise.resolve({ traineeId: 'trainee-123' }) };
 
 describe('API: GET /api/trainer/arbeitszeugnis/aggregate/[traineeId]', () => {
@@ -50,7 +55,9 @@ describe('API: GET /api/trainer/arbeitszeugnis/aggregate/[traineeId]', () => {
   it('should return 400 when traineeId is missing', async () => {
     const GET = await importHandler();
     const res = await GET(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/aggregate/?ausbildungsjahr=1'),
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/aggregate/?ausbildungsjahr=1'
+      ),
       { params: Promise.resolve({ traineeId: '' }) }
     );
 
@@ -62,7 +69,9 @@ describe('API: GET /api/trainer/arbeitszeugnis/aggregate/[traineeId]', () => {
   it('should return 400 for invalid ausbildungsjahr', async () => {
     const GET = await importHandler();
     const res = await GET(
-      new Request('http://localhost/api/trainer/arbeitszeugnis/aggregate/trainee-123?ausbildungsjahr=abc'),
+      new Request(
+        'http://localhost/api/trainer/arbeitszeugnis/aggregate/trainee-123?ausbildungsjahr=abc'
+      ),
       { params: Promise.resolve({ traineeId: 'trainee-123' }) }
     );
 
