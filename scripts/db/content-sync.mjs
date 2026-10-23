@@ -11,6 +11,16 @@
 // the allowlist (DENY below). profiles and organizations are only READ to
 // translate foreign key ids (lookups), their rows are never copied.
 //
+// Which columns: only the columns listed in "columns" of a table are copied, never
+// "all columns that both sides share". A column that is not listed (for example a
+// new column of a later migration) is not synchronised until someone adds it.
+// A copied column that is a foreign key to a user table (profiles, organizations,
+// auth.*) needs a remap rule, otherwise the sync aborts.
+//
+// Update mode: --update never (default) only inserts. --update configured applies
+// the per-table "update" setting of the allowlist (newer, always, never). The
+// release workflow always runs with never; configured is only started by hand.
+//
 // Behaviour: additive, never destructive.
 //   1. INSERT rows that exist in the source and not in the target (identity =
 //      the configured key columns of the table, e.g. [code]).
@@ -75,6 +85,8 @@ const DENY = [
   /embedding/,
   /password|token|secret|credential/,
 ];
+// Tables that hold users; a copied foreign key to one of them needs a remap rule
+const USER_TABLES = ['profiles', 'organizations'];
 const REPORT_MARKER = 'CONTENT_SYNC_REPORT:';
 const q = value => `'${String(value).replace(/'/g, "''")}'`;
 
@@ -126,10 +138,31 @@ export function validateConfig(config) {
       errors.push(`${where}: update must be one of ${UPDATE_MODES.join(', ')}`);
     }
     if (
-      t.exclude !== undefined &&
-      !(Array.isArray(t.exclude) && t.exclude.every(c => IDENT.test(c)))
+      !Array.isArray(t.columns) ||
+      t.columns.length === 0 ||
+      !t.columns.every(c => IDENT.test(c))
     ) {
-      errors.push(`${where}: exclude must be a list of column names`);
+      errors.push(
+        `${where}: columns must be a non-empty explicit list of the columns to copy`
+      );
+    } else {
+      for (const k of t.key ?? []) {
+        if (!t.columns.includes(k)) {
+          errors.push(`${where}: key column ${k} is not in columns`);
+        }
+      }
+      for (const c of Object.keys(t.remap ?? {})) {
+        if (!t.columns.includes(c)) {
+          errors.push(`${where}: remap column ${c} is not in columns`);
+        }
+      }
+      for (const c of t.columns) {
+        if (/password|token|secret|credential/.test(c)) {
+          errors.push(
+            `${where}: column ${c} looks like a secret and is refused`
+          );
+        }
+      }
     }
     for (const [column, spec] of Object.entries(t.remap ?? {})) {
       if (!IDENT.test(column) || !IDENT.test(spec?.table ?? '')) {
@@ -177,7 +210,8 @@ export function castExpression(alias, srcCol, dstCol) {
  * @param {{
  *   config: object,
  *   meta: Record<string, Record<string, { name: string, dataType: string, udtSchema: string, udtName: string, generated: boolean }[]>>,
- *   from: string, to: string, ownerEmail?: string|null, rollback: boolean, only?: string[]|null
+ *   from: string, to: string, ownerEmail?: string|null, rollback: boolean, only?: string[]|null,
+ *   updateMode?: 'never'|'configured', fks?: Record<string, Record<string, { column: string, refSchema: string, refTable: string }[]>>
  * }} input
  * @returns {{ sql: string, tables: string[], notes: string[], errors: string[] }}
  */
@@ -189,8 +223,13 @@ export function buildScript({
   ownerEmail = null,
   rollback,
   only = null,
+  updateMode = 'never',
+  fks = {},
 }) {
   const errors = validateConfig(config);
+  if (!['never', 'configured'].includes(updateMode)) {
+    errors.push(`updateMode must be never or configured, not ${updateMode}`);
+  }
   const notes = [];
   if (
     !ALLOWED_SCHEMAS.includes(from) ||
@@ -233,19 +272,35 @@ export function buildScript({
       continue;
     }
     const dstByName = new Map(dstCols.map(c => [c.name, c]));
-    const exclude = new Set(t.exclude ?? []);
+    const allowed = new Set(t.columns);
     const common = srcCols.filter(
       c =>
+        allowed.has(c.name) &&
         dstByName.has(c.name) &&
         !c.generated &&
-        !dstByName.get(c.name).generated &&
-        !exclude.has(c.name)
+        !dstByName.get(c.name).generated
     );
     const names = common.map(c => c.name);
     const missingKey = t.key.filter(k => !names.includes(k));
     if (missingKey.length > 0) {
       errors.push(
         `${t.name}: key column(s) ${missingKey.join(', ')} missing in one of the schemas`
+      );
+      continue;
+    }
+    // A copied column that points to a user table must have a remap rule
+    const userFk = [from, to].flatMap(schema =>
+      (fks[schema]?.[t.name] ?? []).filter(
+        f =>
+          names.includes(f.column) &&
+          !(t.remap ?? {})[f.column] &&
+          (USER_TABLES.includes(f.refTable) ||
+            ['auth', 'storage'].includes(f.refSchema))
+      )
+    );
+    if (userFk.length > 0) {
+      errors.push(
+        `${t.name}: column(s) ${[...new Set(userFk.map(f => f.column))].join(', ')} reference a user table (${[...new Set(userFk.map(f => f.refTable))].join(', ')}) without a remap rule`
       );
       continue;
     }
@@ -287,9 +342,12 @@ export function buildScript({
       .map(
         ([c]) => `(s.${ident(c)} is null or ${exprByName.get(c)} is not null)`
       );
-    const hasId = names.includes('id');
+    // The id is never copied (the target generates it), it is only needed for the id map
+    const hasId =
+      srcCols.some(c => c.name === 'id') && dstCols.some(c => c.name === 'id');
     const insertCols = names.filter(n => n !== 'id' || t.key.includes('id'));
-    const mode = t.update ?? 'newer';
+    // --update never (default, release): only insert; configured: per-table setting
+    const mode = updateMode === 'never' ? 'never' : (t.update ?? 'newer');
     const effectiveMode =
       mode === 'newer' && !names.includes('updated_at') ? 'always' : mode;
     // Columns that point to a user or organization (creator, uploader) are
@@ -427,6 +485,27 @@ function loadMeta(target, config, from, to) {
       where table_schema in (${q(from)}, ${q(to)}) and table_name in (${names.map(q).join(', ')})
       order by table_schema, table_name, ordinal_position`
   );
+  const fkRows = query(
+    target,
+    `select ns.nspname as table_schema, cl.relname as table_name, a.attname as column_name,
+            rns.nspname as ref_schema, rcl.relname as ref_table
+       from pg_constraint con
+       join pg_class cl on cl.oid = con.conrelid
+       join pg_namespace ns on ns.oid = cl.relnamespace
+       join pg_class rcl on rcl.oid = con.confrelid
+       join pg_namespace rns on rns.oid = rcl.relnamespace
+       cross join lateral unnest(con.conkey) as k(attnum)
+       join pg_attribute a on a.attrelid = con.conrelid and a.attnum = k.attnum
+      where con.contype = 'f' and ns.nspname in (${q(from)}, ${q(to)}) and cl.relname in (${names.map(q).join(', ')})`
+  );
+  const fks = { [from]: {}, [to]: {} };
+  for (const r of fkRows) {
+    (fks[r.table_schema][r.table_name] ??= []).push({
+      column: r.column_name,
+      refSchema: r.ref_schema,
+      refTable: r.ref_table,
+    });
+  }
   const meta = { [from]: {}, [to]: {} };
   for (const r of rows) {
     (meta[r.table_schema][r.table_name] ??= []).push({
@@ -437,7 +516,7 @@ function loadMeta(target, config, from, to) {
       generated: Boolean(r.generated),
     });
   }
-  return meta;
+  return { meta, fks };
 }
 
 function dryRun(target, built) {
@@ -461,7 +540,7 @@ function main() {
   const target = targetFrom(args);
   if (!target) {
     console.error(
-      'Usage: node scripts/db/content-sync.mjs --linked|--local|--db-url <url> [--apply] [--direction preview-to-production|production-to-preview] [--owner-email <email>]'
+      'Usage: node scripts/db/content-sync.mjs --linked|--local|--db-url <url> [--apply] [--direction preview-to-production|production-to-preview] [--update never|configured] [--owner-email <email>]'
     );
     process.exit(2);
   }
@@ -487,7 +566,10 @@ function main() {
       '--owner-email',
       process.env.CONTENT_SYNC_OWNER_EMAIL || null
     );
-    const meta = loadMeta(target, config, from, to);
+    const updateMode = argValue(args, '--update', 'never');
+    if (!['never', 'configured'].includes(updateMode))
+      throw new Error('--update must be never or configured');
+    const { meta, fks } = loadMeta(target, config, from, to);
     const only = argValue(args, '--only')?.split(',') ?? null;
     const dry = buildScript({
       config,
@@ -497,6 +579,8 @@ function main() {
       ownerEmail,
       rollback: true,
       only,
+      updateMode,
+      fks,
     });
     if (dry.errors.length > 0)
       throw new Error(
@@ -508,7 +592,7 @@ function main() {
         'Note: no owner email, rows whose creator cannot be matched are skipped.'
       );
     say(
-      `Content sync ${from} -> ${to} (${dry.tables.length} tables, ${apply ? 'apply' : 'dry run'})`
+      `Content sync ${from} -> ${to} (${dry.tables.length} tables, ${apply ? 'apply' : 'dry run'}, update mode: ${updateMode === 'never' ? 'never, insert only' : 'configured per table'})`
     );
     const report = dryRun(target, dry);
     const first = summarize(report);
@@ -527,6 +611,8 @@ function main() {
         ownerEmail,
         rollback: false,
         only,
+        updateMode,
+        fks,
       });
       query(target, real.sql, { emptyAllowed: true });
       const after = summarize(dryRun(target, dry));

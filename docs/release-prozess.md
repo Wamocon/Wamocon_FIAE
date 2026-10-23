@@ -169,10 +169,13 @@ Bitte vor dem Einsatz lesen. Die Preview-Umgebung ist bewusst günstig gebaut un
 
 Regeln:
 
-- Additiv und nie zerstörend: fehlende Zeilen werden eingefügt, vorhandene je Tabelle aktualisiert (`newer`, `always` oder `never`), gelöscht wird nie etwas.
+- Additiv und nie zerstörend: fehlende Zeilen werden eingefügt, gelöscht wird nie etwas.
+- **Ein Release fügt nur ein** (`--update never`, Standard des Skripts). Bestehende Zeilen zu ändern ist eine eigene, bewusste Entscheidung: nur der manuelle Workflow "Content Sync" mit der Eingabe `update_mode = newer` wendet die Einstellung `update` je Tabelle an (`newer`, `always` oder `never`).
+- **Spalten-Allowlist.** Je Tabelle steht in `columns` die ausdrückliche Liste der kopierten Spalten. Eine Spalte, die nicht genannt ist, wird nie kopiert, auch wenn beide Schemas sie haben (zum Beispiel neue Spalten späterer Migrationen oder `is_indexed_by_hai`). Schlüssel- und Remap-Spalten müssen in der Liste stehen, geheimnisartige Spaltennamen (`password`, `token`, `secret`, `credential`) werden abgelehnt.
+- **Fremdschlüssel auf Nutzertabellen.** Ist eine kopierte Spalte ein Fremdschlüssel auf `profiles`, `organizations` oder ein Objekt in `auth` oder `storage` und hat keine `remap`-Regel, bricht der Abgleich ab, bevor etwas geschrieben wird.
 - Der Abgleich erkennt Zeilen über konfigurierbare Schlüsselspalten (`key`). Fremdschlüssel werden über den Schlüssel der Elterntabelle übersetzt, weil die Ids der Schemas verschieden sind. Eine Zeile, deren Elter nicht übersetzt werden kann, wird übersprungen und gezählt.
 - Alles oder nichts: ein Lauf in einer Transaktion unter Sperre. Ein nicht eindeutiger Schlüssel bricht ab.
-- Trockenlauf ist Standard (Transaktion mit Rollback, genaue Zahlen). Mit Anwenden folgt ein zweiter Trockenlauf, der null Änderungen melden muss.
+- Trockenlauf ist Standard (Transaktion mit Rollback, genaue Zahlen). Mit Anwenden folgt ein zweiter Trockenlauf, der null Änderungen melden muss. Der Bericht mit den Zahlen je Tabelle steht auch im Job-Summary des Laufs, im Release also vor der Freigabe des folgenden Deployments einsehbar.
 - Nie dabei: `profiles`, Abgaben, Fortschritt, Zeugnisse, Organisationen, Benachrichtigungen, `hai_embeddings` und alles, was Nutzerdaten enthält. Der Code lehnt solche Namen selbst dann ab, wenn sie in der Allowlist stünden. `profiles` und `organizations` werden nur gelesen, um Ids zu übersetzen (E-Mail beziehungsweise Slug).
 - Ersteller (`created_by_id`) werden beim Einfügen gesetzt (Profil mit der E-Mail aus `CONTENT_SYNC_OWNER_EMAIL`, falls kein Profil mit gleicher E-Mail existiert) und beim Aktualisieren nie überschrieben.
 

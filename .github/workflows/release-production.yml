@@ -168,9 +168,12 @@ jobs:
         with:
           project-ref: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
 
-      # Additive, never destructive, allowlist only. See scripts/db/content-sync.mjs.
+      # Additive, never destructive, allowlist of tables AND columns. A release only INSERTS
+      # (--update never); changing existing rows is a separate, manual decision (Content
+      # Sync workflow, update_mode). The report with the exact counts of the dry run that
+      # precedes the commit is written to the job summary. See scripts/db/content-sync.mjs.
       - name: Sync training content
-        run: node scripts/db/content-sync.mjs --linked --apply --direction preview-to-production
+        run: node scripts/db/content-sync.mjs --linked --apply --direction preview-to-production --update never
 
   deploy:
     name: Deploy to Production

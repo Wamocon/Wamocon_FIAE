@@ -32,11 +32,19 @@ const config = {
     {
       name: 'courses',
       key: ['title'],
+      columns: [
+        'title',
+        'description',
+        'created_by_id',
+        'created_at',
+        'updated_at',
+      ],
       remap: { created_by_id: { table: 'profiles', onMissing: 'owner' } },
     },
     {
       name: 'enablers',
       key: ['course_id', 'title'],
+      columns: ['course_id', 'title', 'duration_unit', 'updated_at'],
       remap: { course_id: { table: 'courses', onMissing: 'skip' } },
     },
   ],
@@ -48,6 +56,7 @@ const courseCols = schema => [
   col('created_at'),
   col('updated_at'),
   col('description'),
+  col('legacy_flag'),
 ];
 const enablerCols = schema => [
   col('id'),
@@ -71,6 +80,7 @@ const build = (extra = {}) =>
     to: 'public',
     ownerEmail: 'owner@example.test',
     rollback: true,
+    updateMode: 'configured',
     ...extra,
   });
 
@@ -274,17 +284,166 @@ test('script: update mode never writes no update', () => {
   assert.ok(!sql.includes('update public.courses'));
 });
 
-test('script: excluded columns are not copied', () => {
+test('script: only the listed columns are copied, a shared column that is not listed is not', () => {
+  const { sql } = build();
+  // legacy_flag exists on both sides but is not in the allowlist
+  assert.ok(!sql.includes('legacy_flag'));
+  assert.ok(sql.includes('description'));
+  assert.ok(sql.includes('title'));
+  // a listed column that does not exist on one side is simply not copied
+  const m = structuredClone(meta);
+  m.public_preview.courses = m.public_preview.courses.filter(
+    c => c.name !== 'created_at'
+  );
+  assert.ok(!build({ meta: m }).sql.includes('created_at'));
+});
+
+test('script: a column that is not in the allowlist is never copied, even a new one', () => {
+  const m = structuredClone(meta);
+  m.public_preview.courses.push(col('internal_notes'));
+  m.public.courses.push(col('internal_notes'));
+  assert.ok(!build({ meta: m }).sql.includes('internal_notes'));
+});
+
+test('config: every table needs an explicit columns list with its key and remap columns', () => {
+  const noColumns = structuredClone(config);
+  delete noColumns.tables[0].columns;
+  assert.ok(validateConfig(noColumns).some(e => e.includes('columns must be')));
+  const noKey = structuredClone(config);
+  noKey.tables[0].columns = ['created_by_id'];
+  assert.ok(validateConfig(noKey).some(e => e.includes('key column title')));
+  const noRemap = structuredClone(config);
+  noRemap.tables[0].columns = ['title'];
+  assert.ok(
+    validateConfig(noRemap).some(e => e.includes('remap column created_by_id'))
+  );
+  const secret = structuredClone(config);
+  secret.tables[0].columns.push('api_token');
+  assert.ok(validateConfig(secret).some(e => e.includes('secret')));
+});
+
+test('script: a copied foreign key to a user table without a remap rule aborts', () => {
   const c = structuredClone(config);
-  c.tables[0].exclude = ['description'];
-  const { sql } = buildScript({
+  c.tables[0].columns.push('owner_org_id');
+  const m = structuredClone(meta);
+  m.public_preview.courses.push(col('owner_org_id'));
+  m.public.courses.push(col('owner_org_id'));
+  const fks = {
+    public_preview: {
+      courses: [
+        {
+          column: 'owner_org_id',
+          refSchema: 'public_preview',
+          refTable: 'organizations',
+        },
+      ],
+    },
+    public: {
+      courses: [
+        {
+          column: 'owner_org_id',
+          refSchema: 'public',
+          refTable: 'organizations',
+        },
+      ],
+    },
+  };
+  const r = buildScript({
     config: c,
+    meta: m,
+    fks,
+    from: 'public_preview',
+    to: 'public',
+    rollback: true,
+  });
+  assert.ok(
+    r.errors.some(e => e.includes('owner_org_id') && e.includes('user table'))
+  );
+  assert.equal(r.sql, '');
+  // with a remap rule the same column is fine
+  c.tables[0].remap.owner_org_id = { table: 'profiles', onMissing: 'null' };
+  assert.deepEqual(
+    buildScript({
+      config: c,
+      meta: m,
+      fks,
+      from: 'public_preview',
+      to: 'public',
+      rollback: true,
+    }).errors,
+    []
+  );
+  // the existing remapped creator column does not trigger it
+  const withCreator = {
+    public_preview: {
+      courses: [
+        {
+          column: 'created_by_id',
+          refSchema: 'public_preview',
+          refTable: 'profiles',
+        },
+      ],
+    },
+    public: {},
+  };
+  assert.deepEqual(build({ fks: withCreator }).errors, []);
+  // a foreign key to auth.* is refused as well
+  const toAuth = {
+    public_preview: {
+      enablers: [{ column: 'title', refSchema: 'auth', refTable: 'users' }],
+    },
+    public: {},
+  };
+  assert.ok(build({ fks: toAuth }).errors.some(e => e.includes('user table')));
+});
+
+test('script: the default update mode is never, an update statement is only written for configured', () => {
+  const never = buildScript({
+    config,
     meta,
     from: 'public_preview',
     to: 'public',
     rollback: true,
   });
-  assert.ok(!sql.includes('description'));
+  assert.deepEqual(never.errors, []);
+  assert.ok(!/update public\./.test(never.sql));
+  assert.ok(never.sql.includes('insert into public.courses'));
+  assert.ok(/update public\.courses d set/.test(build().sql));
+  assert.ok(
+    buildScript({
+      config,
+      meta,
+      from: 'public_preview',
+      to: 'public',
+      rollback: true,
+      updateMode: 'sometimes',
+    }).errors.length > 0
+  );
+});
+
+test('the allowlist file lists columns for every table and not the HAI index flag', () => {
+  for (const tbl of realConfig().tables) {
+    assert.ok(Array.isArray(tbl.columns) && tbl.columns.length > 0, tbl.name);
+    for (const k of tbl.key)
+      assert.ok(tbl.columns.includes(k), `${tbl.name}.${k}`);
+  }
+  const docs = realConfig().tables.find(x => x.name === 'content_documents');
+  assert.ok(!docs.columns.includes('is_indexed_by_hai'));
+});
+
+test('the release workflow only inserts, the manual workflow chooses the update mode', () => {
+  const release = readFileSync(
+    '.github/workflows/release-production.yml',
+    'utf8'
+  );
+  assert.ok(
+    release.includes(
+      'content-sync.mjs --linked --apply --direction preview-to-production --update never'
+    )
+  );
+  const manual = readFileSync('.github/workflows/content-sync.yml', 'utf8');
+  assert.ok(manual.includes('update_mode:'));
+  assert.ok(/--update "\$mode"/.test(manual));
 });
 
 test('script: a column that exists in only one schema is not copied', () => {
@@ -302,7 +461,12 @@ test('script: a column that exists in only one schema is not copied', () => {
 
 test('script: an optional table that is missing is skipped with a note, a required one is an error', () => {
   const c = structuredClone(config);
-  c.tables.push({ name: 'training_catalogs', key: ['code'], optional: true });
+  c.tables.push({
+    name: 'training_catalogs',
+    key: ['code'],
+    columns: ['code'],
+    optional: true,
+  });
   const r = buildScript({
     config: c,
     meta,
@@ -313,7 +477,11 @@ test('script: an optional table that is missing is skipped with a note, a requir
   assert.deepEqual(r.errors, []);
   assert.ok(r.notes.some(n => n.includes('training_catalogs')));
   const c2 = structuredClone(config);
-  c2.tables.push({ name: 'training_catalogs', key: ['code'] });
+  c2.tables.push({
+    name: 'training_catalogs',
+    key: ['code'],
+    columns: ['code'],
+  });
   assert.ok(
     buildScript({
       config: c2,
@@ -327,6 +495,7 @@ test('script: an optional table that is missing is skipped with a note, a requir
 
 test('script: a remap for a column that does not exist is ignored', () => {
   const c = structuredClone(config);
+  c.tables[0].columns.push('training_catalog_id');
   c.tables[0].remap.training_catalog_id = {
     table: 'profiles',
     onMissing: 'skip',

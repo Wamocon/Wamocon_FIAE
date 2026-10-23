@@ -13,6 +13,10 @@
 #           Production deploy. The workflow first WAITS (up to 20 minutes)
 #           until public has the migrations of that release.
 #
+# Update  : update_mode never (default) only inserts new rows. newer also updates
+#           existing rows as configured per table; only a person starts that.
+#           The release workflow never updates.
+#
 # Rules   : scripts/db/content-sync.mjs (header) and supabase/content-tables.json.
 #           In short: only training content, additive, never deleting, user data
 #           is never touched. Direction preview-to-production is the release
@@ -40,6 +44,14 @@ on:
         options:
           - preview-to-production
           - production-to-preview
+      update_mode:
+        description: 'never = only insert new rows (default); newer = also update existing rows as configured per table (newer or always) in supabase/content-tables.json'
+        required: true
+        default: never
+        type: choice
+        options:
+          - never
+          - newer
 
 concurrency:
   group: content-sync
@@ -62,6 +74,7 @@ jobs:
       CONTENT_SYNC_OWNER_EMAIL: ${{ vars.CONTENT_SYNC_OWNER_EMAIL }}
       APPLY: ${{ inputs.apply }}
       DIRECTION: ${{ inputs.direction }}
+      UPDATE_MODE: ${{ inputs.update_mode }}
     steps:
       - name: Determine the latest release
         id: release
@@ -102,8 +115,11 @@ jobs:
 
       - name: Content sync
         run: |
+          # newer = the per-table update setting of the allowlist applies
+          mode=never
+          if [ "$UPDATE_MODE" = "newer" ]; then mode=configured; fi
           if [ "$APPLY" = "true" ]; then
-            node scripts/db/content-sync.mjs --linked --direction "$DIRECTION" --apply
+            node scripts/db/content-sync.mjs --linked --direction "$DIRECTION" --update "$mode" --apply
           else
-            node scripts/db/content-sync.mjs --linked --direction "$DIRECTION"
+            node scripts/db/content-sync.mjs --linked --direction "$DIRECTION" --update "$mode"
           fi
