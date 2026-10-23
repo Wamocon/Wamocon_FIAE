@@ -15,7 +15,8 @@
  *  - An organization keeps at least one enabled, active catalog. An organization
  *    without any row counts as FIAE enabled (legacy), see effectiveOrganizationRows.
  *  - A trainee has exactly one occupation. The app enforces that inside the
- *    transaction (there is no unique index on the trainee alone).
+ *    transaction, and since 20261026000100 the unique index
+ *    trainee_enrollments_trainee_unique backs it in the database.
  *
  * The rules are pure functions (check*), they get the data as arguments and
  * return { ok: true, value } or { ok: false, status, code, count? }. The codes
