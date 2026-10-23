@@ -15,6 +15,7 @@ import {
   varchar,
   vector,
   check,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 // --- SUPABASE AUTH HELPER ---
@@ -170,32 +171,51 @@ export const trainingCatalogs = pgTable(
   })
 );
 
-export const courses = pgTable('courses', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  trainingCatalogId: uuid('training_catalog_id')
-    .notNull()
-    .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
-    .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
-  title: text('title').notNull(),
-  description: text('description'),
-  year: integer('year'), // 1, 2, or 3
-  chapter: integer('chapter'), // For "capital 1 to n"
-  examPart: integer('exam_part'), // 1 = Abschlussprüfung Teil 1, 2 = Abschlussprüfung Teil 2
-  lernfelder: text('lernfelder').array().default([]), // e.g. ['LF-1', 'LF-5']
+// Format of the stable text codes on courses, enablers and use cases (for
+// example "K6.1"): 1 to 64 characters of letters, digits, '.', '_' and '-',
+// starting with a letter or digit. Mirrors the SQL CHECK constraints.
+export const CONTENT_CODE_PATTERN = '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$';
 
-  // The main trainer who created the course
-  createdById: uuid('created_by_id')
-    .notNull()
-    .references(() => profiles.id),
+export const courses = pgTable(
+  'courses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingCatalogId: uuid('training_catalog_id')
+      .notNull()
+      .default(sql.raw(`'${defaultTrainingCatalogId}'::uuid`))
+      .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
+    // Stable text code (e.g. "K6.1"), unique per catalog, NULL for legacy rows
+    code: text('code'),
+    title: text('title').notNull(),
+    description: text('description'),
+    year: integer('year'), // 1, 2, or 3
+    chapter: integer('chapter'), // For "capital 1 to n"
+    examPart: integer('exam_part'), // 1 = Abschlussprüfung Teil 1, 2 = Abschlussprüfung Teil 2
+    lernfelder: text('lernfelder').array().default([]), // e.g. ['LF-1', 'LF-5']
 
-  isActive: boolean('is_active').default(false),
-  isPublished: boolean('is_published').default(false), // For drafts
+    // The main trainer who created the course
+    createdById: uuid('created_by_id')
+      .notNull()
+      .references(() => profiles.id),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+    isActive: boolean('is_active').default(false),
+    isPublished: boolean('is_published').default(false), // For drafts
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    codeFormatCheck: check(
+      'courses_code_format_check',
+      sql`${table.code} is null or ${table.code} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`
+    ),
+    catalogCodeUnique: uniqueIndex('courses_catalog_code_unique')
+      .on(table.trainingCatalogId, table.code)
+      .where(sql`${table.code} is not null`),
+  })
+);
 
 // Many-to-many table linking courses to multiple trainers and trainees
 export const courseMembers = pgTable(
@@ -243,54 +263,82 @@ export const courseSkills = pgTable(
 
 // --- Course Content: Enablers & Use Cases ---
 
-export const enablers = pgTable('enablers', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  courseId: uuid('course_id')
-    .notNull()
-    .references(() => courses.id, { onDelete: 'cascade' }),
-  title: text('title').notNull(),
-  orderIndex: integer('order_index').notNull(), // To set the order of modules
+export const enablers = pgTable(
+  'enablers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    // Stable text code, unique per course, NULL for legacy rows
+    code: text('code'),
+    title: text('title').notNull(),
+    orderIndex: integer('order_index').notNull(), // To set the order of modules
 
-  // Content
-  descriptionText: text('description_text'),
-  pptUrl: text('ppt_url'), // Link to Supabase Storage
-  videoUrl: text('video_url'), // Link to Supabase Storage or external
-  scenarioPdfUrl: text('scenario_pdf_url'), // Link to Supabase Storage (PDF)
+    // Content
+    descriptionText: text('description_text'),
+    pptUrl: text('ppt_url'), // Link to Supabase Storage
+    videoUrl: text('video_url'), // Link to Supabase Storage or external
+    scenarioPdfUrl: text('scenario_pdf_url'), // Link to Supabase Storage (PDF)
 
-  // Settings
-  durationValue: integer('duration_value'),
-  durationUnit: durationUnit('duration_unit'),
-  isActive: boolean('is_active').default(false),
-  activatedAt: timestamp('activated_at'),
+    // Settings
+    durationValue: integer('duration_value'),
+    durationUnit: durationUnit('duration_unit'),
+    isActive: boolean('is_active').default(false),
+    activatedAt: timestamp('activated_at'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    codeFormatCheck: check(
+      'enablers_code_format_check',
+      sql`${table.code} is null or ${table.code} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`
+    ),
+    courseCodeUnique: uniqueIndex('enablers_course_code_unique')
+      .on(table.courseId, table.code)
+      .where(sql`${table.code} is not null`),
+  })
+);
 
-export const useCases = pgTable('use_cases', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  courseId: uuid('course_id')
-    .notNull()
-    .references(() => courses.id, { onDelete: 'cascade' }),
-  title: text('title').notNull(),
-  descriptionText: text('description_text').notNull(),
-  orderIndex: integer('order_index').notNull(),
+export const useCases = pgTable(
+  'use_cases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    // Stable text code, unique per course, NULL for legacy rows
+    code: text('code'),
+    title: text('title').notNull(),
+    descriptionText: text('description_text').notNull(),
+    orderIndex: integer('order_index').notNull(),
 
-  durationValue: integer('duration_value'),
-  durationUnit: durationUnit('duration_unit'),
-  isActive: boolean('is_active').default(false),
-  activatedAt: timestamp('activated_at'),
-  year: integer('year').array(),
-  trainingStage: integer('training_stage').array(),
-  lernfelder: text('lernfelder').array(),
+    durationValue: integer('duration_value'),
+    durationUnit: durationUnit('duration_unit'),
+    isActive: boolean('is_active').default(false),
+    activatedAt: timestamp('activated_at'),
+    year: integer('year').array(),
+    trainingStage: integer('training_stage').array(),
+    lernfelder: text('lernfelder').array(),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at')
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => ({
+    codeFormatCheck: check(
+      'use_cases_code_format_check',
+      sql`${table.code} is null or ${table.code} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`
+    ),
+    courseCodeUnique: uniqueIndex('use_cases_course_code_unique')
+      .on(table.courseId, table.code)
+      .where(sql`${table.code} is not null`),
+  })
+);
 
 export const trainingCatalogLearningFields = pgTable(
   'training_catalog_learning_fields',
