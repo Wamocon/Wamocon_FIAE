@@ -97,11 +97,9 @@ export default function TrainerDashboard() {
 
   // ── React Query replaces manual useState + useEffect + fetch ──
   const url = (() => {
+    // The server derives the trainer from the session, no ids in the URL
     if (!user?.id && !profile?.id) return null;
-    const params = new URLSearchParams();
-    if (user?.id) params.set('trainerAuthId', user.id);
-    if (profile?.id) params.set('trainerProfileId', profile.id);
-    return `/api/trainer/dashboard?${params.toString()}`;
+    return '/api/trainer/dashboard';
   })();
 
   const { data, isLoading: dataLoading } = useApiQuery<DashboardResponse>(url, {

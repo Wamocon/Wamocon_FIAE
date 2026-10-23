@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -9,15 +10,15 @@ import { eq, and, desc } from 'drizzle-orm';
 // GET: Fetch pending evaluations for trainer review
 export async function GET(request: NextRequest) {
     try {
+        const session = await requireTrainer(request);
+        if (isErrorResponse(session)) return session;
+
         const { searchParams } = new URL(request.url);
-        const trainerId = searchParams.get('trainerId');
+        const trainerId = session.id;
         const status = searchParams.get('status') || 'SUBMITTED';
         const traineeId = searchParams.get('traineeId');
         const year = searchParams.get('year');
 
-        if (!trainerId) {
-            return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-        }
 
         // Build query conditions
         const conditions = [eq(weeklyEvaluations.trainerId, trainerId as any)];

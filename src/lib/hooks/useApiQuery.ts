@@ -1,3 +1,4 @@
+import { authFetch } from '@/lib/authFetch';
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 import { consumePrefetch } from '@/lib/prefetch';
 
@@ -36,7 +37,7 @@ export function useApiQuery<T>(
         if (prefetched) return prefetched;
       }
 
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await authFetch(url, { cache: 'no-store' });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`API ${res.status}: ${text}`);

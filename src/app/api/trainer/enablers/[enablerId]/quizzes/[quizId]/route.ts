@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -8,7 +9,7 @@ import {
   questions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET: quiz detail for editing/view
 export async function GET(
@@ -16,6 +17,9 @@ export async function GET(
   { params }: { params: Promise<{ enablerId: string; quizId: string }> }
 ) {
   try {
+    const session = await requireTrainer(_req);
+    if (isErrorResponse(session)) return session;
+
     const { quizId } = await params;
     const [link] = await db
       .select()
@@ -71,13 +75,12 @@ export async function PATCH(
   { params }: { params: Promise<{ enablerId: string; quizId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { enablerId, quizId } = await params;
     const body = await req.json();
-    const trainerId: string | undefined = body?.trainerId;
-
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
+    const trainerId = session.id;
 
     const [enabler] = await db
       .select({ id: enablers.id })
@@ -87,12 +90,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
     }
 
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },
@@ -179,20 +176,13 @@ export async function DELETE(
   { params }: { params: Promise<{ enablerId: string; quizId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { enablerId, quizId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
-
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },

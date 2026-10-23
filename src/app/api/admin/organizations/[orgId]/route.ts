@@ -1,8 +1,14 @@
+import {
+  requireAdmin,
+  requireSuperAdmin,
+  isErrorResponse,
+  scopeOrg,
+  isInOrgScope,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, count } from 'drizzle-orm';
 import { organizations, profiles } from '@/db/migrations/schemas/schema';
-import { verifyAdmin } from '@/lib/auth-helpers';
 
 export async function GET(
   req: NextRequest,
@@ -10,10 +16,13 @@ export async function GET(
 ) {
   try {
     const { orgId } = await params;
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // The caller's identity comes from the bearer token, never from the URL
+    const session = await requireAdmin(req);
+    if (isErrorResponse(session)) return session;
+
+    // Org admins can only open their own organization
+    if (!isInOrgScope(scopeOrg(session), orgId)) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     const [org] = await db
@@ -39,14 +48,29 @@ export async function PATCH(
 ) {
   try {
     const { orgId } = await params;
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // The caller's identity comes from the bearer token, never from the URL
+    const session = await requireAdmin(req);
+    if (isErrorResponse(session)) return session;
+
+    if (!isInOrgScope(scopeOrg(session), orgId)) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     const body = await req.json();
     const updates: Record<string, unknown> = {};
+
+    // Plan, seats and activation are commercial settings of the platform
+    if (
+      !session.isSuperAdmin &&
+      ['subscriptionPlan', 'maxTraineeSeats', 'maxTrainerSeats', 'isActive'].some(
+        key => body[key] !== undefined
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'Only the platform admin can change plan, seats or activation' },
+        { status: 403 }
+      );
+    }
 
     if (typeof body.name === 'string') updates.name = body.name.trim();
     if (typeof body.subscriptionPlan === 'string') {
@@ -105,11 +129,9 @@ export async function DELETE(
 ) {
   try {
     const { orgId } = await params;
-    const { searchParams } = new URL(req.url);
-    const adminId = searchParams.get('adminId');
-    if (!adminId || !(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    // Deleting an organization is a platform-wide action
+    const session = await requireSuperAdmin(req);
+    if (isErrorResponse(session)) return session;
 
     const [target] = await db
       .select({

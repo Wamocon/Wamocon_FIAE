@@ -3,13 +3,18 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
+import { fakeSession, mockSession } from '../../../../helpers/mockNext';
+
 const mockChatWithFallback = jest.fn();
 
-async function importHandler() {
+async function importHandler(
+  session: ReturnType<typeof fakeSession> | null = fakeSession()
+) {
   jest.resetModules();
   jest.doMock('@/lib/hai/providers', () => ({
     chatWithFallback: mockChatWithFallback,
   }));
+  mockSession(session);
   const mod = await import('../../../../../src/app/api/trainer/arbeitszeugnis/generate-summary/route');
   return mod.POST as (req: Request) => Promise<Response>;
 }
@@ -17,6 +22,28 @@ async function importHandler() {
 describe('API: /api/trainer/arbeitszeugnis/generate-summary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  const request = () =>
+    new Request('http://localhost/api/trainer/arbeitszeugnis/generate-summary', {
+      method: 'POST',
+      body: JSON.stringify({ traineeName: 'Max', manualOverallGrade: 2 }),
+    });
+
+  it('401 without a session', async () => {
+    const POST = await importHandler(null);
+    const res = await POST(request());
+    expect(res.status).toBe(401);
+    expect(mockChatWithFallback).not.toHaveBeenCalled();
+  });
+
+  it('403 for a trainee session', async () => {
+    const POST = await importHandler(
+      fakeSession({ role: 'TRAINEE', isTrainerLevel: false })
+    );
+    const res = await POST(request());
+    expect(res.status).toBe(403);
+    expect(mockChatWithFallback).not.toHaveBeenCalled();
   });
 
   it('should generate an AI overall assessment', async () => {

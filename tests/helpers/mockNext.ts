@@ -103,3 +103,107 @@ export function sessionProfileRow(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Fake session layer for route logic tests
+// ---------------------------------------------------------------------------
+
+export type FakeSession = {
+  id: string;
+  email: string | null;
+  fullName: string | null;
+  role: string;
+  organizationId: string;
+  isPlatformOwner: boolean;
+  isSuperAdmin: boolean;
+  isAdmin: boolean;
+  isTrainerLevel: boolean;
+};
+
+/** A trainer session. Pass overrides for other roles. */
+export function fakeSession(overrides: Partial<FakeSession> = {}): FakeSession {
+  return {
+    id: 'trainer-1',
+    email: 'trainer@example.com',
+    fullName: 'Test Trainer',
+    role: 'TRAINER',
+    organizationId: 'org-1',
+    isPlatformOwner: false,
+    isSuperAdmin: false,
+    isAdmin: false,
+    isTrainerLevel: true,
+    ...overrides,
+  };
+}
+
+/**
+ * Replace the session guards of '@/lib/auth/session' so a route runs as the
+ * given session (or anonymous with null) without Supabase or database access.
+ * The guards keep the real status codes: 401 without a session, 403 when the
+ * role is too low. Everything else (scopeOrg, isErrorResponse, ...) is real.
+ * Call it before importing the route (after jest.resetModules()).
+ */
+export function mockSession(session: FakeSession | null) {
+  jest.doMock('@/lib/auth/session', () => {
+    const actual = jest.requireActual('@/lib/auth/session') as any;
+    const { NextResponse } = jest.requireActual('next/server') as any;
+    const guard = (allowed: (s: FakeSession) => boolean) => async () => {
+      if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      return allowed(session)
+        ? session
+        : NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    };
+    return {
+      ...actual,
+      requireUser: guard(() => true),
+      requireTrainer: guard(s => s.isTrainerLevel),
+      requireAdmin: guard(s => s.isAdmin),
+      requireSuperAdmin: guard(s => s.isSuperAdmin),
+    };
+  });
+}
+
+/**
+ * Replace the trainee responsibility check of '@/lib/auth/trainee-access'.
+ * 'ok' grants access, 'forbidden' answers 403 and 'missing' answers 404.
+ */
+export function mockTraineeAccess(
+  outcome: 'ok' | 'forbidden' | 'missing' = 'ok'
+) {
+  jest.doMock('@/lib/auth/trainee-access', () => {
+    const { NextResponse } = jest.requireActual('next/server') as any;
+    return {
+      __esModule: true,
+      requireTraineeAccess: async (_session: unknown, traineeId: string) => {
+        if (outcome === 'forbidden') {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        if (outcome === 'missing') {
+          return NextResponse.json(
+            { error: 'Trainee not found' },
+            { status: 404 }
+          );
+        }
+        return {
+          trainee: {
+            id: traineeId,
+            role: 'TRAINEE',
+            organizationId: 'org-1',
+            assignedTrainerId: null,
+          },
+          scope: {
+            id: 'trainer-1',
+            role: 'TRAINER',
+            organizationId: 'org-1',
+            isPlatformOwner: false,
+            isSuperAdmin: false,
+            canSeeOrgWide: false,
+            profileIds: ['trainer-1'],
+          },
+        };
+      },
+    };
+  });
+}

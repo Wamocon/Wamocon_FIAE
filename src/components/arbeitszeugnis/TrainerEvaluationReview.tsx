@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import React, { useState } from 'react';
 import {
   Card,
@@ -65,7 +66,6 @@ interface SoftskillRating {
 interface TrainerEvaluationReviewProps {
   evaluation: Evaluation;
   trainee: Trainee;
-  trainerId?: string;
   existingSoftskillRatings?: SoftskillRating[];
   onApprove?: () => void;
   onReject?: () => void;
@@ -84,7 +84,6 @@ const GRADE_OPTIONS = [
 export default function TrainerEvaluationReview({
   evaluation,
   trainee,
-  trainerId,
   existingSoftskillRatings = [],
   onApprove,
   onReject,
@@ -149,12 +148,9 @@ export default function TrainerEvaluationReview({
         payload.releaseRating = releaseRating || undefined;
         payload.releaseComment = releaseComment || undefined;
         payload.editReason = editReason || undefined;
-        if (trainerId) {
-          payload.trainerId = trainerId;
-        }
       }
 
-      const res = await fetch(`/api/trainer/evaluations/${evaluation.id}`, {
+      const res = await authFetch(`/api/trainer/evaluations/${evaluation.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -189,7 +185,7 @@ export default function TrainerEvaluationReview({
         await handleSave();
       }
 
-      const res = await fetch(`/api/trainer/evaluations/${evaluation.id}`, {
+      const res = await authFetch(`/api/trainer/evaluations/${evaluation.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,8 +1,9 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lernfelderSchema, useCases } from '@/db/migrations/schemas/schema';
 import { eq, arrayContains } from 'drizzle-orm';
-import { verifyTrainer, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 /**
  * GET /api/trainer/lernfelder/[id]
@@ -13,6 +14,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireTrainer(_req);
+    if (isErrorResponse(session)) return session;
+
     const { id } = await params;
     const [row] = await db
       .select()
@@ -61,11 +65,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { id } = await params;
-    const trainerId = req.nextUrl.searchParams.get('trainerId');
-    if (!trainerId || !(await verifyTrainer(trainerId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },
@@ -105,11 +109,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { id } = await params;
-    const trainerId = req.nextUrl.searchParams.get('trainerId');
-    if (!trainerId || !(await verifyTrainer(trainerId))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },

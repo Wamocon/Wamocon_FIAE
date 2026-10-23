@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import { chatWithFallback } from '@/lib/hai/providers';
 
@@ -36,6 +37,9 @@ const IHK_GRADE_DEFINITIONS: Record<
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { remark, grade, traineeName, gender } = await req.json();
 
     if (!remark || !grade) {

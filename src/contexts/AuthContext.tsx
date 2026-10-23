@@ -150,10 +150,8 @@ function buildDashboardUrl(
   profileId?: string
 ): string {
   if (TRAINER_LEVEL_ROLES.includes(role as UserRole)) {
-    const params = new URLSearchParams();
-    params.set('trainerAuthId', userId);
-    if (profileId) params.set('trainerProfileId', profileId);
-    return `/api/trainer/dashboard?${params.toString()}`;
+    // The server derives the trainer from the session
+    return '/api/trainer/dashboard';
   }
   return `/api/trainee/dashboard?userId=${profileId || userId}`;
 }

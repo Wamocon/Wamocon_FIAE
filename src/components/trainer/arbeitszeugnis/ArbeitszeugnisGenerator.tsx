@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
@@ -242,10 +243,9 @@ export function ArbeitszeugnisGenerator() {
       setTraineesLoading(true);
       try {
         // Use batch endpoint to get trainees WITH stats in one call
-        const res = await fetch(
-          `/api/trainer/trainees/with-stats?trainerProfileId=${profile?.id}`,
-          { cache: 'no-store' }
-        );
+        const res = await authFetch(`/api/trainer/trainees/with-stats`, {
+          cache: 'no-store',
+        });
         if (res.ok) {
           const data = await res.json();
           setTrainees(data.trainees || []);
@@ -283,11 +283,11 @@ export function ArbeitszeugnisGenerator() {
         }
 
         const [aggRes, radarRes] = await Promise.all([
-          fetch(
+          authFetch(
             `/api/trainer/arbeitszeugnis/aggregate/${selectedTrainee}${query}`,
             { cache: 'no-store' }
           ),
-          fetch(
+          authFetch(
             `/api/trainer/arbeitszeugnis/skill-radar/${selectedTrainee}${query}`,
             { cache: 'no-store' }
           ),
@@ -324,7 +324,7 @@ export function ArbeitszeugnisGenerator() {
 
         // Fetch existing certificates for this trainee/period
         try {
-          const certRes = await fetch(
+          const certRes = await authFetch(
             `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${effectiveAusbildungsjahr}`,
             { cache: 'no-store' }
           );
@@ -457,26 +457,29 @@ export function ArbeitszeugnisGenerator() {
     const summaryContext = isSummaryEdited(summary, name) ? summary : '';
 
     try {
-      const res = await fetch('/api/trainer/arbeitszeugnis/generate-summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          traineeName: aggregatedData.traineeName,
-          gender,
-          certificateType,
-          overallAverage: aggregatedData.overallAverage,
-          manualOverallGrade,
-          components: aggregatedData.components.map(c => ({
-            title: c.componentTitle,
-            finalGrade: c.finalGrade,
-            averageGrade: c.averageGrade,
-            totalHours: c.totalHours,
-          })),
-          softSkills: aggregatedData.softSkills || null,
-          summaryContext,
-          shorteningEligible: aggregatedData.shorteningEligible,
-        }),
-      });
+      const res = await authFetch(
+        '/api/trainer/arbeitszeugnis/generate-summary',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            traineeName: aggregatedData.traineeName,
+            gender,
+            certificateType,
+            overallAverage: aggregatedData.overallAverage,
+            manualOverallGrade,
+            components: aggregatedData.components.map(c => ({
+              title: c.componentTitle,
+              finalGrade: c.finalGrade,
+              averageGrade: c.averageGrade,
+              totalHours: c.totalHours,
+            })),
+            softSkills: aggregatedData.softSkills || null,
+            summaryContext,
+            shorteningEligible: aggregatedData.shorteningEligible,
+          }),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -549,7 +552,7 @@ export function ArbeitszeugnisGenerator() {
         );
       }
 
-      const res = await fetch(
+      const res = await authFetch(
         `/api/trainer/arbeitszeugnis/issue/${selectedTrainee}`,
         {
           method: 'POST',
@@ -564,7 +567,6 @@ export function ArbeitszeugnisGenerator() {
             radarImage: radarImageBase64,
             startDate: aggregatedData.periodStart,
             endDate: aggregatedData.periodEnd,
-            trainerId: profile?.id,
             traineeBirthDate: selectedTraineeData?.birth_date || null,
             softSkills: aggregatedData.softSkills
               ? {
@@ -602,7 +604,7 @@ export function ArbeitszeugnisGenerator() {
       // Load company logo
       let logoImageBase64: string | undefined;
       try {
-        const logoResponse = await fetch('/WMC_Logo.png');
+        const logoResponse = await authFetch('/WMC_Logo.png');
         const logoBlob = await logoResponse.blob();
         logoImageBase64 = await new Promise<string>(resolve => {
           const reader = new FileReader();
@@ -681,7 +683,7 @@ export function ArbeitszeugnisGenerator() {
 
     setRedownloading(true);
     try {
-      const certRes = await fetch(
+      const certRes = await authFetch(
         `/api/trainer/arbeitszeugnis/certificates/${selectedTrainee}?ausbildungsjahr=${effectiveAusbildungsjahr}`,
         { cache: 'no-store' }
       );
@@ -713,7 +715,7 @@ export function ArbeitszeugnisGenerator() {
 
       let logoImageBase64: string | undefined;
       try {
-        const logoResponse = await fetch('/WMC_Logo.png');
+        const logoResponse = await authFetch('/WMC_Logo.png');
         const logoBlob = await logoResponse.blob();
         logoImageBase64 = await new Promise<string>(resolve => {
           const reader = new FileReader();
@@ -807,9 +809,12 @@ export function ArbeitszeugnisGenerator() {
     setBulkProgress({ current: 0, total: 0 });
 
     try {
-      const res = await fetch('/api/trainer/arbeitszeugnis/certificates/all', {
-        cache: 'no-store',
-      });
+      const res = await authFetch(
+        '/api/trainer/arbeitszeugnis/certificates/all',
+        {
+          cache: 'no-store',
+        }
+      );
       if (!res.ok) throw new Error('Failed to fetch certificates');
       const data = await res.json();
       const certificates = data.certificates || [];
@@ -823,7 +828,7 @@ export function ArbeitszeugnisGenerator() {
 
       let logoImageBase64: string | undefined;
       try {
-        const logoResponse = await fetch('/WMC_Logo.png');
+        const logoResponse = await authFetch('/WMC_Logo.png');
         const logoBlob = await logoResponse.blob();
         logoImageBase64 = await new Promise<string>(resolve => {
           const reader = new FileReader();

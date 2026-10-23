@@ -1,5 +1,6 @@
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
 import db from '@/db';
 import { activityReportUseCaseEntries, activityReports, profiles, trainingUseCases } from '@/db/migrations/schemas/schema';
 import { eq, and } from 'drizzle-orm';
@@ -16,23 +17,8 @@ import { eq, and } from 'drizzle-orm';
  */
 export async function POST(request: NextRequest) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        // Verify user is a trainer
-        const trainerProfile = await db
-            .select({ role: profiles.role })
-            .from(profiles)
-            .where(eq(profiles.id, user.id))
-            .limit(1);
-
-        if (trainerProfile[0]?.role !== 'TRAINER') {
-            return NextResponse.json({ error: 'Only trainers can grade entries' }, { status: 403 });
-        }
+        const session = await requireTrainer(request);
+        if (isErrorResponse(session)) return session;
 
         const body = await request.json();
         const { reportId, grades } = body;
@@ -57,6 +43,9 @@ export async function POST(request: NextRequest) {
         if (!report[0]) {
             return NextResponse.json({ error: 'Activity report not found' }, { status: 404 });
         }
+
+        const access = await requireTraineeAccess(session, String(report[0].traineeId));
+        if (isErrorResponse(access)) return access;
 
         // Update each entry with grade
         const updatedEntries: string[] = [];
@@ -84,7 +73,7 @@ export async function POST(request: NextRequest) {
                     gradeComment: comment || null,
                     isGradeApproved: true,
                     gradeApprovedAt: now,
-                    gradeApprovedBy: user.id,
+                    gradeApprovedBy: session.id,
                 })
                 .where(
                     and(
@@ -115,12 +104,8 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await requireTrainer(request);
+        if (isErrorResponse(session)) return session;
 
         const { searchParams } = new URL(request.url);
         const reportId = searchParams.get('reportId');
@@ -128,6 +113,18 @@ export async function GET(request: NextRequest) {
         if (!reportId) {
             return NextResponse.json({ error: 'reportId is required' }, { status: 400 });
         }
+
+        // The report must belong to a trainee the caller is responsible for
+        const [report] = await db
+            .select({ traineeId: activityReports.traineeId })
+            .from(activityReports)
+            .where(eq(activityReports.id, reportId))
+            .limit(1);
+        if (!report) {
+            return NextResponse.json({ error: 'Activity report not found' }, { status: 404 });
+        }
+        const access = await requireTraineeAccess(session, String(report.traineeId));
+        if (isErrorResponse(access)) return access;
 
         const entries = await db
             .select({

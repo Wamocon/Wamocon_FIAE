@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, count, eq, ilike, inArray } from 'drizzle-orm';
@@ -5,6 +6,9 @@ import { lessons, modules, subLessons } from '@/db/migrations/schemas/schema';
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q')?.trim();
     const year = searchParams.get('year'); // '1' | '2' | '3' or undefined

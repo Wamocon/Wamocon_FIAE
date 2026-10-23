@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -14,12 +15,13 @@ import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
     const onlyPending = searchParams.get('onlyPending') === 'true';
     const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (all)
-    if (!trainerId)
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
 
     const [trainerOrgId, isPlatformOwner] = await Promise.all([
       getUserOrgId(trainerId),

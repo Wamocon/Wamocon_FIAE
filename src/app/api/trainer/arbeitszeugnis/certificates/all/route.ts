@@ -1,3 +1,9 @@
+import {
+  requireTrainer,
+  isErrorResponse,
+  scopeOrg,
+  orgScopeCondition,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { workCertificates, profiles } from '@/db/migrations/schemas/schema';
@@ -11,6 +17,10 @@ import { eq, desc } from 'drizzle-orm';
  */
 export async function GET(request: NextRequest) {
   try {
+    const session = await requireTrainer(request);
+    if (isErrorResponse(session)) return session;
+
+    // Only certificates of trainees inside the caller's organization
     const certificates = await db
       .select({
         id: workCertificates.id,
@@ -30,6 +40,7 @@ export async function GET(request: NextRequest) {
       })
       .from(workCertificates)
       .innerJoin(profiles, eq(workCertificates.traineeId, profiles.id))
+      .where(orgScopeCondition(profiles.organizationId, scopeOrg(session)))
       .orderBy(desc(workCertificates.issueDate));
 
     return NextResponse.json({

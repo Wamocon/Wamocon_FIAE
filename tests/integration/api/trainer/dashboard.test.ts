@@ -3,14 +3,19 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
+import { fakeSession, mockSession } from '../../../helpers/mockNext';
 
 function makeGet(url: string) {
   return { url } as any;
 }
 
-async function importHandlerWithDb(mockDb: any) {
+async function importHandlerWithDb(
+  mockDb: any,
+  session: ReturnType<typeof fakeSession> | null = fakeSession({ id: 'tr1' })
+) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockSession(session);
   const mod = await import('@/app/api/trainer/dashboard/route');
   return mod.GET as (req: any) => Promise<Response>;
 }
@@ -21,11 +26,21 @@ describe('API: Trainer Dashboard', () => {
     jest.clearAllMocks();
   });
 
-  it('400 if no trainer id is given', async () => {
+  it('401 without a session', async () => {
     const { db } = createTableDb();
-    const GET = await importHandlerWithDb(db);
+    const GET = await importHandlerWithDb(db, null);
     const res = await GET(makeGet('http://localhost/api/trainer/dashboard'));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for a trainee session', async () => {
+    const { db } = createTableDb();
+    const GET = await importHandlerWithDb(
+      db,
+      fakeSession({ role: 'TRAINEE', isTrainerLevel: false })
+    );
+    const res = await GET(makeGet('http://localhost/api/trainer/dashboard'));
+    expect(res.status).toBe(403);
   });
 
   it('GET /api/trainer/dashboard returns summary', async () => {
@@ -77,8 +92,9 @@ describe('API: Trainer Dashboard', () => {
     });
 
     const GET = await importHandlerWithDb(db);
+    // Identity parameters in the query are ignored, the session decides
     const res = await GET(
-      makeGet('http://localhost/api/trainer/dashboard?trainerAuthId=tr1')
+      makeGet('http://localhost/api/trainer/dashboard?trainerAuthId=someone')
     );
 
     expect(res.status).toBe(200);

@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
+import { fakeSession, mockSession } from '../../../helpers/mockNext';
 
 function makeGet(url: string) {
   return { url } as any;
@@ -13,17 +14,23 @@ const scope = {
   role: 'TRAINER',
   organizationId: 'org1',
   isPlatformOwner: false,
+  isSuperAdmin: false,
   canSeeOrgWide: false,
   profileIds: ['tr1'],
 };
 
-async function importHandler(mockDb: any, trainerScope: any = scope) {
+async function importHandler(
+  mockDb: any,
+  trainerScope: any = scope,
+  session: ReturnType<typeof fakeSession> | null = fakeSession({ id: 'tr1' })
+) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
   jest.doMock('@/lib/trainer-scope', () => ({
     __esModule: true,
     getTrainerScope: jest.fn().mockResolvedValue(trainerScope),
   }));
+  mockSession(session);
   const mod = await import('@/app/api/trainer/profile/route');
   return mod.GET as (req: any) => Promise<Response>;
 }
@@ -34,19 +41,28 @@ describe('API: Trainer Profile', () => {
     jest.clearAllMocks();
   });
 
-  it('400 without trainerId', async () => {
+  it('401 without a session', async () => {
     const { db } = createTableDb();
-    const GET = await importHandler(db);
+    const GET = await importHandler(db, scope, null);
     const res = await GET(makeGet('http://localhost/api/trainer/profile'));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for a trainee session', async () => {
+    const { db } = createTableDb();
+    const GET = await importHandler(
+      db,
+      scope,
+      fakeSession({ role: 'TRAINEE', isTrainerLevel: false })
+    );
+    const res = await GET(makeGet('http://localhost/api/trainer/profile'));
+    expect(res.status).toBe(403);
   });
 
   it('403 if the caller has no trainer scope', async () => {
     const { db } = createTableDb();
     const GET = await importHandler(db, null);
-    const res = await GET(
-      makeGet('http://localhost/api/trainer/profile?trainerId=tr1')
-    );
+    const res = await GET(makeGet('http://localhost/api/trainer/profile'));
     expect(res.status).toBe(403);
   });
 
@@ -78,8 +94,9 @@ describe('API: Trainer Profile', () => {
     });
 
     const GET = await importHandler(db);
+    // The trainerId query parameter is ignored, the session decides
     const res = await GET(
-      makeGet('http://localhost/api/trainer/profile?trainerId=tr1')
+      makeGet('http://localhost/api/trainer/profile?trainerId=someone-else')
     );
 
     expect(res.status).toBe(200);

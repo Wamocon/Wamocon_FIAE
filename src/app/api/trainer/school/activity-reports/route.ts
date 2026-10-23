@@ -1,23 +1,21 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, desc, and } from 'drizzle-orm';
 import { activityReports, activityReportEntries, profiles } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET /api/trainer/school/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
     try {
+        const session = await requireTrainer(req);
+        if (isErrorResponse(session)) return session;
+
         const url = new URL(req.url);
-        const trainerId = url.searchParams.get('trainerId');
+        const trainerId = session.id;
         const status = url.searchParams.get('status');
 
-        if (!trainerId) {
-            return NextResponse.json({ error: 'trainerId required' }, { status: 400 });
-        }
 
-        if (!(await verifyTrainer(trainerId))) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
 
         const isPO = await verifyPlatformOwner(trainerId);
         const trainerOrgId = await getUserOrgId(trainerId);

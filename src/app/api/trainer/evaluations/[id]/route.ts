@@ -1,3 +1,5 @@
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -18,6 +20,9 @@ interface RouteParams {
 // GET: Fetch single evaluation with softskill ratings
 export async function GET(request: NextRequest, { params }: RouteParams) {
     try {
+        const session = await requireTrainer(request);
+        if (isErrorResponse(session)) return session;
+
         const { id } = await params;
 
         // Fetch evaluation
@@ -32,6 +37,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         }
 
         const evaluation = evaluationRows[0];
+
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId));
+        if (isErrorResponse(access)) return access;
 
         // Fetch trainee info
         const traineeRows = await db
@@ -68,6 +76,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PUT: Trainer submits assessment
 export async function PUT(request: NextRequest, { params }: RouteParams) {
     try {
+        const session = await requireTrainer(request);
+        if (isErrorResponse(session)) return session;
+
         const { id } = await params;
 
         // Fetch evaluation
@@ -82,6 +93,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         }
 
         const evaluation = evaluationRows[0];
+
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId));
+        if (isErrorResponse(access)) return access;
 
         const body = await request.json();
         const {
@@ -109,33 +123,33 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
             if (releaseRating !== undefined) {
                 // Log audit trail if rating changed
-                if (evaluation.releaseRating !== releaseRating && body.trainerId) {
+                if (evaluation.releaseRating !== releaseRating && session.id) {
                     await db.insert(gradeEditHistory).values({
                         entityType: 'WEEKLY_EVALUATION',
                         entityId: id,
                         fieldName: 'releaseRating',
                         oldValue: evaluation.releaseRating || null,
                         newValue: releaseRating,
-                        changedBy: body.trainerId,
+                        changedBy: session.id,
                         changeReason: editReason || null,
                     });
                 }
                 updateData.releaseRating = releaseRating;
                 updateData.releaseComment = releaseComment?.substring(0, 500) || null;
                 updateData.releasedAt = new Date();
-                updateData.releasedBy = body.trainerId || null;
+                updateData.releasedBy = session.id || null;
             }
 
             // Also allow editing trainer rating on release edit
             if (trainerRating !== undefined) {
-                if (evaluation.trainerRating !== trainerRating && body.trainerId) {
+                if (evaluation.trainerRating !== trainerRating && session.id) {
                     await db.insert(gradeEditHistory).values({
                         entityType: 'WEEKLY_EVALUATION',
                         entityId: id,
                         fieldName: 'trainerRating',
                         oldValue: evaluation.trainerRating || null,
                         newValue: trainerRating,
-                        changedBy: body.trainerId,
+                        changedBy: session.id,
                         changeReason: editReason || null,
                     });
                 }
@@ -244,6 +258,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 // PATCH: Approve or reject evaluation
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
     try {
+        const session = await requireTrainer(request);
+        if (isErrorResponse(session)) return session;
+
         const { id } = await params;
 
         const evaluationRows = await db
@@ -258,8 +275,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
         const evaluation = evaluationRows[0];
 
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId));
+        if (isErrorResponse(access)) return access;
+
         const body = await request.json();
-        const { action, rejectionReason, trainerId } = body;
+        const { action, rejectionReason } = body;
+        // The acting trainer is the authenticated user, never a client value
+        const trainerId = session.id;
 
         if (!['approve', 'reject'].includes(action)) {
             return NextResponse.json({ error: 'Invalid action. Use "approve" or "reject"' }, { status: 400 });
