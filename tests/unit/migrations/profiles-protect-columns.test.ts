@@ -6,15 +6,17 @@ import * as path from 'path';
 
 /**
  * Static checks of the profile protection: the column privileges
- * (20261023200000, narrowed by 20261023300000) and the trigger (20261023300000)
- * are two independent layers and must name the same writable columns, and these
- * must be the columns the browser really writes. The SQL itself is verified on a
- * throwaway database.
+ * (20261023200000, narrowed by version 2 of the trigger) and the trigger (version
+ * 2, 20261023300100, which replaces the UPDATE only version 20261023300000 that
+ * was already applied to Preview) are two independent layers and must name the
+ * same writable columns, and these must be the columns the browser really
+ * writes. The SQL itself is verified on a throwaway database.
  */
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'supabase', 'migrations');
 const PRIVILEGES = '20261023200000_security_profiles_column_privileges.sql';
-const TRIGGER = '20261023300000_security_profiles_protect_columns.sql';
+const FIRST_VERSION = '20261023300000_security_profiles_protect_columns.sql';
+const TRIGGER = '20261023300100_security_profiles_protect_columns_v2.sql';
 
 /** SQL without line comments (the files document themselves in comments). */
 function readSql(fileName: string): string {
@@ -129,8 +131,11 @@ describe('profiles protection', () => {
     expect(trigger).toMatch(/set\s+local\s+statement_timeout\s*=\s*'60s'/i);
   });
 
-  it('sorts behind the privilege migration and ahead of the catalog series', () => {
-    expect(TRIGGER > PRIVILEGES).toBe(true);
+  it('sorts behind the privilege migration and ahead of the catalog series, version 2 after version 1', () => {
+    expect(FIRST_VERSION > PRIVILEGES).toBe(true);
+    expect(TRIGGER > FIRST_VERSION).toBe(true);
     expect(TRIGGER < '20261024').toBe(true);
+    // an applied migration is never edited: version 1 stays in the folder
+    expect(fs.existsSync(path.join(MIGRATIONS_DIR, FIRST_VERSION))).toBe(true);
   });
 });
