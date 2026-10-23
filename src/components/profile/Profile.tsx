@@ -138,7 +138,7 @@ export function Profile() {
         avatar_url: profile.avatar || null,
         birth_date: editedProfile.birth_date || null,
         training_start_date: editedProfile.training_start_date || null,
-      });
+      }).catch(e => console.error('Profile update error:', e));
       toast.success(t('profile.updateSuccess') || 'Profil aktualisiert');
     } else {
       // Reset to current profile data when entering edit mode

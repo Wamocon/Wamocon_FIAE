@@ -2,7 +2,7 @@
 // connection string never reaches a log. Static checks of the workflows and
 // actions (text based, no YAML library needed) plus the pure helpers.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { driftFindings } from '../../../scripts/db/drift-check.mjs';
 import {
@@ -103,6 +103,31 @@ test('only Production jobs use the token and the environment Production', () => 
     assert.ok(/environment:\s*Production\b/.test(block), `${path} ${name}`);
     assert.ok(block.includes('SUPABASE_ACCESS_TOKEN'), `${path} ${name}`);
   }
+});
+
+test('a push or pull request never reaches Production: workflows with Production access start only by hand, by release or by schedule', () => {
+  // The rule of the owner: merging into master must never migrate or deploy Production.
+  const dir = '.github/workflows';
+  const withProduction = [];
+  for (const file of readdirSync(dir).filter(f => f.endsWith('.yml'))) {
+    const text = code(read(`${dir}/${file}`));
+    if (!/SUPABASE_ACCESS_TOKEN|environment:\s*Production/.test(text)) continue;
+    withProduction.push(file);
+    const start = text.search(/^on:/m);
+    assert.ok(start >= 0, `${file}: no trigger block`);
+    const triggers = text
+      .slice(start)
+      .split(/^(?:jobs|concurrency|permissions|env):/m)[0];
+    assert.ok(
+      !/^\s{2}(push|pull_request|pull_request_target|workflow_run):/m.test(
+        triggers
+      ),
+      `${file}: a push or pull request can start a workflow with Production access`
+    );
+  }
+  // not vacuous: the release and the manual Production deploy are among them
+  assert.ok(withProduction.includes('release-production.yml'));
+  assert.ok(withProduction.includes('deploy-production.yml'));
 });
 
 test('the daily drift run is Preview only, the Production comparison is manual', () => {

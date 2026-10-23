@@ -131,6 +131,15 @@ jobs:
       - name: Baseline guard
         run: node scripts/db/baseline-guard.mjs --plan dry-run.txt
 
+      # Fails BEFORE anything is applied if the plan contains migrations of the KfBM
+      # rebuild (version 20261024000100 and newer) and the owner has not approved the
+      # rollout (repository variable KFBM_ROLLOUT_APPROVED = true), see
+      # docs/production-schema-migration.md. Other releases are not affected.
+      - name: Rollout gate
+        env:
+          KFBM_ROLLOUT_APPROVED: ${{ vars.KFBM_ROLLOUT_APPROVED }}
+        run: node scripts/db/rollout-gate.mjs --plan dry-run.txt
+
       - name: Apply migrations to public
         if: steps.dry.outputs.pending == 'yes'
         run: node scripts/db/supabase-retry.mjs db push --linked
