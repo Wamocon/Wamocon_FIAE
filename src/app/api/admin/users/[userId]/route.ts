@@ -4,6 +4,7 @@ import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { DB_OPTION } from '@/lib/db-schema';
+import { blockInPreview } from '@/lib/preview-guard';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
@@ -140,6 +141,10 @@ export async function DELETE(
     // The caller's identity comes from the bearer token, never from the URL
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
+
+    // auth.admin.deleteUser would delete an account of the shared Production auth
+    const blocked = blockInPreview();
+    if (blocked) return blocked;
 
     if (session.id === userId) {
       return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });

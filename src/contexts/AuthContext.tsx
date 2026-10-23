@@ -13,7 +13,11 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { prefetch } from '@/lib/prefetch';
-import { DB_SCHEMA } from '@/lib/db-schema';
+import {
+  DB_SCHEMA,
+  IS_PREVIEW_SCHEMA,
+  PREVIEW_ADMIN_BLOCKED_MESSAGE,
+} from '@/lib/db-schema';
 import type {
   RealtimeChannel,
   RealtimePostgresChangesPayload,
@@ -721,6 +725,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     role: 'trainee' | 'trainer'
   ) => {
+    // Preview shares the auth of Production: no new accounts from Preview
+    if (IS_PREVIEW_SCHEMA) throw new Error(PREVIEW_ADMIN_BLOCKED_MESSAGE);
     setLoading(true);
 
     const { data, error } = await supabase.auth.signUp({

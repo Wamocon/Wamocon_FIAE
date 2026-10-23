@@ -136,3 +136,11 @@ export function withStoragePrefix(
   }
   return `${PREVIEW_STORAGE_PREFIX}${path}`;
 }
+
+/**
+ * Message of the Preview lockdown: Preview shares the Supabase Auth of
+ * Production, so every action that creates, deletes or changes accounts is
+ * switched off there (src/lib/preview-guard.ts, AuthContext sign-up).
+ */
+export const PREVIEW_ADMIN_BLOCKED_MESSAGE =
+  'This action is disabled in the Preview environment: it would create, delete or change accounts that Preview shares with Production.';

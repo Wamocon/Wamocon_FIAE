@@ -12,6 +12,7 @@ import { eq, sql } from 'drizzle-orm';
 import { profiles, organizations, notifications } from '@/db/migrations/schemas/schema';
 import { sendCredentialsEmail } from '@/lib/email';
 import { DB_OPTION } from '@/lib/db-schema';
+import { blockInPreview } from '@/lib/preview-guard';
 import crypto from 'crypto';
 
 export async function GET(req: NextRequest) {
@@ -80,6 +81,10 @@ export async function POST(req: NextRequest) {
     // The caller's identity comes from the bearer token, never from the URL
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
+
+    // auth.admin.createUser would create an account in the shared Production auth
+    const blocked = blockInPreview();
+    if (blocked) return blocked;
 
     const body = await req.json();
     const { email, fullName, role, organizationId, sendEmail } = body as {
