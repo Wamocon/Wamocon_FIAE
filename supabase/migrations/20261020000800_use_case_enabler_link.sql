@@ -6,14 +6,15 @@
 -- clears the link (ON DELETE SET NULL on enabler_id only, PostgreSQL 15), the
 -- use case itself is kept.
 --
--- Backfill for the existing FIAE content, deterministic and conservative:
--- inside one course, enablers and use cases are sorted by order_index
--- (then created_at, id) and paired by position, but ONLY in courses that have
--- exactly as many enablers as use cases (and at least one) and no link yet.
--- Everything else stays NULL. Review the result with
+-- No automatic backfill for the existing FIAE content. A read-only measurement
+-- of production on 2026-10-23 found 26 courses with 189 enablers and 88 use
+-- cases, and only 4 courses with as many use cases as enablers. Pairing by
+-- position would link wrong rows, and an empty link is safer than a wrong one.
+-- Existing FIAE use cases therefore keep enabler_id NULL. Review the state
+-- per course with
 --   select * from public.v_use_case_enabler_backfill_report where needs_review;
--- NOT NULL on enabler_id is enforced in a later migration once the report is
--- clean. The KfBM import sets enabler_id explicitly.
+-- NOT NULL on enabler_id must not be enforced for the FIAE catalog. The KfBM
+-- import sets enabler_id explicitly for every use case.
 
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
@@ -67,59 +68,8 @@ begin
   end if;
 end $$;
 
--- Deterministic backfill (see header). Courses that already contain a link are
--- skipped, so a second run changes nothing.
-do $$
-declare
-  paired_count integer;
-begin
-  with enabler_pos as (
-    select
-      e.id,
-      e.course_id,
-      row_number() over (
-        partition by e.course_id
-        order by e.order_index, e.created_at, e.id
-      ) as pos,
-      count(*) over (partition by e.course_id) as total
-    from public.enablers e
-  ),
-  use_case_pos as (
-    select
-      u.id,
-      u.course_id,
-      row_number() over (
-        partition by u.course_id
-        order by u.order_index, u.created_at, u.id
-      ) as pos,
-      count(*) over (partition by u.course_id) as total
-    from public.use_cases u
-  ),
-  pairs as (
-    select up.id as use_case_id, ep.id as enabler_id
-    from use_case_pos up
-    join enabler_pos ep
-      on ep.course_id = up.course_id
-     and ep.pos = up.pos
-     and ep.total = up.total
-    where not exists (
-      select 1
-      from public.use_cases linked
-      where linked.course_id = up.course_id
-        and linked.enabler_id is not null
-    )
-  )
-  update public.use_cases u
-  set enabler_id = p.enabler_id
-  from pairs p
-  where u.id = p.use_case_id
-    and u.enabler_id is null;
-
-  get diagnostics paired_count = row_count;
-  raise notice 'use_cases.enabler_id backfill: % use cases paired by position.', paired_count;
-end $$;
-
--- Diagnosis per course: counts, pairing state and deviations.
+-- Diagnosis per course: counts, pairing state and deviations. Courses without
+-- any link show up as partially_paired and need a human decision.
 create or replace view public.v_use_case_enabler_backfill_report
 with (security_invoker = true)
 as
