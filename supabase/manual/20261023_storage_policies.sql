@@ -38,6 +38,12 @@ drop policy if exists "Allow all operations fqilq1_2" on storage.objects;
 drop policy if exists "Allow all operations fqilq1_3" on storage.objects;
 drop policy if exists "policy_name" on storage.objects;
 
+-- The new policies are dropped first, so the script can be run again.
+drop policy if exists "content_select_own_folder" on storage.objects;
+drop policy if exists "content_insert_own_folder" on storage.objects;
+drop policy if exists "content_update_own_folder" on storage.objects;
+drop policy if exists "content_delete_own_folder" on storage.objects;
+
 -- The SELECT policy stays, limited to the own folder. INSERT ... RETURNING in
 -- the storage service needs it, and it stops listing other users' files.
 create policy "content_select_own_folder" on storage.objects
