@@ -2,7 +2,7 @@
 --
 -- The value is added in its own file because a new enum value cannot be used
 -- in the transaction that adds it. Nothing in this file uses it; the backfill
--- of the platform owner admins is a later file (20261024000000, gated).
+-- of the platform owner admins is a later file (20261025000000, gated).
 --
 -- Adding the value is harmless for the running app: no profile has the role
 -- yet. ADMIN in customer organizations and TEMP_ADMIN stay as they are.

@@ -103,7 +103,7 @@ begin
       and not a.attisdropped
   ) then
     raise exception
-      'Run the files 20261020000100 to 20261020000400 first (catalog consistency columns are missing).';
+      'Run the files 20261024000100 to 20261024000400 first (catalog consistency columns are missing).';
   end if;
 
   if to_regclass('public.lernfelder_legacy') is not null

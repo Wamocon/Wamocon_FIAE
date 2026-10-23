@@ -1,6 +1,6 @@
 -- Package 2.2 (part 2): validate the composite catalog foreign keys.
 --
--- The keys were created NOT VALID in 20261020000300_catalog_consistency_keys.sql.
+-- The keys were created NOT VALID in 20261024000300_catalog_consistency_keys.sql.
 -- VALIDATE CONSTRAINT scans the existing rows with a weaker lock
 -- (SHARE UPDATE EXCLUSIVE) that does not block reads or writes. Validating in
 -- its own file keeps the exclusive locks of the previous file short.

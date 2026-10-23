@@ -49,8 +49,8 @@ column needs a safe default.
 
 ## Runbook: Ausbildungskatalog-Migrationsreihe (KfBM-Umbau)
 
-Dieser Abschnitt gilt für die Dateien `supabase/migrations/20261020000100` bis
-`20261020001500` und `20261024000000` (PR 83). Die Migration von `202606260001` oben ist bereits in
+Dieser Abschnitt gilt für die Dateien `supabase/migrations/20261024000100` bis
+`20261024001500` und `20261025000000` (PR 83). Die Migration von `202606260001` oben ist bereits in
 Produktion angewendet und bleibt unverändert. Die Reihe ist bisher auf keiner
 Datenbank angewendet worden. Sie wurde nur auf einer lokalen Wegwerf-Datenbank
 (PostgreSQL 15 mit Stubs für `auth` und `storage`) geprüft, nicht auf einer
@@ -84,12 +84,12 @@ Kopie der Produktion.
 | 000900 | `occupation_code`, `regulation_version`, `settings`, `elective_pick_count` |
 | 001000 bis 001400 | `organization_catalogs`, `trainee_enrollments` (mit FIAE-Backfill), `training_components.kind`, `trainee_elective_choices` |
 | 001500 | Enum-Wert `SUPER_ADMIN` (eigene Datei) |
-| 20261024000000 | Backfill ADMIN der Plattform-Organisation zu SUPER_ADMIN, **technisch gesperrt** bis PR 89 angewendet ist und der App-Release bestätigt wurde (siehe Reihenfolge, Punkt 5) |
+| 20261025000000 | Backfill ADMIN der Plattform-Organisation zu SUPER_ADMIN, **technisch gesperrt** bis PR 89 angewendet ist und der App-Release bestätigt wurde (siehe Reihenfolge, Punkt 5) |
 
 Daten werden verändert in: 000300 (UPDATE enablers, use_cases, mappings),
 000500 (Kopie der Lernfelder), 000700 (UPDATE training_components), 001000
 (INSERT Organisationen), 001200 (INSERT Einschreibungen), 001300 (UPDATE
-training_components), 20261024000000 (UPDATE profiles). Die Aussage "keine
+training_components), 20261025000000 (UPDATE profiles). Die Aussage "keine
 Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
 
 ## Reihenfolge
@@ -103,10 +103,10 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
    vorhanden.
 3. **Reihenfolge-Regel für PR 89:** Die Migration
    `20261023200000_security_profiles_column_privileges.sql` MUSS vor
-   `20261020001500` angewendet sein, weil sonst jeder angemeldete Nutzer seine
+   `20261024001500` angewendet sein, weil sonst jeder angemeldete Nutzer seine
    eigene Rolle setzen könnte (die Reihe trägt ältere Versionsnummern). Vorcheck:
    `select has_column_privilege('authenticated','public.profiles','role','UPDATE');`
-   muss `false` liefern. Die Datei 001500 und die Datei 20261024000000 prüfen das
+   muss `false` liefern. Die Datei 001500 und die Datei 20261025000000 prüfen das
    selbst und brechen sonst ab.
 4. **Migration anwenden** (Dateien 000100 bis 001500) über die Release-Pipeline
    bzw. `supabase db push`. Jede Datei läuft in einer Transaktion mit
@@ -120,7 +120,7 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
    Rollenprüfungen der App behandeln `SUPER_ADMIN` mindestens wie `ADMIN`.
 6. **Erst nach diesem App-Release:** Freigabe setzen
    (`comment on type public.user_role is 'super_admin_backfill=approved';`) und
-   die Datei `20261024000000_super_admin_backfill.sql` anwenden. Ohne Freigabe
+   die Datei `20261025000000_super_admin_backfill.sql` anwenden. Ohne Freigabe
    oder ohne PR 89 bricht die Datei mit einer klaren Meldung ab, die Pipeline
    hält an dieser Stelle an (das Gate ist technisch, nicht nur ein Kommentar).
    Rückweg: `update public.profiles set role = 'ADMIN' where role = 'SUPER_ADMIN';`
@@ -183,7 +183,7 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
 
 ## Rollback
 
-`docs/rollback/20261020-kfbm-catalog-down.sql`. Nur sinnvoll, bis der erste
+`docs/rollback/20261024-kfbm-catalog-down.sql`. Nur sinnvoll, bis der erste
 KfBM-Datensatz existiert; das Skript bricht sonst ab. Danach `supabase migration
 repair --status reverted <Version>` für die Dateien der Reihe. Der Enum-Wert
 `SUPER_ADMIN` bleibt bestehen (Postgres kann ihn nicht entfernen).

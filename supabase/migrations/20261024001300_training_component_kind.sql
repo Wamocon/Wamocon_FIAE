@@ -37,7 +37,7 @@ where training_year = 3
 
 -- An integrative component runs through the whole training and has no phase.
 -- Added after the backfill; the backfilled rows have phase NULL (file
--- 20261020000700 maps training_year 3 to NULL).
+-- 20261024000700 maps training_year 3 to NULL).
 do $$
 begin
   if not exists (

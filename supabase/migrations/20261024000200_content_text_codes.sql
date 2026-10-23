@@ -27,7 +27,7 @@ begin
          and not a.attisdropped
      ) then
     raise exception
-      'Run 20261020000100_training_catalog_curriculum.sql first (training catalog columns are missing).';
+      'Run 20261024000100_training_catalog_curriculum.sql first (training catalog columns are missing).';
   end if;
 end $$;
 

@@ -69,7 +69,7 @@ async function getTableColumns(tableName: string): Promise<Set<string>> {
 /**
  * Select-list suffix (", col1, col2") for those of the wanted columns that
  * exist in the source database. The catalog columns only exist after the
- * training catalog migration series (20261020*); older databases are
+ * training catalog migration series (20261024*); older databases are
  * exported without them and are imported as FIAE.
  */
 function optionalColumns(available: Set<string>, wanted: string[]): string {
@@ -132,7 +132,7 @@ async function main() {
 
   if (!columns.courses.has('training_catalog_id')) {
     manifest.warnings.push(
-      'Source database has no training catalog columns (migration series 20261020* not applied). All rows are imported as FIAE.'
+      'Source database has no training catalog columns (migration series 20261024* not applied). All rows are imported as FIAE.'
     );
   }
 

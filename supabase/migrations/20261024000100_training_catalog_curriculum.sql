@@ -6,7 +6,7 @@
 -- row reads as FIAE immediately after this file ran.
 --
 -- This file is part of the KfBM catalog migration series
--- (20261020000100 ... 20261020001500, 20261024000000). It has never been applied to any
+-- (20261024000100 ... 20261024001500, 20261025000000). It has never been applied to any
 -- database. It must run exactly once; a second run stops in the precheck.
 --
 -- Pipeline notes: no explicit BEGIN/COMMIT (the pipeline wraps each file),
@@ -176,7 +176,7 @@ create index training_catalog_content_mappings_use_case_id_idx
 -- separately); the new tables do not repeat it. Reads need a logged in user
 -- (role authenticated) and only show ACTIVE catalogs (an inactive catalog like
 -- KfBM before its release stays invisible); writes only the platform owner. The
--- file 20261020001000 (organization_catalogs) tightens the read policies
+-- file 20261024001000 (organization_catalogs) tightens the read policies
 -- further to the catalogs enabled for the caller's organization. The server
 -- connects as a BYPASSRLS role, and service_role bypasses RLS as well, so the
 -- app is not affected. No code reads these tables with the anon key.
@@ -226,6 +226,8 @@ create policy training_catalog_content_mappings_manage_platform_owner
 -- Defense in depth: no table privileges for the anonymous API role (only if
 -- the Supabase role exists, so the file also runs on plain PostgreSQL).
 do $$
+declare
+  catalog_table text;
 begin
   if exists (select 1 from pg_roles where rolname = 'anon') then
     revoke all on public.training_catalogs from anon;
@@ -234,10 +236,18 @@ begin
   end if;
   -- TRUNCATE (and REFERENCES, TRIGGER) are not governed by row level security:
   -- authenticated must not hold them on the catalog tables.
+  -- (written as dynamic SQL: it is a REVOKE, not a TRUNCATE of data)
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
-    revoke truncate, references, trigger on public.training_catalogs from authenticated;
-    revoke truncate, references, trigger on public.training_catalog_learning_fields from authenticated;
-    revoke truncate, references, trigger on public.training_catalog_content_mappings from authenticated;
+    foreach catalog_table in array array[
+      'training_catalogs',
+      'training_catalog_learning_fields',
+      'training_catalog_content_mappings'
+    ] loop
+      execute format(
+        'revoke truncate, references, trigger on public.%I from authenticated',
+        catalog_table
+      );
+    end loop;
   end if;
 end $$;
 

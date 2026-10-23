@@ -37,7 +37,7 @@ export const userRole = pgEnum('user_role', [
   'TRAINER',
   'TRAINEE',
   // Platform owner admin (ADMIN of the platform owner organization after the
-  // 20261024000000 backfill). Added by 20261020001500.
+  // 20261025000000 backfill). Added by 20261024001500.
   'SUPER_ADMIN',
 ]);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);
@@ -418,7 +418,7 @@ export const useCases = pgTable(
       columns: [table.courseId, table.trainingCatalogId],
       foreignColumns: [courses.id, courses.trainingCatalogId],
     }).onDelete('cascade'),
-    // 1:1 link to the enabler (names as in 20261020000800). In the database the
+    // 1:1 link to the enabler (names as in 20261024000800). In the database the
     // key is ON DELETE SET NULL (enabler_id), which clears only the enabler
     // link; Drizzle cannot express the column list, so the migration SQL is the
     // source of truth for this key.

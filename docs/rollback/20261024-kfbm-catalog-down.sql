@@ -1,5 +1,5 @@
 -- Down script for the KfBM training catalog migration series
--- (supabase/migrations/20261020000100 ... 20261020001500 and 20261024000000).
+-- (supabase/migrations/20261024000100 ... 20261024001500 and 20261025000000).
 --
 -- Only meaningful until the FIAE-only state is left: the script refuses to run
 -- as soon as the first non-FIAE (KfBM) record exists, because dropping the
@@ -80,7 +80,7 @@ begin
   end if;
 end $$;
 
--- 1. SUPER_ADMIN back to ADMIN (20261024000000) ------------------------------
+-- 1. SUPER_ADMIN back to ADMIN (20261025000000) ------------------------------
 do $$
 begin
   if exists (
@@ -100,7 +100,7 @@ begin
   end if;
 end $$;
 
--- 2. Elective choices, enrollments, organization catalogs (20261020001000 - 1400)
+-- 2. Elective choices, enrollments, organization catalogs (20261024001000 - 1400)
 drop trigger if exists training_components_kind_change_check
   on public.training_components;
 drop trigger if exists training_catalogs_elective_pick_count_check
@@ -117,12 +117,12 @@ drop trigger if exists organizations_enable_default_catalog
 drop function if exists public.enable_default_catalog_for_organization();
 drop table if exists public.organization_catalogs;
 
--- 3. Component kind and phase (20261020001300, 20261020000700) --------------
+-- 3. Component kind and phase (20261024001300, 20261024000700) --------------
 alter table public.training_components
   drop column if exists kind,
   drop column if exists phase;
 
--- 4. Use case enabler link (20261020000800) ----------------------------------
+-- 4. Use case enabler link (20261024000800) ----------------------------------
 drop view if exists public.v_use_case_enabler_backfill_report;
 alter table public.use_cases
   drop constraint if exists use_cases_enabler_course_fk,
@@ -131,14 +131,14 @@ alter table public.use_cases
 alter table public.enablers
   drop constraint if exists enablers_id_course_unique;
 
--- 5. Quiz binding (20261020000600) -------------------------------------------
+-- 5. Quiz binding (20261024000600) -------------------------------------------
 drop index if exists public.quizzes_global_component_unique;
 alter table public.quizzes
   drop constraint if exists quizzes_component_catalog_fk,
   drop column if exists training_component_id,
   drop column if exists training_catalog_id;
 
--- 6. Learning field model (20261020000500): restore the legacy tables --------
+-- 6. Learning field model (20261024000500): restore the legacy tables --------
 do $$
 declare
   fiae constant uuid := '00000000-0000-4000-8000-000000000001';
@@ -231,7 +231,7 @@ end $$;
 drop function if exists public.lernfelder_view_write();
 drop function if exists public.lernfeld_label_training_year(text);
 
--- 7. Catalog tables and consistency columns (20261020000100 - 0400) ----------
+-- 7. Catalog tables and consistency columns (20261024000100 - 0400) ----------
 drop table if exists public.training_catalog_content_mappings;
 drop table if exists public.training_catalog_learning_fields;
 
@@ -248,7 +248,7 @@ alter table public.use_cases
   drop column if exists training_catalog_id,
   drop column if exists code;
 
--- 8. Text codes on courses (20261020000200) and catalog columns -------------
+-- 8. Text codes on courses (20261024000200) and catalog columns -------------
 alter table public.courses
   drop column if exists code;
 
@@ -267,7 +267,7 @@ alter table public.courses
 
 drop table if exists public.training_catalogs;
 
--- Helper of the organization bound read policies (20261020001000); the tables
+-- Helper of the organization bound read policies (20261024001000); the tables
 -- whose policies used it are gone by now.
 drop function if exists public.can_read_training_catalog(uuid);
 

@@ -23,7 +23,7 @@ export const legacyLearningFieldSelect = {
 /**
  * Training year (1 to 3) from the number in a label such as "LF-7": 1 to 5
  * year 1, 6 to 10 year 2, 11 and above year 3, no number defaults to year 1.
- * Same rule as supabase/migrations/20261020000500_learning_field_model.sql.
+ * Same rule as supabase/migrations/20261024000500_learning_field_model.sql.
  */
 export function labelTrainingYear(label: string): number {
   const match = /^\s*LF[\s._-]*(\d{1,3})/i.exec(label);

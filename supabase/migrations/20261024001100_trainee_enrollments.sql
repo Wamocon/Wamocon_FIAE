@@ -4,7 +4,7 @@
 -- (trainee, catalog), with the start date and the planned duration. There is
 -- no regulation version per trainee; the catalog carries the informational
 -- regulation_version. The table is created empty here; the FIAE backfill of
--- existing trainees is a separate file (20261020001200).
+-- existing trainees is a separate file (20261024001200).
 --
 -- start_date is nullable like profiles.start_of_training_date. duration_years
 -- follows the existing check of profiles.ausbildung_duration_years (2 or 3).

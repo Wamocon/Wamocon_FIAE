@@ -13,7 +13,7 @@
 --      inserts that do not know the column keep working unchanged.
 --   4. Composite foreign keys, created NOT VALID. They are enforced for new
 --      and changed rows immediately and validated in the next file
---      (20261020000400_catalog_consistency_validate.sql).
+--      (20261024000400_catalog_consistency_validate.sql).
 --
 -- Table sizes are small (hundreds of rows), so the backfill UPDATEs run well
 -- inside the statement timeout. The existing single-column foreign keys stay
@@ -33,7 +33,7 @@ begin
          and not a.attisdropped
      ) then
     raise exception
-      'Run 20261020000100_training_catalog_curriculum.sql first (training catalog tables are missing).';
+      'Run 20261024000100_training_catalog_curriculum.sql first (training catalog tables are missing).';
   end if;
 end $$;
 

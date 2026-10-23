@@ -11,7 +11,7 @@
  * code, use cases their enabler_id and global quizzes their
  * training_component_id. The import never creates catalogs or components;
  * they must exist in the target (catalogs come from the migration series
- * supabase/migrations/20261020*). Content of a non-FIAE catalog is refused if
+ * supabase/migrations/20261024*). Content of a non-FIAE catalog is refused if
  * the target has no catalog columns.
  *
  * The --trainer-id parameter is REQUIRED and specifies which trainer profile ID
@@ -109,7 +109,7 @@ function escapeArray(value: string[] | null | undefined): string {
 // --- Training catalog support -------------------------------------------
 // The catalog columns (training_catalog_id, code, enabler_id,
 // training_component_id) exist only after the training catalog migration
-// series (supabase/migrations/20261020*). Older exports and older target
+// series (supabase/migrations/20261024*). Older exports and older target
 // databases are handled: missing catalog ids in the export mean FIAE, and
 // target databases without the columns are only accepted for FIAE content.
 
@@ -220,7 +220,7 @@ async function preflightCatalogs(): Promise<void> {
 
   if (!targetColumns.courses.has('training_catalog_id')) {
     throw new Error(
-      `The export contains content of other training catalogs (${foreign.join(', ')}) but the target database has no catalog columns. Apply the migration series supabase/migrations/20261020* first.`
+      `The export contains content of other training catalogs (${foreign.join(', ')}) but the target database has no catalog columns. Apply the migration series supabase/migrations/20261024* first.`
     );
   }
 

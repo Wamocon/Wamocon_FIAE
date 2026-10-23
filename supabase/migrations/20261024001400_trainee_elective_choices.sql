@@ -21,8 +21,8 @@
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
 
--- Precheck: the elective rules need training_components.kind (20261020001300)
--- and training_catalogs.elective_pick_count (20261020000900).
+-- Precheck: the elective rules need training_components.kind (20261024001300)
+-- and training_catalogs.elective_pick_count (20261024000900).
 do $$
 begin
   if not exists (
@@ -37,7 +37,7 @@ begin
       and not a.attisdropped
   ) or to_regclass('public.trainee_enrollments') is null then
     raise exception
-      'Run 20261020000900, 20261020001100 and 20261020001300 first (kind, elective_pick_count or trainee_enrollments missing).';
+      'Run 20261024000900, 20261024001100 and 20261024001300 first (kind, elective_pick_count or trainee_enrollments missing).';
   end if;
 end $$;
 

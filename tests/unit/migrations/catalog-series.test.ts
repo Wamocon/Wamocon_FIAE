@@ -20,13 +20,13 @@ import {
 
 /**
  * Static checks of the training catalog migration series
- * (supabase/migrations/20261020* and the gated 20261024000000). They guard the
+ * (supabase/migrations/20261024* and the gated 20261025000000). They guard the
  * conventions of the release pipeline; the SQL itself is verified on a
  * throwaway database.
  */
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'supabase', 'migrations');
-const SERIES_PREFIXES = ['20261020', '20261024'];
+const SERIES_PREFIXES = ['20261024', '20261025'];
 const MAX_IDENTIFIER_LENGTH = 63;
 
 const seriesFiles = fs
@@ -71,29 +71,56 @@ describe('catalog migration series files', () => {
       expect(name).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
       return name.slice(0, 14);
     });
-    expect(versions[0]).toBe('20261020000100');
+    expect(versions[0]).toBe('20261024000100');
     expect(new Set(versions).size).toBe(versions.length);
     expect([...versions].sort()).toEqual(versions);
   });
 
+  it('sorts every series file after all migrations of master (20261023*)', () => {
+    const others = fs
+      .readdirSync(MIGRATIONS_DIR)
+      .filter(name => !SERIES_PREFIXES.some(p => name.startsWith(p)));
+    const hardening = others.filter(name => name.startsWith('20261023'));
+    // the security migrations of master are applied by hand in production and
+    // must stay in front of the series (the CLI refuses older files)
+    expect(hardening).toEqual([
+      '20261023100000_security_lock_unused_tables.sql',
+      '20261023100100_security_close_hai_policies.sql',
+      '20261023100200_security_close_anonymous_content_reads.sql',
+      '20261023200000_security_profiles_column_privileges.sql',
+    ]);
+    const newest = hardening[hardening.length - 1];
+    for (const file of seriesFiles) {
+      expect(file > newest).toBe(true);
+    }
+  });
+
+  it('keeps the SUPER_ADMIN backfill as the last file of the series', () => {
+    const last = seriesFiles[seriesFiles.length - 1];
+    expect(last).toBe('20261025000000_super_admin_backfill.sql');
+    expect(seriesFiles[seriesFiles.length - 2]).toBe(
+      '20261024001500_user_role_super_admin_value.sql'
+    );
+  });
+
   it('sorts the SUPER_ADMIN backfill after the PR 89 profile privileges', () => {
-    const backfill = '20261024000000_super_admin_backfill.sql';
+    const backfill = '20261025000000_super_admin_backfill.sql';
     const pr89 = '20261023200000_security_profiles_column_privileges.sql';
     expect(seriesFiles).toContain(backfill);
     expect(fs.existsSync(path.join(MIGRATIONS_DIR, pr89))).toBe(true);
     expect(backfill > pr89).toBe(true);
     // the old name must not exist any more
     expect(seriesFiles).not.toContain(
-      '20261020001600_super_admin_backfill.sql'
+      '20261024001600_super_admin_backfill.sql'
     );
   });
 
   it('enforces the rollout gate of the SUPER_ADMIN backfill in SQL', () => {
     const raw = fs.readFileSync(
-      path.join(MIGRATIONS_DIR, '20261024000000_super_admin_backfill.sql'),
+      path.join(MIGRATIONS_DIR, '20261025000000_super_admin_backfill.sql'),
       'utf-8'
     );
-    const sql = readSql('20261024000000_super_admin_backfill.sql');
+    const sql = readSql('20261025000000_super_admin_backfill.sql');
     // gate 1: PR 89 privileges, gate 2: human approval token
     expect(sql).toMatch(/has_column_privilege\('authenticated'/);
     expect(sql).toMatch(/super_admin_backfill=approved/);
@@ -102,7 +129,7 @@ describe('catalog migration series files', () => {
     expect(raw).toMatch(/^-- preview:skip$/m);
     expect(raw).toMatch(/^-- preview:end$/m);
     // the enum file checks PR 89 as well
-    expect(readSql('20261020001500_user_role_super_admin_value.sql')).toMatch(
+    expect(readSql('20261024001500_user_role_super_admin_value.sql')).toMatch(
       /has_column_privilege\('authenticated'/
     );
   });
@@ -181,9 +208,9 @@ describe('catalog migration series files', () => {
 
   it('keeps the enrollment and organization catalog tables read only for the API roles', () => {
     const files = [
-      '20261020001000_organization_catalogs.sql',
-      '20261020001100_trainee_enrollments.sql',
-      '20261020001400_trainee_elective_choices.sql',
+      '20261024001000_organization_catalogs.sql',
+      '20261024001100_trainee_enrollments.sql',
+      '20261024001400_trainee_elective_choices.sql',
     ];
     for (const file of files) {
       const sql = readSql(file);
@@ -204,7 +231,7 @@ describe('catalog migration series files', () => {
   });
 
   it('closes the legacy learning field tables for the API roles', () => {
-    const sql = readSql('20261020000500_learning_field_model.sql');
+    const sql = readSql('20261024000500_learning_field_model.sql');
     expect(sql).toMatch(/lernfelder_legacy/);
     expect(sql).toMatch(/drop policy %I on public\.%I/);
     expect(sql).toMatch(/revoke all on public\.%I from %I/);
@@ -212,10 +239,10 @@ describe('catalog migration series files', () => {
   });
 
   it('binds catalog reads to active catalogs of the own organization', () => {
-    const first = readSql('20261020000100_training_catalog_curriculum.sql');
+    const first = readSql('20261024000100_training_catalog_curriculum.sql');
     expect(first).not.toMatch(/for select to authenticated\s+using \(true\)/i);
     expect(first).toMatch(/is_active or public\.is_platform_owner\(\)/);
-    const org = readSql('20261020001000_organization_catalogs.sql');
+    const org = readSql('20261024001000_organization_catalogs.sql');
     expect(org).toMatch(/function public\.can_read_training_catalog/);
     expect(org).toMatch(/security definer\s+set search_path = ''/i);
     expect(org).toMatch(/oc\.organization_id = public\.get_user_org_id\(\)/);
@@ -233,34 +260,38 @@ describe('catalog migration series files', () => {
   });
 
   it('guards the catalog tables against TRUNCATE and the functions against anon', () => {
-    const first = readSql('20261020000100_training_catalog_curriculum.sql');
+    const first = readSql('20261024000100_training_catalog_curriculum.sql');
     expect(first).toMatch(
-      /revoke truncate, references, trigger on public\.training_catalogs from authenticated/
+      /revoke truncate, references, trigger on public\.%I from authenticated/
     );
-    expect(first).toMatch(
-      /revoke truncate, references, trigger on public\.training_catalog_content_mappings from authenticated/
-    );
+    for (const table of [
+      'training_catalogs',
+      'training_catalog_learning_fields',
+      'training_catalog_content_mappings',
+    ]) {
+      expect(first).toContain(`'${table}'`);
+    }
     // derivation triggers run as definer with a fixed search_path
-    const keys = readSql('20261020000300_catalog_consistency_keys.sql');
+    const keys = readSql('20261024000300_catalog_consistency_keys.sql');
     expect(
       keys.match(/security definer\s+set search_path = ''/gi)
     ).toHaveLength(2);
     // every file that defines functions also revokes EXECUTE from anon
     for (const file of [
-      '20261020000300_catalog_consistency_keys.sql',
-      '20261020000500_learning_field_model.sql',
-      '20261020001000_organization_catalogs.sql',
-      '20261020001400_trainee_elective_choices.sql',
+      '20261024000300_catalog_consistency_keys.sql',
+      '20261024000500_learning_field_model.sql',
+      '20261024001000_organization_catalogs.sql',
+      '20261024001400_trainee_elective_choices.sql',
     ]) {
       expect(readSql(file)).toMatch(/revoke execute on function %s from anon/);
     }
   });
 
   it('keeps the elective limit when the rules change', () => {
-    const sql = readSql('20261020001400_trainee_elective_choices.sql');
+    const sql = readSql('20261024001400_trainee_elective_choices.sql');
     expect(sql).toMatch(/after update of elective_pick_count/);
     expect(sql).toMatch(/before update of kind/);
-    // precheck for the columns of 20261020001300 and 20261020000900
+    // precheck for the columns of 20261024001300 and 20261024000900
     expect(sql).toMatch(/attname = 'kind'/);
     expect(sql).toMatch(/attname = 'elective_pick_count'/);
   });
@@ -270,7 +301,7 @@ describe('catalog migration series files', () => {
       /\badd\s+value\b/i.test(readSql(name))
     );
     expect(filesWithAddValue).toEqual([
-      '20261020001500_user_role_super_admin_value.sql',
+      '20261024001500_user_role_super_admin_value.sql',
     ]);
   });
 });

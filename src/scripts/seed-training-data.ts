@@ -450,7 +450,7 @@ async function main() {
         for (const c of componentsData) {
             // phase: 1 or 2, NULL = integrative (whole training); kind marks the
             // integrative components. Same rule as the catalog migration
-            // 20261020000700 / 20261020001300 uses for the existing rows.
+            // 20261024000700 / 20261024001300 uses for the existing rows.
             const phase = c.trainingYear === 1 || c.trainingYear === 2 ? c.trainingYear : null;
             const kind = c.trainingYear === 3 ? 'integrativ' : 'pflicht';
 

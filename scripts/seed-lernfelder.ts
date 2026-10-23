@@ -8,7 +8,7 @@
  * and is no longer seeded directly.
  *
  * The trainingYear values below are also the source of the year assignment in
- * supabase/migrations/20261020000500_learning_field_model.sql (LF1-LF5 year 1,
+ * supabase/migrations/20261024000500_learning_field_model.sql (LF1-LF5 year 1,
  * LF6-LF9 and LF10a year 2, LF11a-LF12a year 3).
  *
  * Run with: npx tsx -r dotenv/config scripts/seed-lernfelder.ts

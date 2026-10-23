@@ -1,7 +1,7 @@
 -- Package 2.5 (part 8): platform owner admins become SUPER_ADMIN (E2).
 --
 -- !!! ROLLOUT GATE (enforced, the file fails while the gate is closed) !!!
--- This file sorts last (20261024000000, after 20261023200000 of PR 89) and only
+-- This file sorts last (20261025000000, after 20261023200000 of PR 89) and only
 -- runs when two things are true:
 --
 --   1. PR 89 is applied: authenticated has no UPDATE privilege on
@@ -48,7 +48,7 @@ begin
       and e.enumlabel = 'SUPER_ADMIN'
   ) then
     raise exception
-      'Enum value SUPER_ADMIN is missing; apply 20261020001500_user_role_super_admin_value.sql first.';
+      'Enum value SUPER_ADMIN is missing; apply 20261024001500_user_role_super_admin_value.sql first.';
   end if;
 
   -- Gate 1: PR 89 (column privileges on profiles)

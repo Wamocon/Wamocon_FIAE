@@ -22,7 +22,7 @@ begin
       and connamespace = 'public'::regnamespace
   ) then
     raise exception
-      'Run the files 20261020000100 to 20261020000400 first (training_components_id_catalog_unique is missing).';
+      'Run the files 20261024000100 to 20261024000400 first (training_components_id_catalog_unique is missing).';
   end if;
 end $$;
 
