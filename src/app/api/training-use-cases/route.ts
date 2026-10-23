@@ -3,9 +3,24 @@ import db from '@/db';
 import { trainingUseCases, trainingComponents } from '@/db/migrations/schemas/schema';
 import { eq } from 'drizzle-orm';
 import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
+    publicCatalogHeaders,
+    resolvePublicCatalog,
+} from '@/lib/catalog/public';
 
-export async function GET() {
+// Public list of the training use cases of one active catalog
+// (?catalog=CODE, default FIAE). The catalog is part of the URL, so shared
+// caches keep the catalogs apart (see publicCatalogHeaders).
+export async function GET(req: Request) {
     try {
+        const catalog = await resolvePublicCatalog(req);
+        if (!catalog) {
+            return NextResponse.json(
+                { error: 'Training catalog not found' },
+                { status: 404, headers: { 'Cache-Control': 'no-store' } }
+            );
+        }
+
         // Fetch use cases with their component info
         const useCasesData = await db
             .select({
@@ -20,7 +35,8 @@ export async function GET() {
                 componentTitle: trainingComponents.title,
             })
             .from(trainingUseCases)
-            .leftJoin(trainingComponents, eq(trainingUseCases.componentId, trainingComponents.id))
+            .innerJoin(trainingComponents, eq(trainingUseCases.componentId, trainingComponents.id))
+            .where(eq(trainingComponents.trainingCatalogId, catalog.id))
             .orderBy(trainingComponents.code, trainingUseCases.orderIndex);
 
         // Transform to camelCase for frontend
@@ -39,9 +55,7 @@ export async function GET() {
         }));
 
         return NextResponse.json({ useCases: formattedUseCases }, {
-            headers: {
-                'Cache-Control': 'no-store',
-            },
+            headers: publicCatalogHeaders(catalog, 'no-store'),
         });
     } catch (error: any) {
         // If table doesn't exist yet, return empty use cases

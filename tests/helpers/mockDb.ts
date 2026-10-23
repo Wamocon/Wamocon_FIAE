@@ -2,7 +2,7 @@
 // Update per test to return the expected rows for each query chain.
 
 import { getTableName, is } from 'drizzle-orm';
-import { PgTable } from 'drizzle-orm/pg-core';
+import { PgDialect, PgTable } from 'drizzle-orm/pg-core';
 import * as schema from '@/db/migrations/schemas/schema';
 
 export function mockDbOnce(impl: Partial<Record<string, any>>) {
@@ -24,7 +24,19 @@ export type RecordedCall = {
   op: 'select' | 'insert' | 'update' | 'delete';
   table: string | null;
   values?: unknown;
+  /** Conditions passed to where(), in call order. */
+  where?: unknown[];
 };
+
+/** Render a drizzle condition to SQL text and parameters (for assertions). */
+export function renderCondition(condition: unknown): {
+  sql: string;
+  params: unknown[];
+} {
+  const dialect = new PgDialect();
+  const query = dialect.sqlToQuery(condition as any);
+  return { sql: query.sql, params: query.params };
+}
 
 // Map both the SQL table name and the schema export name to the SQL name, so
 // tests can write `courseMembers` or `course_members` interchangeably.
@@ -111,6 +123,9 @@ export function createTableDb(
             call.table = toSqlName(tableNameOf(args[0]));
           }
           if (prop === 'values' || prop === 'set') call.values = args[0];
+          if (prop === 'where' && args[0]) {
+            (call.where ??= []).push(args[0]);
+          }
           return chain;
         };
       },
@@ -139,6 +154,21 @@ export function createTableDb(
   return {
     db,
     calls,
+    /**
+     * Rendered where() conditions of all calls on a table, as one SQL string
+     * and the flat parameter list. Lets tests assert that a query is limited
+     * to a catalog even though the mock ignores conditions.
+     */
+    filters(op: RecordedCall['op'], table: string) {
+      const sqlName = toSqlName(table);
+      const rendered = calls
+        .filter(c => c.op === op && c.table === sqlName)
+        .flatMap(c => (c.where ?? []).map(renderCondition));
+      return {
+        sql: rendered.map(r => r.sql).join(' | '),
+        params: rendered.flatMap(r => r.params),
+      };
+    },
     /** Values passed to insert().values() / update().set() for a table. */
     writes(op: 'insert' | 'update' | 'delete', table: string) {
       const sqlName = toSqlName(table);

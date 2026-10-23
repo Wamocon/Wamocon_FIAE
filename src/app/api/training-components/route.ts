@@ -1,12 +1,29 @@
 import { NextResponse } from 'next/server';
 import db from '@/db';
+import { eq } from 'drizzle-orm';
 import { trainingComponents } from '@/db/migrations/schemas/schema';
+import {
+  publicCatalogHeaders,
+  resolvePublicCatalog,
+} from '@/lib/catalog/public';
 
-export async function GET() {
+// Public list of the training components of one active catalog
+// (?catalog=CODE, default FIAE). The catalog is part of the URL, so shared
+// caches keep the catalogs apart (see publicCatalogHeaders).
+export async function GET(req: Request) {
     try {
+        const catalog = await resolvePublicCatalog(req);
+        if (!catalog) {
+            return NextResponse.json(
+                { error: 'Training catalog not found' },
+                { status: 404, headers: { 'Cache-Control': 'no-store' } }
+            );
+        }
+
         const components = await db
             .select()
             .from(trainingComponents)
+            .where(eq(trainingComponents.trainingCatalogId, catalog.id))
             .orderBy(trainingComponents.orderIndex);
 
         // Transform to camelCase for frontend
@@ -23,9 +40,10 @@ export async function GET() {
         }));
 
         return NextResponse.json({ components: formattedComponents }, {
-            headers: {
-                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=59',
-            },
+            headers: publicCatalogHeaders(
+                catalog,
+                'public, s-maxage=300, stale-while-revalidate=59'
+            ),
         });
     } catch (error: any) {
         // If table doesn't exist yet, return empty components
