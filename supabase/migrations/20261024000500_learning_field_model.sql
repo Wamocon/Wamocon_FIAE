@@ -7,7 +7,12 @@
 -- working without code changes.
 --
 -- Legacy shape (drizzle 0026): lernfelder(id, title, description, label,
--- created_at, updated_at). It has no code, year or order. Mapping rules:
+-- created_at, updated_at). It has no code, year or order. Production
+-- additionally carries the columns of the second drizzle model (code,
+-- training_year, hours_budget, is_common, order_index). They are empty there
+-- (checked on 2026-10-23: 12 rows, all NULL or the default true), so the first
+-- block accepts them while they carry no value and stops otherwise. They stay
+-- in the legacy backup table. Mapping rules:
 --   code        = trimmed label, for example 'LF-1' (blank labels become
 --                 'LF-<first 8 id characters>'; repeated labels get ' #2',
 --                 ' #3', ... in created_at order)
@@ -43,6 +48,8 @@ do $$
 declare
   lf_kind "char";
   map_kind "char";
+  extra_column text;
+  carried_rows integer;
 begin
   select c.relkind into lf_kind
   from pg_class c
@@ -66,14 +73,44 @@ begin
       'public.lernfelder and public.lernfeld_mappings must be ordinary tables.';
   end if;
 
+  -- Columns of the second drizzle model may exist next to the drizzle 0026
+  -- columns (production has them). They are accepted only while they carry no
+  -- value: the mapping below derives code, year and order from the label, so a
+  -- value in one of them would be dropped silently.
+  for extra_column in
+    select a.attname::text
+    from pg_attribute a
+    where a.attrelid = to_regclass('public.lernfelder')
+      and a.attname in ('code', 'training_year', 'hours_budget', 'order_index')
+      and not a.attisdropped
+    order by a.attname
+  loop
+    execute format(
+      'select count(*) from public.lernfelder where %I is not null',
+      extra_column
+    ) into carried_rows;
+    if carried_rows > 0 then
+      raise exception
+        'public.lernfelder carries values in the column % (% rows); the label based mapping would drop them. Stop and review.',
+        extra_column, carried_rows;
+    end if;
+  end loop;
+
+  -- is_common = false marks a learning field for the LFA only, the target model
+  -- has no such flag.
   if exists (
     select 1 from pg_attribute a
     where a.attrelid = to_regclass('public.lernfelder')
-      and a.attname = 'code'
+      and a.attname = 'is_common'
       and not a.attisdropped
   ) then
-    raise exception
-      'public.lernfelder still has the old seed shape (column code). Apply the drizzle migration 0026_add_lernfelder_table first.';
+    execute 'select count(*) from public.lernfelder where is_common is false'
+      into carried_rows;
+    if carried_rows > 0 then
+      raise exception
+        'public.lernfelder has % rows with is_common = false, which the target model cannot represent. Stop and review.',
+        carried_rows;
+    end if;
   end if;
 
   if (
