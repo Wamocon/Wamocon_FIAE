@@ -1,24 +1,27 @@
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, desc, and } from 'drizzle-orm';
 import { schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner, verifyTrainer } from '@/lib/auth-helpers';
+import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 
 // GET /api/trainer/school/exams?trainerId=...&traineeId=...
 export async function GET(req: NextRequest) {
     try {
+        const session = await requireTrainer(req);
+        if (isErrorResponse(session)) return session;
+
         const url = new URL(req.url);
-        const trainerId = url.searchParams.get('trainerId');
+        const trainerId = session.id;
         const traineeId = url.searchParams.get('traineeId');
-
-        if (!trainerId) {
-            return NextResponse.json({ error: 'trainerId required' }, { status: 400 });
+        if (traineeId) {
+            const access = await requireTraineeAccess(session, traineeId);
+            if (isErrorResponse(access)) return access;
         }
 
-        if (!(await verifyTrainer(trainerId))) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+
 
         const isPO = await verifyPlatformOwner(trainerId);
         const trainerOrgId = await getUserOrgId(trainerId);
@@ -66,16 +69,19 @@ export async function GET(req: NextRequest) {
 // POST /api/trainer/school/exams - Create company exam
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
-        const { trainerId, traineeId, subject, examDate, examTypeValue } = body;
+        const session = await requireTrainer(req);
+        if (isErrorResponse(session)) return session;
 
-        if (!trainerId || !traineeId || !subject || !examDate) {
+        const body = await req.json();
+        const { traineeId, subject, examDate, examTypeValue } = body;
+        const trainerId = session.id;
+
+        if (!traineeId || !subject || !examDate) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        if (!(await verifyTrainer(trainerId))) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const access = await requireTraineeAccess(session, String(traineeId));
+        if (isErrorResponse(access)) return access;
 
         const organizationId = await getUserOrgId(trainerId);
 

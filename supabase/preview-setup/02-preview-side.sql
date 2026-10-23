@@ -1,18 +1,23 @@
 -- =============================================================================
--- Preview setup, step 3 of 4: everything on the Preview side that is not structure
+-- Preview setup, step 2 of 3: everything on the Preview side that is not structure
 -- =============================================================================
 -- WHO/WHEN: run automatically by scripts/db/preview-migrate.mjs (setup and
 --           rebuild, i.e. the workflow "Preview Reset") right after the
 --           structure of public was cloned into public_preview. A human may also
 --           run it by hand. IDEMPOTENT.
 -- EFFECT:   touches public_preview and the Preview twins on shared objects
---           (names end in _preview, so a rebuild removes and recreates them).
+--           (storage policies, names end in _preview, so a rebuild removes and
+--           recreates them).
 --           Never changes a Production object.
 --
--- Contents: (1) helper functions with fixed search_path, (2) twin trigger for
--- handle_new_user (routing by the sign-up metadata env=preview), (3) realtime
--- publication membership, (4) storage policies for the prefix preview/ in the
+-- Contents: (1) helper functions with fixed search_path, (2) realtime
+-- publication membership, (3) storage policies for the prefix preview/ in the
 -- shared buckets avatar and content.
+--
+-- No auth trigger is needed: auth.users has no trigger, profiles are created by
+-- /api/auth/sync-profile in the schema the deployment is connected to. So a user
+-- who signs up in Preview gets the profile in public_preview, and nothing on the
+-- auth side has to be created or changed.
 -- =============================================================================
 
 -- 1. Helper functions of the Preview schema with a fixed search_path.
@@ -28,26 +33,7 @@ begin
 end
 $$;
 
--- 2. Twin trigger: only users created from Preview (env=preview) get their
---    profile in public_preview. The Production trigger skips exactly these users
---    (02-production-side.sql), so every user is handled by exactly one trigger.
-do $$
-begin
-  if to_regprocedure('public_preview.handle_new_user()') is null then
-    raise exception 'public_preview.handle_new_user() is missing: clone the structure first (workflow Preview Reset).';
-  end if;
-  execute 'drop trigger if exists on_auth_user_created_preview on auth.users';
-  execute $t$
-    create trigger on_auth_user_created_preview
-      after insert on auth.users
-      for each row
-      when ((new.raw_user_meta_data ->> 'env') = 'preview')
-      execute function public_preview.handle_new_user()
-  $t$;
-end
-$$;
-
--- 3. Realtime: the app listens to postgres_changes on notifications and profiles
+-- 2. Realtime: the app listens to postgres_changes on notifications and profiles
 --    in the schema of its environment (src/lib/db-schema.ts DB_SCHEMA).
 do $$
 declare
@@ -67,7 +53,7 @@ begin
 end
 $$;
 
--- 4. Storage: Preview uploads go to preview/<user id>/... in the SHARED buckets
+-- 3. Storage: Preview uploads go to preview/<user id>/... in the SHARED buckets
 --    avatar and content (no bucket twins). The Production policies expect the user
 --    id as first folder, so Preview needs its own policies for the prefix.
 --    Names end in _preview (removed and recreated by a rebuild).
@@ -92,7 +78,7 @@ drop policy if exists content_delete_preview on storage.objects;
 create policy content_delete_preview on storage.objects for delete to authenticated
   using (bucket_id = 'content' and (storage.foldername(name))[1] = 'preview' and (storage.foldername(name))[2] = auth.uid()::text);
 
--- 5. Make the new objects reachable for the Preview role (a no-op while the role does not exist)
+-- 4. Make the new objects reachable for the Preview role (a no-op while the role does not exist)
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'app_preview') then

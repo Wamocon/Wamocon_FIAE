@@ -20,7 +20,7 @@
 //   node scripts/db/preview-migrate.mjs setup --linked [--probe]
 //       public_preview does not exist yet: create it with the structure of
 //       public (schema-only dump), seed the history with the ledger of public,
-//       run supabase/preview-setup/03-preview-side.sql. --probe rolls back.
+//       run supabase/preview-setup/02-preview-side.sql. --probe rolls back.
 //   node scripts/db/preview-migrate.mjs apply --linked [--plan-only]
 //       apply open migrations in order, each in its own transaction
 //   node scripts/db/preview-migrate.mjs rebuild --linked [--execute]
@@ -53,13 +53,13 @@ import {
 const FOLDER = 'supabase/migrations';
 const LEGACY_FILE = 'supabase/legacy-migrations.txt';
 const KNOWN_DRIFT_FILE = 'supabase/known-drift.txt';
-const POST_CLONE_FILE = 'supabase/preview-setup/03-preview-side.sql';
+const POST_CLONE_FILE = 'supabase/preview-setup/02-preview-side.sql';
 const LEDGER = 'supabase_migrations.preview_schema_migrations';
 const NAME = /^(\d{12,14})_([a-z0-9_]+)\.sql$/;
 const PROBE_MARKER = 'preview-probe-ok';
 const REBUILD_COMMAND =
   'node scripts/db/preview-migrate.mjs rebuild --linked (docs/release-prozess.md)';
-// Role of the Preview app connection; created by supabase/preview-setup/01-schema-and-role.sql
+// Role of the Preview app connection; created by supabase/preview-setup/01-preview-role.sql
 export const PREVIEW_ROLE = 'app_preview';
 
 const q = value => `'${String(value).replace(/'/g, "''")}'`;

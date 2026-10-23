@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -175,8 +176,8 @@ export default function EditCoursePage() {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await fetch(
-          `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+        const res = await authFetch(
+          `/api/trainer/courses/${courseId}`,
           { cache: 'no-store' }
         );
         if (!res.ok)
@@ -202,8 +203,8 @@ export default function EditCoursePage() {
           }))
         );
         // load members
-        const memRes = await fetch(
-          `/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`,
+        const memRes = await authFetch(
+          `/api/trainer/courses/${courseId}/members`,
           { cache: 'no-store' }
         );
         if (memRes.ok) {
@@ -243,7 +244,7 @@ export default function EditCoursePage() {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const r = await fetch(
+        const r = await authFetch(
           `/api/trainer/profiles?role=TRAINER&q=${encodeURIComponent(q)}`,
           { signal: controller.signal }
         );
@@ -272,7 +273,7 @@ export default function EditCoursePage() {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const r = await fetch(
+        const r = await authFetch(
           `/api/trainer/profiles?role=TRAINEE&q=${encodeURIComponent(q)}`,
           { signal: controller.signal }
         );
@@ -310,8 +311,8 @@ export default function EditCoursePage() {
           .filter(Boolean),
       };
 
-      const res = await fetch(
-        `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+      const res = await authFetch(
+        `/api/trainer/courses/${courseId}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -510,8 +511,8 @@ export default function EditCoursePage() {
                               t('trainer.content.confirmRemoveMember')
                             );
                             if (!ok) return;
-                            await fetch(
-                              `/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`,
+                            await authFetch(
+                              `/api/trainer/courses/${courseId}/members?userId=${m.id}`,
                               { method: 'DELETE' }
                             );
                             setMembersTrainers(prev =>
@@ -540,8 +541,8 @@ export default function EditCoursePage() {
                           type="button"
                           className="border-accent/30 bg-accent/5 hover:bg-accent/15 hover:border-accent/60 flex w-full flex-col gap-2 rounded-lg border px-3 py-2 text-left transition-colors sm:flex-row sm:items-center sm:justify-between"
                           onClick={async () => {
-                            await fetch(
-                              `/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`,
+                            await authFetch(
+                              `/api/trainer/courses/${courseId}/members`,
                               {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -594,8 +595,8 @@ export default function EditCoursePage() {
                               t('trainer.content.confirmRemoveMember')
                             );
                             if (!ok) return;
-                            await fetch(
-                              `/api/trainer/courses/${courseId}/members?userId=${m.id}&trainerId=${trainerId || ''}`,
+                            await authFetch(
+                              `/api/trainer/courses/${courseId}/members?userId=${m.id}`,
                               { method: 'DELETE' }
                             );
                             setMembersTrainees(prev =>
@@ -624,8 +625,8 @@ export default function EditCoursePage() {
                           type="button"
                           className="border-accent/30 bg-accent/5 hover:bg-accent/15 hover:border-accent/60 flex w-full flex-col gap-2 rounded-lg border px-3 py-2 text-left transition-colors sm:flex-row sm:items-center sm:justify-between"
                           onClick={async () => {
-                            await fetch(
-                              `/api/trainer/courses/${courseId}/members?trainerId=${trainerId || ''}`,
+                            await authFetch(
+                              `/api/trainer/courses/${courseId}/members`,
                               {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -683,16 +684,16 @@ export default function EditCoursePage() {
                         type="button"
                         className="border-accent/30 rounded-md border px-2 py-1 text-xs"
                         onClick={async () => {
-                          await fetch(
-                            `/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`,
+                          await authFetch(
+                            `/api/trainer/enablers/${e.id}`,
                             {
                               method: 'PATCH',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ isActive: !e.isActive }),
                             }
                           );
-                          const r = await fetch(
-                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                          const r = await authFetch(
+                            `/api/trainer/courses/${courseId}`,
                             { cache: 'no-store' }
                           );
                           const data = await r.json();
@@ -716,7 +717,7 @@ export default function EditCoursePage() {
                       onClick={async () => {
                         try {
                           setEditingEnablerId(e.id);
-                          const er = await fetch(
+                          const er = await authFetch(
                             `/api/trainer/enablers/${e.id}`,
                             { cache: 'no-store' }
                           );
@@ -727,7 +728,7 @@ export default function EditCoursePage() {
                             setEnablerDescription(en.descriptionText || '');
                             setEnablerScenarioPdf(en.scenarioPdfUrl || '');
                           }
-                          const ql = await fetch(
+                          const ql = await authFetch(
                             `/api/trainer/enablers/${e.id}/quizzes`,
                             { cache: 'no-store' }
                           );
@@ -738,7 +739,7 @@ export default function EditCoursePage() {
                             setEnablerQuizList([]);
                           }
                           try {
-                            const dr = await fetch(
+                            const dr = await authFetch(
                               `/api/trainer/enablers/${e.id}/documents`,
                               { cache: 'no-store' }
                             );
@@ -773,16 +774,16 @@ export default function EditCoursePage() {
                           );
                           if (!ok) return;
                           try {
-                            const del = await fetch(
-                              `/api/trainer/enablers/${e.id}?trainerId=${trainerId || ''}`,
+                            const del = await authFetch(
+                              `/api/trainer/enablers/${e.id}`,
                               { method: 'DELETE' }
                             );
                             if (!del.ok)
                               throw new Error(
                                 t('trainer.content.errorDeleteFailed')
                               );
-                            const r = await fetch(
-                              `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                            const r = await authFetch(
+                              `/api/trainer/courses/${courseId}`,
                               { cache: 'no-store' }
                             );
                             const data = await r.json();
@@ -837,16 +838,16 @@ export default function EditCoursePage() {
                         type="button"
                         className="border-accent/30 rounded-md border px-2 py-1 text-xs"
                         onClick={async () => {
-                          await fetch(
-                            `/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`,
+                          await authFetch(
+                            `/api/trainer/use-cases/${u.id}`,
                             {
                               method: 'PATCH',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ isActive: !u.isActive }),
                             }
                           );
-                          const r = await fetch(
-                            `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                          const r = await authFetch(
+                            `/api/trainer/courses/${courseId}`,
                             { cache: 'no-store' }
                           );
                           const data = await r.json();
@@ -870,7 +871,7 @@ export default function EditCoursePage() {
                       onClick={async () => {
                         try {
                           setEditingUseCaseId(u.id);
-                          const ur = await fetch(
+                          const ur = await authFetch(
                             `/api/trainer/use-cases/${u.id}`,
                             { cache: 'no-store' }
                           );
@@ -908,7 +909,7 @@ export default function EditCoursePage() {
                             setUseCaseEditActive(false);
                           }
                           try {
-                            const docRes = await fetch(
+                            const docRes = await authFetch(
                               `/api/trainer/use-cases/${u.id}/documents`,
                               { cache: 'no-store' }
                             );
@@ -943,16 +944,16 @@ export default function EditCoursePage() {
                           );
                           if (!ok) return;
                           try {
-                            const del = await fetch(
-                              `/api/trainer/use-cases/${u.id}?trainerId=${trainerId || ''}`,
+                            const del = await authFetch(
+                              `/api/trainer/use-cases/${u.id}`,
                               { method: 'DELETE' }
                             );
                             if (!del.ok)
                               throw new Error(
                                 t('trainer.content.errorDeleteFailed')
                               );
-                            const r = await fetch(
-                              `/api/trainer/courses/${courseId}?trainerId=${trainerId || ''}`,
+                            const r = await authFetch(
+                              `/api/trainer/courses/${courseId}`,
                               { cache: 'no-store' }
                             );
                             const data = await r.json();
@@ -1228,8 +1229,8 @@ export default function EditCoursePage() {
                     setEnablerSubmitting(true);
                     try {
                       // 1) Create Enabler
-                      const res = await fetch(
-                        `/api/trainer/courses/${courseId}/enablers?trainerId=${trainerId}`,
+                      const res = await authFetch(
+                        `/api/trainer/courses/${courseId}/enablers`,
                         {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -1262,8 +1263,8 @@ export default function EditCoursePage() {
                       if (newEnablerId && pendingEnablerPdfs.length > 0) {
                         for (const pdf of pendingEnablerPdfs) {
                           try {
-                            await fetch(
-                              `/api/trainer/enablers/${newEnablerId}/documents?trainerId=${trainerId}`,
+                            await authFetch(
+                              `/api/trainer/enablers/${newEnablerId}/documents`,
                               {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -1285,8 +1286,8 @@ export default function EditCoursePage() {
                       if (newEnablerId && pendingScenarioPdfs.length > 0) {
                         for (const pdf of pendingScenarioPdfs) {
                           try {
-                            await fetch(
-                              `/api/trainer/enablers/${newEnablerId}/documents?trainerId=${trainerId}`,
+                            await authFetch(
+                              `/api/trainer/enablers/${newEnablerId}/documents`,
                               {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -1305,8 +1306,8 @@ export default function EditCoursePage() {
                       }
 
                       // 3) Refresh and close
-                      const r = await fetch(
-                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                      const r = await authFetch(
+                        `/api/trainer/courses/${courseId}`,
                         { cache: 'no-store' }
                       );
                       const fresh = await r.json();
@@ -1593,8 +1594,8 @@ export default function EditCoursePage() {
                     }
                     setUseCaseSubmitting(true);
                     try {
-                      const res = await fetch(
-                        `/api/trainer/courses/${courseId}/use-cases?trainerId=${trainerId}`,
+                      const res = await authFetch(
+                        `/api/trainer/courses/${courseId}/use-cases`,
                         {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -1632,8 +1633,8 @@ export default function EditCoursePage() {
                       if (newUseCaseId && pendingUseCasePdfs.length > 0) {
                         for (const pdf of pendingUseCasePdfs) {
                           try {
-                            await fetch(
-                              `/api/trainer/use-cases/${newUseCaseId}/documents?trainerId=${trainerId}`,
+                            await authFetch(
+                              `/api/trainer/use-cases/${newUseCaseId}/documents`,
                               {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -1651,8 +1652,8 @@ export default function EditCoursePage() {
                         }
                       }
 
-                      const r = await fetch(
-                        `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                      const r = await authFetch(
+                        `/api/trainer/courses/${courseId}`,
                         { cache: 'no-store' }
                       );
                       const fresh = await r.json();
@@ -1779,7 +1780,7 @@ export default function EditCoursePage() {
                                   onClick={async () => {
                                     if (!editingEnablerId) return;
                                     try {
-                                      await fetch(
+                                      await authFetch(
                                         `/api/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`,
                                         {
                                           method: 'PATCH',
@@ -1791,7 +1792,7 @@ export default function EditCoursePage() {
                                           }),
                                         }
                                       );
-                                      const ql = await fetch(
+                                      const ql = await authFetch(
                                         `/api/trainer/enablers/${editingEnablerId}/quizzes`,
                                         { cache: 'no-store' }
                                       );
@@ -1818,11 +1819,11 @@ export default function EditCoursePage() {
                                     );
                                     if (!ok) return;
                                     try {
-                                      await fetch(
+                                      await authFetch(
                                         `/api/trainer/enablers/${editingEnablerId}/quizzes/${item.quizId}`,
                                         { method: 'DELETE' }
                                       );
-                                      const ql = await fetch(
+                                      const ql = await authFetch(
                                         `/api/trainer/enablers/${editingEnablerId}/quizzes`,
                                         { cache: 'no-store' }
                                       );
@@ -1987,8 +1988,8 @@ export default function EditCoursePage() {
                                 );
                                 if (!ok) return;
                                 try {
-                                  await fetch(
-                                    `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                  await authFetch(
+                                    `/api/trainer/enablers/${editingEnablerId}/documents?documentId=${doc.id}`,
                                     { method: 'DELETE' }
                                   );
                                   setEnablerDocuments(prev =>
@@ -2020,8 +2021,8 @@ export default function EditCoursePage() {
                       .replace(/^\d+_/, '')
                       .replace(/\.pdf$/i, '');
                     try {
-                      const res = await fetch(
-                        `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}`,
+                      const res = await authFetch(
+                        `/api/trainer/enablers/${editingEnablerId}/documents`,
                         {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -2132,8 +2133,8 @@ export default function EditCoursePage() {
                                 );
                                 if (!ok) return;
                                 try {
-                                  await fetch(
-                                    `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                  await authFetch(
+                                    `/api/trainer/enablers/${editingEnablerId}/documents?documentId=${doc.id}`,
                                     { method: 'DELETE' }
                                   );
                                   setEnablerDocuments(prev =>
@@ -2195,8 +2196,8 @@ export default function EditCoursePage() {
                       .replace(/^\d+_/, '')
                       .replace(/\.pdf$/i, '');
                     try {
-                      const res = await fetch(
-                        `/api/trainer/enablers/${editingEnablerId}/documents?trainerId=${trainerId}`,
+                      const res = await authFetch(
+                        `/api/trainer/enablers/${editingEnablerId}/documents`,
                         {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -2246,8 +2247,8 @@ export default function EditCoursePage() {
                         return;
                       }
                       try {
-                        const pr = await fetch(
-                          `/api/trainer/enablers/${editingEnablerId}?trainerId=${trainerId}`,
+                        const pr = await authFetch(
+                          `/api/trainer/enablers/${editingEnablerId}`,
                           {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
@@ -2270,8 +2271,8 @@ export default function EditCoursePage() {
                             t('trainer.content.errorLessonUpdateFailed')
                           );
 
-                        const r = await fetch(
-                          `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                        const r = await authFetch(
+                          `/api/trainer/courses/${courseId}`,
                           { cache: 'no-store' }
                         );
                         const fresh = await r.json();
@@ -2536,8 +2537,8 @@ export default function EditCoursePage() {
                               );
                               if (!ok) return;
                               try {
-                                await fetch(
-                                  `/api/trainer/use-cases/${editingUseCaseId}/documents?trainerId=${trainerId}&documentId=${doc.id}`,
+                                await authFetch(
+                                  `/api/trainer/use-cases/${editingUseCaseId}/documents?documentId=${doc.id}`,
                                   { method: 'DELETE' }
                                 );
                                 setUseCaseDocuments(prev =>
@@ -2569,8 +2570,8 @@ export default function EditCoursePage() {
                       .replace(/^\d+_/, '')
                       .replace(/\.pdf$/i, '');
                     try {
-                      const res = await fetch(
-                        `/api/trainer/use-cases/${editingUseCaseId}/documents?trainerId=${trainerId}`,
+                      const res = await authFetch(
+                        `/api/trainer/use-cases/${editingUseCaseId}/documents`,
                         {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -2623,8 +2624,8 @@ export default function EditCoursePage() {
                         return;
                       }
                       try {
-                        const pr = await fetch(
-                          `/api/trainer/use-cases/${editingUseCaseId}?trainerId=${trainerId}`,
+                        const pr = await authFetch(
+                          `/api/trainer/use-cases/${editingUseCaseId}`,
                           {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
@@ -2655,8 +2656,8 @@ export default function EditCoursePage() {
                           throw new Error(
                             t('trainer.content.errorUseCaseUpdateFailed')
                           );
-                        const r = await fetch(
-                          `/api/trainer/courses/${courseId}?trainerId=${trainerId}`,
+                        const r = await authFetch(
+                          `/api/trainer/courses/${courseId}`,
                           { cache: 'no-store' }
                         );
                         const fresh = await r.json();

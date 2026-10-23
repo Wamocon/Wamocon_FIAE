@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,7 +33,7 @@ export function TrainerLernfelderTab() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch('/api/trainer/lernfelder', { cache: 'no-store' })
+    authFetch('/api/trainer/lernfelder', { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         setLernfelder(data.lernfelder || []);
@@ -97,7 +98,7 @@ export function TrainerLernfelderTab() {
     e.stopPropagation();
     if (!confirm(t('lernfelder.deleteConfirm'))) return;
     try {
-      const res = await fetch(`/api/trainer/lernfelder/${id}`, {
+      const res = await authFetch(`/api/trainer/lernfelder/${id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -113,7 +114,7 @@ export function TrainerLernfelderTab() {
     setSubmitting(true);
     try {
       if (isEditing && currentId) {
-        const res = await fetch(`/api/trainer/lernfelder/${currentId}`, {
+        const res = await authFetch(`/api/trainer/lernfelder/${currentId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -134,7 +135,7 @@ export function TrainerLernfelderTab() {
           setShowModal(false);
         }
       } else {
-        const res = await fetch('/api/trainer/lernfelder', {
+        const res = await authFetch('/api/trainer/lernfelder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, ilike, and, ne, inArray } from 'drizzle-orm';
@@ -6,14 +7,14 @@ import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q')?.trim();
     const excludeId = searchParams.get('excludeId');
-    const requesterId = searchParams.get('requesterId');
+    const requesterId = session.id;
 
-    if (!requesterId) {
-      return NextResponse.json({ error: 'requesterId is required' }, { status: 400 });
-    }
 
     const trainerRoles = ['TRAINER', 'ADMIN', 'TEMP_ADMIN'] as const;
     const conditions: any[] = [inArray(profiles.role, trainerRoles)];

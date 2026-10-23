@@ -1,7 +1,7 @@
 -- =============================================================================
--- Preview setup, step 4 of 4: verification (READ ONLY)
+-- Preview setup, step 3 of 3: verification (READ ONLY)
 -- =============================================================================
--- WHO/WHEN: a human, after steps 1 to 3, and again after every "Preview Reset".
+-- WHO/WHEN: a human, after steps 1 and 2, and again after every "Preview Reset".
 --           Only SELECT. Every query states what the expected result is.
 -- =============================================================================
 
@@ -23,37 +23,31 @@ select c.relname, p.priv
 --    EXPECTED: true
 select has_schema_privilege('app_preview', 'public_preview', 'usage') as usage_on_preview;
 
--- 4. Both auth triggers exist and are mutually exclusive by the sign-up metadata.
---    EXPECTED: on_auth_user_created with "is distinct from 'preview'" and
---              on_auth_user_created_preview with "= 'preview'"
-select tgname, pg_get_triggerdef(oid) as definition
-  from pg_trigger
- where tgrelid = 'auth.users'::regclass and not tgisinternal and tgname in ('on_auth_user_created', 'on_auth_user_created_preview');
-
--- 5. Helper functions have a fixed search_path in both schemas.
---    EXPECTED: four rows, proconfig contains search_path=<schema>, pg_temp
+-- 4. Helper functions of public_preview have a fixed search_path.
+--    EXPECTED: two rows for public_preview with search_path=public_preview, pg_temp.
+--    The rows of public are shown for comparison and stay unchanged.
 select n.nspname, p.proname, p.proconfig
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
  where n.nspname in ('public', 'public_preview') and p.proname in ('get_user_org_id', 'is_platform_owner')
  order by n.nspname, p.proname;
 
--- 6. Realtime membership of the Preview tables.
+-- 5. Realtime membership of the Preview tables.
 --    EXPECTED: notifications and profiles in public_preview
 select schemaname, tablename from pg_publication_tables
  where pubname = 'supabase_realtime' and schemaname in ('public', 'public_preview') and tablename in ('notifications', 'profiles')
  order by schemaname, tablename;
 
--- 7. Storage policies for the preview/ prefix.
+-- 6. Storage policies for the preview/ prefix.
 --    EXPECTED: six policies ending in _preview (avatar and content: insert, update, delete)
 select policyname, cmd from pg_policies
  where schemaname = 'storage' and tablename = 'objects' and policyname like '%\_preview'
  order by policyname;
 
--- 8. Preview holds no copy of production user data right after setup.
+-- 7. Preview holds no copy of production user data right after setup.
 --    EXPECTED: 0 (users arrive only through sign-ups from Preview; content comes from seed, import or the content sync)
 select count(*) as preview_profiles from public_preview.profiles;
 
--- 9. Migration history of Preview equals the ledger of public (right after a reset)
+-- 8. Migration history of Preview equals the ledger of public (right after a reset)
 --    plus the migrations of master that are not released yet.
 select (select count(*) from supabase_migrations.schema_migrations) as public_ledger,
        (select count(*) from supabase_migrations.preview_schema_migrations) as preview_ledger;

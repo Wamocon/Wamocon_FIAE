@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -66,7 +67,7 @@ export function TrainerSchoolView() {
 
         async function loadStats() {
             try {
-                const res = await fetch(`/api/trainer/school/stats?trainerId=${trainerId}`, { cache: 'no-store' });
+                const res = await authFetch(`/api/trainer/school/stats`, { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     setStats(data);

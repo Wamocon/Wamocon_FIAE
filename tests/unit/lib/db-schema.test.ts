@@ -3,7 +3,6 @@ import {
   assertRoleMatchesSchema,
   assertSchemaMatchesEnvironment,
   resolveDbSchema,
-  signupMetadata,
   withStoragePrefix,
 } from '@/lib/db-schema';
 
@@ -117,7 +116,7 @@ describe('lib/db-schema assertRoleMatchesSchema', () => {
   });
 });
 
-describe('lib/db-schema storage prefix and signup metadata', () => {
+describe('lib/db-schema storage prefix', () => {
   it('Preview uploads get the prefix once, Production paths stay', () => {
     expect(withStoragePrefix('u1/file.pdf', 'public_preview')).toBe(
       'preview/u1/file.pdf'
@@ -126,10 +125,5 @@ describe('lib/db-schema storage prefix and signup metadata', () => {
       'preview/u1/file.pdf'
     );
     expect(withStoragePrefix('u1/file.pdf', 'public')).toBe('u1/file.pdf');
-  });
-
-  it('only Preview marks sign-ups with env=preview', () => {
-    expect(signupMetadata('public_preview')).toEqual({ env: 'preview' });
-    expect(signupMetadata('public')).toEqual({});
   });
 });

@@ -11,16 +11,18 @@ import fs from 'fs';
 import path from 'path';
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
+// Credentials come from the environment only, never from source.
+// Required: QA_SUPABASE_URL, QA_SUPABASE_SERVICE_ROLE_KEY,
+//           PROD_SUPABASE_URL, PROD_SUPABASE_SERVICE_ROLE_KEY
+// Run: node --env-file=.env.local scripts/upload-szenarien.mjs --env <qa|production>
 const ENVS = {
   qa: {
-    url: 'https://thzssnabxgchzbsnbgoh.supabase.co',
-    serviceKey:
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoenNzbmFieGdjaHpic25iZ29oIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NjQ5MDE5NCwiZXhwIjoyMDgyMDY2MTk0fQ.DEp7REslGk-iX15Mt_5i6cAxOB76b8pqBlQhx-OzGgA',
+    url: process.env.QA_SUPABASE_URL,
+    serviceKey: process.env.QA_SUPABASE_SERVICE_ROLE_KEY,
   },
   production: {
-    url: 'https://ngpsgwwlnlliphfgtrya.supabase.co',
-    serviceKey:
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ncHNnd3dsbmxsaXBoZmd0cnlhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjM0OTIwMCwiZXhwIjoyMDc3OTI1MjAwfQ.B8kLXUizUPUSSWno74HjyvqtX764v6xp81K-MdDd3ZM',
+    url: process.env.PROD_SUPABASE_URL,
+    serviceKey: process.env.PROD_SUPABASE_SERVICE_ROLE_KEY,
   },
 };
 
@@ -41,6 +43,10 @@ if (!envArg || !ENVS[envArg]) {
 }
 
 const config = ENVS[envArg];
+if (!config.url || !config.serviceKey) {
+  console.error(`Missing URL or service key for "${envArg}" in the environment.`);
+  process.exit(1);
+}
 const supabase = createClient(config.url, config.serviceKey);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────

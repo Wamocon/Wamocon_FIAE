@@ -2,18 +2,30 @@ import { describe, it, expect, jest } from '@jest/globals';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BreadcrumbProvider, useBreadcrumbs } from '@/contexts/BreadcrumbContext';
+import {
+  BreadcrumbProvider,
+  useBreadcrumbs,
+} from '@/contexts/BreadcrumbContext';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/trainee/dashboard',
 }));
 
+// BreadcrumbProvider reads translations from the language context
+function renderWithLanguage(ui: React.ReactElement) {
+  return render(<LanguageProvider>{ui}</LanguageProvider>);
+}
+
 function Consumer() {
-  const { breadcrumbs, addBreadcrumb, removeBreadcrumb, clearBreadcrumbs } = useBreadcrumbs();
+  const { breadcrumbs, addBreadcrumb, removeBreadcrumb, clearBreadcrumbs } =
+    useBreadcrumbs();
   return (
     <div>
       <div data-testid="count">{breadcrumbs.length}</div>
-      <button onClick={() => addBreadcrumb({ label: 'X', href: '/x' })}>add</button>
+      <button onClick={() => addBreadcrumb({ label: 'X', href: '/x' })}>
+        add
+      </button>
       <button onClick={() => removeBreadcrumb('/x')}>remove</button>
       <button onClick={() => clearBreadcrumbs()}>clear</button>
     </div>
@@ -23,7 +35,11 @@ function Consumer() {
 describe('BreadcrumbContext', () => {
   it('push adds a breadcrumb', async () => {
     const user = userEvent.setup();
-    render(<BreadcrumbProvider><Consumer /></BreadcrumbProvider>);
+    renderWithLanguage(
+      <BreadcrumbProvider>
+        <Consumer />
+      </BreadcrumbProvider>
+    );
     const initial = Number(screen.getByTestId('count').textContent);
     await user.click(screen.getByText('add'));
     expect(Number(screen.getByTestId('count').textContent)).toBe(initial + 1);
@@ -31,7 +47,11 @@ describe('BreadcrumbContext', () => {
 
   it('pop removes last breadcrumb', async () => {
     const user = userEvent.setup();
-    render(<BreadcrumbProvider><Consumer /></BreadcrumbProvider>);
+    renderWithLanguage(
+      <BreadcrumbProvider>
+        <Consumer />
+      </BreadcrumbProvider>
+    );
     await user.click(screen.getByText('add'));
     const afterAdd = Number(screen.getByTestId('count').textContent);
     await user.click(screen.getByText('remove'));
@@ -40,7 +60,11 @@ describe('BreadcrumbContext', () => {
 
   it('reset clears breadcrumbs', async () => {
     const user = userEvent.setup();
-    render(<BreadcrumbProvider><Consumer /></BreadcrumbProvider>);
+    renderWithLanguage(
+      <BreadcrumbProvider>
+        <Consumer />
+      </BreadcrumbProvider>
+    );
     await user.click(screen.getByText('add'));
     await user.click(screen.getByText('add'));
     expect(Number(screen.getByTestId('count').textContent)).toBeGreaterThan(0);

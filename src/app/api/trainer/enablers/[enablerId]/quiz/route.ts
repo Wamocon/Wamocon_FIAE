@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, inArray } from 'drizzle-orm';
@@ -8,7 +9,7 @@ import {
   questions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 // GET quiz for an enabler (trainer editing)
 export async function GET(
@@ -16,6 +17,9 @@ export async function GET(
   { params }: { params: Promise<{ enablerId: string }> }
 ) {
   try {
+    const session = await requireTrainer(_req);
+    if (isErrorResponse(session)) return session;
+
     const { enablerId } = await params;
     const [link] = await db
       .select()
@@ -69,10 +73,13 @@ export async function POST(
   { params }: { params: Promise<{ enablerId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { enablerId } = await params;
     const body = await req.json();
     const title: string | undefined = body?.title;
-    const createdById: string | undefined = body?.createdById;
+    const createdById = session.id;
     const items: Array<{
       questionText: string;
       options: string[];
@@ -92,12 +99,6 @@ export async function POST(
       return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
     }
 
-    if (!(await verifyTrainer(createdById))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
     if (!(await verifyPlatformOwner(createdById))) {
       return NextResponse.json(
         { error: 'Only platform administrators can manage curriculum content' },

@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -98,11 +99,11 @@ export function TrainerExamsTab() {
       setLoading(true);
       try {
         const [examsRes, traineesRes] = await Promise.all([
-          fetch(
-            `/api/trainer/school/exams?trainerId=${trainerId}${traineeFilter ? `&traineeId=${traineeFilter}` : ''}`,
+          authFetch(
+            `/api/trainer/school/exams${traineeFilter ? `&traineeId=${traineeFilter}` : ''}`,
             { cache: 'no-store' }
           ),
-          fetch(`/api/trainer/trainees?trainerProfileId=${trainerId}`, {
+          authFetch(`/api/trainer/trainees`, {
             cache: 'no-store',
           }),
         ]);
@@ -126,10 +127,10 @@ export function TrainerExamsTab() {
   const handleAddExam = async (examData: any) => {
     if (!profile?.id) return;
     try {
-      const res = await fetch('/api/trainer/school/exams', {
+      const res = await authFetch('/api/trainer/school/exams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...examData, trainerId: profile.id }),
+        body: JSON.stringify(examData),
       });
       if (res.ok) {
         const data = await res.json();
@@ -147,7 +148,7 @@ export function TrainerExamsTab() {
     maxPoints: number
   ) => {
     try {
-      const res = await fetch(`/api/trainer/school/exams/${examId}/grade`, {
+      const res = await authFetch(`/api/trainer/school/exams/${examId}/grade`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ points, maxPoints }),

@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -80,8 +81,8 @@ export function Profile() {
           setStatsLoading(false);
           return;
         }
-        const url = `/api/trainer/profile?trainerId=${profile.id}`;
-        const res = await fetch(url, { cache: 'no-store' });
+        const url = `/api/trainer/profile`;
+        const res = await authFetch(url, { cache: 'no-store' });
         if (!res.ok) {
           setStatsLoading(false);
           return;

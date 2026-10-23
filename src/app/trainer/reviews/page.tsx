@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -144,9 +145,12 @@ export default function TrainerReviewsPage() {
     if (fetchedDocIdsRef.current.has(useCaseId)) return;
     fetchedDocIdsRef.current.add(useCaseId);
     try {
-      const res = await fetch(`/api/trainer/use-cases/${useCaseId}/documents`, {
-        cache: 'no-store',
-      });
+      const res = await authFetch(
+        `/api/trainer/use-cases/${useCaseId}/documents`,
+        {
+          cache: 'no-store',
+        }
+      );
       if (!res.ok) {
         setSolutionDocsMap(prev => ({ ...prev, [useCaseId]: null }));
         return;
@@ -207,8 +211,8 @@ export default function TrainerReviewsPage() {
       setError(null);
       try {
         const onlyPending = statusFilter === 'pending';
-        const r = await fetch(
-          `/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`,
+        const r = await authFetch(
+          `/api/trainer/reviews?onlyPending=${onlyPending ? 'true' : 'false'}`,
           { cache: 'no-store' }
         );
         if (!r.ok) throw new Error(t('trainer.reviews.loadError'));
@@ -257,8 +261,8 @@ export default function TrainerReviewsPage() {
       setError(null);
       try {
         if (activeTab === 'quizzes') {
-          const res = await fetch(
-            `/api/trainer/quiz-submissions?trainerProfileId=${profile.id}&onlyPending=${pendingFilter === 'pending'}`,
+          const res = await authFetch(
+            `/api/trainer/quiz-submissions?onlyPending=${pendingFilter === 'pending'}`,
             { cache: 'no-store' }
           );
           if (!res.ok) throw new Error(t('trainer.reviews.quizLoadError'));
@@ -316,8 +320,8 @@ export default function TrainerReviewsPage() {
       const feedbacks = feedbacksMap[id] || [];
       const url =
         kind === 'enabler'
-          ? `/api/trainer/reviews/enablers/${id}?trainerId=${profile.id}`
-          : `/api/trainer/reviews/use-cases/${id}?trainerId=${profile.id}`;
+          ? `/api/trainer/reviews/enablers/${id}`
+          : `/api/trainer/reviews/use-cases/${id}`;
       const body =
         kind === 'enabler' && feedbacks.length > 0
           ? {
@@ -325,7 +329,7 @@ export default function TrainerReviewsPage() {
               feedbacks: feedbacks.filter(f => f.feedback.trim().length > 0),
             }
           : { status, trainerFeedback: feedback };
-      const r = await fetch(url, {
+      const r = await authFetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -356,8 +360,8 @@ export default function TrainerReviewsPage() {
 
       // Background refresh (non-blocking) to sync with server
       const onlyPending = statusFilter === 'pending';
-      fetch(
-        `/api/trainer/reviews?trainerId=${profile.id}&onlyPending=${onlyPending ? 'true' : 'false'}`,
+      authFetch(
+        `/api/trainer/reviews?onlyPending=${onlyPending ? 'true' : 'false'}`,
         { cache: 'no-store' }
       )
         .then(rr => rr.json())
@@ -420,12 +424,11 @@ export default function TrainerReviewsPage() {
     }
 
     try {
-      const r = await fetch(`/api/trainer/quiz-submissions/${id}`, {
+      const r = await authFetch(`/api/trainer/quiz-submissions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           is_reviewed: !current,
-          reviewer_id: profile?.id,
         }),
       });
       if (!r.ok) {
@@ -447,8 +450,8 @@ export default function TrainerReviewsPage() {
       );
 
       // Background refresh (non-blocking)
-      fetch(
-        `/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`,
+      authFetch(
+        `/api/trainer/quiz-submissions?onlyPending=${pendingFilter === 'pending'}`,
         { cache: 'no-store' }
       )
         .then(res => res.json())
@@ -1138,14 +1141,13 @@ export default function TrainerReviewsPage() {
                           }
                           setBusyIds(prev => new Set(prev).add(s.id));
                           try {
-                            const r = await fetch(
+                            const r = await authFetch(
                               `/api/trainer/quiz-submissions/${s.id}`,
                               {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   trainer_feedback: feedback,
-                                  reviewer_id: profile?.id,
                                 }),
                               }
                             );
@@ -1160,8 +1162,8 @@ export default function TrainerReviewsPage() {
                               n.delete(s.id);
                               return n;
                             });
-                            const res = await fetch(
-                              `/api/trainer/quiz-submissions?trainerProfileId=${profile?.id}&onlyPending=${pendingFilter === 'pending'}`,
+                            const res = await authFetch(
+                              `/api/trainer/quiz-submissions?onlyPending=${pendingFilter === 'pending'}`,
                               { cache: 'no-store' }
                             );
                             const data = await res.json();

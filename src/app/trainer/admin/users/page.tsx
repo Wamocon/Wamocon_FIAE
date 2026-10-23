@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -77,9 +78,9 @@ export default function AdminUsersPage() {
   const loadUsers = useCallback(async () => {
     if (!profile) return;
     try {
-      const params = new URLSearchParams({ adminId: profile.id });
+      const params = new URLSearchParams();
       if (filterOrg) params.set('orgId', filterOrg);
-      const res = await fetch(`/api/admin/users?${params.toString()}`, {
+      const res = await authFetch(`/api/admin/users?${params.toString()}`, {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(t('admin.users.updateFailed'));
@@ -93,7 +94,7 @@ export default function AdminUsersPage() {
   const loadOrgs = useCallback(async () => {
     if (!profile) return;
     try {
-      const res = await fetch(`/api/admin/organizations?adminId=${profile.id}`, {
+      const res = await authFetch(`/api/admin/organizations`, {
         cache: 'no-store',
       });
       if (!res.ok) return;
@@ -114,7 +115,7 @@ export default function AdminUsersPage() {
   const updateUser = async (userId: string, updates: Record<string, unknown>) => {
     setSavingIds(prev => new Set(prev).add(userId));
     try {
-      const res = await fetch(`/api/admin/users/${userId}?adminId=${profile.id}`, {
+      const res = await authFetch(`/api/admin/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -144,7 +145,7 @@ export default function AdminUsersPage() {
     }
     setCreating(true);
     try {
-      const res = await fetch(`/api/admin/users?adminId=${profile.id}`, {
+      const res = await authFetch(`/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser),
@@ -168,7 +169,7 @@ export default function AdminUsersPage() {
 
     setDeletingIds(prev => new Set(prev).add(user.id));
     try {
-      const res = await fetch(`/api/admin/users/${user.id}?adminId=${profile.id}`, {
+      const res = await authFetch(`/api/admin/users/${user.id}`, {
         method: 'DELETE',
       });
       if (!res.ok) {

@@ -9,14 +9,14 @@
 #      suffix _preview on auth and storage, cron jobs with suffix -preview)
 #   2. clones the STRUCTURE of public (schema-only dump, no rows) rewritten for
 #      public_preview and takes over the migration ledger of public
-#   3. runs supabase/preview-setup/03-preview-side.sql (helper functions, twin
-#      trigger, realtime, storage prefix policies)
+#   3. runs supabase/preview-setup/02-preview-side.sql (helper functions,
+#      realtime, storage prefix policies)
 #   4. applies the migrations of master that public does not have yet
 # No production data is copied. Content comes from seed, import or the content
 # sync. All Preview data is deleted. public is only read.
 #
 # It is also the first-time setup of public_preview, after a human ran
-# supabase/preview-setup/01-preview-role.sql and 02-production-side.sql.
+# supabase/preview-setup/01-preview-role.sql.
 #
 # When to run: migrations of closed branches linger in public_preview; a
 # migration of a branch that was changed after it was applied; a broken state.

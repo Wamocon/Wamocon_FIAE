@@ -1,7 +1,10 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
+import { DB_OPTION } from '@/lib/db-schema';
 import {
   courseMembers,
   profiles,
@@ -9,11 +12,10 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
-import { DB_OPTION } from '@/lib/db-schema';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const key = getSupabaseSecretKey() || '';
   return createClient(url, key, {
     auth: { persistSession: false },
     db: DB_OPTION,
@@ -38,9 +40,12 @@ export async function GET(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
     // Verify course exists
     if (!(await verifyCourseExists(courseId))) {
@@ -84,14 +89,14 @@ export async function POST(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
     // Validate trainerId is provided
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
-    }
 
     // Verify course exists
     if (!(await verifyCourseExists(courseId))) {
@@ -100,16 +105,6 @@ export async function POST(
 
     // Verify the requester is a valid trainer (shared curriculum - any trainer can manage)
     console.log('[POST /members] Checking trainer:', trainerId);
-    if (!(await verifyTrainer(trainerId))) {
-      console.log(
-        '[POST /members] Trainer verification failed for:',
-        trainerId
-      );
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     const organizationId = await getUserOrgId(trainerId);
 
@@ -258,17 +253,17 @@ export async function DELETE(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { courseId } = await params;
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
 
     // Validate required params
     if (!userId) {
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-    }
-    if (!trainerId) {
-      return NextResponse.json({ error: 'Missing trainerId' }, { status: 400 });
     }
 
     // Verify course exists
@@ -277,12 +272,6 @@ export async function DELETE(
     }
 
     // Verify the requester is a valid trainer (shared curriculum - any trainer can manage)
-    if (!(await verifyTrainer(trainerId))) {
-      return NextResponse.json(
-        { error: 'Forbidden - not a trainer' },
-        { status: 403 }
-      );
-    }
 
     const organizationId = await getUserOrgId(trainerId);
 

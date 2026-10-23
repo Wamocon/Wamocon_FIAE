@@ -120,7 +120,7 @@ npm run build
 ```env
 HAI_CHAT_PROVIDER=openai-compatible
 OPENAI_COMPATIBLE_BASE_URL=https://sokrates.test-qualitaetsmanagement.com/api
-OPENAI_COMPATIBLE_API_KEY=sk-17f9ad4a32bb4b1da765406e6d7c1923
+OPENAI_COMPATIBLE_API_KEY=<your-api-key>
 OPENAI_COMPATIBLE_MODEL=sokrates-fast
 ```
 

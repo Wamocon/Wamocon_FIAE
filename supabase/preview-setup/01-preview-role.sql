@@ -1,13 +1,13 @@
 -- =============================================================================
--- Preview setup, step 1 of 4: schema, rights and the database role app_preview
+-- Preview setup, step 1 of 3: schema, rights and the database role app_preview
 -- =============================================================================
 -- WHO/WHEN: a human, ONCE, in the Supabase SQL editor (or psql) as the
 --           project owner (role postgres). Not run by any workflow.
 -- EFFECT:   creates the empty schema public_preview and the login role
 --           app_preview. Touches NOTHING in public, auth or storage.
 -- ORDER:    01 (this file) -> workflow "Preview Reset" (mode execute) clones the
---           structure of public into public_preview and runs 03 ->
---           02 (changes production, see there) -> 04 (verify).
+--           structure of public into public_preview and runs 02 ->
+--           03 (verify). No step changes anything in public or auth.
 --
 -- Idempotent: running it again changes nothing that is already in place.
 --
@@ -65,7 +65,7 @@ grant usage on schema extensions to app_preview;
 
 -- 5. NO rights on public. Production tables carry grants for anon, authenticated
 --    and service_role only, so a new role has none; the revokes make it explicit
---    and repeatable. Section 04-verify.sql proves it.
+--    and repeatable. Section 03-verify.sql proves it.
 revoke all on all tables in schema public from app_preview;
 revoke all on all sequences in schema public from app_preview;
 revoke all on all functions in schema public from app_preview;

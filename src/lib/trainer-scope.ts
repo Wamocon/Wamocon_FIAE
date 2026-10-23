@@ -2,14 +2,19 @@ import db from '@/db';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
-
-const TRAINER_LEVEL_ROLES = ['ADMIN', 'TEMP_ADMIN', 'TRAINER'] as const;
+import {
+  isAdminRole,
+  isSuperAdmin,
+  TRAINER_LEVEL_ROLES,
+} from '@/lib/auth/roles';
 
 export type TrainerScope = {
   id: string;
   role: string;
   organizationId: string | null;
   isPlatformOwner: boolean;
+  /** Platform-wide administrator, sees every organization. */
+  isSuperAdmin: boolean;
   canSeeOrgWide: boolean;
   profileIds: string[];
 };
@@ -30,18 +35,14 @@ export async function getTrainerScope(
     .from(profiles)
     .where(eq(profiles.id, trainerId as any));
 
-  if (
-    !requester ||
-    !TRAINER_LEVEL_ROLES.includes(requester.role as any)
-  ) {
+  if (!requester || !TRAINER_LEVEL_ROLES.includes(requester.role as any)) {
     return null;
   }
 
   const organizationId =
     requester.organizationId ?? (await getUserOrgId(trainerId));
   const isPlatformOwner = await verifyPlatformOwner(trainerId);
-  const canSeeOrgWide =
-    requester.role === 'ADMIN' || requester.role === 'TEMP_ADMIN';
+  const canSeeOrgWide = isAdminRole(requester.role);
 
   const aliasConditions: any[] = [eq(profiles.id, trainerId as any)];
   if (requester.email) {
@@ -72,6 +73,7 @@ export async function getTrainerScope(
     role: requester.role,
     organizationId,
     isPlatformOwner,
+    isSuperAdmin: isSuperAdmin({ role: requester.role, isPlatformOwner }),
     canSeeOrgWide,
     profileIds: Array.from(
       new Set([trainerId, ...aliases.map(alias => String(alias.id))])
@@ -88,7 +90,7 @@ export function isTraineeVisibleToTrainer(
 ) {
   if (scope.canSeeOrgWide) {
     return (
-      scope.isPlatformOwner ||
+      scope.isSuperAdmin ||
       !scope.organizationId ||
       String(trainee.organizationId || '') === String(scope.organizationId)
     );

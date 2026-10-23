@@ -136,14 +136,3 @@ export function withStoragePrefix(
   }
   return `${PREVIEW_STORAGE_PREFIX}${path}`;
 }
-
-/**
- * Sign-up metadata. A user created by Preview carries env=preview, so the
- * Production auth trigger skips the user and the Preview twin trigger creates
- * the profile in public_preview (supabase/preview-setup/02 and 03).
- */
-export function signupMetadata(
-  schema: DbSchema = DB_SCHEMA
-): Record<string, string> {
-  return schema === 'public_preview' ? { env: 'preview' } : {};
-}

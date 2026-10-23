@@ -1,3 +1,4 @@
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, ilike, sql, count } from 'drizzle-orm';
@@ -17,17 +18,13 @@ import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const { searchParams } = new URL(req.url);
-    const trainerId = searchParams.get('trainerId');
+    const trainerId = session.id;
     const q = searchParams.get('q')?.trim();
     const year = searchParams.get('year');
-
-    if (!trainerId) {
-      return NextResponse.json(
-        { error: 'trainerId required' },
-        { status: 400 }
-      );
-    }
 
     const cacheKey = `trainer_quizzes_${trainerId}_${q || ''}_${year || ''}`;
     const cached = await apiCache.getOrFetch(
@@ -111,10 +108,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
     const body = await req.json();
-    const trainer_id = (body?.trainer_id || body?.trainerId) as
-      | string
-      | undefined;
+    const trainer_id = session.id;
     const title = String(body?.title || '').trim();
     const quiz_type = (body?.quiz_type || body?.quizType) as 'mini' | 'big';
     const enabler_id = body?.enabler_id || body?.enablerId || null;
@@ -127,12 +125,6 @@ export async function POST(req: NextRequest) {
     const assignedTraineeIds = (body?.assigned_trainee_ids ||
       body?.assignedTraineeIds ||
       []) as string[];
-
-    if (!trainer_id)
-      return NextResponse.json(
-        { error: 'trainer_id required' },
-        { status: 400 }
-      );
 
     if (!(await verifyPlatformOwner(trainer_id))) {
       return NextResponse.json(

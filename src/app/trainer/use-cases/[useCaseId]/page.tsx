@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -67,7 +68,7 @@ export default function TrainerUseCaseDetailPage() {
       if (!useCaseId) return;
       setLoading(true);
       try {
-        const res = await fetch(`/api/trainer/use-cases/${useCaseId}`, {
+        const res = await authFetch(`/api/trainer/use-cases/${useCaseId}`, {
           cache: 'no-store',
         });
         if (!res.ok) throw new Error('Not found');
@@ -97,7 +98,7 @@ export default function TrainerUseCaseDetailPage() {
 
         // Fetch documents
         try {
-          const docRes = await fetch(
+          const docRes = await authFetch(
             `/api/trainer/use-cases/${useCaseId}/documents`,
             { cache: 'no-store' }
           );
@@ -122,27 +123,20 @@ export default function TrainerUseCaseDetailPage() {
     if (!profile?.id || !useCase) return;
     setSaving(true);
     try {
-      const res = await fetch(
-        `/api/trainer/use-cases/${useCaseId}?trainerId=${profile.id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: editTitle,
-            descriptionText: editDescription,
-            durationValue: editDurationValue
-              ? parseInt(editDurationValue)
-              : null,
-            durationUnit: editDurationUnit || null,
-            year: editYear.length > 0 ? editYear.map(Number) : null,
-            trainingStage:
-              editTrainingStage.length > 0
-                ? editTrainingStage.map(Number)
-                : null,
-            isActive: editIsActive,
-          }),
-        }
-      );
+      const res = await authFetch(`/api/trainer/use-cases/${useCaseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle,
+          descriptionText: editDescription,
+          durationValue: editDurationValue ? parseInt(editDurationValue) : null,
+          durationUnit: editDurationUnit || null,
+          year: editYear.length > 0 ? editYear.map(Number) : null,
+          trainingStage:
+            editTrainingStage.length > 0 ? editTrainingStage.map(Number) : null,
+          isActive: editIsActive,
+        }),
+      });
       if (res.ok) {
         const data = await res.json();
         setUseCase(data.useCase);
