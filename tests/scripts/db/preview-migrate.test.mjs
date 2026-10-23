@@ -10,6 +10,7 @@ import {
   checksum,
   ensureGrantsSql,
   plan,
+  previewSearchPath,
   purgeSql,
   rebuildPlan,
 } from '../../../scripts/db/preview-migrate.mjs';
@@ -167,4 +168,9 @@ test('purge SQL empties public_preview only, keeps the schema and refuses foreig
 
 test('the migration role is named like in the SQL template', () => {
   assert.equal(PREVIEW_MIGRATOR_ROLE, 'app_preview_migrator');
+});
+
+test('the search path of the Preview scripts adds public only for an extension in public', () => {
+  assert.equal(previewSearchPath(false), 'public_preview, extensions');
+  assert.equal(previewSearchPath(true), 'public_preview, extensions, public');
 });

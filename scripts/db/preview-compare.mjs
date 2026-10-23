@@ -24,7 +24,14 @@ export function objects(dump) {
   const map = new Map();
   let key = null;
   // on both sides, because public may mention public_preview explicitly
-  const align = t => t.replaceAll(PREVIEW_SCHEMA, 'public');
+  // The clone calls preview_support.auth_uid() where public calls auth.uid(): same meaning
+  const align = t =>
+    t
+      .replaceAll(PREVIEW_SCHEMA, 'public')
+      .replace(
+        /"?(?:preview_support"?\."?auth_|auth"?\."?)(uid|role|jwt|email)"?\(/g,
+        'auth.$1('
+      );
   for (const line of dump.split('\n')) {
     const head = HEAD.exec(line);
     if (head) {

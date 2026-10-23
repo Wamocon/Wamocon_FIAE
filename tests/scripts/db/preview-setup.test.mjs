@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { buildSetupScript } from '../../../scripts/db/preview-migrate.mjs';
+import { rewrite } from '../../../scripts/db/preview-rewrite.mjs';
 
 const read = name => readFileSync(`supabase/preview-setup/${name}`, 'utf8');
 const files = [
@@ -168,4 +169,59 @@ test('the post clone file can be embedded in the setup script', () => {
   });
   assert.ok(!/\$pv_(outer|script)\$/.test(script));
   assert.ok(script.includes('revoke execute on function'));
+});
+
+test('the migration role never gets USAGE on auth, the four auth helpers come as wrappers', () => {
+  const sql = noComments(read('01-preview-role.sql'));
+  assert.ok(!/grant\s+usage\s+on\s+schema\s+auth\b/i.test(sql));
+  for (const name of ['uid', 'role', 'jwt', 'email']) {
+    const fn = new RegExp(
+      String.raw`create or replace function preview_support\.auth_${name}\(\)[^;]*security definer set search_path = pg_catalog, pg_temp[^;]*select auth\.${name}\(\)`,
+      'i'
+    );
+    assert.ok(fn.test(sql.replace(/\s+/g, ' ')), `wrapper ${name}`);
+    // the rewriter emits exactly this name
+    const r = rewrite(`select auth.${name}();`);
+    assert.deepEqual(r.errors, []);
+    assert.ok(r.sql.includes(`preview_support.auth_${name}()`), r.sql);
+  }
+  // the migration role may call the wrappers
+  assert.ok(
+    /grant usage on schema preview_support to [^;]*app_preview_migrator/i.test(
+      sql
+    )
+  );
+  assert.ok(
+    /grant execute on all functions in schema preview_support to [^;]*app_preview_migrator/i.test(
+      sql
+    )
+  );
+});
+
+test('the role template puts public on the search path only when an extension lives there', () => {
+  const sql = noComments(read('01-preview-role.sql'));
+  assert.ok(
+    /pg_extension e where e\.extnamespace = 'public'::regnamespace/.test(sql)
+  );
+  assert.ok(/path := path \|\| ', public'/.test(sql));
+  assert.ok(/alter role app_preview_migrator set search_path = %s/.test(sql));
+  assert.ok(/alter role app_preview set search_path = %s/.test(sql));
+});
+
+test('the rebuild script switches off function body checks and uses the search path', () => {
+  const script = buildSetupScript({
+    baseline: [],
+    localByVersion: new Map(),
+    dumpSql: 'select 1;',
+    searchPath: 'public_preview, extensions, public',
+  });
+  assert.ok(script.includes('set local check_function_bodies = off;'));
+  assert.ok(
+    script.includes(
+      'set local search_path = public_preview, extensions, public;'
+    )
+  );
+  assert.ok(
+    script.indexOf('check_function_bodies') < script.indexOf('select 1;')
+  );
 });
