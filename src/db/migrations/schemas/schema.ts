@@ -418,6 +418,16 @@ export const useCases = pgTable(
       columns: [table.courseId, table.trainingCatalogId],
       foreignColumns: [courses.id, courses.trainingCatalogId],
     }).onDelete('cascade'),
+    // 1:1 link to the enabler (names as in 20261020000800). In the database the
+    // key is ON DELETE SET NULL (enabler_id), which clears only the enabler
+    // link; Drizzle cannot express the column list, so the migration SQL is the
+    // source of truth for this key.
+    enablerIdUnique: unique('use_cases_enabler_id_unique').on(table.enablerId),
+    enablerCourseFk: foreignKey({
+      name: 'use_cases_enabler_course_fk',
+      columns: [table.enablerId, table.courseId],
+      foreignColumns: [enablers.id, enablers.courseId],
+    }).onDelete('set null'),
   })
 );
 

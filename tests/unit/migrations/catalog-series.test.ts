@@ -290,6 +290,16 @@ describe('Drizzle schema names of the catalog tables', () => {
     trainingComponents,
   ];
 
+  it('declares the use case enabler link with the migration names', () => {
+    const config = getTableConfig(useCases);
+    expect(config.uniqueConstraints.map(unique => unique.name)).toContain(
+      'use_cases_enabler_id_unique'
+    );
+    expect(
+      config.foreignKeys.map(foreignKey => foreignKey.getName())
+    ).toContain('use_cases_enabler_course_fk');
+  });
+
   it('keeps constraint and index names within 63 characters', () => {
     const tooLong: string[] = [];
     for (const table of tables) {
