@@ -2,7 +2,8 @@
  * Shared Authorization Helpers
  *
  * Multi-tenant role hierarchy:
- *   ADMIN > TEMP_ADMIN > TRAINER > TRAINEE
+ *   SUPER_ADMIN > ADMIN > TEMP_ADMIN > TRAINER > TRAINEE
+ * (role constants and permission rules live in src/lib/auth/roles.ts)
  *
  * Platform-owner (Wamocon) trainers manage shared curriculum.
  * Customer-org trainers manage only their org's supplementary content.
@@ -13,17 +14,22 @@ import { eq, and } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
 import { profiles, organizations } from '@/db/migrations/schemas/schema';
 import { withDbRetry } from '@/lib/db-retry';
+import {
+  ADMIN_ROLES as ADMIN_LEVEL_ROLES,
+  TRAINER_LEVEL_ROLES,
+} from '@/lib/auth/roles';
 
-const PRIVILEGED_ROLES = ['ADMIN', 'TEMP_ADMIN', 'TRAINER'] as const;
-const ADMIN_ROLES = ['ADMIN', 'TEMP_ADMIN'] as const;
+const PRIVILEGED_ROLES: readonly string[] = TRAINER_LEVEL_ROLES;
+const ADMIN_ROLES: readonly string[] = ADMIN_LEVEL_ROLES;
 
 /**
  * Map a stored profile role to the two-tier role used by HAI/trainer features.
- * Privileged roles (ADMIN, TEMP_ADMIN, TRAINER) all act as 'TRAINER'; everyone
- * else (including unknown roles) falls back to the least-privileged 'TRAINEE'.
+ * Privileged roles (SUPER_ADMIN, ADMIN, TEMP_ADMIN, TRAINER) all act as
+ * 'TRAINER'; everyone else (including unknown roles) falls back to the
+ * least-privileged 'TRAINEE'. Matching is case-sensitive on purpose.
  */
 export function toHaiRole(role?: string | null): 'TRAINER' | 'TRAINEE' {
-  return role === 'ADMIN' || role === 'TEMP_ADMIN' || role === 'TRAINER'
+  return role != null && PRIVILEGED_ROLES.includes(role)
     ? 'TRAINER'
     : 'TRAINEE';
 }
@@ -49,7 +55,7 @@ export async function verifyTrainer(userId: string): Promise<boolean> {
         .where(eq(profiles.id, userId as any))
     );
 
-    if (row && PRIVILEGED_ROLES.includes(row.role as any)) return true;
+    if (row && PRIVILEGED_ROLES.includes(row.role)) return true;
 
     if (!row) {
       const admin = getAdminClient();
@@ -81,7 +87,7 @@ export async function verifyAdmin(userId: string): Promise<boolean> {
         .where(eq(profiles.id, userId as any))
     );
 
-    if (row && ADMIN_ROLES.includes(row.role as any)) return true;
+    if (row && ADMIN_ROLES.includes(row.role)) return true;
 
     if (!row) {
       const admin = getAdminClient();
@@ -164,7 +170,10 @@ export async function getProfile(userId: string) {
 
   try {
     const [profile] = await withDbRetry(() =>
-      db.select().from(profiles).where(eq(profiles.id, userId as any))
+      db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.id, userId as any))
     );
 
     return profile || null;
@@ -208,7 +217,9 @@ export const WAMOCON_ORG_ID = '00000000-0000-0000-0000-000000000001';
  */
 export async function getUserOrgId(userId: string): Promise<string> {
   if (!userId) {
-    console.warn('[getUserOrgId] called with empty userId, defaulting to WAMOCON_ORG_ID');
+    console.warn(
+      '[getUserOrgId] called with empty userId, defaulting to WAMOCON_ORG_ID'
+    );
     return WAMOCON_ORG_ID;
   }
   try {
@@ -219,11 +230,15 @@ export async function getUserOrgId(userId: string): Promise<string> {
         .where(eq(profiles.id, userId as any))
     );
     if (!row) {
-      console.warn(`[getUserOrgId] no profile found for userId=${userId}, defaulting to WAMOCON_ORG_ID`);
+      console.warn(
+        `[getUserOrgId] no profile found for userId=${userId}, defaulting to WAMOCON_ORG_ID`
+      );
       return WAMOCON_ORG_ID;
     }
     if (!row.organizationId) {
-      console.warn(`[getUserOrgId] profile ${userId} has no organizationId, defaulting to WAMOCON_ORG_ID`);
+      console.warn(
+        `[getUserOrgId] profile ${userId} has no organizationId, defaulting to WAMOCON_ORG_ID`
+      );
     }
     return row.organizationId ?? WAMOCON_ORG_ID;
   } catch (err) {
