@@ -7,8 +7,13 @@
 # them against public_preview (the structure of public_preview is cloned from
 # public, which already contains their effect).
 #
-# One file name per line, then "# reason". Add a line only with a reason in the
-# pull request; remove it as soon as the file is renamed.
+# Format: <file name>  <state>  # reason
+#   applied  already applied to production by hand. scripts/db/baseline-guard.mjs
+#            stops a release if "supabase db push" would apply this file again,
+#            which means the ledger baseline repair was not done yet.
+#   pending  not applied anywhere yet (default).
+# Add a line only with a reason in the pull request; remove it as soon as the
+# file is renamed.
 
-202606260001_schema_only_ausbildung_duration.sql  # already applied to production by hand (MCP); part of the baseline
-202610200001_training_catalog_curriculum.sql      # not applied anywhere yet; another branch renames it to a 14 digit version, then delete this line
+202606260001_schema_only_ausbildung_duration.sql  applied  # applied to production by hand (MCP); part of the baseline
+202610200001_training_catalog_curriculum.sql      pending  # not applied anywhere yet; another branch renames it to a 14 digit version, then delete this line

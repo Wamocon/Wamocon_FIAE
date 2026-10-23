@@ -6,7 +6,9 @@ import {
   destructiveStatements,
   normalizeVersion,
   readLegacy,
+  readLegacyEntries,
 } from '../../../scripts/db/migration-check.mjs';
+import { appliedLegacyInPlan } from '../../../scripts/db/baseline-guard.mjs';
 
 const base = {
   files: ['20261001000000_old.sql', '20261026000000_last.sql'],
@@ -121,6 +123,39 @@ test('legacy list is parsed', () => {
       '# comment\n\n202606260001_a_b.sql  # reason\nnot a file\n20261027000000_c.sql\n'
     ),
     ['202606260001_a_b.sql', '20261027000000_c.sql']
+  );
+});
+
+test('legacy entries carry a state, pending is the default', () => {
+  assert.deepEqual(
+    readLegacyEntries(
+      '202606260001_a.sql applied # x\n202610200001_b.sql # y\nnot a file\n'
+    ),
+    [
+      { file: '202606260001_a.sql', state: 'applied' },
+      { file: '202610200001_b.sql', state: 'pending' },
+    ]
+  );
+});
+
+test('baseline guard: reports applied baseline files that the plan would apply again', () => {
+  const entries = [
+    { file: '202606260001_a.sql', state: 'applied' },
+    { file: '202610200001_b.sql', state: 'pending' },
+  ];
+  const plan =
+    'Would push these migrations:\n • 202606260001_a.sql\n • 202610200001_b.sql\n • 20261101000000_c.sql';
+  assert.deepEqual(appliedLegacyInPlan(entries, plan), ['202606260001_a.sql']);
+  assert.deepEqual(
+    appliedLegacyInPlan(
+      entries,
+      'Would push these migrations:\n • 20261101000000_c.sql'
+    ),
+    []
+  );
+  assert.deepEqual(
+    appliedLegacyInPlan(entries, 'Remote database is up to date.'),
+    []
   );
 });
 

@@ -41,12 +41,25 @@ export function normalizeVersion(version) {
   return version.padEnd(14, '0');
 }
 
-/** Reads the legacy list: one file name per line, "# reason" and blank lines are ignored. */
-export function readLegacy(text) {
+/**
+ * Reads the legacy list: one file name per line, optionally followed by the
+ * state "applied" (already applied to production, baseline) or "pending"
+ * (default, not applied anywhere). "# reason" and blank lines are ignored.
+ */
+export function readLegacyEntries(text) {
   return text
     .split(/\r?\n/)
     .map(l => l.replace(/#.*$/, '').trim())
-    .filter(l => LOOSE_NAME.test(l));
+    .filter(Boolean)
+    .map(l => {
+      const [file, state = 'pending'] = l.split(/\s+/);
+      return { file, state };
+    })
+    .filter(e => LOOSE_NAME.test(e.file));
+}
+
+export function readLegacy(text) {
+  return readLegacyEntries(text).map(e => e.file);
 }
 
 /** Removes comments and strings so a word in a comment causes no false alarm. */
