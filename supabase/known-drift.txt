@@ -7,6 +7,71 @@
 # the files existed. Every new line comes with a reason in the pull request. A
 # new, unexplained deviation belongs into a migration file instead.
 #
-# State: empty. The first run against the hosted database shows whether there
-# are leftovers. Before that, a human aligns the ledger once (baseline repair,
-# see docs/release-prozess.md).
+# State 2026-10-23: the first run against the hosted database (workflow
+# Preview Reset, mode plan) listed 60 ledger rows without a file. They are
+# migrations that were applied through the Supabase dashboard or tools from
+# 14 January to 27 February 2026, before the migration files of this
+# repository existed (the structure of public already contains their effect,
+# the Drizzle history under src/db/migrations is not a replayable chain). They
+# cannot be fixed any more, so they are baseline.
+
+20260114153142  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260211094058  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260211094115  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093505  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093506  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093529  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093530  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093557  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093558  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093601  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093614  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093633  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093651  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093710  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093722  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212093736  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212095101  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212095735  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212095842  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260212100712  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213082451  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213082500  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213082520  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213082819  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213082909  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213082931  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213082948  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083011  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083303  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083400  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083441  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083451  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083511  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083518  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083521  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083526  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083529  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083533  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083537  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083722  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083726  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083731  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083734  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083835  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083845  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083849  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083851  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083857  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083906  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083910  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083918  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083922  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083924  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083928  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083931  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260213083934  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260219125101  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260219125524  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260223115909  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
+20260227143256  # applied through the Supabase dashboard before the migration files existed, effect is part of the baseline structure
