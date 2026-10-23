@@ -37,6 +37,10 @@ export async function GET(req: Request) {
       trainingYear: c.trainingYear,
       orderIndex: c.orderIndex,
       createdAt: c.createdAt,
+      // Phase 1 or 2, null = integrative or not filled (clients fall back to
+      // orderIndex, see getComponentPhase in @/lib/ausbildung/duration)
+      phase: c.phase ?? null,
+      kind: c.kind ?? 'pflicht',
     }));
 
     return NextResponse.json(
