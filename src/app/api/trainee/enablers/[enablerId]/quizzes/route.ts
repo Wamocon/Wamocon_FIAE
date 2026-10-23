@@ -10,6 +10,7 @@ import {
   quizSubmissions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
 // GET: list active quizzes for an enabler visible to the trainee with gating
 // query: traineeId
@@ -23,6 +24,10 @@ export async function GET(
     const traineeId = searchParams.get('traineeId');
     if (!traineeId)
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    // The content must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'enabler', enablerId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const [enabler] = await db
       .select({

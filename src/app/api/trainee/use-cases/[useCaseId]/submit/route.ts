@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { useCases, courseMembers, useCaseSubmissions, useCaseSubmissionLinks, notifications, courses } from '@/db/migrations/schemas/schema';
@@ -15,6 +16,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     const submissionText: string | undefined = body?.submissionText;
     const links: Array<{ url: string; description?: string }> = Array.isArray(body?.links) ? body.links : [];
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    // The content must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'useCase', useCaseId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const organizationId = await getUserOrgId(traineeId);
 

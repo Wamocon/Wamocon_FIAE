@@ -19,6 +19,12 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 import {
+  catalogCacheKey,
+  catalogCondition,
+  requireCatalogScopeForUser,
+  type CatalogScope,
+} from '@/lib/catalog/scope';
+import {
   getPhaseDeadline,
   getPhaseMonthRange,
   getTrainingPhase,
@@ -38,12 +44,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Use cached data if available
-    const cacheKey = `trainee_dashboard_${userId}`;
+    const scope = await requireCatalogScopeForUser(userId, req);
+    if (scope instanceof Response) return scope;
+
+    // Use cached data if available (the catalog scope is part of the key)
+    const cacheKey = `trainee_dashboard_${userId}_${catalogCacheKey(scope)}`;
     const cached = await apiCache.getOrFetch(
       cacheKey,
       async () => {
-        return await fetchDashboardData(userId);
+        return await fetchDashboardData(userId, scope);
       },
       ApiCache.TTL.MEDIUM // 5 minutes cache
     );
@@ -60,7 +69,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-async function fetchDashboardData(userId: string) {
+async function fetchDashboardData(userId: string, scope: CatalogScope) {
   try {
     // ── Phase 1: All user data in ONE parallel batch (was 2 sequential phases) ──
     const [
@@ -82,7 +91,8 @@ async function fetchDashboardData(userId: string) {
         .where(
           and(
             eq(courseMembers.userId, userId as any),
-            eq(courseMembers.role, 'TRAINEE' as any)
+            eq(courseMembers.role, 'TRAINEE' as any),
+            catalogCondition(courses.trainingCatalogId, scope)
           )
         ),
       // Merged: quiz scores + timestamps (was 2 separate queries)

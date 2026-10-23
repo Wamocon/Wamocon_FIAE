@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { enablers, courseMembers, enablerSubmissions, EnablerSubmission } from '@/db/migrations/schemas/schema';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
 // GET trainee-facing enabler detail (title, description, ppt, video)
 // query: traineeId
@@ -14,6 +15,10 @@ export async function GET(
     const traineeId = searchParams.get('traineeId');
     const { enablerId } = await params;
     if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    // The content must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'enabler', enablerId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const [e] = await db.select().from(enablers).where(eq(enablers.id, enablerId));
     if (!e || !e.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });

@@ -12,6 +12,11 @@ import {
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import {
+  catalogCacheKey,
+  catalogCondition,
+  requireCatalogScopeForUser,
+} from '@/lib/catalog/scope';
 
 // Passing score threshold for quizzes (50%)
 const PASS_THRESHOLD = 50;
@@ -81,14 +86,31 @@ export async function GET(req: NextRequest) {
     if (!traineeId)
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
+    const scope = await requireCatalogScopeForUser(traineeId, req);
+    if (scope instanceof Response) return scope;
+
     const data = await apiCache.getOrFetch(
-      `trainee_courses_${traineeId}`,
+      `trainee_courses_${traineeId}_${catalogCacheKey(scope)}`,
       async () => {
         const memberships = await db
           .select()
           .from(courseMembers)
           .where(eq(courseMembers.userId, traineeId));
-        const courseIds: string[] = memberships.map(m => m.courseId);
+        const memberCourseIds: string[] = memberships.map(m => m.courseId);
+        // Only courses of the trainee's catalog scope
+        const courseIds: string[] = memberCourseIds.length
+          ? (
+              await db
+                .select({ id: courses.id })
+                .from(courses)
+                .where(
+                  and(
+                    inArray(courses.id, memberCourseIds),
+                    catalogCondition(courses.trainingCatalogId, scope)
+                  )
+                )
+            ).map(r => String(r.id))
+          : [];
         if (!courseIds.length) return { courses: [] };
 
         const rows = await db

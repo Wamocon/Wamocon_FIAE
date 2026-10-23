@@ -230,6 +230,8 @@ export function mockCatalogScope(
       requireCatalogScope: async () => scope,
       requireCatalogScopeForUser: async () => scope,
       requireContentScope: async () => scope,
+      requireContentScopeForUser: async () => scope,
+      getCatalogScopeForUserId: async () => scope,
       ensureContentInScope: async () => null,
       getContentCatalogId: async () => scope.activeCatalogId,
     };

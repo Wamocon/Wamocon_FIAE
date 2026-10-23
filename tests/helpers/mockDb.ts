@@ -124,7 +124,10 @@ export function createTableDb(
           }
           if (prop === 'values' || prop === 'set') call.values = args[0];
           if (prop === 'where' && args[0]) {
-            (call.where ??= []).push(args[0]);
+            // drizzle also accepts where(fields => condition)
+            const condition =
+              typeof args[0] === 'function' ? args[0]({}) : args[0];
+            if (condition) (call.where ??= []).push(condition);
           }
           return chain;
         };

@@ -9,6 +9,7 @@ import {
   enablerSubmissions,
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
 // GET course details for a trainee: includes active enablers and use-cases with progress status
 // query: traineeId
@@ -22,6 +23,10 @@ export async function GET(
     const { courseId } = await context.params;
     if (!traineeId)
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+
+    // The content must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'course', courseId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const [member] = await db
       .select()

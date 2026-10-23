@@ -312,6 +312,19 @@ export async function requireCatalogScopeForUser(
 }
 
 /**
+ * Scope of a user id for server-internal readers (HAI data context): the scope
+ * or null if it cannot be determined. Callers must treat null as "no access"
+ * and return no content (fail closed).
+ */
+export async function getCatalogScopeForUserId(
+  userId: string,
+  request?: CatalogRequestLike | null
+): Promise<CatalogScope | null> {
+  const scope = await requireCatalogScopeForUser(userId, request);
+  return scope instanceof Response ? null : scope;
+}
+
+/**
  * Catalogs to filter a read by: the chosen one if the caller picked a catalog,
  * otherwise everything the caller may see.
  */
@@ -413,6 +426,22 @@ export async function requireContentScope(
   id: string
 ): Promise<CatalogScope | NextResponse> {
   const scope = await requireCatalogScope(subject, request);
+  if (scope instanceof Response) return scope;
+  const denied = await ensureContentInScope(scope, kind, id);
+  return denied ?? scope;
+}
+
+/**
+ * Like requireContentScope for routes that identify the user by an id
+ * parameter (trainee routes): the scope comes from the profile of `userId`.
+ */
+export async function requireContentScopeForUser(
+  userId: string,
+  request: CatalogRequestLike | null | undefined,
+  kind: CatalogContentKind,
+  id: string
+): Promise<CatalogScope | NextResponse> {
+  const scope = await requireCatalogScopeForUser(userId, request);
   if (scope instanceof Response) return scope;
   const denied = await ensureContentInScope(scope, kind, id);
   return denied ?? scope;

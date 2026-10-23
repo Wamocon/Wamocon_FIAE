@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and, sql, ne } from 'drizzle-orm';
-import { activityReports, activityReportUseCaseEntries, trainingUseCases } from '@/db/migrations/schemas/schema';
+import { activityReports, activityReportUseCaseEntries, trainingComponents, trainingUseCases } from '@/db/migrations/schemas/schema';
 import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import {
+    catalogCondition,
+    requireCatalogScopeForUser,
+} from '@/lib/catalog/scope';
 
 /**
  * GET /api/trainee/use-case-hours
@@ -19,6 +23,9 @@ export async function GET(request: NextRequest) {
         if (!traineeId) {
             return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
         }
+
+        const scope = await requireCatalogScopeForUser(traineeId, request);
+        if (scope instanceof Response) return scope;
 
         // Get all non-rejected reports for this trainee (DRAFT + SUBMITTED + APPROVED)
         // This prevents double-booking: if a SUBMITTED report uses 10hrs of a use case,
@@ -46,7 +53,9 @@ export async function GET(request: NextRequest) {
                     description: trainingUseCases.description,
                     plannedHours: trainingUseCases.plannedHours,
                 })
-                .from(trainingUseCases);
+                .from(trainingUseCases)
+                .innerJoin(trainingComponents, eq(trainingUseCases.componentId, trainingComponents.id))
+                .where(catalogCondition(trainingComponents.trainingCatalogId, scope));
 
             const result = allUseCases.map(uc => ({
                 useCaseId: uc.id,
@@ -81,7 +90,9 @@ export async function GET(request: NextRequest) {
                 description: trainingUseCases.description,
                 plannedHours: trainingUseCases.plannedHours,
             })
-            .from(trainingUseCases);
+            .from(trainingUseCases)
+                .innerJoin(trainingComponents, eq(trainingUseCases.componentId, trainingComponents.id))
+                .where(catalogCondition(trainingComponents.trainingCatalogId, scope));
 
         const result = allUseCases.map(uc => {
             const used = usedMap.get(uc.id) || 0;

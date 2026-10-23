@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
@@ -29,6 +30,10 @@ export async function POST(
       Array.isArray(body?.answers) ? body.answers : [];
     if (!traineeId || answers.length === 0)
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+    // The content must lie inside the catalog scope of the trainee
+    const catalogScope = await requireContentScopeForUser(traineeId, req, 'enabler', enablerId);
+    if (catalogScope instanceof Response) return catalogScope;
 
     const organizationId = await getUserOrgId(traineeId);
 
