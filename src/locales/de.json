@@ -2071,5 +2071,8 @@
   "catalogs.regulation": "Ordnungsfassung {version}",
   "catalogs.signIn": "Zur Anmeldung",
   "catalogs.backHome": "Zur Startseite",
-  "catalogs.listLabel": "Verfügbare Ausbildungsberufe"
+  "catalogs.listLabel": "Verfügbare Ausbildungsberufe",
+  "catalogs.login.banner": "Anmeldung für den Beruf: {title}",
+  "catalogs.login.unknown": "Der gewählte Beruf ist nicht verfügbar. Sie melden sich in Ihrem eigenen Beruf an.",
+  "catalogs.login.notAllowed": "Ihr Konto ist für den Beruf {title} nicht freigeschaltet. Sie sind in Ihrem eigenen Beruf angemeldet."
 }

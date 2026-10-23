@@ -72,16 +72,33 @@ describe('CatalogSelection', () => {
     ).toBeInTheDocument();
   });
 
-  it('leads every occupation to the existing sign in', async () => {
+  it('leads every occupation to the sign in with its own code', async () => {
     global.fetch = jest.fn(() => ok([FIAE, KFBM])) as any;
     renderWithProviders(<CatalogSelection />);
     await screen.findByText('Phasen: 15 und 21 Monate');
 
     const links = screen.getAllByRole('link', { name: /Zur Anmeldung/ });
-    expect(links).toHaveLength(2);
-    for (const link of links) {
-      expect(link).toHaveAttribute('href', '/login');
-    }
+    expect(links.map(link => link.getAttribute('href'))).toEqual([
+      '/login?catalog=FIAE',
+      '/login?catalog=KFBM',
+    ]);
+    // the link names the occupation for screen readers
+    expect(
+      screen.getByRole('link', {
+        name: 'Zur Anmeldung Kaufmann/-frau für Büromanagement',
+      })
+    ).toBeInTheDocument();
+  });
+
+  it('encodes a code with special characters in the link', async () => {
+    global.fetch = jest.fn(() =>
+      ok([
+        { code: 'A&B', title: 'Test', durationYears: 3, phaseMonths: [18, 18] },
+      ])
+    ) as any;
+    renderWithProviders(<CatalogSelection />);
+    const link = await screen.findByRole('link', { name: /Zur Anmeldung/ });
+    expect(link).toHaveAttribute('href', '/login?catalog=A%26B');
   });
 
   it('shows a hint instead of an empty list when no occupation is active', async () => {

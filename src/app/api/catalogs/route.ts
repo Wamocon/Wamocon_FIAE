@@ -7,7 +7,9 @@ import { resolveCatalogSettings } from '@/lib/catalog/settings';
 // Public list of the active training catalogs (occupations) for the selection
 // page before the login. Only what a visitor needs to choose an occupation:
 // no ids, no internal settings (shortening threshold, rules). The list is the
-// same for everybody, so shared caches may keep it.
+// same for everybody, but it must be current right after an occupation was
+// activated, so it is not cached (the middleware sets the same value for every
+// API route that is not on its list of static data).
 export async function GET() {
   try {
     const rows = await db
@@ -41,9 +43,7 @@ export async function GET() {
     return NextResponse.json(
       { catalogs },
       {
-        headers: {
-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=59',
-        },
+        headers: { 'Cache-Control': 'private, no-cache' },
       }
     );
   } catch (error: any) {

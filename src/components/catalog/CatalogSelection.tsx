@@ -127,7 +127,7 @@ export function CatalogSelection() {
                 )}
               </ul>
               <Link
-                href="/login"
+                href={`/login?catalog=${encodeURIComponent(catalog.code)}`}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 mt-6 inline-block rounded-xl px-5 py-3 text-center text-sm font-semibold"
               >
                 {t('catalogs.signIn')}

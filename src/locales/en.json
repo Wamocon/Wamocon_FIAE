@@ -2069,5 +2069,8 @@
   "catalogs.regulation": "Regulation version {version}",
   "catalogs.signIn": "Go to sign in",
   "catalogs.backHome": "Back to home",
-  "catalogs.listLabel": "Available training occupations"
+  "catalogs.listLabel": "Available training occupations",
+  "catalogs.login.banner": "Signing in for the occupation: {title}",
+  "catalogs.login.unknown": "The chosen occupation is not available. You sign in to your own occupation.",
+  "catalogs.login.notAllowed": "Your account is not enabled for the occupation {title}. You are signed in to your own occupation."
 }
