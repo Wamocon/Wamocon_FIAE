@@ -6,9 +6,10 @@
 -- organizations get the FIAE row from a trigger, so organization creation in
 -- the app keeps working without code changes.
 --
--- RLS follows the pattern of public.organizations: members read the rows of
+-- RLS follows the pattern of public.organizations, but only for logged in
+-- users (role authenticated, never public or anon): members read the rows of
 -- their own organization (get_user_org_id()), only the platform owner changes
--- them.
+-- them. There is no policy with USING (true).
 
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
@@ -40,7 +41,7 @@ alter table public.organization_catalogs enable row level security;
 drop policy if exists organization_catalogs_select_own_org
   on public.organization_catalogs;
 create policy organization_catalogs_select_own_org
-  on public.organization_catalogs for select
+  on public.organization_catalogs for select to authenticated
   using (
     organization_id = public.get_user_org_id()
     or public.is_platform_owner()
@@ -49,8 +50,17 @@ create policy organization_catalogs_select_own_org
 drop policy if exists organization_catalogs_manage_platform_owner
   on public.organization_catalogs;
 create policy organization_catalogs_manage_platform_owner
-  on public.organization_catalogs for all
+  on public.organization_catalogs for all to authenticated
   using (public.is_platform_owner());
+
+-- No anonymous access (only if the Supabase role exists). The server role
+-- bypasses RLS (BYPASSRLS), like service_role.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on public.organization_catalogs from anon;
+  end if;
+end $$;
 
 -- Backfill: all existing organizations use FIAE (idempotent).
 insert into public.organization_catalogs (

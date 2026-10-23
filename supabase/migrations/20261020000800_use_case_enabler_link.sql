@@ -148,7 +148,16 @@ select
   (p.paired_title_mismatch_count > 0) as title_review_recommended
 from per_course p;
 
+-- The view exposes counts per course; it is for operators, not for anonymous
+-- API callers (revoked only if the Supabase API role exists).
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on public.v_use_case_enabler_backfill_report from anon;
+  end if;
+end $$;
+
 comment on column public.use_cases.enabler_id is
-  'Optional 1:1 link to the enabler of the same course (composite foreign key with course_id). NOT NULL is enforced later, once v_use_case_enabler_backfill_report is clean.';
+  'Optional 1:1 link to the enabler of the same course (composite foreign key with course_id). NULL for all existing FIAE use cases (no positional backfill, production counts do not match); set explicitly by the KfBM import.';
 comment on view public.v_use_case_enabler_backfill_report is
-  'Per course: enabler and use case counts, paired count and deviations of the use_cases.enabler_id backfill. needs_review = true marks courses that must be fixed before enabler_id becomes NOT NULL; title_review_recommended is a soft hint to spot-check paired titles.';
+  'Per course: number of enablers and use cases, how many use cases are linked (paired_count, column name kept) and deviations. needs_review = true marks courses whose counts or links do not match; title_review_recommended is a soft hint for linked rows with different titles.';

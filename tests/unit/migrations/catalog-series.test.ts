@@ -115,6 +115,16 @@ describe('catalog migration series files', () => {
       expect(tooLong).toEqual([]);
     });
 
+    it('limits every policy to authenticated users (no public or anon reads)', () => {
+      const policies = sql
+        .split(/\bcreate\s+policy\b/i)
+        .slice(1)
+        .map(chunk => chunk.split(';')[0]);
+      for (const policy of policies) {
+        expect(policy).toMatch(/\bto\s+authenticated\b/i);
+      }
+    });
+
     it('does not use a new enum value in the file that adds it', () => {
       if (/\badd\s+value\b/i.test(sql)) {
         expect(sql).not.toMatch(

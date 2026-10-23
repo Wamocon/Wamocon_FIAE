@@ -171,25 +171,45 @@ create index training_catalog_content_mappings_enabler_id_idx
 create index training_catalog_content_mappings_use_case_id_idx
   on public.training_catalog_content_mappings (use_case_id);
 
+-- Row level security. Decision: catalog content is NOT public. Existing
+-- policies of other content tables allow anonymous reads (known issue, fixed
+-- separately); the new tables do not repeat it. Reads need a logged in user
+-- (role authenticated), writes only the platform owner. The server connects
+-- as a BYPASSRLS role, and service_role bypasses RLS as well, so the
+-- app is not affected. No code reads these tables with the anon key.
 alter table public.training_catalogs enable row level security;
-create policy training_catalogs_select_all
-  on public.training_catalogs for select using (true);
+create policy training_catalogs_select_authenticated
+  on public.training_catalogs for select to authenticated using (true);
 create policy training_catalogs_manage_platform_owner
-  on public.training_catalogs for all using (public.is_platform_owner());
+  on public.training_catalogs for all to authenticated
+  using (public.is_platform_owner());
 
 alter table public.training_catalog_learning_fields enable row level security;
-create policy training_catalog_learning_fields_select_all
-  on public.training_catalog_learning_fields for select using (true);
+create policy training_catalog_learning_fields_select_authenticated
+  on public.training_catalog_learning_fields
+  for select to authenticated using (true);
 create policy training_catalog_learning_fields_manage_platform_owner
   on public.training_catalog_learning_fields
-  for all using (public.is_platform_owner());
+  for all to authenticated using (public.is_platform_owner());
 
 alter table public.training_catalog_content_mappings enable row level security;
-create policy training_catalog_content_mappings_select_all
-  on public.training_catalog_content_mappings for select using (true);
+create policy training_catalog_content_mappings_select_authenticated
+  on public.training_catalog_content_mappings
+  for select to authenticated using (true);
 create policy training_catalog_content_mappings_manage_platform_owner
   on public.training_catalog_content_mappings
-  for all using (public.is_platform_owner());
+  for all to authenticated using (public.is_platform_owner());
+
+-- Defense in depth: no table privileges for the anonymous API role (only if
+-- the Supabase role exists, so the file also runs on plain PostgreSQL).
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on public.training_catalogs from anon;
+    revoke all on public.training_catalog_learning_fields from anon;
+    revoke all on public.training_catalog_content_mappings from anon;
+  end if;
+end $$;
 
 comment on table public.training_catalogs is
   'Occupation-specific training catalog; existing FIAE courses and training components remain assigned to FIAE.';

@@ -131,7 +131,7 @@ alter table public.trainee_elective_choices enable row level security;
 drop policy if exists trainee_elective_choices_org_isolation
   on public.trainee_elective_choices;
 create policy trainee_elective_choices_org_isolation
-  on public.trainee_elective_choices for all
+  on public.trainee_elective_choices for all to authenticated
   using (
     exists (
       select 1
@@ -142,6 +142,15 @@ create policy trainee_elective_choices_org_isolation
     )
     or public.is_platform_owner()
   );
+
+-- No anonymous access (only if the Supabase role exists). The server role
+-- bypasses RLS (BYPASSRLS), like service_role. There is no USING (true) policy.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on public.trainee_elective_choices from anon;
+  end if;
+end $$;
 
 comment on table public.trainee_elective_choices is
   'Elective components (training_components.kind = wahl) picked by a trainee for an enrollment; at most training_catalogs.elective_pick_count rows per enrollment.';

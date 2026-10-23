@@ -50,7 +50,7 @@ alter table public.trainee_enrollments enable row level security;
 drop policy if exists trainee_enrollments_org_isolation
   on public.trainee_enrollments;
 create policy trainee_enrollments_org_isolation
-  on public.trainee_enrollments for all
+  on public.trainee_enrollments for all to authenticated
   using (
     exists (
       select 1
@@ -60,6 +60,15 @@ create policy trainee_enrollments_org_isolation
     )
     or public.is_platform_owner()
   );
+
+-- No anonymous access (only if the Supabase role exists). The server role
+-- bypasses RLS (BYPASSRLS), like service_role. There is no USING (true) policy.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on public.trainee_enrollments from anon;
+  end if;
+end $$;
 
 comment on table public.trainee_enrollments is
   'Enrollment of a trainee in exactly one training catalog (occupation) with start date and planned duration.';
