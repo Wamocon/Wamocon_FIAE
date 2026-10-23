@@ -20,17 +20,18 @@ import {
 
 /**
  * Static checks of the training catalog migration series
- * (supabase/migrations/20261020*). They guard the conventions of the release
- * pipeline; the SQL itself is verified on a throwaway database.
+ * (supabase/migrations/20261020* and the gated 20261024000000). They guard the
+ * conventions of the release pipeline; the SQL itself is verified on a
+ * throwaway database.
  */
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'supabase', 'migrations');
-const SERIES_PREFIX = '20261020';
+const SERIES_PREFIXES = ['20261020', '20261024'];
 const MAX_IDENTIFIER_LENGTH = 63;
 
 const seriesFiles = fs
   .readdirSync(MIGRATIONS_DIR)
-  .filter(name => name.startsWith(SERIES_PREFIX))
+  .filter(name => SERIES_PREFIXES.some(p => name.startsWith(p)))
   .sort();
 
 /** SQL without line comments (the files document themselves in comments). */
@@ -73,6 +74,37 @@ describe('catalog migration series files', () => {
     expect(versions[0]).toBe('20261020000100');
     expect(new Set(versions).size).toBe(versions.length);
     expect([...versions].sort()).toEqual(versions);
+  });
+
+  it('sorts the SUPER_ADMIN backfill after the PR 89 profile privileges', () => {
+    const backfill = '20261024000000_super_admin_backfill.sql';
+    const pr89 = '20261023200000_security_profiles_column_privileges.sql';
+    expect(seriesFiles).toContain(backfill);
+    expect(fs.existsSync(path.join(MIGRATIONS_DIR, pr89))).toBe(true);
+    expect(backfill > pr89).toBe(true);
+    // the old name must not exist any more
+    expect(seriesFiles).not.toContain(
+      '20261020001600_super_admin_backfill.sql'
+    );
+  });
+
+  it('enforces the rollout gate of the SUPER_ADMIN backfill in SQL', () => {
+    const raw = fs.readFileSync(
+      path.join(MIGRATIONS_DIR, '20261024000000_super_admin_backfill.sql'),
+      'utf-8'
+    );
+    const sql = readSql('20261024000000_super_admin_backfill.sql');
+    // gate 1: PR 89 privileges, gate 2: human approval token
+    expect(sql).toMatch(/has_column_privilege\('authenticated'/);
+    expect(sql).toMatch(/super_admin_backfill=approved/);
+    expect(sql).toMatch(/raise exception/i);
+    // the gate and the update are skipped for Preview
+    expect(raw).toMatch(/^-- preview:skip$/m);
+    expect(raw).toMatch(/^-- preview:end$/m);
+    // the enum file checks PR 89 as well
+    expect(readSql('20261020001500_user_role_super_admin_value.sql')).toMatch(
+      /has_column_privilege\('authenticated'/
+    );
   });
 
   it('sorts after the already applied production migration', () => {

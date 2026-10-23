@@ -6,7 +6,7 @@
 -- row reads as FIAE immediately after this file ran.
 --
 -- This file is part of the KfBM catalog migration series
--- (20261020000100 ... 20261020001600). It has never been applied to any
+-- (20261020000100 ... 20261020001500, 20261024000000). It has never been applied to any
 -- database. It must run exactly once; a second run stops in the precheck.
 --
 -- Pipeline notes: no explicit BEGIN/COMMIT (the pipeline wraps each file),

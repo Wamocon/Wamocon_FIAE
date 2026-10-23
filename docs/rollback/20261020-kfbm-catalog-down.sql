@@ -1,5 +1,5 @@
 -- Down script for the KfBM training catalog migration series
--- (supabase/migrations/20261020000100 ... 20261020001600).
+-- (supabase/migrations/20261020000100 ... 20261020001500 and 20261024000000).
 --
 -- Only meaningful until the FIAE-only state is left: the script refuses to run
 -- as soon as the first non-FIAE (KfBM) record exists, because dropping the
@@ -80,7 +80,7 @@ begin
   end if;
 end $$;
 
--- 1. SUPER_ADMIN back to ADMIN (20261020001600) ------------------------------
+-- 1. SUPER_ADMIN back to ADMIN (20261024000000) ------------------------------
 do $$
 begin
   if exists (

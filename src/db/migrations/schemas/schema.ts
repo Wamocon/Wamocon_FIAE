@@ -37,7 +37,7 @@ export const userRole = pgEnum('user_role', [
   'TRAINER',
   'TRAINEE',
   // Platform owner admin (ADMIN of the platform owner organization after the
-  // 20261020001600 backfill). Added by 20261020001500.
+  // 20261024000000 backfill). Added by 20261020001500.
   'SUPER_ADMIN',
 ]);
 export const durationUnit = pgEnum('duration_unit', ['DAYS', 'WEEKS']);

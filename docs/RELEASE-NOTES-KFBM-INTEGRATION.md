@@ -98,7 +98,7 @@ angewendet, nur auf einer lokalen Wegwerf-Datenbank geprüft (siehe unten).
   Migration mit dem Suffix "#2" versehen); das Löschen eines Enablers oder Use Cases
   entfernt dessen Lernfeld-Zuordnung; Lesezugriff auf Katalog- und Lernfeldtabellen
   nur für angemeldete Benutzer.
-- Migrationsreihenfolge und Rollout: siehe Runbook. Die Datei 20261020001600
+- Migrationsreihenfolge und Rollout: siehe Runbook. Die Datei 20261024000000
   (SUPER_ADMIN-Backfill) erst nach dem passenden App-Release.
 
 ## Prüfungen
@@ -134,7 +134,7 @@ angewendet, nur auf einer lokalen Wegwerf-Datenbank geprüft (siehe unten).
    Nachchecks gegenlesen.
 2. Ausbildungskatalog in Benutzer- und Organisationskontext und in den API- und
    UI-Flows durchgängig machen; Arbeitszeugnis auf die Katalog-Settings umstellen.
-3. App für `SUPER_ADMIN` freigeben, danach Datei 001600 anwenden.
+3. App für `SUPER_ADMIN` freigeben, danach Freigabe setzen und Datei 20261024000000 anwenden (sie schlägt fehl, solange das Gate geschlossen ist).
 4. Text-Arrays `courses.lernfelder` und `use_cases.lernfelder` migrieren;
    `lernfelder_legacy` und `lernfeld_mappings_legacy` später entfernen.
 5. KfBM-Curriculum und Mapping aus freigegebenen Quellen importieren, Content über

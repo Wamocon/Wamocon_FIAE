@@ -335,6 +335,11 @@ select
 select max(version) as last_ledger_version, count(*) as ledger_rows
 from supabase_migrations.schema_migrations;
 
+-- C1b. Precheck before 20261020001500: PR 89 must be applied. Must return false,
+-- otherwise authenticated can still change its own role.
+select has_column_privilege('authenticated', 'public.profiles', 'role', 'UPDATE')
+  as authenticated_can_update_role_must_be_false;
+
 -- C2. Precheck: course content counts (production reference, measured
 -- 2026-10-23: 26 courses, 189 enablers, 88 use cases).
 select
@@ -354,7 +359,7 @@ from public.lernfelder
 group by label
 order by label;
 
--- C4. Postcheck (after the series without 20261020001600): everything is FIAE.
+-- C4. Postcheck (after the series without 20261024000000): everything is FIAE.
 select 'courses' as table_name, training_catalog_id, count(*) from public.courses group by 2
 union all select 'enablers', training_catalog_id, count(*) from public.enablers group by 2
 union all select 'use_cases', training_catalog_id, count(*) from public.use_cases group by 2
@@ -404,7 +409,7 @@ select
   (select count(*) from public.organization_catalogs) as organization_catalogs,
   (select count(*) from public.organizations) as organizations;
 
--- C10. After 20261020001600 only: no ADMIN left in the platform owner organization.
+-- C10. After 20261024000000 only: no ADMIN left in the platform owner organization.
 select p.role, count(*)
 from public.profiles p
 join public.organizations o on o.id = p.organization_id
