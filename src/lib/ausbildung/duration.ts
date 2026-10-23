@@ -8,6 +8,10 @@
  *
  * A 3-year plan keeps the legacy 18 + 18 month split. A 2-year intensive plan
  * compresses those same two phases to 12 + 12 months.
+ *
+ * The length of phase 1 can be passed in (`phaseOneMonths`), for example from
+ * the phase plan of an occupation (src/lib/catalog/phase-plan.ts, KfBM 15
+ * months). Without it, or with an invalid value, the legacy lengths apply.
  */
 
 export type AusbildungDurationYears = 2 | 3;
@@ -65,17 +69,33 @@ function addMonths(date: Date, months: number): Date {
   return result;
 }
 
-function getPhaseOneMonths(durationYears: AusbildungDurationYears): number {
+/**
+ * Length of phase 1 in months: the given value if it is a whole number of
+ * months shorter than the whole training, otherwise the legacy 12 or 18.
+ */
+function getPhaseOneMonths(
+  durationYears: AusbildungDurationYears,
+  phaseOneMonths?: number | null
+): number {
+  if (
+    typeof phaseOneMonths === 'number' &&
+    Number.isInteger(phaseOneMonths) &&
+    phaseOneMonths >= 1 &&
+    phaseOneMonths < durationYears * 12
+  ) {
+    return phaseOneMonths;
+  }
   return durationYears === 2 ? 12 : 18;
 }
 
 /** Month range for phase labels. Months are one-based and inclusive. */
 export function getPhaseMonthRange(
   durationYears: number | null | undefined,
-  phase: TrainingPhase
+  phase: TrainingPhase,
+  phaseOneMonthsOverride?: number | null
 ): { startMonth: number; endMonth: number } {
   const duration = normalizeDurationYears(durationYears);
-  const phaseOneMonths = getPhaseOneMonths(duration);
+  const phaseOneMonths = getPhaseOneMonths(duration, phaseOneMonthsOverride);
 
   if (phase === 1) {
     return { startMonth: 1, endMonth: phaseOneMonths };
@@ -91,12 +111,36 @@ export function getPhaseMonthRange(
 export function getTrainingPhase(
   startDate: Date,
   durationYears: number | null | undefined = DEFAULT_DURATION_YEARS,
-  now: Date = new Date()
+  now: Date = new Date(),
+  phaseOneMonthsOverride?: number | null
 ): TrainingPhase {
   const duration = normalizeDurationYears(durationYears);
-  const phaseOneMonths = getPhaseOneMonths(duration);
+  const phaseOneMonths = getPhaseOneMonths(duration, phaseOneMonthsOverride);
   const monthsSince = monthsBetween(startDate, now);
   return monthsSince < phaseOneMonths ? 1 : 2;
+}
+
+/**
+ * Phase of a training component (1, 2, or 3 = integrative, whole training).
+ * The phase column decides if it is set (1 or 2). An integrative component
+ * has no phase and is phase 3. Everything else keeps the old rule and takes the
+ * phase from the order index of the 26 ARP components (1 to 12, 13 to 22,
+ * 23 to 26), so rows without a filled column behave as before. No phase
+ * (null) means the component is not tied to a phase.
+ */
+export function getComponentPhase(component: {
+  phase?: number | null;
+  kind?: string | null;
+  orderIndex?: number | null;
+}): TrainingComponentPhase | null {
+  if (component.phase === 1 || component.phase === 2) return component.phase;
+  if (component.kind === 'integrativ') return 3;
+  const order = component.orderIndex;
+  if (typeof order !== 'number') return null;
+  if (order >= 1 && order <= 12) return 1;
+  if (order >= 13 && order <= 22) return 2;
+  if (order >= 23 && order <= 26) return 3;
+  return null;
 }
 
 /** Backward-compatible alias: stored ausbildungsjahr values now mean phase. */
@@ -133,10 +177,16 @@ export function getTotalDurationWeeks(
 export function getPhaseDeadline(
   startDate: Date,
   durationYears: number | null | undefined,
-  phase: TrainingComponentPhase
+  phase: TrainingComponentPhase,
+  phaseOneMonthsOverride?: number | null
 ): Date {
   const duration = normalizeDurationYears(durationYears);
-  if (phase === 1) return addMonths(startDate, getPhaseOneMonths(duration));
+  if (phase === 1) {
+    return addMonths(
+      startDate,
+      getPhaseOneMonths(duration, phaseOneMonthsOverride)
+    );
+  }
   return addMonths(startDate, duration * 12);
 }
 
@@ -144,9 +194,15 @@ export function getPhaseDeadline(
 export function getContentStageDeadline(
   startDate: Date,
   stage: TrainingComponentPhase,
-  durationYears: number | null | undefined = DEFAULT_DURATION_YEARS
+  durationYears: number | null | undefined = DEFAULT_DURATION_YEARS,
+  phaseOneMonthsOverride?: number | null
 ): Date {
-  return getPhaseDeadline(startDate, durationYears, stage);
+  return getPhaseDeadline(
+    startDate,
+    durationYears,
+    stage,
+    phaseOneMonthsOverride
+  );
 }
 
 /** Overall planned end date of the apprenticeship. */
@@ -163,10 +219,11 @@ export const getAusbildungEndDate = getTrainingEndDate;
 export function getPhaseDateRange(
   startDate: Date,
   phase: TrainingComponentPhase | 0,
-  durationYears: number | null | undefined = DEFAULT_DURATION_YEARS
+  durationYears: number | null | undefined = DEFAULT_DURATION_YEARS,
+  phaseOneMonthsOverride?: number | null
 ): { startDate: Date; endDate: Date } {
   const duration = normalizeDurationYears(durationYears);
-  const phaseOneMonths = getPhaseOneMonths(duration);
+  const phaseOneMonths = getPhaseOneMonths(duration, phaseOneMonthsOverride);
   const startOffsetMonths = phase === 2 ? phaseOneMonths : 0;
   const endOffsetMonths =
     phase === 1 ? phaseOneMonths : normalizeDurationYears(duration) * 12;
