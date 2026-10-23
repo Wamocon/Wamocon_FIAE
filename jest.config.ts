@@ -14,7 +14,13 @@ const config: Config = {
   transformIgnorePatterns: [
     'node_modules/(?!(lucide-react|react-markdown|rehype-highlight|remark-gfm|d3-|d3|redent|strip-indent|indent-string)/)',
   ],
-  testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
+  testPathIgnorePatterns: [
+    '<rootDir>/.next/',
+    '<rootDir>/node_modules/',
+    // Git worktrees of local agent sessions hold copies of every test file
+    '<rootDir>/.claude/',
+  ],
+  modulePathIgnorePatterns: ['<rootDir>/.claude/'],
   extensionsToTreatAsEsm: [],
   collectCoverage: true,
   collectCoverageFrom: [
