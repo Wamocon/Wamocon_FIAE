@@ -2111,5 +2111,9 @@
   "admin.catalogs.error.CATALOG_INACTIVE": "The occupation is not active on the platform.",
   "admin.catalogs.error.NOT_A_TRAINEE": "Only trainees can be assigned to an occupation.",
   "admin.catalogs.error.CATALOG_NOT_FOUND": "The occupation was not found.",
-  "admin.catalogs.error.USER_NOT_FOUND": "The user was not found."
+  "admin.catalogs.error.USER_NOT_FOUND": "The user was not found.",
+  "catalog.switcher.label": "Choose occupation",
+  "catalog.switcher.current": "Current occupation: {title}",
+  "catalog.switcher.reloadHint": "The page reloads when you switch.",
+  "catalog.branding.badge": "Occupation: {title}"
 }

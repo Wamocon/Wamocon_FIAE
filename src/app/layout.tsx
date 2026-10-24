@@ -11,6 +11,8 @@ import QueryProvider from '@/components/QueryProvider';
 import { OnboardingProvider } from '@/contexts/OnboardingContext';
 import { TourOverlay } from '@/components/onboarding/TourOverlay';
 import { SidebarProvider } from '@/contexts/SidebarContext';
+import { CatalogProvider } from '@/contexts/CatalogContext';
+import { CatalogBranding } from '@/components/catalog/CatalogBranding';
 
 // Lazy-load HAI chat widget - it's not needed for initial page render
 // Import directly instead of through barrel to avoid pulling in all HAI modules
@@ -39,18 +41,21 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <AuthProvider>
           <QueryProvider>
-            <LanguageProvider>
-              <ThemeProvider>
-                <BreadcrumbProvider>
-                  <SidebarProvider>
-                    <OnboardingProvider>
-                      <HaiWrapper>{children}</HaiWrapper>
-                      <TourOverlay />
-                    </OnboardingProvider>
-                  </SidebarProvider>
-                </BreadcrumbProvider>
-              </ThemeProvider>
-            </LanguageProvider>
+            <CatalogProvider>
+              <LanguageProvider>
+                <ThemeProvider>
+                  <BreadcrumbProvider>
+                    <SidebarProvider>
+                      <OnboardingProvider>
+                        <HaiWrapper>{children}</HaiWrapper>
+                        <TourOverlay />
+                        <CatalogBranding />
+                      </OnboardingProvider>
+                    </SidebarProvider>
+                  </BreadcrumbProvider>
+                </ThemeProvider>
+              </LanguageProvider>
+            </CatalogProvider>
           </QueryProvider>
         </AuthProvider>
         <Toaster containerStyle={{ zIndex: 9999 }} />

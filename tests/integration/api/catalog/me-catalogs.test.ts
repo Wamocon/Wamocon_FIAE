@@ -12,18 +12,34 @@ const FIAE = '00000000-0000-4000-8000-000000000001';
 const KFBM = '00000000-0000-4000-8000-000000000002';
 const ORG = 'org-1';
 
+const DEFAULT_BRANDING = {
+  title: 'LFA Plattform',
+  shortName: null,
+  accent: null,
+};
+
 const catalogs = [
   {
     id: KFBM,
     code: 'KFBM',
     title: 'Kaufmann/-frau für Büromanagement',
     isActive: true,
+    settings: {
+      phase_months: [15, 21],
+      shortening_threshold: 2.49,
+      branding: {
+        title: 'KfBM Lernplattform',
+        short_name: 'KfBM',
+        accent: 'teal',
+      },
+    },
   },
   {
     id: FIAE,
     code: 'FIAE',
     title: 'Fachinformatiker/in Anwendungsentwicklung',
     isActive: true,
+    settings: {},
   },
 ];
 const inactive = {
@@ -93,7 +109,11 @@ describe('GET /api/me/catalogs', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       catalogs: [
-        { code: 'FIAE', title: 'Fachinformatiker/in Anwendungsentwicklung' },
+        {
+          code: 'FIAE',
+          title: 'Fachinformatiker/in Anwendungsentwicklung',
+          branding: DEFAULT_BRANDING,
+        },
       ],
       activeCode: 'FIAE',
       selected: false,
@@ -203,6 +223,85 @@ describe('GET /api/me/catalogs', () => {
     expect(text).not.toContain(FIAE);
     expect(text).not.toContain(KFBM);
     expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  describe('branding', () => {
+    it('gives every occupation the validated branding of its settings, FIAE the default look', async () => {
+      const { GET } = await load({ organizationCatalogs: both }, trainer());
+      const body = await (await GET(req())).json();
+      expect(body.catalogs).toEqual([
+        {
+          code: 'FIAE',
+          title: 'Fachinformatiker/in Anwendungsentwicklung',
+          branding: DEFAULT_BRANDING,
+        },
+        {
+          code: 'KFBM',
+          title: 'Kaufmann/-frau für Büromanagement',
+          branding: {
+            title: 'KfBM Lernplattform',
+            shortName: 'KfBM',
+            accent: '#0f766e',
+          },
+        },
+      ]);
+    });
+
+    it('gives out only the branding, never other settings', async () => {
+      const { GET } = await load({ organizationCatalogs: both }, trainer());
+      const text = JSON.stringify(await (await GET(req())).json());
+      expect(text).not.toContain('phase_months');
+      expect(text).not.toContain('phaseMonths');
+      expect(text).not.toContain('2.49');
+      expect(text).not.toContain('settings');
+    });
+
+    it.each([
+      ['no settings at all', null],
+      ['settings that are not an object', 'kaputt'],
+      ['no branding key', { phase_months: [15, 21] }],
+      ['a branding that is not an object', { branding: 'teal' }],
+    ])('falls back to the default look for %s', async (_label, settings) => {
+      const { GET } = await load(
+        {
+          organizationCatalogs: kfbmOnly,
+          trainingCatalogs: [{ ...catalogs[0], settings }, catalogs[1]],
+        },
+        trainer()
+      );
+      const body = await (await GET(req())).json();
+      expect(body.catalogs[0].branding).toEqual(DEFAULT_BRANDING);
+    });
+
+    it('replaces only the invalid values of a branding by the default', async () => {
+      const { GET } = await load(
+        {
+          organizationCatalogs: kfbmOnly,
+          trainingCatalogs: [
+            {
+              ...catalogs[0],
+              settings: {
+                branding: {
+                  title: '<script>alert(1)</script>',
+                  short_name: 'KfBM',
+                  accent: 'url(javascript:alert(1))',
+                  logo: 'https://evil.example/x.png',
+                },
+              },
+            },
+            catalogs[1],
+          ],
+        },
+        trainer()
+      );
+      const body = await (await GET(req())).json();
+      expect(body.catalogs[0].branding).toEqual({
+        title: 'LFA Plattform',
+        shortName: 'KfBM',
+        accent: null,
+      });
+      expect(JSON.stringify(body)).not.toContain('evil.example');
+    });
   });
 
   it('answers 503 and hides the details when the scope cannot be determined', async () => {
