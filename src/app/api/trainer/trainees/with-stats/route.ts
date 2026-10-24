@@ -10,6 +10,7 @@ import {
   activityReports,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
 
 /**
  * GET /api/trainer/trainees/with-stats
@@ -39,6 +40,14 @@ export async function GET(req: NextRequest) {
     const traineeConditions = [eq(profiles.role, 'TRAINEE')];
     if (!isPlatformOwnerUser && trainerOrgId) {
       traineeConditions.push(eq(profiles.organizationId, trainerOrgId));
+    }
+
+    // With a chosen occupation (x-catalog) only its trainees, without a choice
+    // everything as before.
+    const catalogFilter = await requireTraineeCatalogFilter(session, req);
+    if (catalogFilter instanceof Response) return catalogFilter;
+    if (catalogFilter.condition) {
+      traineeConditions.push(catalogFilter.condition);
     }
 
     const traineeRows = await db
