@@ -670,6 +670,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await waitForProfile(userId);
       const loaded = await loadProfile(userId, userEmail || '');
 
+      // 0. No readable profile: the row is missing, or hidden by row level
+      // security (a profile without an organization cannot read itself).
+      // Without this the sign-in would end without an error and without a redirect.
+      if (!loaded) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setProfile(null);
+        clearCachedAuth();
+        setLoading(false);
+        throw new Error(
+          'Ihr Profil konnte nicht geladen werden. Bitte wenden Sie sich an Ihren Administrator.'
+        );
+      }
+
       // --- Activation gates ---
       // 1. Account deactivated by Wamocon
       if (loaded && loaded.isActive === false) {
