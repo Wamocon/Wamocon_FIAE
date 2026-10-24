@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { CatalogActivationPanel } from '@/components/admin/CatalogActivationPanel';
 import { OrganizationCatalogsEditor } from '@/components/admin/OrganizationCatalogsEditor';
+import { SeatCounter } from '@/components/admin/SeatCounter';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import toast from 'react-hot-toast';
 import {
@@ -127,7 +128,18 @@ export default function AdminOrganizationsPage() {
       const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        // Plan and seats are changed by the platform admin only (the API
+        // answers 403 otherwise), so an ADMIN sends the other fields
+        body: JSON.stringify(
+          isSuperAdmin
+            ? form
+            : {
+                name: form.name,
+                contactEmail: form.contactEmail,
+                contactPerson: form.contactPerson,
+                notes: form.notes,
+              }
+        ),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -224,18 +236,22 @@ export default function AdminOrganizationsPage() {
             </div>
             <div>
               <h1 className="text-foreground mb-2 text-3xl font-bold">
-                {t('admin.org.title')}
+                {isSuperAdmin ? t('admin.org.title') : t('admin.seats.ownTitle')}
               </h1>
-              <p className="text-muted">{t('admin.org.subtitle')}</p>
+              <p className="text-muted">
+                {isSuperAdmin ? t('admin.org.subtitle') : t('admin.seats.ownSubtitle')}
+              </p>
             </div>
           </div>
-          <button
-            onClick={openCreate}
-            className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-xl px-5 py-3 font-medium transition-colors"
-          >
-            <Plus className="h-5 w-5" />
-            {t('admin.org.newOrganization')}
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={openCreate}
+              className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-xl px-5 py-3 font-medium transition-colors"
+            >
+              <Plus className="h-5 w-5" />
+              {t('admin.org.newOrganization')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -276,6 +292,8 @@ export default function AdminOrganizationsPage() {
                 placeholder="acme-gmbh"
               />
             </div>
+            {isSuperAdmin && (
+            <>
             <div>
               <label className="text-foreground mb-1.5 block text-sm font-medium">{t('admin.org.plan')} *</label>
               <select
@@ -307,6 +325,8 @@ export default function AdminOrganizationsPage() {
                 />
               </div>
             </div>
+            </>
+            )}
             <div>
               <label className="text-foreground mb-1.5 block text-sm font-medium">{t('admin.org.contactEmail')}</label>
               <input
@@ -407,23 +427,20 @@ export default function AdminOrganizationsPage() {
               </div>
             </div>
 
-            {/* Seats */}
-            <div className="mb-4 grid grid-cols-2 gap-3">
-              <div className="bg-background/50 rounded-xl p-3">
-                <div className="text-muted text-xs">{t('admin.org.trainers')}</div>
-                <div className="text-foreground text-lg font-bold">
-                  {org.currentTrainers}
-                  <span className="text-muted text-sm font-normal">/{org.maxTrainerSeats}</span>
-                </div>
-              </div>
-              <div className="bg-background/50 rounded-xl p-3">
-                <div className="text-muted text-xs">{t('admin.org.trainees')}</div>
-                <div className="text-foreground text-lg font-bold">
-                  {org.currentTrainees}
-                  <span className="text-muted text-sm font-normal">/{org.maxTraineeSeats}</span>
-                </div>
-              </div>
+            {/* Seats: the count is the one the API enforces (409 SEATS_FULL) */}
+            <div className="mb-1 grid grid-cols-2 gap-3">
+              <SeatCounter
+                label={t('admin.org.trainers')}
+                occupied={org.currentTrainers}
+                limit={org.maxTrainerSeats}
+              />
+              <SeatCounter
+                label={t('admin.org.trainees')}
+                occupied={org.currentTrainees}
+                limit={org.maxTraineeSeats}
+              />
             </div>
+            <p className="text-muted mb-4 text-xs">{t('admin.seats.hint')}</p>
 
             {/* Training occupations of the organization (platform admin only) */}
             {isSuperAdmin && (
@@ -451,7 +468,7 @@ export default function AdminOrganizationsPage() {
                 <Pencil className="h-4 w-4" />
                 {t('common.edit')}
               </button>
-              {!org.isPlatformOwner && (
+              {isSuperAdmin && !org.isPlatformOwner && (
                 <>
                   <button
                     onClick={() => deleteOrg(org)}

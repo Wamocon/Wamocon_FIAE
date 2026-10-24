@@ -7,7 +7,7 @@ import {
 } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { isTrainerLevelRole } from '@/lib/auth/roles';
+import { tallySeatsByOrganization } from '@/lib/admin/seatRules';
 import { eq, sql } from 'drizzle-orm';
 import { organizations, profiles } from '@/db/migrations/schemas/schema';
 
@@ -54,15 +54,17 @@ export async function GET(req: NextRequest) {
         .where(orgScopeCondition(profiles.organizationId, scope))
         .groupBy(profiles.organizationId, profiles.role);
 
-      for (const r of rows) {
-        const oid = r.orgId ?? '';
-        if (!counts[oid]) counts[oid] = { trainers: 0, trainees: 0 };
-        const upper = String(r.role).toUpperCase();
-        if (isTrainerLevelRole(upper)) {
-          counts[oid].trainers += r.count;
-        } else if (upper === 'TRAINEE') {
-          counts[oid].trainees += r.count;
-        }
+      // The same rule as the seat check of POST and PATCH /api/admin/users
+      // (src/lib/admin/seatRules.ts): what is shown is what is enforced
+      const seats = tallySeatsByOrganization(
+        rows.map(r => ({
+          organizationId: r.orgId,
+          role: r.role,
+          count: r.count,
+        }))
+      );
+      for (const [oid, tally] of Object.entries(seats)) {
+        counts[oid] = { trainers: tally.trainers, trainees: tally.trainees };
       }
     }
 
