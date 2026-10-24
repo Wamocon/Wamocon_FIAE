@@ -125,4 +125,76 @@ describe('AuthContext', () => {
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
+
+  it('signIn signs out and reports an error when the profile is not readable', async () => {
+    const originalFrom = mockSupabase.from;
+    const originalSignOut = mockSupabase.auth.signOut;
+    const signOut = (jest.fn() as any).mockResolvedValue({});
+    mockSupabase.auth.signOut = signOut;
+    // The account exists, but its profile row is hidden (row level security) or missing
+    mockSupabase.from = (jest.fn() as any).mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: (jest.fn() as any).mockResolvedValue({
+            data: null,
+            error: { code: 'PGRST116', message: 'no rows' },
+          }),
+          maybeSingle: (jest.fn() as any).mockResolvedValue({
+            data: null,
+            error: null,
+          }),
+        }),
+      }),
+    });
+    mockSupabase.auth.signInWithPassword.mockResolvedValue({
+      data: { user: { id: 'u2', email: 'u2@example.com' } },
+      error: null,
+    });
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    function SignInConsumer() {
+      const { user, signIn } = useAuth();
+      const [message, setMessage] = React.useState('');
+      return (
+        <div>
+          <div data-testid="signed-in-uid">{user?.id ?? ''}</div>
+          <div data-testid="message">{message}</div>
+          <button
+            onClick={() =>
+              signIn('u2@example.com', 'secret').catch((e: Error) =>
+                setMessage(e.message)
+              )
+            }
+          >
+            login
+          </button>
+        </div>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <SignInConsumer />
+      </AuthProvider>
+    );
+    await user.click(screen.getByText('login'));
+
+    // No silent success: the person sees why nothing happens, and no session is left behind
+    await waitFor(
+      () =>
+        expect(screen.getByTestId('message').textContent).toContain(
+          'Ihr Profil konnte nicht geladen werden'
+        ),
+      { timeout: 8000 }
+    );
+    expect(signOut).toHaveBeenCalled();
+    expect(screen.getByTestId('signed-in-uid').textContent).toBe('');
+
+    consoleError.mockRestore();
+    mockSupabase.from = originalFrom;
+    mockSupabase.auth.signOut = originalSignOut;
+  }, 15000);
 });
