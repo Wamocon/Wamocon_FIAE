@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  isValidBrandingShortName,
+  isValidBrandingTitle,
+  normalizeBrandingAccent,
+} from '@/lib/catalog/branding';
 
 /**
  * Configuration of a training catalog (training_catalogs.settings, jsonb).
@@ -12,6 +17,9 @@ import { z } from 'zod';
  *  - department_label         label of the department field
  *  - phase_months             months of phase 1 and phase 2, for example
  *                             [18, 18] (FIAE) or [15, 21] (KfBM)
+ *  - branding                 presentation of the occupation (title, short_name,
+ *                             accent), see src/lib/catalog/branding.ts, which
+ *                             also reads it (not part of CatalogSettings)
  *
  * This module only defines the type, defaults and validation. Callers in the
  * Arbeitszeugnis code still use their own constants; switching them over is
@@ -23,6 +31,19 @@ export type SchoolOrganization = (typeof SCHOOL_ORGANIZATIONS)[number];
 
 const positiveMonths = z.number().int().positive().max(120);
 
+const brandingSchema = z
+  .object({
+    title: z.string().refine(isValidBrandingTitle, 'invalid title'),
+    short_name: z
+      .string()
+      .refine(isValidBrandingShortName, 'invalid short name'),
+    accent: z
+      .string()
+      .refine(v => normalizeBrandingAccent(v) !== null, 'invalid accent color'),
+  })
+  .partial()
+  .strict();
+
 /** Strict schema for writing settings (rejects unknown keys and bad values). */
 export const catalogSettingsSchema = z
   .object({
@@ -32,6 +53,7 @@ export const catalogSettingsSchema = z
     softskill_criteria_set: z.string().trim().min(1),
     department_label: z.string().trim().min(1),
     phase_months: z.tuple([positiveMonths, positiveMonths]),
+    branding: brandingSchema,
   })
   .partial()
   .strict();

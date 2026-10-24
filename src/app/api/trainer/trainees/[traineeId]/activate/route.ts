@@ -11,6 +11,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { ensureTraineeInCatalog } from '@/lib/catalog/trainee-scope';
 
 type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
 
@@ -43,6 +44,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
         }
       }
     }
+
+    // A trainee of another occupation than the chosen one is not found.
+    const outOfCatalog = await ensureTraineeInCatalog(session, req, traineeId);
+    if (outOfCatalog) return outOfCatalog;
 
     if (!itemType || !itemId || typeof isActive !== 'boolean') {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
