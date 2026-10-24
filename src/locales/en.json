@@ -2111,5 +2111,21 @@
   "admin.catalogs.error.CATALOG_INACTIVE": "The occupation is not active on the platform.",
   "admin.catalogs.error.NOT_A_TRAINEE": "Only trainees can be assigned to an occupation.",
   "admin.catalogs.error.CATALOG_NOT_FOUND": "The occupation was not found.",
-  "admin.catalogs.error.USER_NOT_FOUND": "The user was not found."
+  "admin.catalogs.error.USER_NOT_FOUND": "The user was not found.",
+  "admin.menu.platform": "Organizations and occupations",
+  "admin.menu.ownOrganization": "My organization",
+  "admin.seats.ownTitle": "My organization",
+  "admin.seats.ownSubtitle": "Seats and contact data of your organization",
+  "admin.seats.occupied": "{occupied} of {limit} taken",
+  "admin.seats.full": "Full",
+  "admin.seats.over": "Over the limit",
+  "admin.seats.hint": "All accounts of the organization count, inactive ones too. Admins and temp admins take trainer seats. Only the platform admin raises the seats.",
+  "admin.seats.error.SEATS_FULL.trainee.admin": "All trainee seats of your organization are taken ({occupied} of {limit}). The platform admin can raise the seats.",
+  "admin.seats.error.SEATS_FULL.trainee.superAdmin": "All trainee seats of this organization are taken ({occupied} of {limit}). Raise the seats of the organization under Organizations and occupations.",
+  "admin.seats.error.SEATS_FULL.trainer.admin": "All trainer seats of your organization are taken ({occupied} of {limit}). Admins and temp admins count as trainers. The platform admin can raise the seats.",
+  "admin.seats.error.SEATS_FULL.trainer.superAdmin": "All trainer seats of this organization are taken ({occupied} of {limit}). Admins and temp admins count as trainers. Raise the seats of the organization under Organizations and occupations.",
+  "admin.seats.error.ROLE_NOT_ASSIGNABLE": "You may not assign this role. Temp admins can only create trainers and trainees, admins cannot create super admins.",
+  "admin.userCreate.occupation": "Occupation",
+  "admin.userCreate.occupationHint": "The organization offers several occupations. A trainee learns in exactly one occupation.",
+  "admin.userCreate.error.CATALOG_REQUIRED": "The organization offers several occupations. Please choose an occupation for the trainee."
 }
