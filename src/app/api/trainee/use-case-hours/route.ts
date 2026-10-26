@@ -3,6 +3,7 @@ import db from '@/db';
 import { eq, and, sql, ne } from 'drizzle-orm';
 import { activityReports, activityReportUseCaseEntries, trainingComponents, trainingUseCases } from '@/db/migrations/schemas/schema';
 import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import {
     catalogCondition,
     requireCatalogScopeForUser,
@@ -15,14 +16,14 @@ import {
  * reports are pending at the same time.
  */
 export async function GET(request: NextRequest) {
+    const session = await requireUser(request);
+    if (isErrorResponse(session)) return session;
+    // The hours of the session user, a traineeId in the query is ignored
+    const traineeId = session.id;
+
     try {
         const { searchParams } = new URL(request.url);
-        const traineeId = searchParams.get('traineeId');
         const excludeReportId = searchParams.get('excludeReportId'); // For editing existing reports
-
-        if (!traineeId) {
-            return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
-        }
 
         const scope = await requireCatalogScopeForUser(traineeId, request);
         if (scope instanceof Response) return scope;

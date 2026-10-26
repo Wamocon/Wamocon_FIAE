@@ -13,7 +13,7 @@
  *   context?: {
  *     enablerId?: string;      // Current enabler context
  *     courseId?: string;       // Current course context
- *     scenarioText?: string;   // Current scenario text
+ *     scenarioText?: string;   // Ignored: never copied into the prompt
  *   };
  *   stream?: boolean;          // Enable streaming response
  * }
@@ -38,10 +38,10 @@ import {
 import { getProviderStatus } from '@/lib/hai/providers';
 import { buildHaiTrainingScope } from '@/lib/hai/trainingScope';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
 import { getUserOrgId, requireProPlan, toHaiRole } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
-import { verifyChatContextIds } from '@/lib/hai/chatContext';
 
 // ============================================================================
 // TYPES
@@ -456,51 +456,84 @@ async function updateAssistantMessage(
 }
 
 /**
- * Get enabler and course titles for context
+ * Get enabler and course titles for context. The ids come from the client, so
+ * they only count if the enabler or course belongs to one of the catalogs
+ * (occupations) of the user; otherwise `inScope` is false, no title is
+ * returned and the caller must drop the ids.
  */
 async function getContextTitles(
   enablerId?: string,
-  courseId?: string
-): Promise<{ enablerTitle?: string; courseTitle?: string }> {
+  courseId?: string,
+  catalogIds?: string[] | null
+): Promise<{
+  enablerTitle?: string;
+  courseTitle?: string;
+  inScope: boolean;
+}> {
   let enablerTitle: string | undefined;
   let courseTitle: string | undefined;
+  const allowed = (catalogId: unknown) =>
+    !!catalogIds && catalogIds.includes(String(catalogId));
 
-  if (enablerId) {
-    const enabler = await db
-      .select({ title: enablers.title, courseId: enablers.courseId })
-      .from(enablers)
-      .where(eq(enablers.id, enablerId))
-      .limit(1);
+  // Both ids count on their own: a malformed id or one outside the catalogs
+  // of the user drops the whole context
+  if (
+    (enablerId && !isValidUUID(enablerId)) ||
+    (courseId && !isValidUUID(courseId))
+  ) {
+    return { inScope: false };
+  }
 
-    if (enabler.length > 0) {
-      enablerTitle = enabler[0].title;
-
-      // Get course title from enabler's course
-      if (enabler[0].courseId) {
-        const course = await db
-          .select({ title: courses.title })
-          .from(courses)
-          .where(eq(courses.id, enabler[0].courseId))
-          .limit(1);
-
-        if (course.length > 0) {
-          courseTitle = course[0].title || undefined;
-        }
-      }
-    }
-  } else if (courseId) {
+  if (courseId) {
     const course = await db
-      .select({ title: courses.title })
+      .select({
+        title: courses.title,
+        trainingCatalogId: courses.trainingCatalogId,
+      })
       .from(courses)
       .where(eq(courses.id, courseId))
       .limit(1);
 
-    if (course.length > 0) {
-      courseTitle = course[0].title || undefined;
+    if (course.length === 0 || !allowed(course[0].trainingCatalogId)) {
+      return { inScope: false };
+    }
+    courseTitle = course[0].title || undefined;
+  }
+
+  if (enablerId) {
+    const enabler = await db
+      .select({
+        title: enablers.title,
+        courseId: enablers.courseId,
+        trainingCatalogId: enablers.trainingCatalogId,
+      })
+      .from(enablers)
+      .where(eq(enablers.id, enablerId))
+      .limit(1);
+
+    if (enabler.length === 0 || !allowed(enabler[0].trainingCatalogId)) {
+      return { inScope: false };
+    }
+    enablerTitle = enabler[0].title;
+
+    // Get course title from enabler's course
+    if (enabler[0].courseId) {
+      const course = await db
+        .select({
+          title: courses.title,
+          trainingCatalogId: courses.trainingCatalogId,
+        })
+        .from(courses)
+        .where(eq(courses.id, enabler[0].courseId))
+        .limit(1);
+
+      if (course.length > 0 && allowed(course[0].trainingCatalogId)) {
+        courseTitle = course[0].title || undefined;
+      }
     }
   }
 
-  return { enablerTitle, courseTitle };
+  return { enablerTitle, courseTitle, inScope: true };
 }
 
 // ============================================================================
@@ -588,17 +621,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // The enabler and course of the client are only kept if they lie inside
-    // the catalog scope of the person (another occupation: ignored)
-    const verified = await verifyChatContextIds(userId, context);
-
     // Determine context type
-    const contextType = verified.enablerId
+    const contextType = context?.enablerId
       ? 'enabler'
-      : verified.courseId
+      : context?.courseId
         ? 'course'
         : 'general';
-    const contextId = verified.enablerId || verified.courseId || undefined;
+    const contextId = context?.enablerId || context?.courseId || undefined;
 
     // Get or create session
     let sessionId: string;
@@ -815,10 +844,12 @@ export async function POST(req: NextRequest) {
     // Load cross-session memory (key facts + summaries from other chats)
     const crossSessionMemory = await loadUserMemory(userId, sessionId);
 
-    // Get context titles
-    const { enablerTitle, courseTitle } = await getContextTitles(
-      verified.enablerId,
-      verified.courseId
+    // Get context titles (only for an enabler or course of the user's occupation)
+    const catalogScope = await getCatalogScopeForUserId(userId);
+    const { enablerTitle, courseTitle, inScope } = await getContextTitles(
+      context?.enablerId,
+      context?.courseId,
+      catalogScope?.allowedCatalogIds
     );
 
     // Build pipeline context (Phase 1: pass userRole for live data context)
@@ -831,11 +862,12 @@ export async function POST(req: NextRequest) {
     const pipelineContext: PipelineContext = {
       userId,
       sessionId,
-      currentEnablerId: verified.enablerId,
-      currentCourseId: verified.courseId,
+      currentEnablerId: inScope ? context?.enablerId : undefined,
+      currentCourseId: inScope ? context?.courseId : undefined,
       enablerTitle,
       courseTitle,
-      scenarioText: context?.scenarioText,
+      // scenarioText of the request is not used: it would reach the system
+      // prompt as an instruction. The database holds no scenario text yet.
       previousMessages,
       // Privileged roles (ADMIN, TEMP_ADMIN) act as TRAINER so they receive
       // full trainer-level context and live data branches in the RAG pipeline.

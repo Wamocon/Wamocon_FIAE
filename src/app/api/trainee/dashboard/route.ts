@@ -18,6 +18,7 @@ import {
   profiles,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import {
   catalogCacheKey,
   catalogCondition,
@@ -37,12 +38,11 @@ import {
 // Passing score threshold for quizzes (50%)
 const PASS_THRESHOLD = 50;
 
+// The dashboard of the session user, a userId in the query is ignored.
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get('userId');
-  if (!userId) {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-  }
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const userId = session.id;
 
   try {
     const scope = await requireCatalogScopeForUser(userId, req);

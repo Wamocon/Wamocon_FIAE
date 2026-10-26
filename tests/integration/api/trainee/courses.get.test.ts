@@ -3,7 +3,10 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
-import { mockCatalogScope } from '../../../helpers/mockNext';
+import {
+  mockCatalogScope,
+  mockTraineeSession,
+} from '../../../helpers/mockNext';
 
 function makeGet(url: string) {
   return { url } as any;
@@ -12,6 +15,7 @@ function makeGet(url: string) {
 async function importListHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockTraineeSession();
   mockCatalogScope();
   const mod = await import('@/app/api/trainee/courses/route');
   return mod.GET as (req: any) => Promise<Response>;
@@ -20,6 +24,7 @@ async function importListHandlerWithDb(mockDb: any) {
 async function importDetailHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockTraineeSession();
   mockCatalogScope();
   const mod = await import('@/app/api/trainee/courses/[courseId]/route');
   return mod.GET as unknown as (req: any, ctx: { params: Promise<{ courseId: string }> }) => Promise<Response>;

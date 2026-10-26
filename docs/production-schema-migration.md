@@ -50,9 +50,10 @@ column needs a safe default.
 ## Runbook: Ausbildungskatalog-Migrationsreihe (KfBM-Umbau)
 
 Dieser Abschnitt gilt für die Dateien `supabase/migrations/20261024000100` bis
-`20261024001500`, `20261025000000`, die Sicherheitsdatei `20261025000100` und
-die Folgedateien `20261026000100` und `20261027000100` (PR 83 und später). Die
-Migration von
+`20261024001500`, `20261025000000`, die Sicherheitsdatei `20261025000100`,
+die Folgedateien `20261026000100` und `20261027000100` und die drei Dateien
+`20261028000100` bis `20261028000300` zur Vorbereitung des KfBM-Inhaltsimports
+(PR 83 und später). Die Migration von
 `202606260001` oben ist bereits in Produktion
 angewendet und bleibt unverändert. Die Reihe ist in Produktion noch nicht
 angewendet. Geprüft ist sie auf einer lokalen Wegwerf-Datenbank (PostgreSQL 15
@@ -101,13 +102,17 @@ also nur strukturell geprüft, nicht mit den echten Zeilen.
 | 20261025000100 | Sicherheitsdatei: `revoke create on schema public from public`. Eine einzige Anweisung, ändert keine Daten. Sie liegt hinter dem Backfill und wird deshalb erst nach dessen Freigabe angewendet (Punkt 6). Rückweg: `grant create on schema public to public;` |
 | 20261026000100 | Genau eine Einschreibung je Azubi: eindeutiger Index `trainee_enrollments_trainee_unique` auf `trainee_enrollments (trainee_id)`. Die Vorprüfung bricht mit einer Meldung samt Anzahl ab, wenn ein Azubi mehr als eine Einschreibung hat, und löscht nichts. Ändert keine Daten, `create unique index` ohne `concurrently` (die Datei läuft in einer Transaktion), die Tabelle ist klein. Sie liegt hinter dem Backfill und wird deshalb ebenfalls erst nach dessen Freigabe angewendet. Rückweg: `drop index public.trainee_enrollments_trainee_unique;` |
 | 20261027000100 | HAI-Index, Beruf und Lösungsschutz (Paket H1): Spalten `training_catalog_id`, `visibility` (`all` oder `trainer`) und `organization_id` an `hai_embeddings`, Index `idx_hai_embeddings_scope`, drei Ableitungsfunktionen, ein BEFORE-Trigger auf `hai_embeddings`, der die Spalten für Zeilen der bestehenden Schreibpfade füllt, und ein AFTER-Trigger auf `content_documents`, der Chunks mitnimmt, wenn ein Dokument später Lösung oder `TRAINER_ONLY` wird oder die Organisation wechselt. Backfill in reinem SQL, ohne Modellaufruf, kein erneutes Einbetten: Der Katalog kommt je Quelle aus Enabler, Kurs, Use Case, Quiz, Dokument, Lernfeld oder Komponente, persönliche Zeilen über die Einschreibung. Zeilen ohne ableitbaren Katalog gehen an FIAE, die Zahl je `source_type` steht als `raise notice` im Lauf, die Datei bricht deshalb nicht ab. `visibility = 'trainer'` für Lösungsseiten (`TRAINER_SOLUTION`), Dokumente mit `TRAINER_ONLY` und jeden Quiz-Chunk (Fragen und Antworten liegen im selben Text, ein Folge-Chunk kann das Ende einer Antwort ohne Marker tragen). Abbruch nur in den Vorprüfungen (Tabelle, Katalogreihe, FIAE-Katalog fehlen). Ein UPDATE berührt jede Zeile, die einen Wert braucht, einmal, `create index` ohne `concurrently`. Die Sperre des `alter table` (ACCESS EXCLUSIVE auf `hai_embeddings`) gilt bis zum Ende der Datei, also auch während des Backfills: im Wartungsfenster anwenden. Die Datei liegt hinter dem Katalog und wird deshalb erst nach der Freigabe angewendet. Der App-Code von H1 setzt die Spalten voraus: App-Release erst nach dieser Datei. Rückweg: Kopfkommentar der Datei. |
+| 20261028000100 | Kurs und Komponente verbinden: `courses.training_component_id` (nullable), zusammengesetzter Fremdschlüssel `courses_component_catalog_fk` auf `training_components (id, training_catalog_id)` (`on delete restrict`), eindeutiger Index `courses_training_component_unique` (höchstens ein Kurs je Komponente). Backfill nur dort, wo Kurs und Komponente im selben Katalog denselben Code tragen und die Komponente noch frei ist. Die FIAE-Kurse haben keinen Code und bleiben `NULL`, das ist kein Fehler (die Datei meldet die Zahlen mit `raise notice`). Rückweg: Index, Constraint und Spalte entfernen (Kopfkommentar der Datei). |
+| 20261028000200 | `quizzes.code` (nullable, gleiches Format wie die anderen Codes, eindeutig je Katalog wo gesetzt) und Katalogprüfung für Quiz-Verknüpfungen: Trigger `enabler_quiz_links_catalog_check` verlangt, dass Quiz und Enabler (über den Kurs) im selben Katalog liegen, ein zweiter Trigger schützt den Katalog eines schon verknüpften Quiz. Die Vorprüfung bricht mit der Zahl der Verstöße ab und ändert nichts. Rückweg im Kopfkommentar der Datei. |
+| 20261028000300 | Eindeutig `(component_id, letter)` auf `training_use_cases` (Vorprüfung bricht mit der Zahl der Dubletten ab, löscht nichts) und `options.order_index` (nullable, ohne Standardwert, kein Umschreiben der Tabelle). Rückweg im Kopfkommentar der Datei. |
 
 Daten werden verändert in: 000300 (UPDATE enablers, use_cases, mappings),
 000500 (Kopie der Lernfelder), 000700 (UPDATE training_components), 001000
 (INSERT Organisationen), 001200 (INSERT Einschreibungen), 001300 (UPDATE
 training_components), 20261025000000 (UPDATE profiles), 20261027000100 (UPDATE
-hai_embeddings). Die Aussage "keine
-Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
+hai_embeddings), 20261028000100 (UPDATE courses, nur bei gleichem Code von Kurs und
+Komponente, für FIAE heute keine Zeile). Die Aussage "keine Produktivdaten geändert"
+gilt nur, solange die Reihe nicht angewendet ist.
 
 ## Reihenfolge
 
@@ -160,6 +165,19 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
    Quiz-Chunks haben `trainer`). Vor der Freigabe die Organisationsverteilung der
    Dokumente prüfen (Abfrage C12a): Tragen die Plattform-PDFs die Organisation der
    Plattform statt NULL, sehen Kundenorganisationen sie in der HAI nicht mehr. Ein Reindex ist nicht nötig.
+   Danach laufen `20261028000100` bis `20261028000300` (Vorbereitung des
+   KfBM-Inhaltsimports). Vorchecks (nur lesend): Abfrage C15 (Quiz-Verknüpfungen
+   über Katalogen hinweg) und C16 (doppelte Buchstaben je Komponente) müssen null
+   Zeilen liefern, sonst brechen die Dateien `20261028000200` und
+   `20261028000300` mit einer Meldung samt Anzahl ab und ändern nichts. Nachcheck:
+   Abfrage C15b. Der Backfill von `20261028000100` meldet die Zahlen im Protokoll
+   (für FIAE ist null verknüpft die erwartete Zahl: `courses.code` erlaubt kein
+   `§`, die Codes der FIAE-Komponenten beginnen damit). Der App-Release mit den
+   neuen Spalten (`courses.training_component_id`, `quizzes.code`,
+   `options.order_index`) folgt erst nach `20261028000300`, weil Abfragen über
+   `courses`, `quizzes` und `options` alle Spalten nennen. Die Dateien nehmen
+   kurz eine Sperre auf diese Tabellen (`lock_timeout` 5 Sekunden), am besten
+   außerhalb der Stoßzeiten anwenden.
 7. **Nachchecks** (Abschnitt "Katalogreihe, Nachchecks" in der Verifikations-SQL):
    Zeilenzahlen der Bestandstabellen unverändert, alle Kurse und Komponenten im
    Katalog FIAE, `lernfelder` (View) liefert so viele Zeilen wie
@@ -216,6 +234,16 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
 - `trainee_enrollments` ist eine Momentaufnahme der Profile. Maßgeblich bleiben
   bis zur Umstellung der App `profiles.start_of_training_date` und
   `profiles.ausbildung_duration_years`.
+- Quiz und Enabler müssen im selben Katalog liegen. Ab `20261028000200` weist die
+  Datenbank eine Verknüpfung (`enabler_quiz_links`) mit einem Quiz eines anderen
+  Katalogs ab (`check_violation`, die Meldung nennt beide Kataloge). Die
+  Trainer-Routen setzen den Katalog des Quiz schon aus dem Enabler, sie sind
+  nicht betroffen. Wer sonst Quizze für einen Enabler eines anderen Berufs
+  anlegt, muss `quizzes.training_catalog_id` selbst setzen (der Standard ist FIAE).
+- Ein Kurs, der mit einer Komponente verbunden ist (`courses.training_component_id`),
+  hält diese fest: Die Komponente lässt sich nicht löschen (`on delete restrict`).
+  Das Seed-Skript für die FIAE-Komponenten löscht Komponenten und scheitert dann
+  laut, sobald ein FIAE-Kurs verbunden ist.
 - Ein Azubi hat genau eine Einschreibung. Der Berufswechsel ersetzt sie (die
   Administration löscht die anderen Einschreibungen in derselben Transaktion,
   `setTraineeEnrollment`). Ab `20261026000100` sichert ein eindeutiger Index auf

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
@@ -12,20 +13,22 @@ import {
   courses,
 } from '@/db/migrations/schemas/schema';
 
+// The session user is the trainee, a traineeId in the body is ignored.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ enablerId: string }> }
 ) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const { enablerId } = await params;
     const body = await req.json();
-    const traineeId: string | undefined = body?.traineeId;
     const solutionText: string | null = body?.solutionText ?? null; // Legacy single solution
     const solutions:
       | Array<{ scenarioIndex: number; text: string }>
       | undefined = body?.solutions; // New: multiple solutions
-    if (!traineeId)
-      return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     // The content must lie inside the catalog scope of the trainee
     const catalogScope = await requireContentScopeForUser(traineeId, req, 'enabler', enablerId);

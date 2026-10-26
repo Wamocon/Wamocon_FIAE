@@ -2,7 +2,10 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { mockCatalogScope } from '../../../helpers/mockNext';
+import {
+  mockCatalogScope,
+  mockTraineeSession,
+} from '../../../helpers/mockNext';
 
 function makeGet(url: string) {
   return { url } as any;
@@ -11,6 +14,7 @@ function makeGet(url: string) {
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockTraineeSession();
   mockCatalogScope();
   const mod = await import('@/app/api/trainee/use-cases/[useCaseId]/route');
   return mod.GET as (
@@ -94,18 +98,6 @@ describe('API: GET /api/trainee/use-cases/[useCaseId]', () => {
       status: 'APPROVED',
     });
     expect(body.submission.links).toHaveLength(2);
-  });
-
-  it('400 missing traineeId', async () => {
-    const mockDb = { select: jest.fn() };
-    const GET = await importHandlerWithDb(mockDb);
-    const res = await GET(
-      makeGet('http://localhost/api/trainee/use-cases/u1'),
-      { params: Promise.resolve({ useCaseId: 'u1' }) }
-    );
-    const body = await (res as any).json();
-    expect((res as any).status).toBe(400);
-    expect(body).toEqual({ error: 'Missing traineeId' });
   });
 
   it('403 forbidden if not member', async () => {
