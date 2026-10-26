@@ -191,8 +191,11 @@ export function withStoragePrefix(
 
 /**
  * Message of the Preview lockdown: Preview shares the Supabase Auth of
- * Production, so every action that creates, deletes or changes accounts is
- * switched off there (src/lib/preview-guard.ts, AuthContext sign-up).
+ * Production, so the self-registration (POST /api/register, sign-up in the
+ * AuthContext) and every other route with auth.admin.* that does not handle
+ * the Preview flag are switched off there (src/lib/preview-guard.ts). The
+ * administrator routes that create and delete users are open in Preview and
+ * work with the flag (src/lib/preview-account.ts).
  */
 export const PREVIEW_ADMIN_BLOCKED_MESSAGE =
   'This action is disabled in the Preview environment: it would create, delete or change accounts that Preview shares with Production.';

@@ -12,7 +12,12 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { TraineeEnrollmentDialog } from '@/components/admin/TraineeEnrollmentDialog';
 import { NewUserOccupationSelect } from '@/components/admin/NewUserOccupationSelect';
-import { adminUserErrorMessage } from '@/components/admin/adminUserErrors';
+import {
+  adminUserErrorMessage,
+  deleteSuccessMessageKey,
+} from '@/components/admin/adminUserErrors';
+import { PreviewAccountNotice } from '@/components/admin/PreviewAccountNotice';
+import { IS_PREVIEW_SCHEMA } from '@/lib/db-schema';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import toast from 'react-hot-toast';
 import {
@@ -61,6 +66,9 @@ const ROLE_CONFIG: Record<string, { labelKey: string; icon: typeof Shield; color
   TRAINEE: { labelKey: 'roles.trainee', icon: GraduationCap, color: 'text-green-400 bg-green-500/10' },
 };
 
+// Preview sends no credentials mail unless asked for, Production does
+const DEFAULT_SEND_EMAIL = !IS_PREVIEW_SCHEMA;
+
 export default function AdminUsersPage() {
   const { profile, loading, isPlatformOwner } = useAuth() as any;
   const { t } = useLanguage();
@@ -85,7 +93,7 @@ export default function AdminUsersPage() {
     role: 'TRAINEE',
     organizationId: '',
     catalogId: '',
-    sendEmail: true,
+    sendEmail: DEFAULT_SEND_EMAIL,
   });
   // The occupation of a trainee, set by the field that only appears for an
   // organization with more than one usable occupation
@@ -211,7 +219,8 @@ export default function AdminUsersPage() {
         const data = await res.json();
         throw new Error(data.error || t('admin.users.deleteFailed'));
       }
-      toast.success(t('admin.users.userDeleted'));
+      const deleted = await res.json().catch(() => null);
+      toast.success(t(deleteSuccessMessageKey(deleted)));
       await loadUsers();
     } catch (e: any) {
       toast.error(e?.message || t('admin.users.deleteFailed'));
@@ -287,7 +296,7 @@ export default function AdminUsersPage() {
             onClick={() => {
               setShowCreateForm(true);
               setCreatedCredentials(null);
-              setNewUser({ email: '', fullName: '', role: 'TRAINEE', organizationId: '', catalogId: '', sendEmail: true });
+              setNewUser({ email: '', fullName: '', role: 'TRAINEE', organizationId: '', catalogId: '', sendEmail: DEFAULT_SEND_EMAIL });
             }}
             className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-xl px-5 py-3 font-medium transition-colors"
           >
@@ -296,6 +305,8 @@ export default function AdminUsersPage() {
           </button>
         </div>
       </div>
+
+      <PreviewAccountNotice />
 
       {/* Create User Form */}
       {showCreateForm && (
@@ -358,7 +369,7 @@ export default function AdminUsersPage() {
                 <button
                   onClick={() => {
                     setCreatedCredentials(null);
-                    setNewUser({ email: '', fullName: '', role: 'TRAINEE', organizationId: '', catalogId: '', sendEmail: true });
+                    setNewUser({ email: '', fullName: '', role: 'TRAINEE', organizationId: '', catalogId: '', sendEmail: DEFAULT_SEND_EMAIL });
                   }}
                   className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-5 py-2.5 font-medium transition-colors"
                 >
@@ -440,6 +451,11 @@ export default function AdminUsersPage() {
                     {t('admin.users.sendCredentials')}
                   </span>
                 </label>
+                {IS_PREVIEW_SCHEMA && (
+                  <p className="text-muted mt-1 text-xs">
+                    {t('admin.users.previewMailHint')}
+                  </p>
+                )}
               </div>
               <div className="mt-6 flex justify-end gap-3">
                 <button

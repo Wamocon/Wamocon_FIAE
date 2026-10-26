@@ -11,8 +11,9 @@
 --             - again after every "Preview Reset" (a reset leaves public_preview
 --               empty: no organization, no profile, no role).
 -- WHY:      public_preview has no rows after a reset. A new profile starts as
---           TRAINEE without an organization and accounts cannot be created in
---           the Preview (blockInPreview). Without this step nobody sees KfBM.
+--           TRAINEE without an organization, and accounts are created in the
+--           Preview only by an administrator in the user administration (they
+--           carry app_metadata.preview_only). Without this step nobody sees KfBM.
 -- EFFECT:   inside ONE transaction, in the schema public_preview only
 --             1. creates the platform organization (is_platform_owner = true),
 --             2. creates the "Demo-Ausbildungsbetrieb" (plan PRO, generous
