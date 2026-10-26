@@ -5,12 +5,27 @@ import {
   weeklySoftskillRatings,
   mesSoftskillCriteria,
   gradeEditHistory,
-  activityReports,
 } from '@/db/migrations/schemas/schema';
 import { eq, and, asc } from 'drizzle-orm';
+import {
+  isErrorResponse,
+  requireTrainer,
+  requireUser,
+} from '@/lib/auth/session';
+import {
+  loadReportForSession,
+  ratingAccessCondition,
+  traineeAccessCondition,
+} from '@/lib/auth/activity-report-access';
 
 // GET: Get evaluation for a specific activity report
+// A trainee reads the evaluation of their own report, trainer level the one of
+// a report of a trainee inside its organization scope. Any other report is a
+// 404.
 export async function GET(request: NextRequest) {
+  const session = await requireUser(request);
+  if (isErrorResponse(session)) return session;
+
   try {
     const url = new URL(request.url);
     const activityReportId = url.searchParams.get('activityReportId');
@@ -21,6 +36,13 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const report = await loadReportForSession(
+      session,
+      request,
+      activityReportId
+    );
+    if (isErrorResponse(report)) return report;
 
     // Get the weekly evaluation linked to this activity report
     const evaluations = await db
@@ -73,16 +95,19 @@ export async function GET(request: NextRequest) {
 
 // POST: Create or update weekly evaluation with softskill ratings
 // Supports: trainer ratings, release ratings, and grade editing with audit trail
+// Trainer level only, for a report of a trainee inside its organization scope.
+// Trainee, organization and week come from the report, the trainer is the
+// session user: a traineeId, trainerId, organizationId, weekNumber or year in
+// the body is ignored.
 export async function POST(request: NextRequest) {
+  const session = await requireTrainer(request);
+  if (isErrorResponse(session)) return session;
+  const trainerId = session.id;
+
   try {
     const body = await request.json();
     const {
       activityReportId,
-      traineeId,
-      trainerId,
-      weekNumber,
-      year,
-      ausbildungsjahr,
       trainerRating,
       trainerComment,
       releaseRating,
@@ -93,27 +118,34 @@ export async function POST(request: NextRequest) {
       editReason, // Optional reason for editing (audit trail)
     } = body;
 
-    if (
-      !activityReportId ||
-      !traineeId ||
-      !trainerId ||
-      !weekNumber ||
-      !year
-    ) {
+    if (!activityReportId) {
       return NextResponse.json(
-        {
-          error:
-            'Missing required fields: activityReportId, traineeId, trainerId, weekNumber, year',
-        },
+        { error: 'Missing required field: activityReportId' },
         { status: 400 }
       );
     }
+
+    const report = await loadReportForSession(
+      session,
+      request,
+      String(activityReportId)
+    );
+    if (isErrorResponse(report)) return report;
 
     // Check if evaluation already exists for this activity report
     const existingEvaluations = await db
       .select()
       .from(weeklyEvaluations)
-      .where(eq(weeklyEvaluations.activityReportId, activityReportId as any));
+      .where(eq(weeklyEvaluations.activityReportId, report.id as any));
+
+    // The trainee and the organization of the caller are part of every update
+    const evaluationWhere = (evaluationId: string) =>
+      and(
+        eq(weeklyEvaluations.id, evaluationId as any),
+        eq(weeklyEvaluations.activityReportId, report.id as any),
+        eq(weeklyEvaluations.traineeId, report.traineeId as any),
+        traineeAccessCondition(session, weeklyEvaluations.traineeId)
+      );
 
     let evaluation;
     const now = new Date();
@@ -154,7 +186,7 @@ export async function POST(request: NextRequest) {
             releasedBy: trainerId,
             updatedAt: now,
           })
-          .where(eq(weeklyEvaluations.id, existing.id))
+          .where(evaluationWhere(existing.id))
           .returning();
         evaluation = updated[0];
       } else if (softskillsOnly) {
@@ -187,46 +219,20 @@ export async function POST(request: NextRequest) {
             status: 'APPROVED',
             updatedAt: now,
           })
-          .where(eq(weeklyEvaluations.id, existing.id))
+          .where(evaluationWhere(existing.id))
           .returning();
         evaluation = updated[0];
       }
     } else {
-      let organizationId = body.organizationId as string | undefined;
-      let calculatedAusbildungsjahr = Number(ausbildungsjahr) || 1;
-
-      const reportRows = await db
-        .select({
-          organizationId: activityReports.organizationId,
-          ausbildungsjahr: activityReports.ausbildungsjahr,
-        })
-        .from(activityReports)
-        .where(eq(activityReports.id, activityReportId as any))
-        .limit(1);
-
-      organizationId = organizationId || reportRows[0]?.organizationId || undefined;
-      calculatedAusbildungsjahr =
-        reportRows[0]?.ausbildungsjahr ?? calculatedAusbildungsjahr;
-
-      if (!organizationId) {
-        return NextResponse.json(
-          {
-            error:
-              'organizationId could not be resolved for this activity report',
-          },
-          { status: 400 }
-        );
-      }
-
       // Create new evaluation
       const insertValues: any = {
-        traineeId,
+        traineeId: report.traineeId,
         trainerId,
-        organizationId,
-        activityReportId,
-        weekNumber,
-        year,
-        ausbildungsjahr: calculatedAusbildungsjahr,
+        organizationId: report.organizationId,
+        activityReportId: report.id,
+        weekNumber: report.weekNumber,
+        year: report.year,
+        ausbildungsjahr: report.ausbildungsjahr,
         trainerRating: trainerRatingStr as any,
         trainerComment: trainerComment || null,
         trainerApprovedAt: now,
@@ -246,6 +252,14 @@ export async function POST(request: NextRequest) {
         .values(insertValues)
         .returning();
       evaluation = inserted[0];
+    }
+
+    // The guarded update matched nothing: the evaluation is not the caller's
+    if (!evaluation) {
+      return NextResponse.json(
+        { error: 'Evaluation not found' },
+        { status: 404 }
+      );
     }
 
     // Update or create softskill ratings
@@ -302,7 +316,13 @@ export async function POST(request: NextRequest) {
                 releaseComment: skillReleaseComment || null,
                 updatedAt: now,
               })
-              .where(eq(weeklySoftskillRatings.id, existingRating.id));
+              .where(
+                and(
+                  eq(weeklySoftskillRatings.id, existingRating.id),
+                  eq(weeklySoftskillRatings.weeklyEvaluationId, evaluation.id),
+                  ratingAccessCondition(session)
+                )
+              );
           } else if (skillRating) {
             // Audit trail for trainer rating changes
             if (
@@ -328,7 +348,13 @@ export async function POST(request: NextRequest) {
                 trainerComment: skillComment || null,
                 updatedAt: now,
               })
-              .where(eq(weeklySoftskillRatings.id, existingRating.id));
+              .where(
+                and(
+                  eq(weeklySoftskillRatings.id, existingRating.id),
+                  eq(weeklySoftskillRatings.weeklyEvaluationId, evaluation.id),
+                  ratingAccessCondition(session)
+                )
+              );
           }
         } else if (skillRating) {
           // Insert new rating
