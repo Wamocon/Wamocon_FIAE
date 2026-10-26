@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { PageLoader } from '@/components/ui/PageLoader';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
@@ -35,7 +36,8 @@ export default function EditEnablerQuizPage() {
   const params = useParams<{ enablerId: string; quizId: string }>();
   const enablerId = params?.enablerId as string;
   const quizId = params?.quizId as string;
-  const { profile, isPlatformOwner } = useAuth();
+  const { profile } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -108,7 +110,7 @@ export default function EditEnablerQuizPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">{t('trainer.enablerQuiz.title')}</h1>
         <div className="flex items-center gap-2">
-          {editing && isPlatformOwner && (
+          {editing && canEditCurriculum && (
             <button
               className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600"
               onClick={async () => {
@@ -129,7 +131,7 @@ export default function EditEnablerQuizPage() {
               {t('common.delete')}
             </button>
           )}
-          {isPlatformOwner && (
+          {canEditCurriculum && (
             <button
               className="border-accent/30 rounded-md border px-3 py-1.5 text-sm"
               onClick={() => setEditing(!editing)}

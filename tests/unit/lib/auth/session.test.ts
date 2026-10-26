@@ -220,12 +220,53 @@ describe('auth/session', () => {
       );
     });
 
+    it.each([
+      [{ role: 'TRAINEE' }, 403],
+      [{ role: 'TRAINER', isPlatformOwner: true }, 403],
+      [{ role: 'TRAINER', isPlatformOwner: false }, 403],
+      [{ role: 'TEMP_ADMIN', isPlatformOwner: true }, 403],
+      [{ role: 'ADMIN', isPlatformOwner: false }, 403],
+      [{ role: 'ADMIN', isPlatformOwner: true }, 200],
+      [{ role: 'SUPER_ADMIN', isPlatformOwner: false }, 200],
+    ])('requireCurriculumEditor for %j -> %s', async (profile, status) => {
+      const { requireCurriculumEditor, CURRICULUM_WRITE_FORBIDDEN } =
+        await load({ profile });
+      const res = await requireCurriculumEditor(authed());
+      if (status === 200) {
+        expect(res).toMatchObject({ id: 'session-user', isSuperAdmin: true });
+      } else {
+        expect((res as Response).status).toBe(403);
+        expect(await (res as Response).json()).toEqual({
+          error: CURRICULUM_WRITE_FORBIDDEN,
+        });
+      }
+    });
+
+    it('requireCurriculumEditor ignores role hints of the request', async () => {
+      const { requireCurriculumEditor } = await load({
+        profile: { role: 'TRAINER', isPlatformOwner: true },
+      });
+      const request = makeRequest(
+        'PATCH',
+        'http://localhost/api/x?role=ADMIN',
+        {
+          token: 'good',
+          headers: { 'x-user-role': 'SUPER_ADMIN' },
+          body: { role: 'SUPER_ADMIN', isPlatformOwner: true },
+        }
+      );
+      expect(
+        ((await requireCurriculumEditor(request)) as Response).status
+      ).toBe(403);
+    });
+
     it('all of them answer 401 without a token', async () => {
       const m = await load({});
       for (const fn of [
         m.requireTrainer,
         m.requireAdmin,
         m.requireSuperAdmin,
+        m.requireCurriculumEditor,
       ]) {
         expect(((await fn(anonymous())) as Response).status).toBe(401);
       }

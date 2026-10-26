@@ -1,4 +1,8 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -9,7 +13,6 @@ import {
   questions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
-import { verifyPlatformOwner } from '@/lib/auth-helpers';
 import { requireContentScope, ensureContentInScope } from '@/lib/catalog/scope';
 
 // GET: quiz detail for editing/view
@@ -78,7 +81,7 @@ export async function PATCH(
   { params }: { params: Promise<{ enablerId: string; quizId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { enablerId, quizId } = await params;
@@ -95,13 +98,6 @@ export async function PATCH(
       .where(eq(enablers.id, enablerId));
     if (!enabler) {
       return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
-    }
-
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
     }
 
     await db.transaction(async tx => {
@@ -183,7 +179,7 @@ export async function DELETE(
   { params }: { params: Promise<{ enablerId: string; quizId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { enablerId, quizId } = await params;
@@ -193,13 +189,6 @@ export async function DELETE(
     if (denied_quiz) return denied_quiz;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
-
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
 
     await db.transaction(async tx => {
       await tx

@@ -1,8 +1,12 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 import { requireContentScope } from '@/lib/catalog/scope';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
@@ -91,7 +95,7 @@ export async function PATCH(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
@@ -111,15 +115,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Shared curriculum model: any valid trainer can edit any course
+    // Curriculum writes are limited to the platform wide admin
     console.log('[PATCH /course] Checking trainer:', trainerId);
-
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
 
     const organizationId = await getUserOrgId(trainerId);
 
@@ -229,7 +226,7 @@ export async function DELETE(
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { courseId } = await params;
@@ -249,14 +246,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Shared curriculum model: any valid trainer can delete any course
-
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
+    // Curriculum writes are limited to the platform wide admin
 
     const organizationId = await getUserOrgId(trainerId);
 

@@ -15,6 +15,10 @@
 // trainee/lernfelder, trainee/lernfelder/[id], trainee/evaluations/softskills
 // and trainee/school/lernfelder. 'haiIndex' handlers manage the shared HAI
 // index (see src/lib/hai/indexAccess.ts).
+// 'curriculum' is a write handler of the curriculum content (courses, enablers,
+// use cases, quizzes, learning fields, modules, lessons): only the platform
+// wide admin (isSuperAdmin) passes, a trainer or admin of any organization,
+// including the platform organization, is answered with 403.
 // 'trainee' is a signed-in trainee: a trainer-level caller is answered with 403
 // (creating and editing an activity report and the self rating of the skills
 // are actions of the trainee, bound to the owner of the report).
@@ -24,6 +28,7 @@ export type GuardKind =
   | 'trainer'
   | 'admin'
   | 'superAdmin'
+  | 'curriculum'
   | 'haiIndex';
 
 export type GuardedRoute = {
@@ -143,19 +148,19 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/content/lessons/[lessonId]',
     method: 'PATCH',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['lessonId'],
   },
   {
     route: 'trainer/content/lessons/[lessonId]',
     method: 'DELETE',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['lessonId'],
   },
   {
     route: 'trainer/content/modules/[moduleId]/lessons',
     method: 'POST',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['moduleId'],
   },
   {
@@ -167,19 +172,19 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/content/modules/[moduleId]',
     method: 'PATCH',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['moduleId'],
   },
   {
     route: 'trainer/content/modules/[moduleId]',
     method: 'DELETE',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['moduleId'],
   },
   {
     route: 'trainer/content/modules',
     method: 'POST',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: [],
   },
   { route: 'trainer/content', method: 'GET', guard: 'trainer', params: [] },
@@ -192,7 +197,7 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/courses/[courseId]/enablers',
     method: 'POST',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['courseId'],
   },
   {
@@ -222,13 +227,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/courses/[courseId]',
     method: 'PATCH',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['courseId'],
   },
   {
     route: 'trainer/courses/[courseId]',
     method: 'DELETE',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['courseId'],
   },
   {
@@ -240,11 +245,11 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/courses/[courseId]/use-cases',
     method: 'POST',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['courseId'],
   },
   { route: 'trainer/courses', method: 'GET', guard: 'trainer', params: [] },
-  { route: 'trainer/courses', method: 'POST', guard: 'trainer', params: [] },
+  { route: 'trainer/courses', method: 'POST', guard: 'curriculum', params: [] },
   { route: 'trainer/dashboard', method: 'GET', guard: 'trainer', params: [] },
   {
     route: 'trainer/enablers/[enablerId]/documents',
@@ -273,7 +278,7 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/enablers/[enablerId]/quiz',
     method: 'POST',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['enablerId'],
   },
   {
@@ -285,13 +290,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/enablers/[enablerId]/quizzes/[quizId]',
     method: 'PATCH',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['enablerId', 'quizId'],
   },
   {
     route: 'trainer/enablers/[enablerId]/quizzes/[quizId]',
     method: 'DELETE',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['enablerId', 'quizId'],
   },
   {
@@ -303,7 +308,7 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/enablers/[enablerId]/quizzes',
     method: 'POST',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['enablerId'],
   },
   {
@@ -315,13 +320,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/enablers/[enablerId]',
     method: 'PATCH',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['enablerId'],
   },
   {
     route: 'trainer/enablers/[enablerId]',
     method: 'DELETE',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['enablerId'],
   },
   {
@@ -352,17 +357,17 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/lernfelder/[id]',
     method: 'PATCH',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['id'],
   },
   {
     route: 'trainer/lernfelder/[id]',
     method: 'DELETE',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['id'],
   },
   { route: 'trainer/lernfelder', method: 'GET', guard: 'trainer', params: [] },
-  { route: 'trainer/lernfelder', method: 'POST', guard: 'trainer', params: [] },
+  { route: 'trainer/lernfelder', method: 'POST', guard: 'curriculum', params: [] },
   { route: 'trainer/profile', method: 'GET', guard: 'trainer', params: [] },
   { route: 'trainer/profiles', method: 'GET', guard: 'trainer', params: [] },
   {
@@ -404,17 +409,17 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/quizzes/[quizId]',
     method: 'DELETE',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['quizId'],
   },
   {
     route: 'trainer/quizzes/[quizId]',
     method: 'PATCH',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['quizId'],
   },
   { route: 'trainer/quizzes', method: 'GET', guard: 'trainer', params: [] },
-  { route: 'trainer/quizzes', method: 'POST', guard: 'trainer', params: [] },
+  { route: 'trainer/quizzes', method: 'POST', guard: 'curriculum', params: [] },
   {
     route: 'trainer/reviews/enablers/[submissionId]',
     method: 'PATCH',
@@ -517,13 +522,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   {
     route: 'trainer/use-cases/[useCaseId]',
     method: 'PATCH',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['useCaseId'],
   },
   {
     route: 'trainer/use-cases/[useCaseId]',
     method: 'DELETE',
-    guard: 'trainer',
+    guard: 'curriculum',
     params: ['useCaseId'],
   },
   {

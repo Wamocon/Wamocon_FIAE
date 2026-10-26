@@ -1,9 +1,12 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lessons, modules, subLessons } from '@/db/migrations/schemas/schema';
 import { eq, inArray } from 'drizzle-orm';
-import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
@@ -30,17 +33,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ mod
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { moduleId } = await params;
     const trainerId = session.id;
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
     const body = await req.json();
     const updates: any = {};
     if (typeof body?.title === 'string') updates.title = body.title;
@@ -109,17 +106,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ mo
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { moduleId } = await params;
     const trainerId = session.id;
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
     // Delete subLessons -> lessons -> module
     const lessonRows = await db.select({ id: lessons.id }).from(lessons).where(eq(lessons.module_id, moduleId));
     const lessonIds = lessonRows.map(r => r.id);

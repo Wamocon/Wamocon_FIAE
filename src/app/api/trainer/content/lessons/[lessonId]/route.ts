@@ -1,23 +1,16 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import { requireCurriculumEditor, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lessons, subLessons } from '@/db/migrations/schemas/schema';
 import { eq } from 'drizzle-orm';
-import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ lessonId: string }> }) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { lessonId } = await params;
     const trainerId = session.id;
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
     const body = await req.json();
     const updates: any = {};
     if (typeof body?.title === 'string') updates.title = body.title;
@@ -36,17 +29,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ le
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ lessonId: string }> }) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { lessonId } = await params;
     const trainerId = session.id;
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
     await db.delete(subLessons).where(eq(subLessons.lesson_id, lessonId));
     await db.delete(lessons).where(eq(lessons.id, lessonId));
     return NextResponse.json({ ok: true });

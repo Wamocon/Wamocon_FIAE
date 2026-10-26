@@ -4,6 +4,7 @@ import { authFetch } from '@/lib/authFetch';
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { PageLoader } from '@/components/ui/PageLoader';
 
 type BuilderQuestion = {
@@ -16,13 +17,14 @@ export default function EnablerQuizBuilderPage() {
   const router = useRouter();
   const params = useParams<{ enablerId: string }>();
   const enablerId = params?.enablerId as string;
-  const { profile, isPlatformOwner, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
 
   useEffect(() => {
-    if (!authLoading && !isPlatformOwner) {
+    if (!authLoading && !canEditCurriculum) {
       router.replace('/trainer/content-management');
     }
-  }, [authLoading, isPlatformOwner, router]);
+  }, [authLoading, canEditCurriculum, router]);
 
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
