@@ -31,14 +31,14 @@ describe('useRequestCatalog', () => {
 
   it('is not ready before the own occupations are known', async () => {
     authFetchMock.mockReturnValue(new Promise(() => undefined));
-    const { result } = renderHook(() => useRequestCatalog(), {
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
       wrapper: wrapper(),
     });
     expect(result.current.ready).toBe(false);
   });
 
-  it('does not ask while it is disabled (nobody signed in yet)', async () => {
-    const { result } = renderHook(() => useRequestCatalog(false), {
+  it('does not ask while nobody is signed in yet (no user id)', async () => {
+    const { result } = renderHook(() => useRequestCatalog(null), {
       wrapper: wrapper(),
     });
     expect(result.current.ready).toBe(false);
@@ -47,7 +47,7 @@ describe('useRequestCatalog', () => {
 
   it('asks /api/me/catalogs without a catalog parameter', async () => {
     answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
-    const { result } = renderHook(() => useRequestCatalog(), {
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.ready).toBe(true));
@@ -57,7 +57,7 @@ describe('useRequestCatalog', () => {
 
   it('FIAE: urls stay exactly as they are', async () => {
     answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
-    const { result } = renderHook(() => useRequestCatalog(), {
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.ready).toBe(true));
@@ -69,7 +69,7 @@ describe('useRequestCatalog', () => {
 
   it('KfBM: urls get ?catalog=KFBM', async () => {
     answer({ catalogs: [{ code: 'KFBM', title: 'K' }], activeCode: 'KFBM' });
-    const { result } = renderHook(() => useRequestCatalog(), {
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.ready).toBe(true));
@@ -81,7 +81,7 @@ describe('useRequestCatalog', () => {
 
   it('falls back to the plain urls when there is no active occupation', async () => {
     answer({ catalogs: [], activeCode: null });
-    const { result } = renderHook(() => useRequestCatalog(), {
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.ready).toBe(true));
@@ -91,7 +91,7 @@ describe('useRequestCatalog', () => {
 
   it('is ready with the plain urls when the lookup fails', async () => {
     answer({ error: 'Unauthorized' }, false, 401);
-    const { result } = renderHook(() => useRequestCatalog(), {
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.ready).toBe(true));
@@ -99,9 +99,36 @@ describe('useRequestCatalog', () => {
     expect(result.current.withCatalog('/api/x')).toBe('/api/x');
   });
 
+  it('asks again for another user in the same tab (no cache across users)', async () => {
+    // Same QueryClient on purpose: the cache survives a sign-out in the browser
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const sameClient = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
+    const { result, rerender } = renderHook(
+      ({ userId }: { userId: string | null }) => useRequestCatalog(userId),
+      { wrapper: sameClient, initialProps: { userId: 'user-a' } }
+    );
+    await waitFor(() => expect(result.current.catalog).toBe('FIAE'));
+
+    // User A signs out, user B (KfBM) signs in within the stale time of five minutes
+    rerender({ userId: null });
+    answer({ catalogs: [{ code: 'KFBM', title: 'K' }], activeCode: 'KFBM' });
+    rerender({ userId: 'user-b' });
+
+    await waitFor(() => expect(result.current.catalog).toBe('KFBM'));
+    expect(authFetchMock).toHaveBeenCalledTimes(2);
+    expect(result.current.withCatalog('/api/training-components')).toBe(
+      '/api/training-components?catalog=KFBM'
+    );
+  });
+
   it('keeps the same function while the occupation does not change', async () => {
     answer({ catalogs: [{ code: 'KFBM', title: 'K' }], activeCode: 'KFBM' });
-    const { result, rerender } = renderHook(() => useRequestCatalog(), {
+    const { result, rerender } = renderHook(() => useRequestCatalog('u1'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.ready).toBe(true));

@@ -121,7 +121,7 @@ export default function TraineeActivityReportsPage() {
     : null;
   // The lists belong to the occupation of the user (?catalog= only for an
   // occupation other than FIAE, so FIAE requests stay unchanged)
-  const { ready: catalogReady, withCatalog } = useRequestCatalog(!!profile?.id);
+  const { ready: catalogReady, withCatalog } = useRequestCatalog(profile?.id);
   const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>(
     catalogReady ? withCatalog('/api/training-components') : null
   );

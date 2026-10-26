@@ -113,7 +113,7 @@ export default function TrainerActivityReportsPage() {
   const router = useRouter();
   // The lists belong to the occupation of the user (?catalog= only for an
   // occupation other than FIAE, so FIAE requests stay unchanged)
-  const { ready: catalogReady, withCatalog } = useRequestCatalog(!!profile?.id);
+  const { ready: catalogReady, withCatalog } = useRequestCatalog(profile?.id);
   // loadData keeps its identity, it always reads the current occupation here
   const withCatalogRef = useRef(withCatalog);
   withCatalogRef.current = withCatalog;

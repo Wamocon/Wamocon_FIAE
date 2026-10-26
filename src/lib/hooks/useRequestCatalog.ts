@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { useQuery } from '@tanstack/react-query';
+import { authFetch } from '@/lib/authFetch';
 import { withCatalogParam } from '@/lib/catalog/request-catalog';
 
 type MeCatalogs = { activeCode?: string | null };
@@ -16,10 +17,25 @@ type MeCatalogs = { activeCode?: string | null };
  * the urls stay plain, as before the occupations). Wait for it before the first
  * request, otherwise a KfBM user would briefly get FIAE lists.
  *
- * @param enabled false until the user is signed in
+ * The answer belongs to ONE user, so the id of the user is part of the query
+ * key. A key made of the url alone would hand the answer of the previous user
+ * to the next one who signs in within the same tab (the cache survives a
+ * sign-out), and a KfBM trainee would get FIAE lists.
+ *
+ * @param userId id of the signed-in user, nothing (null or undefined) until then
  */
-export function useRequestCatalog(enabled = true) {
-  const query = useApiQuery<MeCatalogs>(enabled ? '/api/me/catalogs' : null, {
+export function useRequestCatalog(userId: string | null | undefined) {
+  const query = useQuery<MeCatalogs, Error>({
+    queryKey: ['me-catalogs', userId ?? null],
+    queryFn: async () => {
+      const res = await authFetch('/api/me/catalogs', { cache: 'no-store' });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`API ${res.status}: ${text}`);
+      }
+      return res.json();
+    },
+    enabled: !!userId,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
