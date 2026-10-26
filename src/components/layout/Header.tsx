@@ -7,6 +7,8 @@ import { Menu, ChevronLeft, Crown, Sparkles } from 'lucide-react';
 import NotificationsBell from '@/components/ui/NotificationsBell';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
+import { CatalogSwitcher } from '@/components/catalog/CatalogSwitcher';
+import { CatalogBadge } from '@/components/catalog/CatalogBadge';
 
 interface HeaderProps {
   onGoBack: () => void;
@@ -39,6 +41,7 @@ export function Header({
   }
 
   return (
+    <>
     <header className="bg-card/80 border-border/60 relative z-50 flex h-16 items-center justify-between border-b px-6 shadow-lg backdrop-blur-md">
       {/* Left side - Breadcrumbs and Sidebar Toggle */}
       <div className="flex items-center gap-4">
@@ -82,6 +85,8 @@ export function Header({
             {subscriptionPlan === 'PRO' ? 'Pro' : 'Light'}
           </div>
         )}
+        <CatalogSwitcher />
+        <CatalogBadge />
         <LanguageToggle variant="icon" />
         <ThemeToggle variant="icon" />
         <div data-tour="header-notifications">
@@ -89,5 +94,9 @@ export function Header({
         </div>
       </div>
     </header>
+    {/* On a phone the header is full: the occupation gets its own row */}
+    <CatalogSwitcher placement="strip" />
+    <CatalogBadge placement="strip" />
+    </>
   );
 }

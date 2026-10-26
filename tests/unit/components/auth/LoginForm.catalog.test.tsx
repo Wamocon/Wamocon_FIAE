@@ -47,6 +47,7 @@ describe('LoginForm with an occupation context', () => {
   const originalFetch = global.fetch;
   beforeEach(() => {
     jest.clearAllMocks();
+    window.localStorage.clear();
     (authFetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
   });
   afterEach(() => {
@@ -68,6 +69,8 @@ describe('LoginForm with an occupation context', () => {
     expect(global.fetch).not.toHaveBeenCalled();
     expect(authFetch).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+    // no occupation is stored in the browser either
+    expect(window.localStorage.getItem('lfa.preferredCatalog')).toBeNull();
   });
 
   it('names the occupation from the public list above the form', async () => {
@@ -177,5 +180,50 @@ describe('LoginForm with an occupation context', () => {
     submit();
     expect(await screen.findByText('Falsches Passwort')).toBeInTheDocument();
     expect(authFetch).not.toHaveBeenCalled();
+  });
+  it('remembers the occupation of the link as the choice to work in', async () => {
+    global.fetch = jest.fn(() => list([FIAE, KFBM])) as any;
+    const signIn = signInAs();
+    renderWithProviders(<LoginForm catalogCode="KFBM" />);
+    await screen.findByText(/Anmeldung für den Beruf/);
+    expect(window.localStorage.getItem('lfa.preferredCatalog')).toBeNull();
+
+    submit();
+    await waitFor(() => expect(signIn).toHaveBeenCalled());
+    expect(window.localStorage.getItem('lfa.preferredCatalog')).toBe('KFBM');
+  });
+
+  it('does not remember an occupation that is not in the public list', async () => {
+    global.fetch = jest.fn(() => list([FIAE])) as any;
+    const signIn = signInAs();
+    renderWithProviders(<LoginForm catalogCode="KFBM" />);
+    await screen.findByText(/nicht verfügbar/);
+
+    submit();
+    await waitFor(() => expect(signIn).toHaveBeenCalled());
+    expect(window.localStorage.getItem('lfa.preferredCatalog')).toBeNull();
+  });
+
+  it('still signs in when the browser storage is blocked', async () => {
+    global.fetch = jest.fn(() => list([FIAE, KFBM])) as any;
+    const signIn = signInAs();
+    const setItem = Storage.prototype.setItem;
+    const spy = jest
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (key === 'lfa.preferredCatalog') throw new Error('blocked');
+        setItem.call(this, key, value);
+      });
+    try {
+      renderWithProviders(<LoginForm catalogCode="KFBM" />);
+      await screen.findByText(/Anmeldung für den Beruf/);
+      submit();
+      await waitFor(() => expect(signIn).toHaveBeenCalledTimes(1));
+      expect(
+        screen.queryByText('Anmeldung fehlgeschlagen')
+      ).not.toBeInTheDocument();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

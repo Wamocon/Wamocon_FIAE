@@ -6,6 +6,16 @@ import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 
 jest.mock('@/lib/authFetch');
 
+// The occupation the user chose in the switcher. Without a provider the real
+// context is neutral (idle), which most tests below rely on.
+const mockCatalog: { status: string; activeCode: string | null } = {
+  status: 'idle',
+  activeCode: null,
+};
+jest.mock('@/contexts/CatalogContext', () => ({
+  useCatalog: () => mockCatalog,
+}));
+
 const authFetchMock = authFetch as jest.MockedFunction<typeof authFetch>;
 
 function answer(body: unknown, ok = true, status = 200) {
@@ -27,7 +37,11 @@ function wrapper() {
 }
 
 describe('useRequestCatalog', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCatalog.status = 'idle';
+    mockCatalog.activeCode = null;
+  });
 
   it('is not ready before the own occupations are known', async () => {
     authFetchMock.mockReturnValue(new Promise(() => undefined));
@@ -124,6 +138,52 @@ describe('useRequestCatalog', () => {
     expect(result.current.withCatalog('/api/training-components')).toBe(
       '/api/training-components?catalog=KFBM'
     );
+  });
+
+  it('uses the occupation chosen in the switcher, not the server default', async () => {
+    // A trainer with FIAE and KfBM chose KfBM. GET /api/me/catalogs is asked
+    // without the header, so the server names its default (FIAE).
+    mockCatalog.status = 'ready';
+    mockCatalog.activeCode = 'KFBM';
+    answer({
+      catalogs: [
+        { code: 'FIAE', title: 'F' },
+        { code: 'KFBM', title: 'K' },
+      ],
+      activeCode: 'FIAE',
+    });
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.catalog).toBe('KFBM');
+    expect(result.current.withCatalog('/api/training-components')).toBe(
+      '/api/training-components?catalog=KFBM'
+    );
+  });
+
+  it('is not ready while the occupations are still being loaded', async () => {
+    // The lookup of this hook may answer before the occupation context knows
+    // the choice, the first request must not go out with the default.
+    mockCatalog.status = 'loading';
+    answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(result.current.ready).toBe(false);
+  });
+
+  it('falls back to the answer of the server when the context failed', async () => {
+    mockCatalog.status = 'error';
+    mockCatalog.activeCode = null;
+    answer({ catalogs: [{ code: 'KFBM', title: 'K' }], activeCode: 'KFBM' });
+    const { result } = renderHook(() => useRequestCatalog('u1'), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.catalog).toBe('KFBM');
   });
 
   it('keeps the same function while the occupation does not change', async () => {
