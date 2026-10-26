@@ -123,7 +123,8 @@ export function getTrainingPhase(
 /**
  * Phase of a training component (1, 2, or 3 = integrative, whole training).
  * The phase column decides if it is set (1 or 2). An integrative component
- * has no phase and is phase 3. Everything else keeps the old rule and takes the
+ * has no phase and is phase 3. An elective one without a phase column has no
+ * phase (null). Everything else keeps the old rule and takes the
  * phase from the order index of the 26 ARP components (1 to 12, 13 to 22,
  * 23 to 26), so rows without a filled column behave as before. No phase
  * (null) means the component is not tied to a phase.
@@ -135,6 +136,9 @@ export function getComponentPhase(component: {
 }): TrainingComponentPhase | null {
   if (component.phase === 1 || component.phase === 2) return component.phase;
   if (component.kind === 'integrativ') return 3;
+  // An elective component has no phase of its own and no place in the order
+  // index of the 26 ARP components
+  if (component.kind === 'wahl') return null;
   const order = component.orderIndex;
   if (typeof order !== 'number') return null;
   if (order >= 1 && order <= 12) return 1;

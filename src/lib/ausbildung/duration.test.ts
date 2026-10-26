@@ -206,6 +206,20 @@ describe('getComponentPhase', () => {
     ).toBeNull();
   });
 
+  it('does not give an elective component without a phase the phase of its order index', () => {
+    // An elective component (kind wahl) is only used by other occupations. Its
+    // order index is not part of the 26 ARP components, so it must not land in
+    // phase 1 or 2 by accident.
+    expect(
+      getComponentPhase({ phase: null, kind: 'wahl', orderIndex: 5 })
+    ).toBeNull();
+    expect(
+      getComponentPhase({ phase: null, kind: 'wahl', orderIndex: 15 })
+    ).toBeNull();
+    // With a phase column an elective component still has its phase
+    expect(getComponentPhase({ phase: 2, kind: 'wahl', orderIndex: 5 })).toBe(2);
+  });
+
   it('ignores an invalid phase value and falls back', () => {
     expect(getComponentPhase({ phase: 0, orderIndex: 14 })).toBe(2);
     expect(getComponentPhase({ phase: 7, orderIndex: 3 })).toBe(1);
