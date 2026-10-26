@@ -14,11 +14,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/db';
-import { eq } from 'drizzle-orm';
-import { profiles } from '@/db/migrations/schemas/schema';
 import { executeAction, ActionType } from '@/lib/hai/actions';
 import { requireProPlan, toHaiRole } from '@/lib/auth-helpers';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 // ============================================================================
 // TYPES
@@ -38,35 +36,15 @@ interface ActionRequestBody {
  */
 export async function POST(req: NextRequest) {
     try {
-        // Get user ID from request
-        const { searchParams } = new URL(req.url);
-        const userId = searchParams.get('userId');
-
-        if (!userId) {
-            return NextResponse.json(
-                { error: 'Nicht authentifiziert. Bitte melde dich an.' },
-                { status: 401 }
-            );
-        }
+        // The person is the session, a userId in the query is ignored
+        const me = await requireUser(req);
+        if (isErrorResponse(me)) return me;
+        const userId = me.id;
 
         if (!(await requireProPlan(userId))) {
             return NextResponse.json(
                 { error: 'HAI.ai is only available with a PRO subscription.' },
                 { status: 403 }
-            );
-        }
-
-        // Verify user exists
-        const user = await db
-            .select({ id: profiles.id, role: profiles.role })
-            .from(profiles)
-            .where(eq(profiles.id, userId))
-            .limit(1);
-
-        if (user.length === 0) {
-            return NextResponse.json(
-                { error: 'Benutzer nicht gefunden.' },
-                { status: 404 }
             );
         }
 
@@ -116,29 +94,15 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
     try {
-        const { searchParams } = new URL(req.url);
-        const userId = searchParams.get('userId');
+        // The person and the role come from the session, never from the query
+        const me = await requireUser(req);
+        if (isErrorResponse(me)) return me;
 
-        if (!userId) {
-            return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-        }
-
-        if (!(await requireProPlan(userId))) {
+        if (!(await requireProPlan(me.id))) {
             return NextResponse.json({ error: 'HAI.ai is only available with a PRO subscription.' }, { status: 403 });
         }
 
-        // Get user role
-        const user = await db
-            .select({ role: profiles.role })
-            .from(profiles)
-            .where(eq(profiles.id, userId))
-            .limit(1);
-
-        if (user.length === 0) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
-        }
-
-        const userRole = user[0].role;
+        const userRole = me.role;
 
         // Define available actions based on role
         const traineeActions: ActionType[] = [

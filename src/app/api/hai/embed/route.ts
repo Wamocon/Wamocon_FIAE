@@ -28,7 +28,8 @@ import {
   lernfelderSchema,
   lernfeldMappings,
 } from '@/db/migrations/schemas/schema';
-import { verifyTrainer } from '@/lib/auth-helpers';
+import { isErrorResponse } from '@/lib/auth/session';
+import { requireHaiIndexManager } from '@/lib/hai/guards';
 import {
   indexContent,
   removeEmbeddings,
@@ -536,24 +537,9 @@ async function runBackgroundReindex(
  */
 export async function POST(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Nicht authentifiziert.' },
-        { status: 401 }
-      );
-    }
-
-    // Verify trainer access
-    const isTrainer = await verifyTrainer(userId);
-    if (!isTrainer) {
-      return NextResponse.json(
-        { error: 'Nur Trainer können Inhalte indexieren.' },
-        { status: 403 }
-      );
-    }
+    // Shared index: platform staff only, the role comes from the session
+    const manager = await requireHaiIndexManager(req);
+    if (isErrorResponse(manager)) return manager;
 
     const body: IndexRequestBody = await req.json();
     const { action, sourceType, sourceId, forceReindex = false } = body;
@@ -654,22 +640,10 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
+    const manager = await requireHaiIndexManager(req);
+    if (isErrorResponse(manager)) return manager;
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
     const jobId = searchParams.get('jobId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-    }
-
-    // Verify trainer access
-    const isTrainer = await verifyTrainer(userId);
-    if (!isTrainer) {
-      return NextResponse.json(
-        { error: 'Nur Trainer können den Indexstatus sehen.' },
-        { status: 403 }
-      );
-    }
 
     // If jobId provided, return that job's status
     if (jobId) {
@@ -726,23 +700,11 @@ export async function GET(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
+    const manager = await requireHaiIndexManager(req);
+    if (isErrorResponse(manager)) return manager;
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
     const sourceType = searchParams.get('sourceType') as SourceType;
     const sourceId = searchParams.get('sourceId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 401 });
-    }
-
-    // Verify trainer access
-    const isTrainer = await verifyTrainer(userId);
-    if (!isTrainer) {
-      return NextResponse.json(
-        { error: 'Nur Trainer können Embeddings löschen.' },
-        { status: 403 }
-      );
-    }
 
     if (!sourceType || !sourceId) {
       return NextResponse.json(

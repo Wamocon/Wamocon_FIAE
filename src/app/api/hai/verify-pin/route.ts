@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
+import { isErrorResponse } from '@/lib/auth/session';
+import { requireHaiIndexManager } from '@/lib/hai/guards';
 
 export async function POST(request: Request) {
+  // The PIN is a second factor on top of the session, not a replacement
+  const manager = await requireHaiIndexManager(request);
+  if (isErrorResponse(manager)) return manager;
+
   try {
     const { pin } = await request.json();
     const expectedPin = process.env.HAI_ADMIN_PIN;

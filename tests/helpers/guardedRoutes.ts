@@ -1,9 +1,18 @@
 // Generated from the route files under src/app/api/trainer and src/app/api/admin,
-// plus me/catalog-requests (a trainer-level request for an occupation).
+// plus me/catalog-requests (a trainer-level request for an occupation) and the
+// HAI routes (src/app/api/hai).
 // Every entry is a handler that must reject anonymous callers (401) and callers
 // with a too low role (403). Regenerate when a route is added.
+// 'user' handlers take any signed-in person (401 only, they work on the
+// session's own data), 'haiIndex' handlers manage the shared HAI index
+// (see src/lib/hai/indexAccess.ts).
 
-export type GuardKind = 'trainer' | 'admin' | 'superAdmin';
+export type GuardKind =
+  | 'user'
+  | 'trainer'
+  | 'admin'
+  | 'superAdmin'
+  | 'haiIndex';
 
 export type GuardedRoute = {
   /** Path below src/app/api, also the module path of the route file. */
@@ -581,4 +590,20 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     guard: 'trainer',
     params: [],
   },
+  { route: 'hai/chat', method: 'POST', guard: 'user', params: [] },
+  { route: 'hai/chat', method: 'PATCH', guard: 'user', params: [] },
+  { route: 'hai/chat', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/session', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/session', method: 'PATCH', guard: 'user', params: [] },
+  { route: 'hai/session', method: 'DELETE', guard: 'user', params: [] },
+  { route: 'hai/session', method: 'POST', guard: 'user', params: [] },
+  { route: 'hai/action', method: 'POST', guard: 'user', params: [] },
+  { route: 'hai/action', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/insights', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/embed', method: 'POST', guard: 'haiIndex', params: [] },
+  { route: 'hai/embed', method: 'GET', guard: 'haiIndex', params: [] },
+  { route: 'hai/embed', method: 'DELETE', guard: 'haiIndex', params: [] },
+  { route: 'hai/sync', method: 'POST', guard: 'haiIndex', params: [] },
+  { route: 'hai/sync', method: 'GET', guard: 'haiIndex', params: [] },
+  { route: 'hai/verify-pin', method: 'POST', guard: 'haiIndex', params: [] },
 ];

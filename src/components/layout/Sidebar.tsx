@@ -3,6 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeRole } from '@/lib/auth/roles';
 import { adminMenuItems } from '@/lib/auth/adminMenu';
+import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCatalog } from '@/contexts/CatalogContext';
 import {
@@ -317,19 +318,22 @@ export function Sidebar({
           })}
         </nav>
 
-        {/* HAI Admin Button — trainer + PRO plan only */}
-        {userRole === 'trainer' && subscriptionPlan === 'PRO' && (
-          <div className="px-4 pb-2">
-            <button
-              onClick={() => setHaiAdminOpen(true)}
-              data-tour="sidebar-hai-admin"
-              className="text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 hover:ring-1"
-            >
-              <span className="text-lg">🦈</span>
-              <span className="font-medium">HAI Admin</span>
-            </button>
-          </div>
-        )}
+        {/* HAI Admin Button: platform staff with the PRO plan only, the
+            routes check the same rule (src/lib/hai/indexAccess.ts) */}
+        {userRole === 'trainer' &&
+          subscriptionPlan === 'PRO' &&
+          canManageHaiIndex({ role: profile?.role, isPlatformOwner }) && (
+            <div className="px-4 pb-2">
+              <button
+                onClick={() => setHaiAdminOpen(true)}
+                data-tour="sidebar-hai-admin"
+                className="text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 hover:ring-1"
+              >
+                <span className="text-lg">🦈</span>
+                <span className="font-medium">HAI Admin</span>
+              </button>
+            </div>
+          )}
 
         <HaiAdminDialog
           open={haiAdminOpen}
