@@ -10,6 +10,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { ensureTraineeInCatalog } from '@/lib/catalog/trainee-scope';
 
 export async function GET(
   req: NextRequest,
@@ -34,6 +35,10 @@ export async function GET(
         );
       }
     }
+
+    // A trainee of another occupation than the chosen one is not found.
+    const outOfCatalog = await ensureTraineeInCatalog(session, req, traineeId);
+    if (outOfCatalog) return outOfCatalog;
 
     const [p] = await db
       .select({
@@ -138,6 +143,10 @@ export async function PATCH(
         { status: 403 }
       );
     }
+
+    // A trainee of another occupation than the chosen one is not found.
+    const outOfCatalog = await ensureTraineeInCatalog(session, req, traineeId);
+    if (outOfCatalog) return outOfCatalog;
 
     const updates: any = {};
     if (typeof body?.full_name === 'string')

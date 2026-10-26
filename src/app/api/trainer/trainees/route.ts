@@ -11,6 +11,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { cacheHeaders } from '@/lib/api-cache';
 import { getTrainerScope } from '@/lib/trainer-scope';
+import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,6 +25,11 @@ export async function GET(req: NextRequest) {
     if (!scope) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    // With a chosen occupation (x-catalog) only its trainees, without a choice
+    // everything as before.
+    const catalogFilter = await requireTraineeCatalogFilter(session, req);
+    if (catalogFilter instanceof Response) return catalogFilter;
 
     const traineeConditions: any[] = [eq(profiles.role, 'TRAINEE')];
     if (!scope.canSeeOrgWide) {
@@ -41,6 +47,9 @@ export async function GET(req: NextRequest) {
         eq(profiles.organizationId, scope.organizationId as any)
       );
     }
+
+    if (catalogFilter.condition)
+      traineeConditions.push(catalogFilter.condition);
 
     const traineeRows = await db
       .select({

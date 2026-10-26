@@ -2113,5 +2113,9 @@
   "admin.catalogs.error.CATALOG_INACTIVE": "Der Beruf ist auf der Plattform nicht aktiv.",
   "admin.catalogs.error.NOT_A_TRAINEE": "Nur Azubis können einem Beruf zugeordnet werden.",
   "admin.catalogs.error.CATALOG_NOT_FOUND": "Der Beruf wurde nicht gefunden.",
-  "admin.catalogs.error.USER_NOT_FOUND": "Der Benutzer wurde nicht gefunden."
+  "admin.catalogs.error.USER_NOT_FOUND": "Der Benutzer wurde nicht gefunden.",
+  "catalog.switcher.label": "Beruf wählen",
+  "catalog.switcher.current": "Aktueller Beruf: {title}",
+  "catalog.switcher.reloadHint": "Beim Wechsel wird die Seite neu geladen.",
+  "catalog.branding.badge": "Beruf: {title}"
 }

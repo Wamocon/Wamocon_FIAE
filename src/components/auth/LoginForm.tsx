@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { authFetch } from '@/lib/authFetch';
+import { writePreferredCatalog } from '@/lib/catalog/selection';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
@@ -85,6 +86,11 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
     setIsLoading(true);
     setError('');
     try {
+      // The occupation of the login link becomes the occupation to work in. The
+      // CatalogProvider only uses it if it is one of the account's occupations.
+      if (catalogCode && catalogState !== 'unknown') {
+        writePreferredCatalog(catalogCode);
+      }
       await signIn(email.trim(), password);
       // redirect happens in the effect when profile is loaded
       if (catalogCode && catalogState !== 'unknown') {
