@@ -42,6 +42,7 @@ async function load(occupation: Occupation, tables: Record<string, any>) {
     toHaiRole: (role?: string | null) =>
       role === 'TRAINER' || role === 'ADMIN' ? 'TRAINER' : 'TRAINEE',
     getUserOrgId: async () => 'org-1',
+    getUserOrgIdStrict: async () => 'org-1',
   }));
   mockCatalogScope(scopeFor(occupation));
   return mock;
@@ -118,7 +119,7 @@ describe('HAI action create_activity_report', () => {
     const result = await executeAction(
       'create_activity_report',
       { weekNumber: 46, year: 2027 },
-      't1'
+      { id: 't1', role: 'TRAINEE', organizationId: 'org-1' } as any
     );
     return { result, mock };
   }

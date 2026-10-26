@@ -10,7 +10,6 @@
 
 import React from 'react';
 import { Check, Loader2, ShieldCheck, X } from 'lucide-react';
-import { MarkdownText } from '@/components/ui/MarkdownText';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { HaiPendingAction } from './HaiProvider';
 
@@ -84,9 +83,9 @@ export function HaiActionCard({
         <div role="status" className="mt-3 text-xs text-emerald-400">
           <p className="font-semibold">{t('hai.action.card.done')}</p>
           {action.resultMessage && (
-            <MarkdownText className="mt-1 max-w-none text-gray-300">
-              {action.resultMessage}
-            </MarkdownText>
+            <p className="mt-1 whitespace-pre-line text-gray-300">
+              {action.resultMessage.replace(/\*\*/g, '')}
+            </p>
           )}
         </div>
       )}

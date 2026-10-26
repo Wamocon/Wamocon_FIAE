@@ -54,6 +54,7 @@ async function load(
     requireProPlan,
     // A lookup by the victim's id would not find the session's organization
     getUserOrgId: jest.fn(async (id: string) => `org-of-${id}`),
+    getUserOrgIdStrict: jest.fn(async (id: string) => `org-of-${id}`),
   }));
   const executeAction = jest.fn(async (..._args: unknown[]) => ({
     success: true,
@@ -299,20 +300,28 @@ describe('HAI action route: the person is the session', () => {
     const { mod, executeAction } = await load('action');
     const res = await mod.POST(
       call('POST', `action?userId=${VICTIM}`, {
-        actionType: 'submit_quiz',
-        parameters: { quizId: 'q1' },
+        actionType: 'complete_enabler',
+        parameters: { enablerId: 'e1' },
+        confirmed: true,
       })
     );
     expect(res.status).toBe(200);
-    expect(executeAction.mock.calls).toEqual([
-      ['submit_quiz', { quizId: 'q1' }, ME],
-    ]);
+    expect(executeAction.mock.calls).toHaveLength(1);
+    const [type, params, actor] = executeAction.mock.calls[0] as any[];
+    expect(type).toBe('complete_enabler');
+    expect(params).toEqual({ enablerId: 'e1' });
+    // The actor is the session, never the userId of the query
+    expect(actor.id).toBe(ME);
   });
 
   it('does not execute anything without the PRO plan', async () => {
     const { mod, executeAction } = await load('action', { pro: false });
     const res = await mod.POST(
-      call('POST', 'action', { actionType: 'submit_quiz', parameters: {} })
+      call('POST', 'action', {
+        actionType: 'submit_quiz',
+        parameters: {},
+        confirmed: true,
+      })
     );
     expect(res.status).toBe(403);
     expect(executeAction).not.toHaveBeenCalled();
@@ -336,6 +345,7 @@ describe('HAI action route: the person is the session', () => {
       call('POST', 'action', {
         actionType: 'approve_submission',
         parameters: {},
+        confirmed: true,
       })
     );
     expect(res.status).toBe(400);
