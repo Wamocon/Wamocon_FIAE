@@ -13,31 +13,37 @@ import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
 import { getISOWeekDates } from '@/lib/date/iso-week';
 import {
-  getTrainerScope,
-  isTraineeVisibleToTrainer,
-} from '@/lib/trainer-scope';
+  isErrorResponse,
+  requireTrainer,
+  requireUser,
+} from '@/lib/auth/session';
+import {
+  entryAccessCondition,
+  loadReportForSession,
+  requireTraineeSession,
+  traineeAccessCondition,
+} from '@/lib/auth/activity-report-access';
 import {
   allowedCatalogCondition,
-  requireCatalogScopeForUser,
+  requireCatalogScope,
 } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 
 // GET: Get a single activity report
+// A trainee reaches their own reports, trainer level the submitted reports of
+// trainees inside its organization scope. Everything else is a 404.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await requireUser(request);
+  if (isErrorResponse(session)) return session;
+
   try {
     const { id } = await params;
 
-    const [report] = await db
-      .select()
-      .from(activityReports)
-      .where(eq(activityReports.id, id as any));
-
-    if (!report) {
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-    }
+    const report = await loadReportForSession(session, request, id);
+    if (isErrorResponse(report)) return report;
 
     // Fetch reviewer name if report has a reviewer
     let reviewerName: string | null = null;
@@ -78,27 +84,23 @@ export async function GET(
   }
 }
 
-// DELETE: Delete a report (only owner + DRAFT/REJECTED, or trainer)
+// DELETE: Delete a report. A trainee deletes their own draft or rejected
+// report, trainer level a submitted or rejected report inside its organization
+// scope. An approved report is never deleted (BBiG §14).
+class NotDeletable extends Error {}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await requireUser(request);
+  if (isErrorResponse(session)) return session;
+
   try {
     const { id } = await params;
 
-    // Fetch report
-    const [report] = await db
-      .select({
-        id: activityReports.id,
-        traineeId: activityReports.traineeId,
-        status: activityReports.status,
-      })
-      .from(activityReports)
-      .where(eq(activityReports.id, id as any));
-
-    if (!report) {
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-    }
+    const report = await loadReportForSession(session, request, id);
+    if (isErrorResponse(report)) return report;
 
     // M-3 fix: Cannot delete APPROVED reports (BBiG §14 record-keeping)
     if (report.status === 'APPROVED') {
@@ -111,19 +113,42 @@ export async function DELETE(
       );
     }
 
-    // Delete related entries first (if not cascading)
-    await db
-      .delete(activityReportUseCaseEntries)
-      .where(eq(activityReportUseCaseEntries.reportId, id as any));
-
-    const [deleted] = await db
-      .delete(activityReports)
-      .where(eq(activityReports.id, id as any))
-      .returning();
-
-    if (!deleted) {
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+    const deletable = session.isTrainerLevel
+      ? ['SUBMITTED', 'REJECTED']
+      : ['DRAFT', 'REJECTED'];
+    if (!deletable.includes(String(report.status))) {
+      return NextResponse.json(
+        { error: 'Eingereichte Nachweise können nicht gelöscht werden' },
+        { status: 403 }
+      );
     }
+
+    // Owner or organization and the status are part of the delete itself. The
+    // entries go first (not every database cascades), and stay if the report
+    // cannot be deleted any more.
+    await db.transaction(async tx => {
+      await tx
+        .delete(activityReportUseCaseEntries)
+        .where(
+          and(
+            eq(activityReportUseCaseEntries.reportId, id as any),
+            entryAccessCondition(session)
+          )
+        );
+
+      const [deleted] = await tx
+        .delete(activityReports)
+        .where(
+          and(
+            eq(activityReports.id, id as any),
+            traineeAccessCondition(session, activityReports.traineeId),
+            inArray(activityReports.status, deletable as any)
+          )
+        )
+        .returning({ id: activityReports.id });
+
+      if (!deleted) throw new NotDeletable();
+    });
 
     apiCache.invalidate('activity_reports');
     apiCache.invalidate('trainee_dashboard');
@@ -131,6 +156,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    if (error instanceof NotDeletable) {
+      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+    }
     console.error('Error in activity-reports DELETE [id]:', error);
     return NextResponse.json(
       { error: 'Interner Serverfehler' },
@@ -139,16 +167,19 @@ export async function DELETE(
   }
 }
 
-// PUT: Update a draft report
+// PUT: Update a draft or rejected report of the signed-in trainee (a userId
+// in the body is ignored, the report of someone else is a 404)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await requireTraineeSession(request);
+  if (isErrorResponse(session)) return session;
+
   try {
     const { id } = await params;
     const body = await request.json();
     const {
-      userId,
       weekNumber,
       year,
       ausbildungsjahr,
@@ -159,22 +190,9 @@ export async function PUT(
       submit,
     } = body;
 
-    // Verify report is draft
-    const [report] = await db
-      .select()
-      .from(activityReports)
-      .where(eq(activityReports.id, id as any));
-
-    if (!report)
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-
-    // Ownership check: only the report owner can update
-    if (userId && String(report.traineeId) !== userId) {
-      return NextResponse.json(
-        { error: 'Zugriff verweigert' },
-        { status: 403 }
-      );
-    }
+    // Verify report is the caller's own
+    const report = await loadReportForSession(session, request, id);
+    if (isErrorResponse(report)) return report;
 
     if (report.status !== 'DRAFT' && report.status !== 'REJECTED') {
       return NextResponse.json(
@@ -184,10 +202,7 @@ export async function PUT(
     }
 
     // Occupation of the report owner: use cases and the phase plan follow it
-    const catalogScope = await requireCatalogScopeForUser(
-      String(report.traineeId),
-      request
-    );
+    const catalogScope = await requireCatalogScope(session, request);
     if (catalogScope instanceof Response) return catalogScope;
 
     // Validate actualHours are non-negative numbers
@@ -405,38 +420,60 @@ export async function PUT(
       updateData.trainerSignedAt = null;
     }
 
-    // Update report fields
-    await db
-      .update(activityReports)
-      .set(updateData)
-      .where(eq(activityReports.id, id as any));
+    // The owner and the status are part of the update itself, so a report
+    // that was submitted in the meantime is not touched. The entries are only
+    // replaced if the update took place.
+    const updated = await db.transaction(async tx => {
+      const [row] = await tx
+        .update(activityReports)
+        .set(updateData)
+        .where(
+          and(
+            eq(activityReports.id, id as any),
+            eq(activityReports.traineeId, session.id as any),
+            inArray(activityReports.status, ['DRAFT', 'REJECTED'])
+          )
+        )
+        .returning({ id: activityReports.id });
+      if (!row) return false;
 
-    // Update entries: delete old, insert new
-    await db
-      .delete(activityReportUseCaseEntries)
-      .where(eq(activityReportUseCaseEntries.reportId, id as any));
+      // Update entries: delete old, insert new
+      await tx
+        .delete(activityReportUseCaseEntries)
+        .where(eq(activityReportUseCaseEntries.reportId, id as any));
 
-    if (entries && entries.length > 0) {
-      await db.insert(activityReportUseCaseEntries).values(
-        entries.map((e: any) => ({
-          reportId: id,
-          useCaseId: e.useCaseId,
-          plannedHours: plannedMap.get(e.useCaseId) ?? e.plannedHours ?? 0,
-          actualHours: e.actualHours,
-          isOverbooked: e.isOverbooked,
-          notes: e.notes || null,
-          // Grade columns - traineeGrade can be set by trainee, others null until trainer grades
-          traineeGrade: e.traineeGrade ? (String(e.traineeGrade) as any) : null,
-          trainerGrade: null,
-          releaseGrade: null,
-          gradeComment: null,
-          releaseGradeComment: null,
-          isGradeApproved: false,
-          gradeApprovedAt: null,
-          gradeApprovedBy: null,
-          releaseGradeAt: null,
-          releaseGradeBy: null,
-        }))
+      if (entries && entries.length > 0) {
+        await tx.insert(activityReportUseCaseEntries).values(
+          entries.map((e: any) => ({
+            reportId: id,
+            useCaseId: e.useCaseId,
+            plannedHours: plannedMap.get(e.useCaseId) ?? e.plannedHours ?? 0,
+            actualHours: e.actualHours,
+            isOverbooked: e.isOverbooked,
+            notes: e.notes || null,
+            // Grade columns - traineeGrade can be set by trainee, others null until trainer grades
+            traineeGrade: e.traineeGrade
+              ? (String(e.traineeGrade) as any)
+              : null,
+            trainerGrade: null,
+            releaseGrade: null,
+            gradeComment: null,
+            releaseGradeComment: null,
+            isGradeApproved: false,
+            gradeApprovedAt: null,
+            gradeApprovedBy: null,
+            releaseGradeAt: null,
+            releaseGradeBy: null,
+          }))
+        );
+      }
+      return true;
+    });
+
+    if (!updated) {
+      return NextResponse.json(
+        { error: 'Cannot edit submitted or approved reports' },
+        { status: 403 }
       );
     }
 
@@ -456,11 +493,15 @@ export async function PUT(
   }
 }
 
-// PATCH: Update report status (for trainer approval/rejection)
+// PATCH: Update report status (trainer level approves or rejects a submitted
+// report inside its organization scope). The reviewer is the session user.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await requireTrainer(request);
+  if (isErrorResponse(session)) return session;
+
   try {
     const { id } = await params;
 
@@ -473,52 +514,18 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { status, feedback, userId } = body;
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
-      );
-    }
-
-    const scope = await getTrainerScope(userId);
-    if (!scope) {
-      return NextResponse.json(
-        { error: 'Only trainers can update reports' },
-        { status: 403 }
-      );
-    }
+    const { status, feedback } = body;
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    const [accessRow] = await db
-      .select({
-        reportId: activityReports.id,
-        traineeId: activityReports.traineeId,
-        assignedTrainerId: profiles.assignedTrainerId,
-        organizationId: profiles.organizationId,
-      })
-      .from(activityReports)
-      .leftJoin(profiles, eq(profiles.id, activityReports.traineeId))
-      .where(eq(activityReports.id, id as any));
-
-    if (!accessRow) {
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-    }
-
-    if (!isTraineeVisibleToTrainer(scope, accessRow)) {
-      return NextResponse.json(
-        { error: 'Trainee is not assigned to this trainer' },
-        { status: 403 }
-      );
-    }
+    const report = await loadReportForSession(session, request, id);
+    if (isErrorResponse(report)) return report;
 
     const updateData: any = {
       status,
-      reviewerId: userId,
+      reviewerId: session.id,
       reviewedAt: new Date(),
     };
 
@@ -531,14 +538,16 @@ export async function PATCH(
     }
 
     // H-3 fix: Atomic status check + update (prevents TOCTOU race condition)
-    // Only update if the report exists AND is currently in SUBMITTED status
+    // Only update if the report is currently in SUBMITTED status and the
+    // trainee lies inside the organization scope of the caller
     const [updated] = await db
       .update(activityReports)
       .set(updateData)
       .where(
         and(
           eq(activityReports.id, id as any),
-          eq(activityReports.status, 'SUBMITTED')
+          eq(activityReports.status, 'SUBMITTED'),
+          traineeAccessCondition(session, activityReports.traineeId)
         )
       )
       .returning();
@@ -548,7 +557,12 @@ export async function PATCH(
       const [exists] = await db
         .select({ id: activityReports.id, status: activityReports.status })
         .from(activityReports)
-        .where(eq(activityReports.id, id as any));
+        .where(
+          and(
+            eq(activityReports.id, id as any),
+            traineeAccessCondition(session, activityReports.traineeId)
+          )
+        );
 
       if (!exists) {
         return NextResponse.json(

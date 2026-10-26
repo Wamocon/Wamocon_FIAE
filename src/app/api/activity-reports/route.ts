@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, and, sql, inArray, ne, desc, or } from 'drizzle-orm';
+import { eq, and, sql, inArray, ne, desc } from 'drizzle-orm';
 import {
   activityReports,
   profiles,
@@ -10,23 +10,35 @@ import {
 } from '@/db/migrations/schemas/schema';
 import type { ActivityReport as ActivityReportRow } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
-import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { normalizePlannedHours } from '@/lib/ausbildung/planned-hours';
 import { getISOWeekDates } from '@/lib/date/iso-week';
 import { withDbRetry } from '@/lib/db-retry';
-import { getTrainerScope } from '@/lib/trainer-scope';
+import { isErrorResponse, requireUser, scopeOrg } from '@/lib/auth/session';
+import {
+  requireTraineeSession,
+  traineeScopeCondition,
+} from '@/lib/auth/activity-report-access';
+import { resolveTraineeForRead } from '@/lib/auth/trainee-data-access';
+import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
 import {
   allowedCatalogCondition,
-  requireCatalogScopeForUser,
+  requireCatalogScope,
 } from '@/lib/catalog/scope';
 import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 
-// GET: List activity reports for the current user
+// GET: List activity reports
+// A trainee gets their own reports (a userId in the query is ignored). Trainer
+// level gets the submitted reports of the trainees in its organization scope
+// (and in the chosen occupation); a userId naming a trainee narrows the list to
+// that trainee, if the trainee lies inside the scope.
 export async function GET(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
+    const requestedUserId = searchParams.get('userId');
     const includeOverbooking =
       searchParams.get('includeOverbooking') !== 'false'; // default true
     const requestedLimit = Number(searchParams.get('limit'));
@@ -34,128 +46,47 @@ export async function GET(req: NextRequest) {
       ? Math.min(Math.max(requestedLimit, 1), 500)
       : 500;
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
-      );
-    }
-
-    // Get user profile to check role
-    const [profile] = await withDbRetry(() =>
-      db
-        .select({
-          id: profiles.id,
-          email: profiles.email,
-          role: profiles.role,
-          organizationId: profiles.organizationId,
-        })
-        .from(profiles)
-        .where(eq(profiles.id, userId as any))
-    );
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-    }
-
     let reports: ActivityReportRow[] = [];
 
-    // Trainees only see their own reports, trainers see all
-    if (profile.role === 'TRAINEE') {
-      const reportOwnerIds = new Set<string>([String(profile.id)]);
-      if (profile.email) {
-        const aliasProfiles = await withDbRetry(() =>
-          db
-            .select({ id: profiles.id })
-            .from(profiles)
-            .where(
-              and(
-                eq(profiles.email, profile.email),
-                eq(profiles.role, 'TRAINEE')
-              )
-            )
-        );
-        aliasProfiles.forEach(alias => reportOwnerIds.add(String(alias.id)));
-      }
-
-      const ownerIds = Array.from(reportOwnerIds);
+    if (!session.isTrainerLevel) {
+      // Trainees only see their own reports
       reports = await withDbRetry(() =>
         db
           .select()
           .from(activityReports)
-          .where(inArray(activityReports.traineeId, ownerIds as any))
+          .where(eq(activityReports.traineeId, session.id as any))
           .orderBy(desc(activityReports.createdAt))
           .limit(limit)
       );
     } else {
-      const scope = await getTrainerScope(userId);
+      let traineeFilter;
+      if (requestedUserId && requestedUserId !== session.id) {
+        const traineeId = await resolveTraineeForRead(
+          session,
+          req,
+          requestedUserId
+        );
+        if (isErrorResponse(traineeId)) return traineeId;
+        traineeFilter = eq(activityReports.traineeId, traineeId as any);
+      } else {
+        const catalogFilter = await requireTraineeCatalogFilter(session, req);
+        if (catalogFilter instanceof Response) return catalogFilter;
+        traineeFilter = traineeScopeCondition(
+          activityReports.traineeId,
+          scopeOrg(session),
+          catalogFilter.condition
+        );
+      }
 
-      if (!scope) {
-        reports = [];
-      } else if (scope.canSeeOrgWide) {
-        const visibilityFilters = [
-          ne(activityReports.status, 'DRAFT'),
-          !scope.isPlatformOwner && scope.organizationId
-            ? eq(activityReports.organizationId, scope.organizationId as any)
-            : undefined,
-        ].filter(Boolean);
-
-        const reportQuery = db
+      // Drafts are the private work of the trainee
+      reports = await withDbRetry(() =>
+        db
           .select()
           .from(activityReports)
+          .where(and(ne(activityReports.status, 'DRAFT'), traineeFilter))
           .orderBy(desc(activityReports.createdAt))
-          .limit(limit);
-
-        reports = await withDbRetry(() =>
-          visibilityFilters.length > 0
-            ? reportQuery.where(and(...(visibilityFilters as any)))
-            : reportQuery
-        );
-      } else if (scope.role === 'TRAINER') {
-        const traineeConditions: any[] = [
-          eq(profiles.role, 'TRAINEE'),
-        ];
-        const traineeAccessFilters: any[] = [
-          inArray(profiles.assignedTrainerId, scope.profileIds as any),
-        ];
-
-        if (scope.organizationId) {
-          traineeAccessFilters.push(
-            eq(profiles.organizationId, scope.organizationId as any)
-          );
-        }
-        traineeConditions.push(or(...traineeAccessFilters)!);
-
-        const assignedTrainees = await withDbRetry(() =>
-          db
-            .select({ id: profiles.id })
-            .from(profiles)
-            .where(and(...traineeConditions))
-        );
-        const assignedTraineeIds = assignedTrainees.map(t => String(t.id));
-
-        reports =
-          assignedTraineeIds.length > 0
-            ? await withDbRetry(() =>
-                db
-                  .select()
-                  .from(activityReports)
-                  .where(
-                    and(
-                      inArray(
-                        activityReports.traineeId,
-                        assignedTraineeIds as any
-                      ),
-                      ne(activityReports.status, 'DRAFT')
-                    )
-                  )
-                  .orderBy(desc(activityReports.createdAt))
-                  .limit(limit)
-              )
-            : [];
-      } else {
-        reports = [];
-      }
+          .limit(limit)
+      );
     }
 
     // Get overbooking status for all reports in one query
@@ -245,10 +176,15 @@ export async function GET(req: NextRequest) {
 
 // POST: Create a new activity report
 export async function POST(req: NextRequest) {
+  // Only a trainee creates reports, for themselves: the person is the session,
+  // a userId in the body is ignored
+  const session = await requireTraineeSession(req);
+  if (isErrorResponse(session)) return session;
+  const userId = session.id;
+
   try {
     const body = await req.json();
     const {
-      userId,
       weekNumber,
       year,
       ausbildungsjahr,
@@ -259,19 +195,10 @@ export async function POST(req: NextRequest) {
       submit,
     } = body;
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
-      );
-    }
+    const organizationId = session.organizationId;
 
-    const organizationId = await getUserOrgId(userId);
-
-    // M-1 fix: Only trainees can create activity reports
     const [creatorProfile] = await db
       .select({
-        role: profiles.role,
         startOfTrainingDate: profiles.startOfTrainingDate,
         ausbildungDurationYears: profiles.ausbildungDurationYears,
       })
@@ -282,15 +209,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    if (creatorProfile?.role !== 'TRAINEE') {
-      return NextResponse.json(
-        { error: 'Nur Auszubildende können Nachweise erstellen' },
-        { status: 403 }
-      );
-    }
-
     // Occupation of the trainee: use cases and the phase plan follow it
-    const catalogScope = await requireCatalogScopeForUser(userId, req);
+    const catalogScope = await requireCatalogScope(session, req);
     if (catalogScope instanceof Response) return catalogScope;
 
     const reportWeekNumber = Number(weekNumber);
