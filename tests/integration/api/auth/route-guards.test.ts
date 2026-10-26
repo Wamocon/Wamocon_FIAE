@@ -74,7 +74,7 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
 
   it('covers the expected number of handlers', () => {
     // Guards against the table silently shrinking when files move
-    expect(GUARDED_ROUTES.length).toBeGreaterThanOrEqual(165);
+    expect(GUARDED_ROUTES.length).toBeGreaterThanOrEqual(180);
   });
 
   it('lists every notification and trainee handler', async () => {
