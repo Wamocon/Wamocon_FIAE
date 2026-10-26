@@ -1,6 +1,6 @@
 # KfBM-Inhaltsimport: Quellformat, Parser und Prüfläufe
 
-Stand: 26.10.2026. Dieses Paket ist Phase 4.0 (Inventur) und 4.3 (Parser) des KfBM-Umbaus. Es **liest nur**. Es schreibt nichts in eine Datenbank, ruft kein Netzwerk und kein Modell auf und ändert keine Quelldatei. Das Schreiben (Phase 4.4) kommt später und baut auf diesen Funktionen auf.
+Stand: 26.10.2026. Dieses Paket ist Phase 4.0 (Inventur) und 4.3 (Parser) des KfBM-Umbaus. Es **liest nur**. Es schreibt nichts in eine Datenbank, ruft kein Netzwerk und kein Modell auf und ändert keine Quelldatei. Das Schreiben (Phase 4.4) steht im Runbook `docs/kfbm-import-runbook.md` (Plan, Prüfung, Probelauf, Apply) und baut auf diesen Funktionen auf.
 
 ## Quelle
 

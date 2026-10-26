@@ -17,6 +17,7 @@ import {
   type FakeSession,
 } from '../../helpers/mockNext';
 import { createTableDb } from '../../helpers/mockDb';
+import { GUARDED_ROUTES } from '../../helpers/guardedRoutes';
 
 // An id in the path that is no uuid cannot be a record. A route that hands it to
 // a uuid column ends in 500 (or 503), because the database rejects the value.
@@ -60,9 +61,21 @@ function trap() {
   });
 }
 
+// Curriculum writes are only open to the platform wide admin (PR 127), the
+// id check comes after that guard
+const CURRICULUM_WRITES = new Set(
+  GUARDED_ROUTES.filter(r => r.guard === 'curriculum').map(
+    r => `${r.method} ${r.route}`
+  )
+);
+const defaultCaller = (entry: Entry): NonNullable<Entry['as']> =>
+  CURRICULUM_WRITES.has(`${entry.method} ${entry.route}`)
+    ? 'superAdmin'
+    : 'trainer';
+
 async function run(entry: Entry, bad: string, db: unknown) {
   jest.resetModules();
-  mockSession(SESSIONS[entry.as ?? 'trainer']);
+  mockSession(SESSIONS[entry.as ?? defaultCaller(entry)]);
   jest.doMock('@/db', () => ({ __esModule: true, default: db }));
   const mod = (await import(`@/app/api/${entry.route}/route`)) as any;
   const params = Object.fromEntries(

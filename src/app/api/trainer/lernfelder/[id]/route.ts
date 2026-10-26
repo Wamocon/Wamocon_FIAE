@@ -1,4 +1,8 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -6,7 +10,6 @@ import {
   useCases,
 } from '@/db/migrations/schemas/schema';
 import { and, eq, arrayContains } from 'drizzle-orm';
-import { verifyPlatformOwner } from '@/lib/auth-helpers';
 import {
   allowedCatalogCondition,
   requireCatalogScope,
@@ -94,19 +97,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { id } = await params;
     const idNotFound = notFoundUnlessUuid(id);
     if (idNotFound) return idNotFound;
     const trainerId = session.id;
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
     const scope = await requireCatalogScope(session, req);
     if (isErrorResponse(scope)) return scope;
 
@@ -161,19 +158,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { id } = await params;
     const idNotFound = notFoundUnlessUuid(id);
     if (idNotFound) return idNotFound;
     const trainerId = session.id;
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
     const scope = await requireCatalogScope(session, req);
     if (isErrorResponse(scope)) return scope;
 

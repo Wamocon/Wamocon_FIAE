@@ -5,10 +5,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 
 export default function NewCoursePage() {
   const router = useRouter();
-  const { profile, isPlatformOwner, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
 
   const [title, setTitle] = useState('');
@@ -22,10 +24,10 @@ export default function NewCoursePage() {
   // No lessons in the new schema; handled as Enablers/Use Cases at course level
 
   if (authLoading) return null;
-  if (!isPlatformOwner) {
+  if (!canEditCurriculum) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
-        <p className="text-muted-foreground">{t('access.contentManagement')}</p>
+        <p className="text-muted-foreground">{t('curriculum.superAdminOnly')}</p>
       </div>
     );
   }

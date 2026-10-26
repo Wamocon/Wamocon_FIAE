@@ -34,6 +34,9 @@ const TOO_LOW_ROLE: Record<GuardedRoute['guard'], Record<string, unknown>> = {
   admin: { role: 'TRAINER' },
   // An ADMIN of a customer organization is not a platform-wide admin
   superAdmin: { role: 'ADMIN', isPlatformOwner: false },
+  // Curriculum writes: even an admin of the platform organization who is not
+  // a super admin (TEMP_ADMIN) is turned away
+  curriculum: { role: 'TEMP_ADMIN', isPlatformOwner: true },
   // A trainer of a customer organization may not touch the shared HAI index
   haiIndex: { role: 'TRAINER', isPlatformOwner: false },
 };
@@ -195,7 +198,12 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
       );
       const res = await handler(...buildCall(entry, TOKEN));
       expect(res.status).toBe(403);
-      expect(await res.json()).toEqual({ error: 'Forbidden' });
+      expect(await res.json()).toEqual({
+        error:
+          entry.guard === 'curriculum'
+            ? 'Only platform administrators can manage curriculum content'
+            : 'Forbidden',
+      });
       // Only the session lookup ran, the handler did not query anything else
       expect(db.select).toHaveBeenCalledTimes(1);
       expect(db.insert).not.toHaveBeenCalled();

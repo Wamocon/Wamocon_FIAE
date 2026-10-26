@@ -1,8 +1,12 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
 
 export async function GET(
@@ -37,7 +41,7 @@ export async function PATCH(
   { params }: { params: Promise<{ useCaseId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { useCases, courseMembers, notifications } =
@@ -60,14 +64,7 @@ export async function PATCH(
       );
     }
 
-    // Shared curriculum: any valid trainer can edit use cases
-
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
+    // Curriculum writes are limited to the platform wide admin
 
     const body = await req.json();
     const updates: any = {};
@@ -149,7 +146,7 @@ export async function DELETE(
   { params }: { params: Promise<{ useCaseId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { useCases } = await import('@/db/migrations/schemas/schema');
@@ -171,14 +168,7 @@ export async function DELETE(
       );
     }
 
-    // Shared curriculum: any valid trainer can delete use cases
-
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
+    // Curriculum writes are limited to the platform wide admin
 
     await db.delete(useCases).where(eq(useCases.id, useCaseId as any));
     return NextResponse.json({ ok: true });

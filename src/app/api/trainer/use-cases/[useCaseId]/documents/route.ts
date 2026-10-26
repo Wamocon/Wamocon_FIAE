@@ -1,6 +1,10 @@
 'use strict';
 
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  isErrorResponse,
+  CURRICULUM_WRITE_FORBIDDEN,
+} from '@/lib/auth/session';
 import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
@@ -10,6 +14,7 @@ import { contentDocuments, useCases } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
 import {
+  canCreateDocument,
   canDeleteDocument,
   documentVisibilityCondition,
   loadPlatformOrgIds,
@@ -125,6 +130,16 @@ export async function POST(
     }
 
     const trainerOrgId = await getUserOrgId(trainerId);
+
+    // A document of the platform organization is curriculum: only the super
+    // admin adds it. A person of a customer organization adds documents of
+    // the own organization.
+    if (!canCreateDocument(session, trainerOrgId, await loadPlatformOrgIds())) {
+      return NextResponse.json(
+        { error: CURRICULUM_WRITE_FORBIDDEN },
+        { status: 403 }
+      );
+    }
 
     const [doc] = await db
       .insert(contentDocuments)

@@ -72,11 +72,12 @@ beforeEach(() => {
 
 describe.each(targets)('$name', target => {
   async function run(
-    method: 'GET' | 'DELETE',
+    method: 'GET' | 'POST' | 'DELETE',
     options: {
       session?: any;
       docs?: Array<ReturnType<typeof document>>;
       query?: string;
+      body?: unknown;
     } = {}
   ) {
     const { mod, mock } = await loadScoped(target.route, {
@@ -88,7 +89,10 @@ describe.each(targets)('$name', target => {
       },
     });
     const res = await mod[method](
-      scopeReq(`${target.url}${options.query ?? ''}`, { method }),
+      scopeReq(`${target.url}${options.query ?? ''}`, {
+        method,
+        body: options.body,
+      }),
       { params: Promise.resolve(target.params) }
     );
     return { res, mock };
@@ -124,6 +128,61 @@ describe.each(targets)('$name', target => {
       const where = mock.filters('select', 'content_documents');
       expect(where.sql).not.toContain('organization_id');
       expect(where.sql).toContain(target.parentColumn);
+    });
+  });
+
+  // Curriculum documents (no organization or the platform organization) are
+  // changed by the super admin only, like the rest of the curriculum (PR 127).
+  // A trainer of a customer organization adds documents of the own organization.
+  describe('create', () => {
+    const body = {
+      title: 'Skript',
+      fileName: 'skript.pdf',
+      storageUrl: 'https://example.test/skript.pdf',
+    };
+    const inserts = (mock: any) => mock.writes('insert', 'content_documents');
+    const platformAdmin = () => ({
+      ...superAdminSession(),
+      organizationId: PLATFORM,
+    });
+
+    it('lets a trainer of a customer organization add a document of the own organization', async () => {
+      const { res, mock } = await run('POST', { body });
+      expect(res.status).toBe(200);
+      expect(inserts(mock)).toHaveLength(1);
+      expect(inserts(mock)[0]).toMatchObject({ organizationId: ORG });
+    });
+
+    it.each([
+      ['a trainer', trainerSession({ organizationId: PLATFORM })],
+      [
+        'a trainer with the platform flag',
+        trainerSession({ organizationId: PLATFORM, isPlatformOwner: true }),
+      ],
+    ])(
+      'answers 403 for %s of the platform organization and adds nothing',
+      async (_name, session) => {
+        const { res, mock } = await run('POST', { body, session });
+        expect(res.status).toBe(403);
+        expect(await res.json()).toEqual({
+          error: 'Only platform administrators can manage curriculum content',
+        });
+        expect(inserts(mock)).toEqual([]);
+      }
+    );
+
+    it('lets the super admin of the platform organization add a curriculum document', async () => {
+      const { res, mock } = await run('POST', {
+        body,
+        session: platformAdmin(),
+      });
+      expect(res.status).toBe(200);
+      expect(inserts(mock)[0]).toMatchObject({ organizationId: PLATFORM });
+    });
+
+    it('still asks for title, file name and storage url', async () => {
+      const { res } = await run('POST', { body: { title: 'x' } });
+      expect(res.status).toBe(400);
     });
   });
 

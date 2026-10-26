@@ -50,6 +50,22 @@ export async function loadPlatformOrgIds(): Promise<Set<string>> {
 }
 
 /**
+ * Whether the session may add a document that will carry `organizationId` (the
+ * organization of the person). Documents of the platform organization are
+ * curriculum: only the super admin adds them, like the rest of the curriculum
+ * (requireCurriculumEditor). A person of a customer organization adds documents
+ * of the own organization.
+ */
+export function canCreateDocument(
+  session: SessionUser,
+  organizationId: string,
+  platformOrgIds: ReadonlySet<string>
+): boolean {
+  if (session.isSuperAdmin) return true;
+  return !platformOrgIds.has(String(organizationId));
+}
+
+/**
  * Whether the session may delete the document. `platformOrgIds` comes from
  * loadPlatformOrgIds.
  */

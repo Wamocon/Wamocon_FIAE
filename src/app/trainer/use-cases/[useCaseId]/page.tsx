@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   ArrowLeft,
@@ -44,7 +45,8 @@ export default function TrainerUseCaseDetailPage() {
   const router = useRouter();
   const params = useParams<{ useCaseId: string }>();
   const useCaseId = params?.useCaseId as string;
-  const { profile, isPlatformOwner } = useAuth();
+  const { profile } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
 
   const [useCase, setUseCase] = useState<UseCase | null>(null);
@@ -255,7 +257,7 @@ export default function TrainerUseCaseDetailPage() {
           </div>
 
           {/* Action Buttons — platform owner only */}
-          {isPlatformOwner && (
+          {canEditCurriculum && (
             <div className="flex items-center gap-2">
               {isEditing ? (
                 <>

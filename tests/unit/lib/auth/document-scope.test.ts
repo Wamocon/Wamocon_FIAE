@@ -160,6 +160,29 @@ describe('canDeleteDocument', () => {
   });
 });
 
+describe('canCreateDocument', () => {
+  const platformIds = new Set([PLATFORM]);
+
+  it('lets a person of a customer organization add documents of the own organization', async () => {
+    const { mod } = await load();
+    expect(mod.canCreateDocument(trainer as any, ORG, platformIds)).toBe(true);
+  });
+
+  it('keeps documents of the platform organization (curriculum) for the super admin', async () => {
+    const { mod } = await load();
+    expect(
+      mod.canCreateDocument(superAdmin as any, PLATFORM, platformIds)
+    ).toBe(true);
+    // the platform flag of a trainer changes nothing
+    expect(
+      mod.canCreateDocument(platformTrainer as any, PLATFORM, platformIds)
+    ).toBe(false);
+    expect(mod.canCreateDocument(trainer as any, PLATFORM, platformIds)).toBe(
+      false
+    );
+  });
+});
+
 describe('loadPlatformOrgIds', () => {
   it('reads the organizations that carry the platform flag', async () => {
     const { mod, rec } = await load([{ id: PLATFORM }, { id: OTHER }]);

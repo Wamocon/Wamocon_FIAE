@@ -2189,6 +2189,7 @@
   "hai.action.card.error.conflict": "Die Aktion passt nicht mehr zum aktuellen Stand. Bitte lade die Seite neu und versuche es erneut.",
   "hai.action.card.error.unavailable": "Die Berechtigung kann gerade nicht geprüft werden. Bitte versuche es später erneut.",
   "hai.action.card.error.generic": "Die Aktion konnte nicht ausgeführt werden. Bitte versuche es später erneut.",
+  "curriculum.superAdminOnly": "Lehrplan-Inhalte dürfen nur von Superadmins geändert werden.",
   "hai.admin.pinLocked": "Zu viele Fehlversuche. Bitte versuchen Sie es in {minutes} min erneut.",
   "hai.admin.pinUnavailable": "Die PIN-Prüfung ist gerade nicht verfügbar. Bitte versuchen Sie es später erneut."
 }

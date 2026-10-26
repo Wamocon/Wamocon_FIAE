@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "status": "Proposal of the rebuild plan (E1 and the 11 open questions of phase 4), not confirmed by the owner. Change a value here, not in the code, and generate the plan again.",
+  "catalog": "KFBM",
+  "duplicates": {
+    "policy": "newest",
+    "ambiguousWithinHours": 24
+  },
+  "components": {
+    "excludedNumbers": [18],
+    "mandatoryNumbers": [1, 2, 3, 4, 5, 6, 7, 8, 9, 24, 25],
+    "electiveNumbers": [10, 11, 12, 13, 14, 15, 16, 17, 19],
+    "integrativeNumbers": [20, 21, 22, 23],
+    "phaseByGroup": { "teil1": 1, "teil2": 2 },
+    "phaseOverrides": {},
+    "totalWeeks": {},
+    "totalHours": {},
+    "placeholderWeeks": 0,
+    "placeholderHours": 0
+  },
+  "content": {
+    "activate": false,
+    "globalQuizQuestions": 20,
+    "enablerText": true
+  },
+  "open": [
+    "Which of the two Excel mapping versions applies (learning fields and use cases are phase 4.5, not part of this run).",
+    "Scenario 23c lies in the folder of enabler 23b and three scenarios use the heading Aufgabe instead of Lösungsszenario: skipped until the owner decides.",
+    "Global quiz copies 01, 03 and 04 exist twice with modification times a few hours apart: skipped until the owner names the valid copy.",
+    "Quiz files with format errors (10b, 16e, 11c, 1a high) are skipped until the files are corrected."
+  ]
+}

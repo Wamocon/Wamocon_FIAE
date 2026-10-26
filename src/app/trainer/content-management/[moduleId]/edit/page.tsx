@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { PageLoader } from '@/components/ui/PageLoader';
 import {
   BookOpen,
@@ -26,6 +27,9 @@ export default function EditCoursePage() {
   const params = useParams<{ moduleId: string }>();
   const courseId = params?.moduleId as string;
   const { profile, isPlatformOwner, subscriptionPlan, loading: authLoading } = useAuth();
+  // Curriculum edits are for the platform wide admin only. isPlatformOwner
+  // and the super admin decide which documents are visible (canSeeTheoryDoc).
+  const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
   const trainerId = profile?.id;
 
@@ -123,14 +127,14 @@ export default function EditCoursePage() {
 
   // LIGHT plan hides only Wamocon THEORY PDFs; scenario + use case PDFs are always visible
   const canSeeTheoryDoc = (doc: { organizationId?: string | null }) => {
-    if (isPlatformOwner) return true;
+    if (isPlatformOwner || canEditCurriculum) return true;
     if (isLightPlan) return doc.organizationId != null && doc.organizationId === trainerOrgId;
     return true;
   };
 
   // Non-Wamocon trainers can only delete their own org's documents
   const canDeleteDoc = (doc: { organizationId?: string | null }) => {
-    if (isPlatformOwner) return true;
+    if (isPlatformOwner || canEditCurriculum) return true;
     return doc.organizationId != null && doc.organizationId === trainerOrgId;
   };
 
@@ -357,7 +361,7 @@ export default function EditCoursePage() {
             >
               <X className="h-4 w-4" /> {t('common.cancel')}
             </button>
-            {isPlatformOwner && (
+            {canEditCurriculum && (
               <button
                 onClick={e => handleSave(e as any)}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
@@ -386,7 +390,7 @@ export default function EditCoursePage() {
                     value={title}
                     onChange={e => setTitle(e.target.value)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                    disabled={!isPlatformOwner}
+                    disabled={!canEditCurriculum}
                   />
                 </div>
                 <div>
@@ -397,7 +401,7 @@ export default function EditCoursePage() {
                     value={year}
                     onChange={e => setYear(e.target.value as any)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2"
-                    disabled={!isPlatformOwner}
+                    disabled={!canEditCurriculum}
                   >
                     <option value="">
                       {t('trainer.content.examPartNone')}
@@ -414,7 +418,7 @@ export default function EditCoursePage() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      disabled={!isPlatformOwner}
+                      disabled={!canEditCurriculum}
                       onClick={() =>
                         setChapter(prev =>
                           String(Math.max(1, (parseInt(prev) || 0) - 1))
@@ -426,7 +430,7 @@ export default function EditCoursePage() {
                     </button>
                     <input
                       value={chapter}
-                      disabled={!isPlatformOwner}
+                      disabled={!canEditCurriculum}
                       onChange={e => {
                         const val = e.target.value.replace(/\D/g, '');
                         const num = parseInt(val);
@@ -441,7 +445,7 @@ export default function EditCoursePage() {
                     />
                     <button
                       type="button"
-                      disabled={!isPlatformOwner}
+                      disabled={!canEditCurriculum}
                       onClick={() =>
                         setChapter(prev => {
                           const next = (parseInt(prev) || 0) + 1;
@@ -679,7 +683,7 @@ export default function EditCoursePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {isPlatformOwner && (
+                    {canEditCurriculum && (
                       <button
                         type="button"
                         className="border-accent/30 rounded-md border px-2 py-1 text-xs"
@@ -758,9 +762,9 @@ export default function EditCoursePage() {
                         }
                       }}
                     >
-                      {isPlatformOwner ? t('common.edit') : t('content.view')}
+                      {canEditCurriculum ? t('common.edit') : t('content.view')}
                     </button>
-                    {isPlatformOwner && (
+                    {canEditCurriculum && (
                       <button
                         type="button"
                         className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
@@ -806,7 +810,7 @@ export default function EditCoursePage() {
                 </li>
               ))}
             </ul>
-            {isPlatformOwner && (
+            {canEditCurriculum && (
               <button
                 type="button"
                 className="border-accent/30 mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
@@ -833,7 +837,7 @@ export default function EditCoursePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {isPlatformOwner && (
+                    {canEditCurriculum && (
                       <button
                         type="button"
                         className="border-accent/30 rounded-md border px-2 py-1 text-xs"
@@ -928,9 +932,9 @@ export default function EditCoursePage() {
                         }
                       }}
                     >
-                      {isPlatformOwner ? t('common.edit') : t('content.view')}
+                      {canEditCurriculum ? t('common.edit') : t('content.view')}
                     </button>
-                    {isPlatformOwner && (
+                    {canEditCurriculum && (
                       <button
                         type="button"
                         className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
@@ -976,7 +980,7 @@ export default function EditCoursePage() {
                 </li>
               ))}
             </ul>
-            {isPlatformOwner && (
+            {canEditCurriculum && (
               <button
                 type="button"
                 className="border-accent/30 mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
@@ -1771,9 +1775,9 @@ export default function EditCoursePage() {
                                   )
                                 }
                               >
-                                {isPlatformOwner ? t('common.edit') : t('content.view')}
+                                {canEditCurriculum ? t('common.edit') : t('content.view')}
                               </button>
-                              {isPlatformOwner && (
+                              {canEditCurriculum && (
                                 <button
                                   type="button"
                                   className="border-accent/30 rounded-md border px-2 py-1 text-xs"
@@ -1808,7 +1812,7 @@ export default function EditCoursePage() {
                                     : t('common.activate')}
                                 </button>
                               )}
-                              {isPlatformOwner && (
+                              {canEditCurriculum && (
                                 <button
                                   type="button"
                                   className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-600"
@@ -1847,7 +1851,7 @@ export default function EditCoursePage() {
                                 difficultyLabel
                               )}
                             </div>
-                            {isPlatformOwner && (
+                            {canEditCurriculum && (
                               <button
                                 type="button"
                                 className="border-accent/30 rounded-md border px-2 py-1 text-xs"
@@ -1874,7 +1878,7 @@ export default function EditCoursePage() {
                 </label>
                 <input
                   value={enablerTitle}
-                  disabled={!isPlatformOwner}
+                  disabled={!canEditCurriculum}
                   onChange={e => setEnablerTitle(e.target.value)}
                   className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
@@ -1885,7 +1889,7 @@ export default function EditCoursePage() {
                 </label>
                 <textarea
                   value={enablerDescription}
-                  disabled={!isPlatformOwner}
+                  disabled={!canEditCurriculum}
                   onChange={e => setEnablerDescription(e.target.value)}
                   className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                   rows={3}
@@ -1901,7 +1905,7 @@ export default function EditCoursePage() {
                   </label>
                   <input
                     value={enablerPpt}
-                    disabled={!isPlatformOwner}
+                    disabled={!canEditCurriculum}
                     onChange={e => setEnablerPpt(e.target.value)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder="https://..."
@@ -1913,7 +1917,7 @@ export default function EditCoursePage() {
                   </label>
                   <input
                     value={enablerVideo}
-                    disabled={!isPlatformOwner}
+                    disabled={!canEditCurriculum}
                     onChange={e => setEnablerVideo(e.target.value)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder="https://..."
@@ -1978,7 +1982,7 @@ export default function EditCoursePage() {
                               <Eye className="h-3 w-3" />
                             </button>
                           )}
-                          {canDeleteDoc(doc) && (
+                          {canEditCurriculum && canDeleteDoc(doc) && (
                             <button
                               type="button"
                               onClick={async () => {
@@ -2011,6 +2015,7 @@ export default function EditCoursePage() {
                 )}
 
                 {/* Upload Theory PDF */}
+                {canEditCurriculum && (
                 <PdfUploader
                   compact
                   userId={trainerId || ''}
@@ -2044,6 +2049,7 @@ export default function EditCoursePage() {
                   }}
                   disabled={!editingEnablerId}
                 />
+                )}
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -2123,7 +2129,7 @@ export default function EditCoursePage() {
                               <Eye className="h-3 w-3" />
                             </button>
                           )}
-                          {canDeleteDoc(doc) && (
+                          {canEditCurriculum && canDeleteDoc(doc) && (
                             <button
                               type="button"
                               onClick={async () => {
@@ -2186,6 +2192,7 @@ export default function EditCoursePage() {
                 )}
 
                 {/* Upload Scenario PDF */}
+                {canEditCurriculum && (
                 <PdfUploader
                   compact
                   userId={trainerId || ''}
@@ -2219,6 +2226,7 @@ export default function EditCoursePage() {
                   }}
                   disabled={!editingEnablerId}
                 />
+                )}
               </div>
 
               {/* Legacy inline Quiz-Fragen removed. Use the multi-difficulty section above to manage quizzes. */}
@@ -2228,9 +2236,9 @@ export default function EditCoursePage() {
                   type="button"
                   onClick={() => setShowEditEnabler(false)}
                 >
-                  {isPlatformOwner ? t('common.cancel') : t('common.close')}
+                  {canEditCurriculum ? t('common.cancel') : t('common.close')}
                 </button>
-                {isPlatformOwner && (
+                {canEditCurriculum && (
                   <button
                     className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2"
                     onClick={async () => {
@@ -2325,7 +2333,7 @@ export default function EditCoursePage() {
                 </label>
                 <input
                   value={useCaseEditTitle}
-                  disabled={!isPlatformOwner}
+                  disabled={!canEditCurriculum}
                   onChange={e => setUseCaseEditTitle(e.target.value)}
                   className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
@@ -2336,7 +2344,7 @@ export default function EditCoursePage() {
                 </label>
                 <textarea
                   value={useCaseEditDesc}
-                  disabled={!isPlatformOwner}
+                  disabled={!canEditCurriculum}
                   onChange={e => setUseCaseEditDesc(e.target.value)}
                   className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                   rows={3}
@@ -2355,7 +2363,7 @@ export default function EditCoursePage() {
                       >
                         <input
                           type="checkbox"
-                          disabled={!isPlatformOwner}
+                          disabled={!canEditCurriculum}
                           checked={useCaseEditYear.includes(yr)}
                           onChange={e => {
                             if (e.target.checked)
@@ -2386,7 +2394,7 @@ export default function EditCoursePage() {
                       >
                         <input
                           type="checkbox"
-                          disabled={!isPlatformOwner}
+                          disabled={!canEditCurriculum}
                           checked={useCaseEditStage.includes(stage)}
                           onChange={e => {
                             if (e.target.checked)
@@ -2423,7 +2431,7 @@ export default function EditCoursePage() {
                     >
                       <input
                         type="checkbox"
-                        disabled={!isPlatformOwner}
+                        disabled={!canEditCurriculum}
                         checked={useCaseEditLernfelder.includes(lf)}
                         onChange={e => {
                           if (e.target.checked)
@@ -2449,7 +2457,7 @@ export default function EditCoursePage() {
                   <input
                     type="number"
                     min={0}
-                    disabled={!isPlatformOwner}
+                    disabled={!canEditCurriculum}
                     value={useCaseEditDuration}
                     onChange={e => setUseCaseEditDuration(e.target.value)}
                     className="border-accent/20 bg-background/60 w-full rounded-xl border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2460,7 +2468,7 @@ export default function EditCoursePage() {
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      disabled={!isPlatformOwner}
+                      disabled={!canEditCurriculum}
                       checked={useCaseEditActive}
                       onChange={e => setUseCaseEditActive(e.target.checked)}
                     />
@@ -2527,7 +2535,7 @@ export default function EditCoursePage() {
                             <Eye className="h-3 w-3" />
                           </button>
                         )}
-                        {canDeleteDoc(doc) && (
+                        {canEditCurriculum && canDeleteDoc(doc) && (
                           <button
                             type="button"
                             onClick={async () => {
@@ -2560,6 +2568,7 @@ export default function EditCoursePage() {
                 )}
 
                 {/* Compact PDF Upload */}
+                {canEditCurriculum && (
                 <PdfUploader
                   compact
                   userId={trainerId || ''}
@@ -2593,6 +2602,7 @@ export default function EditCoursePage() {
                   }}
                   disabled={!editingUseCaseId}
                 />
+                )}
               </div>
 
               <div className="flex justify-end gap-2">
@@ -2601,9 +2611,9 @@ export default function EditCoursePage() {
                   type="button"
                   onClick={() => setShowEditUseCase(false)}
                 >
-                  {isPlatformOwner ? t('common.cancel') : t('common.close')}
+                  {canEditCurriculum ? t('common.cancel') : t('common.close')}
                 </button>
-                {isPlatformOwner && (
+                {canEditCurriculum && (
                   <button
                     className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2"
                     onClick={async () => {

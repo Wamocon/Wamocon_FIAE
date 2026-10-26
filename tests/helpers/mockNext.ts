@@ -165,6 +165,19 @@ export function mockSession(session: FakeSession | null) {
       requireTrainer: guard(s => s.isTrainerLevel),
       requireAdmin: guard(s => s.isAdmin),
       requireSuperAdmin: guard(s => s.isSuperAdmin),
+      // Curriculum writes: only the platform wide admin, with the message of
+      // the real guard
+      requireCurriculumEditor: async () => {
+        if (!session) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        return session.isSuperAdmin
+          ? session
+          : NextResponse.json(
+              { error: actual.CURRICULUM_WRITE_FORBIDDEN },
+              { status: 403 }
+            );
+      },
     };
   });
 }
