@@ -20,9 +20,27 @@ jest.mock('@/lib/hai/providers', () => ({
   getChatProvider: () => ({ isInitialized: () => true }),
   getEmbeddingProvider: () => ({ isInitialized: () => false }),
 }));
+const mockAccess = jest.fn();
 jest.mock('@/lib/hai/retrievalAccess', () => ({
-  resolveRetrievalAccess: jest.fn().mockResolvedValue(null),
+  resolveRetrievalAccess: (userId: string) => mockAccess(userId),
 }));
+// Persona of the occupation (package H3): without an access it is neutral
+jest.mock('@/lib/hai/personaAccess', () => {
+  const persona = jest.requireActual('@/lib/hai/persona');
+  return {
+    loadHaiPersona: async (access: { catalogIds: string[] } | null) =>
+      access
+        ? persona.resolveHaiPersona({
+            catalogs: access.catalogIds.map(id => ({
+              id,
+              code: 'FIAE',
+              title: 'Fachinformatik',
+              settings: {},
+            })),
+          })
+        : persona.NEUTRAL_PERSONA,
+  };
+});
 jest.mock('@/lib/hai/vectorSearch', () => ({ searchWithContext: jest.fn() }));
 jest.mock('@/lib/hai/pageIndexService', () => ({
   fetchPageIndexContext: jest.fn(),
@@ -59,6 +77,40 @@ describe('HAI pipeline: actions are proposals, never writes', () => {
     jest.clearAllMocks();
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     mockExecute.mockResolvedValue({ success: true, message: 'executed' });
+    mockAccess.mockResolvedValue({
+      catalogIds: ['00000000-0000-4000-8000-000000000001'],
+      audience: 'trainee',
+      organizationId: 'org-1',
+      userId: '10000000-0000-4000-8000-000000000001',
+    });
+  });
+
+  it('a user without a catalog scope gets no proposal, in both paths', async () => {
+    mockAccess.mockResolvedValue(null);
+    mockDetect.mockReturnValue(
+      intent('complete_enabler', 1.0, { enablerId: ENABLER })
+    );
+    const blocking = await processMessage('Enabler fertig', ctx());
+    const chunks: string[] = [];
+    const streaming = await processMessageStream('Enabler fertig', ctx(), c =>
+      chunks.push(c)
+    );
+
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockChat).not.toHaveBeenCalled();
+    for (const result of [blocking, streaming]) {
+      expect(result.pendingAction).toBeUndefined();
+      expect(result.intent).toBe('off_topic');
+    }
+    expect(chunks.join('')).toBe(streaming.response);
+  });
+
+  it('a lookup of the scope that fails closes the action step too', async () => {
+    mockAccess.mockResolvedValue(null);
+    mockDetect.mockReturnValue(intent('mark_notification_read', 1.0, { markAll: true }));
+    const result = await processMessage('Alle Benachrichtigungen gelesen', ctx());
+    expect(result.pendingAction).toBeUndefined();
+    expect(mockDetect).not.toHaveBeenCalled();
   });
 
   it.each([0.7, 0.85, 1.0])(

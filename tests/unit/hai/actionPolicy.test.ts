@@ -199,3 +199,38 @@ describe('HAI proactive checks only use the data of the person', () => {
     }
   });
 });
+
+describe('ids parsed from the message text', () => {
+  const SUB = '30000000-0000-4000-8000-000000000001';
+
+  it('become a clean proposal only, the catalog and organization checks run at execution', async () => {
+    const { detectActionIntent } = await import('@/lib/hai/actions');
+    const intent = detectActionIntent(
+      `genehmige die abgabe submission: ${SUB}`,
+      { userRole: 'TRAINER' }
+    );
+    expect(intent?.type).toBe('approve_submission');
+    expect(intent?.requiresConfirmation).toBe(true);
+    expect(
+      sanitizeActionParameters('approve_submission', intent!.parameters)
+    ).toEqual({ ok: true, parameters: { submissionId: SUB } });
+  });
+
+  it('a quiz id from the text can neither grade nor submit anything', async () => {
+    const { detectActionIntent } = await import('@/lib/hai/actions');
+    const grade = detectActionIntent(`bewerte quiz: ${SUB}`, {
+      userRole: 'TRAINER',
+    });
+    expect(grade?.type).toBe('grade_quiz');
+    // No submission and no score in the text: nothing to propose
+    expect(sanitizeActionParameters('grade_quiz', grade!.parameters).ok).toBe(
+      false
+    );
+    const submit = detectActionIntent(`reich das quiz: ${SUB} ein`, {
+      userRole: 'TRAINEE',
+    });
+    // Submitting a quiz is not an executable action any more
+    expect(submit?.type).toBe('submit_quiz');
+    expect(isWriteAction(submit!.type)).toBe(false);
+  });
+});
