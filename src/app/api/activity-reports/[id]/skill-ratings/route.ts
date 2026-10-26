@@ -1,26 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
-import { activityReports, profiles } from '@/db/migrations/schemas/schema';
+import { and, eq } from 'drizzle-orm';
+import { activityReports } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
+import { isErrorResponse } from '@/lib/auth/session';
+import {
+  loadReportForSession,
+  requireTraineeSession,
+} from '@/lib/auth/activity-report-access';
 
 // PATCH: Update skill self-ratings on an existing activity report
-// Allows trainee to fill/update skill self-ratings on any of their own reports
+// Allows the signed-in trainee to fill the skill self-ratings of any of their
+// own reports. The person is the session, a userId in the body is ignored and
+// the report of someone else is a 404. Not an action of trainer level.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await requireTraineeSession(request);
+  if (isErrorResponse(session)) return session;
+
   try {
     const { id } = await params;
     const body = await request.json();
-    const { userId, skillSelfRatings } = body;
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
-      );
-    }
+    const { skillSelfRatings } = body;
 
     if (!skillSelfRatings || typeof skillSelfRatings !== 'object') {
       return NextResponse.json(
@@ -41,21 +44,8 @@ export async function PATCH(
     }
 
     // Verify the report exists and belongs to this user
-    const [report] = await db
-      .select()
-      .from(activityReports)
-      .where(eq(activityReports.id, id as any));
-
-    if (!report) {
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-    }
-
-    if (String(report.traineeId) !== userId) {
-      return NextResponse.json(
-        { error: 'Zugriff verweigert' },
-        { status: 403 }
-      );
-    }
+    const report = await loadReportForSession(session, request, id);
+    if (isErrorResponse(report)) return report;
 
     // One-time submission: reject if already submitted
     if (
@@ -74,14 +64,19 @@ export async function PATCH(
       );
     }
 
-    // Update skill self-ratings
+    // Update skill self-ratings, the owner is part of the update itself
     await db
       .update(activityReports)
       .set({
         skillSelfRatings,
         updatedAt: new Date(),
       })
-      .where(eq(activityReports.id, id as any));
+      .where(
+        and(
+          eq(activityReports.id, id as any),
+          eq(activityReports.traineeId, session.id as any)
+        )
+      );
 
     apiCache.invalidate('activity_reports');
 

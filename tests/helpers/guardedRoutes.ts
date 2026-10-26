@@ -1,7 +1,8 @@
 // Generated from the route files under src/app/api/trainer and src/app/api/admin,
 // plus me/catalog-requests (a trainer-level request for an occupation), the
 // notification routes and every route of a trainee (guard 'user') and the
-// HAI routes (src/app/api/hai).
+// HAI routes (src/app/api/hai), the activity report routes (activity-reports,
+// weekly-evaluations, grade-edit-history) and breadcrumb/label.
 // Every entry is a handler that must reject anonymous callers (401) and callers
 // with a too low role (403). Regenerate when a route is added.
 
@@ -13,8 +14,12 @@
 // trainee/lernfelder, trainee/lernfelder/[id], trainee/evaluations/softskills
 // and trainee/school/lernfelder. 'haiIndex' handlers manage the shared HAI
 // index (see src/lib/hai/indexAccess.ts).
+// 'trainee' is a signed-in trainee: a trainer-level caller is answered with 403
+// (creating and editing an activity report and the self rating of the skills
+// are actions of the trainee, bound to the owner of the report).
 export type GuardKind =
   | 'user'
+  | 'trainee'
   | 'trainer'
   | 'admin'
   | 'superAdmin'
@@ -925,6 +930,84 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     method: 'POST',
     guard: 'user',
     params: ['useCaseId'],
+  },
+  {
+    route: 'activity-reports',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'activity-reports',
+    method: 'POST',
+    guard: 'trainee',
+    params: [],
+  },
+  {
+    route: 'activity-reports/[id]',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'activity-reports/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'activity-reports/[id]',
+    method: 'PUT',
+    guard: 'trainee',
+    params: ['id'],
+  },
+  {
+    route: 'activity-reports/[id]',
+    method: 'PATCH',
+    guard: 'trainer',
+    params: ['id'],
+  },
+  {
+    route: 'activity-reports/[id]/entries',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'activity-reports/[id]/entries',
+    method: 'PATCH',
+    guard: 'trainer',
+    params: ['id'],
+  },
+  {
+    route: 'activity-reports/[id]/skill-ratings',
+    method: 'PATCH',
+    guard: 'trainee',
+    params: ['id'],
+  },
+  {
+    route: 'weekly-evaluations',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'weekly-evaluations',
+    method: 'POST',
+    guard: 'trainer',
+    params: [],
+  },
+  {
+    route: 'grade-edit-history',
+    method: 'GET',
+    guard: 'trainer',
+    params: [],
+  },
+  {
+    route: 'breadcrumb/label',
+    method: 'GET',
+    guard: 'user',
+    params: [],
   },
   { route: 'hai/chat', method: 'POST', guard: 'user', params: [] },
   { route: 'hai/chat', method: 'PATCH', guard: 'user', params: [] },

@@ -46,6 +46,7 @@ export type { ChunkOptions, TextChunk } from './chunker';
 export {
   indexContent,
   indexContentBatch,
+  removeChunkPart,
   removeEmbeddings,
   getEmbeddingCount,
   getIndexedSources,

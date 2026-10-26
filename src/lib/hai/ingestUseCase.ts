@@ -17,6 +17,11 @@ import { createHash } from 'crypto';
 import { getEmbeddingProvider } from './providers';
 import { extractTextByPage, PerPageExtractionResult } from './pdfExtractor';
 import { chunkDocument } from './chunker';
+import {
+  documentVisibility,
+  scopeProblem,
+  type IndexScope,
+} from './indexScope';
 import haiDb from '@/db/haiDb';
 import {
   haiEmbeddings,
@@ -85,27 +90,40 @@ function generateContentHash(content: string): string {
 }
 
 /**
- * Check if a page chunk already exists with same content hash
+ * State of a stored page chunk with the same content hash:
+ *  - 'unchanged': same content and same scope
+ *  - 'rescope': same content, other scope (only the scope columns are updated)
+ *  - 'missing': no chunk with this content
  */
-async function pageChunkExists(
+async function pageChunkState(
   sourceId: string,
   pageNumber: number,
   chunkIndex: number,
-  contentHash: string
-): Promise<boolean> {
+  contentHash: string,
+  scope: IndexScope
+): Promise<'unchanged' | 'rescope' | 'missing'> {
   try {
-    const result = await haiDb.execute(sql`
-            SELECT 1 FROM hai_embeddings 
+    const result = (await haiDb.execute(sql`
+            SELECT training_catalog_id::text AS training_catalog_id,
+                   visibility,
+                   organization_id::text AS organization_id
+            FROM hai_embeddings
             WHERE source_type = 'use_case'
               AND source_id = ${sourceId}::uuid
               AND metadata->>'page' = ${String(pageNumber)}
               AND chunk_index = ${chunkIndex}
               AND content_hash = ${contentHash}
             LIMIT 1
-        `);
-    return (result as any[]).length > 0;
+        `)) as any[];
+    if (result.length === 0) return 'missing';
+    const row = result[0];
+    return row.training_catalog_id === scope.trainingCatalogId &&
+      row.visibility === scope.visibility &&
+      row.organization_id === scope.organizationId
+      ? 'unchanged'
+      : 'rescope';
   } catch {
-    return false;
+    return 'missing';
   }
 }
 
@@ -146,6 +164,8 @@ export async function ingestUseCaseDocument(
         storageUrl: contentDocuments.storageUrl,
         documentType: contentDocuments.documentType,
         useCaseId: contentDocuments.useCaseId,
+        organizationId: contentDocuments.organizationId,
+        visibility: contentDocuments.visibility,
       })
       .from(contentDocuments)
       .where(eq(contentDocuments.id, documentId as any))
@@ -163,12 +183,33 @@ export async function ingestUseCaseDocument(
     }
 
     const [useCaseRow] = await haiDb
-      .select({ title: useCases.title })
+      .select({
+        title: useCases.title,
+        trainingCatalogId: useCases.trainingCatalogId,
+      })
       .from(useCases)
       .where(eq(useCases.id, useCaseId as any))
       .limit(1);
 
     const useCaseTitle = useCaseRow?.title || 'Unknown Use Case';
+
+    // Scope of every chunk of this solution: the occupation of the use case,
+    // the organization of the document, never visible to trainees (only
+    // TRAINER_SOLUTION documents get here)
+    const scope: IndexScope = {
+      trainingCatalogId: useCaseRow?.trainingCatalogId
+        ? String(useCaseRow.trainingCatalogId)
+        : null,
+      visibility: documentVisibility(docRow.documentType, docRow.visibility),
+      organizationId: docRow.organizationId
+        ? String(docRow.organizationId)
+        : null,
+    };
+    const problem = scopeProblem(scope);
+    if (problem) {
+      result.error = `Index scope incomplete for use case ${useCaseId}: ${problem}`;
+      return result;
+    }
 
     onProgress?.(0, 100, `Extracting PDF pages from ${docRow.title}...`);
 
@@ -223,13 +264,37 @@ export async function ingestUseCaseDocument(
 
         // Check if already indexed (skip if not forcing)
         if (!forceReindex) {
-          const exists = await pageChunkExists(
+          const state = await pageChunkState(
             useCaseId,
             page.page,
             chunkIdx,
-            contentHash
+            contentHash,
+            scope
           );
-          if (exists) {
+          if (state === 'rescope') {
+            // Same text, other occupation or owner: no new embedding
+            try {
+              await haiDb.execute(sql`
+                        UPDATE hai_embeddings
+                        SET training_catalog_id = ${scope.trainingCatalogId}::uuid,
+                            visibility = ${scope.visibility},
+                            organization_id = ${scope.organizationId}::uuid,
+                            updated_at = NOW()
+                        WHERE source_type = 'use_case'
+                          AND source_id = ${useCaseId}::uuid
+                          AND chunk_index = ${page.page * 1000 + chunkIdx}
+                    `);
+              result.chunksSkipped++;
+            } catch (scopeError) {
+              console.error(
+                `Failed to update the scope of chunk ${chunkIdx} of page ${page.page}:`,
+                scopeError
+              );
+              result.chunksFailed++;
+            }
+            continue;
+          }
+          if (state === 'unchanged') {
             result.chunksSkipped++;
             continue;
           }
@@ -259,7 +324,8 @@ export async function ingestUseCaseDocument(
           // Upsert embedding
           await haiDb.execute(sql`
                         INSERT INTO hai_embeddings (
-                            source_type, source_id, chunk_index, content, content_hash, embedding, metadata
+                            source_type, source_id, chunk_index, content, content_hash, embedding, metadata,
+                            training_catalog_id, visibility, organization_id
                         ) VALUES (
                             'use_case',
                             ${useCaseId}::uuid,
@@ -267,14 +333,20 @@ export async function ingestUseCaseDocument(
                             ${chunkText},
                             ${contentHash},
                             ${embeddingVector}::vector,
-                            ${metadata}::jsonb
+                            ${JSON.stringify(metadata)}::jsonb,
+                            ${scope.trainingCatalogId}::uuid,
+                            ${scope.visibility},
+                            ${scope.organizationId}::uuid
                         )
-                        ON CONFLICT (source_type, source_id, chunk_index) 
+                        ON CONFLICT (source_type, source_id, chunk_index)
                         DO UPDATE SET
                             content = EXCLUDED.content,
                             content_hash = EXCLUDED.content_hash,
                             embedding = EXCLUDED.embedding,
                             metadata = EXCLUDED.metadata,
+                            training_catalog_id = EXCLUDED.training_catalog_id,
+                            visibility = EXCLUDED.visibility,
+                            organization_id = EXCLUDED.organization_id,
                             updated_at = NOW()
                     `);
 

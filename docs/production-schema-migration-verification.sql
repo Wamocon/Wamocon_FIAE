@@ -514,3 +514,38 @@ select c.training_catalog_id,
 from public.courses c
 group by c.training_catalog_id
 order by c.training_catalog_id;
+
+-- C18. After 20261029000100 (HAI quiz visibility, package H2) and a reindex of the
+-- quizzes: questions are visible to trainees, answers are trainer only, and no
+-- visible chunk carries an answer marker. Expect trainer rows for every
+-- contentPart = 'answers' and 0 in the second query. Quiz chunks written before
+-- the reindex have no contentPart and stay 'trainer'.
+select metadata ->> 'contentPart' as content_part, visibility, count(*) as chunks
+from public.hai_embeddings
+where source_type = 'quiz'
+group by 1, 2
+order by 1, 2;
+
+-- C19. After the reindex (package H2): the scenario hint is its own chunk and trainer
+-- only. Old enabler chunks still carry "Hinweis:" inside the enabler text with
+-- visibility 'all' until the enablers are indexed again. Expect 0.
+select count(*) as enabler_chunks_with_hint_visible
+from public.hai_embeddings
+where source_type = 'enabler'
+  and visibility = 'all'
+  and content like '%Hinweis:%'
+  and coalesce(metadata ->> 'contentPart', '') <> 'hint';
+
+-- C20. After the trainee data were indexed again (package H2): no personal chunk
+-- holds an e-mail address any more. Expect 0.
+select count(*) as personal_chunks_with_email
+from public.hai_embeddings
+where source_type like 'trainee\_%'
+  and content ~ '@';
+
+select count(*) as visible_chunks_with_answer_marker
+from public.hai_embeddings
+where source_type = 'quiz'
+  and visibility = 'all'
+  and (content ~ ('[' || chr(10003) || chr(10007) || ']|Erkl.rung:|Erwartete Antwort:')
+       or coalesce(metadata ->> 'contentPart', '') <> 'questions');
