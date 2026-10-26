@@ -26,6 +26,8 @@ const emptyTables = (): Tables => ({
   options: [],
   enabler_quiz_links: [],
   content_documents: [],
+  training_catalog_learning_fields: [],
+  training_catalog_content_mappings: [],
 });
 
 export interface WriteLog {
@@ -72,12 +74,13 @@ export class MemoryImportDb implements Db {
     const out: Row[] = [];
     if (rows.length === 0) return out;
     const allowed = new Set(TABLES[table].columns);
-    for (const row of rows) {
-      for (const column of Object.keys(row)) {
+    for (const input of rows) {
+      for (const column of Object.keys(input)) {
         if (!allowed.has(column)) {
           throw new Error(`column ${column} is not allowed in ${table}`);
         }
       }
+      const row = this.prepare(table, input);
       this.checkUnique(table, row);
       this.counter += 1;
       const stored = {
@@ -125,6 +128,45 @@ export class MemoryImportDb implements Db {
 
   totalRows() {
     return Object.values(this.tables).reduce((n, rows) => n + rows.length, 0);
+  }
+
+  /**
+   * What the database does before a row is stored: the trigger that derives
+   * the catalog of a mapping from its learning field, and the checks of the
+   * learning field tables (foreign keys, check constraints).
+   */
+  private prepare(table: TableName, row: Row): Row {
+    if (table === 'training_catalog_learning_fields') {
+      const year = Number(row.training_year);
+      if (!row.code || !row.title || !(year >= 1 && year <= 3)) {
+        throw new Error('check violation training_catalog_learning_fields');
+      }
+      if (
+        row.hours_budget !== null &&
+        row.hours_budget !== undefined &&
+        Number(row.hours_budget) < 0
+      ) {
+        throw new Error('check violation hours_budget');
+      }
+    }
+    if (table === 'training_catalog_content_mappings') {
+      const field = this.tables.training_catalog_learning_fields.find(
+        r => r.id === row.learning_field_id
+      );
+      if (!field) throw new Error('foreign key learning_field_id');
+      if ((row.enabler_id == null) === (row.use_case_id == null)) {
+        throw new Error('check violation exactly_one_content');
+      }
+      if (row.enabler_id != null) {
+        const enabler = this.tables.enablers.find(r => r.id === row.enabler_id);
+        if (!enabler) throw new Error('foreign key enabler_id');
+        if (enabler.training_catalog_id !== field.training_catalog_id) {
+          throw new Error('foreign key enabler_catalog_fk');
+        }
+      }
+      return { ...row, training_catalog_id: field.training_catalog_id };
+    }
+    return row;
   }
 
   private checkUnique(table: TableName, row: Row) {
@@ -190,6 +232,28 @@ export class MemoryImportDb implements Db {
             r.enabler_id === row.enabler_id && r.difficulty === row.difficulty
         );
         clash('enabler_quiz_links_quiz', r => r.quiz_id === row.quiz_id);
+        break;
+      case 'training_catalog_learning_fields':
+        clash(
+          'training_catalog_learning_fields_catalog_code_unique',
+          r =>
+            r.training_catalog_id === row.training_catalog_id &&
+            r.code === row.code
+        );
+        clash(
+          'training_catalog_learning_fields_catalog_order_unique',
+          r =>
+            r.training_catalog_id === row.training_catalog_id &&
+            r.order_index === row.order_index
+        );
+        break;
+      case 'training_catalog_content_mappings':
+        clash(
+          'training_catalog_content_mappings_lf_enabler_unique',
+          r =>
+            r.learning_field_id === row.learning_field_id &&
+            r.enabler_id === row.enabler_id
+        );
         break;
       default:
         break;

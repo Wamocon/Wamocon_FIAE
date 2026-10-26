@@ -1,6 +1,6 @@
 # KfBM-Inhaltsimport: Runbook für Plan, Prüfung, Probelauf und Apply
 
-Stand: 26.10.2026. Dieses Paket ist Phase 4.4 des KfBM-Umbaus. Es schreibt die geparsten Inhalte (Phase 4.0 und 4.3, siehe `docs/kfbm-import-quellformat.md`) in die Datenbank, standardmäßig als Probelauf.
+Stand: 27.10.2026. Dieses Paket ist Phase 4.4 des KfBM-Umbaus, die Lernfelder (Phase 4.5) stehen im eigenen Abschnitt weiter unten. Es schreibt die geparsten Inhalte (Phase 4.0 und 4.3, siehe `docs/kfbm-import-quellformat.md`) in die Datenbank, standardmäßig als Probelauf.
 
 **Production ist ausdrücklich nicht vorgesehen.** Das Skript hat kein Ziel `production` und keinen Schalter dafür. Ein Apply in Production gibt es erst nach dem Go des Eigentümers und dem Rollout (Variable `KFBM_ROLLOUT_APPROVED`, `docs/release-prozess.md`), und dann nur nach einer bewussten Änderung des Skripts. Dieses Paket enthält keine Migration und hat keine Wirkung auf Production.
 
@@ -8,7 +8,7 @@ Stand: 26.10.2026. Dieses Paket ist Phase 4.4 des KfBM-Umbaus. Es schreibt die g
 
 Es liest die Quelldokumente (nur lesend) und schreibt in acht Tabellen: `training_components`, `courses`, `enablers`, `quizzes`, `questions`, `options`, `enabler_quiz_links` und `content_documents`. Es löscht nie etwas (kein `DELETE`, kein `TRUNCATE`, keine Struktur) und überschreibt keine bestehende Zeile, außer mit `--update-existing` und nur in benannten Spalten (`src/lib/content-import/apply/tables.ts`).
 
-Es lädt keine Dateien in den Storage hoch, ruft keine Modelle auf, löst keine Indexierung aus und nutzt kein Netzwerk außer der Zieldatenbank. Use Cases und die Zuordnung der Lernfelder aus der Excel (Phase 4.5) gehören nicht dazu.
+Es lädt keine Dateien in den Storage hoch, ruft keine Modelle auf, löst keine Indexierung aus und nutzt kein Netzwerk außer der Zieldatenbank. Use Cases gehören nicht dazu. Die Lernfelder und ihre Zuordnung aus der Excel schreibt ein eigenes Skript (Abschnitt "Lernfelder und Zuordnungen").
 
 ## Ablauf in vier Schritten
 
@@ -119,7 +119,7 @@ Die Komponenten tragen vorläufig Wochen und Sollstunden 0 (die Spalten sind `NO
 
 1. Die Route `GET /api/trainee/enablers/[enablerId]/quizzes/[difficulty]` liefert `options.explanation` an Azubis schon vor der Antwort (die Seite nutzt das, um die Begründung nach der Antwort zu zeigen). Weil die Begründung nur an der richtigen Option steht, verrät das die richtige Antwort. Das ist bestehender Code und gilt auch für FIAE. Vor der Aktivierung eines Quiz die Route ändern (Begründung erst mit dem Ergebnis aus `submit`).
 2. Die Seite der Azubis für einen Enabler ruft die Dokumentenroute des Trainers auf und listet jede Dokumentzeile als Link. Die Route liefert alle Spalten ohne Filter nach Sichtbarkeit. Sie bleibt für Azubis gesperrt, solange niemand sie öffnet. Wer sie öffnet, muss `TRAINER_ONLY` und `TRAINER_SOLUTION` ausfiltern und Zeilen mit leerer `storage_url` nicht als Link zeigen.
-3. Die Wochen und Sollstunden der Komponenten und die Zuordnung der Lernfelder fehlen noch.
+3. Die Wochen und Sollstunden der Komponenten fehlen noch. Die Lernfelder und ihre Zuordnung schreibt das Skript der Phase 4.5, Titel und Stunden der Lernfelder sind dort vorläufig oder offen.
 
 ## Upload der Originaldateien (eigenes Paket, nicht Teil dieses Laufs)
 
@@ -136,8 +136,63 @@ Die Voreinstellungen stehen in `scripts/import/kfbm-decisions.json` und sind Vor
 
 Gründe im Plan: `PARSE_ERROR`, `CODE_MISMATCH`, `DIFFICULTY_MISMATCH`, `KIND_MISMATCH`, `QUESTION_COUNT`, `DUPLICATE_AMBIGUOUS`, `ENABLER_MISSING`, `PATH_ISSUE`, `READ_ERROR`, `PLACEHOLDER`, `NO_HEADING`, `NO_DECISION`, `NO_GROUP`, `KIND_GROUP_MISMATCH`, `SOLUTION_MARKER`.
 
+## Lernfelder und Zuordnungen (Phase 4.5)
+
+Ein eigenes Skript, `scripts/import/kfbm-learning-fields.mjs` (`npm run import:kfbm:learning-fields`), schreibt die 13 Lernfelder des KfBM und ordnet die Enabler des Inhaltsimports den Lernfeldern zu. Es ist ein eigenes Skript, weil die Eingabe eine Excel-Tabelle und eine Codeliste ist und nicht die Word-Dokumente, und weil der Plan eine andere Form hat. Die Sicherheitsstruktur ist dieselbe (Ziele nur `local` und `preview`, Probelauf als Standard, echter Lauf nur mit `--apply`, Transaktion mit Isolation `repeatable read`, derselbe Advisory Lock, kein `DELETE`, keine Struktur, Verbindung nur aus `DB_CONNECTION_STRING`, keine Geheimnisse im Log). Die Prüfung von Host, Schema und Rolle ist derselbe Code (`src/lib/content-import/apply/target.ts`). Dieses Paket enthält keine Migration und hat keine Wirkung auf Production.
+
+### Reihenfolge
+
+1. Inhaltsimport (Abschnitte oben): schreibt Komponenten, Kurse, Enabler, Quizze und Szenarien.
+2. Plan der Lernfelder (ohne Datenbank).
+3. Prüfung, Probelauf, echter Lauf der Lernfelder.
+
+Ohne Enabler im Katalog stoppt das Skript (`NO_ENABLERS`). Fehlen einzelne Enabler, werden deren Zuordnungen als übersprungen gemeldet (`ENABLER_NOT_IN_DATABASE`), und der Lauf lässt sich wiederholen, sobald der Inhaltsimport sie geschrieben hat. Ein zweiter Lauf ergänzt nur, was fehlt.
+
+### Schritte
+
+```
+npm run import:kfbm:learning-fields -- plan "<Pfad>\Übertragung von Mapping aus Dokument in Excel.xlsx" --import-source "<Pfad zu Komponente>" --titles "<Pfad>\Enabler_Quellen.csv" --out kfbm-plan-lf.json
+$env:DB_CONNECTION_STRING = "<Verbindung des Ziels>"
+npm run import:kfbm:learning-fields -- check --plan kfbm-plan-lf.json --target local
+npm run import:kfbm:learning-fields -- run --plan kfbm-plan-lf.json --target local
+npm run import:kfbm:learning-fields -- run --plan kfbm-plan-lf.json --target local --apply
+```
+
+- `plan` liest die Tabelle (nur lesend, 60 Sekunden Frist) und die Codes des Inhaltsimports. Die Codes kommen aus den Dateinamen des Quellordners (`--import-source`, es wird kein Dokument geöffnet, dieselbe Auswahl wie im Plan des Inhaltsimports) oder aus dessen Plan (`--import-plan kfbm-plan.json`). Neben dem JSON entsteht eine Zusammenfassung als Markdown (`kfbm-plan-lf.md`). Beide Dateien enthalten nur Codes, Zahlen und Zeilennummern, keinen Zelltext. Der Dateiname `kfbm-plan-lf.json` steht über `kfbm-plan*.json` in der `.gitignore`.
+- `check` vergleicht den Plan in einer schreibgeschützten Transaktion mit der Zieldatenbank. `run` ist ein Probelauf und rollt zurück, mit `--apply` wird übernommen. Optionen wie beim Inhaltsimport: `--confirm-host <Host>` ist Pflicht für einen echten Lauf in der Preview, `--report-out <Datei.md>` schreibt den Bericht. `--update-existing` aktualisiert nur den Titel bestehender Lernfelder, und nur durch einen Titel aus der Titeldatei des Eigentümers (`.json`) oder wenn noch der Platzhalter "Lernfeld N" steht. Vorläufige Titel aus der Quellenliste ersetzen nie einen gesetzten Titel und ein Platzhalter nie einen vorhandenen. Sonst wird nichts überschrieben. Exit-Codes: 0 fertig, 1 Fehler oder abgelehnt, 2 falsche Aufrufe, 3 Konflikte.
+
+### Was gelesen und geschrieben wird
+
+| Quelle                                                  | Ziel                                                                                                                                                 | Schlüssel für die Idempotenz |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| 13 Lernfelder (Code `LF1` bis `LF13`)                   | `training_catalog_learning_fields` (Schuljahr 1 für LF1 bis LF4, 2 für LF5 bis LF8, 3 für LF9 bis LF13, `order_index` 1 bis 13, `hours_budget` leer) | Katalog und Code             |
+| Zeile der Tabelle (Position mit Buchstabe) und Lernfeld | `training_catalog_content_mappings` (`learning_field_id`, `enabler_id`, der Katalog wird per Trigger abgeleitet)                                     | Lernfeld und Enabler         |
+
+- Die Tabelle: Kopfzeile mit "Schuljahr 1" bis "Schuljahr 3" (in der Fassung vom 07.08.2026 Zeile 4), Spalte A nennt die Komponente nur in der ersten Zeile ihres Blocks, Spalte B die Position ("a) ..."), die Spalten C bis E die Lernfelder je Schuljahr. Die Nummer der Importkomponente folgt aus dem Paragrafen der Verordnung: Abschnitt A (§ 4 Absatz 2) Nr. 1 bis 9 sind K1 bis K9, Abschnitt B (Absatz 3) Nr. 1 bis 10 sind K10 bis K19, Abschnitt C (Absatz 4) Nr. 1 bis 6 sind K20 bis K25. Der Titel der Komponente wird nicht ausgewertet. Bei geteilten Komponenten (K6, K24, K25) entscheidet der Buchstabe, zu welchem Teil der Enabler gehört (K6.1-a, K6.2-d). Es gilt die Fassung "Übertragung von Mapping aus Dokument in Excel.xlsx" (Stand 07.08.2026), die ältere Datei mit dem Zusatz "-WMC-NB-MB-03" wird nicht gelesen.
+- Angaben wie "LF 2", "LF2,3", "LF 2,3,4", "Lernfeld 3", "LF 5, LF 7", "LF 5 und 7" werden gelesen (Groß und Kleinschreibung, Leerzeichen, Steuerzeichen und Silbentrennung spielen keine Rolle). "alle Lernfelder" bedeutet alle Lernfelder des Schuljahrs der Spalte. "nur betrieblich" und "nur betr./beh." bedeuten, dass die Position nur im Betrieb vermittelt wird: kein Lernfeld, kein Fehler (Hinweis im Plan).
+- Nichts wird geraten. Als übersprungen mit Grund und Zeilennummer (und Spalte) führt der Plan: Komponente ohne Gegenstück im Import (`COMPONENT_NOT_IN_IMPORT`), ausgeschlossene Komponente (`COMPONENT_EXCLUDED`, K18), Buchstabe ohne Enabler im Import (`ENABLER_NOT_IN_IMPORT`), mehrfach vorkommender Buchstabe (`DUPLICATE_LETTER`, beide Zeilen), Zeile ohne Buchstaben (`NO_LETTER`), widersprüchlicher Block (`NUMBER_MISMATCH`, `SECTION_MISMATCH`, `REFERENCE_MISMATCH`, `NUMBER_OUT_OF_RANGE`, `BLOCK_UNKNOWN`), Lernfeld außerhalb 1 bis 13 (`LF_OUT_OF_RANGE`), Lernfeld, das nicht zum Schuljahr der Spalte gehört (`YEAR_MISMATCH`), nicht lesbare Zelle (`UNPARSEABLE_REFERENCE`), Lernfeldangabe ohne Zeilentext (`ORPHAN_REFERENCE`).
+- Zuordnungen gibt es nur zu Enablern. Das Modell erlaubt auch Use Cases (genau eines von beiden), die Zuordnung zu Komponenten gibt es im Modell nicht. Use Cases folgen mit deren Import.
+- Titel und Stunden: Die Tabelle nennt keine. Als einzige Quelle für Titel dient die Kapitelliste in `Enabler_Quellen.csv` (Kurztitel aus den Buchkapiteln), mit `--titles <Datei>` übernommen und im Plan als vorläufig markiert. Ohne `--titles` lauten die Titel "Lernfeld 1" bis "Lernfeld 13" (vorläufig, die Spalte ist `NOT NULL`). Der Eigentümer kann offizielle Titel als JSON nachreichen (`{"LF1": "..."}`, Datei mit der Endung `.json`) und mit `--update-existing` einspielen. Stunden (`hours_budget`) bleiben leer, bis eine Quelle vorliegt.
+- Konflikte (ein Lernfeld besteht mit anderem Schuljahr, eine Stelle der Reihenfolge ist von einem anderen Code belegt) stoppen einen echten Lauf vor dem ersten Schreiben (Exit 3). Bestehende Zuordnungen, die der Plan nicht nennt, bleiben unverändert (der Bericht zählt sie).
+
+### Apply in die Preview, Rückbau
+
+- **Wer, wann:** der Eigentümer, nach dem Inhaltsimport in die Preview und nach einem Probelauf gegen die Preview ohne Konflikte. Der Agent, der dieses Paket gebaut hat, schreibt nicht in die Preview.
+- **Womit:** `DB_CONNECTION_STRING` der Preview mit der Rolle `app_preview_migrator`, `--target preview --apply --confirm-host <Host>`. Voraussetzungen: Migrationen bis `20261029000100`, Katalog `KFBM` aktiv, Enabler des Inhaltsimports vorhanden. Der Plan wird auf dem eigenen Rechner aus Excel und Quellordner erzeugt (die Preview braucht keine Quelldateien).
+- **Rückbau:** Das Skript löscht nie. In einer Transaktion, erst als Probe mit `rollback`, dann mit `commit`. Das trifft nur den Katalog KFBM und auch von Hand angelegte Lernfelder und Zuordnungen dieses Katalogs. Nicht während eines Imports ausführen (das SQL nimmt den Advisory Lock nicht). Wurde schon indexiert, danach in `hai_embeddings` die Zeilen mit `source_id` der gelöschten Lernfelder prüfen (dort gibt es keinen Fremdschlüssel):
+
+```sql
+begin;
+delete from training_catalog_content_mappings
+  where training_catalog_id = (select id from training_catalogs where code = 'KFBM');
+delete from training_catalog_learning_fields
+  where training_catalog_id = (select id from training_catalogs where code = 'KFBM');
+rollback; -- zur Kontrolle der Zahlen, dann mit commit wiederholen
+```
+
 ## Tests
 
 - `tests/unit/content-import/apply`: Planbildung aus erfundenen Eingaben, Idempotenz, Rollback des Probelaufs, Konflikte, Lösungsschutz, Zielprüfung, SQL-Schicht mit aufzeichnender Verbindung.
 - `tests/scripts/import/kfbm-apply.test.mjs` (`npm run test:scripts`): die Befehle, Ablehnung von Production und fremden Hosts vor der ersten Verbindung, keine Geheimnisse in der Ausgabe.
+- `tests/unit/content-import/learning-fields` (Tabelle lesen, Lernfeldangaben, Plan, Engine mit Speicherdatenbank, Transaktion mit aufzeichnender Verbindung, Aufrufe) und `tests/scripts/import/kfbm-learning-fields.test.mjs` (`npm run test:scripts`: Befehle, Ablehnung von Production und fremden Hosts vor der ersten Verbindung, keine Geheimnisse in der Ausgabe, kein `.env`, kein Netzwerk).
 - Der Rauchtest gegen eine echte Datenbank steht im Bericht des Pull Requests.
