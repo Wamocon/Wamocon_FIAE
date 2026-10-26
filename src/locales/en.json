@@ -2132,5 +2132,6 @@
   "catalog.switcher.label": "Choose occupation",
   "catalog.switcher.current": "Current occupation: {title}",
   "catalog.switcher.reloadHint": "The page reloads when you switch.",
-  "catalog.branding.badge": "Occupation: {title}"
+  "catalog.branding.badge": "Occupation: {title}",
+  "catalog.switcher.apply": "Switch"
 }

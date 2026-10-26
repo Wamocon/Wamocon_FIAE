@@ -18,6 +18,13 @@ type MeCatalogs = { activeCode?: string | null };
  * the urls stay plain, as before the occupations). Wait for it before the first
  * request, otherwise a KfBM user would briefly get FIAE lists.
  *
+ * With the provider mounted `ready` also needs the provider to be done (ready
+ * or error), not just "not loading": after a sign in within the five minutes
+ * of the cache the query of this hook is answered at once while the provider
+ * has not started yet (idle), and the first request would go out with the
+ * server default. Without a provider (tests, neutral context) only the answer
+ * of this hook counts.
+ *
  * A user with several occupations chooses one in the switcher (CatalogContext).
  * GET /api/me/catalogs is asked without the choice, so its `activeCode` is only
  * the default of the server. The choice of the context wins as soon as it is
@@ -47,9 +54,15 @@ export function useRequestCatalog(userId: string | null | undefined) {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
-  const { status: catalogStatus, activeCode: chosenCode } = useCatalog();
-  const ready =
-    (query.isSuccess || query.isError) && catalogStatus !== 'loading';
+  const {
+    status: catalogStatus,
+    activeCode: chosenCode,
+    inProvider,
+  } = useCatalog();
+  const providerDone = inProvider
+    ? catalogStatus === 'ready' || catalogStatus === 'error'
+    : catalogStatus !== 'loading';
+  const ready = (query.isSuccess || query.isError) && providerDone;
   const catalog =
     (catalogStatus === 'ready' ? chosenCode : null) ??
     query.data?.activeCode ??

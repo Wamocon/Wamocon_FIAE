@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { Briefcase, ChevronDown } from 'lucide-react';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -11,8 +11,13 @@ type Placement = 'bar' | 'strip';
  * Switch between the occupations (catalogs) of the signed in user. Only shown
  * for a user with more than one occupation, so nothing changes for everyone
  * with a single occupation. A native select: labelled, works with the keyboard
- * and uses the picker of the phone. A change loads the page again with the
- * chosen occupation (see CatalogProvider.selectCatalog).
+ * and uses the picker of the phone.
+ *
+ * Choosing and switching are two steps (WCAG 3.2.2 On Input): changing the
+ * select only marks the occupation, the button "Wechseln" next to it switches.
+ * On Windows the arrow keys already change the value of a closed select, and a
+ * reload on every change would throw away unsaved input. The switch loads the
+ * page again with the chosen occupation (see CatalogProvider.selectCatalog).
  *
  * The header is full on a phone, so the switcher exists twice: `bar` inside
  * the header from the small breakpoint up and `strip` as its own row below the
@@ -26,10 +31,14 @@ export function CatalogSwitcher({
   const { catalogs, activeCode, isMultiple, selectCatalog } = useCatalog();
   const { t } = useLanguage();
   const id = useId();
+  const [choice, setChoice] = useState<string | null>(null);
 
   if (!isMultiple || !activeCode) return null;
 
   const active = catalogs.find(c => c.code === activeCode);
+  // The marked occupation, the active one as long as nothing else is marked.
+  const selected =
+    choice && catalogs.some(c => c.code === choice) ? choice : activeCode;
 
   const control = (
     <div className="relative shrink-0">
@@ -46,8 +55,8 @@ export function CatalogSwitcher({
       />
       <select
         id={id}
-        value={activeCode}
-        onChange={event => selectCatalog(event.target.value)}
+        value={selected}
+        onChange={event => setChoice(event.target.value)}
         aria-describedby={`${id}-hint`}
         title={active?.title}
         className="bg-card text-foreground border-border h-9 max-w-[14rem] cursor-pointer appearance-none truncate rounded-lg border py-1 pr-7 pl-8 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))]"
@@ -65,19 +74,36 @@ export function CatalogSwitcher({
     </div>
   );
 
+  const button = (
+    <button
+      type="button"
+      disabled={selected === activeCode}
+      onClick={() => selectCatalog(selected)}
+      aria-describedby={`${id}-hint`}
+      className="bg-card text-foreground border-border disabled:hover:border-border h-9 shrink-0 cursor-pointer rounded-lg border px-3 text-sm font-medium transition-colors hover:border-[hsl(var(--accent))] focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))] disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {t('catalog.switcher.apply')}
+    </button>
+  );
+
   if (placement === 'strip') {
     return (
       <div
-        className="bg-card/80 border-border/60 flex items-center justify-end border-b px-4 py-2 sm:hidden"
+        className="bg-card/80 border-border/60 flex items-center justify-end gap-2 border-b px-4 py-2 sm:hidden"
         data-tour="header-catalog-strip"
       >
         {control}
+        {button}
       </div>
     );
   }
   return (
-    <div className="hidden sm:block" data-tour="header-catalog">
+    <div
+      className="hidden items-center gap-2 sm:flex"
+      data-tour="header-catalog"
+    >
       {control}
+      {button}
     </div>
   );
 }
