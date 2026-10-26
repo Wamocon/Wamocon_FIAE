@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
@@ -7,15 +8,18 @@ import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
 
 // POST submit or update a use-case submission
-// Body: { traineeId: string, submissionText?: string, links?: Array<{ url: string, description?: string }> }
+// Body: { submissionText?: string, links?: Array<{ url: string, description?: string }> }
+// The session user is the trainee, a traineeId in the body is ignored.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ useCaseId: string }> }) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const { useCaseId } = await params;
     const body = await req.json();
-    const traineeId: string | undefined = body?.traineeId;
     const submissionText: string | undefined = body?.submissionText;
     const links: Array<{ url: string; description?: string }> = Array.isArray(body?.links) ? body.links : [];
-    if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     // The content must lie inside the catalog scope of the trainee
     const catalogScope = await requireContentScopeForUser(traineeId, req, 'useCase', useCaseId);

@@ -2,16 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { progress } from '@/db/migrations/schemas/schema';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
+// Marks a sub lesson as done or open for the session user. A userId in the body
+// (sent by older clients) is ignored.
 export async function POST(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const userId = session.id;
+
   try {
     const body = await req.json();
-    const { userId, subLessonId, completed } = body as {
-      userId?: string;
+    const { subLessonId, completed } = body as {
       subLessonId?: string;
       completed?: boolean;
     };
-    if (!userId || !subLessonId || typeof completed !== 'boolean') {
+    if (!subLessonId || typeof completed !== 'boolean') {
       return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
     }
 

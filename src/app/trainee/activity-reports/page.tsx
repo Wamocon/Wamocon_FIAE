@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { authFetch } from '@/lib/authFetch';
 import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -295,7 +296,7 @@ export default function TraineeActivityReportsPage() {
       if (!profile?.id) return null;
 
       // 1. Get all evaluations to find the ID
-      const resLists = await fetch(
+      const resLists = await authFetch(
         `/api/trainee/evaluations?userId=${profile.id}`,
         { cache: 'no-store' }
       );
@@ -310,7 +311,7 @@ export default function TraineeActivityReportsPage() {
 
       // 2. Get full details including Soft Skills
       // Trainee can see their own evaluation details
-      const resDetails = await fetch(
+      const resDetails = await authFetch(
         `/api/trainee/evaluations/${evaluation.id}`,
         { cache: 'no-store' }
       );
@@ -822,7 +823,7 @@ function CreateReportModal({
         const excludeParam = initialReport?.id
           ? `&excludeReportId=${initialReport.id}`
           : '';
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainee/use-case-hours?traineeId=${userId}${excludeParam}`,
           { cache: 'no-store' }
         );

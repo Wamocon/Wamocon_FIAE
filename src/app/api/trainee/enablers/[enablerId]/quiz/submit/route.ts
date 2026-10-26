@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -17,18 +18,22 @@ import {
 } from '@/db/migrations/schemas/schema';
 
 // POST submit answers for enabler quiz
-// Body: { traineeId: string, answers: Array<{ questionId: string, selectedOptionId: string }> }
+// Body: { answers: Array<{ questionId: string, selectedOptionId: string }> }
+// The session user is the trainee, a traineeId in the body is ignored.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ enablerId: string }> }
 ) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const { enablerId } = await params;
     const body = await req.json();
-    const traineeId: string | undefined = body?.traineeId;
     const answers: Array<{ questionId: string; selectedOptionId: string }> =
       Array.isArray(body?.answers) ? body.answers : [];
-    if (!traineeId || answers.length === 0)
+    if (answers.length === 0)
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
     // The content must lie inside the catalog scope of the trainee

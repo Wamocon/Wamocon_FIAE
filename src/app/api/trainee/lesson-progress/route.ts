@@ -2,14 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { lessons, progress, subLessons } from '@/db/migrations/schemas/schema';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
+// The progress of the session user, a userId in the query is ignored.
 export async function GET(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const userId = session.id;
+
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
     const lessonId = searchParams.get('lessonId');
-    if (!userId || !lessonId) {
-      return NextResponse.json({ error: 'Missing userId or lessonId' }, { status: 400 });
+    if (!lessonId) {
+      return NextResponse.json({ error: 'Missing lessonId' }, { status: 400 });
     }
 
     const subs = await db

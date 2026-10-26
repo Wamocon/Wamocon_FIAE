@@ -9,6 +9,7 @@ import { apiQueryKey, useApiQuery } from '@/lib/hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { PageLoader } from '@/components/ui/PageLoader';
+import { authFetch } from '@/lib/authFetch';
 
 export default function TraineeUseCaseDetailPage() {
   const params = useParams<{ useCaseId: string }>();
@@ -103,7 +104,7 @@ export default function TraineeUseCaseDetailPage() {
         submissionText: submissionText || null,
         links: links.filter(l => l.url && l.url.trim()),
       };
-      const r = await fetch(`/api/trainee/use-cases/${useCaseId}/submit`, {
+      const r = await authFetch(`/api/trainee/use-cases/${useCaseId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
