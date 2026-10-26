@@ -322,6 +322,82 @@ describe('/api/trainer/courses/[courseId]/members', () => {
   });
 });
 
+describe('counts of trainees in the course and quiz lists', () => {
+  it('GET /courses counts the members of the own organization only', async () => {
+    const { mod, mock } = await loadScoped('trainer/courses/route', {
+      tables: {
+        courses: [
+          { id: 'c1', title: 'Kurs', year: 1, chapter: 1, examPart: 1 },
+        ],
+        enablers: [],
+        useCases: [],
+        courseMembers: [{ courseId: 'c1', role: 'TRAINEE', cnt: 2 }],
+      },
+    });
+    const res = await mod.GET(scopeReq(`${API}/courses`));
+    expect(res.status).toBe(200);
+    expect((await res.json()).courses[0].traineesCount).toBe(2);
+    const filter = mock.filters('select', 'course_members');
+    expect(filter.sql).toContain('"profiles"."organization_id" = $');
+    expect(filter.params).toContain(ORG);
+  });
+
+  it('GET /courses lets the super admin count every organization', async () => {
+    const { mod, mock } = await loadScoped('trainer/courses/route', {
+      session: superAdminSession(),
+      tables: {
+        courses: [{ id: 'c1', title: 'Kurs' }],
+        enablers: [],
+        useCases: [],
+        courseMembers: [],
+      },
+    });
+    await mod.GET(scopeReq(`${API}/courses`));
+    expect(mock.filters('select', 'course_members').sql).not.toContain(
+      'organization_id'
+    );
+  });
+
+  it('GET /quizzes counts only the assignments of trainees inside the scope', async () => {
+    const { mod, mock } = await loadScoped('trainer/quizzes/route', {
+      tables: {
+        quizzes: [
+          {
+            id: 'q1',
+            title: 'Q',
+            quizType: 'GLOBAL',
+            isActive: true,
+            assignedCount: 3,
+          },
+        ],
+      },
+    });
+    const res = await mod.GET(scopeReq(`${API}/quizzes`));
+    expect(res.status).toBe(200);
+    expect((await res.json()).quizzes[0].assigned_count).toBe(3);
+    const fields = (mock.db.select as any).mock.calls
+      .map((c: any[]) => c[0])
+      .find((f: any) => f?.assignedCount);
+    const { renderCondition } = await import('../../../helpers/mockDb');
+    const { sql: text, params } = renderCondition(fields.assignedCount.sql);
+    expect(text).toContain('"quiz_assignments"."trainee_id" in (select');
+    expect(text).toContain('"profiles"."organization_id" = $');
+    expect(params).toContain(ORG);
+  });
+
+  it('GET /quizzes with an occupation counts only the trainees of that occupation', async () => {
+    const { mod, mock } = await loadScoped('trainer/quizzes/route', {
+      tables: { quizzes: [] },
+    });
+    await mod.GET(scopeReq(`${API}/quizzes`, { header: 'KFBM' }));
+    const fields = (mock.db.select as any).mock.calls
+      .map((c: any[]) => c[0])
+      .find((f: any) => f?.assignedCount);
+    const { renderCondition } = await import('../../../helpers/mockDb');
+    expect(renderCondition(fields.assignedCount.sql).params).toContain(KFBM);
+  });
+});
+
 describe('certificates of many trainees', () => {
   const certificate = { id: 'cert1', traineeId: T1, snapshotData: {} };
 

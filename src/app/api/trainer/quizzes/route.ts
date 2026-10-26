@@ -17,6 +17,7 @@ import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import {
   requireTraineeScopeCondition,
+  traineeIdInScope,
   traineeIdsInScope,
 } from '@/lib/auth/trainee-scope-conditions';
 import {
@@ -34,6 +35,15 @@ export async function GET(req: NextRequest) {
 
     const scope = await requireCatalogScope(session, req);
     if (isErrorResponse(scope)) return scope;
+
+    // The assignments are counted for trainees of the caller's organization
+    // (the super admin: every one) and chosen occupation only
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
+    const assignedToScope = traineeIdInScope(
+      quizAssignments.traineeId,
+      traineeScope.condition
+    );
 
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
@@ -56,7 +66,7 @@ export async function GET(req: NextRequest) {
             updatedAt: quizzes.updatedAt,
             createdAt: quizzes.createdAt,
             assignedCount:
-              sql<number>`count(distinct ${quizAssignments.id})`.as(
+              sql<number>`count(distinct case when ${assignedToScope} then ${quizAssignments.id} end)`.as(
                 'assigned_count'
               ),
           })
@@ -173,11 +183,7 @@ export async function POST(req: NextRequest) {
     // Only trainees of the caller's organization (the super admin: any) and of
     // the chosen occupation can be assigned, checked before anything is created
     if (qt === 'GLOBAL' && Array.isArray(assignedTraineeIds)) {
-      const allowed = await traineeIdsInScope(
-        session,
-        req,
-        assignedTraineeIds
-      );
+      const allowed = await traineeIdsInScope(session, req, assignedTraineeIds);
       if (isErrorResponse(allowed)) return allowed;
       if (assignedTraineeIds.some(tid => !allowed.has(String(tid)))) {
         return NextResponse.json(

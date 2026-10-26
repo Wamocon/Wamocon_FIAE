@@ -444,7 +444,9 @@ describe('GET /api/trainer/activity-reports with a traineeId', () => {
         activityReportUseCaseEntries: [],
       },
     });
-    const res = await mod.GET(scopeReq(`${API}/activity-reports?traineeId=${T2}`));
+    const res = await mod.GET(
+      scopeReq(`${API}/activity-reports?traineeId=${T2}`)
+    );
     expect(res.status).toBe(200);
     expect((await res.json()).reports).toEqual([]);
     expect(mock.calls.some(c => c.table === 'activity_reports')).toBe(false);
