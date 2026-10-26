@@ -153,3 +153,7 @@ supabase_backup/
 
 # Deploy logs
 deploy-logs/
+
+# KfBM import plans hold the content of the source documents, never commit them
+kfbm-plan*.json
+kfbm-plan*.md
