@@ -45,7 +45,9 @@
     "test:scripts": "node --test \"tests/scripts/**/*.test.mjs\"",
     "db:migrations:check": "node scripts/db/migration-check.mjs",
     "db:preview:check": "node scripts/db/preview-migrate.mjs check",
-    "db:content:dry-run": "node scripts/db/content-sync.mjs --linked"
+    "db:content:dry-run": "node scripts/db/content-sync.mjs --linked",
+    "import:kfbm:inventory": "node scripts/import/kfbm-inventory.mjs",
+    "import:kfbm:parse-check": "node scripts/import/kfbm-parse-check.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
