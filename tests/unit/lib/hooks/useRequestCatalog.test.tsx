@@ -8,7 +8,11 @@ jest.mock('@/lib/authFetch');
 
 // The occupation the user chose in the switcher. Without a provider the real
 // context is neutral (idle), which most tests below rely on.
-const mockCatalog: { status: string; activeCode: string | null } = {
+const mockCatalog: {
+  status: string;
+  activeCode: string | null;
+  inProvider?: boolean;
+} = {
   status: 'idle',
   activeCode: null,
 };
@@ -41,6 +45,7 @@ describe('useRequestCatalog', () => {
     jest.clearAllMocks();
     mockCatalog.status = 'idle';
     mockCatalog.activeCode = null;
+    delete mockCatalog.inProvider;
   });
 
   it('is not ready before the own occupations are known', async () => {
@@ -173,6 +178,68 @@ describe('useRequestCatalog', () => {
     await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(result.current.ready).toBe(false);
+  });
+
+  describe('with the provider of the occupations mounted', () => {
+    beforeEach(() => {
+      mockCatalog.inProvider = true;
+    });
+
+    it('is not ready while the provider has not started yet (idle), also if the lookup of this hook is cached', async () => {
+      // sign in again within the five minutes of the cache: the query of this
+      // hook is answered at once, the provider has not loaded anything yet
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      client.setQueryData(['me-catalogs', 'u1'], {
+        catalogs: [{ code: 'FIAE', title: 'F' }],
+        activeCode: 'FIAE',
+      });
+      const cached = ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      );
+      answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
+      const { result, rerender } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: cached,
+      });
+      expect(result.current.ready).toBe(false);
+      mockCatalog.status = 'loading';
+      rerender();
+      expect(result.current.ready).toBe(false);
+      mockCatalog.status = 'ready';
+      mockCatalog.activeCode = 'KFBM';
+      rerender();
+      expect(result.current.ready).toBe(true);
+      expect(result.current.catalog).toBe('KFBM');
+    });
+
+    it('is ready when the provider failed, the lookup of this hook answered', async () => {
+      mockCatalog.status = 'error';
+      answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+    });
+
+    it('is ready for a FIAE user as soon as both have answered (nothing is waited for beyond that)', async () => {
+      mockCatalog.status = 'ready';
+      mockCatalog.activeCode = 'FIAE';
+      answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.withCatalog('/api/x')).toBe('/api/x');
+    });
+
+    it('does not become ready without a user id', () => {
+      mockCatalog.status = 'ready';
+      const { result } = renderHook(() => useRequestCatalog(null), {
+        wrapper: wrapper(),
+      });
+      expect(result.current.ready).toBe(false);
+    });
   });
 
   it('falls back to the answer of the server when the context failed', async () => {

@@ -151,18 +151,46 @@ function hexToHsl(hex: string): [number, number, number] {
   return [(hue * 60 + 360) % 360, saturation * 100, lightness * 100];
 }
 
-/** HSL (degrees, percent, percent) to relative luminance (WCAG). */
-function luminance(h: number, s: number, l: number): number {
+type Channels = [number, number, number];
+
+/** HSL (degrees, percent, percent) to sRGB channels between 0 and 1. */
+function hslChannels(h: number, s: number, l: number): Channels {
   const sat = s / 100;
   const light = l / 100;
   const chroma = (1 - Math.abs(2 * light - 1)) * sat;
   const channel = (n: number) => {
     const k = (n + h / 30) % 12;
-    const value =
-      light - (chroma / 2) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    return light - (chroma / 2) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
   };
-  return 0.2126 * channel(0) + 0.7152 * channel(8) + 0.0722 * channel(4);
+  return [channel(0), channel(8), channel(4)];
+}
+
+/** Relative luminance (WCAG) of sRGB channels between 0 and 1. */
+function channelsLuminance(channels: Channels): number {
+  const [r, g, b] = channels.map(value =>
+    value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  );
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** HSL (degrees, percent, percent) to relative luminance (WCAG). */
+function luminance(h: number, s: number, l: number): number {
+  return channelsLuminance(hslChannels(h, s, l));
+}
+
+/** The channels as a browser paints them: 8 bits each. */
+function to8Bit(channels: Channels): Channels {
+  return channels.map(value => Math.round(value * 255) / 255) as Channels;
+}
+
+function hexChannels(hex: string): Channels {
+  return [1, 3, 5].map(
+    i => parseInt(hex.slice(i, i + 2), 16) / 255
+  ) as Channels;
+}
+
+function contrastRatio(a: number, b: number): number {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
 /** Text colors on the accent (triplets like the theme variables). */
@@ -171,44 +199,122 @@ const NEAR_BLACK = '0 0% 4%';
 const NEAR_BLACK_LUMINANCE = luminance(0, 0, 4);
 
 /**
+ * Contrast the accent needs where it is used as text color (text-primary,
+ * text-accent, the badge). WCAG AA for normal text, the badge is text-xs.
+ */
+const MIN_TEXT_CONTRAST = 4.5;
+
+/** Share of the accent in the surface of the badge (bg-accent/15). */
+const BADGE_ALPHA = 0.15;
+
+type Surfaces = { page: Channels; card: Channels };
+
+/**
+ * The surfaces the accent is read on, per theme (src/app/globals.css): the page
+ * and the card the badge sits on.
+ */
+const THEME_SURFACES: { dark: Surfaces; light: Surfaces } = {
+  dark: { page: hexChannels('#0a0a0a'), card: hexChannels('#0f0f0f') },
+  light: { page: hexChannels('#fafafa'), card: hexChannels('#ffffff') },
+};
+
+/**
+ * The lowest contrast of the accent as text: against the page and against the
+ * tinted surface of the badge (the accent at 15 percent over the card, blended
+ * like a browser does, in the encoded channels).
+ */
+function textContrast(
+  h: number,
+  s: number,
+  l: number,
+  surfaces: Surfaces
+): number {
+  const accent = to8Bit(hslChannels(h, s, l));
+  const badge = to8Bit(
+    accent.map(
+      (value, i) => BADGE_ALPHA * value + (1 - BADGE_ALPHA) * surfaces.card[i]
+    ) as Channels
+  );
+  const text = channelsLuminance(accent);
+  return Math.min(
+    contrastRatio(text, channelsLuminance(surfaces.page)),
+    contrastRatio(text, channelsLuminance(badge))
+  );
+}
+
+interface ThemeFit {
+  minLightness: number;
+  maxLightness: number;
+  /** Contrast of white text on the accent that is still accepted. */
+  minWhiteContrast: number;
+  /** Which way the lightness moves to gain contrast: lighter on a dark page. */
+  direction: 1 | -1;
+  surfaces: Surfaces;
+}
+
+/**
  * The accent as hue, saturation and lightness for one theme, with the text
- * color on it. The lightness is moved into the range. The text stays white (as
- * today) as long as it has the contrast; a bright accent such as yellow gets
- * near black text instead, so the text is readable for every color.
+ * color on it. The lightness is first moved into the range of the theme, then
+ * step by step (lighter in the dark theme, darker in the light one) until the
+ * accent has a contrast of at least 4.5 as text on its surfaces. The range
+ * alone is no guarantee: blue, violet and rose are too dark for the dark page,
+ * and a bright color such as yellow is unreadable on the light page. Hue and
+ * saturation stay. The text on the accent stays white (as today) as long as it
+ * has the contrast; a bright accent such as yellow gets near black text
+ * instead, so the text is readable for every color.
  */
 function fitTheme(
   hex: string,
-  minLightness: number,
-  maxLightness: number,
-  minWhiteContrast: number
+  fit: ThemeFit
 ): { accent: string; foreground: string } {
   const [h, s, l] = hexToHsl(hex);
   const hue = Math.round(h);
   const saturation = Math.round(s);
-  const lightness = Math.round(clamp(l, minLightness, maxLightness));
+  let lightness = Math.round(clamp(l, fit.minLightness, fit.maxLightness));
+  while (
+    lightness > 0 &&
+    lightness < 100 &&
+    textContrast(hue, saturation, lightness, fit.surfaces) < MIN_TEXT_CONTRAST
+  ) {
+    lightness += fit.direction;
+  }
   const lum = luminance(hue, saturation, lightness);
   const white = 1.05 / (lum + 0.05);
   const dark = (lum + 0.05) / (NEAR_BLACK_LUMINANCE + 0.05);
   return {
     accent: `${hue} ${saturation}% ${lightness}%`,
-    foreground: white >= minWhiteContrast || white >= dark ? WHITE : NEAR_BLACK,
+    foreground:
+      white >= fit.minWhiteContrast || white >= dark ? WHITE : NEAR_BLACK,
   };
 }
 
 /**
  * Style rules for an accent color, in the format of the theme variables
  * (src/app/globals.css): accent, primary and ring, and the text color on them.
- * The accent is moved into a readable range per theme (lightness 35 to 66
- * percent in the dark theme, 25 to 48 percent in the light one). White text
- * stays if it has a contrast of at least 3 (dark theme, like today's red) or
- * 4.5 (light theme), otherwise near black text is used. Returns an empty string
+ * The accent starts in a readable range per theme (lightness 35 to 66 percent
+ * in the dark theme, 25 to 48 percent in the light one) and moves on until it
+ * has a contrast of 4.5 as text (see fitTheme). White text stays on the accent
+ * if it has a contrast of at least 3 (dark theme, like today's red) or 4.5
+ * (light theme), otherwise near black text is used. Returns an empty string
  * without a valid, normalized #rrggbb accent, so nothing but numbers can end up
  * in the rules.
  */
 export function brandingCss(accent: string | null): string {
   if (typeof accent !== 'string' || !NORMALIZED_HEX.test(accent)) return '';
-  const dark = fitTheme(accent, 35, 66, 3);
-  const light = fitTheme(accent, 25, 48, 4.5);
+  const dark = fitTheme(accent, {
+    minLightness: 35,
+    maxLightness: 66,
+    minWhiteContrast: 3,
+    direction: 1,
+    surfaces: THEME_SURFACES.dark,
+  });
+  const light = fitTheme(accent, {
+    minLightness: 25,
+    maxLightness: 48,
+    minWhiteContrast: 4.5,
+    direction: -1,
+    surfaces: THEME_SURFACES.light,
+  });
   const rule = (theme: { accent: string; foreground: string }) =>
     `--accent:${theme.accent};--primary:${theme.accent};--ring:${theme.accent};` +
     `--accent-foreground:${theme.foreground};--primary-foreground:${theme.foreground}`;

@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../../helpers/renderWithProviders';
 import { CatalogSwitcher } from '@/components/catalog/CatalogSwitcher';
@@ -81,12 +81,77 @@ describe('CatalogSwitcher', () => {
     );
   });
 
-  it('switches with the mouse or the picker', async () => {
-    context();
-    renderWithProviders(<CatalogSwitcher />);
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'KFBM');
-    expect(selectCatalog).toHaveBeenCalledTimes(1);
-    expect(selectCatalog).toHaveBeenCalledWith('KFBM');
+  describe('choosing and switching are two steps (WCAG 3.2.2)', () => {
+    it('does not switch when the selection changes, the page keeps its unsaved input', async () => {
+      context();
+      renderWithProviders(<CatalogSwitcher />);
+      await userEvent.selectOptions(screen.getByRole('combobox'), 'KFBM');
+      expect(screen.getByRole('combobox')).toHaveValue('KFBM');
+      expect(selectCatalog).not.toHaveBeenCalled();
+    });
+
+    it('does not switch on the arrow keys of the closed select (Windows changes the value with them)', async () => {
+      context();
+      renderWithProviders(<CatalogSwitcher />);
+      const select = screen.getByRole('combobox');
+      select.focus();
+      await userEvent.keyboard('{ArrowDown}');
+      fireEvent.change(select, { target: { value: 'KFBM' } });
+      expect(select).toHaveValue('KFBM');
+      expect(selectCatalog).not.toHaveBeenCalled();
+    });
+
+    it('has a button that is off until another occupation is chosen', async () => {
+      context();
+      renderWithProviders(<CatalogSwitcher />);
+      const button = screen.getByRole('button', { name: 'Wechseln' });
+      expect(button).toBeDisabled();
+      await userEvent.click(button);
+      expect(selectCatalog).not.toHaveBeenCalled();
+      await userEvent.selectOptions(screen.getByRole('combobox'), 'KFBM');
+      expect(button).toBeEnabled();
+    });
+
+    it('switches with the button, once, for the chosen occupation', async () => {
+      context();
+      renderWithProviders(<CatalogSwitcher />);
+      await userEvent.selectOptions(screen.getByRole('combobox'), 'KFBM');
+      await userEvent.click(screen.getByRole('button', { name: 'Wechseln' }));
+      expect(selectCatalog).toHaveBeenCalledTimes(1);
+      expect(selectCatalog).toHaveBeenCalledWith('KFBM');
+    });
+
+    it('is off again when the choice goes back to the active occupation', async () => {
+      context();
+      renderWithProviders(<CatalogSwitcher />);
+      const select = screen.getByRole('combobox');
+      await userEvent.selectOptions(select, 'KFBM');
+      await userEvent.selectOptions(select, 'FIAE');
+      expect(screen.getByRole('button', { name: 'Wechseln' })).toBeDisabled();
+    });
+
+    it('can be reached and used with the keyboard only', async () => {
+      context();
+      renderWithProviders(<CatalogSwitcher />);
+      await userEvent.tab();
+      expect(screen.getByRole('combobox')).toHaveFocus();
+      await userEvent.selectOptions(screen.getByRole('combobox'), 'KFBM');
+      await userEvent.tab();
+      const button = screen.getByRole('button', { name: 'Wechseln' });
+      expect(button).toHaveFocus();
+      await userEvent.keyboard('{Enter}');
+      expect(selectCatalog).toHaveBeenCalledWith('KFBM');
+    });
+
+    it('describes the button with the reload hint', () => {
+      context();
+      renderWithProviders(<CatalogSwitcher />);
+      expect(
+        screen.getByRole('button', { name: 'Wechseln' })
+      ).toHaveAccessibleDescription(
+        'Aktueller Beruf: Fachinformatiker/in Anwendungsentwicklung. Beim Wechsel wird die Seite neu geladen.'
+      );
+    });
   });
 
   it('can be reached with the Tab key (a native select works with the keyboard)', async () => {
@@ -119,7 +184,7 @@ describe('CatalogSwitcher', () => {
   it('sits inside the header from the small breakpoint up', () => {
     context();
     const { container } = renderWithProviders(<CatalogSwitcher />);
-    expect(container.firstElementChild).toHaveClass('hidden', 'sm:block');
+    expect(container.firstElementChild).toHaveClass('hidden', 'sm:flex');
   });
 
   it('is usable on a phone: its own row below the header, nothing is pushed out of the header', () => {
@@ -141,10 +206,12 @@ describe('CatalogSwitcher', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('switches from the strip as well', async () => {
+  it('switches from the strip as well, with the button', async () => {
     context();
     renderWithProviders(<CatalogSwitcher placement="strip" />);
     await userEvent.selectOptions(screen.getByRole('combobox'), 'KFBM');
+    expect(selectCatalog).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Wechseln' }));
     expect(selectCatalog).toHaveBeenCalledWith('KFBM');
   });
 });
