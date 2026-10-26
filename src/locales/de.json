@@ -2134,5 +2134,6 @@
   "catalog.switcher.label": "Beruf wählen",
   "catalog.switcher.current": "Aktueller Beruf: {title}",
   "catalog.switcher.reloadHint": "Beim Wechsel wird die Seite neu geladen.",
-  "catalog.branding.badge": "Beruf: {title}"
+  "catalog.branding.badge": "Beruf: {title}",
+  "catalog.switcher.apply": "Wechseln"
 }

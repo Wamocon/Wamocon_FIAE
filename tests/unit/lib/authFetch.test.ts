@@ -1,7 +1,9 @@
 import { authFetch } from '@/lib/authFetch';
 import {
+  CATALOG_LOOKUP_TIMEOUT_MS,
   resetCatalogSelection,
   setCatalogSelection,
+  writePreferredCatalog,
 } from '@/lib/catalog/selection';
 import { supabase } from '@/lib/supabase';
 
@@ -119,6 +121,39 @@ describe('authFetch', () => {
       getSession.mockResolvedValue({ data: { session: null } });
       await authFetch('/api/trainer/courses');
       expect(sentHeaders().has('authorization')).toBe(false);
+      expect(sentHeaders().get('x-catalog')).toBe('KFBM');
+    });
+  });
+
+  describe('a FIAE user who came through the occupation page (FIAE is stored)', () => {
+    it('sends the request at once and without x-catalog, nothing is held back', async () => {
+      writePreferredCatalog('FIAE');
+      resetCatalogSelection();
+      await authFetch('/api/trainee/dashboard?userId=u1', {
+        cache: 'no-store',
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect([...sentHeaders().keys()]).toEqual(['authorization']);
+    });
+  });
+
+  describe('a stored choice that is not FIAE and a slow lookup', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      writePreferredCatalog('KFBM');
+      resetCatalogSelection();
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('waits as long as the lookup may take, so no request goes out without the header', async () => {
+      const request = authFetch('/api/trainer/courses', { method: 'POST' });
+      // the old waiting time of five seconds is over, the lookup still runs
+      await jest.advanceTimersByTimeAsync(CATALOG_LOOKUP_TIMEOUT_MS - 1);
+      expect(fetchMock).not.toHaveBeenCalled();
+      // the lookup ends (here with the stored choice as the header)
+      setCatalogSelection({ header: 'KFBM', pending: false });
+      await request;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(sentHeaders().get('x-catalog')).toBe('KFBM');
     });
   });
