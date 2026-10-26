@@ -276,6 +276,34 @@ export async function requireSuperAdmin(
   return result.session;
 }
 
+/** Answer of the curriculum write handlers to a caller without the right. */
+export const CURRICULUM_WRITE_FORBIDDEN =
+  'Only platform administrators can manage curriculum content';
+
+/**
+ * Guard of every write handler (POST, PUT, PATCH, DELETE) on curriculum
+ * content: courses, enablers, use cases, quizzes, learning fields, modules,
+ * lessons and the assignments between them. Only the platform wide admin
+ * passes (SUPER_ADMIN, or an ADMIN of the platform organization, see
+ * isSuperAdmin). A trainer or TEMP_ADMIN of the platform organization and
+ * everybody in a customer organization is answered with 403. Role and
+ * organization come from the database row of the session, never from the
+ * request. Reading stays with requireTrainer.
+ */
+export async function requireCurriculumEditor(
+  request: RequestLike
+): Promise<SessionUser | NextResponse> {
+  const result = await authenticate(request);
+  if (!result.ok) return failureResponse(result);
+  if (!result.session.isSuperAdmin) {
+    return NextResponse.json(
+      { error: CURRICULUM_WRITE_FORBIDDEN },
+      { status: 403 }
+    );
+  }
+  return result.session;
+}
+
 // ---------------------------------------------------------------------------
 // Organization scope
 // ---------------------------------------------------------------------------

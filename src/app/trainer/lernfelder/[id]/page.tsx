@@ -4,6 +4,7 @@ import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
@@ -48,7 +49,8 @@ export default function LernfeldDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { t } = useLanguage();
-  const { profile, isPlatformOwner } = useAuth();
+  const { profile } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
   const [lernfeld, setLernfeld] = useState<Lernfeld | null>(null);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,7 +179,7 @@ export default function LernfeldDetailPage({
               )}
             </div>
           </div>
-          {isPlatformOwner && (
+          {canEditCurriculum && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowEditModal(true)}

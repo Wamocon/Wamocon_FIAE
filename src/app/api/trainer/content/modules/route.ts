@@ -1,13 +1,12 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import { requireCurriculumEditor, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { modules, lessons } from '@/db/migrations/schemas/schema';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const body = await req.json();
@@ -18,13 +17,6 @@ export async function POST(req: NextRequest) {
     const inputLessons: Array<{ title: string; order_index?: number; duration_weeks?: number }> | undefined = Array.isArray(body?.lessons)
       ? body.lessons
       : undefined;
-
-    if (!(await verifyPlatformOwner(created_by))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
 
     if (!title || !training_year) {
       return NextResponse.json({ error: 'Missing title or training_year' }, { status: 400 });

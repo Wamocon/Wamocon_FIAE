@@ -1,4 +1,8 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, inArray } from 'drizzle-orm';
@@ -9,7 +13,6 @@ import {
   questions,
   quizzes,
 } from '@/db/migrations/schemas/schema';
-import { verifyPlatformOwner } from '@/lib/auth-helpers';
 import { getContentCatalogId, requireContentScope } from '@/lib/catalog/scope';
 
 // GET quiz for an enabler (trainer editing)
@@ -81,7 +84,7 @@ export async function POST(
   { params }: { params: Promise<{ enablerId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { enablerId } = await params;
@@ -112,13 +115,6 @@ export async function POST(
       .where(eq(enablers.id, enablerId as any));
     if (!enabler) {
       return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
-    }
-
-    if (!(await verifyPlatformOwner(createdById))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
     }
 
     const out = await db.transaction(async tx => {

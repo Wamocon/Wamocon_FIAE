@@ -3,8 +3,8 @@
 import { authFetch } from '@/lib/authFetch';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   Layers,
@@ -17,7 +17,7 @@ import {
 
 export function TrainerLernfelderTab() {
   const router = useRouter();
-  const { isPlatformOwner } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
   const [lernfelder, setLernfelder] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,7 +178,7 @@ export function TrainerLernfelderTab() {
             </h2>
             <p className="text-muted text-sm">{t('lernfelder.overview')}</p>
           </div>
-          {isPlatformOwner && (
+          {canEditCurriculum && (
             <button
               onClick={openCreate}
               className="bg-primary from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-primary-foreground flex items-center gap-2 rounded-xl bg-gradient-to-r px-5 py-2.5 font-medium shadow-lg transition-all duration-200 hover:shadow-xl"
@@ -257,7 +257,7 @@ export function TrainerLernfelderTab() {
             </div>
 
             {/* Actions Footer — platform owner only */}
-            {isPlatformOwner && (
+            {canEditCurriculum && (
               <div className="border-accent/10 flex items-center justify-between border-t pt-2">
                 <button
                   onClick={e => openEdit(e, lf)}
@@ -292,7 +292,7 @@ export function TrainerLernfelderTab() {
               ? t('lernfelder.tryDifferentSearch')
               : t('lernfelder.createFirst')}
           </p>
-          {isPlatformOwner && (
+          {canEditCurriculum && (
             <button
               onClick={openCreate}
               className="from-accent to-primary text-foreground rounded-xl bg-gradient-to-r px-5 py-2 font-medium"

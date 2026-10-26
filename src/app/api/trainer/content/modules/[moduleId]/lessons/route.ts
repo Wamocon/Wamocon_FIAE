@@ -1,12 +1,11 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import { requireCurriculumEditor, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lessons } from '@/db/migrations/schemas/schema';
-import { verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { moduleId } = await params;
@@ -15,13 +14,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mod
     const order_index: number | undefined = body?.order_index ? Number(body.order_index) : undefined;
     const duration_weeks: number | undefined = body?.duration_weeks ? Number(body.duration_weeks) : undefined;
     const created_by: string = session.id;
-
-    if (!(await verifyPlatformOwner(created_by))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
 
     if (!title) return NextResponse.json({ error: 'Missing title' }, { status: 400 });
 

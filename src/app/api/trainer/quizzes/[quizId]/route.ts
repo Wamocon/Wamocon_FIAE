@@ -1,4 +1,8 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -10,7 +14,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { apiCache } from '@/lib/api-cache';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
 import {
   requireTraineeScopeCondition,
@@ -102,7 +106,7 @@ export async function DELETE(
   ctx: { params: Promise<{ quizId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { quizId } = await ctx.params;
@@ -110,14 +114,6 @@ export async function DELETE(
     if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
-
-
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
 
     // Get quiz info and assigned trainees before deleting
     const [qzInfo] = await db
@@ -182,7 +178,7 @@ export async function PATCH(
   ctx: { params: Promise<{ quizId: string }> }
 ) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const { quizId } = await ctx.params;
@@ -198,14 +194,6 @@ export async function PATCH(
     }>;
     const assignedTraineeIds = (body?.assigned_trainee_ids || []) as string[];
     const trainerId = session.id;
-
-
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
 
     const organizationId = await getUserOrgId(trainerId || '');
 

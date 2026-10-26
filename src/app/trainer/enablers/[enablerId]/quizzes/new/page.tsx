@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { useEffect, useState } from 'react';
 
 type BuilderQ = {
@@ -19,7 +20,8 @@ type BuilderQ = {
 export default function NewEnablerQuizPage() {
   const params = useParams<{ enablerId: string }>();
   const enablerId = params?.enablerId as string;
-  const { profile, isPlatformOwner, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -32,12 +34,12 @@ export default function NewEnablerQuizPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !isPlatformOwner) {
+    if (!authLoading && !canEditCurriculum) {
       router.replace('/trainer/content-management');
     }
-  }, [authLoading, isPlatformOwner, router]);
+  }, [authLoading, canEditCurriculum, router]);
 
-  if (!isPlatformOwner) return null;
+  if (!canEditCurriculum) return null;
 
   return (
     <div className="mx-auto mt-6 max-w-7xl bg-background border border-accent/20 rounded-2xl space-y-6 p-6">
