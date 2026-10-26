@@ -2,18 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { weeklyEvaluations } from '@/db/migrations/schemas/schema';
 import { eq, and } from 'drizzle-orm';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { resolveTraineeForRead } from '@/lib/auth/trainee-data-access';
 
 // GET: Get annual performance summary for a trainee
+// A trainee gets their own summary (a traineeId in the query is ignored), a
+// trainer-level caller gets the one of a trainee in their organization scope.
 export async function GET(request: NextRequest) {
+    const session = await requireUser(request);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { searchParams } = new URL(request.url);
-        const traineeId = searchParams.get('traineeId');
         const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : new Date().getFullYear();
         const ausbildungsjahr = searchParams.get('ausbildungsjahr') ? parseInt(searchParams.get('ausbildungsjahr')!) : null;
 
-        if (!traineeId) {
-            return NextResponse.json({ error: 'traineeId is required' }, { status: 400 });
-        }
+        const resolved = await resolveTraineeForRead(
+            session,
+            request,
+            searchParams.get('traineeId')
+        );
+        if (isErrorResponse(resolved)) return resolved;
+        const traineeId = resolved;
 
         // Build query conditions
         const conditions = [

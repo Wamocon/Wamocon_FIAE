@@ -169,6 +169,30 @@ export function mockSession(session: FakeSession | null) {
   });
 }
 
+/** A trainee session (no trainer level). Pass overrides for other fields. */
+export function traineeSession(
+  id = 't1',
+  overrides: Partial<FakeSession> = {}
+): FakeSession {
+  return fakeSession({
+    id,
+    email: 'trainee@example.com',
+    fullName: 'Test Trainee',
+    role: 'TRAINEE',
+    isTrainerLevel: false,
+    ...overrides,
+  });
+}
+
+/**
+ * Run a trainee route as the signed-in trainee `id`: the session is the only
+ * identity, an id in the query or body is ignored. Call it before importing
+ * the route (after jest.resetModules()).
+ */
+export function mockTraineeSession(id = 't1') {
+  mockSession(traineeSession(id));
+}
+
 /**
  * Replace the trainee responsibility check of '@/lib/auth/trainee-access'.
  * 'ok' grants access, 'forbidden' answers 403 and 'missing' answers 404.

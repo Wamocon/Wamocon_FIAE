@@ -70,11 +70,12 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
 
   it('covers the expected number of handlers', () => {
     // Guards against the table silently shrinking when files move
-    expect(GUARDED_ROUTES.length).toBeGreaterThanOrEqual(125);
+    expect(GUARDED_ROUTES.length).toBeGreaterThanOrEqual(165);
   });
 
-  it('lists every notification and trainee school handler', async () => {
-    // A new route file under these folders has to be added to the table
+  it('lists every notification and trainee handler', async () => {
+    // A new route file under these folders has to be added to the table, or to
+    // the short list of open master data routes below (a decision to review)
     const { readdirSync, readFileSync, statSync } = await import('fs');
     const { join } = await import('path');
     const base = join(process.cwd(), 'src/app/api');
@@ -91,7 +92,7 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
             .replace(/\/route\.ts$/, '');
           if (
             route.startsWith('notifications') ||
-            route.startsWith('trainee/school')
+            route.startsWith('trainee/')
           ) {
             const source = readFileSync(full, 'utf8');
             for (const m of source.matchAll(
@@ -107,8 +108,16 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
     const listed = GUARDED_ROUTES.filter(r => r.guard === 'user').map(
       r => `${r.method} ${r.route}`
     );
-    // lernfelder is master data of the occupation and open without a session
-    const open = ['GET trainee/school/lernfelder'];
+    // Master data without personal data, open without a session: the
+    // Lernfelder of an occupation (list and detail, the catalog comes from the
+    // optional session or ?catalog=) and the public list of the softskill
+    // criteria. They answer the same for everybody who asks for one catalog.
+    const open = [
+      'GET trainee/school/lernfelder',
+      'GET trainee/lernfelder',
+      'GET trainee/lernfelder/[id]',
+      'GET trainee/evaluations/softskills',
+    ];
     expect([...listed, ...open].sort()).toEqual(found.sort());
   });
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
@@ -12,17 +13,17 @@ import {
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
 // GET: quiz content for a specific difficulty if unlocked and active
-// query: traineeId
+// The data of the session user, a traineeId or userId in the query is ignored.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ enablerId: string; difficulty: string }> }
 ) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const { enablerId, difficulty } = await params;
-    const { searchParams } = new URL(req.url);
-    const traineeId = searchParams.get('traineeId');
-    if (!traineeId)
-      return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     // The content must lie inside the catalog scope of the trainee
     const catalogScope = await requireContentScopeForUser(traineeId, req, 'enabler', enablerId);
