@@ -407,10 +407,7 @@ describe('trainee routes: the session is the only identity', () => {
         );
 
       it('a trainer reads a trainee of the own organization', async () => {
-        const { res, mock } = await run(
-          [traineeProfile(ORG)],
-          TRAINEE_UUID
-        );
+        const { res, mock } = await run([traineeProfile(ORG)], TRAINEE_UUID);
         expect(res.status).toBe(200);
         expect(mock.filters('select', r.table).params).toContain(TRAINEE_UUID);
         // Nothing was written
@@ -708,9 +705,7 @@ describe('trainee routes: the session is the only identity', () => {
         tables: { weeklyEvaluations: [own] },
       });
       expect(res.status).toBe(200);
-      expect(mock.filters('select', 'weekly_evaluations').params).toContain(
-        ME
-      );
+      expect(mock.filters('select', 'weekly_evaluations').params).toContain(ME);
       expect(touched(mock)).not.toContain(OTHER);
     });
 

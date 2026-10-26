@@ -77,7 +77,7 @@ export function LernfeldNotes() {
       try {
         const [lfRes, notesRes] = await Promise.all([
           authFetch('/api/trainee/school/lernfelder', { cache: 'no-store' }),
-          fetch(`/api/trainee/knowledge-notes?traineeId=${profile.id}`, {
+          authFetch(`/api/trainee/knowledge-notes?traineeId=${profile.id}`, {
             cache: 'no-store',
           }),
         ]);
@@ -130,7 +130,7 @@ export function LernfeldNotes() {
   const handleDeleteNote = async (noteId: string) => {
     if (!profile?.id) return;
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/trainee/knowledge-notes/${noteId}?traineeId=${profile.id}`,
         {
           method: 'DELETE',
@@ -165,7 +165,7 @@ export function LernfeldNotes() {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/trainee/knowledge-notes', {
+      const res = await authFetch('/api/trainee/knowledge-notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

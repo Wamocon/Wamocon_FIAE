@@ -176,9 +176,8 @@ describe('resolveTraineeForRead', () => {
         __esModule: true,
         ensureTraineeInCatalog: async () => null,
       }));
-      const { resolveTraineeForRead } = await import(
-        '@/lib/auth/trainee-data-access'
-      );
+      const { resolveTraineeForRead } =
+        await import('@/lib/auth/trainee-data-access');
       const result = (await resolveTraineeForRead(
         trainer,
         req(),
