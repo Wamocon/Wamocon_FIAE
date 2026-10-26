@@ -444,3 +444,37 @@ select i.indexrelid::regclass as index_name, i.indisunique as is_unique, i.indis
        pg_get_indexdef(i.indexrelid) as definition
 from pg_index i
 where i.indexrelid = to_regclass('public.trainee_enrollments_trainee_unique');
+
+-- C12. Before 20261027000100 (HAI index scope): chunks per source_type. The file
+-- derives catalog, organization and visibility for every row in pure SQL (no model
+-- call). Rows without a derivable catalog go to FIAE and are reported per
+-- source_type with RAISE NOTICE while the file runs.
+select source_type, count(*) as chunks
+from public.hai_embeddings
+group by source_type
+order by source_type;
+
+-- C12a. Before 20261027000100: organization of the documents. The HAI search shows
+-- a document chunk only to its own organization or if organization_id is NULL.
+-- The trainer upload routes store the organization of the uploader, so platform
+-- PDFs may carry the platform organization instead of NULL. Then customer
+-- organizations would no longer find them in the HAI: decide before the rollout.
+select d.organization_id, o.name, o.is_platform_owner, count(*) as documents
+from public.content_documents d
+left join public.organizations o on o.id = d.organization_id
+group by d.organization_id, o.name, o.is_platform_owner
+order by documents desc;
+
+-- C12b. After 20261027000100 only: every chunk has a catalog (without_catalog = 0)
+-- and solutions are trainer only. Expect trainer rows for use_case (solution pages)
+-- and quiz (every quiz chunk), and 0 in the second query.
+select source_type, visibility, count(*) as chunks,
+       count(*) filter (where training_catalog_id is null) as without_catalog
+from public.hai_embeddings
+group by source_type, visibility
+order by source_type, visibility;
+
+select count(*) as solutions_visible_to_trainees
+from public.hai_embeddings
+where metadata ->> 'documentType' = 'TRAINER_SOLUTION'
+  and visibility <> 'trainer';

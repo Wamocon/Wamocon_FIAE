@@ -29,6 +29,7 @@ import type {
 } from './providers';
 import { searchWithContext, SearchResult } from './vectorSearch';
 import { fetchPageIndexContext } from './pageIndexService';
+import { resolveRetrievalAccess } from './retrievalAccess';
 import {
   buildSystemPrompt,
   buildRetrievedContext,
@@ -40,10 +41,7 @@ import { fetchDataContext } from './dataContext';
 import type { UserRole } from './dataContext';
 import { handleActionMessage } from './actionFlow';
 import type { PendingAction } from './actionPolicy';
-import {
-  filterSearchResultsForTrainingScope,
-  type HaiTrainingScope,
-} from './trainingScope';
+import type { HaiTrainingScope } from './trainingScope';
 
 // ============================================================================
 // TYPES
@@ -379,6 +377,121 @@ function convertToProviderMessages(
 }
 
 // ============================================================================
+// RETRIEVAL (shared by processMessage and processMessageStream)
+// ============================================================================
+
+export interface RetrievedContext {
+  /** Vector hits plus one entry per PageIndex citation */
+  searchResults: SearchResult[];
+  /** Text block for the system prompt */
+  retrievedContext: string;
+}
+
+/**
+ * Retrieve the context for one message: vector search and PageIndex, limited
+ * to what the user may see. The scope (catalogs of the occupation, trainee or
+ * trainer level, organization) is derived from the user id and the database,
+ * not from the client. Trainees never get solutions (trainer solution PDFs,
+ * quiz answers), nobody gets content of another occupation or organization.
+ *
+ * Fail closed: without a determinable scope no index content is used. Both
+ * pipelines call this one function, so a rule lands in both.
+ */
+export async function retrieveContext(
+  userMessage: string,
+  context: PipelineContext
+): Promise<RetrievedContext> {
+  const access = await resolveRetrievalAccess(context.userId);
+  if (!access) {
+    console.warn(
+      'HAI.ai: no retrieval scope for the user (fail closed), no index content is used'
+    );
+    return { searchResults: [], retrievedContext: '' };
+  }
+
+  // Step 3: Vector search — may return empty if embedding provider differs from indexing provider
+  let searchResults: SearchResult[] = [];
+  try {
+    const searchContext = await searchWithContext(
+      userMessage,
+      {
+        currentEnablerId: context.currentEnablerId,
+        currentCourseId: context.currentCourseId,
+      },
+      {
+        topK: 5,
+        minSimilarity: 0.45,
+        catalogIds: access.catalogIds,
+        audience: access.audience,
+        organizationId: access.organizationId,
+        userId: access.userId,
+        trainingScope: context.trainingScope,
+      }
+    );
+    searchResults = searchContext.results;
+  } catch (vectorError) {
+    console.warn(
+      'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
+      vectorError
+    );
+    searchResults = [];
+  }
+
+  let retrievedContext = buildRetrievedContext(
+    searchResults.map(r => ({
+      content: r.content,
+      similarity: r.similarity,
+      metadata: r.metadata,
+    }))
+  );
+
+  // PageIndex — fetch relevant PDF pages at query time (non-fatal)
+  try {
+    const pageIndexResult = await fetchPageIndexContext(
+      userMessage,
+      searchResults,
+      {
+        currentEnablerId: context.currentEnablerId,
+        currentCourseId: context.currentCourseId,
+        trainingScope: context.trainingScope,
+        catalogIds: access.catalogIds,
+        audience: access.audience,
+        organizationId: access.organizationId,
+      }
+    );
+    if (pageIndexResult.pdfContext) {
+      retrievedContext = retrievedContext
+        ? `${retrievedContext}\n\n${pageIndexResult.pdfContext}`
+        : pageIndexResult.pdfContext;
+
+      // Add PageIndex citations to search results for citation merging. The
+      // URL is only there for documents that trainees may see.
+      for (const pCit of pageIndexResult.citations) {
+        searchResults.push({
+          id: `pageindex-${pCit.documentId}-p${pCit.pageNumber}`,
+          chunkIndex: pCit.pageNumber,
+          content: `[PDF Page ${pCit.pageNumber}]`,
+          similarity: pCit.relevanceScore,
+          sourceType: 'document',
+          sourceId: pCit.documentId,
+          metadata: {
+            title: pCit.documentTitle,
+            fileName: pCit.fileName,
+            storageUrl: pCit.storageUrl,
+            page: pCit.pageNumber,
+            sourceType: 'pageindex',
+          },
+        });
+      }
+    }
+  } catch (pageIndexError) {
+    console.warn('HAI.ai: PageIndex fetch failed (non-fatal):', pageIndexError);
+  }
+
+  return { searchResults, retrievedContext };
+}
+
+// ============================================================================
 // MAIN PIPELINE
 // ============================================================================
 
@@ -454,78 +567,12 @@ export async function processMessage(
     let retrievedContext = '';
 
     if (intent !== 'quiz_answer' && !enableWebSearch) {
-      // Step 3: Vector search — may return empty if embedding provider differs from indexing provider
-      try {
-        const searchContext = await searchWithContext(
-          userMessage,
-          {
-            currentEnablerId: context.currentEnablerId,
-            currentCourseId: context.currentCourseId,
-          },
-          { topK: 5, minSimilarity: 0.45, userId: context.userId }
-        );
-
-        searchResults = filterSearchResultsForTrainingScope(
-          searchContext.results,
-          context.trainingScope
-        );
-      } catch (vectorError) {
-        console.warn(
-          'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
-          vectorError
-        );
-        searchResults = [];
-      }
-
-      retrievedContext = buildRetrievedContext(
-        searchResults.map(r => ({
-          content: r.content,
-          similarity: r.similarity,
-          metadata: r.metadata,
-        }))
-      );
-
-      // Step 3a: PageIndex — fetch relevant PDF pages at query time (non-fatal)
-      try {
-        const pageIndexResult = await fetchPageIndexContext(
-          userMessage,
-          searchResults,
-          {
-            currentEnablerId: context.currentEnablerId,
-            currentCourseId: context.currentCourseId,
-            trainingScope: context.trainingScope,
-          }
-        );
-        if (pageIndexResult.pdfContext) {
-          retrievedContext = retrievedContext
-            ? `${retrievedContext}\n\n${pageIndexResult.pdfContext}`
-            : pageIndexResult.pdfContext;
-
-          // Add PageIndex citations to search results for citation merging
-          for (const pCit of pageIndexResult.citations) {
-            searchResults.push({
-              id: `pageindex-${pCit.documentId}-p${pCit.pageNumber}`,
-              chunkIndex: pCit.pageNumber,
-              content: `[PDF Page ${pCit.pageNumber}]`,
-              similarity: pCit.relevanceScore,
-              sourceType: 'document',
-              sourceId: pCit.documentId,
-              metadata: {
-                title: pCit.documentTitle,
-                fileName: pCit.fileName,
-                storageUrl: pCit.storageUrl,
-                page: pCit.pageNumber,
-                sourceType: 'pageindex',
-              },
-            });
-          }
-        }
-      } catch (pageIndexError) {
-        console.warn(
-          'HAI.ai: PageIndex fetch failed (non-fatal):',
-          pageIndexError
-        );
-      }
+      // Vector search and PageIndex, limited to the occupation, audience and
+      // organization of the user (one function for both pipelines)
+      ({ searchResults, retrievedContext } = await retrieveContext(
+        userMessage,
+        context
+      ));
     }
 
     // If web search is enabled, switch to general mode to allow external knowledge
@@ -725,77 +772,11 @@ export async function processMessageStream(
     let retrievedContext = '';
 
     if (intent !== 'quiz_answer' && !enableWebSearch) {
-      // Step 3: Vector search — may return empty if embedding provider differs from indexing provider
-      try {
-        const searchContext = await searchWithContext(
-          userMessage,
-          {
-            currentEnablerId: context.currentEnablerId,
-            currentCourseId: context.currentCourseId,
-          },
-          { topK: 5, minSimilarity: 0.45, userId: context.userId }
-        );
-        searchResults = filterSearchResultsForTrainingScope(
-          searchContext.results,
-          context.trainingScope
-        );
-      } catch (vectorError) {
-        console.warn(
-          'HAI.ai: Vector search failed (non-fatal, falling back to PageIndex):',
-          vectorError
-        );
-        searchResults = [];
-      }
-
-      retrievedContext = buildRetrievedContext(
-        searchResults.map(r => ({
-          content: r.content,
-          similarity: r.similarity,
-          metadata: r.metadata,
-        }))
-      );
-
-      // PageIndex — fetch relevant PDF pages at query time (non-fatal)
-      try {
-        const pageIndexResult = await fetchPageIndexContext(
-          userMessage,
-          searchResults,
-          {
-            currentEnablerId: context.currentEnablerId,
-            currentCourseId: context.currentCourseId,
-            trainingScope: context.trainingScope,
-          }
-        );
-        if (pageIndexResult.pdfContext) {
-          retrievedContext = retrievedContext
-            ? `${retrievedContext}\n\n${pageIndexResult.pdfContext}`
-            : pageIndexResult.pdfContext;
-
-          // Add PageIndex citations
-          for (const pCit of pageIndexResult.citations) {
-            searchResults.push({
-              id: `pageindex-${pCit.documentId}-p${pCit.pageNumber}`,
-              chunkIndex: pCit.pageNumber,
-              content: `[PDF Page ${pCit.pageNumber}]`,
-              similarity: pCit.relevanceScore,
-              sourceType: 'document',
-              sourceId: pCit.documentId,
-              metadata: {
-                title: pCit.documentTitle,
-                fileName: pCit.fileName,
-                storageUrl: pCit.storageUrl,
-                page: pCit.pageNumber,
-                sourceType: 'pageindex',
-              },
-            });
-          }
-        }
-      } catch (pageIndexError) {
-        console.warn(
-          'HAI.ai: PageIndex fetch failed (non-fatal):',
-          pageIndexError
-        );
-      }
+      // Same retrieval as processMessage: scoped to the user
+      ({ searchResults, retrievedContext } = await retrieveContext(
+        userMessage,
+        context
+      ));
     }
 
     let mode = determineMode(intent, context);
