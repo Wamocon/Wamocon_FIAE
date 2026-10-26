@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageLoader } from '@/components/ui/PageLoader';
+import { authFetch } from '@/lib/authFetch';
 
 type QuizQ = {
   id: string;
@@ -37,7 +38,7 @@ export default function TraineeEnablerQuizPage() {
       setLoading(true);
       setError(null);
       try {
-        const r = await fetch(
+        const r = await authFetch(
           `/api/trainee/enablers/${enablerId}/quiz?traineeId=${profile.id}`,
           { cache: 'no-store' }
         );
@@ -65,7 +66,7 @@ export default function TraineeEnablerQuizPage() {
       ),
     };
     try {
-      const r = await fetch(`/api/trainee/enablers/${enablerId}/quiz/submit`, {
+      const r = await authFetch(`/api/trainee/enablers/${enablerId}/quiz/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -6,6 +6,7 @@ import {
     mesSoftskillCriteria,
 } from '@/db/migrations/schemas/schema';
 import { eq } from 'drizzle-orm';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -16,9 +17,13 @@ interface RouteParams {
  * 
  * Fetches a single evaluation with its softskill ratings.
  * Returns the same shape as the trainer endpoint so the PDF generation
- * can use the data identically.
+ * can use the data identically. Only an evaluation of the session user is
+ * returned, one of someone else is answered like a missing one.
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(request);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
 
@@ -29,7 +34,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             .where(eq(weeklyEvaluations.id, id as any))
             .limit(1);
 
-        if (evaluationRows.length === 0) {
+        if (
+            evaluationRows.length === 0 ||
+            String(evaluationRows[0].traineeId) !== session.id
+        ) {
             return NextResponse.json({ error: 'Bewertung nicht gefunden' }, { status: 404 });
         }
 

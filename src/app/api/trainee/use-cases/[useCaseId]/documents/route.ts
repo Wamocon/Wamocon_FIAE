@@ -1,6 +1,7 @@
 'use strict';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import db from '@/db';
 import { eq, and, or, ne, sql } from 'drizzle-orm';
@@ -14,19 +15,18 @@ import { contentDocuments, useCases, courseMembers, profiles } from '@/db/migrat
  * - Excludes: TRAINER_ONLY documents (solutions)
  * 
  * This ensures trainees only see questions, not answers.
+ * The trainee is the session user, a traineeId in the query is ignored.
  */
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ useCaseId: string }> }
 ) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+    const traineeId = session.id;
+
     try {
         const { useCaseId } = await params;
-        const { searchParams } = new URL(req.url);
-        const traineeId = searchParams.get('traineeId');
-
-        if (!traineeId) {
-            return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
-        }
 
         // The content must lie inside the catalog scope of the trainee
         const catalogScope = await requireContentScopeForUser(traineeId, req, 'useCase', useCaseId);

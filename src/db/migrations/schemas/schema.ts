@@ -227,6 +227,9 @@ export const courses = pgTable(
       .references(() => trainingCatalogs.id, { onDelete: 'restrict' }),
     // Stable text code (e.g. "K6.1"), unique per catalog, NULL for legacy rows
     code: text('code'),
+    // Training component the course belongs to (composite foreign key with
+    // training_catalog_id, at most one course per component), NULL if unlinked
+    trainingComponentId: uuid('training_component_id'),
     title: text('title').notNull(),
     description: text('description'),
     year: integer('year'), // 1, 2, or 3
@@ -260,6 +263,19 @@ export const courses = pgTable(
       table.id,
       table.trainingCatalogId
     ),
+    // A course can only be linked to a component of its own catalog.
+    componentCatalogFk: foreignKey({
+      name: 'courses_component_catalog_fk',
+      columns: [table.trainingComponentId, table.trainingCatalogId],
+      foreignColumns: [
+        trainingComponents.id,
+        trainingComponents.trainingCatalogId,
+      ],
+    }).onDelete('restrict'),
+    // At most one course per training component
+    componentUnique: uniqueIndex('courses_training_component_unique')
+      .on(table.trainingComponentId)
+      .where(sql`${table.trainingComponentId} is not null`),
   })
 );
 
@@ -612,6 +628,8 @@ export const quizzes = pgTable(
   'quizzes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // Stable text code, unique per catalog, NULL for legacy rows
+    code: text('code'),
     title: text('title').notNull(),
     // ENABLER = "small quiz", GLOBAL = "big quiz"
     quizType: quizType('quiz_type').notNull(),
@@ -634,6 +652,13 @@ export const quizzes = pgTable(
       .$onUpdate(() => new Date()),
   },
   table => ({
+    codeFormatCheck: check(
+      'quizzes_code_format_check',
+      sql`${table.code} is null or ${table.code} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`
+    ),
+    catalogCodeUnique: uniqueIndex('quizzes_catalog_code_unique')
+      .on(table.trainingCatalogId, table.code)
+      .where(sql`${table.code} is not null`),
     // A quiz can only be bound to a component of its own catalog.
     componentCatalogFk: foreignKey({
       name: 'quizzes_component_catalog_fk',
@@ -704,6 +729,8 @@ export const options = pgTable('options', {
   isCorrect: boolean('is_correct').notNull().default(false),
   // Optional explanation (store on the correct option)
   explanation: text('explanation'),
+  // Position inside the question (ascending, NULLS LAST), NULL for old rows
+  orderIndex: integer('order_index'),
 });
 
 // --- Trainee Submissions & Progress ---
@@ -1630,17 +1657,26 @@ export const traineeElectiveChoices = pgTable(
 
 // === TRAINING USE CASES ===
 // Individual skills/tasks within each component
-export const trainingUseCases = pgTable('training_use_cases', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  componentId: uuid('component_id')
-    .notNull()
-    .references(() => trainingComponents.id, { onDelete: 'cascade' }),
-  letter: text('letter').notNull(), // a), b), c), etc.
-  description: text('description').notNull(),
-  plannedHours: real('planned_hours').notNull(), // Sollzeit in Stunden
-  orderIndex: integer('order_index').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const trainingUseCases = pgTable(
+  'training_use_cases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    componentId: uuid('component_id')
+      .notNull()
+      .references(() => trainingComponents.id, { onDelete: 'cascade' }),
+    letter: text('letter').notNull(), // a), b), c), etc.
+    description: text('description').notNull(),
+    plannedHours: real('planned_hours').notNull(), // Sollzeit in Stunden
+    orderIndex: integer('order_index').notNull().default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => ({
+    // A letter names one task inside a component
+    componentLetterUnique: unique(
+      'training_use_cases_component_letter_unique'
+    ).on(table.componentId, table.letter),
+  })
+);
 
 // === ACTIVITY REPORT USE CASE ENTRIES ===
 // Links activity reports to specific use cases with Plan vs Act tracking

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { authFetch } from '@/lib/authFetch';
 import { useQueryClient } from '@tanstack/react-query';
 import LinkifyText from '@/components/ui/LinkifyText';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -185,7 +186,7 @@ export default function TraineeEnablerPage() {
     setAnswers({});
     setCurrentIndex(0);
     try {
-      const r = await fetch(
+      const r = await authFetch(
         `/api/trainee/enablers/${enablerId}/quizzes/${difficulty}?traineeId=${profile.id}`,
         { cache: 'no-store' }
       );
@@ -220,7 +221,7 @@ export default function TraineeEnablerPage() {
     // If already completed, fetch stored submission for review-only mode
     if (g.completed && profile?.id) {
       try {
-        const vr = await fetch(
+        const vr = await authFetch(
           `/api/trainee/quizzes/${g.quizId}/submit?traineeId=${profile.id}`,
           { cache: 'no-store' }
         );
@@ -270,7 +271,7 @@ export default function TraineeEnablerPage() {
       answers: payloadAnswers,
     };
     try {
-      const r = await fetch(
+      const r = await authFetch(
         `/api/trainee/quizzes/${quizContent.quizId}/submit`,
         {
           method: 'POST',
@@ -321,7 +322,7 @@ export default function TraineeEnablerPage() {
     try {
       // Filter out empty solutions and send only filled ones
       const filledSolutions = solutions.filter(s => s.text.trim().length > 0);
-      const r = await fetch(`/api/trainee/enablers/${enablerId}/submit`, {
+      const r = await authFetch(`/api/trainee/enablers/${enablerId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Brain, Play, Award } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useEffect, useState } from 'react';
+import { authFetch } from '@/lib/authFetch';
 
 type QuizCard = {
   id: string;
@@ -27,7 +28,7 @@ export default function TraineeQuizzesPage() {
     const load = async () => {
       if (!profile?.id) return;
       try {
-        const res = await fetch(`/api/trainee/quizzes?userId=${profile.id}`, {
+        const res = await authFetch(`/api/trainee/quizzes?userId=${profile.id}`, {
           cache: 'no-store',
         });
         const data = (await res.json()) as QuizCard[];

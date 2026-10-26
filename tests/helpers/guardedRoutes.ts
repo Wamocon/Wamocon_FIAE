@@ -1,14 +1,18 @@
 // Generated from the route files under src/app/api/trainer and src/app/api/admin,
 // plus me/catalog-requests (a trainer-level request for an occupation), the
-// notification routes and the school routes of a trainee (guard 'user') and the
+// notification routes and every route of a trainee (guard 'user') and the
 // HAI routes (src/app/api/hai).
 // Every entry is a handler that must reject anonymous callers (401) and callers
 // with a too low role (403). Regenerate when a route is added.
 
 // 'user' is any signed-in, active account (no role check): the notification
-// routes, the school routes of a trainee and the HAI routes of one person, which
-// then work on the data of the session only. 'haiIndex' handlers manage the
-// shared HAI index (see src/lib/hai/indexAccess.ts).
+// routes, the routes of a trainee and the HAI routes of one person, which
+// then work on the data of the session only (a few trainee read routes also
+// let a trainer-level caller read the data of a trainee inside their
+// organization scope). The open exceptions are the master data routes:
+// trainee/lernfelder, trainee/lernfelder/[id], trainee/evaluations/softskills
+// and trainee/school/lernfelder. 'haiIndex' handlers manage the shared HAI
+// index (see src/lib/hai/indexAccess.ts).
 export type GuardKind =
   | 'user'
   | 'trainer'
@@ -747,6 +751,180 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     method: 'POST',
     guard: 'user',
     params: ['id'],
+  },
+  {
+    route: 'trainee/annual-summary',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/courses',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/courses/[courseId]',
+    method: 'GET',
+    guard: 'user',
+    params: ['courseId'],
+  },
+  {
+    route: 'trainee/dashboard',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/enablers/[enablerId]',
+    method: 'GET',
+    guard: 'user',
+    params: ['enablerId'],
+  },
+  {
+    route: 'trainee/enablers/[enablerId]/quiz',
+    method: 'GET',
+    guard: 'user',
+    params: ['enablerId'],
+  },
+  {
+    route: 'trainee/enablers/[enablerId]/quiz/submit',
+    method: 'POST',
+    guard: 'user',
+    params: ['enablerId'],
+  },
+  {
+    route: 'trainee/enablers/[enablerId]/quizzes',
+    method: 'GET',
+    guard: 'user',
+    params: ['enablerId'],
+  },
+  {
+    route: 'trainee/enablers/[enablerId]/quizzes/[difficulty]',
+    method: 'GET',
+    guard: 'user',
+    params: ['enablerId', 'difficulty'],
+  },
+  {
+    route: 'trainee/enablers/[enablerId]/submit',
+    method: 'POST',
+    guard: 'user',
+    params: ['enablerId'],
+  },
+  {
+    route: 'trainee/evaluations',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/evaluations',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/evaluations/[id]',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/feedback',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/knowledge-notes',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/knowledge-notes',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/knowledge-notes/[noteId]',
+    method: 'GET',
+    guard: 'user',
+    params: ['noteId'],
+  },
+  {
+    route: 'trainee/knowledge-notes/[noteId]',
+    method: 'PATCH',
+    guard: 'user',
+    params: ['noteId'],
+  },
+  {
+    route: 'trainee/knowledge-notes/[noteId]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['noteId'],
+  },
+  {
+    route: 'trainee/lesson-progress',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/lessons',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/progress',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/quizzes',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/quizzes/[quizId]/submit',
+    method: 'POST',
+    guard: 'user',
+    params: ['quizId'],
+  },
+  {
+    route: 'trainee/quizzes/[quizId]/submit',
+    method: 'GET',
+    guard: 'user',
+    params: ['quizId'],
+  },
+  {
+    route: 'trainee/use-case-hours',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]',
+    method: 'GET',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/documents',
+    method: 'GET',
+    guard: 'user',
+    params: ['useCaseId'],
+  },
+  {
+    route: 'trainee/use-cases/[useCaseId]/submit',
+    method: 'POST',
+    guard: 'user',
+    params: ['useCaseId'],
   },
   { route: 'hai/chat', method: 'POST', guard: 'user', params: [] },
   { route: 'hai/chat', method: 'PATCH', guard: 'user', params: [] },

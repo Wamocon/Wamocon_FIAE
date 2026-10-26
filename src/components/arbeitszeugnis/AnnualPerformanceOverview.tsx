@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { authFetch } from '@/lib/authFetch';
 import {
   Loader2,
   TrendingUp,
@@ -101,7 +102,7 @@ export default function AnnualPerformanceOverview({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainee/annual-summary?traineeId=${traineeId}&year=${year}`,
           { cache: 'no-store' }
         );

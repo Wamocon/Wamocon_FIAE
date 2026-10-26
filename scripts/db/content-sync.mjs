@@ -38,10 +38,24 @@
 // --apply the sync is committed and a second dry run must report zero changes
 // (convergence check).
 //
+// One occupation: with --catalog <CODE> (for example KFBM) the run is limited to
+// the rows of that training catalog. Each table of the allowlist names how a row
+// is assigned to a catalog ("catalogScope": the catalog column itself, the code
+// of the catalog row, or the parent rows up to a table that has the column), and
+// reads, checks and writes only those rows. The key may differ for such a run
+// ("catalogKey", for example [training_catalog_id, code]), so the stable codes
+// of the occupation are used. The uniqueness check only sees the rows of the
+// occupation, so rows of another occupation without a code (all FIAE rows) cannot
+// abort the run. A row of the occupation without a code aborts it. Tables
+// without a "catalogScope" (the legacy FIAE learning field tables) are skipped.
+// Without --catalog nothing of this applies: the keys, the checks and the
+// generated SQL are those of the plain run.
+//
 // Usage:
 //   node scripts/db/content-sync.mjs --linked|--local|--db-url <url>
 //        [--apply] [--direction preview-to-production|production-to-preview]
 //        [--config supabase/content-tables.json] [--owner-email <email>]
+//        [--catalog <CODE>]
 // preview-to-production (default) is the release direction. The reverse
 // direction seeds Preview with the released training content (still only the
 // allowlist, never user data).
@@ -88,7 +102,18 @@ const DENY = [
 // Tables that hold users; a copied foreign key to one of them needs a remap rule
 const USER_TABLES = ['profiles', 'organizations'];
 const REPORT_MARKER = 'CONTENT_SYNC_REPORT:';
+const CATALOG_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const q = value => `'${String(value).replace(/'/g, "''")}'`;
+
+/** The code of a training catalog (--catalog): letters, digits, '.', '_' and '-'. */
+export function parseCatalogCode(value) {
+  if (typeof value !== 'string' || !CATALOG_CODE.test(value)) {
+    throw new Error(
+      `Invalid catalog code: ${JSON.stringify(value)} (letters, digits, '.', '_' and '-', 1 to 64 characters)`
+    );
+  }
+  return value;
+}
 
 function ident(name) {
   if (typeof name !== 'string' || !IDENT.test(name)) {
@@ -138,6 +163,16 @@ export function validateConfig(config) {
       errors.push(`${where}: update must be one of ${UPDATE_MODES.join(', ')}`);
     }
     if (
+      t.catalogKey !== undefined &&
+      (!Array.isArray(t.catalogKey) ||
+        t.catalogKey.length === 0 ||
+        !t.catalogKey.every(c => IDENT.test(c)))
+    ) {
+      errors.push(
+        `${where}: catalogKey must be a non-empty list of column names`
+      );
+    }
+    if (
       !Array.isArray(t.columns) ||
       t.columns.length === 0 ||
       !t.columns.every(c => IDENT.test(c))
@@ -149,6 +184,11 @@ export function validateConfig(config) {
       for (const k of t.key ?? []) {
         if (!t.columns.includes(k)) {
           errors.push(`${where}: key column ${k} is not in columns`);
+        }
+      }
+      for (const k of Array.isArray(t.catalogKey) ? t.catalogKey : []) {
+        if (!t.columns.includes(k)) {
+          errors.push(`${where}: catalogKey column ${k} is not in columns`);
         }
       }
       for (const c of Object.keys(t.remap ?? {})) {
@@ -182,6 +222,58 @@ export function validateConfig(config) {
     }
     seen.add(t.name);
   }
+  errors.push(...scopeErrors(config.tables));
+  return errors;
+}
+
+/** The scope of a table is one of: self (column of the catalog table), column, parents. */
+function scopeErrors(tables) {
+  const errors = [];
+  const byName = new Map(
+    tables.filter(t => t && IDENT.test(t.name ?? '')).map(t => [t.name, t])
+  );
+  for (const t of byName.values()) {
+    const scope = t.catalogScope;
+    if (scope === undefined) continue;
+    const where = `table ${t.name}: catalogScope`;
+    const kinds = ['self', 'column', 'parents'].filter(k => k in (scope ?? {}));
+    if (!scope || typeof scope !== 'object' || kinds.length !== 1) {
+      errors.push(`${where} must have exactly one of self, column, parents`);
+      continue;
+    }
+    if (kinds[0] !== 'parents') {
+      if (!IDENT.test(scope[kinds[0]] ?? '')) {
+        errors.push(`${where}.${kinds[0]} must be a column name`);
+      }
+      continue;
+    }
+    if (!Array.isArray(scope.parents) || scope.parents.length === 0) {
+      errors.push(`${where}.parents must be a non-empty list`);
+      continue;
+    }
+    for (const p of scope.parents) {
+      if (!IDENT.test(p?.column ?? '') || !IDENT.test(p?.table ?? '')) {
+        errors.push(`${where}.parents needs a column and a table name`);
+      } else if (!Array.isArray(t.columns) || !t.columns.includes(p.column)) {
+        errors.push(`${where}: parent column ${p.column} is not in columns`);
+      } else if (!byName.get(p.table)?.catalogScope) {
+        errors.push(
+          `${where}: parent table ${p.table} is not in the allowlist or has no catalogScope`
+        );
+      }
+    }
+  }
+  // a chain of parents must end (no cycle)
+  const cyclic = (name, path) =>
+    path.includes(name) ||
+    (byName.get(name)?.catalogScope?.parents ?? []).some(p =>
+      cyclic(p.table, [...path, name])
+    );
+  for (const t of byName.values()) {
+    if ((t.catalogScope?.parents ?? []).some(p => cyclic(p.table, [t.name]))) {
+      errors.push(`table ${t.name}: catalogScope parents form a cycle`);
+    }
+  }
   return errors;
 }
 
@@ -211,7 +303,8 @@ export function castExpression(alias, srcCol, dstCol) {
  *   config: object,
  *   meta: Record<string, Record<string, { name: string, dataType: string, udtSchema: string, udtName: string, generated: boolean }[]>>,
  *   from: string, to: string, ownerEmail?: string|null, rollback: boolean, only?: string[]|null,
- *   updateMode?: 'never'|'configured', fks?: Record<string, Record<string, { column: string, refSchema: string, refTable: string }[]>>
+ *   updateMode?: 'never'|'configured', fks?: Record<string, Record<string, { column: string, refSchema: string, refTable: string }[]>>,
+ *   catalog?: string|null   limit the run to the rows of this training catalog (code)
  * }} input
  * @returns {{ sql: string, tables: string[], notes: string[], errors: string[] }}
  */
@@ -225,10 +318,18 @@ export function buildScript({
   only = null,
   updateMode = 'never',
   fks = {},
+  catalog = null,
 }) {
   const errors = validateConfig(config);
   if (!['never', 'configured'].includes(updateMode)) {
     errors.push(`updateMode must be never or configured, not ${updateMode}`);
+  }
+  if (catalog !== null) {
+    try {
+      parseCatalogCode(catalog);
+    } catch (e) {
+      errors.push(e.message);
+    }
   }
   const notes = [];
   if (
@@ -250,6 +351,33 @@ export function buildScript({
     config.tables.flatMap(t => Object.values(t.remap ?? {}).map(r => r.table))
   );
   const colsOf = (schema, table) => meta[schema]?.[table] ?? [];
+  const tableByName = new Map(config.tables.map(t => [t.name, t]));
+  const hasColumn = (schema, table, column) =>
+    colsOf(schema, table).some(c => c.name === column);
+  // Condition "this row belongs to the catalog" for a table, on `alias` of a
+  // table in `schema`. A parent condition nests one level deeper per parent.
+  const scopeCond = (table, schema, alias, depth = 0) => {
+    const scope = tableByName.get(table).catalogScope;
+    const need = column => {
+      if (!hasColumn(schema, table, column)) {
+        throw new Error(
+          `catalog scope column ${table}.${column} is missing in ${schema}`
+        );
+      }
+      return `${alias}.${ident(column)}`;
+    };
+    if (scope.self) {
+      return `lower(${need(scope.self)}) = lower(${q(catalog)})`;
+    }
+    if (scope.column) {
+      return `${need(scope.column)} = (select c.id from ${ident(schema)}.training_catalogs c where lower(c.code) = lower(${q(catalog)}))`;
+    }
+    const parts = scope.parents.map(p => {
+      const pa = `p${depth + 1}`;
+      return `exists (select 1 from ${ident(schema)}.${ident(p.table)} ${pa} where ${pa}.id = ${need(p.column)} and ${scopeCond(p.table, schema, pa, depth + 1)})`;
+    });
+    return parts.length === 1 ? parts[0] : `(${parts.join(' or ')})`;
+  };
 
   const mapSub = (parent, alias, column) =>
     `(select m.dst_id from _map_${ident(parent)} m where m.src_id = ${alias}.${ident(column)})`;
@@ -257,6 +385,12 @@ export function buildScript({
 
   for (const t of config.tables) {
     if (only && !only.includes(t.name)) continue;
+    if (catalog && !t.catalogScope) {
+      notes.push(
+        `${t.name}: skipped, no catalogScope (not part of a run limited to one occupation)`
+      );
+      continue;
+    }
     const srcCols = colsOf(from, t.name);
     const dstCols = colsOf(to, t.name);
     if (srcCols.length === 0 || dstCols.length === 0) {
@@ -273,6 +407,8 @@ export function buildScript({
     }
     const dstByName = new Map(dstCols.map(c => [c.name, c]));
     const allowed = new Set(t.columns);
+    // A run limited to one occupation may use another key (with the stable code)
+    const key = catalog && t.catalogKey ? t.catalogKey : t.key;
     const common = srcCols.filter(
       c =>
         allowed.has(c.name) &&
@@ -281,7 +417,7 @@ export function buildScript({
         !dstByName.get(c.name).generated
     );
     const names = common.map(c => c.name);
-    const missingKey = t.key.filter(k => !names.includes(k));
+    const missingKey = key.filter(k => !names.includes(k));
     if (missingKey.length > 0) {
       errors.push(
         `${t.name}: key column(s) ${missingKey.join(', ')} missing in one of the schemas`
@@ -334,7 +470,7 @@ export function buildScript({
         : sub;
     };
     const exprByName = new Map(common.map(c => [c.name, exprOf(c)]));
-    const keyMatch = t.key
+    const keyMatch = key
       .map(k => `d.${ident(k)} is not distinct from ${exprByName.get(k)}`)
       .join(' and ');
     const skipFilters = remaps
@@ -345,7 +481,7 @@ export function buildScript({
     // The id is never copied (the target generates it), it is only needed for the id map
     const hasId =
       srcCols.some(c => c.name === 'id') && dstCols.some(c => c.name === 'id');
-    const insertCols = names.filter(n => n !== 'id' || t.key.includes('id'));
+    const insertCols = names.filter(n => n !== 'id' || key.includes('id'));
     // --update never (default, release): only insert; configured: per-table setting
     const mode = updateMode === 'never' ? 'never' : (t.update ?? 'newer');
     const effectiveMode =
@@ -356,23 +492,39 @@ export function buildScript({
       remapOf.has(n) && remapOf.get(n).table in lookups;
     const setCols = names.filter(
       n =>
-        !t.key.includes(n) &&
+        !key.includes(n) &&
         n !== 'id' &&
         n !== 'created_at' &&
         !isLookupRemap(n) &&
         (effectiveMode === 'newer' || n !== 'updated_at')
     );
     const compareCols = setCols.filter(n => n !== 'updated_at');
-    const keyList = t.key.map(k => `s.${ident(k)}`).join(', ');
-    const dkeyList = t.key.map(k => `d.${ident(k)}`).join(', ');
+    const keyList = key.map(k => `s.${ident(k)}`).join(', ');
+    const dkeyList = key.map(k => `d.${ident(k)}`).join(', ');
     const T = ident(t.name);
+    let scopeS = null;
+    let scopeD = null;
+    if (catalog) {
+      try {
+        scopeS = scopeCond(t.name, from, 's');
+        scopeD = scopeCond(t.name, to, 'd');
+      } catch (e) {
+        errors.push(`${t.name}: ${e.message}`);
+        continue;
+      }
+    }
 
     body.push(`  -- ${T}`);
+    if (catalog && key.includes('code') && names.includes('code')) {
+      body.push(
+        `  if exists (select 1 from ${from}.${T} s where ${scopeS} and s.code is null) then raise exception 'content-sync: ${from}.${T} has row(s) without a code in catalog ${catalog}'; end if;`
+      );
+    }
     body.push(
-      `  if exists (select 1 from ${from}.${T} s group by ${keyList} having count(*) > 1) then raise exception 'content-sync: key (${t.key.join(', ')}) is not unique in ${from}.${T}'; end if;`
+      `  if exists (select 1 from ${from}.${T} s${scopeS ? ` where ${scopeS}` : ''} group by ${keyList} having count(*) > 1) then raise exception 'content-sync: key (${key.join(', ')}) is not unique in ${from}.${T}'; end if;`
     );
     body.push(
-      `  if exists (select 1 from ${to}.${T} d group by ${dkeyList} having count(*) > 1) then raise exception 'content-sync: key (${t.key.join(', ')}) is not unique in ${to}.${T}'; end if;`
+      `  if exists (select 1 from ${to}.${T} d${scopeD ? ` where ${scopeD}` : ''} group by ${dkeyList} having count(*) > 1) then raise exception 'content-sync: key (${key.join(', ')}) is not unique in ${to}.${T}'; end if;`
     );
     if (effectiveMode !== 'never' && compareCols.length > 0) {
       const sets = setCols
@@ -383,7 +535,7 @@ export function buildScript({
       const newer =
         effectiveMode === 'newer' ? ' and s.updated_at > d.updated_at' : '';
       body.push(
-        `  update ${to}.${T} d set ${sets} from ${from}.${T} s where ${keyMatch}${newer} and row(${dcols}) is distinct from row(${scols});`
+        `  update ${to}.${T} d set ${sets} from ${from}.${T} s where ${keyMatch}${newer}${scopeS ? ` and ${scopeS} and ${scopeD}` : ''} and row(${dcols}) is distinct from row(${scols});`
       );
       body.push(`  get diagnostics n_upd = row_count;`);
     } else {
@@ -394,13 +546,14 @@ export function buildScript({
     const where = [
       `not exists (select 1 from ${to}.${T} d where ${keyMatch})`,
       ...skipFilters,
+      ...(scopeS ? [scopeS] : []),
     ].join(' and ');
     body.push(
       `  insert into ${to}.${T} (${cols}) select ${values} from ${from}.${T} s where ${where};`
     );
     body.push(`  get diagnostics n_ins = row_count;`);
     body.push(
-      `  select count(*) into n_skip from ${from}.${T} s where not exists (select 1 from ${to}.${T} d where ${keyMatch});`
+      `  select count(*) into n_skip from ${from}.${T} s where not exists (select 1 from ${to}.${T} d where ${keyMatch})${scopeS ? ` and ${scopeS}` : ''};`
     );
     body.push(
       `  rep := rep || jsonb_build_object(${q(t.name)}, jsonb_build_object('inserted', n_ins, 'updated', n_upd, 'unmatched', n_skip));`
@@ -413,10 +566,10 @@ export function buildScript({
         continue;
       }
       body.push(
-        `  create temp table _map_${T} on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from ${from}.${T} s join ${to}.${T} d on ${keyMatch} order by s.id, d.id;`
+        `  create temp table _map_${T} on commit drop as select distinct on (s.id) s.id as src_id, d.id as dst_id from ${from}.${T} s join ${to}.${T} d on ${keyMatch}${scopeS ? ` where ${scopeS}` : ''} order by s.id, d.id;`
       );
     }
-    planned.set(t.name, { key: t.key });
+    planned.set(t.name, { key: key });
   }
   if (errors.length > 0) return { sql: '', tables: [], notes, errors };
 
@@ -430,11 +583,18 @@ export function buildScript({
       `  create temp table _map_${ident(name)} on commit drop as select distinct on (sp.id) sp.id as src_id, d.id as dst_id from ${from}.${ident(name)} sp join ${to}.${ident(name)} d on ${match} order by sp.id, d.id;`
     );
   }
+  const catalogChecks = catalog
+    ? [from, to].map(
+        schema =>
+          `  if not exists (select 1 from ${ident(schema)}.training_catalogs where lower(code) = lower(${q(catalog)})) then raise exception 'content-sync: catalog ${catalog} does not exist in ${schema}'; end if;`
+      )
+    : [];
   const sql = [
     'do $content_sync$',
     "declare rep jsonb := '{}'::jsonb; n_ins bigint; n_upd bigint; n_skip bigint;",
     'begin',
     "  perform pg_advisory_xact_lock(hashtext('content_sync'));",
+    ...catalogChecks,
     ...head,
     ...body,
     rollback ? `  raise exception '${REPORT_MARKER}%', rep::text;` : '',
@@ -540,7 +700,7 @@ function main() {
   const target = targetFrom(args);
   if (!target) {
     console.error(
-      'Usage: node scripts/db/content-sync.mjs --linked|--local|--db-url <url> [--apply] [--direction preview-to-production|production-to-preview] [--update never|configured] [--owner-email <email>]'
+      'Usage: node scripts/db/content-sync.mjs --linked|--local|--db-url <url> [--apply] [--direction preview-to-production|production-to-preview] [--update never|configured] [--owner-email <email>] [--catalog <CODE>]'
     );
     process.exit(2);
   }
@@ -571,6 +731,9 @@ function main() {
       throw new Error('--update must be never or configured');
     const { meta, fks } = loadMeta(target, config, from, to);
     const only = argValue(args, '--only')?.split(',') ?? null;
+    const catalog = args.includes('--catalog')
+      ? parseCatalogCode(argValue(args, '--catalog'))
+      : null;
     const dry = buildScript({
       config,
       meta,
@@ -581,6 +744,7 @@ function main() {
       only,
       updateMode,
       fks,
+      catalog,
     });
     if (dry.errors.length > 0)
       throw new Error(
@@ -592,7 +756,7 @@ function main() {
         'Note: no owner email, rows whose creator cannot be matched are skipped.'
       );
     say(
-      `Content sync ${from} -> ${to} (${dry.tables.length} tables, ${apply ? 'apply' : 'dry run'}, update mode: ${updateMode === 'never' ? 'never, insert only' : 'configured per table'})`
+      `Content sync ${from} -> ${to} (${dry.tables.length} tables${catalog ? `, catalog ${catalog} only` : ''}, ${apply ? 'apply' : 'dry run'}, update mode: ${updateMode === 'never' ? 'never, insert only' : 'configured per table'})`
     );
     const report = dryRun(target, dry);
     const first = summarize(report);
@@ -613,6 +777,7 @@ function main() {
         only,
         updateMode,
         fks,
+        catalog,
       });
       query(target, real.sql, { emptyAllowed: true });
       const after = summarize(dryRun(target, dry));
