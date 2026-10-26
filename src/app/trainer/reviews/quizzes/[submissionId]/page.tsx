@@ -1,38 +1,99 @@
-import db from '@/db';
-import {
-  quizzes,
-  questions,
-  options,
-  quizSubmissions,
-  quizSubmissionAnswers,
-  profiles,
-  enablerQuizLinks,
-  enablers,
-} from '@/db/migrations/schemas/schema';
-import { asc, eq, inArray } from 'drizzle-orm';
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { authFetch } from '@/lib/authFetch';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
-export default async function QuizSubmissionReviewPage({
-  params,
-}: {
-  params: Promise<{ submissionId: string }>;
-}) {
-  const { submissionId } = await params;
+// The review of one quiz submission with the answer key. The data comes from
+// /api/trainer/quiz-submissions/[submissionId], which answers a trainer of the
+// organization of the trainee only. This page used to read the tables on the
+// server, where it ran for every visitor.
 
-  // Load submission with quiz and trainee
-  const [sub] = await db
-    .select({
-      id: quizSubmissions.id,
-      traineeId: quizSubmissions.traineeId,
-      quizId: quizSubmissions.quizId,
-      score: quizSubmissions.score,
-      isReviewed: quizSubmissions.isReviewed,
-    })
-    .from(quizSubmissions)
-    .where(eq(quizSubmissions.id, submissionId as any))
-    .limit(1);
+type ReviewQuestion = {
+  id: string;
+  text: string;
+  questionType: string;
+  expectedAnswer: string | null;
+  options: Array<{ id: string; optionText: string; isCorrect: boolean }>;
+  selectedOptionId: string | null;
+  textAnswer: string | null;
+};
 
-  if (!sub) {
+type Review = {
+  submission: {
+    id: string;
+    traineeId: string;
+    quizId: string;
+    score: number | null;
+    isReviewed: boolean | null;
+  };
+  quiz: { title: string; quizType: string } | null;
+  trainee: { fullName: string | null; email: string | null } | null;
+  lesson: { difficulty: string; enablerTitle: string | null } | null;
+  questions: ReviewQuestion[];
+};
+
+type LoadState =
+  | { status: 'loading' }
+  | { status: 'missing' }
+  | { status: 'error' }
+  | { status: 'ready'; review: Review };
+
+export default function QuizSubmissionReviewPage() {
+  const { t } = useLanguage();
+  const params = useParams();
+  const submissionId = params?.submissionId as string | undefined;
+  const [state, setState] = useState<LoadState>({ status: 'loading' });
+
+  useEffect(() => {
+    if (!submissionId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await authFetch(
+          `/api/trainer/quiz-submissions/${submissionId}`,
+          { cache: 'no-store' }
+        );
+        if (cancelled) return;
+        if (res.status === 404) return setState({ status: 'missing' });
+        if (!res.ok) return setState({ status: 'error' });
+        setState({ status: 'ready', review: (await res.json()) as Review });
+      } catch (e) {
+        console.error('Load quiz submission review error', e);
+        if (!cancelled) setState({ status: 'error' });
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [submissionId]);
+
+  if (state.status === 'loading') {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (state.status === 'error') {
+    return (
+      <div className="mx-auto max-w-5xl p-6">
+        <div
+          role="alert"
+          className="rounded-3xl border border-red-500/40 bg-red-500/10 p-6 text-red-500"
+        >
+          {t('trainerQuizPages.loadError')}
+        </div>
+      </div>
+    );
+  }
+
+  if (state.status === 'missing') {
     return (
       <div className="mx-auto max-w-5xl p-6">
         <div className="border-accent/30 bg-card rounded-3xl border p-6">
@@ -50,70 +111,9 @@ export default async function QuizSubmissionReviewPage({
     );
   }
 
-  const [quiz] = await db
-    .select()
-    .from(quizzes)
-    .where(eq(quizzes.id, sub.quizId as any))
-    .limit(1);
-  const [trainee] = await db
-    .select()
-    .from(profiles)
-    .where(eq(profiles.id, sub.traineeId as any))
-    .limit(1);
-
-  // Get lesson context (difficulty and enabler title) if applicable
-  const [link] = await db
-    .select()
-    .from(enablerQuizLinks)
-    .where(eq(enablerQuizLinks.quizId, sub.quizId as any))
-    .limit(1);
-  const enabler = link
-    ? (
-        await db
-          .select({ id: enablers.id, title: enablers.title })
-          .from(enablers)
-          .where(eq(enablers.id, link.enablerId as any))
-          .limit(1)
-      )[0]
-    : undefined;
-
-  const qs = await db
-    .select()
-    .from(questions)
-    .where(eq(questions.quizId, sub.quizId as any))
-    .orderBy(asc(questions.orderIndex));
-  const qIds = qs.map(q => q.id);
-  const allOpts = qIds.length
-    ? await db
-        .select()
-        .from(options)
-        .where(inArray(options.questionId, qIds as any))
-    : [];
-  const answers = qIds.length
-    ? await db
-        .select()
-        .from(quizSubmissionAnswers)
-        .where(eq(quizSubmissionAnswers.submissionId, sub.id as any))
-    : [];
-
-  const answerMap = new Map(
-    answers.map(a => [a.questionId, a.selectedOptionId] as const)
-  );
-
-  // Build grouped question data including text answers
-  const answerRows = answers;
-  const textAnswerMap = new Map(
-    answerRows.map(a => [a.questionId, (a as any).textAnswer])
-  );
-  const grouped = qs.map(q => ({
-    id: q.id,
-    text: q.questionText,
-    questionType: (q as any).questionType || 'MCQ',
-    expectedAnswer: (q as any).expectedAnswer || null,
-    options: allOpts.filter(o => o.questionId === q.id),
-    selectedOptionId: answerMap.get(q.id) ?? null,
-    textAnswer: textAnswerMap.get(q.id) || null,
-  }));
+  const { review } = state;
+  const { submission: sub, quiz, trainee, lesson } = review;
+  const grouped = review.questions;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -131,16 +131,16 @@ export default async function QuizSubmissionReviewPage({
         <div className="text-muted-foreground mt-1 text-sm">
           Trainee: {trainee?.fullName ?? trainee?.email ?? sub.traineeId} •
           Score: {sub.score ?? 0}%
-          {quiz?.quizType === 'LESSON' && link?.difficulty && (
+          {quiz?.quizType === 'LESSON' && lesson?.difficulty && (
             <>
               {' '}
               • Schwierigkeit:{' '}
               <span className="bg-muted inline-flex items-center rounded px-2 py-0.5 text-xs">
-                {link.difficulty}
+                {lesson.difficulty}
               </span>
             </>
           )}
-          {enabler?.title && <> • Lesson: {enabler.title}</>}
+          {lesson?.enablerTitle && <> • Lesson: {lesson.enablerTitle}</>}
         </div>
       </div>
 

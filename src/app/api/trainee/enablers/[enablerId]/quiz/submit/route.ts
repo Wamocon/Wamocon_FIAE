@@ -92,6 +92,26 @@ export async function POST(
       );
     const optMap = new Map(optRows.map(o => [String(o.id), o]));
 
+    // One answer per question, with an option of that very question. The
+    // solution comes back only for answers like these: an open question, an
+    // empty selection or an option of another question is refused, so the key
+    // cannot be fetched (or a score inflated) without answering.
+    const questionIds = new Set(qs.map(q => String(q.id)));
+    const answeredOnce = new Set<string>();
+    const validAnswers =
+      answers.every(a => {
+        const questionId = String(a.questionId);
+        if (!questionIds.has(questionId) || answeredOnce.has(questionId))
+          return false;
+        answeredOnce.add(questionId);
+        const opt = a.selectedOptionId
+          ? optMap.get(String(a.selectedOptionId))
+          : undefined;
+        return !!opt && String(opt.questionId) === questionId;
+      }) && answeredOnce.size === questionIds.size;
+    if (!validAnswers)
+      return NextResponse.json({ error: 'Invalid answers' }, { status: 400 });
+
     let correctCount = 0;
     for (const a of answers) {
       const opt = optMap.get(String(a.selectedOptionId));
@@ -116,7 +136,8 @@ export async function POST(
       return sub;
     });
 
-    // Return per-question correctness for feedback
+    // Return per-question correctness for feedback (every question is
+    // answered at this point, see the check above)
     const feedback = qs.map(q => {
       const chosen = answers.find(a => String(a.questionId) === String(q.id));
       const chosenOpt = chosen

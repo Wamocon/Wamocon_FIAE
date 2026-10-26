@@ -1,13 +1,146 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, eq } from 'drizzle-orm';
-import { quizSubmissions, notifications } from '@/db/migrations/schemas/schema';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import {
+  enablerQuizLinks,
+  enablers,
+  notifications,
+  options,
+  profiles,
+  questions,
+  quizSubmissionAnswers,
+  quizSubmissions,
+  quizzes,
+} from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
-import { notFoundUnlessUuid } from '@/lib/uuid';
+import { isUuid, notFoundUnlessUuid } from '@/lib/uuid';
+
+// GET /api/trainer/quiz-submissions/[submissionId]
+// The review of one submission: the questions with the marker of the correct
+// option, the expected answer of a text question and the answers of the
+// trainee. The review page of the trainer reads it from here. It used to read
+// the tables on the server without a session, which handed the answer key to
+// every visitor who knew the id, so the key now sits behind the trainer guard,
+// inside the organization and the occupation of the caller.
+export async function GET(req: NextRequest, ctx: { params: Promise<{ submissionId: string }> }) {
+  try {
+    const session = await requireTrainer(req);
+    if (isErrorResponse(session)) return session;
+
+    const { submissionId } = await ctx.params;
+    const notFound = () => NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+    // an id that is no uuid is a record that cannot exist
+    if (!isUuid(submissionId)) return notFound();
+
+    const [sub] = await db
+      .select({
+        id: quizSubmissions.id,
+        traineeId: quizSubmissions.traineeId,
+        quizId: quizSubmissions.quizId,
+        score: quizSubmissions.score,
+        isReviewed: quizSubmissions.isReviewed,
+      })
+      .from(quizSubmissions)
+      .where(eq(quizSubmissions.id, submissionId as any))
+      .limit(1);
+    if (!sub) return notFound();
+
+    // Same answer for a foreign submission as for a missing one: the trainee
+    // belongs to the organization (and chosen occupation) of the caller and the
+    // quiz lies inside the catalogs of the caller
+    const access = await requireTraineeAccess(session, String(sub.traineeId), req);
+    if (isErrorResponse(access)) return access.status === 404 ? notFound() : access;
+    const catalogScope = await requireCatalogScope(session, req);
+    if (isErrorResponse(catalogScope)) return catalogScope;
+    const deniedQuiz = await ensureContentInScope(catalogScope, 'quiz', String(sub.quizId));
+    if (deniedQuiz) return notFound();
+
+    const [quiz] = await db
+      .select({ title: quizzes.title, quizType: quizzes.quizType })
+      .from(quizzes)
+      .where(eq(quizzes.id, sub.quizId as any))
+      .limit(1);
+    const [trainee] = await db
+      .select({ fullName: profiles.fullName, email: profiles.email })
+      .from(profiles)
+      .where(eq(profiles.id, sub.traineeId as any))
+      .limit(1);
+
+    // Lesson context (difficulty and title of the enabler), if the quiz has one
+    const [link] = await db
+      .select({ enablerId: enablerQuizLinks.enablerId, difficulty: enablerQuizLinks.difficulty })
+      .from(enablerQuizLinks)
+      .where(eq(enablerQuizLinks.quizId, sub.quizId as any))
+      .limit(1);
+    const [enabler] = link
+      ? await db
+          .select({ title: enablers.title })
+          .from(enablers)
+          .where(eq(enablers.id, link.enablerId as any))
+          .limit(1)
+      : [];
+
+    const qs = await db
+      .select({
+        id: questions.id,
+        questionText: questions.questionText,
+        questionType: questions.questionType,
+        expectedAnswer: questions.expectedAnswer,
+      })
+      .from(questions)
+      .where(eq(questions.quizId, sub.quizId as any))
+      .orderBy(asc(questions.orderIndex));
+    const qIds = qs.map(q => q.id);
+    const allOpts = qIds.length
+      ? await db
+          .select({
+            id: options.id,
+            questionId: options.questionId,
+            optionText: options.optionText,
+            isCorrect: options.isCorrect,
+          })
+          .from(options)
+          .where(inArray(options.questionId, qIds as any))
+      : [];
+    const answers = await db
+      .select({
+        questionId: quizSubmissionAnswers.questionId,
+        selectedOptionId: quizSubmissionAnswers.selectedOptionId,
+        textAnswer: quizSubmissionAnswers.textAnswer,
+      })
+      .from(quizSubmissionAnswers)
+      .where(eq(quizSubmissionAnswers.submissionId, sub.id as any));
+    const answerByQuestion = new Map(answers.map(a => [String(a.questionId), a] as const));
+
+    return NextResponse.json({
+      submission: sub,
+      quiz: quiz ? { title: quiz.title, quizType: quiz.quizType } : null,
+      trainee: trainee ? { fullName: trainee.fullName, email: trainee.email } : null,
+      lesson: link ? { difficulty: link.difficulty, enablerTitle: enabler?.title ?? null } : null,
+      questions: qs.map(q => {
+        const answer = answerByQuestion.get(String(q.id));
+        return {
+          id: q.id,
+          text: q.questionText,
+          questionType: q.questionType || 'MCQ',
+          expectedAnswer: q.expectedAnswer || null,
+          options: allOpts
+            .filter(o => String(o.questionId) === String(q.id))
+            .map(o => ({ id: o.id, optionText: o.optionText, isCorrect: !!o.isCorrect })),
+          selectedOptionId: answer?.selectedOptionId ?? null,
+          textAnswer: answer?.textAnswer || null,
+        };
+      }),
+    });
+  } catch (e) {
+    console.error('Trainer quiz submission GET error', e);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
 
 // PATCH /api/trainer/quiz-submissions/[submissionId]
 // Body: { is_reviewed: boolean, trainer_feedback?: string, reviewer_id?: string }
