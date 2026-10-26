@@ -14,6 +14,7 @@ import {
 } from '@/lib/auth/session';
 import {
   loadReportForSession,
+  notGradable,
   ratingAccessCondition,
   traineeAccessCondition,
 } from '@/lib/auth/activity-report-access';
@@ -131,6 +132,8 @@ export async function POST(request: NextRequest) {
       String(activityReportId)
     );
     if (isErrorResponse(report)) return report;
+    const refused = notGradable(report);
+    if (refused) return refused;
 
     // Check if evaluation already exists for this activity report
     const existingEvaluations = await db

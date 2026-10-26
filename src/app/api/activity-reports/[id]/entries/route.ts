@@ -14,7 +14,9 @@ import {
 } from '@/lib/auth/session';
 import {
   entryAccessCondition,
+  GRADABLE_STATUSES,
   loadReportForSession,
+  notGradable,
   UUID,
 } from '@/lib/auth/activity-report-access';
 
@@ -139,6 +141,8 @@ export async function PATCH(
 
     const report = await loadReportForSession(session, request, id);
     if (isErrorResponse(report)) return report;
+    const refused = notGradable(report);
+    if (refused) return refused;
 
     const gradeList = entryGrades.filter((g: any) => g?.entryId && g.grade);
 
@@ -174,20 +178,8 @@ export async function PATCH(
         const { entryId, grade, comment } = gradeData;
         const existing = existingById.get(String(entryId))!;
 
-        // Log edit history if grade is being changed (not first-time set)
-        if (existing.trainerGrade && existing.trainerGrade !== String(grade)) {
-          await tx.insert(gradeEditHistory).values({
-            entityType: 'USE_CASE_ENTRY',
-            entityId: entryId,
-            fieldName: 'trainerGrade',
-            oldValue: existing.trainerGrade,
-            newValue: String(grade),
-            changedBy: session.id,
-            changeReason: editReason || null,
-          });
-        }
-
-        // The report and the organization of the caller are part of the update
+        // The report, its status and the organization of the caller are part
+        // of the update
         const updated = await tx
           .update(activityReportUseCaseEntries)
           .set({
@@ -202,10 +194,28 @@ export async function PATCH(
             and(
               eq(activityReportUseCaseEntries.id, entryId as any),
               eq(activityReportUseCaseEntries.reportId, id as any),
-              entryAccessCondition(session)
+              entryAccessCondition(session, GRADABLE_STATUSES)
             )
           )
           .returning();
+
+        // Log edit history if grade is being changed (not first-time set),
+        // only for a grade that was really written
+        if (
+          updated.length > 0 &&
+          existing.trainerGrade &&
+          existing.trainerGrade !== String(grade)
+        ) {
+          await tx.insert(gradeEditHistory).values({
+            entityType: 'USE_CASE_ENTRY',
+            entityId: entryId,
+            fieldName: 'trainerGrade',
+            oldValue: existing.trainerGrade,
+            newValue: String(grade),
+            changedBy: session.id,
+            changeReason: editReason || null,
+          });
+        }
 
         if (updated.length > 0) updatedRows.push(updated[0]);
       }

@@ -378,6 +378,15 @@ describe('DELETE /api/activity-reports/[id]', () => {
     }
   );
 
+  it('does not let trainer level delete a submitted report (it may be graded)', async () => {
+    const { mod, mock } = await loadRoute('activity-reports/[id]', trainer, {
+      activityReports: [report({ status: 'SUBMITTED' })],
+      profiles: [traineeProfile],
+    });
+    expect((await mod.DELETE(del(), withId(R1))).status).toBe(403);
+    noWrites(mock);
+  });
+
   it('lets trainer level delete a rejected report of its organization', async () => {
     const { mod, mock } = await loadRoute(
       'activity-reports/[id]',
@@ -568,6 +577,25 @@ describe('PATCH /api/activity-reports/[id] (approve or reject)', () => {
     noWrites(mock);
   });
 
+  it('rejects a feedback that is not a text or too long', async () => {
+    const { mod, mock } = await loadRoute(
+      'activity-reports/[id]',
+      trainer,
+      tables()
+    );
+    const object = await mod.PATCH(
+      patch({ status: 'REJECTED', feedback: { x: 1 } }),
+      withId(R1)
+    );
+    expect(object.status).toBe(400);
+    const long = await mod.PATCH(
+      patch({ status: 'REJECTED', feedback: 'x'.repeat(5001) }),
+      withId(R1)
+    );
+    expect(long.status).toBe(400);
+    noWrites(mock);
+  });
+
   it('rejects a status other than APPROVED or REJECTED', async () => {
     const { mod, mock } = await loadRoute(
       'activity-reports/[id]',
@@ -689,6 +717,57 @@ describe('PATCH /api/activity-reports/[id]/entries (grades)', () => {
       oldValue: '4',
       newValue: '2',
     });
+  });
+
+  it.each(['REJECTED'])(
+    'does not grade a %s report',
+    async status => {
+      const { mod, mock } = await loadRoute(
+        'activity-reports/[id]/entries',
+        trainer,
+        tables({ activityReports: [report({ status })] })
+      );
+      expect((await mod.PATCH(patch(), withId(R1))).status).toBe(409);
+      noWrites(mock);
+    }
+  );
+
+  it('grades an approved report (edit with audit trail)', async () => {
+    const { mod } = await loadRoute(
+      'activity-reports/[id]/entries',
+      trainer,
+      tables({ activityReports: [report({ status: 'APPROVED' })] })
+    );
+    expect((await mod.PATCH(patch(), withId(R1))).status).toBe(200);
+  });
+
+  it('puts the status of the report into the grade update', async () => {
+    const { mod, mock } = await loadRoute(
+      'activity-reports/[id]/entries',
+      trainer,
+      tables()
+    );
+    await mod.PATCH(patch(), withId(R1));
+    const filter = mock.filters('update', 'activity_report_use_case_entries');
+    expect(filter.params).toContain('SUBMITTED');
+    expect(filter.params).toContain('APPROVED');
+  });
+
+  it('writes no history line when the grade update matched nothing', async () => {
+    const { mod, mock } = await loadRoute(
+      'activity-reports/[id]/entries',
+      trainer,
+      tables({
+        activityReportUseCaseEntries: [
+          { id: E1, reportId: R1, trainerGrade: '4' },
+        ],
+      }),
+      { activityReportUseCaseEntries: [] }
+    );
+    const res = await mod.PATCH(patch(), withId(R1));
+    expect(res.status).toBe(200);
+    expect((await res.json()).updatedCount).toBe(0);
+    expect(mock.writes('insert', 'grade_edit_history')).toHaveLength(0);
   });
 
   it('does not let a trainee set grades', async () => {
@@ -918,6 +997,16 @@ describe('POST /api/weekly-evaluations', () => {
       year: 2027,
       activityReportId: R1,
     });
+  });
+
+  it('does not evaluate a rejected report', async () => {
+    const { mod, mock } = await loadRoute(
+      'weekly-evaluations',
+      trainer,
+      tables({ activityReports: [report({ status: 'REJECTED' })] })
+    );
+    expect((await mod.POST(post())).status).toBe(409);
+    noWrites(mock);
   });
 
   it('does not let a trainee write an evaluation', async () => {

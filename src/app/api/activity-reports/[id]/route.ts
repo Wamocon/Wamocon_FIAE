@@ -85,8 +85,7 @@ export async function GET(
 }
 
 // DELETE: Delete a report. A trainee deletes their own draft or rejected
-// report, trainer level a submitted or rejected report inside its organization
-// scope. An approved report is never deleted (BBiG §14).
+// report, trainer level a rejected report inside its organization scope. An approved report is never deleted (BBiG §14).
 class NotDeletable extends Error {}
 
 export async function DELETE(
@@ -113,8 +112,11 @@ export async function DELETE(
       );
     }
 
+    // Trainer level deletes a rejected report only (the review offers just
+    // that). A submitted report may already carry grades and a weekly
+    // evaluation, which would go with it.
     const deletable = session.isTrainerLevel
-      ? ['SUBMITTED', 'REJECTED']
+      ? ['REJECTED']
       : ['DRAFT', 'REJECTED'];
     if (!deletable.includes(String(report.status))) {
       return NextResponse.json(
@@ -518,6 +520,13 @@ export async function PATCH(
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    }
+    if (
+      feedback !== undefined &&
+      feedback !== null &&
+      (typeof feedback !== 'string' || feedback.length > 5000)
+    ) {
+      return NextResponse.json({ error: 'Invalid feedback' }, { status: 400 });
     }
 
     const report = await loadReportForSession(session, request, id);

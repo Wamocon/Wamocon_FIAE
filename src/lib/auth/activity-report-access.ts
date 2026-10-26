@@ -25,7 +25,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { eq, sql, type SQL } from 'drizzle-orm';
+import { eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import db from '@/db';
 import {
@@ -144,11 +144,35 @@ export function traineeAccessCondition(
     : eq(traineeIdColumn, session.id as any);
 }
 
-/** An entry of a report the caller reaches (for writes on the entries). */
-export function entryAccessCondition(session: SessionUser): SQL {
+/**
+ * An entry of a report the caller reaches (for writes on the entries),
+ * optionally only while the report has one of the given statuses.
+ */
+export function entryAccessCondition(
+  session: SessionUser,
+  statuses?: readonly string[]
+): SQL {
   const access =
     traineeAccessCondition(session, activityReports.traineeId) ?? sql`true`;
-  return sql`exists (select 1 from ${activityReports} where ${activityReports.id} = ${activityReportUseCaseEntries.reportId} and ${access})`;
+  const status = statuses?.length
+    ? sql` and ${inArray(activityReports.status, statuses as any)}`
+    : sql``;
+  return sql`exists (select 1 from ${activityReports} where ${activityReports.id} = ${activityReportUseCaseEntries.reportId} and ${access}${status})`;
+}
+
+/** Reports a trainer grades: submitted ones, and approved ones (edit). */
+export const GRADABLE_STATUSES = ['SUBMITTED', 'APPROVED'] as const;
+
+/** 409 for a report in a status that is not graded (a rejected report). */
+export function notGradable(report: ActivityReportRow): NextResponse | null {
+  return (GRADABLE_STATUSES as readonly string[]).includes(
+    String(report.status)
+  )
+    ? null
+    : NextResponse.json(
+        { error: 'Nur eingereichte oder genehmigte Nachweise werden bewertet' },
+        { status: 409 }
+      );
 }
 
 /** A softskill rating of an evaluation of a trainee the caller reaches. */
