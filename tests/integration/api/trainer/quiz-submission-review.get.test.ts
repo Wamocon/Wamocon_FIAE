@@ -22,13 +22,15 @@ import { traineeSession } from '../../../helpers/mockNext';
 // trainer guard, inside the organization and occupation of the caller.
 
 const ONE = 'trainer/quiz-submissions/[submissionId]/route';
-const URL_ONE = 'http://localhost/api/trainer/quiz-submissions/s1';
-const params = { params: Promise.resolve({ submissionId: 's1' }) };
+const SID = '33333333-3333-4333-8333-333333333333';
+const QID = '44444444-4444-4444-8444-444444444444';
+const URL_ONE = `http://localhost/api/trainer/quiz-submissions/${SID}`;
+const params = { params: Promise.resolve({ submissionId: SID }) };
 
 const submission = {
-  id: 's1',
+  id: SID,
   traineeId: T1,
-  quizId: 'q1',
+  quizId: QID,
   score: 50,
   isReviewed: false,
 };
@@ -45,19 +47,19 @@ const tables = (overrides: Record<string, unknown> = {}) => ({
   profiles: [traineeRow()],
   quizzes: [
     {
-      id: 'q1',
+      id: QID,
       title: 'Lesson quiz',
       quizType: 'LESSON',
       trainingCatalogId: FIAE,
     },
   ],
-  enablerQuizLinks: [{ quizId: 'q1', enablerId: 'e1', difficulty: 'LOW' }],
+  enablerQuizLinks: [{ quizId: QID, enablerId: 'e1', difficulty: 'LOW' }],
   enablers: [{ id: 'e1', title: 'Enabler One' }],
   // the mock does not sort, the route asks the database for order_index
   questions: [
     {
       id: 'q-1',
-      quizId: 'q1',
+      quizId: QID,
       questionText: 'Pick one',
       questionType: 'MCQ',
       orderIndex: 1,
@@ -65,7 +67,7 @@ const tables = (overrides: Record<string, unknown> = {}) => ({
     },
     {
       id: 'q-2',
-      quizId: 'q1',
+      quizId: QID,
       questionText: 'Free text?',
       questionType: 'TEXT',
       orderIndex: 2,
@@ -78,13 +80,13 @@ const tables = (overrides: Record<string, unknown> = {}) => ({
   ],
   quizSubmissionAnswers: [
     {
-      submissionId: 's1',
+      submissionId: SID,
       questionId: 'q-1',
       selectedOptionId: 'o-2',
       textAnswer: null,
     },
     {
-      submissionId: 's1',
+      submissionId: SID,
       questionId: 'q-2',
       selectedOptionId: null,
       textAnswer: 'forty-three',
@@ -102,9 +104,9 @@ describe('GET /api/trainer/quiz-submissions/[submissionId]', () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.submission).toEqual({
-      id: 's1',
+      id: SID,
       traineeId: T1,
-      quizId: 'q1',
+      quizId: QID,
       score: 50,
       isReviewed: false,
     });
@@ -179,7 +181,7 @@ describe('GET /api/trainer/quiz-submissions/[submissionId]', () => {
         // the second lookup is the occupation check, it finds nobody
         profiles: { sequence: [[traineeRow()], []] },
         quizzes: [
-          { id: 'q1', title: 'T', quizType: 'LESSON', trainingCatalogId: KFBM },
+          { id: QID, title: 'T', quizType: 'LESSON', trainingCatalogId: KFBM },
         ],
       }),
     });
@@ -193,7 +195,7 @@ describe('GET /api/trainer/quiz-submissions/[submissionId]', () => {
       tables: tables({
         organizationCatalogs: [{ trainingCatalogId: FIAE, isEnabled: true }],
         quizzes: [
-          { id: 'q1', title: 'T', quizType: 'LESSON', trainingCatalogId: KFBM },
+          { id: QID, title: 'T', quizType: 'LESSON', trainingCatalogId: KFBM },
         ],
       }),
     });
@@ -209,6 +211,16 @@ describe('GET /api/trainer/quiz-submissions/[submissionId]', () => {
     });
     const res = await mod.GET(scopeReq(URL_ONE), params);
     expect(res.status).toBe(200);
+  });
+
+  it('an id that is no uuid answers like a missing submission (404), no query is made', async () => {
+    const { mod, mock } = await loadScoped(ONE, { tables: tables() });
+    const res = await mod.GET(scopeReq(URL_ONE), {
+      params: Promise.resolve({ submissionId: 'not-a-uuid' }),
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Submission not found' });
+    expect(mock.db.select).not.toHaveBeenCalled();
   });
 
   it('a trainee is turned away (403) without reading anything', async () => {

@@ -17,7 +17,7 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
-import { notFoundUnlessUuid } from '@/lib/uuid';
+import { isUuid, notFoundUnlessUuid } from '@/lib/uuid';
 
 // GET /api/trainer/quiz-submissions/[submissionId]
 // The review of one submission: the questions with the marker of the correct
@@ -33,7 +33,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ submissionI
 
     const { submissionId } = await ctx.params;
     const notFound = () => NextResponse.json({ error: 'Submission not found' }, { status: 404 });
-    if (!submissionId) return notFound();
+    // an id that is no uuid is a record that cannot exist
+    if (!isUuid(submissionId)) return notFound();
 
     const [sub] = await db
       .select({

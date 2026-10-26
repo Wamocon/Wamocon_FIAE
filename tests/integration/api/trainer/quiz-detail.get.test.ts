@@ -16,13 +16,14 @@ import { traineeSession } from '../../../helpers/mockNext';
 // turned away, a quiz of a foreign occupation is not found.
 
 const ONE = 'trainer/quizzes/[quizId]/route';
-const URL_ONE = 'http://localhost/api/trainer/quizzes/q1';
-const params = { params: Promise.resolve({ quizId: 'q1' }) };
+const QID = '44444444-4444-4444-8444-444444444444';
+const URL_ONE = `http://localhost/api/trainer/quizzes/${QID}`;
+const params = { params: Promise.resolve({ quizId: QID }) };
 
 const tables = (trainingCatalogId = FIAE) => ({
   quizzes: [
     {
-      id: 'q1',
+      id: QID,
       title: 'Global quiz',
       isActive: true,
       quizType: 'GLOBAL',
@@ -30,7 +31,7 @@ const tables = (trainingCatalogId = FIAE) => ({
     },
   ],
   questions: [
-    { id: 'q-1', quizId: 'q1', questionText: 'Pick one', orderIndex: 1 },
+    { id: 'q-1', quizId: QID, questionText: 'Pick one', orderIndex: 1 },
   ],
   options: [
     { id: 'o-1', questionId: 'q-1', optionText: 'A', isCorrect: false },
