@@ -51,6 +51,7 @@ Zwei Begrenzungen beim Push auf einen Branch: Der Lauf startet nur, wenn sich `s
 | `supabase/preview-setup/01` bis `04`                           | SQL-Vorlagen für die einmalige Preview-Einrichtung                                              |
 | `supabase/preview-setup/05-demo-bootstrap.sql`                 | SQL-Vorlage von Hand: Plattform-Organisation, Demo-Betrieb, drei Testkonten (Demo-Bootstrap)    |
 | `supabase/preview-setup/06-copy-content-from-production.sql`  | SQL-Vorlage von Hand: Ausbildungsinhalt von Production in die Preview kopieren (bis zum Rollout)  |
+| `supabase/preview-setup/07-copy-users-from-production.sql`    | SQL-Vorlage von Hand: Profile der Plattform-Organisation von Production in die Preview kopieren  |
 | `src/lib/db-schema.ts`                                         | Zentrale Schema-Auswahl der App                                                                 |
 
 Das alte `deploy.yml` (Aufruf des Remote-Workflows `Wamocon/github_workflow`) ist ersetzt.
@@ -173,6 +174,16 @@ Die Workflows führen nichts davon aus. Solange Secrets und Variablen fehlen, sc
 - **Was es nicht tut:** Es kopiert keine Nutzerdaten (keine Profile, Organisationen, Einschreibungen, Abgaben, Fortschritte, Berichte, Bewertungen, Zeugnisse, Benachrichtigungen, keine HAI-Chats und keine Embeddings) und keine Dateien aus dem Storage (die Buckets sind geteilt, die Dokumentzeilen zeigen auf dieselben Dateien). Es ändert Production nie.
 - **Wiederholen:** Ein zweiter Lauf fügt nichts mehr ein (Abgleich über die Id beziehungsweise den Schlüssel). Es ist ein Seed und kein Abgleich: Eine später in Production geänderte Zeile wird nicht aktualisiert. Nach einem Reset den Lauf wiederholen.
 - **Geprüft:** statisch (`tests/unit/preview-setup/content-copy.test.ts`, mit Mutationsprüfung der Schutzregeln), als Probelauf und echter Lauf gegen die Preview am 26.10.2026 (26 Kurse, 189 Enabler, 88 Use Cases, 393 Quizze, 4222 Fragen, 16903 Optionen, 502 Quizverknüpfungen, 1003 Dokumentzeilen, 12 Lernfelder, ein zweiter Probelauf fügte nichts mehr ein). Production blieb unverändert (Zählung vor und nach dem Lauf, Ledger unverändert).
+
+### Nutzer in die Preview kopieren
+
+Die Auth-Konten sind zwischen Production und Preview geteilt, ein Profil in `public_preview` entsteht aber erst, wenn sich die Person dort anmeldet. Die Vorlage `supabase/preview-setup/07-copy-users-from-production.sql` kopiert die vorhandenen Profile der Plattform-Organisation von Production nach `public_preview`, damit die Personen dort sofort mit ihrer Rolle und ihrer Ausbilder-Zuordnung arbeiten können.
+
+- **Wer und wann:** der Eigentümer, von Hand im Supabase SQL-Editor als Rolle `postgres`, nach dem Demo-Bootstrap (die Datei braucht die Plattform-Organisation der Preview) und nach jedem "Preview Reset" erneut.
+- **Was sie tut:** In einer Transaktion mit einem Snapshot liest sie `public.profiles` und `public.organizations` und schreibt nur `public_preview.profiles`. Kopiert werden Id (gleich der Auth-Id), Name, E-Mail-Adresse, Rolle, Aktivierung, Ausbildungsdaten und die Ausbilder-Zuordnung, die Profile kommen in die Plattform-Organisation der Preview. Eine Zuordnung auf einen nicht kopierten Ausbilder wird leer gesetzt. Ein schon vorhandenes Profil bleibt unverändert.
+- **Was sie nicht tut:** Profile von Kundenorganisationen und ohne Organisation werden nicht kopiert (der Bericht zählt sie), ebenso keine Auth-Daten (kein Passwort, kein Token) und keine Daten einer Person außer der Profilzeile (keine Einschreibungen, Abgaben, Berichte). Production wird nie geändert.
+- **Probelauf zuerst:** `v_dry_run` steht auf `true`, das Skript rollt dann alles mit einer Meldung zurück, die die Zahlen zeigt. Ein zweiter Lauf fügt nichts mehr ein.
+- **Geprüft:** statisch (`tests/unit/preview-setup/user-copy.test.ts`, mit Mutationsprüfung), Probelauf und echter Lauf gegen die Preview am 26.10.2026 (6 Profile in Production, 5 eingefügt, das eigene Profil war schon da).
 
 ### Vercel-Region
 
