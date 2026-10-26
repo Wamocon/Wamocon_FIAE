@@ -21,6 +21,7 @@
 
 import { resolveCatalogBranding } from '@/lib/catalog/branding';
 import {
+  isValidHaiText,
   resolveHaiSettings,
   type HaiSettings,
 } from '@/lib/catalog/hai-settings';
@@ -47,9 +48,9 @@ export interface HaiPersona {
   occupationName: string;
   /** Text after "der digitale Lernbegleiter " in the first line. */
   intro: string;
-  glossary: HaiGlossaryEntry[];
-  traineeTopics: string[];
-  trainerTopics: string[];
+  glossary: readonly HaiGlossaryEntry[];
+  traineeTopics: readonly string[];
+  trainerTopics: readonly string[];
   showTrainerTopics: boolean;
   /** The complete line that starts with "**VERBOTEN:**". */
   forbiddenLine: string;
@@ -71,9 +72,9 @@ export interface HaiPersona {
   /** Whether messages about code are classified as code help. */
   codeHelp: boolean;
   /** Words that keep a message out of the off-topic filter. */
-  offTopicContextWords: string[];
+  offTopicContextWords: readonly string[];
   /** Lower case names of other occupations (not of this user). */
-  foreignMarkers: string[];
+  foreignMarkers: readonly string[];
 }
 
 /** A training catalog as the persona needs it (id, code, title, settings). */
@@ -98,9 +99,17 @@ export interface ResolveHaiPersonaInput {
 // FIAE: today's texts, do not change (tests/unit/hai/fiae-baseline.json)
 // ============================================================================
 
+/** Freezes an array and its entries, so a caller cannot change a persona. */
+function deepFreeze<T>(items: T[]): readonly T[] {
+  items.forEach(item => {
+    if (typeof item === 'object' && item !== null) Object.freeze(item);
+  });
+  return Object.freeze(items);
+}
+
 const FIAE_CODE = 'FIAE';
 
-const FIAE_GLOSSARY: HaiGlossaryEntry[] = [
+const FIAE_GLOSSARY: readonly HaiGlossaryEntry[] = deepFreeze([
   {
     term: 'Kurs',
     definition:
@@ -149,9 +158,9 @@ const FIAE_GLOSSARY: HaiGlossaryEntry[] = [
     term: 'Schulklausur',
     definition: 'Klausur mit Fach, Note, Punkte, Prozent',
   },
-];
+]);
 
-const FIAE_TRAINEE_TOPICS = [
+const FIAE_TRAINEE_TOPICS = deepFreeze([
   'Enabler/LF-Inhalte, Szenarien, Use Cases',
   'Stundenplan/Kalender',
   'Pruefungsvorbereitung/IHK',
@@ -167,10 +176,10 @@ const FIAE_TRAINEE_TOPICS = [
   'Enabler↔LF Zuordnung',
   'Gespraechszusammenfassung',
   'Testfaelle',
-];
+]);
 
 /** The trainer topics are the same for every occupation. */
-const TRAINER_TOPICS = [
+const TRAINER_TOPICS = deepFreeze([
   'Notenuebersicht aller Azubis',
   'Lernfortschritt je Azubi',
   'Woechentliche Berichte/Stunden',
@@ -185,9 +194,9 @@ const TRAINER_TOPICS = [
   'Plattform-Nutzung',
   'System-Status',
   'Azubi-Kommunikation',
-];
+]);
 
-const FIAE_OFF_TOPIC_CONTEXT_WORDS = [
+const FIAE_OFF_TOPIC_CONTEXT_WORDS = deepFreeze([
   'enabler',
   'lernfeld',
   'lf',
@@ -203,7 +212,7 @@ const FIAE_OFF_TOPIC_CONTEXT_WORDS = [
   'datenbank',
   'netzwerk',
   'server',
-];
+]);
 
 function buildFiaePersona(): HaiPersona {
   return {
@@ -321,13 +330,24 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
+function fiaeGlossaryEntry(term: string): HaiGlossaryEntry {
+  const entry = FIAE_GLOSSARY.find(e => e.term === term);
+  if (!entry) throw new Error(`Unknown glossary term ${term}`);
+  return entry;
+}
+
 function buildOccupationPersona(
   catalog: CatalogPersonaSource,
   role: HaiPersonaRole | null | undefined,
   phase: HaiPersonaPhase | null | undefined
 ): HaiPersona {
   const hai = haiSettingsOf(catalog);
-  const occupationName = hai?.occupationName ?? catalog.title.trim();
+  // The title is database text outside the settings alphabet: use it only if
+  // it passes the same check, otherwise a neutral phrase
+  const title = catalog.title.trim();
+  const occupationName =
+    hai?.occupationName ??
+    (isValidHaiText(title, 80) ? title : 'deinem Ausbildungsberuf');
   const fieldName = hai?.fieldName ?? occupationName;
   const label = hai?.learningFieldLabel ?? 'LF';
   const max = hai?.learningFieldMax;
@@ -362,11 +382,17 @@ function buildOccupationPersona(
         max ? ` (${label}1-${label}${max})` : ''
       }, N:M mit Enablern und Use Cases`,
     },
-    FIAE_GLOSSARY[6],
-    FIAE_GLOSSARY[7],
-    FIAE_GLOSSARY[8],
-    FIAE_GLOSSARY[9],
-    FIAE_GLOSSARY[10],
+    {
+      term: 'Quiz',
+      definition:
+        'Pro Enabler mehrere Quizzes (BEGINNER/INTERMEDIATE/ADVANCED). Global Quiz auf Component-Ebene',
+    },
+    ...[
+      'Berichtsheft',
+      'Wochenbewertung',
+      'Ausbildungsblock',
+      'Schulklausur',
+    ].map(term => fiaeGlossaryEntry(term)),
     ...(hai?.glossary ?? []),
   ];
 
@@ -443,7 +469,6 @@ function markersOf(catalog: CatalogPersonaSource): string[] {
   const hai = resolveHaiSettings(settings.hai);
   const names = [
     catalog.code,
-    catalog.title,
     resolveCatalogBranding(settings.branding).shortName ?? '',
     hai?.occupationName ?? '',
     hai?.fieldName ?? '',
@@ -451,7 +476,7 @@ function markersOf(catalog: CatalogPersonaSource): string[] {
   ];
   return unique(
     names
-      .map(n => n.trim().toLowerCase())
+      .map(n => normalizeForMatch(n.trim()))
       .filter(n => n.length >= MIN_MARKER_LENGTH)
   );
 }
@@ -472,6 +497,14 @@ function foreignMarkersFor(
   );
 }
 
+/** Lower case, compatibility forms folded, no marks or invisible characters. */
+function normalizeForMatch(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\p{M}\p{Cf}]/gu, '');
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -485,7 +518,7 @@ export function isForeignOccupationQuestion(
   persona: Pick<HaiPersona, 'foreignMarkers'>
 ): boolean {
   if (persona.foreignMarkers.length === 0) return false;
-  const lower = message.toLowerCase();
+  const lower = normalizeForMatch(message);
   return persona.foreignMarkers.some(marker =>
     new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(marker)}`, 'u').test(lower)
   );

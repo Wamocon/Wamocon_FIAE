@@ -27,7 +27,7 @@
  *                         training phase of the trainee
  *  - source_rule          rule for the sources of subject statements
  *  - code_help            true if HAI helps with program code
- *  - offtopic_exceptions  up to 60 lower case words that keep a message out
+ *  - offtopic_exceptions  up to 60 lower case words (4 to 30 characters) that keep a message out
  *                         of the off-topic filter (procurement, travel costs)
  *  - greeting             greeting of HAI (one line)
  *  - refusal_text         answer for questions outside the field
@@ -55,9 +55,11 @@ const HAI_TEXT_WITH_SHARK = new RegExp(
   'u'
 );
 const EXCEPTION_WORD = new RegExp(
-  '^[\\p{Ll}\\p{N}][\\p{Ll}\\p{N} \\-]{1,28}[\\p{Ll}\\p{N}]$',
+  '^[\\p{Ll}\\p{N}][\\p{Ll}\\p{N} \\-]{2,28}[\\p{Ll}\\p{N}]$',
   'u'
 );
+// Letters that draw nothing (Hangul fillers) would allow invisible text
+const INVISIBLE_LETTER = /[\u115F\u1160\u3164\uFFA0]/;
 const LEARNING_FIELD_LABEL = /^[A-Za-z]{1,4}$/;
 
 /** One line of persona text: length 3 to `max`, small alphabet, trimmed. */
@@ -70,6 +72,7 @@ export function isValidHaiText(
   const min = options.min ?? 3;
   if (value.length < min || value.length > max) return false;
   if (value !== value.trim()) return false;
+  if (INVISIBLE_LETTER.test(value)) return false;
   return (options.shark ? HAI_TEXT_WITH_SHARK : HAI_TEXT).test(value);
 }
 
@@ -88,7 +91,7 @@ const exceptionWord = z
   .string()
   .refine(
     v => EXCEPTION_WORD.test(v),
-    'lower case word, 3 to 30 characters, letters, digits, space, hyphen'
+    'lower case word, 4 to 30 characters, letters, digits, space, hyphen'
   );
 
 const glossaryEntry = z

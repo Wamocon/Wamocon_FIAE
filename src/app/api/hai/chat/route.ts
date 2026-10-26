@@ -475,6 +475,31 @@ async function getContextTitles(
   const allowed = (catalogId: unknown) =>
     !!catalogIds && catalogIds.includes(String(catalogId));
 
+  // Both ids count on their own: a malformed id or one outside the catalogs
+  // of the user drops the whole context
+  if (
+    (enablerId && !isValidUUID(enablerId)) ||
+    (courseId && !isValidUUID(courseId))
+  ) {
+    return { inScope: false };
+  }
+
+  if (courseId) {
+    const course = await db
+      .select({
+        title: courses.title,
+        trainingCatalogId: courses.trainingCatalogId,
+      })
+      .from(courses)
+      .where(eq(courses.id, courseId))
+      .limit(1);
+
+    if (course.length === 0 || !allowed(course[0].trainingCatalogId)) {
+      return { inScope: false };
+    }
+    courseTitle = course[0].title || undefined;
+  }
+
   if (enablerId) {
     const enabler = await db
       .select({
@@ -494,29 +519,18 @@ async function getContextTitles(
     // Get course title from enabler's course
     if (enabler[0].courseId) {
       const course = await db
-        .select({ title: courses.title })
+        .select({
+          title: courses.title,
+          trainingCatalogId: courses.trainingCatalogId,
+        })
         .from(courses)
         .where(eq(courses.id, enabler[0].courseId))
         .limit(1);
 
-      if (course.length > 0) {
+      if (course.length > 0 && allowed(course[0].trainingCatalogId)) {
         courseTitle = course[0].title || undefined;
       }
     }
-  } else if (courseId) {
-    const course = await db
-      .select({
-        title: courses.title,
-        trainingCatalogId: courses.trainingCatalogId,
-      })
-      .from(courses)
-      .where(eq(courses.id, courseId))
-      .limit(1);
-
-    if (course.length === 0 || !allowed(course[0].trainingCatalogId)) {
-      return { inScope: false };
-    }
-    courseTitle = course[0].title || undefined;
   }
 
   return { enablerTitle, courseTitle, inScope: true };

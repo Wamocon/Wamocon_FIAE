@@ -59,7 +59,7 @@ function renderGlossary(entries: HaiPersona['glossary']): string {
 
 /** Numbered topics for trainees and, if shown, for trainers (numbering goes on). */
 function renderTopics(persona: HaiPersona): string {
-  const number = (topics: string[], from: number) =>
+  const number = (topics: readonly string[], from: number) =>
     topics.map((topic, i) => `${from + i}) ${topic}`).join(' ');
   const lines = [`**Azubi:** ${number(persona.traineeTopics, 1)}`];
   if (persona.showTrainerTopics) {
@@ -73,20 +73,33 @@ function renderTopics(persona: HaiPersona): string {
   return lines.join('\n\n');
 }
 
+/** Characters without a visible form: control, bidi, zero width, joiners. */
+const INVISIBLE =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u00AD\u061C\u180E\u200B-\u200F\u2060-\u2064\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+
 /**
- * Scenario text is data, never an instruction: control and bidi characters are
- * removed and heading markers at the start of a line are dropped, so the text
- * cannot open a new section of the system prompt. The pipeline only sets it
- * from a server source.
+ * Text that comes from a person or from stored chats is data, never an
+ * instruction: invisible characters are removed, every kind of line break
+ * becomes a plain one and heading markers at the start of a line are dropped,
+ * so the text cannot open a new section of the system prompt.
  */
-function sanitizeScenarioText(text: string): string {
+function sanitizePromptData(text: string, maxLength = Infinity): string {
   return text
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, '')
-    .replace(/\r\n?/g, '\n')
+    .replace(INVISIBLE, '')
+    .replace(/\r\n?|[\u2028\u2029\u0085]/g, '\n')
     .split('\n')
     .map(line => line.replace(/^(\s*)#+\s*/, '$1'))
     .join('\n')
-    .slice(0, 4000);
+    .slice(0, maxLength);
+}
+
+/** One line of data (a topic): no line break, no markup characters. */
+function sanitizeInlineText(text: string, maxLength: number): string {
+  return sanitizePromptData(text)
+    .replace(/[*`<>#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
 }
 
 /** Prompt without persona: no knowledge, no data, only the refusal. */
@@ -231,7 +244,7 @@ export function buildSystemPrompt(context: PromptContext): string {
 Die folgende Zusammenfassung fasst den bisherigen Gespraechsverlauf zusammen.
 Nutze sie um den Kontext frueherer Nachrichten zu behalten.
 
-${context.conversationSummary}`);
+${sanitizePromptData(context.conversationSummary)}`);
   }
 
   // Add cross-session memory (Langzeitgedaechtnis)
@@ -245,7 +258,7 @@ Nutze sie um:
 3. **NICHT ungefragt zitieren**: Nenne fruehere Gespraeche nur wenn es RELEVANT fuer die aktuelle Frage ist oder ein Widerspruch vorliegt. Liste fruehere Chats nicht einfach auf.
 
 ### Notizen aus frueheren Gespraechen:
-${context.crossSessionMemory}`);
+${sanitizePromptData(context.crossSessionMemory)}`);
   }
 
   // Add enabler context if available
@@ -260,7 +273,7 @@ ${context.courseTitle ? `**Kurs:** ${context.courseTitle}` : ''}`);
   if (context.scenarioText) {
     parts.push(`
 ## Aktuelles Szenario
-${sanitizeScenarioText(context.scenarioText)}`);
+${sanitizePromptData(context.scenarioText, 4000)}`);
   }
 
   // Add retrieved context (RAG results)
@@ -289,7 +302,7 @@ Zu dieser Frage wurde KEIN spezifischer Kontext in der Wissensdatenbank gefunden
   if (context.mode === 'quiz' && context.quizTopic) {
     parts.push(`
 ## Quiz-Thema
-Erstelle Fragen zum Thema: **${context.quizTopic}**`);
+Erstelle Fragen zum Thema: **${sanitizeInlineText(context.quizTopic, 80)}**`);
   }
 
   // Add live platform data context (Phase 1)

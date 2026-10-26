@@ -32,9 +32,16 @@ person.
 - **scenarioText**: the chat route no longer copies it from the request into the system
   prompt. The database holds no scenario text yet (the enabler has a description and a PDF
   link only), so the context stays empty until a server source exists. The prompt builder
-  additionally strips heading markers and control characters from any scenario text.
-- **Enabler and course ids** of the request only count if they belong to a catalog of the
-  person; otherwise ids and titles are dropped.
+  strips heading markers, line separators and invisible characters from scenario text, the
+  quiz topic (one line, 80 characters), the conversation summary and the cross session
+  memory. FIAE output is byte-identical except for such unsafe input.
+- **Enabler and course ids** of the request are checked on their own: both must be well
+  formed and belong to a catalog of the person, otherwise ids and titles are dropped.
+- The catalog title is used as occupation name only if it passes the settings alphabet,
+  otherwise the neutral phrase "deinem Ausbildungsberuf" is used.
+- Markers of other occupations are the code, the branding short name and `occupation_name` /
+  `field_name` of the catalogs the user may not use (not the title). The match is folded
+  (NFKC, no marks, no invisible characters).
 
 ## Schema of `settings.hai`
 
@@ -56,7 +63,7 @@ shark emoji.
 | `exam_parts` | two texts (part one, part two), chosen by the training phase of the trainee |
 | `source_rule` | text, 3 to 300 |
 | `code_help` | boolean (default false) |
-| `offtopic_exceptions` | up to 60 lower case words, 3 to 30 characters |
+| `offtopic_exceptions` | up to 60 lower case words, 4 to 30 characters |
 | `greeting` | text, 3 to 300, one line |
 | `refusal_text` | text, 3 to 400 |
 

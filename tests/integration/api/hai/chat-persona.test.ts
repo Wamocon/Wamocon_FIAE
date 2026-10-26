@@ -24,7 +24,11 @@ const COURSE_FIAE = '3a0e4e4c-9f1e-4f3e-9c55-2f6a9d6a0004';
 
 type Scope = { allowedCatalogIds: string[] } | null;
 
-async function load(scope: Scope, enablerCatalogId: string) {
+async function load(
+  scope: Scope,
+  enablerCatalogId: string,
+  courseCatalogId: string = enablerCatalogId
+) {
   jest.resetModules();
   mockSession(
     fakeSession({ id: ME, role: 'TRAINEE', organizationId: 'org-1' })
@@ -49,7 +53,7 @@ async function load(scope: Scope, enablerCatalogId: string) {
         },
       ],
       courses: [
-        { title: 'Titel des Kurses', trainingCatalogId: enablerCatalogId },
+        { title: 'Titel des Kurses', trainingCatalogId: courseCatalogId },
       ],
     },
     { haiChatSessions: [{ id: 'session-1' }] }
@@ -183,5 +187,31 @@ describe('HAI chat route: scenarioText and the occupation of the enabler', () =>
     const res = await mod.POST(post({}));
     expect(res.status).toBe(200);
     expect(contextOf(processMessage as never).currentEnablerId).toBeUndefined();
+  });
+
+  it('checks the course on its own when an enabler of the person is sent too', async () => {
+    const { mod, processMessage } = await load(
+      { allowedCatalogIds: [FIAE_CATALOG_ID] },
+      FIAE_CATALOG_ID,
+      KFBM_CATALOG_ID
+    );
+    await mod.POST(post({ enablerId: ENABLER_FIAE, courseId: COURSE_KFBM }));
+    const ctx = contextOf(processMessage as never);
+    expect(ctx.currentEnablerId).toBeUndefined();
+    expect(ctx.currentCourseId).toBeUndefined();
+    expect(ctx.enablerTitle).toBeUndefined();
+    expect(ctx.courseTitle).toBeUndefined();
+  });
+
+  it('drops a malformed id without asking the database', async () => {
+    const { mod, processMessage } = await load(
+      { allowedCatalogIds: [FIAE_CATALOG_ID] },
+      FIAE_CATALOG_ID
+    );
+    const res = await mod.POST(post({ enablerId: "1'; drop table x; --" }));
+    expect(res.status).toBe(200);
+    const ctx = contextOf(processMessage as never);
+    expect(ctx.currentEnablerId).toBeUndefined();
+    expect(ctx.enablerTitle).toBeUndefined();
   });
 });

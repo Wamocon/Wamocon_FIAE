@@ -77,6 +77,12 @@ describe('settings.hai schema', () => {
     ['exam_parts with one entry', { exam_parts: ['Teil eins'] }],
     ['code_help as string', { code_help: 'true' }],
     ['exception word too short', { offtopic_exceptions: ['ab'] }],
+    ['exception word of three characters', { offtopic_exceptions: ['ein'] }],
+    ['an invisible Hangul filler', { greeting: 'Hallo\u3164\u3164\u3164 du' }],
+    [
+      'exam_parts with a bad entry',
+      { exam_parts: ['Teil eins', 'Teil\nzwei'] },
+    ],
     ['exception word upper case', { offtopic_exceptions: ['Büro'] }],
     ['exception word with a dot', { offtopic_exceptions: ['büro.'] }],
     [
@@ -211,4 +217,39 @@ describe('resolveHaiSettings', () => {
       expect(resolveHaiSettings(raw)).toBeNull();
     }
   );
+});
+
+describe('settings.hai limits are inclusive', () => {
+  it('accepts values exactly at the limits', () => {
+    const ok = {
+      occupation_name: 'a'.repeat(80),
+      field_name: 'b'.repeat(60),
+      refusal_text: 'c'.repeat(400),
+      greeting: 'd'.repeat(300),
+      source_rule: 'e'.repeat(300),
+      exam_name: 'f'.repeat(60),
+      learning_field_max: 20,
+      allowed_topics: Array.from({ length: 15 }, () => 'g'.repeat(80)),
+      glossary: Array.from({ length: 12 }, () => ({
+        term: 'h'.repeat(40),
+        definition: 'i'.repeat(200),
+      })),
+      offtopic_exceptions: Array.from({ length: 60 }, (_, i) => `wort${i}x`),
+    };
+    expect(haiSettingsSchema.safeParse(ok).success).toBe(true);
+    expect(haiSettingsSchema.safeParse({ learning_field_max: 1 }).success).toBe(
+      true
+    );
+    expect(
+      haiSettingsSchema.safeParse({ offtopic_exceptions: ['büro-art'] }).success
+    ).toBe(true);
+    expect(
+      haiSettingsSchema.safeParse({ offtopic_exceptions: ['b'.repeat(30)] })
+        .success
+    ).toBe(true);
+    expect(
+      haiSettingsSchema.safeParse({ offtopic_exceptions: ['b'.repeat(31)] })
+        .success
+    ).toBe(false);
+  });
 });
