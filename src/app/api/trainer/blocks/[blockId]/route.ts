@@ -47,7 +47,7 @@ export async function DELETE(
             return NextResponse.json({ error: 'Block not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(block.traineeId));
+        const access = await requireTraineeAccess(session, String(block.traineeId), req);
         if (isErrorResponse(access)) return access;
 
         // Only allow deletion of trainer-created blocks
@@ -112,7 +112,7 @@ export async function PATCH(
             return NextResponse.json({ error: 'Block not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(existingBlock.traineeId));
+        const access = await requireTraineeAccess(session, String(existingBlock.traineeId), req);
         if (isErrorResponse(access)) return access;
 
         // Only allow editing of trainer-created blocks

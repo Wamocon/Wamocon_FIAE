@@ -45,7 +45,7 @@ export async function POST(
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
     }
 
-    const access = await requireTraineeAccess(session, traineeId);
+    const access = await requireTraineeAccess(session, traineeId, request);
     if (isErrorResponse(access)) return access;
 
     // The issuing trainer is the authenticated user, never a client value

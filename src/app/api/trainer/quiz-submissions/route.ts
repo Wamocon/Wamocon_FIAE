@@ -1,10 +1,13 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, desc, eq, inArray } from 'drizzle-orm';
-import { profiles, quizzes, quizSubmissions, enablerQuizLinks, enablers, courses, courseMembers } from '@/db/migrations/schemas/schema';
-import { getTrainerScope } from '@/lib/trainer-scope';
+import { and, desc, eq } from 'drizzle-orm';
+import { profiles, quizzes, quizSubmissions, enablerQuizLinks, enablers } from '@/db/migrations/schemas/schema';
 import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
+import {
+  requireTraineeScopeCondition,
+  traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 
 // GET /api/trainer/quiz-submissions?trainerProfileId=...&onlyPending=true
 export async function GET(req: NextRequest) {
@@ -13,58 +16,18 @@ export async function GET(req: NextRequest) {
     if (isErrorResponse(session)) return session;
 
     const { searchParams } = new URL(req.url);
-    const trainerProfileId = session.id;
     const onlyPending = searchParams.get('onlyPending') === 'true';
 
     const catalogScope = await requireCatalogScope(session, req);
     if (isErrorResponse(catalogScope)) return catalogScope;
 
-    const scope = await getTrainerScope(trainerProfileId);
-    if (!scope) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const traineeConditions: any[] = [eq(profiles.role, 'TRAINEE' as any)];
-    if (!scope.isPlatformOwner && scope.organizationId) {
-      traineeConditions.push(eq(profiles.organizationId, scope.organizationId as any));
-    } else if (!scope.isPlatformOwner) {
-      traineeConditions.push(inArray(profiles.assignedTrainerId, scope.profileIds as any));
-    }
-
-    // Primary: all trainees in the trainer's organization
-    const organizationTrainees = await db
-      .select({ id: profiles.id, fullName: profiles.fullName })
-      .from(profiles)
-      .where(and(...traineeConditions));
-
-    // Union with trainees from trainer's courses (created or co-trainer)
-    const createdCourses = await db
-      .select({ id: courses.id })
-      .from(courses)
-      .where(eq(courses.createdById, trainerProfileId as any));
-    const trainerMemberCourses = await db
-      .select({ courseId: courseMembers.courseId })
-      .from(courseMembers)
-      .where(and(eq(courseMembers.userId, trainerProfileId as any), eq(courseMembers.role, 'TRAINER' as any)));
-    const courseIds = Array.from(new Set([...
-      createdCourses.map(c => String(c.id)),
-      ...trainerMemberCourses.map(m => String(m.courseId)),
-    ]));
-    let courseTraineeIds: string[] = [];
-    if (courseIds.length > 0) {
-      const courseTrainees = await db
-        .select({ userId: courseMembers.userId })
-        .from(courseMembers)
-        .where(and(inArray(courseMembers.courseId, courseIds as any), eq(courseMembers.role, 'TRAINEE' as any)));
-      courseTraineeIds = courseTrainees.map(t => String(t.userId));
-    }
-
-    const traineeIds = Array.from(new Set([...
-      organizationTrainees.map(t => String(t.id)),
-      ...courseTraineeIds,
-    ]));
-
-    if (traineeIds.length === 0) return NextResponse.json({ submissions: [] });
+    // Only trainees of the caller's organization (the super admin sees every
+    // one) and, with a chosen occupation (x-catalog), of that occupation. The
+    // trainees of the caller's courses are not added: a course can hold
+    // trainees of other organizations, and every trainee inside the scope is
+    // already part of the organization list.
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
 
     const rows = await db
       .select({
@@ -88,7 +51,7 @@ export async function GET(req: NextRequest) {
       .leftJoin(enablers, eq(enablers.id, enablerQuizLinks.enablerId))
       .where(
         and(
-          inArray(quizSubmissions.traineeId, traineeIds as any),
+          traineeIdInScope(quizSubmissions.traineeId, traineeScope.condition),
           catalogCondition(quizzes.trainingCatalogId, catalogScope),
           onlyPending ? eq(quizSubmissions.isReviewed, false as any) : undefined
         )

@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(exam.traineeId));
+        const access = await requireTraineeAccess(session, String(exam.traineeId), req);
         if (isErrorResponse(access)) return access;
 
         const organizationId = await getUserOrgId(String(exam.traineeId));

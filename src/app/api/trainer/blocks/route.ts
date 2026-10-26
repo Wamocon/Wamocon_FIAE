@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
     }
 
-    const access = await requireTraineeAccess(session, traineeId);
+    const access = await requireTraineeAccess(session, traineeId, req);
     if (isErrorResponse(access)) return access;
 
     // Build query conditions
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
 
     for (const tid of targetTraineeIds) {
       try {
-        const access = await requireTraineeAccess(session, String(tid));
+        const access = await requireTraineeAccess(session, String(tid), req);
         if (isErrorResponse(access)) {
           errors.push(`Trainee ${tid} not accessible`);
           continue;

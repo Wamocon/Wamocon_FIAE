@@ -2,161 +2,203 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { NextResponse } from 'next/server';
 import { createTableDb } from '../../../helpers/mockDb';
-import { fakeSession } from '../../../helpers/mockNext';
+import { fakeSession, traineeSession } from '../../../helpers/mockNext';
 
-// Module under test: src/lib/auth/trainee-access.ts. A trainer may only work
-// with trainees of their own organization (or assigned to them), org admins
-// see their organization, the super admin sees everything.
+// Module under test: src/lib/auth/trainee-access.ts. A trainer-level caller may
+// only work with trainees of their own organization (the super admin with every
+// organization) and, once an occupation is chosen, of that occupation. Every
+// other trainee answers like a missing one (404).
 
-type Scope = {
-  id: string;
-  role: string;
-  organizationId: string | null;
-  isPlatformOwner: boolean;
-  isSuperAdmin: boolean;
-  canSeeOrgWide: boolean;
-  profileIds: string[];
-};
-
-const trainerScope: Scope = {
-  id: 'trainer-1',
-  role: 'TRAINER',
-  organizationId: 'org-1',
-  isPlatformOwner: false,
-  isSuperAdmin: false,
-  canSeeOrgWide: false,
-  profileIds: ['trainer-1'],
-};
+const TRAINEE = '22222222-2222-4222-8222-222222222222';
 
 async function load(
   trainee: Record<string, unknown> | null,
-  scope: Scope | null
+  catalogAnswer: () => Promise<NextResponse | null> = async () => null
 ) {
   jest.resetModules();
   const { db } = createTableDb({ profiles: trainee ? [trainee] : [] });
+  const ensureTraineeInCatalog = jest.fn(
+    async (..._args: any[]): Promise<NextResponse | null> => catalogAnswer()
+  );
   jest.doMock('@/db', () => ({ __esModule: true, default: db }));
-  // Keep the real visibility rules, only replace the database lookup
-  const actual = jest.requireActual('@/lib/trainer-scope') as any;
-  jest.doMock('@/lib/trainer-scope', () => ({
-    ...actual,
-    getTrainerScope: jest.fn().mockResolvedValue(scope),
+  jest.doMock('@/lib/catalog/trainee-scope', () => ({
+    __esModule: true,
+    ensureTraineeInCatalog,
   }));
-  return import('@/lib/auth/trainee-access');
+  const mod = await import('@/lib/auth/trainee-access');
+  return { ...mod, db, ensureTraineeInCatalog };
 }
 
-const traineeOf = (
-  organizationId: string | null,
-  assignedTrainerId: string | null = null
-) => ({
-  id: 'trainee-1',
+const traineeOf = (organizationId: string | null) => ({
+  id: TRAINEE,
   role: 'TRAINEE',
   organizationId,
-  assignedTrainerId,
 });
+
+const request = { url: 'http://localhost/api/x', headers: { get: () => null } };
+const trainer = fakeSession({ organizationId: 'org-1' });
 
 describe('requireTraineeAccess', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('404 when the trainee does not exist', async () => {
-    const { requireTraineeAccess } = await load(null, trainerScope);
-    const res = await requireTraineeAccess(fakeSession() as any, 'trainee-1');
-    expect((res as Response).status).toBe(404);
-  });
-
-  it('404 for an empty id without touching the database', async () => {
-    const { requireTraineeAccess } = await load(
-      traineeOf('org-1'),
-      trainerScope
-    );
-    const res = await requireTraineeAccess(fakeSession() as any, '');
-    expect((res as Response).status).toBe(404);
-  });
-
-  it('403 when the caller has no trainer scope', async () => {
-    const { requireTraineeAccess } = await load(traineeOf('org-1'), null);
-    const res = await requireTraineeAccess(fakeSession() as any, 'trainee-1');
-    expect((res as Response).status).toBe(403);
-  });
-
   it('grants a trainer access to a trainee of the own organization', async () => {
-    const { requireTraineeAccess } = await load(
-      traineeOf('org-1'),
-      trainerScope
+    const { requireTraineeAccess, ensureTraineeInCatalog } = await load(
+      traineeOf('org-1')
     );
-    const res = await requireTraineeAccess(fakeSession() as any, 'trainee-1');
-    expect(res).toMatchObject({
-      trainee: { id: 'trainee-1', organizationId: 'org-1' },
-      scope: { id: 'trainer-1' },
+    const res = await requireTraineeAccess(
+      trainer as any,
+      TRAINEE,
+      request as any
+    );
+    expect(res).toEqual({ traineeId: TRAINEE });
+    // the occupation check ran for this trainee with the same request
+    expect(ensureTraineeInCatalog).toHaveBeenCalledWith(
+      trainer,
+      request,
+      TRAINEE
+    );
+  });
+
+  it('works without a request (no occupation chosen)', async () => {
+    const { requireTraineeAccess } = await load(traineeOf('org-1'));
+    expect(await requireTraineeAccess(trainer as any, TRAINEE)).toEqual({
+      traineeId: TRAINEE,
     });
   });
 
-  it('denies a trainer access to a trainee of another organization', async () => {
-    const { requireTraineeAccess } = await load(
-      traineeOf('org-2'),
-      trainerScope
-    );
-    const res = await requireTraineeAccess(fakeSession() as any, 'trainee-1');
-    expect((res as Response).status).toBe(403);
-    expect(await (res as Response).json()).toEqual({ error: 'Forbidden' });
-  });
-
-  it('grants access to a trainee assigned to the trainer, even across organizations', async () => {
-    const { requireTraineeAccess } = await load(
-      traineeOf('org-2', 'trainer-1'),
-      trainerScope
-    );
-    const res = await requireTraineeAccess(fakeSession() as any, 'trainee-1');
-    expect(res).toHaveProperty('trainee');
-  });
-
-  it('treats a trainee without organization as part of the default organization', async () => {
-    const defaultOrg = '00000000-0000-0000-0000-000000000001';
-    const { requireTraineeAccess } = await load(traineeOf(null), {
-      ...trainerScope,
-      organizationId: defaultOrg,
+  it('404 for a trainee of another organization, even one assigned to the trainer', async () => {
+    const { requireTraineeAccess, ensureTraineeInCatalog } = await load({
+      ...traineeOf('org-2'),
+      assignedTrainerId: trainer.id,
     });
-    const res = await requireTraineeAccess(fakeSession() as any, 'trainee-1');
-    expect(res).toHaveProperty('trainee');
+    const res = (await requireTraineeAccess(
+      trainer as any,
+      TRAINEE
+    )) as Response;
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Not found' });
+    expect(ensureTraineeInCatalog).not.toHaveBeenCalled();
+  });
+
+  it('404 when the trainee does not exist', async () => {
+    const { requireTraineeAccess } = await load(null);
+    const res = (await requireTraineeAccess(
+      trainer as any,
+      TRAINEE
+    )) as Response;
+    expect(res.status).toBe(404);
+  });
+
+  it('404 for a person who is no trainee', async () => {
+    const { requireTraineeAccess } = await load({
+      ...traineeOf('org-1'),
+      role: 'TRAINER',
+    });
+    const res = (await requireTraineeAccess(
+      trainer as any,
+      TRAINEE
+    )) as Response;
+    expect(res.status).toBe(404);
+  });
+
+  it('404 for an empty id or an id that is no uuid, without a lookup', async () => {
+    const { requireTraineeAccess, db } = await load(traineeOf('org-1'));
+    expect(
+      ((await requireTraineeAccess(trainer as any, '')) as Response).status
+    ).toBe(404);
+    expect(
+      ((await requireTraineeAccess(trainer as any, 'trainee-1')) as Response)
+        .status
+    ).toBe(404);
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it('404 for a trainee of another occupation than the chosen one', async () => {
+    const { requireTraineeAccess } = await load(traineeOf('org-1'), async () =>
+      NextResponse.json({ error: 'Not found' }, { status: 404 })
+    );
+    const res = (await requireTraineeAccess(
+      trainer as any,
+      TRAINEE,
+      request as any
+    )) as Response;
+    expect(res.status).toBe(404);
+  });
+
+  it('403 for an occupation the caller may not choose', async () => {
+    const { requireTraineeAccess } = await load(traineeOf('org-1'), async () =>
+      NextResponse.json(
+        { error: 'Training catalog not allowed' },
+        { status: 403 }
+      )
+    );
+    const res = (await requireTraineeAccess(
+      trainer as any,
+      TRAINEE,
+      request as any
+    )) as Response;
+    expect(res.status).toBe(403);
+  });
+
+  it('403 for a caller below trainer level (a trainee)', async () => {
+    const { requireTraineeAccess, db } = await load(traineeOf('org-1'));
+    const res = (await requireTraineeAccess(
+      traineeSession(TRAINEE) as any,
+      TRAINEE
+    )) as Response;
+    expect(res.status).toBe(403);
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it('limits an org admin to their organization', async () => {
-    const adminScope = { ...trainerScope, role: 'ADMIN', canSeeOrgWide: true };
-    const same = await load(traineeOf('org-1'), adminScope);
-    expect(
-      await same.requireTraineeAccess(fakeSession() as any, 'trainee-1')
-    ).toHaveProperty('trainee');
-    const other = await load(traineeOf('org-2'), adminScope);
-    const res = await other.requireTraineeAccess(
-      fakeSession() as any,
-      'trainee-1'
-    );
-    expect((res as Response).status).toBe(403);
+    const admin = fakeSession({
+      role: 'ADMIN',
+      isAdmin: true,
+      organizationId: 'org-1',
+    });
+    const same = await load(traineeOf('org-1'));
+    expect(await same.requireTraineeAccess(admin as any, TRAINEE)).toEqual({
+      traineeId: TRAINEE,
+    });
+    const other = await load(traineeOf('org-2'));
+    const res = (await other.requireTraineeAccess(
+      admin as any,
+      TRAINEE
+    )) as Response;
+    expect(res.status).toBe(404);
   });
 
   it('lets the super admin see every organization', async () => {
-    const superScope = {
-      ...trainerScope,
-      role: 'ADMIN',
-      isPlatformOwner: true,
-      isSuperAdmin: true,
-      canSeeOrgWide: true,
-    };
-    const { requireTraineeAccess } = await load(traineeOf('org-9'), superScope);
-    const res = await requireTraineeAccess(fakeSession() as any, 'trainee-1');
-    expect(res).toHaveProperty('trainee');
+    const { requireTraineeAccess } = await load(traineeOf('org-9'));
+    const res = await requireTraineeAccess(
+      fakeSession({
+        role: 'SUPER_ADMIN',
+        isSuperAdmin: true,
+        isAdmin: true,
+      }) as any,
+      TRAINEE
+    );
+    expect(res).toEqual({ traineeId: TRAINEE });
   });
 
-  it('does not let a TEMP_ADMIN of the platform organization see other organizations', async () => {
-    const tempScope = {
-      ...trainerScope,
-      role: 'TEMP_ADMIN',
-      isPlatformOwner: true,
-      isSuperAdmin: false,
-      canSeeOrgWide: true,
-    };
-    const { requireTraineeAccess } = await load(traineeOf('org-9'), tempScope);
-    const res = await requireTraineeAccess(fakeSession() as any, 'trainee-1');
-    expect((res as Response).status).toBe(403);
+  it('does not let a trainer or TEMP_ADMIN of the platform organization see other organizations', async () => {
+    // the platform-owner flag of the organization does not widen the scope
+    const { requireTraineeAccess } = await load(traineeOf('org-9'));
+    for (const session of [
+      fakeSession({ isPlatformOwner: true }),
+      fakeSession({
+        role: 'TEMP_ADMIN',
+        isAdmin: true,
+        isPlatformOwner: true,
+      }),
+    ]) {
+      const res = (await requireTraineeAccess(
+        session as any,
+        TRAINEE
+      )) as Response;
+      expect(res.status).toBe(404);
+    }
   });
 });

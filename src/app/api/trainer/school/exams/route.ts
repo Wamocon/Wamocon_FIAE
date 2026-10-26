@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
         const trainerId = session.id;
         const traineeId = url.searchParams.get('traineeId');
         if (traineeId) {
-            const access = await requireTraineeAccess(session, traineeId);
+            const access = await requireTraineeAccess(session, traineeId, req);
             if (isErrorResponse(access)) return access;
         }
 
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const access = await requireTraineeAccess(session, String(traineeId));
+        const access = await requireTraineeAccess(session, String(traineeId), req);
         if (isErrorResponse(access)) return access;
 
         const organizationId = await getUserOrgId(trainerId);

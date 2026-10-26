@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Activity report not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(report[0].traineeId));
+        const access = await requireTraineeAccess(session, String(report[0].traineeId), request);
         if (isErrorResponse(access)) return access;
 
         // Update each entry with grade
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
         if (!report) {
             return NextResponse.json({ error: 'Activity report not found' }, { status: 404 });
         }
-        const access = await requireTraineeAccess(session, String(report.traineeId));
+        const access = await requireTraineeAccess(session, String(report.traineeId), request);
         if (isErrorResponse(access)) return access;
 
         const entries = await db

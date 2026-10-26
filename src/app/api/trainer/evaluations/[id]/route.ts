@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         const evaluation = evaluationRows[0];
 
-        const access = await requireTraineeAccess(session, String(evaluation.traineeId));
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request);
         if (isErrorResponse(access)) return access;
 
         // Fetch trainee info
@@ -94,7 +94,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
         const evaluation = evaluationRows[0];
 
-        const access = await requireTraineeAccess(session, String(evaluation.traineeId));
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request);
         if (isErrorResponse(access)) return access;
 
         const body = await request.json();
@@ -275,7 +275,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
         const evaluation = evaluationRows[0];
 
-        const access = await requireTraineeAccess(session, String(evaluation.traineeId));
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request);
         if (isErrorResponse(access)) return access;
 
         const body = await request.json();

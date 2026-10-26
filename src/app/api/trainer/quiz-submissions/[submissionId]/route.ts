@@ -1,10 +1,12 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { quizSubmissions, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
 
 // PATCH /api/trainer/quiz-submissions/[submissionId]
 // Body: { is_reviewed: boolean, trainer_feedback?: string, reviewer_id?: string }
@@ -24,9 +26,25 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissio
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
     }
 
-    // Verify caller is a trainer
-    if (reviewer_id) {
-    }
+    // The submission has to belong to a trainee the caller is responsible for
+    // (own organization, chosen occupation). A foreign one answers like a
+    // missing one, so nothing is leaked and nothing is changed.
+    const [existing] = await db
+      .select({ id: quizSubmissions.id, traineeId: quizSubmissions.traineeId, quizId: quizSubmissions.quizId })
+      .from(quizSubmissions)
+      .where(eq(quizSubmissions.id, submissionId as any))
+      .limit(1);
+    const notFound = () => NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+    if (!existing) return notFound();
+
+    const access = await requireTraineeAccess(session, String(existing.traineeId), req);
+    if (isErrorResponse(access)) return access.status === 404 ? notFound() : access;
+
+    // The reviewed quiz must lie inside the caller's catalogs
+    const catalogScope = await requireCatalogScope(session, req);
+    if (isErrorResponse(catalogScope)) return catalogScope;
+    const deniedQuiz = await ensureContentInScope(catalogScope, 'quiz', String(existing.quizId));
+    if (deniedQuiz) return notFound();
 
     const update: any = {};
     if (is_reviewed !== undefined) {
@@ -45,7 +63,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissio
     const [sub] = await db
       .update(quizSubmissions)
       .set(update)
-      .where(eq(quizSubmissions.id, submissionId as any))
+      .where(and(eq(quizSubmissions.id, submissionId as any), eq(quizSubmissions.traineeId, access.traineeId as any)))
       .returning();
 
     if (!sub) {
