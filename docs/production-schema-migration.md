@@ -50,8 +50,9 @@ column needs a safe default.
 ## Runbook: Ausbildungskatalog-Migrationsreihe (KfBM-Umbau)
 
 Dieser Abschnitt gilt für die Dateien `supabase/migrations/20261024000100` bis
-`20261024001500`, `20261025000000` und die Sicherheitsdatei `20261025000100`
-(PR 83). Die Migration von `202606260001` oben ist bereits in Produktion
+`20261024001500`, `20261025000000`, die Sicherheitsdatei `20261025000100` und
+die Folgedatei `20261026000100` (PR 83 und später). Die Migration von
+`202606260001` oben ist bereits in Produktion
 angewendet und bleibt unverändert. Die Reihe ist in Produktion noch nicht
 angewendet. Geprüft ist sie auf einer lokalen Wegwerf-Datenbank (PostgreSQL 15
 mit Stubs für `auth` und `storage`) und, Stand 23.10.2026, in der
@@ -97,6 +98,7 @@ also nur strukturell geprüft, nicht mit den echten Zeilen.
 | 001500 | Enum-Wert `SUPER_ADMIN` (eigene Datei) |
 | 20261025000000 | Backfill ADMIN der Plattform-Organisation zu SUPER_ADMIN, **technisch gesperrt** bis PR 89 angewendet ist und der App-Release bestätigt wurde (siehe Reihenfolge, Punkt 5) |
 | 20261025000100 | Sicherheitsdatei: `revoke create on schema public from public`. Eine einzige Anweisung, ändert keine Daten. Sie liegt hinter dem Backfill und wird deshalb erst nach dessen Freigabe angewendet (Punkt 6). Rückweg: `grant create on schema public to public;` |
+| 20261026000100 | Genau eine Einschreibung je Azubi: eindeutiger Index `trainee_enrollments_trainee_unique` auf `trainee_enrollments (trainee_id)`. Die Vorprüfung bricht mit einer Meldung samt Anzahl ab, wenn ein Azubi mehr als eine Einschreibung hat, und löscht nichts. Ändert keine Daten, `create unique index` ohne `concurrently` (die Datei läuft in einer Transaktion), die Tabelle ist klein. Sie liegt hinter dem Backfill und wird deshalb ebenfalls erst nach dessen Freigabe angewendet. Rückweg: `drop index public.trainee_enrollments_trainee_unique;` |
 
 Daten werden verändert in: 000300 (UPDATE enablers, use_cases, mappings),
 000500 (Kopie der Lernfelder), 000700 (UPDATE training_components), 001000
@@ -144,7 +146,10 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
    Danach läuft die Sicherheitsdatei `20261025000100` (Widerruf von `CREATE` auf
    `public` für `PUBLIC`), weil sie hinter dem Backfill einsortiert ist. Vorcheck
    und Nachcheck: `04-verify.sql`, Abfrage 4 (`create_priv` auf `public`) muss von
-   `true` auf `false` wechseln.
+   `true` auf `false` wechseln. Als Nächstes läuft `20261026000100` (eindeutiger
+   Index auf `trainee_enrollments (trainee_id)`). Vorcheck (nur lesend): Abfrage
+   C11 der Verifikations-SQL muss null Zeilen liefern, sonst bricht die Datei
+   mit einer Meldung ab und ändert nichts. Nachcheck: Abfrage C11b.
 7. **Nachchecks** (Abschnitt "Katalogreihe, Nachchecks" in der Verifikations-SQL):
    Zeilenzahlen der Bestandstabellen unverändert, alle Kurse und Komponenten im
    Katalog FIAE, `lernfelder` (View) liefert so viele Zeilen wie
@@ -201,6 +206,11 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
 - `trainee_enrollments` ist eine Momentaufnahme der Profile. Maßgeblich bleiben
   bis zur Umstellung der App `profiles.start_of_training_date` und
   `profiles.ausbildung_duration_years`.
+- Ein Azubi hat genau eine Einschreibung. Der Berufswechsel ersetzt sie (die
+  Administration löscht die anderen Einschreibungen in derselben Transaktion,
+  `setTraineeEnrollment`). Ab `20261026000100` sichert ein eindeutiger Index auf
+  `trainee_id` das in der Datenbank ab: Eine zweite Einschreibung desselben
+  Azubis scheitert mit `unique_violation`.
 
 ## Rollback
 
