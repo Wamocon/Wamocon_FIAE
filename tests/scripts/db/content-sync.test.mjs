@@ -431,6 +431,27 @@ test('the allowlist file lists columns for every table and not the HAI index fla
   assert.ok(!docs.columns.includes('is_indexed_by_hai'));
 });
 
+test('the keys of the content tables are unique in the Production data (measured on 2026-10-26)', () => {
+  // The first provisional keys were too coarse. In Production they were not
+  // unique (content_documents 50, quizzes 2, questions 18, options 1 groups),
+  // and the sync aborts on a key that is not unique, also in the release run.
+  // With these keys every group is unique, without changing any data.
+  const keys = Object.fromEntries(
+    realConfig().tables.map(t => [t.name, t.key])
+  );
+  assert.deepEqual(keys.content_documents, [
+    'enabler_id',
+    'use_case_id',
+    'course_id',
+    'title',
+    'file_name',
+    'document_type',
+  ]);
+  assert.deepEqual(keys.quizzes, ['title', 'quiz_type', 'created_at']);
+  assert.deepEqual(keys.questions, ['quiz_id', 'order_index']);
+  assert.deepEqual(keys.options, ['question_id', 'option_text', 'is_correct']);
+});
+
 test('the release workflow only inserts, the manual workflow chooses the update mode', () => {
   const release = readFileSync(
     '.github/workflows/release-production.yml',
