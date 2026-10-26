@@ -56,9 +56,32 @@ describe('reindex-gemini.ts protection', () => {
     );
   });
 
-  it('hands the rollout gate value to the check (production)', () => {
-    expect(main).toMatch(/\bprocess\.env\n?\s*\);/);
+  it('reads the rollout gate from the process environment, before dotenv', () => {
+    const shell = script.indexOf('const SHELL_ROLLOUT_APPROVED = process.env');
+    const dotenvCall = script.indexOf("dotenv.config({ path: '.env.local' })");
+    expect(shell).toBeGreaterThan(0);
+    expect(shell).toBeLessThan(dotenvCall);
+    expect(main).toMatch(/\{ KFBM_ROLLOUT_APPROVED: SHELL_ROLLOUT_APPROVED \}/);
     expect(main).toMatch(/checkTargetAgainstConnection\(\s*OPTIONS,/);
+  });
+
+  it('purges only what the script builds (no trainee chunks, no solution pages)', () => {
+    const purges = script.slice(
+      script.indexOf('async function purgeAllEmbeddings'),
+      script.indexOf('function printPlan')
+    );
+    const guarded =
+      purges.match(
+        /source_type IN \('course', 'enabler', 'quiz', 'document'\)\s+OR \(source_type = 'use_case' AND chunk_index < 1000\)/g
+      ) ?? [];
+    expect(guarded.length).toBe(7);
+    expect(purges).not.toMatch(/trainee_/);
+  });
+
+  it('gives only the options of a multiple choice question to the public text', () => {
+    expect(script).toMatch(
+      /q\.question_type === 'MCQ' && Array\.isArray\(q\.options\)/
+    );
   });
 
   it('makes no model call in a dry run', () => {

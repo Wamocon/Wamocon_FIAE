@@ -8,8 +8,8 @@
  *  - --target preview|production|local is always required and is compared with
  *    the facts of the connection (host, current_schema, role) before anything
  *    else happens
- *  - production is refused without --confirm-production AND an approved
- *    rollout gate (KFBM_ROLLOUT_APPROVED = "true", see scripts/db/rollout-gate.mjs)
+ *  - production is refused without --confirm-production <host of the
+ *    connection> AND an approved rollout gate (KFBM_ROLLOUT_APPROVED = "true", see scripts/db/rollout-gate.mjs)
  *  - --purge and --purge-stale only together with --catalog
  *
  * @module lib/hai/reindexArgs
@@ -27,7 +27,8 @@ export interface ReindexOptions {
   /** Code of the training catalog the run is limited to, upper case. */
   catalogCode: string | null;
   target: ReindexTarget | null;
-  confirmProduction: boolean;
+  /** Host named by --confirm-production, must equal the host of the run. */
+  confirmProductionHost: string | null;
 }
 
 export type ParsedReindexArgs =
@@ -54,9 +55,12 @@ const FLAGS = new Set([
   '--purge',
   '--purge-stale',
   '--pdfs-only',
+]);
+const VALUE_OPTIONS = new Set([
+  '--catalog',
+  '--target',
   '--confirm-production',
 ]);
-const VALUE_OPTIONS = new Set(['--catalog', '--target']);
 
 /** Splits "--name=value" into name and value, otherwise leaves the token. */
 function splitToken(token: string): [string, string | undefined] {
@@ -79,6 +83,8 @@ export function parseReindexArgs(argv: string[]): ParsedReindexArgs {
       const value = inline ?? argv[++i];
       if (value === undefined || value.startsWith('--') || value === '') {
         errors.push(`${name} needs a value`);
+      } else if (values.has(name)) {
+        errors.push(`${name} is given twice`);
       } else {
         values.set(name, value);
       }
@@ -120,13 +126,19 @@ export function parseReindexArgs(argv: string[]): ParsedReindexArgs {
     errors.push('--purge and --purge-stale are only allowed with --catalog');
   }
 
-  const confirmProduction = flags.has('--confirm-production');
-  if (confirmProduction && target !== 'production') {
+  if (purge && flags.has('--pdfs-only')) {
+    errors.push('--purge cannot be combined with --pdfs-only');
+  }
+
+  // Production needs the host of the connection spelled out
+  const confirmProductionHost =
+    values.get('--confirm-production')?.toLowerCase() ?? null;
+  if (confirmProductionHost !== null && target !== 'production') {
     errors.push('--confirm-production only belongs to --target production');
   }
-  if (target === 'production' && !confirmProduction) {
+  if (target === 'production' && confirmProductionHost === null) {
     errors.push(
-      'Production is refused without --confirm-production (and an approved rollout gate)'
+      'Production is refused without --confirm-production <host> (and an approved rollout gate)'
     );
   }
 
@@ -142,7 +154,7 @@ export function parseReindexArgs(argv: string[]): ParsedReindexArgs {
       pdfsOnly: flags.has('--pdfs-only'),
       catalogCode,
       target,
-      confirmProduction,
+      confirmProductionHost,
     },
   };
 }
@@ -173,10 +185,10 @@ export function isLoopbackHost(host: string | null): boolean {
  *  - preview: schema public_preview and a Preview role
  *  - production: non-loopback host, schema public, no Preview role, an
  *    approved rollout gate (env value exactly "true"); the flag
- *    --confirm-production is checked by parseReindexArgs
+ *    --confirm-production must name the host of the connection
  */
 export function checkTargetAgainstConnection(
-  options: Pick<ReindexOptions, 'target' | 'confirmProduction'>,
+  options: Pick<ReindexOptions, 'target' | 'confirmProductionHost'>,
   facts: ConnectionFacts,
   env: Record<string, string | undefined>
 ): string[] {
@@ -231,8 +243,10 @@ export function checkTargetAgainstConnection(
           `The role ${facts.currentUser} is a Preview role, not a production role.`
         );
       }
-      if (!options.confirmProduction) {
-        errors.push('Production needs --confirm-production.');
+      if (options.confirmProductionHost !== facts.host) {
+        errors.push(
+          `--confirm-production must name the host of the connection (${facts.host}).`
+        );
       }
       if (env.KFBM_ROLLOUT_APPROVED !== 'true') {
         errors.push(

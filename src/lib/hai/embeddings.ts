@@ -18,6 +18,7 @@ import { createHash } from 'crypto';
 import { getEmbeddingProvider } from './providers';
 import { chunkDocument } from './chunker';
 import {
+  CHUNK_INDEX_BLOCK,
   chunkIndexRange,
   scopeProblem,
   type HaiVisibility,
@@ -343,6 +344,17 @@ export async function indexContent(
       preserveParagraphs: true,
       preserveSentences: true,
     });
+
+    // The public part must never reach the block of the trainer part
+    if (chunks.length >= CHUNK_INDEX_BLOCK) {
+      return {
+        success: false,
+        chunksIndexed: 0,
+        chunksSkipped: 0,
+        chunksFailed: 0,
+        error: `Too many chunks (${chunks.length}) for ${sourceType}/${sourceId}`,
+      };
+    }
 
     if (chunks.length === 0) {
       return {

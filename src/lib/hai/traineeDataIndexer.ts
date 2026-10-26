@@ -82,8 +82,11 @@ async function personalIndexScope(traineeId: string): Promise<IndexScope> {
     })
     .from(traineeEnrollments)
     .where(eq(traineeEnrollments.traineeId, traineeId));
-  const [latest] = [...enrollments].sort((a, b) =>
-    String(b.startDate ?? '').localeCompare(String(a.startDate ?? ''))
+  // Latest start first; the catalog id breaks a tie so the pick is stable
+  const [latest] = [...enrollments].sort(
+    (a, b) =>
+      String(b.startDate ?? '').localeCompare(String(a.startDate ?? '')) ||
+      String(a.trainingCatalogId).localeCompare(String(b.trainingCatalogId))
   );
 
   const [owner] = await haiDb

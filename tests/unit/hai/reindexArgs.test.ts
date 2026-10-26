@@ -59,9 +59,10 @@ describe('parseReindexArgs: --target', () => {
   it('accepts preview, local and production (with its confirmation)', () => {
     expect(ok('--target', 'preview').target).toBe('preview');
     expect(ok('--target=local').target).toBe('local');
-    expect(ok('--target', 'production', '--confirm-production').target).toBe(
-      'production'
-    );
+    expect(
+      ok('--target', 'production', '--confirm-production', 'db.example.co')
+        .target
+    ).toBe('production');
   });
 
   it('refuses any other target and a missing value', () => {
@@ -74,15 +75,15 @@ describe('parseReindexArgs: --target', () => {
 
   it('refuses production without --confirm-production', () => {
     expect(errors('--target', 'production', '--apply')).toEqual([
-      'Production is refused without --confirm-production (and an approved rollout gate)',
+      'Production is refused without --confirm-production <host> (and an approved rollout gate)',
     ]);
   });
 
   it('refuses --confirm-production for another target', () => {
-    expect(errors('--target', 'preview', '--confirm-production')).toEqual([
+    expect(errors('--target', 'preview', '--confirm-production', 'x')).toEqual([
       '--confirm-production only belongs to --target production',
     ]);
-    expect(errors('--confirm-production')).toContain(
+    expect(errors('--confirm-production', 'x')).toContain(
       '--confirm-production only belongs to --target production'
     );
   });
@@ -130,6 +131,21 @@ describe('parseReindexArgs: --catalog and the purges', () => {
     const options = ok('--target', 'local', '--force', '--pdfs-only');
     expect(options.force).toBe(true);
     expect(options.pdfsOnly).toBe(true);
+  });
+
+  it('refuses --purge together with --pdfs-only', () => {
+    expect(
+      errors('--target', 'local', '--catalog', 'KFBM', '--purge', '--pdfs-only')
+    ).toEqual(['--purge cannot be combined with --pdfs-only']);
+  });
+
+  it('refuses a value option that is given twice', () => {
+    expect(errors('--target', 'local', '--target', 'production')).toEqual([
+      '--target is given twice',
+    ]);
+    expect(
+      errors('--target', 'local', '--catalog', 'FIAE', '--catalog', 'KFBM')
+    ).toEqual(['--catalog is given twice']);
   });
 
   it('refuses unknown arguments (a typo must not start a run)', () => {
@@ -185,21 +201,21 @@ describe('checkTargetAgainstConnection', () => {
   it('accepts a target that fits the connection', () => {
     expect(
       checkTargetAgainstConnection(
-        { target: 'local', confirmProduction: false },
+        { target: 'local', confirmProductionHost: null },
         local,
         {}
       )
     ).toEqual([]);
     expect(
       checkTargetAgainstConnection(
-        { target: 'preview', confirmProduction: false },
+        { target: 'preview', confirmProductionHost: null },
         preview,
         {}
       )
     ).toEqual([]);
     expect(
       checkTargetAgainstConnection(
-        { target: 'production', confirmProduction: true },
+        { target: 'production', confirmProductionHost: 'db.example.co' },
         production,
         { KFBM_ROLLOUT_APPROVED: 'true' }
       )
@@ -208,7 +224,7 @@ describe('checkTargetAgainstConnection', () => {
 
   it('refuses --target local on a remote host', () => {
     const problems = checkTargetAgainstConnection(
-      { target: 'local', confirmProduction: false },
+      { target: 'local', confirmProductionHost: null },
       production,
       {}
     );
@@ -217,7 +233,7 @@ describe('checkTargetAgainstConnection', () => {
 
   it('refuses --target preview on the public schema or with a production role', () => {
     const onPublic = checkTargetAgainstConnection(
-      { target: 'preview', confirmProduction: false },
+      { target: 'preview', confirmProductionHost: null },
       production,
       {}
     );
@@ -227,7 +243,7 @@ describe('checkTargetAgainstConnection', () => {
 
   it('refuses --target production for a Preview connection', () => {
     const problems = checkTargetAgainstConnection(
-      { target: 'production', confirmProduction: true },
+      { target: 'production', confirmProductionHost: 'db.example.co' },
       preview,
       { KFBM_ROLLOUT_APPROVED: 'true' }
     );
@@ -238,7 +254,7 @@ describe('checkTargetAgainstConnection', () => {
   it('refuses production on a loopback host', () => {
     expect(
       checkTargetAgainstConnection(
-        { target: 'production', confirmProduction: true },
+        { target: 'production', confirmProductionHost: 'db.example.co' },
         local,
         { KFBM_ROLLOUT_APPROVED: 'true' }
       ).join(' ')
@@ -248,7 +264,7 @@ describe('checkTargetAgainstConnection', () => {
   it('refuses production while the rollout gate is not suspended', () => {
     for (const value of [undefined, '', 'TRUE', 'yes', 'false', '1']) {
       const problems = checkTargetAgainstConnection(
-        { target: 'production', confirmProduction: true },
+        { target: 'production', confirmProductionHost: 'db.example.co' },
         production,
         { KFBM_ROLLOUT_APPROVED: value }
       );
@@ -256,10 +272,20 @@ describe('checkTargetAgainstConnection', () => {
     }
   });
 
+  it('refuses production when the confirmed host is not the host of the run', () => {
+    expect(
+      checkTargetAgainstConnection(
+        { target: 'production', confirmProductionHost: 'other.example.co' },
+        production,
+        { KFBM_ROLLOUT_APPROVED: 'true' }
+      ).join(' ')
+    ).toMatch(/must name the host of the connection \(db\.example\.co\)/);
+  });
+
   it('refuses production without the confirmation flag', () => {
     expect(
       checkTargetAgainstConnection(
-        { target: 'production', confirmProduction: false },
+        { target: 'production', confirmProductionHost: null },
         production,
         { KFBM_ROLLOUT_APPROVED: 'true' }
       ).join(' ')
@@ -269,14 +295,14 @@ describe('checkTargetAgainstConnection', () => {
   it('refuses when the facts of the connection are unknown', () => {
     expect(
       checkTargetAgainstConnection(
-        { target: 'local', confirmProduction: false },
+        { target: 'local', confirmProductionHost: null },
         { host: null, currentSchema: null, currentUser: null },
         {}
       ).length
     ).toBeGreaterThan(0);
     expect(
       checkTargetAgainstConnection(
-        { target: null, confirmProduction: false },
+        { target: null, confirmProductionHost: null },
         local,
         {}
       )

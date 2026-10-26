@@ -223,6 +223,37 @@ describe('indexContent: unchanged text with another scope is rescoped without a 
   });
 });
 
+describe('indexContent: the public block stays below the trainer block', () => {
+  it('refuses a text that needs 10000 chunks or more', async () => {
+    jest.resetModules();
+    jest.doMock('@/db/haiDb', () => ({
+      __esModule: true,
+      default: { execute: jest.fn(), select: jest.fn() },
+    }));
+    jest.doMock('@/lib/hai/providers', () => ({
+      __esModule: true,
+      getEmbeddingProvider: () => ({
+        name: 'gemini',
+        isInitialized: () => true,
+        generateEmbedding: jest.fn(),
+      }),
+    }));
+    jest.doMock('@/lib/hai/chunker', () => ({
+      __esModule: true,
+      chunkDocument: () =>
+        Array.from({ length: 10000 }, (_, index) => ({
+          content: `c${index}`,
+          index,
+          metadata: {},
+        })),
+    }));
+    const { indexContent } = await import('@/lib/hai/embeddings');
+    const result = await indexContent(base);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Too many chunks/);
+  });
+});
+
 describe('removeChunkPart', () => {
   it('removes one block of chunk indexes of a source', async () => {
     const { removeChunkPart, execute } = await load();

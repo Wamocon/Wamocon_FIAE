@@ -18,5 +18,6 @@ export function citationUrl(result: CitationSource): string | undefined {
     result.metadata?.sourceType === 'pageindex';
   if (!isPageIndexHit) return undefined;
   const url = result.metadata?.storageUrl;
-  return typeof url === 'string' && url ? url : undefined;
+  // only a web address: no javascript: or data: URL reaches a link
+  return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined;
 }

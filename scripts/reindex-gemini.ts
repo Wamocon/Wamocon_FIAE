@@ -72,6 +72,9 @@ import {
   buildQuizTexts,
   type QuizQuestionInput,
 } from '../src/lib/hai/quizIndexText';
+// The rollout gate is read from the environment of the process only, before
+// dotenv: a value that sits in .env.local or .env must not open it silently
+const SHELL_ROLLOUT_APPROVED = process.env.KFBM_ROLLOUT_APPROVED;
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
@@ -545,6 +548,11 @@ async function indexSource(
       `;
     }
     return { success: true, chunks: 0, skipped: true };
+  }
+
+  if (part.staleBelow !== null && chunks.length >= CHUNK_INDEX_BLOCK) {
+    fail(`${sourceType}/${title}: too many chunks for its block, not indexed`);
+    return { success: false, chunks: 0, skipped: false };
   }
 
   PLAN_INVENTORY.add(
@@ -1051,13 +1059,14 @@ async function indexQuizzes(db: postgres.Sql) {
         q.question_type === 'TEXT' && q.expected_answer
           ? q.expected_answer
           : null,
-      options: Array.isArray(q.options)
-        ? q.options.map((opt: any) => ({
-            text: opt.text,
-            isCorrect: opt.correct,
-            explanation: opt.explanation,
-          }))
-        : [],
+      options:
+        q.question_type === 'MCQ' && Array.isArray(q.options)
+          ? q.options.map((opt: any) => ({
+              text: opt.text,
+              isCorrect: opt.correct,
+              explanation: opt.explanation,
+            }))
+          : [],
     }));
 
     // Questions and answers are separate texts BEFORE the size chunking:
@@ -1655,6 +1664,8 @@ async function purgeAllEmbeddings(db: postgres.Sql) {
   const [{ count }] = await db`
     SELECT COUNT(*) as count FROM hai_embeddings
     WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (source_type IN ('course', 'enabler', 'quiz', 'document')
+        OR (source_type = 'use_case' AND chunk_index < 1000))
   `;
   if (Number(count) === 0) {
     ok('No embeddings to purge for this catalog');
@@ -1665,6 +1676,8 @@ async function purgeAllEmbeddings(db: postgres.Sql) {
     SELECT source_type, visibility, COUNT(*) as cnt
     FROM hai_embeddings
     WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (source_type IN ('course', 'enabler', 'quiz', 'document')
+        OR (source_type = 'use_case' AND chunk_index < 1000))
     GROUP BY source_type, visibility
     ORDER BY cnt DESC
   `;
@@ -1679,6 +1692,8 @@ async function purgeAllEmbeddings(db: postgres.Sql) {
   await db`
     DELETE FROM hai_embeddings
     WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (source_type IN ('course', 'enabler', 'quiz', 'document')
+        OR (source_type = 'use_case' AND chunk_index < 1000))
   `;
   ok(`Purged ${count} embedding chunks`);
 }
@@ -1695,6 +1710,8 @@ async function purgeStaleEmbeddings(db: postgres.Sql) {
   const [{ total_count }] = await db`
     SELECT COUNT(*) as total_count FROM hai_embeddings
     WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (source_type IN ('course', 'enabler', 'quiz', 'document')
+        OR (source_type = 'use_case' AND chunk_index < 1000))
   `;
   if (Number(total_count) === 0) {
     ok('No embeddings found for this catalog — nothing to purge');
@@ -1707,6 +1724,8 @@ async function purgeStaleEmbeddings(db: postgres.Sql) {
       COUNT(*) as cnt
     FROM hai_embeddings
     WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (source_type IN ('course', 'enabler', 'quiz', 'document')
+        OR (source_type = 'use_case' AND chunk_index < 1000))
     GROUP BY COALESCE(metadata->>'embeddingModel', '(untagged)')
     ORDER BY cnt DESC
   `;
@@ -1719,6 +1738,8 @@ async function purgeStaleEmbeddings(db: postgres.Sql) {
   const [{ stale_count }] = await db`
     SELECT COUNT(*) as stale_count FROM hai_embeddings
     WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (source_type IN ('course', 'enabler', 'quiz', 'document')
+        OR (source_type = 'use_case' AND chunk_index < 1000))
       AND (metadata->>'embeddingModel' IS NULL
         OR metadata->>'embeddingModel' != ${EMBEDDING_MODEL})
   `;
@@ -1738,6 +1759,8 @@ async function purgeStaleEmbeddings(db: postgres.Sql) {
   await db`
     DELETE FROM hai_embeddings
     WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (source_type IN ('course', 'enabler', 'quiz', 'document')
+        OR (source_type = 'use_case' AND chunk_index < 1000))
       AND (metadata->>'embeddingModel' IS NULL
         OR metadata->>'embeddingModel' != ${EMBEDDING_MODEL})
   `;
@@ -1831,7 +1854,7 @@ async function main() {
         currentSchema: facts.current_schema,
         currentUser: facts.current_role,
       },
-      process.env
+      { KFBM_ROLLOUT_APPROVED: SHELL_ROLLOUT_APPROVED }
     );
     if (problems.length > 0) {
       for (const problem of problems) fail(problem);

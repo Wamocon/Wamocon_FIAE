@@ -154,4 +154,21 @@ describe('citationUrl: only a PageIndex hit carries a URL', () => {
     ).toBeUndefined();
     expect(citationUrl({})).toBeUndefined();
   });
+
+  it('gives no URL that is not a web address', () => {
+    for (const storageUrl of [
+      'javascript:alert(1)',
+      'data:text/html,<script>',
+      'file:///etc/passwd',
+      '//evil.example/x',
+      '',
+    ]) {
+      expect(
+        citationUrl({
+          id: 'pageindex-d1-p3',
+          metadata: { sourceType: 'pageindex', storageUrl },
+        })
+      ).toBeUndefined();
+    }
+  });
 });
