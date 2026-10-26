@@ -4,8 +4,9 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
-// The notification routes and every route of a trainee answer only with a
-// bearer session. A browser call with a plain fetch() carries no token and
+// The notification routes, every route of a trainee and the activity report
+// routes (activity-reports, weekly-evaluations, grade-edit-history) and the
+// breadcrumb labels answer only with a bearer session. A browser call with a plain fetch() carries no token and
 // would be answered with 401, so every caller has to use authFetch
 // (src/lib/authFetch.ts). This test reads the sources and fails for a plain
 // fetch() whose url is one of these routes, including a url kept in a variable
@@ -16,7 +17,7 @@ import { join } from 'path';
 // softskill criteria).
 
 const PROTECTED =
-  /\/api\/(notifications|trainee\/(school|annual-summary|courses|dashboard|enablers|evaluations(?!\/softskills(?![\w-]))|feedback|knowledge-notes|lesson-progress|lessons|progress|quizzes|use-case-hours|use-cases))(?![\w-])/;
+  /\/api\/(notifications|activity-reports|weekly-evaluations|grade-edit-history|breadcrumb\/label|trainee\/(school|annual-summary|courses|dashboard|enablers|evaluations(?!\/softskills(?![\w-]))|feedback|knowledge-notes|lesson-progress|lessons|progress|quizzes|use-case-hours|use-cases))(?![\w-])/;
 const SRC = join(process.cwd(), 'src');
 const API = join(SRC, 'app', 'api');
 
@@ -83,6 +84,34 @@ describe('plainFetchViolations (the scanner itself)', () => {
     );
   });
 
+  it('flags a plain fetch to every activity report route', () => {
+    const urls = [
+      '/api/activity-reports?userId=1&limit=500',
+      '/api/activity-reports',
+      '/api/activity-reports/r1',
+      '/api/activity-reports/r1/entries',
+      '/api/activity-reports/r1/skill-ratings',
+      '/api/weekly-evaluations?activityReportId=r1',
+      '/api/weekly-evaluations',
+      '/api/grade-edit-history?entityType=USE_CASE_ENTRY&entityId=e1',
+      '/api/breadcrumb/label?entity=module&id=m1',
+    ];
+    for (const url of urls) {
+      expect(plainFetchViolations(`fetch('${url}')`)).toHaveLength(1);
+      expect(plainFetchViolations(`fetch(\`${url}\`)`)).toHaveLength(1);
+      expect(plainFetchViolations(`authFetch('${url}')`)).toEqual([]);
+    }
+  });
+
+  it('does not mix up the trainer routes of the same name', () => {
+    expect(
+      plainFetchViolations("fetch('/api/trainer/activity-reports/r1')")
+    ).toEqual([]);
+    expect(
+      plainFetchViolations("fetch('/api/trainee/school/reports')")
+    ).toHaveLength(1);
+  });
+
   it('flags a plain fetch to every other route of a trainee', () => {
     const urls = [
       '/api/trainee/annual-summary?traineeId=1',
@@ -111,7 +140,7 @@ describe('plainFetchViolations (the scanner itself)', () => {
 });
 
 describe('browser code calls the protected routes with authFetch', () => {
-  it('finds no plain fetch() to /api/notifications or a protected /api/trainee route', () => {
+  it('finds no plain fetch() to /api/notifications, an activity report route or a protected /api/trainee route', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(SRC)) {
       for (const target of plainFetchViolations(readFileSync(file, 'utf8'))) {

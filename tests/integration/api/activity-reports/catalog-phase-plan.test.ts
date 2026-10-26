@@ -3,7 +3,11 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
-import { makeRequest } from '../../../helpers/mockNext';
+import {
+  makeRequest,
+  mockSession,
+  traineeSession,
+} from '../../../helpers/mockNext';
 
 // POST /api/activity-reports and PUT /api/activity-reports/[id] follow the
 // catalog of the trainee (KfBM S4): the use cases come from the trainee's
@@ -15,6 +19,8 @@ import { makeRequest } from '../../../helpers/mockNext';
 const FIAE = '00000000-0000-4000-8000-000000000001';
 const KFBM = '00000000-0000-4000-8000-000000000002';
 const ORG = 'org-1';
+const ME = '11111111-1111-4111-8111-111111111111';
+const REPORT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 const fiaeSettings = { phase_months: [18, 18] };
 const kfbmSettings = { phase_months: [15, 21] };
@@ -32,7 +38,7 @@ function tablesFor(occupation: Occupation, durationYears = 3) {
   return {
     profiles: [
       {
-        id: 't1',
+        id: ME,
         role: 'TRAINEE',
         organizationId: ORG,
         isPlatformOwner: false,
@@ -64,12 +70,11 @@ async function loadRoute(
   returns: Record<string, any[]> = {}
 ) {
   jest.resetModules();
+  // the real catalog scope runs against the table mock, as the trainee ME
+  jest.dontMock('@/lib/catalog/scope');
+  mockSession(traineeSession(ME, { organizationId: ORG }));
   const mock = createTableDb(tables, returns);
   jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
-  jest.doMock('@/lib/auth-helpers', () => ({
-    __esModule: true,
-    getUserOrgId: async () => ORG,
-  }));
   const mod = await import(`@/app/api/${route}/route`);
   return { mod, mock };
 }
@@ -82,7 +87,7 @@ const entry = (extra: Record<string, unknown> = {}) => ({
 });
 
 const postBody = (entries = [entry()]) => ({
-  userId: 't1',
+  userId: ME,
   weekNumber: WEEK,
   year: YEAR,
   entries,
@@ -92,7 +97,7 @@ const postBody = (entries = [entry()]) => ({
 const post = (body: unknown) =>
   makeRequest('POST', 'http://localhost/api/activity-reports', { body });
 const put = (body: unknown) =>
-  makeRequest('PUT', 'http://localhost/api/activity-reports/r1', { body });
+  makeRequest('PUT', `http://localhost/api/activity-reports/${REPORT}`, { body });
 
 describe('POST /api/activity-reports', () => {
   beforeEach(() => {
@@ -105,7 +110,7 @@ describe('POST /api/activity-reports', () => {
       const { mod, mock } = await loadRoute(
         'activity-reports',
         tablesFor('FIAE'),
-        { activityReports: [{ id: 'r1' }] }
+        { activityReports: [{ id: REPORT }] }
       );
       const res = await mod.POST(post(postBody()));
       expect(res.status).toBe(200);
@@ -118,7 +123,7 @@ describe('POST /api/activity-reports', () => {
       const { mod, mock } = await loadRoute(
         'activity-reports',
         tablesFor('FIAE', 2),
-        { activityReports: [{ id: 'r1' }] }
+        { activityReports: [{ id: REPORT }] }
       );
       const res = await mod.POST(post(postBody()));
       expect(res.status).toBe(200);
@@ -131,7 +136,7 @@ describe('POST /api/activity-reports', () => {
       const { mod, mock } = await loadRoute(
         'activity-reports',
         tablesFor('KFBM'),
-        { activityReports: [{ id: 'r1' }] }
+        { activityReports: [{ id: REPORT }] }
       );
       const res = await mod.POST(post(postBody()));
       expect(res.status).toBe(200);
@@ -144,7 +149,7 @@ describe('POST /api/activity-reports', () => {
       const { mod, mock } = await loadRoute(
         'activity-reports',
         tablesFor('KFBM'),
-        { activityReports: [{ id: 'r1' }] }
+        { activityReports: [{ id: REPORT }] }
       );
       await mod.POST(post(postBody()));
       expect(mock.filters('select', 'training_catalogs').params).toContain(
@@ -158,7 +163,7 @@ describe('POST /api/activity-reports', () => {
       const { mod, mock } = await loadRoute(
         'activity-reports',
         tablesFor('KFBM'),
-        { activityReports: [{ id: 'r1' }] }
+        { activityReports: [{ id: REPORT }] }
       );
       const res = await mod.POST(post(postBody()));
       expect(res.status).toBe(200);
@@ -174,7 +179,7 @@ describe('POST /api/activity-reports', () => {
       const { mod, mock } = await loadRoute(
         'activity-reports',
         tablesFor('FIAE'),
-        { activityReports: [{ id: 'r1' }] }
+        { activityReports: [{ id: REPORT }] }
       );
       await mod.POST(post(postBody()));
       const filter = mock.filters('select', 'training_use_cases');
@@ -187,7 +192,7 @@ describe('POST /api/activity-reports', () => {
       const { mod, mock } = await loadRoute(
         'activity-reports',
         { ...tablesFor('KFBM'), trainingUseCases: [] },
-        { activityReports: [{ id: 'r1' }] }
+        { activityReports: [{ id: REPORT }] }
       );
       const res = await mod.POST(
         post(postBody([entry({ useCaseId: 'fiae-use-case', actualHours: 0 })]))
@@ -208,7 +213,7 @@ describe('POST /api/activity-reports', () => {
         // the enrolled catalog is not enabled for the organization
         organizationCatalogs: [{ trainingCatalogId: FIAE, isEnabled: true }],
       },
-      { activityReports: [{ id: 'r1' }] }
+      { activityReports: [{ id: REPORT }] }
     );
     const res = await mod.POST(post(postBody()));
     expect(res.status).toBe(403);
@@ -223,8 +228,8 @@ describe('PUT /api/activity-reports/[id]', () => {
   });
 
   const draft = {
-    id: 'r1',
-    traineeId: 't1',
+    id: REPORT,
+    traineeId: ME,
     status: 'DRAFT',
     ausbildungsjahr: 1,
   };
@@ -236,7 +241,7 @@ describe('PUT /api/activity-reports/[id]', () => {
     };
   }
 
-  const params = { params: Promise.resolve({ id: 'r1' }) };
+  const params = { params: Promise.resolve({ id: REPORT }) };
 
   it('FIAE: month 15 stays phase 1', async () => {
     const { mod, mock } = await loadRoute(
@@ -299,12 +304,12 @@ describe('PUT /api/activity-reports/[id]', () => {
     expect(mock.writes('update', 'activity_reports')).toHaveLength(0);
   });
 
-  it('still answers 403 for a report of another trainee', async () => {
+  it('answers 404 for a report of another trainee', async () => {
     const { mod } = await loadRoute('activity-reports/[id]', {
       ...putTables('FIAE'),
       activityReports: [{ ...draft, traineeId: 'someone-else' }],
     });
     const res = await mod.PUT(put(postBody()), params);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });

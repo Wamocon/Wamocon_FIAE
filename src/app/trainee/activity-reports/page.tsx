@@ -254,7 +254,7 @@ export default function TraineeActivityReportsPage() {
     if (!confirm(t('reports.deleteConfirm'))) return;
 
     try {
-      const res = await fetch(`/api/activity-reports/${reportId}`, {
+      const res = await authFetch(`/api/activity-reports/${reportId}`, {
         method: 'DELETE',
       });
 
@@ -273,7 +273,7 @@ export default function TraineeActivityReportsPage() {
     e.stopPropagation();
     try {
       // Fetch entries for this report
-      const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
+      const res = await authFetch(`/api/activity-reports/${report.id}/entries`, {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(t('reports.error.loadEntries'));
@@ -330,7 +330,7 @@ export default function TraineeActivityReportsPage() {
     e.stopPropagation();
     try {
       // Fetch entries for this report
-      const entriesRes = await fetch(
+      const entriesRes = await authFetch(
         `/api/activity-reports/${report.id}/entries`,
         { cache: 'no-store' }
       );
@@ -1049,7 +1049,7 @@ function CreateReportModal({
         : '/api/activity-reports';
       const method = initialReport ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1750,7 +1750,7 @@ function ReportDetailModal({
 
   const loadEntries = async () => {
     try {
-      const res = await fetch(`/api/activity-reports/${report.id}/entries`, {
+      const res = await authFetch(`/api/activity-reports/${report.id}/entries`, {
         cache: 'no-store',
       });
       if (res.ok) {
@@ -1767,7 +1767,7 @@ function ReportDetailModal({
   // Load trainer skill ratings from weekly evaluations
   const loadSkillRatings = async () => {
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/weekly-evaluations?activityReportId=${report.id}`,
         {
           cache: 'no-store',
@@ -1798,7 +1798,7 @@ function ReportDetailModal({
     if (!profile?.id) return;
     setSavingSkills(true);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/activity-reports/${report.id}/skill-ratings`,
         {
           method: 'PATCH',
@@ -1842,7 +1842,7 @@ function ReportDetailModal({
 
     setSavingSkills(true);
     try {
-      const res = await fetch(`/api/activity-reports/${report.id}`, {
+      const res = await authFetch(`/api/activity-reports/${report.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

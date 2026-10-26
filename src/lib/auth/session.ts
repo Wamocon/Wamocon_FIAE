@@ -35,7 +35,7 @@ import {
 } from '@/lib/auth/roles';
 
 /** Organization used when a profile has none, same default as getUserOrgId. */
-const DEFAULT_ORG_ID = '00000000-0000-0000-0000-000000000001';
+export const DEFAULT_ORG_ID = '00000000-0000-0000-0000-000000000001';
 
 /** How long a verified token is trusted without asking Supabase again. */
 const TOKEN_CACHE_TTL_MS = 30_000;
