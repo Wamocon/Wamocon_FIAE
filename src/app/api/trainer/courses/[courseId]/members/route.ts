@@ -3,7 +3,7 @@ import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne, or } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
 import { DB_OPTION } from '@/lib/db-schema';
 import {
@@ -15,6 +15,12 @@ import {
 import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
 import { isInOrgScope, orgScopeCondition, scopeOrg } from '@/lib/auth/session';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import {
+  isTrainerInOrgScope,
+  requireTraineeScopeCondition,
+  traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -65,6 +71,10 @@ export async function GET(
       );
     }
 
+    // The trainees of the list also lie inside the chosen occupation
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
+
     const list = await db
       .select({
         id: courseMembers.id,
@@ -80,7 +90,11 @@ export async function GET(
           eq(courseMembers.courseId, courseId as any),
           // Members of other organizations are not listed (the super admin
           // sees every organization)
-          orgScopeCondition(profiles.organizationId, scopeOrg(session))
+          orgScopeCondition(profiles.organizationId, scopeOrg(session)),
+          or(
+            ne(courseMembers.role, 'TRAINEE' as any),
+            traineeIdInScope(courseMembers.userId, traineeScope.condition)
+          )
         )
       );
 
@@ -145,7 +159,10 @@ export async function POST(
       })
       .from(profiles)
       .where(eq(profiles.id, userId as any));
-    // A person of another organization answers like an unknown one
+    // A person of another organization, another occupation or another role
+    // than the one asked for answers like an unknown one
+    const unknownUser = () =>
+      NextResponse.json({ error: 'User not found' }, { status: 404 });
     if (
       !userToAdd ||
       !isInOrgScope(
@@ -153,7 +170,16 @@ export async function POST(
         userToAdd.organizationId ? String(userToAdd.organizationId) : null
       )
     ) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return unknownUser();
+    }
+    if (role === 'TRAINEE') {
+      if (String(userToAdd.role) !== 'TRAINEE') return unknownUser();
+      const access = await requireTraineeAccess(session, userId, req);
+      if (isErrorResponse(access)) {
+        return access.status === 404 ? unknownUser() : access;
+      }
+    } else if (!(await isTrainerInOrgScope(session, userId))) {
+      return unknownUser();
     }
 
     // Check if user is already a member of this course
@@ -313,7 +339,8 @@ export async function DELETE(
         )
       );
 
-    // A member of another organization answers like a missing one
+    // A member of another organization (or, for a trainee, of another
+    // occupation than the chosen one) answers like a missing one
     let memberInScope = false;
     if (memberToRemove) {
       const [memberProfile] = await db
@@ -328,6 +355,11 @@ export async function DELETE(
             ? String(memberProfile.organizationId)
             : null
         );
+      if (memberInScope && String(memberToRemove.role) === 'TRAINEE') {
+        memberInScope = !isErrorResponse(
+          await requireTraineeAccess(session, userId, req)
+        );
+      }
     }
 
     if (!memberToRemove || !memberInScope) {

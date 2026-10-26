@@ -104,7 +104,7 @@ export async function POST(
       return NextResponse.json({ error: 'Trainee not found' }, { status: 404 });
     }
 
-    const organizationId = await getUserOrgId(trainerId || traineeId);
+    const organizationId = await getUserOrgId(traineeId);
 
     let yearStart: Date;
     let yearEnd: Date;

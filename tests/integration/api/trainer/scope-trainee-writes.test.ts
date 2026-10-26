@@ -435,6 +435,72 @@ describe.each(cases)('$name', entry => {
   });
 });
 
+describe('a DRAFT report is private to the trainee', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  const draft = { ...report, status: 'DRAFT' };
+  const params = { params: Promise.resolve({ id: 'r1' }) };
+
+  it('GET and PUT answer 404 for an own trainee and change nothing', async () => {
+    const { mod, mock } = await loadScoped(
+      'trainer/activity-reports/[id]/route',
+      {
+        tables: { profiles: [traineeRow()], activityReports: [draft] },
+      }
+    );
+    const url = `${API}/activity-reports/r1`;
+    expect((await mod.GET(scopeReq(url), params)).status).toBe(404);
+    const put = await mod.PUT(
+      scopeReq(url, { method: 'PUT', body: { action: 'approve' } }),
+      params
+    );
+    expect(put.status).toBe(404);
+    expect(mock.writes('update', 'activity_reports')).toEqual([]);
+  });
+
+  it('the trainer list and the school list leave drafts out', async () => {
+    const list = await loadScoped('trainer/activity-reports/route', {
+      tables: {
+        profiles: [traineeRow()],
+        activityReports: [],
+        activityReportUseCaseEntries: [],
+      },
+    });
+    await list.mod.GET(scopeReq(`${API}/activity-reports?status=DRAFT`));
+    expect(
+      list.mock.filters('select', 'activity_reports').params
+    ).not.toContain('DRAFT');
+    const school = await loadScoped('trainer/school/activity-reports/route', {
+      tables: { activityReports: [], activityReportEntries: [] },
+    });
+    await school.mod.GET(scopeReq(`${API}/school/activity-reports`));
+    expect(school.mock.filters('select', 'activity_reports').sql).toContain(
+      '"activity_reports"."status" <> $'
+    );
+  });
+
+  it('answers 409 when the report was reviewed in the meantime and does not notify', async () => {
+    const { mod, mock } = await loadScoped(
+      'trainer/activity-reports/[id]/route',
+      {
+        tables: { profiles: [traineeRow()], activityReports: [report] },
+        returns: { activityReports: [] },
+      }
+    );
+    const res = await mod.PUT(
+      scopeReq(`${API}/activity-reports/r1`, {
+        method: 'PUT',
+        body: { action: 'approve' },
+      }),
+      params
+    );
+    expect(res.status).toBe(409);
+    expect(mock.writes('insert', 'notifications')).toEqual([]);
+  });
+});
+
 describe('a foreign record answers exactly like a missing one', () => {
   beforeEach(() => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);

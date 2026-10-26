@@ -36,7 +36,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             .from(activityReports)
             .where(eq(activityReports.id, id as any));
 
-        if (!report) {
+        // A DRAFT is the private work of the trainee, not visible to trainer level
+        if (!report || report.status === 'DRAFT') {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
 
@@ -117,7 +118,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             .from(activityReports)
             .where(eq(activityReports.id, id as any));
 
-        if (!report) {
+        if (!report || report.status === 'DRAFT') {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
 
@@ -140,7 +141,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             .from(profiles)
             .where(eq(profiles.id, trainerId));
 
-        const organizationId = await getUserOrgId(trainerId);
+        const organizationId = await getUserOrgId(String(report.traineeId));
 
         const now = new Date();
         let updateData: Record<string, any>;
@@ -178,8 +179,16 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         const [updated] = await db
             .update(activityReports)
             .set(updateData)
-            .where(and(eq(activityReports.id, id as any), eq(activityReports.traineeId, access.traineeId as any)))
+            .where(and(
+                eq(activityReports.id, id as any),
+                eq(activityReports.traineeId, access.traineeId as any),
+                // only a report that still waits for the review
+                eq(activityReports.status, 'SUBMITTED')
+            ))
             .returning();
+        if (!updated) {
+            return NextResponse.json({ error: 'Report already reviewed' }, { status: 409 });
+        }
 
         // Send notification to trainee
         await db.insert(notifications).values({

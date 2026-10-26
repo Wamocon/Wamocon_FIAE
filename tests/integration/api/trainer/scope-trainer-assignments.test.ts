@@ -9,6 +9,7 @@ import {
   OTHER_ORG,
   T1,
   T2,
+  TRAINER,
   loadScoped,
   scopeReq,
   selectParams,
@@ -277,6 +278,68 @@ describe('/api/trainer/courses/[courseId]/members', () => {
     expect(mock.writes('insert', 'course_members')).toEqual([]);
   });
 
+  it('POST refuses a trainee of another occupation than the chosen one (404)', async () => {
+    const { mod, mock } = await loadScoped(route, {
+      tables: {
+        ...base,
+        // the second lookup is the occupation check, it finds nobody
+        profiles: {
+          sequence: [
+            [{ id: T1, role: 'TRAINEE', organizationId: ORG }],
+            [{ id: T1, role: 'TRAINEE', organizationId: ORG }],
+            [],
+          ],
+        },
+        courseMembers: [],
+      },
+    });
+    const res = await mod.POST(
+      scopeReq(url, {
+        header: 'KFBM',
+        method: 'POST',
+        body: { userId: T1, role: 'TRAINEE' },
+      }),
+      params
+    );
+    expect(res.status).toBe(404);
+    expect(mock.writes('insert', 'course_members')).toEqual([]);
+  });
+
+  it('POST refuses a person whose role does not match the role asked for (404)', async () => {
+    const trainerAsTrainee = await loadScoped(route, {
+      tables: {
+        ...base,
+        profiles: [{ id: T1, role: 'TRAINER', organizationId: ORG }],
+        courseMembers: [],
+      },
+    });
+    expect(
+      (await trainerAsTrainee.mod.POST(add(T1, 'TRAINEE'), params)).status
+    ).toBe(404);
+    const traineeAsTrainer = await loadScoped(route, {
+      tables: {
+        ...base,
+        profiles: [{ id: T1, role: 'TRAINEE', organizationId: ORG }],
+        courseMembers: [],
+      },
+    });
+    const res = await traineeAsTrainer.mod.POST(add(T1, 'TRAINER'), params);
+    expect(res.status).toBe(404);
+    expect(traineeAsTrainer.mock.writes('insert', 'course_members')).toEqual(
+      []
+    );
+  });
+
+  it('GET narrows the trainees of the list to the chosen occupation', async () => {
+    const { mod, mock } = await loadScoped(route, {
+      tables: { ...base, courseMembers: [] },
+    });
+    await mod.GET(scopeReq(url, { header: 'KFBM' }), params);
+    const filter = mock.filters('select', 'course_members');
+    expect(filter.sql).toContain('exists (select 1 from "trainee_enrollments"');
+    expect(filter.params).toContain(KFBM);
+  });
+
   it('POST lets the super admin add a person of any organization', async () => {
     const { mod } = await loadScoped(route, {
       session: superAdminSession(),
@@ -297,7 +360,7 @@ describe('/api/trainer/courses/[courseId]/members', () => {
       tables: {
         ...base,
         courseMembers: member,
-        profiles: [{ organizationId: ORG }],
+        profiles: [{ id: T1, role: 'TRAINEE', organizationId: ORG }],
       },
     });
     const res = await mod.DELETE(remove, params);
@@ -319,6 +382,52 @@ describe('/api/trainer/courses/[courseId]/members', () => {
     expect(res.status).toBe(404);
     expect(mock.calls.some(c => c.op === 'delete')).toBe(false);
     expect(mock.writes('insert', 'notifications')).toEqual([]);
+  });
+});
+
+describe('/api/trainer/quiz-members', () => {
+  const route = 'trainer/quiz-members/route';
+  const quiz = [{ createdById: TRAINER, trainingCatalogId: FIAE }];
+
+  it('GET lists only members of the own organization', async () => {
+    const { mod, mock } = await loadScoped(route, {
+      tables: { quizzes: quiz, quizMembers: [] },
+    });
+    const res = await mod.GET(scopeReq(`${API}/quiz-members?quizId=q1`));
+    expect(res.status).toBe(200);
+    const filter = mock.filters('select', 'quiz_members');
+    expect(filter.sql).toContain('"quiz_members"."trainer_id" in (select');
+    expect(filter.params).toContain(ORG);
+  });
+
+  const del = (trainerId: string) =>
+    scopeReq(`${API}/quiz-members`, {
+      method: 'DELETE',
+      body: { quiz_id: 'q1', trainer_id: trainerId },
+    });
+
+  it('DELETE refuses to remove a trainer of another organization (404)', async () => {
+    const { mod, mock } = await loadScoped(route, {
+      tables: {
+        quizzes: quiz,
+        profiles: [{ role: 'TRAINER', organizationId: OTHER_ORG }],
+      },
+    });
+    const res = await mod.DELETE(del(T2));
+    expect(res.status).toBe(404);
+    expect(mock.calls.some(c => c.op === 'delete')).toBe(false);
+  });
+
+  it('DELETE removes a trainer of the own organization, and leaving is always allowed', async () => {
+    const own = await loadScoped(route, {
+      tables: {
+        quizzes: quiz,
+        profiles: [{ role: 'TRAINER', organizationId: ORG }],
+      },
+    });
+    expect((await own.mod.DELETE(del(T2))).status).toBe(200);
+    const leave = await loadScoped(route, { tables: { quizzes: quiz } });
+    expect((await leave.mod.DELETE(del(TRAINER))).status).toBe(200);
   });
 });
 

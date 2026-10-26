@@ -306,7 +306,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
         // Create notification for trainee
         if (trainerId) {
-            const organizationId = await getUserOrgId(trainerId);
+            const organizationId = await getUserOrgId(String(evaluation.traineeId));
             await db.insert(notifications).values({
                 userId: evaluation.traineeId,
                 actorId: trainerId,

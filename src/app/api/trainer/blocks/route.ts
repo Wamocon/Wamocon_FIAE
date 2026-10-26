@@ -180,8 +180,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const organizationId = await getUserOrgId(trainerId);
-
     // Process each trainee
     const results = [];
     const errors = [];
@@ -193,6 +191,9 @@ export async function POST(req: NextRequest) {
           errors.push(`Trainee ${tid} not accessible`);
           continue;
         }
+
+        // The block belongs to the organization of the trainee
+        const organizationId = await getUserOrgId(String(tid));
 
         const [trainee] = await db
           .select({
@@ -259,7 +260,7 @@ export async function POST(req: NextRequest) {
         const [row] = await db
           .insert(ausbildungBlocks)
           .values({
-            traineeId: tid as any,
+            traineeId: access.traineeId as any,
             schuljahr,
             ausbildungsjahr,
             calendarWeek,

@@ -66,10 +66,8 @@ export async function GET(req: NextRequest) {
     } else {
       conditions.push(inArray(activityReports.traineeId, traineeIds as any));
     }
-    if (
-      status &&
-      ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'].includes(status)
-    ) {
+    // A DRAFT is the private work of the trainee, never listed to trainer level
+    if (status && ['SUBMITTED', 'APPROVED', 'REJECTED'].includes(status)) {
       conditions.push(eq(activityReports.status, status as any));
     } else {
       conditions.push(

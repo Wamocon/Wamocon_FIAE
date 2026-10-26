@@ -1,7 +1,7 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, ne, desc, and } from 'drizzle-orm';
 import { activityReports, activityReportEntries, profiles } from '@/db/migrations/schemas/schema';
 import {
     requireTraineeScopeCondition,
@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
         const conditions: any[] = [
             traineeIdInScope(activityReports.traineeId, traineeScope.condition),
         ];
+        // A DRAFT is the private work of the trainee, never listed to trainer level
+        conditions.push(ne(activityReports.status, 'DRAFT' as any));
         if (status) conditions.push(eq(activityReports.status, status as any));
 
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

@@ -258,7 +258,7 @@ export async function POST(req: NextRequest) {
     ) {
       const values = assignedTraineeIds.map(tid => ({
         quizId: qz.id,
-        traineeId: tid,
+        traineeId: String(tid),
         assignedById: trainer_id,
         organizationId,
       }));

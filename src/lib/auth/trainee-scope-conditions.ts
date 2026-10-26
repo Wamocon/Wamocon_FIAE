@@ -74,6 +74,20 @@ export function traineeRecordCondition(
 }
 
 /**
+ * Condition for a column that holds the id of any person (quiz_members.trainer_id
+ * and so on): the person has to belong to the organization scope of the session.
+ * undefined for the super admin, who sees every organization.
+ */
+export function profileIdInOrgScope(
+  column: PgColumn,
+  session: SessionUser
+): SQL | undefined {
+  const org = orgScopeCondition(profiles.organizationId, scopeOrg(session));
+  if (!org) return undefined;
+  return sql`${column} in (select ${profiles.id} from ${profiles} where ${org})`;
+}
+
+/**
  * Condition for a column that holds a trainee id (quiz_submissions.trainee_id
  * and so on): the trainee has to be one of the trainees of `condition`. Use it
  * in the where() of reads and, above all, of writes, so a change can never

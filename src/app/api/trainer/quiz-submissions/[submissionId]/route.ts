@@ -74,7 +74,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissio
     if (is_reviewed) {
       try {
         const actorId = reviewer_id || null;
-        const organizationId = await getUserOrgId(String(reviewer_id || sub.traineeId));
+        const organizationId = await getUserOrgId(String(sub.traineeId));
         await db.insert(notifications).values({
           userId: String(sub.traineeId),
           actorId: actorId ? String(actorId) : null,

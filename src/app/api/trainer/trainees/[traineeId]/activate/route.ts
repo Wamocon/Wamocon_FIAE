@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
       if (deniedItem) return deniedItem;
     }
 
-    const organizationId = await getUserOrgId(trainerId || traineeId);
+    const organizationId = await getUserOrgId(traineeId);
 
     switch (itemType) {
       case 'ENABLER': {

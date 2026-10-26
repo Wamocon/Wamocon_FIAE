@@ -82,7 +82,7 @@ export async function PATCH(
     }
 
 
-    const organizationId = await getUserOrgId(trainerId);
+    const organizationId = await getUserOrgId(String(sub.traineeId));
 
     const [row] = await db
       .update(enablerSubmissions)
