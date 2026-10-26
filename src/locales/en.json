@@ -2132,5 +2132,9 @@
   "catalog.switcher.label": "Choose occupation",
   "catalog.switcher.current": "Current occupation: {title}",
   "catalog.switcher.reloadHint": "The page reloads when you switch.",
-  "catalog.branding.badge": "Occupation: {title}"
+  "catalog.branding.badge": "Occupation: {title}",
+  "admin.users.previewNotice": "Preview: Accounts you create here are for tests only. Production does not accept them, and a sign-in there is rejected. If you delete an account that Production also uses, the Preview only removes the Preview profile.",
+  "admin.users.previewMailHint": "The Preview sends no e-mail by default. The credentials appear here after the account is created.",
+  "admin.users.userDeletedAccountShared": "Preview profile deleted. The sign-in account stays, because Production uses it too.",
+  "admin.users.userDeletedAccountKept": "Preview profile deleted. The sign-in account could not be checked or deleted and stays."
 }

@@ -19,6 +19,11 @@ import {
   IS_PREVIEW_SCHEMA,
   PREVIEW_ADMIN_BLOCKED_MESSAGE,
 } from '@/lib/db-schema';
+import {
+  PREVIEW_ACCOUNT_REJECTED_CODE,
+  PREVIEW_ACCOUNT_REJECTED_MESSAGE,
+  isRejectedInProduction,
+} from '@/lib/preview-account';
 import type {
   RealtimeChannel,
   RealtimePostgresChangesPayload,
@@ -368,9 +373,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetch('/api/auth/sync-profile', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => {
-      /* ignore */
-    });
+    })
+      .then(async res => {
+        // Production rejects an account that was created in Preview
+        if (res?.status !== 403) return;
+        const body = await res.json().catch(() => null);
+        if (body?.code === PREVIEW_ACCOUNT_REJECTED_CODE) void signOut(true);
+      })
+      .catch(() => {
+        /* ignore */
+      });
   };
 
   useEffect(() => {
@@ -605,6 +617,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     let userId: string | null = null;
     let userEmail: string | null = null;
+    let signedInUser: { app_metadata?: unknown } | null = null;
 
     const sdkResult = await supabase.auth.signInWithPassword({
       email,
@@ -648,6 +661,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         userId = setRes.session.user.id;
         userEmail = setRes.session.user.email || email;
+        signedInUser = setRes.session.user;
       } catch (e: unknown) {
         setLoading(false);
         throw e instanceof Error ? e : new Error('Anmeldung fehlgeschlagen.');
@@ -655,6 +669,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (sdkResult.data.user) {
       userId = sdkResult.data.user.id;
       userEmail = sdkResult.data.user.email || email;
+      signedInUser = sdkResult.data.user;
+    }
+
+    // An account created in Preview is no user of Production (shared auth)
+    if (userId && isRejectedInProduction(signedInUser)) {
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+      clearCachedAuth();
+      setLoading(false);
+      throw new Error(PREVIEW_ACCOUNT_REJECTED_MESSAGE);
     }
 
     if (userId) {

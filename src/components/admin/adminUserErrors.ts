@@ -61,3 +61,18 @@ export async function adminUserErrorMessage(
   if (typeof data?.error === 'string' && data.error) return data.error;
   return t(fallbackKey);
 }
+
+/**
+ * Translation key of the toast after a delete. Production answers
+ * { success: true }. Preview also says whether the auth account stayed
+ * (authAccountKept): a real account that Preview shares with Production keeps
+ * its auth account, only the Preview profile goes.
+ */
+export function deleteSuccessMessageKey(
+  data: { authAccountKept?: unknown; authAccountKeptReason?: unknown } | null
+): string {
+  if (data?.authAccountKept !== true) return 'admin.users.userDeleted';
+  return data.authAccountKeptReason === 'SHARED_ACCOUNT'
+    ? 'admin.users.userDeletedAccountShared'
+    : 'admin.users.userDeletedAccountKept';
+}
