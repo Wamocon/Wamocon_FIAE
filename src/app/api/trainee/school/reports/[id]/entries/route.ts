@@ -7,26 +7,34 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { activityReports, activityReportEntries } from '@/db/migrations/schemas/schema';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
 }
 
+// A report of someone else is answered like a missing one
+const notFound = () =>
+    NextResponse.json({ error: 'Report not found' }, { status: 404 });
+
 // GET /api/trainee/school/reports/[id]/entries
 export async function GET(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id: reportId } = await params;
 
-        // Verify report exists
+        // Verify report exists and belongs to the session user
         const [report] = await db
-            .select({ id: activityReports.id })
+            .select({ id: activityReports.id, traineeId: activityReports.traineeId })
             .from(activityReports)
             .where(eq(activityReports.id, reportId as any));
 
-        if (!report) {
-            return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        if (!report || String(report.traineeId) !== session.id) {
+            return notFound();
         }
 
         const entries = await db
@@ -57,18 +65,21 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
 // POST /api/trainee/school/reports/[id]/entries
 export async function POST(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id: reportId } = await params;
         const body = await req.json();
 
-        // Verify report exists and is editable
+        // Verify report exists, belongs to the session user and is editable
         const [report] = await db
-            .select({ id: activityReports.id, status: activityReports.status })
+            .select({ id: activityReports.id, status: activityReports.status, traineeId: activityReports.traineeId })
             .from(activityReports)
             .where(eq(activityReports.id, reportId as any));
 
-        if (!report) {
-            return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        if (!report || String(report.traineeId) !== session.id) {
+            return notFound();
         }
 
         if (report.status !== 'DRAFT' && report.status !== 'REJECTED') {
@@ -118,6 +129,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
 // PUT /api/trainee/school/reports/[id]/entries (batch update)
 export async function PUT(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id: reportId } = await params;
         const body = await req.json();
@@ -127,14 +141,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'entries array required' }, { status: 400 });
         }
 
-        // Verify report exists and is editable
+        // Verify report exists, belongs to the session user and is editable
         const [report] = await db
-            .select({ id: activityReports.id, status: activityReports.status })
+            .select({ id: activityReports.id, status: activityReports.status, traineeId: activityReports.traineeId })
             .from(activityReports)
             .where(eq(activityReports.id, reportId as any));
 
-        if (!report) {
-            return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        if (!report || String(report.traineeId) !== session.id) {
+            return notFound();
         }
 
         if (report.status !== 'DRAFT' && report.status !== 'REJECTED') {
@@ -165,12 +179,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
                 updateData.berufsschulStunden = entryData.berufsschulStunden;
 
             if (Object.keys(updateData).length > 0) {
+                // The entry has to belong to this report, otherwise an entry id of
+                // someone else's report could be changed through an own report
                 const [updated] = await db
                     .update(activityReportEntries)
                     .set(updateData)
-                    .where(eq(activityReportEntries.id, entryData.id))
+                    .where(and(eq(activityReportEntries.id, entryData.id), eq(activityReportEntries.reportId, reportId as any)))
                     .returning();
-                updatedEntries.push(updated);
+                if (updated) updatedEntries.push(updated);
             }
         }
 

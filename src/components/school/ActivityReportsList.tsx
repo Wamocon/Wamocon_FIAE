@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { authFetch } from '@/lib/authFetch';
 import { useSearchParams } from 'next/navigation';
 import {
   ClipboardCheck,
@@ -131,7 +132,7 @@ export function ActivityReportsList() {
         url += `&status=${filterStatus}`;
       }
 
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await authFetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error(t('reports.error.load'));
       const data = await res.json();
 
@@ -151,7 +152,7 @@ export function ActivityReportsList() {
     setError(null);
 
     try {
-      const res = await fetch('/api/trainee/school/reports', {
+      const res = await authFetch('/api/trainee/school/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -462,7 +463,7 @@ function ActivityReportDetail({
   const loadReport = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/trainee/school/reports/${reportId}`, {
+      const res = await authFetch(`/api/trainee/school/reports/${reportId}`, {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(t('reports.error.load'));
@@ -494,7 +495,7 @@ function ActivityReportDetail({
 
     try {
       if (entries.length > 0) {
-        await fetch(`/api/trainee/school/reports/${reportId}/entries`, {
+        await authFetch(`/api/trainee/school/reports/${reportId}/entries`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -519,7 +520,7 @@ function ActivityReportDetail({
           }),
         });
       } else {
-        await fetch(`/api/trainee/school/reports/${reportId}/entries`, {
+        await authFetch(`/api/trainee/school/reports/${reportId}/entries`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -557,7 +558,7 @@ function ActivityReportDetail({
     try {
       await handleSave();
 
-      const res = await fetch(
+      const res = await authFetch(
         `/api/trainee/school/reports/${reportId}/submit`,
         {
           method: 'POST',

@@ -12,6 +12,7 @@ import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
@@ -47,21 +48,21 @@ function getISOWeek(date: Date): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-// GET /api/trainee/school/blocks?traineeId=...&schuljahr=...&year=...
+// GET /api/trainee/school/blocks?schuljahr=...&year=...
+// The blocks of the session user. A traineeId in the query (sent by older
+// clients) is ignored, the session is the only identity.
 export async function GET(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+
   try {
     const { searchParams } = new URL(req.url);
-    const traineeId = searchParams.get('traineeId');
     const schuljahr = searchParams.get('schuljahr');
     const year = searchParams.get('year');
     const ausbildungsjahr = searchParams.get('ausbildungsjahr');
 
-    if (!traineeId) {
-      return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
-    }
-
     // Build query conditions
-    const conditions = [eq(ausbildungBlocks.traineeId, traineeId as any)];
+    const conditions = [eq(ausbildungBlocks.traineeId, session.id as any)];
 
     if (schuljahr) {
       conditions.push(eq(ausbildungBlocks.schuljahr, schuljahr));
@@ -101,12 +102,16 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/trainee/school/blocks
-// Body: { traineeId, schuljahr?, ausbildungsjahr?, calendarWeek, year, startDate, endDate, blockType, blockNumber?, title?, notes?, isPersonal?, examSubType?, description?, inviteeEmails? }
+// The block belongs to the session user, a traineeId in the body is ignored.
+// Body: { schuljahr?, ausbildungsjahr?, calendarWeek, year, startDate, endDate, blockType, blockNumber?, title?, notes?, isPersonal?, examSubType?, description?, inviteeEmails? }
 export async function POST(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const body = await req.json();
     const {
-      traineeId,
       schuljahr,
       ausbildungsjahr,
       calendarWeek,
@@ -125,11 +130,6 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // Validation
-    if (!traineeId)
-      return NextResponse.json(
-        { error: 'traineeId required' },
-        { status: 400 }
-      );
     if (!calendarWeek || calendarWeek < 1 || calendarWeek > 53) {
       return NextResponse.json(
         { error: 'Valid calendarWeek (1-53) required' },

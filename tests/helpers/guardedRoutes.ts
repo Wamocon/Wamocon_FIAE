@@ -1,12 +1,14 @@
 // Generated from the route files under src/app/api/trainer and src/app/api/admin,
-// plus me/catalog-requests (a trainer-level request for an occupation) and the
+// plus me/catalog-requests (a trainer-level request for an occupation), the
+// notification routes and the school routes of a trainee (guard 'user') and the
 // HAI routes (src/app/api/hai).
 // Every entry is a handler that must reject anonymous callers (401) and callers
 // with a too low role (403). Regenerate when a route is added.
-// 'user' handlers take any signed-in person (401 only, they work on the
-// session's own data), 'haiIndex' handlers manage the shared HAI index
-// (see src/lib/hai/indexAccess.ts).
 
+// 'user' is any signed-in, active account (no role check): the notification
+// routes, the school routes of a trainee and the HAI routes of one person, which
+// then work on the data of the session only. 'haiIndex' handlers manage the
+// shared HAI index (see src/lib/hai/indexAccess.ts).
 export type GuardKind =
   | 'user'
   | 'trainer'
@@ -589,6 +591,162 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     method: 'POST',
     guard: 'trainer',
     params: [],
+  },
+  {
+    route: 'notifications',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'notifications/[id]',
+    method: 'PATCH',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'notifications/mark-all-read',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/blocks',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/blocks',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/blocks/import',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/blocks/[id]',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/blocks/[id]',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/blocks/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/exams',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/exams/[id]',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]/result',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]/result',
+    method: 'POST',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]/result',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/reports',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/reports/[id]',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]/entries',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]/entries',
+    method: 'POST',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]/entries',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]/submit',
+    method: 'POST',
+    guard: 'user',
+    params: ['id'],
   },
   { route: 'hai/chat', method: 'POST', guard: 'user', params: [] },
   { route: 'hai/chat', method: 'PATCH', guard: 'user', params: [] },

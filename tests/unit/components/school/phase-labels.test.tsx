@@ -49,12 +49,15 @@ function signIn(
     },
     loading: false,
   });
-  authFetchMock.mockImplementation(async input =>
+  // The school routes answer only with the session token, so the components
+  // call them with authFetch like the occupation lookup. Their answers come
+  // from fetchMock, a plain global fetch is rejected (see beforeEach).
+  authFetchMock.mockImplementation(async (input, init) =>
     String(input).startsWith('/api/me/catalogs')
       ? meOk
         ? json({ catalogs: [entry], activeCode: entry.code })
         : json({ error: 'Forbidden' }, false, 403)
-      : json({})
+      : fetchMock(input, init)
   );
 }
 
@@ -79,7 +82,9 @@ describe('ActivityReportsList: phase labels', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    (global as any).fetch = fetchMock;
+    (global as any).fetch = jest.fn().mockRejectedValue(
+      new Error('plain fetch must not be used for the school routes')
+    );
     fetchMock.mockImplementation(async (input: unknown) => {
       const url = String(input);
       if (url.includes('/api/trainee/school/reports/r2')) {
@@ -151,7 +156,9 @@ describe('BlockCalendar: phase label of a block', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    (global as any).fetch = fetchMock;
+    (global as any).fetch = jest.fn().mockRejectedValue(
+      new Error('plain fetch must not be used for the school routes')
+    );
     const now = new Date();
     const block = {
       id: 'b1',
