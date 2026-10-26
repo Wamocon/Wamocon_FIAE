@@ -37,7 +37,9 @@
 -- account: create it in the Supabase dashboard (Authentication, Users, add
 -- user, confirm the e-mail address). It exists for Production too. There a
 -- profile only appears if somebody signs in to Production with it. It is a
--- TRAINEE without an organization (no rights, no data, harmless).
+-- TRAINEE without an organization (no rights of its own). Note: sync-profile
+-- assigns a new trainee to an existing trainer, so that trainer sees the
+-- account in the list.
 -- RECOMMENDATION: own test accounts with a throwaway password, NOT the real
 -- accounts of people.
 --
