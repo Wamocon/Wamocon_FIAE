@@ -444,3 +444,39 @@ select i.indexrelid::regclass as index_name, i.indisunique as is_unique, i.indis
        pg_get_indexdef(i.indexrelid) as definition
 from pg_index i
 where i.indexrelid = to_regclass('public.trainee_enrollments_trainee_unique');
+
+-- C12. Before 20261028000200 (quiz catalog check): quiz links whose quiz and enabler
+-- belong to different catalogs. Expect 0 rows, otherwise the file stops with the
+-- number and nothing is changed. A human decides (fix the catalog or the link).
+select l.id, q.training_catalog_id as quiz_catalog, c.training_catalog_id as enabler_catalog
+from public.enabler_quiz_links l
+join public.quizzes q on q.id = l.quiz_id
+join public.enablers e on e.id = l.enabler_id
+join public.courses c on c.id = e.course_id
+where q.training_catalog_id <> c.training_catalog_id;
+
+-- C12b. After 20261028000200 only: the two triggers exist and are enabled
+-- (tgenabled = 'O'), the code column and its unique index exist.
+select t.tgname, t.tgenabled, t.tgrelid::regclass as on_table
+from pg_trigger t
+where t.tgname in ('enabler_quiz_links_catalog_check', 'quizzes_catalog_link_check')
+  and not t.tgisinternal;
+select to_regclass('public.quizzes_catalog_code_unique') as quiz_code_index,
+       (select count(*) from information_schema.columns
+         where table_schema = 'public' and table_name = 'quizzes' and column_name = 'code') as quiz_code_column;
+
+-- C13. Before 20261028000300: a letter that appears more than once in a component.
+-- Expect 0 rows, otherwise the file stops with the number and nothing is changed.
+select component_id, letter, count(*) as occurrences
+from public.training_use_cases
+group by component_id, letter
+having count(*) > 1;
+
+-- C14. After 20261028000100 only: links between courses and components. For FIAE
+-- the expected number of linked courses is 0 (the courses have no code).
+select c.training_catalog_id,
+       count(*) as courses,
+       count(c.training_component_id) as linked_to_component
+from public.courses c
+group by c.training_catalog_id
+order by c.training_catalog_id;

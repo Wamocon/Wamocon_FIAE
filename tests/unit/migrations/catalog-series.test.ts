@@ -21,12 +21,12 @@ import {
 /**
  * Static checks of the training catalog migration series
  * (supabase/migrations/20261024*, the gated 20261025000000 and the later files
- * 20261026*). They guard the conventions of the release pipeline; the SQL
+ * 20261026* and 20261028*). They guard the conventions of the release pipeline; the SQL
  * itself is verified on a throwaway database.
  */
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'supabase', 'migrations');
-const SERIES_PREFIXES = ['20261024', '20261025', '20261026'];
+const SERIES_PREFIXES = ['20261024', '20261025', '20261026', '20261028'];
 const MAX_IDENTIFIER_LENGTH = 63;
 
 const seriesFiles = fs
@@ -41,6 +41,9 @@ const SECURITY_FILES = ['20261025000100_security_revoke_public_create.sql'];
 // per-file conventions below and in detail by their own test file.
 const FOLLOW_UP_FILES = [
   '20261026000100_trainee_enrollments_one_per_trainee.sql',
+  '20261028000100_course_training_component_link.sql',
+  '20261028000200_quiz_code_and_link_catalog_check.sql',
+  '20261028000300_use_case_letter_unique_option_order.sql',
 ];
 const catalogFiles = seriesFiles.filter(
   name => !SECURITY_FILES.includes(name) && !FOLLOW_UP_FILES.includes(name)
