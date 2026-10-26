@@ -1,7 +1,9 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { OCCUPATION_CHOICE_PATH } from '@/lib/catalog/choice';
 import {
   TourStep,
   TRAINEE_MAIN_STEPS,
@@ -54,6 +56,9 @@ function getSteps(role: string, type: TourType): TourStep[] {
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
+  // The tour points at the sidebar and the header of the dashboards, which the
+  // occupation choice page does not have: it starts after the person left it.
+  const onOccupationChoice = usePathname() === OCCUPATION_CHOICE_PATH;
   const [isActive, setIsActive] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [tourType, setTourType] = useState<TourType | null>(null);
@@ -122,6 +127,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!profile?.role) return;
     if (isCompleted('main')) return;
+    if (onOccupationChoice || isActive) return;
 
     // Delay to let dashboard render first
     const timer = setTimeout(() => {
@@ -129,9 +135,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     }, 1200);
 
     return () => clearTimeout(timer);
-    // Only run once when profile loads
+    // Only run once when profile loads (and again when the occupation choice is left)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.role]);
+  }, [profile?.role, onOccupationChoice]);
 
   return (
     <OnboardingContext.Provider

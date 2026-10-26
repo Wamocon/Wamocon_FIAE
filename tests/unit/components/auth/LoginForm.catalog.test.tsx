@@ -28,7 +28,19 @@ const KFBM = { code: 'KFBM', title: 'Kaufmann/-frau für Büromanagement' };
 const list = (catalogs: unknown[]) =>
   Promise.resolve({ ok: true, json: () => Promise.resolve({ catalogs }) });
 
-function signInAs(signIn: jest.Mock = jest.fn().mockResolvedValue(undefined)) {
+// Like AuthProvider.signIn, the default double asks the redirect hint (the
+// third argument) before it returns.
+function signInAs(
+  signIn: jest.Mock = jest.fn(
+    async (
+      _email: string,
+      _password: string,
+      hint?: () => Promise<unknown>
+    ) => {
+      await hint?.();
+    }
+  )
+) {
   (useAuth as jest.Mock).mockReturnValue({ profile: null, signIn });
   return signIn;
 }
@@ -55,18 +67,22 @@ describe('LoginForm with an occupation context', () => {
   });
 
   it('changes nothing without an occupation code (FIAE regression)', async () => {
-    global.fetch = jest.fn() as any;
+    // Platform with one active occupation: the only request of the form is the
+    // public list that tells it so, the sign in is the one of today.
+    global.fetch = jest.fn(() => list([FIAE])) as any;
     const signIn = signInAs();
     renderWithProviders(<LoginForm />);
 
     expect(
       screen.queryByText(/Anmeldung für den Beruf/)
     ).not.toBeInTheDocument();
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
     submit();
     await waitFor(() =>
       expect(signIn).toHaveBeenCalledWith('azubi@example.com', 'geheim')
     );
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith('/api/catalogs');
     expect(authFetch).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
     // no occupation is stored in the browser either
@@ -101,7 +117,8 @@ describe('LoginForm with an occupation context', () => {
   });
 
   it('tells the user when the account is not enabled for the occupation and keeps the sign in', async () => {
-    global.fetch = jest.fn(() => list([FIAE, KFBM])) as any;
+    // one active occupation: the old hint (several: see LoginForm.occupationChoice)
+    global.fetch = jest.fn(() => list([KFBM])) as any;
     signInAs();
     (authFetch as jest.Mock).mockResolvedValue({ ok: false, status: 403 });
     renderWithProviders(<LoginForm catalogCode="KFBM" />);
