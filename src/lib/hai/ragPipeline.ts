@@ -30,6 +30,14 @@ import type {
 import { searchWithContext, SearchResult } from './vectorSearch';
 import { fetchPageIndexContext } from './pageIndexService';
 import { resolveRetrievalAccess } from './retrievalAccess';
+import type { RetrievalAccess } from './retrievalAccess';
+import {
+  FIAE_PERSONA,
+  FOREIGN_OCCUPATION_TEXT,
+  isForeignOccupationQuestion,
+  type HaiPersona,
+} from './persona';
+import { loadHaiPersona } from './personaAccess';
 import {
   buildSystemPrompt,
   buildRetrievedContext,
@@ -66,6 +74,11 @@ export interface PipelineContext {
   currentCourseId?: string;
   enablerTitle?: string;
   courseTitle?: string;
+  /**
+   * Scenario text for the system prompt. Server source only: the chat route
+   * must never copy text of the request into it (it would be an instruction
+   * on system level).
+   */
   scenarioText?: string;
   previousMessages?: ChatMessage[];
   quizState?: QuizState;
@@ -118,7 +131,11 @@ export interface Citation {
 /**
  * Classify the user's intent based on their message
  */
-function classifyIntent(message: string, quizState?: QuizState): IntentType {
+export function classifyIntent(
+  message: string,
+  quizState?: QuizState,
+  persona: HaiPersona = FIAE_PERSONA
+): IntentType {
   const lowerMessage = message.toLowerCase().trim();
 
   // Check for greetings (German + English)
@@ -185,7 +202,7 @@ function classifyIntent(message: string, quizState?: QuizState): IntentType {
   // Check for code help
   const codePatterns =
     /```|<code>|funktion|methode|syntax|fehler im code|code.*erklär/i;
-  if (codePatterns.test(message)) {
+  if (persona.codeHelp && codePatterns.test(message)) {
     return 'code_help';
   }
 
@@ -304,23 +321,9 @@ function classifyIntent(message: string, quizState?: QuizState): IntentType {
   if (offTopicKeywords.some(k => lowerMessage.includes(k))) {
     // Exception: Don't flag IT-related terms that overlap (e.g., "film" in "Filmsequenz")
     // Also don't flag if the message clearly references LFA/Enabler/LF context
-    const itContextIndicators = [
-      'enabler',
-      'lernfeld',
-      'lf',
-      'klausur',
-      'azubi',
-      'ausbildung',
-      'berufsschule',
-      'code',
-      'programmier',
-      'projekt',
-      'ihk',
-      'prüfung',
-      'datenbank',
-      'netzwerk',
-      'server',
-    ];
+    // The words come from the persona of the occupation (FIAE: the IT words,
+    // KfBM: for example procurement, travel costs, hospitality)
+    const itContextIndicators = persona.offTopicContextWords;
     const hasItContext = itContextIndicators.some(k =>
       lowerMessage.includes(k)
     );
@@ -399,9 +402,14 @@ export interface RetrievedContext {
  */
 export async function retrieveContext(
   userMessage: string,
-  context: PipelineContext
+  context: PipelineContext,
+  resolvedAccess?: RetrievalAccess | null
 ): Promise<RetrievedContext> {
-  const access = await resolveRetrievalAccess(context.userId);
+  // The pipelines resolve the access once per turn and pass it on
+  const access =
+    resolvedAccess === undefined
+      ? await resolveRetrievalAccess(context.userId)
+      : resolvedAccess;
   if (!access) {
     console.warn(
       'HAI.ai: no retrieval scope for the user (fail closed), no index content is used'
@@ -492,6 +500,47 @@ export async function retrieveContext(
 }
 
 // ============================================================================
+// PERSONA (shared by processMessage and processMessageStream)
+// ============================================================================
+
+export interface TurnPersona {
+  /** What the user may read, null without a scope (fail closed). */
+  access: RetrievalAccess | null;
+  /** Persona of the occupation of the user, neutral without a scope. */
+  persona: HaiPersona;
+}
+
+/**
+ * Access and persona of one turn, both from the server: the access comes from
+ * the user id and the database, the persona from the settings of the catalogs
+ * of that access, the role and the training phase. Both pipelines call this
+ * one function.
+ */
+export async function resolveTurnPersona(
+  context: PipelineContext
+): Promise<TurnPersona> {
+  const access = await resolveRetrievalAccess(context.userId);
+  const persona = await loadHaiPersona(access, context.trainingScope);
+  return { access, persona };
+}
+
+/**
+ * Reply that ends the turn before retrieval and before any model call, or
+ * null: a neutral refusal without a scope, a neutral refusal for a question
+ * that names another occupation. Nothing of the other occupation is revealed.
+ */
+export function personaRefusal(
+  userMessage: string,
+  persona: HaiPersona
+): string | null {
+  if (persona.neutral) return persona.refusalText;
+  if (isForeignOccupationQuestion(userMessage, persona)) {
+    return FOREIGN_OCCUPATION_TEXT;
+  }
+  return null;
+}
+
+// ============================================================================
 // MAIN PIPELINE
 // ============================================================================
 
@@ -532,17 +581,27 @@ export async function processMessage(
   }
 
   try {
-    // Step 0: An action in the message becomes a proposal, never a write
+    // Step 1a: Persona of the occupation (server side), refusal without a
+    // scope or for a question about another occupation
+    const { access, persona } = await resolveTurnPersona(context);
+    const refusal = personaRefusal(userMessage, persona);
+    if (refusal) {
+      return { response: refusal, intent: 'off_topic', citations: [] };
+    }
+
+    // Step 1b: An action in the message becomes a proposal, never a write.
+    // Behind the persona gate: without a scope or for a message about another
+    // occupation there is no proposal.
     const actionResponse = await handleActionMessage(userMessage, context);
     if (actionResponse) return actionResponse;
 
     // Step 1: Classify intent
-    const intent = classifyIntent(userMessage, context.quizState);
+    const intent = classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents
     if (intent === 'greeting') {
       return {
-        response: getGreetingPrompt(),
+        response: getGreetingPrompt(persona),
         intent,
         citations: [],
       };
@@ -550,7 +609,7 @@ export async function processMessage(
 
     if (intent === 'off_topic') {
       return {
-        response: getOffTopicResponse(),
+        response: getOffTopicResponse(persona),
         intent,
         citations: [],
       };
@@ -571,7 +630,8 @@ export async function processMessage(
       // organization of the user (one function for both pipelines)
       ({ searchResults, retrievedContext } = await retrieveContext(
         userMessage,
-        context
+        context,
+        access
       ));
     }
 
@@ -608,12 +668,15 @@ export async function processMessage(
       scenarioText: context.scenarioText,
       retrievedContext: retrievedContext || undefined,
       quizTopic:
-        intent === 'quiz_request' ? extractQuizTopic(userMessage) : undefined,
+        intent === 'quiz_request'
+          ? extractQuizTopic(userMessage, persona)
+          : undefined,
       liveDataContext,
       userRole: context.userRole,
       conversationSummary: context.conversationSummary,
       crossSessionMemory: context.crossSessionMemory,
       trainingScope: context.trainingScope,
+      persona,
     });
 
     // Step 5: Convert previous messages to provider format
@@ -686,7 +749,7 @@ export async function processMessage(
     if (intent === 'quiz_request') {
       newQuizState = {
         active: true,
-        topic: extractQuizTopic(userMessage),
+        topic: extractQuizTopic(userMessage, persona),
         currentQuestion: 1,
         totalQuestions: 5,
         score: 0,
@@ -742,24 +805,33 @@ export async function processMessageStream(
   }
 
   try {
-    // Step 0: An action in the message becomes a proposal, never a write
+    // Persona of the occupation (server side), same gate as processMessage
+    const { access, persona } = await resolveTurnPersona(context);
+    const refusal = personaRefusal(userMessage, persona);
+    if (refusal) {
+      onChunk(refusal);
+      return { response: refusal, intent: 'off_topic', citations: [] };
+    }
+
+    // An action in the message becomes a proposal, never a write (behind the
+    // persona gate, like in processMessage)
     const actionResponse = await handleActionMessage(userMessage, context);
     if (actionResponse) {
       onChunk(actionResponse.response);
       return actionResponse;
     }
 
-    const intent = classifyIntent(userMessage, context.quizState);
+    const intent = classifyIntent(userMessage, context.quizState, persona);
 
     // Handle special intents immediately
     if (intent === 'greeting') {
-      const greeting = getGreetingPrompt();
+      const greeting = getGreetingPrompt(persona);
       onChunk(greeting);
       return { response: greeting, intent, citations: [] };
     }
 
     if (intent === 'off_topic') {
-      const offTopic = getOffTopicResponse();
+      const offTopic = getOffTopicResponse(persona);
       onChunk(offTopic);
       return { response: offTopic, intent, citations: [] };
     }
@@ -775,7 +847,8 @@ export async function processMessageStream(
       // Same retrieval as processMessage: scoped to the user
       ({ searchResults, retrievedContext } = await retrieveContext(
         userMessage,
-        context
+        context,
+        access
       ));
     }
 
@@ -816,6 +889,7 @@ export async function processMessageStream(
       conversationSummary: context.conversationSummary,
       crossSessionMemory: context.crossSessionMemory,
       trainingScope: context.trainingScope,
+      persona,
     });
 
     // Convert messages to provider format
@@ -909,7 +983,10 @@ export async function processMessageStream(
 /**
  * Extract quiz topic from user message
  */
-function extractQuizTopic(message: string): string {
+function extractQuizTopic(
+  message: string,
+  persona: HaiPersona = FIAE_PERSONA
+): string {
   // Remove quiz command
   const topic = message
     .replace(/\/quiz\s*/i, '')
@@ -917,7 +994,7 @@ function extractQuizTopic(message: string): string {
     .replace(/teste mich (zu|über)\s*/i, '')
     .trim();
 
-  return topic || 'Allgemeine IT-Kenntnisse';
+  return topic || persona.quizDefaultTopic;
 }
 
 /**
