@@ -6,3 +6,12 @@
 export function reloadPage(): void {
   window.location.reload();
 }
+
+/**
+ * Leave the page for another one with a full page load (also replaceable in
+ * tests). Used after a change of the occupation on the occupation choice page,
+ * so the destination starts with the new occupation and clean data.
+ */
+export function navigateTo(url: string): void {
+  window.location.assign(url);
+}

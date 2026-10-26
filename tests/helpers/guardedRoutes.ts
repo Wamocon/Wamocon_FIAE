@@ -1,4 +1,5 @@
-// Generated from the route files under src/app/api/trainer and src/app/api/admin.
+// Generated from the route files under src/app/api/trainer and src/app/api/admin,
+// plus me/catalog-requests (a trainer-level request for an occupation).
 // Every entry is a handler that must reject anonymous callers (401) and callers
 // with a too low role (403). Regenerate when a route is added.
 
@@ -574,4 +575,10 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   },
   { route: 'admin/users', method: 'GET', guard: 'admin', params: [] },
   { route: 'admin/users', method: 'POST', guard: 'admin', params: [] },
+  {
+    route: 'me/catalog-requests',
+    method: 'POST',
+    guard: 'trainer',
+    params: [],
+  },
 ];
