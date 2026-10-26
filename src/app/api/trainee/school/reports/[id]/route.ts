@@ -10,13 +10,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { activityReports, activityReportEntries, profiles } from '@/db/migrations/schemas/schema';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
 }
 
+// A report of someone else is answered like a missing one
+const notFound = () =>
+    NextResponse.json({ error: 'Report not found' }, { status: 404 });
+
 // GET /api/trainee/school/reports/[id]
 export async function GET(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
 
@@ -26,8 +34,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             .from(activityReports)
             .where(eq(activityReports.id, id as any));
 
-        if (!report) {
-            return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        if (!report || String(report.traineeId) !== session.id) {
+            return notFound();
         }
 
         // Get entries
@@ -80,6 +88,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
 // PUT /api/trainee/school/reports/[id]
 export async function PUT(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
         const body = await req.json();
@@ -90,8 +101,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             .from(activityReports)
             .where(eq(activityReports.id, id as any));
 
-        if (!existing) {
-            return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        if (!existing || String(existing.traineeId) !== session.id) {
+            return notFound();
         }
 
         // Only allow editing drafts or rejected reports
@@ -119,7 +130,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             const [updated] = await db
                 .update(activityReports)
                 .set(updateData)
-                .where(eq(activityReports.id, id as any))
+                .where(and(eq(activityReports.id, id as any), eq(activityReports.traineeId, session.id as any)))
                 .returning();
             updatedReport = updated;
         }
@@ -133,17 +144,20 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/trainee/school/reports/[id]
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
 
         // Get existing report
         const [existing] = await db
-            .select({ id: activityReports.id, status: activityReports.status })
+            .select({ id: activityReports.id, status: activityReports.status, traineeId: activityReports.traineeId })
             .from(activityReports)
             .where(eq(activityReports.id, id as any));
 
-        if (!existing) {
-            return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        if (!existing || String(existing.traineeId) !== session.id) {
+            return notFound();
         }
 
         // Only allow deleting drafts
@@ -156,7 +170,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
         // Delete (cascades to entries)
         await db
             .delete(activityReports)
-            .where(eq(activityReports.id, id as any));
+            .where(and(eq(activityReports.id, id as any), eq(activityReports.traineeId, session.id as any)));
 
         return NextResponse.json({ success: true, deleted: id });
     } catch (e) {

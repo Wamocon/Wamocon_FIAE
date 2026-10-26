@@ -8,17 +8,25 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
 }
 
+// A block of someone else is answered like a missing one
+const notFound = () =>
+    NextResponse.json({ error: 'Block not found' }, { status: 404 });
+
 // GET /api/trainee/school/blocks/[id]
 export async function GET(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
 
@@ -27,8 +35,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             .from(ausbildungBlocks)
             .where(eq(ausbildungBlocks.id, id as any));
 
-        if (!block) {
-            return NextResponse.json({ error: 'Block not found' }, { status: 404 });
+        if (!block || String(block.traineeId) !== session.id) {
+            return notFound();
         }
 
         return NextResponse.json({ block });
@@ -41,18 +49,21 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 // PUT /api/trainee/school/blocks/[id]
 // Body: Partial block fields to update
 export async function PUT(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
         const body = await req.json();
 
-        // Check block exists
+        // Check block exists and belongs to the session user
         const [existing] = await db
             .select()
             .from(ausbildungBlocks)
             .where(eq(ausbildungBlocks.id, id as any));
 
-        if (!existing) {
-            return NextResponse.json({ error: 'Block not found' }, { status: 404 });
+        if (!existing || String(existing.traineeId) !== session.id) {
+            return notFound();
         }
 
         // Build update object - only include provided fields
@@ -106,7 +117,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         const [updated] = await db
             .update(ausbildungBlocks)
             .set(updateData)
-            .where(eq(ausbildungBlocks.id, id as any))
+            .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.traineeId, session.id as any)))
             .returning();
 
         return NextResponse.json({ block: updated });
@@ -118,22 +129,25 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/trainee/school/blocks/[id]
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
 
-        // Check block exists
+        // Check block exists and belongs to the session user
         const [existing] = await db
-            .select({ id: ausbildungBlocks.id })
+            .select({ id: ausbildungBlocks.id, traineeId: ausbildungBlocks.traineeId })
             .from(ausbildungBlocks)
             .where(eq(ausbildungBlocks.id, id as any));
 
-        if (!existing) {
-            return NextResponse.json({ error: 'Block not found' }, { status: 404 });
+        if (!existing || String(existing.traineeId) !== session.id) {
+            return notFound();
         }
 
         await db
             .delete(ausbildungBlocks)
-            .where(eq(ausbildungBlocks.id, id as any));
+            .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.traineeId, session.id as any)));
 
         return NextResponse.json({ success: true, deleted: id });
     } catch (e) {

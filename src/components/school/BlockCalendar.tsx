@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { authFetch } from '@/lib/authFetch';
 import {
   Calendar,
   ChevronLeft,
@@ -266,11 +267,11 @@ export function BlockCalendar() {
       try {
         // Fetch blocks and exams in parallel
         const [blocksRes, examsRes] = await Promise.all([
-          fetch(
+          authFetch(
             `/api/trainee/school/blocks?traineeId=${profile.id}&year=${selectedYear}`,
             { cache: 'no-store' }
           ),
-          fetch(`/api/trainee/school/exams?traineeId=${profile.id}`, {
+          authFetch(`/api/trainee/school/exams?traineeId=${profile.id}`, {
             cache: 'no-store',
           }),
         ]);
@@ -520,7 +521,7 @@ export function BlockCalendar() {
   const handleAddBlock = async (blockData: Partial<Block>) => {
     if (!profile?.id) return;
     try {
-      const res = await fetch('/api/trainee/school/blocks', {
+      const res = await authFetch('/api/trainee/school/blocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -542,7 +543,7 @@ export function BlockCalendar() {
 
   const handleDeleteBlock = async (blockId: string) => {
     try {
-      const res = await fetch(`/api/trainee/school/blocks/${blockId}`, {
+      const res = await authFetch(`/api/trainee/school/blocks/${blockId}`, {
         method: 'DELETE',
       });
 
@@ -1550,7 +1551,7 @@ function ImportBlocksModal({
         return row;
       });
 
-      const res = await fetch('/api/trainee/school/blocks/import', {
+      const res = await authFetch('/api/trainee/school/blocks/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
