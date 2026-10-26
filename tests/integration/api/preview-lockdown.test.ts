@@ -4,9 +4,12 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../helpers/mockDb';
 
-// Preview shares the Supabase Auth of Production. Every route that calls
-// auth.admin.* (create or delete accounts) answers 403 in Preview, before it
-// touches anything, and keeps working unchanged in Production.
+// Preview shares the Supabase Auth of Production. The public self-registration
+// (POST /api/register) answers 403 in Preview, before it touches anything, and
+// keeps working unchanged in Production. The two administrator routes
+// (POST /api/admin/users, DELETE /api/admin/users/[userId]) are open in
+// Preview, they flag and check the accounts (tests/integration/api/admin/
+// users-preview.test.ts).
 
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(),
@@ -56,7 +59,7 @@ function jsonRequest(body: unknown, url = 'http://localhost/api/x') {
   } as any;
 }
 
-describe('Preview lockdown of the routes that use auth.admin.*', () => {
+describe('Preview lockdown of the public self-registration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -74,33 +77,8 @@ describe('Preview lockdown of the routes that use auth.admin.*', () => {
     expect(createUser).not.toHaveBeenCalled();
   });
 
-  it('POST /api/admin/users answers 403 in Preview and creates no account', async () => {
-    const { createUser } = await load(true);
-    const { POST } = await import('@/app/api/admin/users/route');
-    const res = await POST(
-      jsonRequest({
-        email: 'new@example.com',
-        fullName: 'New User',
-        role: 'TRAINEE',
-        organizationId: 'org1',
-      })
-    );
-    expect(res.status).toBe(403);
-    expect(createUser).not.toHaveBeenCalled();
-  });
-
-  it('DELETE /api/admin/users/[userId] answers 403 in Preview and deletes no account', async () => {
-    const { deleteUser } = await load(true);
-    const { DELETE } = await import('@/app/api/admin/users/[userId]/route');
-    const res = await DELETE(jsonRequest({}), {
-      params: Promise.resolve({ userId: 'victim' }),
-    });
-    expect(res.status).toBe(403);
-    expect(deleteUser).not.toHaveBeenCalled();
-  });
-
-  it('outside of Preview the guard does not answer 403', async () => {
-    await load(false);
+  it('the administrator routes are no longer locked in Preview', async () => {
+    await load(true);
     const { DELETE } = await import('@/app/api/admin/users/[userId]/route');
     const res = await DELETE(jsonRequest({}), {
       params: Promise.resolve({ userId: 'a1' }),

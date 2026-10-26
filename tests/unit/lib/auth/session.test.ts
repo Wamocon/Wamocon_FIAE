@@ -15,11 +15,23 @@ type Rows = Parameters<typeof createTableDb>[0];
 
 async function load(options: {
   profile?: Record<string, unknown> | null;
-  tokens?: Record<string, { id: string; email?: string }>;
+  tokens?: Record<
+    string,
+    { id: string; email?: string; app_metadata?: Record<string, unknown> }
+  >;
   tables?: Rows;
   dbError?: Error;
+  /** Simulate the Preview deployment (IS_PREVIEW_SCHEMA). */
+  preview?: boolean;
 }) {
   jest.resetModules();
+  if (options.preview !== undefined) {
+    const actual: any = jest.requireActual('@/lib/db-schema');
+    jest.doMock('@/lib/db-schema', () => ({
+      ...actual,
+      IS_PREVIEW_SCHEMA: options.preview,
+    }));
+  }
   const getUser = mockSupabaseAuth(
     options.tokens ?? { good: { id: 'session-user', email: 'a@example.com' } }
   );
@@ -290,5 +302,92 @@ describe('auth/session', () => {
         })
       ).toBeDefined();
     });
+  });
+});
+
+describe('auth/session: accounts created in Preview', () => {
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
+  });
+
+  const flaggedToken = {
+    good: {
+      id: 'session-user',
+      email: 'a@example.com',
+      app_metadata: { preview_only: true },
+    },
+  };
+
+  it('Production answers 403 for an account flagged preview_only, even with a profile', async () => {
+    const { authenticate, requireUser, isErrorResponse, db } = await load({
+      tokens: flaggedToken,
+      preview: false,
+    });
+    expect(await authenticate(authed())).toEqual({
+      ok: false,
+      status: 403,
+      error: 'Forbidden',
+    });
+    const res = await requireUser(authed());
+    expect(isErrorResponse(res)).toBe(true);
+    expect((res as Response).status).toBe(403);
+    // the profile is not even read
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects the flagged account on every request, also from the token cache', async () => {
+    const { authenticate, getUser } = await load({
+      tokens: flaggedToken,
+      preview: false,
+    });
+    await authenticate(authed());
+    const again = await authenticate(authed());
+    expect(again.ok).toBe(false);
+    expect(getUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('Preview accepts the flagged account', async () => {
+    const { getSessionUser } = await load({
+      tokens: flaggedToken,
+      preview: true,
+    });
+    expect(await getSessionUser(authed())).toMatchObject({
+      id: 'session-user',
+    });
+  });
+
+  it('Production accepts normal accounts as before (with and without app_metadata)', async () => {
+    const plain = await load({ preview: false });
+    expect(await plain.getSessionUser(authed())).toMatchObject({
+      id: 'session-user',
+    });
+    const withMetadata = await load({
+      preview: false,
+      tokens: {
+        good: {
+          id: 'session-user',
+          email: 'a@example.com',
+          app_metadata: { provider: 'email', providers: ['email'] },
+        },
+      },
+    });
+    expect(await withMetadata.getSessionUser(authed())).toMatchObject({
+      id: 'session-user',
+    });
+  });
+
+  it('only the boolean true counts as the flag', async () => {
+    const { getSessionUser } = await load({
+      preview: false,
+      tokens: {
+        good: {
+          id: 'session-user',
+          email: 'a@example.com',
+          app_metadata: { preview_only: 'false' },
+        },
+      },
+    });
+    expect(await getSessionUser(authed())).not.toBeNull();
   });
 });

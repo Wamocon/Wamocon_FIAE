@@ -2135,5 +2135,9 @@
   "catalog.switcher.current": "Aktueller Beruf: {title}",
   "catalog.switcher.reloadHint": "Beim Wechsel wird die Seite neu geladen.",
   "catalog.branding.badge": "Beruf: {title}",
+  "admin.users.previewNotice": "Preview: Konten, die Sie hier anlegen, sind nur für Tests. Production erkennt sie nicht an, eine Anmeldung dort wird abgewiesen. Wenn Sie ein Konto löschen, das auch in Production genutzt wird, entfernt die Preview nur das Preview-Profil.",
+  "admin.users.previewMailHint": "In der Preview wird standardmäßig keine E-Mail versendet. Die Zugangsdaten erscheinen nach dem Anlegen hier.",
+  "admin.users.userDeletedAccountShared": "Preview-Profil gelöscht. Das Anmeldekonto bleibt bestehen, weil es auch in Production genutzt wird.",
+  "admin.users.userDeletedAccountKept": "Preview-Profil gelöscht. Das Anmeldekonto konnte nicht geprüft oder gelöscht werden und bleibt bestehen.",
   "catalog.switcher.apply": "Wechseln"
 }

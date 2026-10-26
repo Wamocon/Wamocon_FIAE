@@ -64,7 +64,11 @@ export function makeAuthedPost(
   return makeRequest('POST', url, { token, body });
 }
 
-export type TestAuthUser = { id: string; email?: string };
+export type TestAuthUser = {
+  id: string;
+  email?: string;
+  app_metadata?: Record<string, unknown>;
+};
 
 /**
  * Replace the Supabase client so that `auth.getUser(token)` resolves the given

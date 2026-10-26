@@ -18,7 +18,8 @@
 import { getSupabasePublicKey } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { DB_OPTION, assertDbConfig } from '@/lib/db-schema';
+import { DB_OPTION, IS_PREVIEW_SCHEMA, assertDbConfig } from '@/lib/db-schema';
+import { isPreviewOnlyUser } from '@/lib/preview-account';
 import { createHash } from 'crypto';
 import { eq, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
@@ -68,7 +69,12 @@ export type AuthResult = { ok: true; session: SessionUser } | AuthFailure;
 // Token verification
 // ---------------------------------------------------------------------------
 
-type VerifiedToken = { id: string; email: string | null };
+type VerifiedToken = {
+  id: string;
+  email: string | null;
+  /** The account was created in Preview (app_metadata.preview_only). */
+  previewOnly: boolean;
+};
 const tokenCache = new Map<
   string,
   { user: VerifiedToken; expiresAt: number }
@@ -125,6 +131,7 @@ async function verifyAccessToken(
     const user: VerifiedToken = {
       id: data.user.id,
       email: data.user.email ?? null,
+      previewOnly: isPreviewOnlyUser(data.user),
     };
     if (tokenCache.size >= TOKEN_CACHE_MAX_ENTRIES) tokenCache.clear();
     tokenCache.set(key, { user, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
@@ -149,6 +156,11 @@ export async function authenticate(request: RequestLike): Promise<AuthResult> {
 
   const verified = await verifyAccessToken(token);
   if ('ok' in verified) return verified;
+
+  // An account created in Preview is no real user of Production (shared auth)
+  if (verified.previewOnly && !IS_PREVIEW_SCHEMA) {
+    return { ok: false, status: 403, error: 'Forbidden' };
+  }
 
   let row;
   try {
