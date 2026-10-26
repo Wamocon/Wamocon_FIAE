@@ -21,11 +21,7 @@ import {
     activityReports,
     courseMembers,
     enablerCompletions,
-    enablerQuizLinks,
-    enablerQuizzes,
-    quizAssignments,
     quizSubmissions,
-    quizzes,
     notifications,
     enablerSubmissions,
     profiles,
@@ -41,6 +37,7 @@ import {
     fail,
     notFound,
     requireResponsibleTrainer,
+    unavailable,
 } from './actionGuards';
 import {
     isActionAllowedForRole,
@@ -362,6 +359,17 @@ export async function executeAction(
             );
         }
 
+        // A trainer-level person acts inside an organization that must be known
+        // (a profile without one would silently count as the platform organization)
+        if (audience === 'TRAINER') {
+            try {
+                await getUserOrgIdStrict(actor.id);
+            } catch (error) {
+                console.error('HAI.ai: organization of the trainer unknown:', error);
+                return unavailable();
+            }
+        }
+
         const checked = sanitizeActionParameters(actionType, parameters);
         if (!checked.ok) {
             return fail('invalid', checked.message, 'Invalid parameters');
@@ -378,9 +386,6 @@ export async function executeAction(
 
             case 'complete_enabler':
                 return await completeEnabler(actor, params, request);
-
-            case 'submit_quiz':
-                return await submitQuiz(actor, params, request);
 
             case 'mark_notification_read':
                 return await markNotificationRead(actor.id, params);
@@ -600,7 +605,7 @@ async function submitActivityReport(
 
         return {
             success: true,
-            message: `📤 **Tätigkeitsnachweis eingereicht!**\n\n✅ KW ${report.weekNumber} wurde zur Prüfung eingereicht.\n\n📬 Dein Trainer wird benachrichtigt und gibt dir bald Feedback.`,
+            message: `📤 **Tätigkeitsnachweis eingereicht!**\n\n✅ KW ${report.weekNumber} wurde zur Prüfung eingereicht.`,
             data: { reportId: report.id },
         };
     } catch (error) {
@@ -703,140 +708,6 @@ async function completeEnabler(
         return fail(
             'error',
             'Fehler beim Abschließen des Enablers.',
-            'Action failed'
-        );
-    }
-}
-
-/**
- * The enabler a lesson quiz belongs to (new links first, then the legacy 1:1
- * link), or null for a quiz without an enabler.
- */
-async function findEnablerOfQuiz(quizId: string): Promise<string | null> {
-    const [link] = await db
-        .select({ enablerId: enablerQuizLinks.enablerId })
-        .from(enablerQuizLinks)
-        .where(eq(enablerQuizLinks.quizId, quizId))
-        .limit(1);
-    if (link) return String(link.enablerId);
-
-    const [legacy] = await db
-        .select({ enablerId: enablerQuizzes.enablerId })
-        .from(enablerQuizzes)
-        .where(eq(enablerQuizzes.quizId, quizId))
-        .limit(1);
-    return legacy ? String(legacy.enablerId) : null;
-}
-
-/**
- * Submit a quiz. The quiz must be active and inside the occupation of the
- * trainee. A global quiz has to be assigned to the trainee, a lesson quiz
- * belongs to an active enabler of a course the trainee is a member of and
- * takes a single attempt.
- */
-async function submitQuiz(
-    actor: SessionUser,
-    parameters: Record<string, unknown>,
-    request?: CatalogRequestLike | null
-): Promise<ActionResult> {
-    try {
-        const userId = actor.id;
-        const quizId = parameters.quizId as string;
-
-        const outOfScope = await ensureContentAllowed(actor, request, 'quiz', quizId);
-        if (outOfScope) return outOfScope;
-
-        const [quiz] = await db
-            .select({
-                id: quizzes.id,
-                isActive: quizzes.isActive,
-                quizType: quizzes.quizType,
-            })
-            .from(quizzes)
-            .where(eq(quizzes.id, quizId))
-            .limit(1);
-
-        if (!quiz || !quiz.isActive) return notFound();
-
-        const isGlobal = String(quiz.quizType || '').toUpperCase() === 'GLOBAL';
-
-        if (isGlobal) {
-            const [assignment] = await db
-                .select({ id: quizAssignments.id })
-                .from(quizAssignments)
-                .where(
-                    and(
-                        eq(quizAssignments.quizId, quizId),
-                        eq(quizAssignments.traineeId, userId)
-                    )
-                )
-                .limit(1);
-            if (!assignment) return notFound();
-        } else {
-            const enablerId = await findEnablerOfQuiz(quizId);
-            if (!enablerId) return notFound();
-
-            const [enabler] = await db
-                .select({ isActive: enablers.isActive, courseId: enablers.courseId })
-                .from(enablers)
-                .where(eq(enablers.id, enablerId))
-                .limit(1);
-            if (!enabler || !enabler.isActive) return notFound();
-
-            const [member] = await db
-                .select({ userId: courseMembers.userId })
-                .from(courseMembers)
-                .where(
-                    and(
-                        eq(courseMembers.courseId, enabler.courseId),
-                        eq(courseMembers.userId, userId)
-                    )
-                )
-                .limit(1);
-            if (!member) return notFound();
-        }
-
-        const previous = await db
-            .select({ id: quizSubmissions.id })
-            .from(quizSubmissions)
-            .where(
-                and(
-                    eq(quizSubmissions.quizId, quizId),
-                    eq(quizSubmissions.traineeId, userId)
-                )
-            );
-
-        // A lesson quiz takes a single attempt, a global quiz may be repeated
-        if (!isGlobal && previous.length > 0) {
-            return fail(
-                'conflict',
-                'Zu diesem Quiz gibt es bereits eine Abgabe.',
-                'Quiz already submitted'
-            );
-        }
-
-        // A write never falls back to the platform organization
-        const organizationId = await getUserOrgIdStrict(userId);
-
-        // Submit quiz
-        await db.insert(quizSubmissions).values({
-            traineeId: userId,
-            quizId,
-            submittedAt: new Date(),
-            organizationId,
-            attemptNumber: previous.length + 1,
-        });
-
-        return {
-            success: true,
-            message: '📋 **Quiz eingereicht!**\n\n✅ Deine Antworten wurden gespeichert.\n\n👨‍🏫 Dein Trainer wird das Quiz bewerten und dir Feedback geben.',
-            data: { quizId },
-        };
-    } catch (error) {
-        console.error('HAI.ai: Error submitting quiz:', error);
-        return fail(
-            'error',
-            'Fehler beim Einreichen des Quiz.',
             'Action failed'
         );
     }

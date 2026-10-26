@@ -360,7 +360,7 @@ describe('HAI action route: the person is the session', () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.userRole).toBe('TRAINEE');
-    expect(body.availableActions).toContain('submit_quiz');
+    expect(body.availableActions).toContain('complete_enabler');
     expect(body.availableActions).not.toContain('approve_submission');
     expect(requireProPlan.mock.calls).toEqual([[ME]]);
   });

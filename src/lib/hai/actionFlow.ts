@@ -25,7 +25,6 @@ export interface ActionFlowContext {
   userRole?: 'TRAINER' | 'TRAINEE';
   currentEnablerId?: string;
   currentCourseId?: string;
-  enablerTitle?: string;
 }
 
 /** Fits PipelineResult: a proposal or a plain answer, nothing was executed. */
@@ -83,9 +82,9 @@ export async function handleActionMessage(
   const checked = sanitizeActionParameters(intent.type, intent.parameters);
   if (!checked.ok) return answer(checked.message, intent.type);
 
-  const description = describeAction(intent.type, checked.parameters, {
-    enablerTitle: context.enablerTitle,
-  });
+  // No titles from the client supplied context: the enabler id of the chat
+  // request is not checked yet, a title would show content of a foreign enabler
+  const description = describeAction(intent.type, checked.parameters);
   return {
     response: `Ich habe diese Aktion vorbereitet:\n\n**${description}**\n\nSie wird erst ausgeführt, wenn du sie bestätigst. Ohne Bestätigung ändert sich nichts.`,
     intent: 'action',

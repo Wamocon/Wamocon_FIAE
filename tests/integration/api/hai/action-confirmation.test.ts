@@ -202,6 +202,7 @@ describe('/api/hai/action: entry conditions', () => {
     'reject_report',
     'upload_document',
     'show_progress',
+    'submit_quiz',
     'constructor',
     '__proto__',
     'drop_everything',
@@ -254,7 +255,6 @@ describe('/api/hai/action: the role must fit the action type', () => {
     ['create_activity_report', { weekNumber: 12 }],
     ['submit_activity_report', {}],
     ['complete_enabler', { enablerId: ENABLER }],
-    ['submit_quiz', { quizId: QUIZ, answers: [{}] }],
   ];
   const TRAINER_ONLY: Array<[string, Record<string, unknown>]> = [
     ['approve_submission', { submissionId: SUBMISSION }],
@@ -304,7 +304,6 @@ describe('/api/hai/action: the role must fit the action type', () => {
       'create_activity_report',
       'submit_activity_report',
       'complete_enabler',
-      'submit_quiz',
       'mark_notification_read',
     ]);
 
@@ -379,8 +378,6 @@ describe('/api/hai/action: parameters', () => {
     ['create_activity_report', { year: 1999 }],
     ['mark_notification_read', {}],
     ['mark_notification_read', { notificationId: 'x' }],
-    ['submit_quiz', { quizId: QUIZ }],
-    ['submit_quiz', { quizId: QUIZ, answers: [] }],
   ])('rejects invalid parameters of %s', async (type, parameters) => {
     const role = ['approve_submission', 'approve_report'].includes(type)
       ? 'TRAINER'
@@ -481,121 +478,6 @@ describe('/api/hai/action: trainee actions', () => {
     expect(writeCount(rec)).toBe(0);
   });
 
-  describe('submit_quiz', () => {
-    const submit = () =>
-      post(confirmed('submit_quiz', { quizId: QUIZ, answers: [{ a: 1 }] }));
-    const lesson = (overrides: Rows = {}): Rows => ({
-      quizzes: [
-        {
-          id: QUIZ,
-          isActive: true,
-          quizType: 'ENABLER',
-          trainingCatalogId: FIAE,
-        },
-      ],
-      enablerQuizLinks: [{ enablerId: ENABLER }],
-      enablerQuizzes: [],
-      enablers: [enablerRow()],
-      courseMembers: [{ userId: ME }],
-      quizSubmissions: [],
-      ...overrides,
-    });
-
-    it('a lesson quiz of the own course is submitted', async () => {
-      const { mod, rec, getUserOrgIdStrict } = await load({ tables: lesson() });
-      const res = await mod.POST(submit());
-      expect(res.status).toBe(200);
-      expect(rec.writes('insert', 'quiz_submissions')[0]).toMatchObject({
-        traineeId: ME,
-        quizId: QUIZ,
-        organizationId: ORG,
-        attemptNumber: 1,
-      });
-      expect(getUserOrgIdStrict).toHaveBeenCalledWith(ME);
-    });
-
-    it('a global quiz needs an assignment', async () => {
-      const global = (assigned: boolean) =>
-        lesson({
-          quizzes: [
-            {
-              id: QUIZ,
-              isActive: true,
-              quizType: 'GLOBAL',
-              trainingCatalogId: FIAE,
-            },
-          ],
-          quizAssignments: assigned ? [{ id: 'a1' }] : [],
-          quizSubmissions: [{ id: 'old' }],
-        });
-      const denied = await load({ tables: global(false) });
-      expect((await denied.mod.POST(submit())).status).toBe(404);
-      expect(writeCount(denied.rec)).toBe(0);
-
-      const allowed = await load({ tables: global(true) });
-      expect((await allowed.mod.POST(submit())).status).toBe(200);
-      // A global quiz may be repeated
-      expect(allowed.rec.writes('insert', 'quiz_submissions')[0]).toMatchObject(
-        {
-          attemptNumber: 2,
-        }
-      );
-    });
-
-    it.each([
-      ['an unknown quiz id', { quizzes: [] }],
-      [
-        'a quiz of another occupation',
-        {
-          quizzes: [
-            {
-              id: QUIZ,
-              isActive: true,
-              quizType: 'ENABLER',
-              trainingCatalogId: KFBM,
-            },
-          ],
-        },
-      ],
-      [
-        'an inactive quiz',
-        {
-          quizzes: [
-            {
-              id: QUIZ,
-              isActive: false,
-              quizType: 'ENABLER',
-              trainingCatalogId: FIAE,
-            },
-          ],
-        },
-      ],
-      [
-        'a quiz without an enabler',
-        { enablerQuizLinks: [], enablerQuizzes: [] },
-      ],
-      ['a quiz of a course the trainee is not in', { courseMembers: [] }],
-      [
-        'a quiz of an inactive enabler',
-        { enablers: [enablerRow({ isActive: false })] },
-      ],
-    ])('%s answers not found', async (_name, overrides) => {
-      const { mod, rec } = await load({ tables: lesson(overrides as Rows) });
-      const res = await mod.POST(submit());
-      expect(res.status).toBe(404);
-      expect(writeCount(rec)).toBe(0);
-    });
-
-    it('a second attempt at a lesson quiz answers 409', async () => {
-      const { mod, rec } = await load({
-        tables: lesson({ quizSubmissions: [{ id: 'old' }] }),
-      });
-      const res = await mod.POST(submit());
-      expect(res.status).toBe(409);
-      expect(writeCount(rec)).toBe(0);
-    });
-  });
-
   describe('a write never falls back to the platform organization', () => {
     it('create_activity_report stops when the organization cannot be resolved', async () => {
       const { mod, rec } = await load({
@@ -609,31 +491,6 @@ describe('/api/hai/action: trainee actions', () => {
       );
       expect(res.status).toBe(500);
       expect(rec.writes('insert', 'activity_reports')).toEqual([]);
-    });
-
-    it('submit_quiz stops when the organization cannot be resolved', async () => {
-      const { mod, rec } = await load({
-        orgFails: true,
-        tables: {
-          quizzes: [
-            {
-              id: QUIZ,
-              isActive: true,
-              quizType: 'ENABLER',
-              trainingCatalogId: FIAE,
-            },
-          ],
-          enablerQuizLinks: [{ enablerId: ENABLER }],
-          enablers: [enablerRow()],
-          courseMembers: [{ userId: ME }],
-          quizSubmissions: [],
-        },
-      });
-      const res = await mod.POST(
-        post(confirmed('submit_quiz', { quizId: QUIZ, answers: [{}] }))
-      );
-      expect(res.status).toBe(500);
-      expect(rec.writes('insert', 'quiz_submissions')).toEqual([]);
     });
 
     it('create_activity_report writes the resolved organization', async () => {
@@ -978,6 +835,17 @@ describe('/api/hai/action: trainer actions', () => {
       expect(res.status).toBe(404);
       expect(writeCount(rec)).toBe(0);
     });
+  });
+
+  it('a trainer whose organization cannot be resolved acts on nothing', async () => {
+    const { mod, rec } = await load({
+      role: 'TRAINER',
+      orgFails: true,
+      tables: submissionTables(),
+    });
+    const res = await mod.POST(approveSubmission());
+    expect(res.status).toBe(503);
+    expect(writeCount(rec)).toBe(0);
   });
 
   it('every update names owner and organization in its WHERE clause', async () => {

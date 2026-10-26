@@ -26,10 +26,14 @@ describe('HAI action policy', () => {
         'grade_quiz',
         'mark_notification_read',
         'submit_activity_report',
-        'submit_quiz',
       ].sort()
     );
-    for (const type of ['reject_submission', 'upload_document', 'toString']) {
+    for (const type of [
+      'reject_submission',
+      'upload_document',
+      'submit_quiz',
+      'toString',
+    ]) {
       expect(isWriteAction(type)).toBe(false);
     }
   });
@@ -91,6 +95,13 @@ describe('HAI action policy', () => {
     expect(
       describeAction('complete_enabler', {}, { enablerTitle: 'A "B" `c`' })
     ).toBe('Enabler "A  B   c" als abgeschlossen markieren');
+    // No link or image syntax from a title
+    const hostile = describeAction(
+      'complete_enabler',
+      {},
+      { enablerTitle: '![x](https://evil.example/?c=1) <b>#</b>' }
+    );
+    expect(hostile).not.toMatch(/[[\]()!<>#]/);
     expect(describeAction('grade_quiz', { score: 80 })).toContain('80 %');
     expect(
       describeAction('create_activity_report', { weekNumber: 4 })

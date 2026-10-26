@@ -76,9 +76,12 @@ describe('HAI pipeline: actions are proposals, never writes', () => {
       expect(result.pendingAction).toEqual({
         type: 'complete_enabler',
         parameters: { enablerId: ENABLER },
-        description: 'Enabler "SQL Grundlagen" als abgeschlossen markieren',
+        description: 'Den aktuellen Enabler als abgeschlossen markieren',
       });
-      expect(result.response).toContain('SQL Grundlagen');
+      // The title of the client supplied context is never echoed (the enabler
+      // id of the request is not checked before the confirmed call)
+      expect(result.response).not.toContain('SQL Grundlagen');
+      expect(JSON.stringify(result.pendingAction)).not.toContain('SQL Grundlagen');
     }
   );
 

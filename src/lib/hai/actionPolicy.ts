@@ -24,7 +24,6 @@ const ACTION_AUDIENCE = {
   create_activity_report: 'TRAINEE',
   submit_activity_report: 'TRAINEE',
   complete_enabler: 'TRAINEE',
-  submit_quiz: 'TRAINEE',
   mark_notification_read: 'ANY',
   approve_submission: 'TRAINER',
   approve_report: 'TRAINER',
@@ -152,21 +151,6 @@ const READERS: Record<WriteActionType, Reader> = {
     'Keine Enabler-ID angegeben. Bitte öffne den Enabler, den du abschließen möchtest.'
   ),
 
-  submit_quiz: requireId(
-    'quizId',
-    'Keine Quiz-ID angegeben. Bitte reiche das Quiz über die Quiz-Seite ein.',
-    raw => {
-      const answers = raw.answers;
-      if (!Array.isArray(answers) || answers.length === 0) {
-        return invalid(
-          'Keine Antworten angegeben. Bitte reiche das Quiz über die Quiz-Seite ein.'
-        );
-      }
-      if (answers.length > 500) return invalid('Zu viele Antworten.');
-      return valid({ answers });
-    }
-  ),
-
   mark_notification_read: raw => {
     if (raw.markAll === true) return valid({ markAll: true });
     if (raw.notificationId !== undefined) {
@@ -225,7 +209,9 @@ export function sanitizeActionParameters(
 function cleanTitle(title: string): string {
   // eslint-disable-next-line no-control-regex
   return title
-    .replace(/[\u0000-\u001f"`*_]/g, ' ')
+    // Quotes and markup characters, so a title can neither break the text
+    // nor form a link or an image in the markdown answer
+    .replace(/[\u0000-\u001f"`*_\[\]()!<>#|]/g, ' ')
     .trim()
     .slice(0, 120);
 }
@@ -257,8 +243,6 @@ export function describeAction(
         ? `Enabler "${title}" als abgeschlossen markieren`
         : 'Den aktuellen Enabler als abgeschlossen markieren';
     }
-    case 'submit_quiz':
-      return 'Quiz einreichen';
     case 'mark_notification_read':
       return parameters.markAll
         ? 'Alle Benachrichtigungen als gelesen markieren'
