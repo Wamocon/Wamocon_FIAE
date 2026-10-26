@@ -11,6 +11,7 @@ import {
   buildTrainingScopePrompt,
   type HaiTrainingScope,
 } from './trainingScope';
+import { FIAE_PERSONA, type HaiPersona } from './persona';
 
 // ============================================================================
 // TYPES
@@ -40,40 +41,82 @@ export interface PromptContext {
   crossSessionMemory?: string;
   /** Duration-aware training scope for trainee-facing answers */
   trainingScope?: HaiTrainingScope;
+  /**
+   * Persona of the occupation, resolved on the server (see persona.ts). Without
+   * it the FIAE texts apply, as before the persona work.
+   */
+  persona?: HaiPersona;
 }
 
 // ============================================================================
 // CORE SYSTEM PROMPT
 // ============================================================================
 
-const CORE_PERSONALITY = `Du bist **HAI.ai** 🦈 — der digitale Lernbegleiter im Lernzentrum für Auszubildende (LFA).
+/** Glossary lines of the persona, one list item each. */
+function renderGlossary(entries: HaiPersona['glossary']): string {
+  return entries.map(e => `- **${e.term}**: ${e.definition}`).join('\n');
+}
+
+/** Numbered topics for trainees and, if shown, for trainers (numbering goes on). */
+function renderTopics(persona: HaiPersona): string {
+  const number = (topics: string[], from: number) =>
+    topics.map((topic, i) => `${from + i}) ${topic}`).join(' ');
+  const lines = [`**Azubi:** ${number(persona.traineeTopics, 1)}`];
+  if (persona.showTrainerTopics) {
+    lines.push(
+      `**Trainer (zusaetzlich):** ${number(
+        persona.trainerTopics,
+        persona.traineeTopics.length + 1
+      )}`
+    );
+  }
+  return lines.join('\n\n');
+}
+
+/**
+ * Scenario text is data, never an instruction: control and bidi characters are
+ * removed and heading markers at the start of a line are dropped, so the text
+ * cannot open a new section of the system prompt. The pipeline only sets it
+ * from a server source.
+ */
+function sanitizeScenarioText(text: string): string {
+  return text
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map(line => line.replace(/^(\s*)#+\s*/, '$1'))
+    .join('\n')
+    .slice(0, 4000);
+}
+
+/** Prompt without persona: no knowledge, no data, only the refusal. */
+function buildNeutralPrompt(persona: HaiPersona): string {
+  return `Du bist **HAI.ai** 🦈, der digitale Lernbegleiter. Dem Konto dieses Nutzers ist kein Ausbildungsberuf zugeordnet.
+
+## Regeln
+- IMMER Deutsch
+- Du hast KEINEN Zugriff auf eine Wissensdatenbank, auf Plattform-Daten oder auf Inhalte eines Berufs
+- Beantworte KEINE fachlichen Fragen und nenne KEINE Inhalte, Daten oder Namen
+- Antworte IMMER nur mit diesem Text: "${persona.refusalPrompt}"`;
+}
+
+function buildCorePersonality(persona: HaiPersona): string {
+  return `Du bist **HAI.ai** 🦈 — der digitale Lernbegleiter ${persona.intro}.
 Praezise, freundlich, motivierend, paedagogisch. Kein Blabla — klare Antworten auf den Punkt.
 
 ## Plattform-Glossar
-- **Kurs**: Uebergeordneter Ausbildungsbereich mit mehreren Enablern (~26 Components pro Kurs)
-- **Enabler**: Lerneinheit (~150 gesamt) mit Components, Use Cases, Szenarien, Quizzes. KEINE Personen!
-- **Component**: Unterabschnitt mit Theorie/Beispielen
-- **Use Case**: Praktische Aufgabe/Fallstudie (~90 gesamt) mit PDF + Trainerloesung
-- **Szenario**: Praxisuebung im Enabler, eigenstaendig zu loesen
-- **Lernfeld (LF)**: Berufsschul-Lernfeld nach IHK (LF1-LF12), N:M mit Enablern und Use Cases
-- **Quiz**: Pro Enabler bis zu 3 (BEGINNER/INTERMEDIATE/ADVANCED). Global Quiz auf Component-Ebene
-- **Berichtsheft**: Woechentlicher Taetigkeitsnachweis (DRAFT → SUBMITTED → APPROVED/REVISION_NEEDED)
-- **Wochenbewertung**: Leistungsbewertung mit Kompetenzgraden (Fach/Methoden/Sozial/Personal)
-- **Ausbildungsblock**: Kalender (SCHOOL, COMPANY, EXAM, VACATION etc.)
-- **Schulklausur**: Klausur mit Fach, Note, Punkte, Prozent
+${renderGlossary(persona.glossary)}
 
 **Hierarchie**: Kurs → Enabler → Components + Use Cases + Szenarien + Quizzes
 **Querverbindungen**: Lernfelder ↔ Enabler (N:M), Lernfelder ↔ Use Cases (N:M)
 
 ## Erlaubte Themen — NUR DIESE beantworten
-**Azubi:** 1) Enabler/LF-Inhalte, Szenarien, Use Cases 2) Stundenplan/Kalender 3) Pruefungsvorbereitung/IHK 4) Quiz/Wissenstest 5) Code erklaeren/debuggen/PseudoCode/EVA 6) Fachbegriffe/Themen vereinfachen/Notizen 7) Projektarbeit/Gantt/ERM/Struktogramme 8) Berichtsheft/Taetigkeitsnachweis 9) Professionelle Emails/Prompts 10) Motivation/"Hai Five" 11) Klausurerinnerungen 12) Tool-Empfehlungen 13) Enabler↔LF Zuordnung 14) Gespraechszusammenfassung 15) Testfaelle
+${renderTopics(persona)}
 
-**Trainer (zusaetzlich):** 16) Notenuebersicht aller Azubis 17) Lernfortschritt je Azubi 18) Woechentliche Berichte/Stunden 19) Nachweis-Status 20) Fehlzeiten 21) Pruefungstermine 22) Verkuerzungs-Qualifikation 23) Anwesenheit 24) Berufsschul-Info/Lehrer 25) QuickWins 26) Besprechungen 27) Plattform-Nutzung 28) System-Status 29) Azubi-Kommunikation
-
-**VERBOTEN:** Allgemeinwissen, Unterhaltung, Persoenliches, Politik, Religion, Wetter, Shopping, Kreatives Schreiben, Mathematik — alles ohne LFA/IT-Bezug.
+${persona.forbiddenLine}
 
 **Ablehnung (IMMER so, NIEMALS weicher):**
-"Das liegt leider ausserhalb meines Fachgebiets. 🦈 Ich bin spezialisiert auf deine LFA-Ausbildung — Lernfelder, Enabler, Code-Hilfe, Pruefungsvorbereitung und alles rund um deine IT-Ausbildung. Wie kann ich dir dabei helfen?"
+"${persona.refusalPrompt}"
 
 ## Regeln
 - IMMER Deutsch
@@ -83,7 +126,7 @@ Praezise, freundlich, motivierend, paedagogisch. Kein Blabla — klare Antworten
 - KURZ antworten (3-5 Saetze bei einfachen Fragen), bei komplexen: kurz starten, mehr anbieten
 - Plattform-Daten NUR auf explizite Nachfrage nennen
 - Faehigkeiten NICHT auflisten ausser bei "Was kannst du?"
-- Markdown, Code in \`\`\`sprache\`\`\`, **fett** fuer Wichtiges, nummerierte Listen, [Quelle: Enabler-Name]
+- Markdown, Code in \`\`\`sprache\`\`\`, **fett** fuer Wichtiges, nummerierte Listen, [Quelle: Enabler-Name]${persona.sourceRule ? `\n- ${persona.sourceRule}` : ''}
 
 ## KRITISCH: Anti-Halluzination bei Plattform-Daten
 **ERFINDE NIEMALS Plattform-Daten.** Das heisst:
@@ -92,25 +135,26 @@ Praezise, freundlich, motivierend, paedagogisch. Kein Blabla — klare Antworten
 - Wenn im Abschnitt "Aktuelle Plattform-Daten" KEINE Daten zu einer Frage stehen → sage: "Dazu liegen mir aktuell keine Daten vor. Bitte pruefe es direkt in der Plattform."
 - Wenn du bei einer falschen Aussage korrigiert wirst → entschuldige dich KURZ und verweise auf die Plattform. Erfinde KEINE technischen Erklaerungen (keine "Sync-Fehler", "Datenlatenz", "Export-Zeitpunkte", "Tech-Team" etc.)
 - NUR Daten nennen die EXPLIZIT im System-Prompt unter "Aktuelle Plattform-Daten" stehen. Alles andere ist NICHT verfuegbar.`;
+}
 
 // ============================================================================
 // MODE-SPECIFIC PROMPTS
 // ============================================================================
 
-const MODE_PROMPTS: Record<PromptMode, string> = {
-  general: `
+const MODE_PROMPTS: Record<PromptMode, (persona: HaiPersona) => string> = {
+  general: persona => `
 ## Aktueller Modus: Allgemeine Hilfe
 Der Nutzer befindet sich nicht in einem spezifischen Enabler.
-Beantworte Fragen allgemein zum Thema Fachinformatik.
+Beantworte Fragen allgemein zum Thema ${persona.generalTopic}.
 Wenn du nicht sicher bist, frage nach mehr Kontext.`,
 
-  enabler: `
+  enabler: () => `
 ## Aktueller Modus: Enabler-Kontext
 Der Nutzer lernt gerade einen spezifischen Enabler.
 Beziehe deine Antworten auf den Inhalt dieses Enablers.
 Verweise auf relevante Abschnitte wenn möglich.`,
 
-  quiz: `
+  quiz: persona => `
 ## Aktueller Modus: Quiz
 Du stellst dem Nutzer Quiz-Fragen zu einem Thema.
 
@@ -125,9 +169,9 @@ Du stellst dem Nutzer Quiz-Fragen zu einem Thema.
 **Schwierigkeitsgrade:**
 - Leicht: Definitionen, Grundbegriffe
 - Mittel: Anwendung, Zusammenhänge
-- Schwer: IHK-Prüfungsniveau`,
+- Schwer: ${persona.examLevelLabel}`,
 
-  scenario: `
+  scenario: () => `
 ## Aktueller Modus: Szenario-Hilfe
 Der Nutzer arbeitet an einem Praxisszenario.
 
@@ -143,9 +187,9 @@ Beispiel-Leitfragen:
 - "Welche Technologien könnten passen?"
 - "Hast du an X gedacht?"`,
 
-  exam_prep: `
-## Aktueller Modus: IHK-Prüfungsvorbereitung
-Der Nutzer bereitet sich auf die IHK-Prüfung vor.
+  exam_prep: persona => `
+## Aktueller Modus: ${persona.examModeTitle}
+${persona.examSentence}
 
 **Prüfungs-Tipps:**
 1. Fokussiere auf typische Prüfungsthemen
@@ -166,10 +210,14 @@ Der Nutzer bereitet sich auf die IHK-Prüfung vor.
  * @returns Complete system prompt
  */
 export function buildSystemPrompt(context: PromptContext): string {
-  const parts: string[] = [CORE_PERSONALITY];
+  const persona = context.persona ?? FIAE_PERSONA;
+  if (persona.neutral) {
+    return buildNeutralPrompt(persona);
+  }
+  const parts: string[] = [buildCorePersonality(persona)];
 
   // Add mode-specific prompt
-  parts.push(MODE_PROMPTS[context.mode]);
+  parts.push(MODE_PROMPTS[context.mode](persona));
 
   const trainingScopePrompt = buildTrainingScopePrompt(context.trainingScope);
   if (trainingScopePrompt) {
@@ -212,7 +260,7 @@ ${context.courseTitle ? `**Kurs:** ${context.courseTitle}` : ''}`);
   if (context.scenarioText) {
     parts.push(`
 ## Aktuelles Szenario
-${context.scenarioText}`);
+${sanitizeScenarioText(context.scenarioText)}`);
   }
 
   // Add retrieved context (RAG results)
@@ -232,7 +280,7 @@ Zu dieser Frage wurde KEIN spezifischer Kontext in der Wissensdatenbank gefunden
 
 **Dein Verhalten in diesem Fall:**
 1. Fragen zu konkreten Enablern, Use Cases, Kursinhalten: "Dazu habe ich keine Informationen in meinen Unterlagen. Bitte schaue in den entsprechenden Enabler oder frage deinen Trainer."
-2. Allgemeine LFA-Themen (z.B. "Was ist eine Datenbank?"): Antworte kurz aus IT-Fachwissen, weise darauf hin dass keine kursinternen Unterlagen gefunden wurden.
+2. ${persona.noContextTopicLabel}: Antworte kurz aus ${persona.expertiseLabel}, weise darauf hin dass keine kursinternen Unterlagen gefunden wurden.
 3. Maximal 2-3 Saetze. Biete an, bei spezifischeren Fragen nochmal zu suchen.
 4. Erfinde KEINE Details, Daten, Tabellen oder Statuswerte die nicht in deinem Wissen sind.`);
   }
@@ -317,12 +365,13 @@ export function buildRetrievedContext(
 export function getQuizGenerationPrompt(
   topic: string,
   difficulty: 'easy' | 'medium' | 'hard',
-  count: number = 5
+  count: number = 5,
+  persona: HaiPersona = FIAE_PERSONA
 ): string {
   const difficultyMap = {
     easy: 'Leicht (Definitionen, Grundbegriffe)',
     medium: 'Mittel (Anwendung, Zusammenhänge)',
-    hard: 'Schwer (IHK-Prüfungsniveau)',
+    hard: `Schwer (${persona.examLevelLabel})`,
   };
 
   return `Erstelle ${count} Multiple-Choice-Fragen zum Thema "${topic}".
@@ -354,17 +403,15 @@ Weise auf Best Practices und mögliche Verbesserungen hin.`;
 /**
  * Get a prompt for the greeting message
  */
-export function getGreetingPrompt(): string {
-  return `Ahoi! 🦈 Ich bin **HAI.ai**, dein Lernbegleiter für Fachinformatik.
-
-Wie kann ich dir helfen?`;
+export function getGreetingPrompt(persona: HaiPersona = FIAE_PERSONA): string {
+  return persona.greeting;
 }
 
 /**
  * Get a prompt for handling off-topic queries
  */
-export function getOffTopicResponse(): string {
-  return `Das liegt leider außerhalb meines Fachgebiets. 🦈 Ich bin spezialisiert auf deine LFA-Ausbildung — Lernfelder, Enabler, Code-Hilfe, Prüfungsvorbereitung und alles rund um deine IT-Ausbildung. Wie kann ich dir dabei helfen?`;
+export function getOffTopicResponse(persona: HaiPersona = FIAE_PERSONA): string {
+  return persona.refusalText;
 }
 
 /**
