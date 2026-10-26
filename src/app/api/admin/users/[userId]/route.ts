@@ -1,5 +1,7 @@
 import { requireAdmin, isErrorResponse, scopeOrg, isInOrgScope } from '@/lib/auth/session';
-import { canManageAdmins, canModifyRole } from '@/lib/auth/roles';
+import { canModifyRole } from '@/lib/auth/roles';
+import { checkRoleForUpdate } from '@/lib/admin/roleAssignment';
+import { updateUserChecked, userWriteFailureBody } from '@/lib/admin/userWrites';
 import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -66,19 +68,18 @@ export async function PATCH(
     const updates: Record<string, unknown> = {};
 
     if (typeof body.role === 'string') {
-      const newRole = body.role.toUpperCase();
-      const validRoles = ['ADMIN', 'TEMP_ADMIN', 'TRAINER', 'TRAINEE'];
-      if (!validRoles.includes(newRole)) {
-        return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
-      }
-      // TEMP_ADMIN cannot promote to ADMIN or modify ADMIN users
-      if (newRole === 'ADMIN' && !canManageAdmins(session)) {
+      // The caller may only hand out roles assignableRoles allows (an
+      // unchanged role is no change)
+      const decision = checkRoleForUpdate(session, body.role, targetUser.role);
+      if (!decision.ok) {
         return NextResponse.json(
-          { error: 'TEMP_ADMIN cannot promote users to ADMIN' },
-          { status: 403 }
+          decision.code
+            ? { error: decision.error, code: decision.code }
+            : { error: decision.error },
+          { status: decision.status }
         );
       }
-      updates.role = newRole;
+      updates.role = decision.role;
     }
 
     if (typeof body.isActive === 'boolean') updates.isActive = body.isActive;
@@ -109,23 +110,21 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    const [row] = await db
-      .update(profiles)
-      .set(updates)
-      .where(eq(profiles.id, userId as any))
-      .returning({
-        id: profiles.id,
-        fullName: profiles.fullName,
-        firstName: profiles.firstName,
-        lastName: profiles.lastName,
-        email: profiles.email,
-        role: profiles.role,
-        isActive: profiles.isActive,
-        trainerActivated: profiles.trainerActivated,
-        organizationId: profiles.organizationId,
-      });
+    // A change that takes a seat (a role of the other kind of seat, another
+    // organization) is checked against the seats of the target organization in
+    // the same transaction. Activation takes no seat: inactive accounts count.
+    // The rules are checked once more under the row lock of the user (guard),
+    // the reads above are only the early answer.
+    const result = await updateUserChecked(userId, updates, {
+      session,
+      requestedRole: typeof updates.role === 'string' ? updates.role : undefined,
+    });
+    if (!result.ok) {
+      const failure = userWriteFailureBody(result);
+      return NextResponse.json(failure.body, { status: failure.status });
+    }
 
-    return NextResponse.json({ user: row });
+    return NextResponse.json({ user: result.row });
   } catch (e) {
     console.error('Admin update user error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

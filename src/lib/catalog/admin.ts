@@ -78,7 +78,8 @@ export type RuleCode =
   | 'CATALOG_NOT_ENABLED'
   | 'CATALOG_IN_USE'
   | 'LAST_ENABLED_CATALOG'
-  | 'DEFAULT_CATALOG';
+  | 'DEFAULT_CATALOG'
+  | 'CATALOG_REQUIRED';
 
 export type RuleFailure = {
   ok: false;
@@ -129,7 +130,7 @@ export type EnrollmentChange = {
   replaced: number;
 };
 
-type Executor = Pick<
+export type Executor = Pick<
   typeof db,
   'select' | 'insert' | 'update' | 'delete' | 'execute'
 >;
@@ -286,6 +287,43 @@ export function checkEnrollmentTarget(input: {
   return { ok: true, value: catalog };
 }
 
+/**
+ * The catalog of a trainee that is created now. A requested catalog has to pass
+ * the same rules as an enrollment (active, enabled for the organization).
+ * Without a request the default applies: the only usable catalog of the
+ * organization, or FIAE when there are several (so an organization that only
+ * knows FIAE behaves as before). Several usable catalogs without FIAE among
+ * them cannot be decided, the choice is required (400).
+ */
+export function resolveNewTraineeCatalog(input: {
+  requestedCatalogId: string | null;
+  catalogs: CatalogInfo[];
+  orgRows: OrgCatalogRow[];
+}): RuleResult<CatalogInfo> {
+  const { requestedCatalogId, catalogs, orgRows } = input;
+  if (requestedCatalogId) {
+    return checkEnrollmentTarget({
+      trainee: { role: ROLE.TRAINEE },
+      catalog: catalogs.find(c => c.id === requestedCatalogId) ?? null,
+      orgRows,
+    });
+  }
+  const usable = usableCatalogIds(orgRows, catalogs);
+  const pickId =
+    usable.length === 1
+      ? usable[0]
+      : usable.includes(FIAE_CATALOG_ID)
+        ? FIAE_CATALOG_ID
+        : null;
+  if (pickId) {
+    const catalog = catalogs.find(c => c.id === pickId);
+    if (catalog) return { ok: true, value: catalog };
+  }
+  return usable.length === 0
+    ? fail(400, 'CATALOG_NOT_ENABLED')
+    : fail(400, 'CATALOG_REQUIRED');
+}
+
 // ---------------------------------------------------------------------------
 // Request helpers
 // ---------------------------------------------------------------------------
@@ -302,6 +340,8 @@ const RULE_MESSAGES: Record<RuleCode, string> = {
   LAST_ENABLED_CATALOG:
     'An organization must keep at least one enabled and active training catalog',
   DEFAULT_CATALOG: 'The default training catalog (FIAE) cannot be deactivated',
+  CATALOG_REQUIRED:
+    'The organization offers several training catalogs, choose one for the trainee',
 };
 
 /** JSON body of an error answer: readable text, stable code, optional count. */
@@ -488,7 +528,46 @@ async function loadUsage(
   };
 }
 
-async function takeCatalogAdminLock(tx: Executor) {
+/**
+ * Reads what decides the catalog of a new trainee and decides it
+ * (resolveNewTraineeCatalog). Writes nothing, so it also serves as an early
+ * check before anything is created. Run it with the executor of the
+ * transaction (after takeCatalogAdminLock) for the check that counts.
+ */
+export async function loadNewTraineeCatalog(
+  q: Executor,
+  organizationId: string,
+  requestedCatalogId: string | null
+): Promise<RuleResult<CatalogInfo>> {
+  const catalogs = await loadCatalogs(q);
+  const orgRows = await loadOrganizationRows(q, organizationId);
+  return resolveNewTraineeCatalog({ requestedCatalogId, catalogs, orgRows });
+}
+
+/**
+ * The enrollment of a trainee that was created just now, in the transaction of
+ * the caller. A new profile has no start date yet and the default duration of
+ * three years, the same values setTraineeEnrollment takes from such a profile.
+ */
+export async function insertTraineeEnrollment(
+  q: Executor,
+  traineeId: string,
+  catalogId: string
+): Promise<void> {
+  await q.insert(traineeEnrollments).values({
+    traineeId,
+    trainingCatalogId: catalogId,
+    startDate: null,
+    durationYears: 3,
+  });
+}
+
+/**
+ * Lock of every catalog administration write (held until the transaction
+ * ends). A flow that also takes the seat lock of an organization takes that
+ * one first, see src/lib/admin/userWrites.ts.
+ */
+export async function takeCatalogAdminLock(tx: Executor) {
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtext(${CATALOG_ADMIN_LOCK}))`
   );

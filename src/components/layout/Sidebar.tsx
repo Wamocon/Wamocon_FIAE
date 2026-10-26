@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeRole } from '@/lib/auth/roles';
+import { adminMenuItems } from '@/lib/auth/adminMenu';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   LayoutDashboard,
@@ -30,6 +31,12 @@ const HaiAdminDialog = dynamic(
   }
 );
 
+// Icons of the admin entries (the entries themselves: lib/auth/adminMenu.ts)
+const ADMIN_MENU_ICONS = {
+  adminOrgs: Building2,
+  adminUsers: ShieldCheck,
+} as const;
+
 interface SidebarProps {
   currentView: string;
   isOpen: boolean;
@@ -43,7 +50,8 @@ export function Sidebar({
   onToggle: _onToggle,
   userRole,
 }: SidebarProps) {
-  const { profile, signOut, loading, subscriptionPlan, isAdmin } = useAuth();
+  const { profile, signOut, loading, subscriptionPlan, isPlatformOwner } =
+    useAuth();
   const { language, t } = useLanguage();
   const router = useRouter();
   const pathname = usePathname();
@@ -167,22 +175,16 @@ export function Sidebar({
               icon: Users,
               href: '/trainer/trainees',
             },
-            ...(isAdmin
-              ? [
-                  {
-                    id: 'adminOrgs',
-                    label: t('nav.organizations'),
-                    icon: Building2,
-                    href: '/trainer/admin/organizations',
-                  },
-                  {
-                    id: 'adminUsers',
-                    label: t('nav.userManagement'),
-                    icon: ShieldCheck,
-                    href: '/trainer/admin/users',
-                  },
-                ]
-              : []),
+            // Each admin level sees what it may open (never the protection,
+            // the routes check the role themselves)
+            ...adminMenuItems({ role: profile?.role, isPlatformOwner }).map(
+              item => ({
+                id: item.id,
+                label: t(item.labelKey),
+                icon: ADMIN_MENU_ICONS[item.id],
+                href: item.href,
+              })
+            ),
           ]
         : [
             {
@@ -224,7 +226,7 @@ export function Sidebar({
         href: userRole === 'trainee' ? '/trainee/profile' : '/trainer/profile',
       },
     ],
-    [userRole, t, isAdmin, subscriptionPlan]
+    [userRole, t, profile?.role, isPlatformOwner, subscriptionPlan]
   );
 
   if (!profile) return null;
