@@ -1,5 +1,6 @@
 -- Down script for the KfBM training catalog migration series
--- (supabase/migrations/20261024000100 ... 20261024001500 and 20261025000000).
+-- (supabase/migrations/20261024000100 ... 20261024001500 and 20261025000000,
+-- plus the model gap files 20261028000100 ... 20261028000300 if they ran).
 --
 -- Only meaningful until the FIAE-only state is left: the script refuses to run
 -- as soon as the first non-FIAE (KfBM) record exists, because dropping the
@@ -99,6 +100,27 @@ begin
     comment on type public.user_role is null;
   end if;
 end $$;
+
+-- 1b. Model gap files for the content import (20261028000100 - 300) ---------
+-- No-op where the files did not run (everything is guarded). Data in these
+-- columns is lost: course to component links, quiz codes, option order.
+drop trigger if exists enabler_quiz_links_catalog_check
+  on public.enabler_quiz_links;
+drop trigger if exists quizzes_catalog_link_check on public.quizzes;
+drop function if exists public.check_quiz_link_catalog();
+drop function if exists public.check_quiz_catalog_for_links();
+drop index if exists public.quizzes_catalog_code_unique;
+alter table public.quizzes
+  drop constraint if exists quizzes_code_format_check,
+  drop column if exists code;
+drop index if exists public.courses_training_component_unique;
+alter table public.courses
+  drop constraint if exists courses_component_catalog_fk,
+  drop column if exists training_component_id;
+alter table public.training_use_cases
+  drop constraint if exists training_use_cases_component_letter_unique;
+alter table public.options
+  drop column if exists order_index;
 
 -- 2. Elective choices, enrollments, organization catalogs (20261024001000 - 1400)
 drop trigger if exists training_components_kind_change_check
