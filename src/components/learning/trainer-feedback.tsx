@@ -7,6 +7,7 @@ import type { LessonWithSubLessons } from '@/db/queries';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { authFetch } from '@/lib/authFetch';
 
 interface LessonProps {
   data: LessonWithSubLessons | null;
@@ -23,7 +24,7 @@ export default function Lesson({ data }: LessonProps) {
     const load = async () => {
       if (!data?.lesson.id || !profile?.id) return;
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`,
           { cache: 'no-store' }
         );
@@ -63,7 +64,7 @@ export default function Lesson({ data }: LessonProps) {
         else copy.delete(subLessonId);
         return copy;
       });
-      await fetch('/api/trainee/progress', {
+      await authFetch('/api/trainee/progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

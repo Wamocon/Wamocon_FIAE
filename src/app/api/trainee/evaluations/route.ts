@@ -7,16 +7,25 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { resolveTraineeForRead } from '@/lib/auth/trainee-data-access';
 
 // GET: Fetch trainee's evaluations
+// A trainee gets their own evaluations (a userId in the query is ignored), a
+// trainer-level caller gets the ones of a trainee in their organization scope.
 export async function GET(request: NextRequest) {
+  const session = await requireUser(request);
+  if (isErrorResponse(session)) return session;
+
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-    }
+    const resolved = await resolveTraineeForRead(
+      session,
+      request,
+      searchParams.get('userId')
+    );
+    if (isErrorResponse(resolved)) return resolved;
+    const userId = resolved;
 
     const cached = await apiCache.getOrFetch(
       `trainee_evaluations_${userId}`,
@@ -46,11 +55,16 @@ export async function GET(request: NextRequest) {
 }
 
 // POST: Create or update trainee self-assessment
+// Only the session user changes their own self-assessment, a userId in the body
+// is ignored.
 export async function POST(request: NextRequest) {
+  const session = await requireUser(request);
+  if (isErrorResponse(session)) return session;
+  const userId = session.id;
+
   try {
     const body = await request.json();
     const {
-      userId,
       weekNumber,
       year,
       ausbildungsjahr,
@@ -59,9 +73,9 @@ export async function POST(request: NextRequest) {
       submit = false,
     } = body;
 
-    if (!userId || !weekNumber || !year || !ausbildungsjahr) {
+    if (!weekNumber || !year || !ausbildungsjahr) {
       return NextResponse.json(
-        { error: 'userId, weekNumber, year, and ausbildungsjahr are required' },
+        { error: 'weekNumber, year, and ausbildungsjahr are required' },
         { status: 400 }
       );
     }

@@ -3,7 +3,10 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
-import { mockCatalogScope } from '../../../helpers/mockNext';
+import {
+  mockCatalogScope,
+  mockTraineeSession,
+} from '../../../helpers/mockNext';
 
 function makePost(url: string, body: any) {
   return { url, json: async () => body } as any;
@@ -12,6 +15,7 @@ function makePost(url: string, body: any) {
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockTraineeSession();
   mockCatalogScope();
   const mod =
     await import('@/app/api/trainee/use-cases/[useCaseId]/submit/route');
@@ -110,20 +114,6 @@ describe('API: POST /api/trainee/use-cases/[useCaseId]/submit', () => {
     expect(writes('insert', 'useCaseSubmissionLinks')[0]).toEqual([
       { submissionId: 's1', url: 'https://c', description: null },
     ]);
-  });
-
-  it('400 if missing traineeId', async () => {
-    const { db } = createTableDb();
-    const POST = await importHandlerWithDb(db);
-    const res = await POST(
-      makePost('http://localhost/api/trainee/use-cases/u1/submit', {
-        submissionText: 'X',
-      }),
-      { params: Promise.resolve({ useCaseId: 'u1' }) }
-    );
-    const body = await (res as any).json();
-    expect((res as any).status).toBe(400);
-    expect(body).toEqual({ error: 'Missing traineeId' });
   });
 
   it('403 if not member', async () => {

@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import SoftskillRatingGrid from './SoftskillRatingGrid';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
+import { authFetch } from '@/lib/authFetch';
 
 interface ARPUseCase {
   id: string;
@@ -208,7 +209,7 @@ export default function WeeklyEvaluationForm({
     }
 
     try {
-      const res = await fetch('/api/trainee/evaluations', {
+      const res = await authFetch('/api/trainee/evaluations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
