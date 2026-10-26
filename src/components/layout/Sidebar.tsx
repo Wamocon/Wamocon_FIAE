@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { normalizeRole } from '@/lib/auth/roles';
 import { adminMenuItems } from '@/lib/auth/adminMenu';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCatalog } from '@/contexts/CatalogContext';
 import {
   LayoutDashboard,
   BookOpen,
@@ -16,6 +17,7 @@ import {
   ClipboardList,
   Building2,
   ShieldCheck,
+  Briefcase,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -53,6 +55,8 @@ export function Sidebar({
   const { profile, signOut, loading, subscriptionPlan, isPlatformOwner } =
     useAuth();
   const { language, t } = useLanguage();
+  // More than one occupation: the way back to the occupation choice
+  const { isMultiple } = useCatalog();
   const router = useRouter();
   const pathname = usePathname();
   const [haiAdminOpen, setHaiAdminOpen] = useState(false);
@@ -367,6 +371,16 @@ export function Sidebar({
               </p>
             </div>
           </div>
+
+          {isMultiple && (
+            <Link
+              href="/berufswahl"
+              className="text-muted-foreground hover:text-foreground hover:bg-accent/10 hover:ring-accent mt-3 flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left transition-all duration-200 hover:ring-1"
+            >
+              <Briefcase className="h-5 w-5" />
+              <span className="font-medium">{t('catalog.tiles.nav')}</span>
+            </Link>
+          )}
 
           <button
             onClick={handleSignOut}

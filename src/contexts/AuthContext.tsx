@@ -67,11 +67,22 @@ interface Profile {
   organization?: OrgInfo | null;
 }
 
+/**
+ * A hint of the caller of signIn where to go after the sign in, instead of the
+ * dashboard (the login form sends the person to the occupation choice). null
+ * or undefined: the dashboard of the role.
+ */
+export type SignInRedirect = () => Promise<string | null | undefined>;
+
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (
+    email: string,
+    password: string,
+    resolveRedirect?: SignInRedirect
+  ) => Promise<void>;
   signUp: (
     fullName: string,
     email: string,
@@ -613,7 +624,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (
+    email: string,
+    password: string,
+    resolveRedirect?: SignInRedirect
+  ) => {
     setLoading(true);
     let userId: string | null = null;
     let userEmail: string | null = null;
@@ -751,7 +766,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       scheduleAutoLogout();
 
       if (isPublicPath && loaded) {
-        router.replace(getDashboardPath(loaded.role));
+        let target: string | null | undefined = null;
+        if (resolveRedirect) {
+          try {
+            target = await resolveRedirect();
+          } catch {
+            // a failing hint never undoes the sign in: the dashboard it is
+          }
+        }
+        router.replace(target || getDashboardPath(loaded.role));
       }
       return;
     }

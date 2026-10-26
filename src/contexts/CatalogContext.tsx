@@ -20,7 +20,7 @@ import {
   type CatalogBranding,
 } from '@/lib/catalog/branding';
 import { normalizeCatalogCode } from '@/lib/catalog/client';
-import { reloadPage } from '@/lib/catalog/navigation';
+import { navigateTo, reloadPage } from '@/lib/catalog/navigation';
 import {
   CATALOG_LOOKUP_TIMEOUT_MS,
   readPreferredCatalog,
@@ -49,8 +49,11 @@ export interface CatalogContextValue {
   branding: CatalogBranding;
   /** The branding is shown (the active occupation is not FIAE). */
   brandingApplied: boolean;
-  /** Choose another occupation: the page loads again with it. */
-  selectCatalog: (code: string) => void;
+  /**
+   * Choose another occupation: the page loads again with it, or the browser
+   * goes to `destination` (a path) with a full page load if one is given.
+   */
+  selectCatalog: (code: string, destination?: string) => void;
   /** A CatalogProvider is mounted (false for the neutral default value). */
   inProvider: boolean;
 }
@@ -232,14 +235,15 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const catalogs = loaded?.catalogs ?? NO_CATALOGS;
 
   const selectCatalog = useCallback(
-    (code: string) => {
+    (code: string, destination?: string) => {
       const target = normalizeCatalogCode(code);
       if (!target || target === activeCode) return;
       if (!catalogs.some(c => c.code === target)) return;
       writePreferredCatalog(target);
       // Data of the previous occupation must not survive in the cache.
       queryClient.clear();
-      reloadPage();
+      if (destination) navigateTo(destination);
+      else reloadPage();
     },
     [activeCode, catalogs, queryClient]
   );

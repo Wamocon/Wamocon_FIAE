@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, BookOpen } from 'lucide-react';
 import Link from 'next/link';
@@ -9,11 +9,20 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { authFetch } from '@/lib/authFetch';
 import { writePreferredCatalog } from '@/lib/catalog/selection';
+import {
+  OCCUPATION_CHOICE_PATH,
+  needsOccupationChoice,
+  type LoginLinkChoice,
+} from '@/lib/catalog/choice';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
 type CatalogState = 'idle' | 'ready' | 'unknown' | 'unavailable';
+
+// The check of the login link must not hold the sign in back for long: after
+// this time the sign in goes on to the dashboard, as if the check had failed.
+const LINK_CHECK_TIMEOUT_MS = 4000;
 
 // catalogCode: the occupation the visitor chose on /ausbildung (?catalog=CODE).
 // Without it the form behaves exactly as before.
@@ -25,23 +34,32 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
   const [error, setError] = useState('');
   const [catalogTitle, setCatalogTitle] = useState<string | null>(null);
   const [catalogState, setCatalogState] = useState<CatalogState>('idle');
+  // Number of active occupations of the platform, null while it is not known
+  const [activeCount, setActiveCount] = useState<number | null>(null);
+  // True while the sign in decides where to go, so this form does not send the
+  // person to the dashboard first
+  const holdRedirect = useRef(false);
   const router = useRouter();
   const { profile, signIn } = useAuth();
   const { t } = useLanguage();
 
-  // Name of the chosen occupation from the public list of the active ones.
+  // The public list of the active occupations. Its length tells whether the
+  // occupation choice follows the sign in, and with a login link it names the
+  // chosen occupation.
   useEffect(() => {
-    if (!catalogCode) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch('/api/catalogs');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const found = (Array.isArray(data?.catalogs) ? data.catalogs : []).find(
+        const catalogs = Array.isArray(data?.catalogs) ? data.catalogs : [];
+        if (cancelled) return;
+        setActiveCount(catalogs.length);
+        if (!catalogCode) return;
+        const found = catalogs.find(
           (c: { code?: string }) => String(c.code).toUpperCase() === catalogCode
         );
-        if (cancelled) return;
         if (found) {
           setCatalogTitle(found.title);
           setCatalogState('ready');
@@ -49,7 +67,7 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
           setCatalogState('unknown');
         }
       } catch {
-        if (!cancelled) setCatalogState('unavailable');
+        if (!cancelled && catalogCode) setCatalogState('unavailable');
       }
     })();
     return () => {
@@ -59,23 +77,45 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
 
   // After the sign in the server says whether this account has the chosen
   // occupation. It is a hint only: a failed check never undoes the sign in.
-  const checkCatalogAccess = async (code: string) => {
+  const checkCatalogAccess = async (
+    code: string,
+    notAllowedKey = 'catalogs.login.notAllowed'
+  ): Promise<LoginLinkChoice> => {
     try {
       const res = await authFetch(
         `/api/me/catalogs?catalog=${encodeURIComponent(code)}`
       );
       if (res.status === 403) {
-        toast.error(
-          t('catalogs.login.notAllowed', { title: catalogTitle ?? code })
-        );
+        toast.error(t(notAllowedKey, { title: catalogTitle ?? code }));
+        return 'denied';
       }
+      return res.ok ? 'allowed' : 'unknown';
     } catch {
       // network error: nothing to tell the user
+      return 'unknown';
     }
   };
 
+  // Where the sign in leads on a platform with several active occupations: the
+  // occupation choice, unless the login link chose an occupation the account
+  // has. null: the dashboard of the role, as always.
+  const resolveRedirect = async (): Promise<string | null> => {
+    let link: LoginLinkChoice = 'none';
+    if (catalogCode && catalogState !== 'unknown') {
+      link = await Promise.race([
+        checkCatalogAccess(catalogCode, 'catalog.tiles.loginNotAllowed'),
+        new Promise<LoginLinkChoice>(resolve =>
+          setTimeout(() => resolve('unknown'), LINK_CHECK_TIMEOUT_MS)
+        ),
+      ]);
+    }
+    return needsOccupationChoice({ activeCatalogCount: activeCount, link })
+      ? OCCUPATION_CHOICE_PATH
+      : null;
+  };
+
   useEffect(() => {
-    if (profile) {
+    if (profile && !holdRedirect.current) {
       if (isTrainerLevelRole(profile.role)) router.push('/trainer/dashboard');
       else router.push('/trainee/dashboard');
     }
@@ -91,12 +131,19 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
       if (catalogCode && catalogState !== 'unknown') {
         writePreferredCatalog(catalogCode);
       }
-      await signIn(email.trim(), password);
-      // redirect happens in the effect when profile is loaded
-      if (catalogCode && catalogState !== 'unknown') {
-        await checkCatalogAccess(catalogCode);
+      if (activeCount !== null && activeCount > 1) {
+        // Several active occupations: signIn asks where to go
+        holdRedirect.current = true;
+        await signIn(email.trim(), password, resolveRedirect);
+      } else {
+        await signIn(email.trim(), password);
+        // redirect happens in the effect when profile is loaded
+        if (catalogCode && catalogState !== 'unknown') {
+          await checkCatalogAccess(catalogCode);
+        }
       }
     } catch (err: any) {
+      holdRedirect.current = false;
       setError(err?.message || t('auth.loginFailed'));
     } finally {
       setIsLoading(false);

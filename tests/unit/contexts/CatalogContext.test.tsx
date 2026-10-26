@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CatalogProvider, useCatalog } from '@/contexts/CatalogContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/lib/authFetch';
-import { reloadPage } from '@/lib/catalog/navigation';
+import { navigateTo, reloadPage } from '@/lib/catalog/navigation';
 import {
   getCatalogHeader,
   isCatalogPending,
@@ -16,7 +16,10 @@ import {
 
 jest.mock('@/contexts/AuthContext');
 jest.mock('@/lib/authFetch', () => ({ authFetch: jest.fn() }));
-jest.mock('@/lib/catalog/navigation', () => ({ reloadPage: jest.fn() }));
+jest.mock('@/lib/catalog/navigation', () => ({
+  reloadPage: jest.fn(),
+  navigateTo: jest.fn(),
+}));
 
 const authFetchMock = authFetch as jest.Mock;
 
@@ -246,15 +249,38 @@ describe('CatalogProvider', () => {
         expect(reloadPage).not.toHaveBeenCalled();
       });
 
+      it('goes to the destination instead of reloading when one is given (occupation choice page)', async () => {
+        const { result, clear } = setup();
+        await waitFor(() => expect(result.current.status).toBe('ready'));
+        act(() => result.current.selectCatalog('KFBM', '/trainer/dashboard'));
+        expect(readPreferredCatalog()).toBe('KFBM');
+        expect(clear).toHaveBeenCalledTimes(1);
+        expect(navigateTo).toHaveBeenCalledWith('/trainer/dashboard');
+        expect(reloadPage).not.toHaveBeenCalled();
+        // cache is emptied before the browser leaves the page
+        expect(clear.mock.invocationCallOrder[0]).toBeLessThan(
+          (navigateTo as jest.Mock).mock.invocationCallOrder[0]
+        );
+      });
+
+      it('does not leave the page for the occupation that is already active, also with a destination', async () => {
+        const { result } = setup();
+        await waitFor(() => expect(result.current.status).toBe('ready'));
+        act(() => result.current.selectCatalog('FIAE', '/trainee/dashboard'));
+        expect(navigateTo).not.toHaveBeenCalled();
+        expect(reloadPage).not.toHaveBeenCalled();
+      });
+
       it.each(['ZZZ', '', 'a b', '<script>', 'KFBM;x'])(
         'refuses %p: only one of the user occupations can be chosen',
         async code => {
           const { result, clear } = setup();
           await waitFor(() => expect(result.current.status).toBe('ready'));
-          act(() => result.current.selectCatalog(code));
+          act(() => result.current.selectCatalog(code, '/trainee/dashboard'));
           expect(readPreferredCatalog()).toBe('FIAE');
           expect(clear).not.toHaveBeenCalled();
           expect(reloadPage).not.toHaveBeenCalled();
+          expect(navigateTo).not.toHaveBeenCalled();
         }
       );
     });
