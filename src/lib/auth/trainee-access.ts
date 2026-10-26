@@ -24,19 +24,27 @@ export type TraineeAccess = { traineeId: string };
  * Resolve the trainee and check that the session may access them. Returns the
  * trainee id, or a ready-made 404 (outside the scope or unknown), 403 (a
  * foreign occupation or no trainer level) or 503 (lookup failed) response.
+ * Routes that look a record up first (an evaluation, a block, ...) pass the
+ * message of their own 404, so a foreign record answers exactly like a missing
+ * one.
  */
 export async function requireTraineeAccess(
   session: SessionUser,
   traineeId: string,
-  request: CatalogRequestLike = {}
+  request: CatalogRequestLike = {},
+  notFoundMessage = 'Not found'
 ): Promise<TraineeAccess | NextResponse> {
+  const notFound = () =>
+    NextResponse.json({ error: notFoundMessage }, { status: 404 });
   if (!session.isTrainerLevel) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (!traineeId) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
+  if (!traineeId) return notFound();
   const resolved = await resolveTraineeForRead(session, request, traineeId);
-  if (typeof resolved !== 'string') return resolved;
+  if (typeof resolved !== 'string') {
+    // The record that was asked for (a report, a block, ...) is "not found"
+    // in the words of the route, whether it is missing or foreign
+    return resolved.status === 404 ? notFound() : resolved;
+  }
   return { traineeId: resolved };
 }

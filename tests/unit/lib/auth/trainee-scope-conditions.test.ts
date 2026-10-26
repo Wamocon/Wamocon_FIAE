@@ -156,3 +156,78 @@ describe('traineeIdsInScope', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('traineeRecordCondition', () => {
+  it('binds a write to the id, the role and the organization of the session', async () => {
+    const { traineeRecordCondition } = await load();
+    const { sql: text, params } = renderCondition(
+      traineeRecordCondition(trainer as any, A)
+    );
+    expect(text).toContain('"profiles"."id" = $');
+    expect(text).toContain('"profiles"."role" = $');
+    expect(text).toContain('"profiles"."organization_id" = $');
+    expect(params).toEqual([A, 'TRAINEE', 'org-1']);
+  });
+
+  it('leaves the organization open for the super admin', async () => {
+    const { traineeRecordCondition } = await load();
+    const { sql: text } = renderCondition(
+      traineeRecordCondition(superAdmin as any, A)
+    );
+    expect(text).not.toContain('organization_id');
+  });
+});
+
+describe('isUuid', () => {
+  it('accepts a uuid and nothing else', async () => {
+    const { isUuid } = await load();
+    expect(isUuid(A)).toBe(true);
+    expect(isUuid('x')).toBe(false);
+    expect(isUuid(undefined)).toBe(false);
+    expect(isUuid(42)).toBe(false);
+  });
+});
+
+describe('isTrainerInOrgScope', () => {
+  const row = (role: string, organizationId: string | null) => ({
+    rows: [{ role, organizationId }],
+  });
+
+  it('accepts a trainer or admin of the own organization', async () => {
+    for (const role of ['TRAINER', 'ADMIN', 'TEMP_ADMIN']) {
+      const { isTrainerInOrgScope } = await load(row(role, 'org-1'));
+      expect(await isTrainerInOrgScope(trainer as any, A)).toBe(true);
+    }
+  });
+
+  it('refuses a trainer of another organization, a trainee and an unknown person', async () => {
+    const other = await load(row('TRAINER', 'org-2'));
+    expect(await other.isTrainerInOrgScope(trainer as any, A)).toBe(false);
+    const trainee = await load(row('TRAINEE', 'org-1'));
+    expect(await trainee.isTrainerInOrgScope(trainer as any, A)).toBe(false);
+    const unknown = await load({ rows: [] });
+    expect(await unknown.isTrainerInOrgScope(trainer as any, A)).toBe(false);
+  });
+
+  it('refuses an id that is no uuid without asking the database', async () => {
+    const { isTrainerInOrgScope, mock } = await load(row('TRAINER', 'org-1'));
+    expect(await isTrainerInOrgScope(trainer as any, 'nope')).toBe(false);
+    expect(mock.db.select).not.toHaveBeenCalled();
+  });
+
+  it('lets the super admin pick a trainer of any organization', async () => {
+    const { isTrainerInOrgScope } = await load(row('TRAINER', 'org-9'));
+    expect(await isTrainerInOrgScope(superAdmin as any, A)).toBe(true);
+  });
+
+  it('treats a profile without an organization as the default organization', async () => {
+    const defaultOrg = '00000000-0000-0000-0000-000000000001';
+    const { isTrainerInOrgScope } = await load(row('TRAINER', null));
+    expect(
+      await isTrainerInOrgScope(
+        fakeSession({ organizationId: defaultOrg }) as any,
+        A
+      )
+    ).toBe(true);
+  });
+});

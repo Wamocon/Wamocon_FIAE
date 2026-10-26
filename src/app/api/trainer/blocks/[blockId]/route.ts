@@ -47,7 +47,7 @@ export async function DELETE(
             return NextResponse.json({ error: 'Block not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(block.traineeId), req);
+        const access = await requireTraineeAccess(session, String(block.traineeId), req, 'Block not found');
         if (isErrorResponse(access)) return access;
 
         // Only allow deletion of trainer-created blocks
@@ -58,7 +58,9 @@ export async function DELETE(
         const organizationId = await getUserOrgId(String(block.createdByTrainerId || block.traineeId));
 
         // Delete the block
-        await db.delete(ausbildungBlocks).where(eq(ausbildungBlocks.id, blockId));
+        await db
+            .delete(ausbildungBlocks)
+            .where(and(eq(ausbildungBlocks.id, blockId), eq(ausbildungBlocks.traineeId, access.traineeId as any)));
 
         // Notify trainee that block was cancelled
         if (block.traineeId) {
@@ -112,7 +114,7 @@ export async function PATCH(
             return NextResponse.json({ error: 'Block not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(existingBlock.traineeId), req);
+        const access = await requireTraineeAccess(session, String(existingBlock.traineeId), req, 'Block not found');
         if (isErrorResponse(access)) return access;
 
         // Only allow editing of trainer-created blocks
@@ -150,7 +152,7 @@ export async function PATCH(
         const [updatedBlock] = await db
             .update(ausbildungBlocks)
             .set(updates)
-            .where(eq(ausbildungBlocks.id, blockId))
+            .where(and(eq(ausbildungBlocks.id, blockId), eq(ausbildungBlocks.traineeId, access.traineeId as any)))
             .returning();
 
         const organizationId = await getUserOrgId(String(existingBlock.createdByTrainerId || existingBlock.traineeId));

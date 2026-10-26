@@ -200,33 +200,55 @@ describe('trainee lists per occupation', () => {
   });
 
   describe('trainee record, overview and activation', () => {
-    const traineeUrl = 'http://localhost/api/trainer/trainees/t1';
-    const params = { params: Promise.resolve({ traineeId: 't1' }) };
+    const T1 = '11111111-1111-4111-8111-111111111111';
+    const traineeUrl = `http://localhost/api/trainer/trainees/${T1}`;
+    const params = { params: Promise.resolve({ traineeId: T1 }) };
 
-    // the catalog check is the query on profiles that selects only the id and
-    // is made after the organization check, so each route needs its own mock
-    const record = (inScope: boolean, withHeader: boolean) => ({
+    // requireTraineeAccess looks the trainee up first (role and organization),
+    // the occupation check is the second query on profiles and only made with
+    // a header. It finds the trainee (inScope) or nobody.
+    const access = { id: T1, role: 'TRAINEE', organizationId: ORG };
+    const lookups = (
+      inScope: boolean,
+      withHeader: boolean,
+      ...more: any[][]
+    ) => ({
       profiles: {
         sequence: [
-          ...(withHeader ? [inScope ? [{ id: 't1' }] : []] : []),
-          [{ id: 't1', fullName: 'A', organizationId: ORG }],
-          [{ assignedTrainerId: null }],
+          [access],
+          ...(withHeader ? [inScope ? [{ id: T1 }] : []] : []),
+          ...more,
         ],
       },
     });
+    const traineeRecord = { id: T1, fullName: 'A', organizationId: ORG };
+    const updated = {
+      profiles: [
+        {
+          id: T1,
+          fullName: 'Neu',
+          ausbildungDurationYears: 3,
+          assignedTrainerId: null,
+          trainerActivated: false,
+        },
+      ],
+    };
 
     it('GET record: a trainee of another occupation is not found (404)', async () => {
-      const { mod } = await load('[traineeId]/route', record(false, true));
+      const { mod } = await load('[traineeId]/route', lookups(false, true));
       const res = await mod.GET(req(traineeUrl, { header: 'KFBM' }), params);
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ error: 'Not found' });
     });
 
     it('GET record: a trainee of the chosen occupation is returned', async () => {
-      const { mock, mod } = await load('[traineeId]/route', record(true, true));
+      const { mock, mod } = await load(
+        '[traineeId]/route',
+        lookups(true, true, [traineeRecord], [{ assignedTrainerId: null }])
+      );
       const res = await mod.GET(req(traineeUrl, { header: 'KFBM' }), params);
       expect(res.status).toBe(200);
-      expect((await res.json()).trainee.id).toBe('t1');
+      expect((await res.json()).trainee.id).toBe(T1);
       expect(mock.filters('select', 'profiles').sql).toContain(
         'exists (select 1 from "trainee_enrollments"'
       );
@@ -235,7 +257,7 @@ describe('trainee lists per occupation', () => {
     it('GET record, FIAE regression: without a header nothing about occupations is asked', async () => {
       const { mock, mod } = await load(
         '[traineeId]/route',
-        record(true, false)
+        lookups(true, false, [traineeRecord], [{ assignedTrainerId: null }])
       );
       const res = await mod.GET(req(traineeUrl), params);
       expect(res.status).toBe(200);
@@ -247,15 +269,8 @@ describe('trainee lists per occupation', () => {
     it('PATCH record: a trainee of another occupation is not changed (404)', async () => {
       const { mock, mod } = await load(
         '[traineeId]/route',
-        {
-          profiles: {
-            sequence: [
-              [{ id: 't1', organizationId: ORG, assignedTrainerId: null }],
-              [],
-            ],
-          },
-        },
-        { profiles: [{ id: 't1' }] }
+        lookups(false, true),
+        updated
       );
       const res = await mod.PATCH(
         req(traineeUrl, {
@@ -272,25 +287,8 @@ describe('trainee lists per occupation', () => {
     it('PATCH record: a trainee of the chosen occupation is changed', async () => {
       const { mock, mod } = await load(
         '[traineeId]/route',
-        {
-          profiles: {
-            sequence: [
-              [{ id: 't1', organizationId: ORG, assignedTrainerId: null }],
-              [{ id: 't1' }],
-            ],
-          },
-        },
-        {
-          profiles: [
-            {
-              id: 't1',
-              fullName: 'Neu',
-              ausbildungDurationYears: 3,
-              assignedTrainerId: null,
-              trainerActivated: false,
-            },
-          ],
-        }
+        lookups(true, true),
+        updated
       );
       const res = await mod.PATCH(
         req(traineeUrl, {
@@ -307,24 +305,8 @@ describe('trainee lists per occupation', () => {
     it('PATCH record, FIAE regression: without a header the trainee is changed as before', async () => {
       const { mock, mod } = await load(
         '[traineeId]/route',
-        {
-          profiles: {
-            sequence: [
-              [{ id: 't1', organizationId: ORG, assignedTrainerId: null }],
-            ],
-          },
-        },
-        {
-          profiles: [
-            {
-              id: 't1',
-              fullName: 'Neu',
-              ausbildungDurationYears: 3,
-              assignedTrainerId: null,
-              trainerActivated: false,
-            },
-          ],
-        }
+        lookups(true, false),
+        updated
       );
       const res = await mod.PATCH(
         req(traineeUrl, { method: 'PATCH', body: { full_name: 'Neu' } }),
@@ -336,9 +318,10 @@ describe('trainee lists per occupation', () => {
     });
 
     it('overview: a trainee of another occupation is not found (404)', async () => {
-      const { mod } = await load('[traineeId]/overview/route', {
-        profiles: { sequence: [[]] },
-      });
+      const { mod } = await load(
+        '[traineeId]/overview/route',
+        lookups(false, true)
+      );
       const res = await mod.GET(
         req(`${traineeUrl}/overview`, { header: 'KFBM' }),
         params
@@ -347,23 +330,23 @@ describe('trainee lists per occupation', () => {
     });
 
     it('overview: a trainee of the chosen occupation is shown', async () => {
-      const { mod } = await load('[traineeId]/overview/route', {
-        profiles: {
-          sequence: [[{ id: 't1' }], [{ id: 't1', fullName: 'A' }]],
-        },
-      });
+      const { mod } = await load(
+        '[traineeId]/overview/route',
+        lookups(true, true, [{ id: T1, fullName: 'A' }])
+      );
       const res = await mod.GET(
         req(`${traineeUrl}/overview`, { header: 'KFBM' }),
         params
       );
       expect(res.status).toBe(200);
-      expect((await res.json()).trainee.id).toBe('t1');
+      expect((await res.json()).trainee.id).toBe(T1);
     });
 
     it('overview, FIAE regression: without a header nothing about occupations is asked', async () => {
-      const { mock, mod } = await load('[traineeId]/overview/route', {
-        profiles: { sequence: [[{ id: 't1', fullName: 'A' }]] },
-      });
+      const { mock, mod } = await load(
+        '[traineeId]/overview/route',
+        lookups(true, false, [{ id: T1, fullName: 'A' }])
+      );
       const res = await mod.GET(req(`${traineeUrl}/overview`), params);
       expect(res.status).toBe(200);
       expect(selectsFrom(mock, 'training_catalogs')).toHaveLength(0);
@@ -376,10 +359,13 @@ describe('trainee lists per occupation', () => {
         method: 'PATCH',
         body: { itemType: 'ENABLER', itemId: 'e1', isActive: true },
       });
+    // the enabler of the item lies in the occupation of the caller
+    const item = { enablers: [{ trainingCatalogId: FIAE }] };
 
     it('activation: a trainee of another occupation is not changed (404)', async () => {
       const { mock, mod } = await load('[traineeId]/activate/route', {
-        profiles: { sequence: [[{ role: 'TRAINER' }], []] },
+        ...lookups(false, true),
+        ...item,
       });
       const res = await mod.PATCH(activate('KFBM'), params);
       expect(res.status).toBe(404);
@@ -389,7 +375,8 @@ describe('trainee lists per occupation', () => {
 
     it('activation: a trainee of the chosen occupation is changed', async () => {
       const { mock, mod } = await load('[traineeId]/activate/route', {
-        profiles: { sequence: [[{ role: 'TRAINER' }], [{ id: 't1' }]] },
+        ...lookups(true, true),
+        ...item,
       });
       const res = await mod.PATCH(activate('KFBM'), params);
       expect(res.status).toBe(200);
@@ -398,20 +385,21 @@ describe('trainee lists per occupation', () => {
       );
     });
 
-    it('activation, FIAE regression: without a header nothing about occupations is asked', async () => {
+    it('activation, FIAE regression: without a header only the item is checked against the catalogs', async () => {
       const { mock, mod } = await load('[traineeId]/activate/route', {
-        profiles: { sequence: [[{ role: 'TRAINER' }]] },
+        ...lookups(true, false),
+        ...item,
       });
       const res = await mod.PATCH(activate(), params);
       expect(res.status).toBe(200);
-      expect(selectsFrom(mock, 'training_catalogs')).toHaveLength(0);
       expect(selectsFrom(mock, 'trainee_enrollments')).toHaveLength(0);
     });
 
     it('answers 403 for an occupation the organization has not enabled, before anything is changed', async () => {
       const { mock, mod } = await load('[traineeId]/activate/route', {
         organizationCatalogs: fiaeOnly,
-        profiles: { sequence: [[{ role: 'TRAINER' }], [{ id: 't1' }]] },
+        ...lookups(true, true),
+        ...item,
       });
       const res = await mod.PATCH(activate('KFBM'), params);
       expect(res.status).toBe(403);

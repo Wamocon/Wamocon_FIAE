@@ -59,6 +59,8 @@ export type ScopedLoad = {
   session?: FakeSession | null;
   tables?: Record<string, TableRows>;
   returns?: Record<string, any[]>;
+  /** Extra jest.doMock calls, run before the route is imported. */
+  setup?: () => void;
 };
 
 /**
@@ -85,6 +87,7 @@ export async function loadScoped(routePath: string, options: ScopedLoad = {}) {
     getUserOrgId: async () => session?.organizationId ?? ORG,
   }));
   mockSession(session);
+  options.setup?.();
   const mod = await import(`@/app/api/${routePath}`);
   return { mock, mod };
 }

@@ -8,14 +8,15 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
     activityReports,
     activityReportEntries,
     profiles,
     notifications
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -28,8 +29,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         if (isErrorResponse(session)) return session;
 
         const { id } = await params;
-        const { searchParams } = new URL(req.url);
-        const requesterId = session.id;
 
         // Get report
         const [report] = await db
@@ -41,16 +40,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
 
-        if (requesterId) {
-            const isPO = await verifyPlatformOwner(requesterId);
-            if (!isPO) {
-                const trainerOrgId = await getUserOrgId(requesterId);
-                const traineeOrgId = await getUserOrgId(report.traineeId);
-                if (trainerOrgId !== traineeOrgId) {
-                    return NextResponse.json({ error: 'Not in your organization' }, { status: 403 });
-                }
-            }
-        }
+        // Only the report of a trainee of the own organization (the super admin:
+        // any) and of the chosen occupation. A foreign report answers like a
+        // missing one.
+        const access = await requireTraineeAccess(session, String(report.traineeId), req, 'Report not found');
+        if (isErrorResponse(access)) return access;
 
         // Get entries
         const entries = await db
@@ -127,20 +121,17 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
 
+        // Only the report of a trainee of the own organization (the super admin:
+        // any) and of the chosen occupation. A foreign report answers like a
+        // missing one, whatever its status is.
+        const access = await requireTraineeAccess(session, String(report.traineeId), req, 'Report not found');
+        if (isErrorResponse(access)) return access;
+
         // Validate status
         if (report.status !== 'SUBMITTED') {
             return NextResponse.json({
                 error: `Cannot ${action} report with status: ${report.status}`
             }, { status: 403 });
-        }
-
-        const isPO = await verifyPlatformOwner(trainerId);
-        if (!isPO) {
-            const trainerOrgId = await getUserOrgId(trainerId);
-            const traineeOrgId = await getUserOrgId(report.traineeId);
-            if (trainerOrgId !== traineeOrgId) {
-                return NextResponse.json({ error: 'Not in your organization' }, { status: 403 });
-            }
         }
 
         // Get trainer info for notification
@@ -187,7 +178,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         const [updated] = await db
             .update(activityReports)
             .set(updateData)
-            .where(eq(activityReports.id, id as any))
+            .where(and(eq(activityReports.id, id as any), eq(activityReports.traineeId, access.traineeId as any)))
             .returning();
 
         // Send notification to trainee

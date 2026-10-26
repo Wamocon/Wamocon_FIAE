@@ -14,6 +14,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { verifyTrainer, getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
+import { isInOrgScope, orgScopeCondition, scopeOrg } from '@/lib/auth/session';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -74,7 +75,14 @@ export async function GET(
       })
       .from(courseMembers)
       .leftJoin(profiles, eq(courseMembers.userId, profiles.id))
-      .where(eq(courseMembers.courseId, courseId as any));
+      .where(
+        and(
+          eq(courseMembers.courseId, courseId as any),
+          // Members of other organizations are not listed (the super admin
+          // sees every organization)
+          orgScopeCondition(profiles.organizationId, scopeOrg(session))
+        )
+      );
 
     return NextResponse.json({ members: list });
   } catch (e) {
@@ -130,10 +138,21 @@ export async function POST(
 
     // Verify the user to be added exists
     const [userToAdd] = await db
-      .select({ id: profiles.id, role: profiles.role })
+      .select({
+        id: profiles.id,
+        role: profiles.role,
+        organizationId: profiles.organizationId,
+      })
       .from(profiles)
       .where(eq(profiles.id, userId as any));
-    if (!userToAdd) {
+    // A person of another organization answers like an unknown one
+    if (
+      !userToAdd ||
+      !isInOrgScope(
+        scopeOrg(session),
+        userToAdd.organizationId ? String(userToAdd.organizationId) : null
+      )
+    ) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -294,7 +313,24 @@ export async function DELETE(
         )
       );
 
-    if (!memberToRemove) {
+    // A member of another organization answers like a missing one
+    let memberInScope = false;
+    if (memberToRemove) {
+      const [memberProfile] = await db
+        .select({ organizationId: profiles.organizationId })
+        .from(profiles)
+        .where(eq(profiles.id, userId as any));
+      memberInScope =
+        !!memberProfile &&
+        isInOrgScope(
+          scopeOrg(session),
+          memberProfile.organizationId
+            ? String(memberProfile.organizationId)
+            : null
+        );
+    }
+
+    if (!memberToRemove || !memberInScope) {
       return NextResponse.json(
         { error: 'Member not found in this course' },
         { status: 404 }

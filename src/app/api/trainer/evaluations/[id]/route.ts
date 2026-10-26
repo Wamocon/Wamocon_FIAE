@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         const evaluation = evaluationRows[0];
 
-        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request);
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request, 'Evaluation not found');
         if (isErrorResponse(access)) return access;
 
         // Fetch trainee info
@@ -94,7 +94,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
         const evaluation = evaluationRows[0];
 
-        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request);
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request, 'Evaluation not found');
         if (isErrorResponse(access)) return access;
 
         const body = await request.json();
@@ -160,7 +160,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             await db
                 .update(weeklyEvaluations)
                 .set(updateData)
-                .where(eq(weeklyEvaluations.id, id as any));
+                .where(and(eq(weeklyEvaluations.id, id as any), eq(weeklyEvaluations.traineeId, access.traineeId as any)));
 
             // Update softskill release ratings
             if (softskillRatings && Array.isArray(softskillRatings)) {
@@ -207,7 +207,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
                 trainerComment: trainerComment?.substring(0, 500) || null,
                 updatedAt: new Date(),
             })
-            .where(eq(weeklyEvaluations.id, id as any));
+            .where(and(eq(weeklyEvaluations.id, id as any), eq(weeklyEvaluations.traineeId, access.traineeId as any)));
 
         // Update softskill ratings
         if (softskillRatings && Array.isArray(softskillRatings)) {
@@ -275,7 +275,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
         const evaluation = evaluationRows[0];
 
-        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request);
+        const access = await requireTraineeAccess(session, String(evaluation.traineeId), request, 'Evaluation not found');
         if (isErrorResponse(access)) return access;
 
         const body = await request.json();
@@ -302,7 +302,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
                 rejectionReason: action === 'reject' ? rejectionReason : null,
                 updatedAt: new Date(),
             })
-            .where(eq(weeklyEvaluations.id, id as any));
+            .where(and(eq(weeklyEvaluations.id, id as any), eq(weeklyEvaluations.traineeId, access.traineeId as any)));
 
         // Create notification for trainee
         if (trainerId) {

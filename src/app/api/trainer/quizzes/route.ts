@@ -16,6 +16,10 @@ import {
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import {
+  requireTraineeScopeCondition,
+  traineeIdsInScope,
+} from '@/lib/auth/trainee-scope-conditions';
+import {
   catalogCacheKey,
   catalogCondition,
   ensureContentInScope,
@@ -165,6 +169,23 @@ export async function POST(req: NextRequest) {
     const scope = await requireCatalogScope(session, req);
     if (isErrorResponse(scope)) return scope;
     let quizCatalogId = scope.activeCatalogId;
+
+    // Only trainees of the caller's organization (the super admin: any) and of
+    // the chosen occupation can be assigned, checked before anything is created
+    if (qt === 'GLOBAL' && Array.isArray(assignedTraineeIds)) {
+      const allowed = await traineeIdsInScope(
+        session,
+        req,
+        assignedTraineeIds
+      );
+      if (isErrorResponse(allowed)) return allowed;
+      if (assignedTraineeIds.some(tid => !allowed.has(String(tid)))) {
+        return NextResponse.json(
+          { error: 'Trainee not found' },
+          { status: 404 }
+        );
+      }
+    }
     if (qt === 'LESSON' && enabler_id) {
       const denied = await ensureContentInScope(
         scope,

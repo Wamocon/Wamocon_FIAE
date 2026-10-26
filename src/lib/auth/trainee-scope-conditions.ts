@@ -25,8 +25,9 @@ import type { PgColumn } from 'drizzle-orm/pg-core';
 import db from '@/db';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { withDbRetry } from '@/lib/db-retry';
-import { ROLE } from '@/lib/auth/roles';
+import { isTrainerLevelRole, ROLE } from '@/lib/auth/roles';
 import {
+  isInOrgScope,
   orgScopeCondition,
   scopeOrg,
   type SessionUser,
@@ -35,6 +36,11 @@ import type { CatalogRequestLike } from '@/lib/catalog/scope';
 import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Whether a value has the shape of a uuid (the database rejects others). */
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID.test(value);
+}
 
 /** Condition on `profiles` for the trainees the caller may see. */
 export async function requireTraineeScopeCondition(
@@ -75,6 +81,36 @@ export function traineeRecordCondition(
  */
 export function traineeIdInScope(column: PgColumn, condition: SQL): SQL {
   return sql`${column} in (select ${profiles.id} from ${profiles} where ${condition})`;
+}
+
+/**
+ * Whether `trainerId` is a trainer-level person (trainer, admin) of the
+ * organization scope of the session. Use it before a person is assigned to
+ * something, so nobody can be given access to data of another organization.
+ */
+export async function isTrainerInOrgScope(
+  session: SessionUser,
+  trainerId: unknown
+): Promise<boolean> {
+  if (!isUuid(trainerId)) return false;
+  const [row] = await withDbRetry(() =>
+    db
+      .select({
+        role: profiles.role,
+        organizationId: profiles.organizationId,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, trainerId as any))
+      .limit(1)
+  );
+  return (
+    !!row &&
+    isTrainerLevelRole(String(row.role)) &&
+    isInOrgScope(
+      scopeOrg(session),
+      row.organizationId ? String(row.organizationId) : null
+    )
+  );
 }
 
 /**
