@@ -1,9 +1,13 @@
 // Generated from the route files under src/app/api/trainer and src/app/api/admin,
-// plus me/catalog-requests (a trainer-level request for an occupation).
+// plus me/catalog-requests (a trainer-level request for an occupation), the
+// notification routes and the school routes of a trainee (guard 'user').
 // Every entry is a handler that must reject anonymous callers (401) and callers
 // with a too low role (403). Regenerate when a route is added.
 
-export type GuardKind = 'trainer' | 'admin' | 'superAdmin';
+// 'user' is any signed-in, active account (no role check): the notification
+// routes and the school routes of a trainee, which then work on the data of the
+// session only.
+export type GuardKind = 'user' | 'trainer' | 'admin' | 'superAdmin';
 
 export type GuardedRoute = {
   /** Path below src/app/api, also the module path of the route file. */
@@ -580,5 +584,161 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     method: 'POST',
     guard: 'trainer',
     params: [],
+  },
+  {
+    route: 'notifications',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'notifications/[id]',
+    method: 'PATCH',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'notifications/mark-all-read',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/blocks',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/blocks',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/blocks/import',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/blocks/[id]',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/blocks/[id]',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/blocks/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/exams',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/exams/[id]',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]/result',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]/result',
+    method: 'POST',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/exams/[id]/result',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports',
+    method: 'GET',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/reports',
+    method: 'POST',
+    guard: 'user',
+    params: [],
+  },
+  {
+    route: 'trainee/school/reports/[id]',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]',
+    method: 'DELETE',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]/entries',
+    method: 'GET',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]/entries',
+    method: 'POST',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]/entries',
+    method: 'PUT',
+    guard: 'user',
+    params: ['id'],
+  },
+  {
+    route: 'trainee/school/reports/[id]/submit',
+    method: 'POST',
+    guard: 'user',
+    params: ['id'],
   },
 ];

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { authFetch } from '@/lib/authFetch';
 import {
   GraduationCap,
   TrendingUp,
@@ -42,7 +43,7 @@ export function ExamResultsOverview() {
     const loadResults = async () => {
       setLoading(true);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=false`,
           { cache: 'no-store' }
         );

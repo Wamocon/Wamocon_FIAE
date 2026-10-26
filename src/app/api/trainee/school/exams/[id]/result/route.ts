@@ -10,6 +10,7 @@ import db from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { schoolExams, schoolExamResults, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -34,19 +35,23 @@ function determinePassed(grade?: string, points?: number): boolean | null {
 }
 
 // POST /api/trainee/school/exams/[id]/result
+// The result is recorded for the session user, a traineeId in the body is ignored.
 export async function POST(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id: examId } = await params;
         const body = await req.json();
-        const { traineeId, grade, points, percentage, passed, notes } = body;
+        const { grade, points, percentage, passed, notes } = body;
 
-        // Validate exam exists
+        // Validate exam exists and belongs to the session user
         const [exam] = await db
             .select({ id: schoolExams.id, traineeId: schoolExams.traineeId })
             .from(schoolExams)
             .where(eq(schoolExams.id, examId as any));
 
-        if (!exam) {
+        if (!exam || String(exam.traineeId) !== session.id) {
             return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
         }
 
@@ -62,7 +67,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             }, { status: 409 });
         }
 
-        const effectiveTraineeId = traineeId || String(exam.traineeId);
+        const effectiveTraineeId = session.id;
         const organizationId = await getUserOrgId(effectiveTraineeId);
 
         // Determine passed status
@@ -72,7 +77,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             .insert(schoolExamResults)
             .values({
                 examId: examId as any,
-                traineeId: (traineeId || exam.traineeId) as any,
+                traineeId: effectiveTraineeId as any,
                 grade: grade || null,
                 points: points ?? null,
                 percentage: percentage ?? null,
@@ -118,17 +123,20 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
 // PUT /api/trainee/school/exams/[id]/result
 export async function PUT(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id: examId } = await params;
         const body = await req.json();
 
-        // Find existing result
+        // Find existing result, the result of someone else counts as missing
         const [existing] = await db
             .select()
             .from(schoolExamResults)
             .where(eq(schoolExamResults.examId, examId as any));
 
-        if (!existing) {
+        if (!existing || String(existing.traineeId) !== session.id) {
             return NextResponse.json({
                 error: 'No result found for this exam. Use POST to create.'
             }, { status: 404 });
@@ -158,7 +166,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         const [updated] = await db
             .update(schoolExamResults)
             .set(updateData)
-            .where(eq(schoolExamResults.id, existing.id))
+            .where(and(eq(schoolExamResults.id, existing.id), eq(schoolExamResults.traineeId, session.id as any)))
             .returning();
 
         return NextResponse.json({ result: updated });
@@ -170,6 +178,9 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
 // GET /api/trainee/school/exams/[id]/result
 export async function GET(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id: examId } = await params;
 
@@ -178,7 +189,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             .from(schoolExamResults)
             .where(eq(schoolExamResults.examId, examId as any));
 
-        if (!result) {
+        // The result of someone else counts as missing
+        if (!result || String(result.traineeId) !== session.id) {
             return NextResponse.json({ result: null });
         }
 

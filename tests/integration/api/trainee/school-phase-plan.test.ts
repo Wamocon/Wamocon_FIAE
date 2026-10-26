@@ -3,7 +3,11 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
-import { makeRequest } from '../../../helpers/mockNext';
+import {
+  fakeSession,
+  makeRequest,
+  mockSession,
+} from '../../../helpers/mockNext';
 
 // The school routes of a trainee (blocks, exams, reports) work out the phase
 // of a date (ausbildungsjahr) with the phase plan of the occupation of the
@@ -70,6 +74,15 @@ async function loadRoute(
   returns: Record<string, any[]> = {}
 ) {
   jest.resetModules();
+  // The routes work as the signed-in trainee (own data only)
+  mockSession(
+    fakeSession({
+      id: 't1',
+      role: 'TRAINEE',
+      isTrainerLevel: false,
+      organizationId: ORG,
+    })
+  );
   const mock = createTableDb(tables, returns);
   jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
   jest.doMock('@/lib/auth-helpers', () => ({
@@ -81,7 +94,7 @@ async function loadRoute(
 }
 
 const call = (method: string, url: string, body?: unknown) =>
-  makeRequest(method, `http://localhost${url}`, { body });
+  makeRequest(method, `http://localhost${url}`, { token: 'tok', body });
 const withId = (id: string) => ({ params: Promise.resolve({ id }) });
 
 // Every case runs for the three plans: FIAE, FIAE shortened, KfBM

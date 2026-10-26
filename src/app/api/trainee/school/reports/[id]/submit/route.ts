@@ -14,6 +14,7 @@ import {
     notifications
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -21,6 +22,9 @@ interface RouteParams {
 
 // POST /api/trainee/school/reports/[id]/submit
 export async function POST(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
         const body = await req.json();
@@ -39,7 +43,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             .from(activityReports)
             .where(eq(activityReports.id, id as any));
 
-        if (!report) {
+        // A report of someone else is answered like a missing one
+        if (!report || String(report.traineeId) !== session.id) {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
 
@@ -96,7 +101,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 traineeSignedAt: now, // Trainee signature = submission timestamp
                 reviewerFeedback: null, // Clear any previous rejection feedback
             })
-            .where(eq(activityReports.id, id as any))
+            .where(and(eq(activityReports.id, id as any), eq(activityReports.traineeId, session.id as any)))
             .returning();
 
         // Send notification to assigned trainer
