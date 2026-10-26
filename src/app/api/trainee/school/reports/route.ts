@@ -16,6 +16,7 @@ import {
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 // Helper to get ISO week number
 function getISOWeek(date: Date): number {
@@ -62,18 +63,19 @@ function calculateAusbildungsjahr(
   return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
-// GET /api/trainee/school/reports?traineeId=...&status=...&year=...
+// GET /api/trainee/school/reports?status=...&year=...
+// The reports of the session user. A traineeId in the query (sent by older
+// clients) is ignored, the session is the only identity.
 export async function GET(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const { searchParams } = new URL(req.url);
-    const traineeId = searchParams.get('traineeId');
     const status = searchParams.get('status');
     const year = searchParams.get('year');
     const ausbildungsjahr = searchParams.get('ausbildungsjahr');
-
-    if (!traineeId) {
-      return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
-    }
 
     // Build conditions
     const conditions = [eq(activityReports.traineeId, traineeId as any)];
@@ -139,11 +141,15 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/trainee/school/reports
+// The report belongs to the session user, a traineeId in the body is ignored.
 export async function POST(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const body = await req.json();
     const {
-      traineeId,
       weekNumber,
       year,
       ausbildungsjahr,
@@ -151,13 +157,6 @@ export async function POST(req: NextRequest) {
       // Optional: Initial entry data
       entry,
     } = body;
-
-    // Validation
-    if (!traineeId)
-      return NextResponse.json(
-        { error: 'traineeId required' },
-        { status: 400 }
-      );
 
     const organizationId = await getUserOrgId(traineeId);
 

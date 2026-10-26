@@ -17,6 +17,7 @@ import {
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 // Helper to get current Schuljahr
 function getCurrentSchuljahr(): string {
@@ -36,18 +37,19 @@ function calculateAusbildungsjahr(
   return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
-// GET /api/trainee/school/exams?traineeId=...&upcoming=true&schuljahr=...
+// GET /api/trainee/school/exams?upcoming=true&schuljahr=...
+// The exams of the session user. A traineeId in the query (sent by older
+// clients) is ignored, the session is the only identity.
 export async function GET(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const { searchParams } = new URL(req.url);
-    const traineeId = searchParams.get('traineeId');
     const schuljahr = searchParams.get('schuljahr');
     const upcoming = searchParams.get('upcoming') === 'true';
     const limit = parseInt(searchParams.get('limit') || '50', 10);
-
-    if (!traineeId) {
-      return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
-    }
 
     // Build query conditions
     const conditions = [eq(schoolExams.traineeId, traineeId as any)];
@@ -196,11 +198,15 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/trainee/school/exams
+// The exam belongs to the session user, a traineeId in the body is ignored.
 export async function POST(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const body = await req.json();
     const {
-      traineeId,
       schuljahr,
       ausbildungsjahr,
       examDate,
@@ -215,11 +221,6 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // Validation
-    if (!traineeId)
-      return NextResponse.json(
-        { error: 'traineeId required' },
-        { status: 400 }
-      );
     if (!examDate)
       return NextResponse.json({ error: 'examDate required' }, { status: 400 });
     if (!subject)

@@ -18,6 +18,7 @@ import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 // Helper to parse German date format "10.08." or "10.08. - 14.08."
 function parseGermanDateRange(
@@ -145,11 +146,16 @@ interface ImportResult {
 }
 
 // POST /api/trainee/school/blocks/import
+// The blocks are imported into the calendar of the session user, a traineeId in
+// the body is ignored.
 export async function POST(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const body = await req.json();
     const {
-      traineeId,
       csvData,
       schuljahr,
       baseYear, // Calendar year for date parsing (e.g., 2026)
@@ -158,11 +164,6 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // Validation
-    if (!traineeId)
-      return NextResponse.json(
-        { error: 'traineeId required' },
-        { status: 400 }
-      );
     if (!csvData || !Array.isArray(csvData)) {
       return NextResponse.json(
         { error: 'csvData array required' },

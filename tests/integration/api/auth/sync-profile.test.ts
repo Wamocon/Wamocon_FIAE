@@ -338,6 +338,104 @@ describe('API: Auth Sync Profile', () => {
     expect(order(db.execute)).toBeLessThan(order(mergeProfileReferences));
     expect(writes('delete', 'profiles')).toHaveLength(1);
   });
+
+  describe('duplicate e-mail (23505) without a profile found by the e-mail lookup', () => {
+    const orphanRow = {
+      id: 'orphan-id',
+      role: 'TRAINEE',
+      organizationId: 'org-9',
+      startOfTrainingDate: '2026-08-01',
+      ausbildungDurationYears: 2,
+      birthDate: '2005-05-05',
+      avatarUrl: 'https://example.com/a.png',
+      trainerActivated: true,
+      assignedTrainerId: 'tr-old',
+    };
+
+    function duplicateEmailDb() {
+      const mock = createTableDb({
+        profiles: { sequence: [[], [{ id: 'tr1' }], [orphanRow]] },
+      });
+      const uniqueViolation = Object.assign(new Error('duplicate key'), {
+        cause: { code: '23505' },
+      });
+      const realInsert = mock.db.insert;
+      mock.db.insert = jest
+        .fn()
+        .mockImplementationOnce(() => ({
+          values: () => ({
+            onConflictDoUpdate: () => Promise.reject(uniqueViolation),
+          }),
+        }))
+        .mockImplementation(realInsert);
+      return mock;
+    }
+
+    it('403 and no merge when the e-mail address is not confirmed', async () => {
+      const mockUser = {
+        id: 'u9',
+        email: 'orphan@example.com',
+        user_metadata: {},
+      };
+      const { db, writes } = duplicateEmailDb();
+      const POST = await importHandlerWithDb(db, supabaseReturning(mockUser));
+      const res = await POST(
+        makePost('http://localhost/api/auth/sync-profile', authed)
+      );
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({
+        error: 'E-Mail-Adresse nicht bestätigt',
+      });
+      // Nothing was merged: the pre-created profile and its role stay as they were
+      expect(db.transaction).not.toHaveBeenCalled();
+      expect(writes('delete', 'profiles')).toHaveLength(0);
+      const { mergeProfileReferences } = await import('@/lib/profile-identity');
+      expect(mergeProfileReferences).not.toHaveBeenCalled();
+    });
+
+    it('keeps the organization and the training data of the merged profile', async () => {
+      const mockUser = {
+        id: 'u9',
+        email: 'orphan@example.com',
+        email_confirmed_at: '2025-01-01T00:00:00Z',
+        user_metadata: {},
+      };
+      const { db, writes } = duplicateEmailDb();
+      const POST = await importHandlerWithDb(db, supabaseReturning(mockUser));
+      const res = await POST(
+        makePost('http://localhost/api/auth/sync-profile', authed)
+      );
+      expect(res.status).toBe(200);
+      const [inserted] = writes('insert', 'profiles') as any[];
+      expect(inserted).toEqual(
+        expect.objectContaining({
+          id: 'u9',
+          organizationId: 'org-9',
+          startOfTrainingDate: '2026-08-01',
+          ausbildungDurationYears: 2,
+        })
+      );
+      const updates = writes('update', 'profiles') as any[];
+      const final = updates.find(values => values.email);
+      expect(final).toEqual(
+        expect.objectContaining({
+          email: 'orphan@example.com',
+          organizationId: 'org-9',
+          startOfTrainingDate: '2026-08-01',
+          ausbildungDurationYears: 2,
+          birthDate: '2005-05-05',
+          avatarUrl: 'https://example.com/a.png',
+          // An activated trainee stays activated with the trainer assigned before
+          trainerActivated: true,
+          assignedTrainerId: 'tr-old',
+        })
+      );
+      // The assignment after the merge keeps the old trainer as well
+      expect(updates.every(values => values.assignedTrainerId !== 'tr1')).toBe(
+        true
+      );
+    });
+  });
 });
 
 describe('API: Auth Sync Profile, accounts created in Preview', () => {

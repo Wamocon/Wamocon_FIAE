@@ -39,6 +39,8 @@ import { getProviderStatus } from '@/lib/hai/providers';
 import { buildHaiTrainingScope } from '@/lib/hai/trainingScope';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { getUserOrgId, requireProPlan, toHaiRole } from '@/lib/auth-helpers';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 
 // ============================================================================
 // TYPES
@@ -506,16 +508,10 @@ async function getContextTitles(
 
 export async function POST(req: NextRequest) {
   try {
-    // Get user ID from request (passed by frontend after auth)
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Nicht authentifiziert. Bitte melde dich an.' },
-        { status: 401 }
-      );
-    }
+    // The person is the session, a userId in the query is ignored
+    const me = await requireUser(req);
+    if (isErrorResponse(me)) return me;
+    const userId = me.id;
 
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
@@ -1065,15 +1061,9 @@ export async function POST(req: NextRequest) {
 // Update a user message content (edit)
 export async function PATCH(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Nicht authentifiziert. Bitte melde dich an.' },
-        { status: 401 }
-      );
-    }
+    const me = await requireUser(req);
+    if (isErrorResponse(me)) return me;
+    const userId = me.id;
 
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
@@ -1164,12 +1154,9 @@ export async function PATCH(req: NextRequest) {
 
 // Health check endpoint
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get('userId');
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-  }
+  const me = await requireUser(req);
+  if (isErrorResponse(me)) return me;
+  const userId = me.id;
 
   if (!(await requireProPlan(userId))) {
     return NextResponse.json(
@@ -1197,7 +1184,8 @@ export async function GET(req: NextRequest) {
     // Include provider status for diagnostics
     let providerInfo;
     try {
-      providerInfo = getProviderStatus();
+      // Diagnostics are for platform staff, not for every PRO user
+      providerInfo = canManageHaiIndex(me) ? getProviderStatus() : null;
     } catch {
       providerInfo = null;
     }

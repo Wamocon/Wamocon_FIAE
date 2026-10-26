@@ -81,9 +81,27 @@ describe('Sidebar', () => {
     expect(links()).toEqual([...TRAINER_LINKS, PROFILE]);
   });
 
-  it('trainer with the PRO plan still gets the HAI button, nobody else changed', () => {
-    renderFor('trainer', { plan: 'PRO' });
+  it('trainer of the platform organization with the PRO plan gets the HAI button', () => {
+    renderFor('trainer', { plan: 'PRO', isPlatformOwner: true });
     expect(screen.getByText('HAI Admin')).toBeInTheDocument();
+  });
+
+  it('SUPER_ADMIN with the PRO plan gets the HAI button', () => {
+    renderFor('SUPER_ADMIN', { plan: 'PRO' });
+    expect(screen.getByText('HAI Admin')).toBeInTheDocument();
+  });
+
+  it('trainer of a customer organization gets no HAI button, the routes would answer 403', () => {
+    // The shared index has no organization column (src/lib/hai/indexAccess.ts)
+    renderFor('trainer', { plan: 'PRO' });
+    expect(screen.queryByText('HAI Admin')).not.toBeInTheDocument();
+    renderFor('admin', { plan: 'PRO' });
+    expect(screen.queryByText('HAI Admin')).not.toBeInTheDocument();
+  });
+
+  it('no HAI button without the PRO plan', () => {
+    renderFor('trainer', { plan: 'LIGHT', isPlatformOwner: true });
+    expect(screen.queryByText('HAI Admin')).not.toBeInTheDocument();
   });
 
   it('SUPER_ADMIN: the platform and the users', () => {

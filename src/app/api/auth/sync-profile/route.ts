@@ -92,6 +92,13 @@ export async function POST(request: Request) {
       );
     }
 
+    // Merging attaches this login to a pre-created profile and its role, so the
+    // e-mail address has to be verified first (both merge paths below).
+    const emailConfirmed = Boolean(
+      user.email_confirmed_at ||
+      (user as { confirmed_at?: string }).confirmed_at
+    );
+
     // Check if profile already exists
     const existingProfile = await db
       .select({
@@ -195,12 +202,6 @@ export async function POST(request: Request) {
     const lastName = nameParts.slice(1).join(' ') || '';
 
     if (existing && existing.id !== user.id) {
-      // Merging attaches this login to a pre-created profile and its role, so
-      // the e-mail address must be verified first.
-      const emailConfirmed = Boolean(
-        user.email_confirmed_at ||
-        (user as { confirmed_at?: string }).confirmed_at
-      );
       if (!emailConfirmed) {
         return NextResponse.json(
           { error: 'E-Mail-Adresse nicht bestätigt' },
@@ -299,12 +300,40 @@ export async function POST(request: Request) {
       const pgCode = (drizzleErr as { cause?: { code?: string } })?.cause?.code;
       if (pgCode === '23505') {
         const orphan = await db
-          .select({ id: profiles.id, role: profiles.role })
+          .select({
+            id: profiles.id,
+            role: profiles.role,
+            organizationId: profiles.organizationId,
+            startOfTrainingDate: profiles.startOfTrainingDate,
+            ausbildungDurationYears: profiles.ausbildungDurationYears,
+            birthDate: profiles.birthDate,
+            avatarUrl: profiles.avatarUrl,
+            trainerActivated: profiles.trainerActivated,
+            assignedTrainerId: profiles.assignedTrainerId,
+          })
           .from(profiles)
           .where(and(eq(profiles.email, email), ne(profiles.id, user.id)))
           .limit(1);
         const preservedRole = orphan[0]?.role ?? role;
         if (!orphan[0]?.id) throw drizzleErr;
+        // Same rule as the merge above: the pre-created profile and its role
+        // are handed over only to a verified e-mail address
+        if (!emailConfirmed) {
+          return NextResponse.json(
+            { error: 'E-Mail-Adresse nicht bestätigt' },
+            { status: 403 }
+          );
+        }
+        // The organization and the training data of the old profile are kept
+        const mergedOrganizationId = orphan[0].organizationId ?? organizationId;
+        // The activation and the trainer of the old profile are kept too (only
+        // a trainee has a trainer), not the defaults of a new profile
+        const mergedTrainerActivated =
+          orphan[0].trainerActivated ?? trainerActivated;
+        assignedTrainerId =
+          preservedRole === 'TRAINEE'
+            ? (orphan[0].assignedTrainerId ?? assignedTrainerId)
+            : null;
 
         await db.transaction(async tx => {
           if (preservedRole === 'TRAINEE') {
@@ -321,8 +350,10 @@ export async function POST(request: Request) {
               role: preservedRole as any,
               assignedTrainerId: assignedTrainerId ?? undefined,
               isActive: true,
-              organizationId,
-              trainerActivated,
+              organizationId: mergedOrganizationId,
+              trainerActivated: mergedTrainerActivated,
+              startOfTrainingDate: orphan[0].startOfTrainingDate,
+              ausbildungDurationYears: orphan[0].ausbildungDurationYears ?? 3,
             })
             .onConflictDoNothing();
           await mergeProfileReferences(tx, orphan[0].id, user.id);
@@ -336,9 +367,13 @@ export async function POST(request: Request) {
               lastName,
               role: preservedRole as any,
               isActive: true,
-              organizationId,
-              trainerActivated,
+              organizationId: mergedOrganizationId,
+              trainerActivated: mergedTrainerActivated,
               assignedTrainerId: assignedTrainerId ?? null,
+              startOfTrainingDate: orphan[0].startOfTrainingDate,
+              ausbildungDurationYears: orphan[0].ausbildungDurationYears ?? 3,
+              birthDate: orphan[0].birthDate,
+              avatarUrl: orphan[0].avatarUrl,
             })
             .where(eq(profiles.id, user.id as any));
         });
