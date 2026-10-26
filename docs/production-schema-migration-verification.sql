@@ -429,3 +429,18 @@ join public.organizations o on o.id = p.organization_id
 where o.is_platform_owner
 group by p.role
 order by p.role;
+
+-- C11. Before 20261026000100 (one enrollment per trainee): trainees with more than
+-- one enrollment. Expect 0 rows, otherwise the file stops with the same message
+-- and nothing is changed. A human decides which enrollment stays.
+select trainee_id, count(*) as enrollments
+from public.trainee_enrollments
+group by trainee_id
+having count(*) > 1;
+
+-- C11b. After 20261026000100 only: the unique index exists and is a plain unique
+-- index on trainee_id (expect one row with is_unique = true, is_valid = true).
+select i.indexrelid::regclass as index_name, i.indisunique as is_unique, i.indisvalid as is_valid,
+       pg_get_indexdef(i.indexrelid) as definition
+from pg_index i
+where i.indexrelid = to_regclass('public.trainee_enrollments_trainee_unique');

@@ -20,13 +20,13 @@ import {
 
 /**
  * Static checks of the training catalog migration series
- * (supabase/migrations/20261024* and the gated 20261025000000). They guard the
- * conventions of the release pipeline; the SQL itself is verified on a
- * throwaway database.
+ * (supabase/migrations/20261024*, the gated 20261025000000 and the later files
+ * 20261026*). They guard the conventions of the release pipeline; the SQL
+ * itself is verified on a throwaway database.
  */
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'supabase', 'migrations');
-const SERIES_PREFIXES = ['20261024', '20261025'];
+const SERIES_PREFIXES = ['20261024', '20261025', '20261026'];
 const MAX_IDENTIFIER_LENGTH = 63;
 
 const seriesFiles = fs
@@ -37,7 +37,14 @@ const seriesFiles = fs
 // Security hardening that travels with the same pull request and sorts behind the
 // catalog series. It is held to one statement below.
 const SECURITY_FILES = ['20261025000100_security_revoke_public_create.sql'];
-const catalogFiles = seriesFiles.filter(name => !SECURITY_FILES.includes(name));
+// Follow-up files that sort behind the security files. They are checked by the
+// per-file conventions below and in detail by their own test file.
+const FOLLOW_UP_FILES = [
+  '20261026000100_trainee_enrollments_one_per_trainee.sql',
+];
+const catalogFiles = seriesFiles.filter(
+  name => !SECURITY_FILES.includes(name) && !FOLLOW_UP_FILES.includes(name)
+);
 
 /** SQL without line comments (the files document themselves in comments). */
 function readSql(fileName: string): string {
@@ -118,6 +125,16 @@ describe('catalog migration series files', () => {
     expect(
       readSql('20261025000100_security_revoke_public_create.sql').trim()
     ).toBe('revoke create on schema public from public;');
+  });
+
+  it('puts the follow-up files behind the security files', () => {
+    for (const file of FOLLOW_UP_FILES) {
+      expect(seriesFiles).toContain(file);
+      for (const security of SECURITY_FILES) {
+        expect(file > security).toBe(true);
+      }
+    }
+    expect(seriesFiles.slice(-FOLLOW_UP_FILES.length)).toEqual(FOLLOW_UP_FILES);
   });
 
   it('sorts the SUPER_ADMIN backfill after the PR 89 profile privileges', () => {
