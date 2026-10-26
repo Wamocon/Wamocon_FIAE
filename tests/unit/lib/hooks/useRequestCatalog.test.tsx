@@ -253,6 +253,113 @@ describe('useRequestCatalog', () => {
     expect(result.current.catalog).toBe('KFBM');
   });
 
+  describe('phase one of the occupation (phaseOneMonthsFor)', () => {
+    const fiae = {
+      code: 'FIAE',
+      title: 'F',
+      phaseMonths: { '3': [18, 18], '2': [12, 12] },
+    };
+    const kfbm = {
+      code: 'KFBM',
+      title: 'K',
+      phaseMonths: { '3': [15, 21], '2': [10, 14] },
+    };
+
+    it('FIAE: 18 months, 12 shortened (the labels stay as before)', async () => {
+      answer({ catalogs: [fiae], activeCode: 'FIAE' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBe(18);
+      expect(result.current.phaseOneMonthsFor(2)).toBe(12);
+    });
+
+    it('KfBM: 15 months, 10 shortened', async () => {
+      answer({ catalogs: [kfbm], activeCode: 'KFBM' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBe(15);
+      expect(result.current.phaseOneMonthsFor(2)).toBe(10);
+      expect(result.current.phaseOneMonthsFor(null)).toBe(15);
+    });
+
+    it('takes the plan of the active occupation, not of the first one', async () => {
+      answer({ catalogs: [fiae, kfbm], activeCode: 'KFBM' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBe(15);
+    });
+
+    it('takes the plan of the occupation chosen in the switcher', async () => {
+      mockCatalog.status = 'ready';
+      mockCatalog.activeCode = 'KFBM';
+      answer({ catalogs: [fiae, kfbm], activeCode: 'FIAE' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBe(15);
+    });
+
+    it('gives nothing without a phase plan in the answer (the previous lengths apply)', async () => {
+      answer({ catalogs: [{ code: 'KFBM', title: 'K' }], activeCode: 'KFBM' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+    });
+
+    it('gives nothing for an invalid phase plan', async () => {
+      answer({
+        catalogs: [
+          { code: 'KFBM', title: 'K', phaseMonths: { '3': [15, 20] } },
+        ],
+        activeCode: 'KFBM',
+      });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+    });
+
+    it('gives nothing when the occupation is not in the list', async () => {
+      answer({ catalogs: [fiae], activeCode: 'KFBM' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+    });
+
+    it('gives nothing when the lookup fails or is not done yet', async () => {
+      answer({ error: 'Unauthorized' }, false, 401);
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+    });
+
+    it('keeps the same function while the plan does not change', async () => {
+      answer({ catalogs: [kfbm], activeCode: 'KFBM' });
+      const { result, rerender } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      const first = result.current.phaseOneMonthsFor;
+      rerender();
+      expect(result.current.phaseOneMonthsFor).toBe(first);
+    });
+  });
+
   it('keeps the same function while the occupation does not change', async () => {
     answer({ catalogs: [{ code: 'KFBM', title: 'K' }], activeCode: 'KFBM' });
     const { result, rerender } = renderHook(() => useRequestCatalog('u1'), {

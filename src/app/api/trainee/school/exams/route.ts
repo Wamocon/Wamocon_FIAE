@@ -16,6 +16,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
 // Helper to get current Schuljahr
 function getCurrentSchuljahr(): string {
@@ -29,9 +30,10 @@ function getCurrentSchuljahr(): string {
 function calculateAusbildungsjahr(
   startDate: Date,
   durationYears?: number | null,
-  atDate: Date = new Date()
+  atDate: Date = new Date(),
+  phaseOneMonths?: number | null
 ): number {
-  return getTrainingPhase(startDate, durationYears, atDate);
+  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
 // GET /api/trainee/school/exams?traineeId=...&upcoming=true&schuljahr=...
@@ -234,12 +236,18 @@ export async function POST(req: NextRequest) {
       .from(profiles)
       .where(eq(profiles.id, traineeId));
 
+    // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+    const phasePlan =
+      trainee?.startOfTrainingDate
+        ? await loadPhasePlanForUser(traineeId, trainee.ausbildungDurationYears)
+        : null;
     const calculatedAusbildungsjahr =
       trainee?.startOfTrainingDate
         ? calculateAusbildungsjahr(
             trainee.startOfTrainingDate,
             trainee.ausbildungDurationYears,
-            new Date(examDate)
+            new Date(examDate),
+            phasePlan?.phaseMonths[0]
           )
         : ausbildungsjahr || 1;
     const calculatedSchuljahr = schuljahr || getCurrentSchuljahr();
