@@ -18,6 +18,7 @@ import {
   isTraineeVisibleToTrainer,
 } from '@/lib/trainer-scope';
 import { loadPhasePlansForUsers } from '@/lib/catalog/phase-plan-db';
+import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
 
 // GET /api/trainer/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
@@ -34,6 +35,11 @@ export async function GET(req: NextRequest) {
     if (!scope) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    // With a chosen occupation (x-catalog) only the reports of its trainees,
+    // without a choice everything as before.
+    const catalogFilter = await requireTraineeCatalogFilter(session, req);
+    if (catalogFilter instanceof Response) return catalogFilter;
 
     const traineeConditions: any[] = [eq(profiles.role, 'TRAINEE')];
     if (scope.canSeeOrgWide) {
@@ -53,6 +59,9 @@ export async function GET(req: NextRequest) {
       }
       traineeConditions.push(or(...traineeAccessFilters)!);
     }
+
+    if (catalogFilter.condition)
+      traineeConditions.push(catalogFilter.condition);
 
     if (!scope.canSeeOrgWide && traineeId) {
       const [requestedTrainee] = await db
@@ -88,7 +97,15 @@ export async function GET(req: NextRequest) {
     const traineeIds = trainees.map(t => String(t.id));
     const traineeMap = new Map(trainees.map(t => [t.id, t]));
 
-    if (traineeIds.length === 0) {
+    // A trainee outside the chosen occupation has no reports in this list. Do
+    // not fall back to the whole list of the occupation (without a choice the
+    // behavior stays as before).
+    const outsideChosenOccupation =
+      !!catalogFilter.condition &&
+      !!traineeId &&
+      !traineeIds.includes(traineeId);
+
+    if (traineeIds.length === 0 || outsideChosenOccupation) {
       return NextResponse.json(
         { reports: [], meta: { total: 0, pending: 0 } },
         { headers: { 'Cache-Control': 'no-store' } }
