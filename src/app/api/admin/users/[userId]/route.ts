@@ -113,7 +113,12 @@ export async function PATCH(
     // A change that takes a seat (a role of the other kind of seat, another
     // organization) is checked against the seats of the target organization in
     // the same transaction. Activation takes no seat: inactive accounts count.
-    const result = await updateUserChecked(userId, updates);
+    // The rules are checked once more under the row lock of the user (guard),
+    // the reads above are only the early answer.
+    const result = await updateUserChecked(userId, updates, {
+      session,
+      requestedRole: typeof updates.role === 'string' ? updates.role : undefined,
+    });
     if (!result.ok) {
       const failure = userWriteFailureBody(result);
       return NextResponse.json(failure.body, { status: failure.status });

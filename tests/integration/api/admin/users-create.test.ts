@@ -147,6 +147,32 @@ const post = (data: unknown) =>
     body: data,
   });
 
+describe('POST /api/admin/users: input shape', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it.each([
+    ['fullName is a number', { fullName: 123 }],
+    ['fullName is an object', { fullName: { first: 'A' } }],
+    ['fullName is an array', { fullName: ['A'] }],
+    ['fullName is blank', { fullName: '   ' }],
+    ['fullName is far too long', { fullName: 'A'.repeat(201) }],
+    ['email is a number', { email: 42 }],
+    ['email is an array', { email: ['a@b.de'] }],
+    ['role is a number', { role: 7 }],
+    ['organizationId is a number', { organizationId: 5 }],
+  ])(
+    '%s: 400 before anything happens, so no auth account is left behind',
+    async (_name, overrides) => {
+      const { mod, mock, createUser, deleteUser } = await load();
+      const res = await mod.POST(post(body(overrides)));
+      expect(res.status).toBe(400);
+      expect(createUser).not.toHaveBeenCalled();
+      expect(deleteUser).not.toHaveBeenCalled();
+      expect(mock.writes('insert', 'profiles')).toHaveLength(0);
+    }
+  );
+});
+
 describe('POST /api/admin/users: roles', () => {
   beforeEach(() => jest.clearAllMocks());
 

@@ -243,6 +243,12 @@ describe('adminUserErrorMessage', () => {
     expect(text).toBe(de['admin.seats.error.ROLE_NOT_ASSIGNABLE']);
   });
 
+  it('names a missing organization when a role from trainer level up is refused', async () => {
+    expect(await message({ code: 'ORGANIZATION_REQUIRED' }, undefined, 400)).toBe(
+      de['admin.userCreate.error.ORGANIZATION_REQUIRED']
+    );
+  });
+
   it('knows the occupation errors, also the new one for a missing choice', async () => {
     expect(await message({ code: 'CATALOG_REQUIRED' }, undefined, 400)).toBe(
       de['admin.userCreate.error.CATALOG_REQUIRED']

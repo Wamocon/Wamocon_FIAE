@@ -46,6 +46,9 @@ export async function adminUserErrorMessage(
   if (code === 'ROLE_NOT_ASSIGNABLE') {
     return t('admin.seats.error.ROLE_NOT_ASSIGNABLE');
   }
+  if (code === 'ORGANIZATION_REQUIRED') {
+    return t('admin.userCreate.error.ORGANIZATION_REQUIRED');
+  }
   if (code === 'CATALOG_REQUIRED') {
     return t('admin.userCreate.error.CATALOG_REQUIRED');
   }

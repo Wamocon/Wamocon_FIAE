@@ -126,6 +126,10 @@ async function removeAuthUser(
   }
 }
 
+/** Limits of the free text fields of a new user (the form allows far less). */
+const MAX_FULL_NAME_LENGTH = 200;
+const MAX_EMAIL_LENGTH = 254;
+
 export async function POST(req: NextRequest) {
   try {
     // The caller's identity comes from the bearer token, never from the URL
@@ -148,9 +152,31 @@ export async function POST(req: NextRequest) {
         catalogId?: unknown;
       };
 
-    if (!email || !fullName || !role || !organizationId) {
+    // Every field is checked for its type before anything happens. A value such
+    // as fullName: 123 would pass a plain truthiness check, create the auth
+    // account and then fail on fullName.trim(), which leaves an account without
+    // a profile and blocks the address.
+    if (
+      typeof email !== 'string' ||
+      typeof fullName !== 'string' ||
+      typeof role !== 'string' ||
+      typeof organizationId !== 'string' ||
+      !email.trim() ||
+      !fullName.trim() ||
+      !role ||
+      !organizationId
+    ) {
       return NextResponse.json(
         { error: 'email, fullName, role, and organizationId are required' },
+        { status: 400 }
+      );
+    }
+    if (
+      fullName.trim().length > MAX_FULL_NAME_LENGTH ||
+      email.trim().length > MAX_EMAIL_LENGTH
+    ) {
+      return NextResponse.json(
+        { error: 'fullName or email is too long' },
         { status: 400 }
       );
     }

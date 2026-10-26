@@ -56,6 +56,8 @@ type Options = {
   target?: Record<string, unknown> | null;
   usage?: any[];
   vanishesInTransaction?: boolean;
+  /** The user as the transaction sees it under the row lock (it may have changed). */
+  before?: { role: string; organizationId: string | null };
 };
 
 async function load(options: Options = {}) {
@@ -82,7 +84,12 @@ async function load(options: Options = {}) {
           target ? [target] : [],
           options.vanishesInTransaction || !target
             ? []
-            : [{ role: target.role, organizationId: target.organizationId }],
+            : [
+                options.before ?? {
+                  role: target.role,
+                  organizationId: target.organizationId,
+                },
+              ],
           options.usage ?? room,
         ],
       },
@@ -311,6 +318,116 @@ describe('PATCH /api/admin/users/[userId]: seats', () => {
     const res = await call(mod, { role: 'TRAINER' });
     expect(res.status).toBe(404);
     expect(mock.writes('update', 'profiles')).toHaveLength(0);
+  });
+});
+
+describe('PATCH /api/admin/users/[userId]: locks and a changed user', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('locks the profile row with no key update, so the foreign key check of an enrollment never waits for it', async () => {
+    // FOR UPDATE would conflict with the KEY SHARE lock that inserting an
+    // enrollment takes on the profile row (deadlock with POST and the
+    // enrollment change of the same user, each holding one lock and waiting
+    // for the other).
+    const { mod, mock } = await load();
+    const res = await call(mod, { isActive: false });
+    expect(res.status).toBe(200);
+    expect(mock.locks('profiles')).toEqual(['no key update']);
+  });
+
+  it('the scope is checked again under the lock: a user moved to another organization meanwhile is 404', async () => {
+    const { mod, mock } = await load({
+      before: { role: 'TRAINEE', organizationId: OTHER_ORG },
+    });
+    const res = await call(mod, { isActive: false });
+    expect(res.status).toBe(404);
+    expect(mock.writes('update', 'profiles')).toHaveLength(0);
+  });
+
+  it('the role of the user is checked again under the lock: promoted to ADMIN meanwhile, TEMP_ADMIN may not touch it', async () => {
+    const { mod, mock } = await load({
+      session: tempAdmin(),
+      target: {
+        id: TARGET,
+        email: 'target@example.com',
+        role: 'TRAINER',
+        organizationId: ORG,
+      },
+      before: { role: 'ADMIN', organizationId: ORG },
+    });
+    const res = await call(mod, { isActive: false });
+    expect(res.status).toBe(403);
+    expect(mock.writes('update', 'profiles')).toHaveLength(0);
+  });
+
+  it('a role the caller may hand out is judged against the role under the lock', async () => {
+    // On the first read the user already is a TEMP_ADMIN, so asking for
+    // TEMP_ADMIN is no change and passes. Meanwhile the user became a trainer:
+    // under the lock the same request would HAND OUT TEMP_ADMIN, which a
+    // TEMP_ADMIN may not do.
+    const { mod, mock } = await load({
+      session: tempAdmin(),
+      target: {
+        id: TARGET,
+        email: 'target@example.com',
+        role: 'TEMP_ADMIN',
+        organizationId: ORG,
+      },
+      before: { role: 'TRAINER', organizationId: ORG },
+    });
+    const res = await call(mod, { role: 'TEMP_ADMIN' });
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('ROLE_NOT_ASSIGNABLE');
+    expect(mock.writes('update', 'profiles')).toHaveLength(0);
+  });
+});
+
+describe('PATCH /api/admin/users/[userId]: a role from trainer level up needs an organization', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // A user without organization counts as a member of the default
+  // organization for the scope, but not for the seats
+  const DEFAULT_ORG = '00000000-0000-0000-0000-000000000001';
+  const orphan = {
+    id: TARGET,
+    email: 'self.registered@example.com',
+    role: 'TRAINEE',
+    organizationId: null,
+  };
+
+  it.each(['TRAINER', 'TEMP_ADMIN', 'ADMIN'])(
+    'ADMIN of the default organization cannot make a user without organization a %s (400)',
+    async role => {
+      const { mod, mock } = await load({
+        session: admin(DEFAULT_ORG),
+        target: orphan,
+      });
+      const res = await call(mod, { role });
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('ORGANIZATION_REQUIRED');
+      expect(mock.writes('update', 'profiles')).toHaveLength(0);
+    }
+  );
+
+  it('the platform admin can give the organization and the role in one change', async () => {
+    const { mod, mock } = await load({
+      session: superAdmin(),
+      target: orphan,
+      usage: room,
+    });
+    const res = await call(mod, { role: 'TRAINER', organizationId: ORG });
+    expect(res.status).toBe(200);
+    expect(mock.writes('update', 'profiles')).toHaveLength(1);
+  });
+
+  it('a change that is no role change still works for a user without organization', async () => {
+    const { mod, mock } = await load({
+      session: admin(DEFAULT_ORG),
+      target: orphan,
+    });
+    const res = await call(mod, { isActive: false });
+    expect(res.status).toBe(200);
+    expect(mock.writes('update', 'profiles')).toHaveLength(1);
   });
 });
 
