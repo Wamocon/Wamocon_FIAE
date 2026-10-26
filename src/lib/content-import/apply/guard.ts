@@ -81,13 +81,37 @@ export function leakOf(text: string, solutions: string[]): string | null {
   if (SOLUTION_MARKERS.some(marker => marker.test(text))) {
     return 'contains a solution marker';
   }
-  for (const solution of solutions) {
-    const needle = normalize(solution);
-    if (needle.length >= MIN_SOLUTION_LENGTH && visible.includes(needle)) {
+  const index = needleIndex(solutions);
+  for (let i = 0; i + MIN_SOLUTION_LENGTH <= visible.length; i += 1) {
+    const bucket = index.get(visible.slice(i, i + MIN_SOLUTION_LENGTH));
+    if (bucket && bucket.some(needle => visible.startsWith(needle, i))) {
       return 'contains a solution text';
     }
   }
   return null;
+}
+
+/**
+ * Index of the solution texts by their first MIN_SOLUTION_LENGTH characters,
+ * so a text is searched in one pass instead of once per solution (a run has
+ * thousands of rationales and tens of thousands of options). Built once per
+ * list of solutions.
+ */
+const indexCache = new WeakMap<string[], Map<string, string[]>>();
+function needleIndex(solutions: string[]): Map<string, string[]> {
+  const cached = indexCache.get(solutions);
+  if (cached) return cached;
+  const index = new Map<string, string[]>();
+  for (const solution of solutions) {
+    const needle = normalize(solution);
+    if (needle.length < MIN_SOLUTION_LENGTH) continue;
+    const key = needle.slice(0, MIN_SOLUTION_LENGTH);
+    const bucket = index.get(key);
+    if (bucket) bucket.push(needle);
+    else index.set(key, [needle]);
+  }
+  indexCache.set(solutions, index);
+  return index;
 }
 
 /** Problems of the plan: a solution in a field that trainees can see. */
