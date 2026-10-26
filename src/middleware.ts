@@ -10,11 +10,11 @@ const CC_MEDIUM = 'private, no-cache'; // mutable data – always reach origin
 const CC_SHORT = 'private, no-cache'; // mutable data – always reach origin
 
 /**
- * Static / reference data, rarely or never changes.
- * Not /api/trainee/lernfelder/[id]: the answer depends on the session (the
- * occupation of the caller, 404 for a learning field of another occupation),
- * and a shared cache must not serve it to someone else. It falls under
- * MEDIUM_RE (private) like the other trainee routes.
+ * Static / reference data — rarely or never changes. Only routes whose answer
+ * is the same for every caller belong here (the catalog of the public lists is
+ * part of the URL). /api/trainee/lernfelder/[id] is not listed: its answer
+ * depends on the occupation of the session, which is not part of the URL, so it
+ * gets the private tier below.
  */
 const LONG_RE =
   /^\/api\/(training-(use-cases|components)|softskill-criteria|trainee\/evaluations\/softskills|verify\/)/;

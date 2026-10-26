@@ -37,6 +37,7 @@ import {
 } from '@/lib/hai';
 import { getProviderStatus } from '@/lib/hai/providers';
 import { buildHaiTrainingScope } from '@/lib/hai/trainingScope';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { getUserOrgId, requireProPlan, toHaiRole } from '@/lib/auth-helpers';
 
 // ============================================================================
@@ -821,6 +822,11 @@ export async function POST(req: NextRequest) {
 
     // Build pipeline context (Phase 1: pass userRole for live data context)
     const userRole = toHaiRole(user[0].role);
+    // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+    const phasePlan =
+      userRole === 'TRAINEE' && user[0].startOfTrainingDate
+        ? await loadPhasePlanForUser(userId, user[0].ausbildungDurationYears)
+        : null;
     const pipelineContext: PipelineContext = {
       userId,
       sessionId,
@@ -839,6 +845,7 @@ export async function POST(req: NextRequest) {
         role: userRole,
         startOfTrainingDate: user[0].startOfTrainingDate,
         ausbildungDurationYears: user[0].ausbildungDurationYears,
+        phaseOneMonths: phasePlan?.phaseMonths[0],
       }),
     };
 
