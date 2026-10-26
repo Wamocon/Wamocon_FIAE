@@ -38,7 +38,11 @@ import {
 import { getProviderStatus } from '@/lib/hai/providers';
 import { buildHaiTrainingScope } from '@/lib/hai/trainingScope';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
-import { getUserOrgId, requireProPlan, toHaiRole } from '@/lib/auth-helpers';
+import {
+  getUserOrgIdStrict,
+  requireProPlan,
+  toHaiRole,
+} from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 
@@ -104,8 +108,9 @@ async function getOrCreateSession(
     }
   }
 
-  // Create new session
-  const organizationId = await getUserOrgId(userId);
+  // Create new session. A write never falls back to the platform organization:
+  // if the organization cannot be resolved, the request stops.
+  const organizationId = await getUserOrgIdStrict(userId);
   const newSession = await db
     .insert(haiChatSessions)
     .values({
@@ -938,6 +943,7 @@ export async function POST(req: NextRequest) {
                   sessionId,
                   citations: result.citations,
                   intent: result.intent,
+                  pendingAction: result.pendingAction,
                 })}\n\n`
               )
             );
@@ -1040,6 +1046,7 @@ export async function POST(req: NextRequest) {
       citations: result.citations,
       intent: result.intent,
       quizState: result.quizState,
+      pendingAction: result.pendingAction,
     });
   } catch (error) {
     console.error('HAI.ai chat error:', error);

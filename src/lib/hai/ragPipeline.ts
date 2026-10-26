@@ -38,7 +38,8 @@ import {
 } from './prompts';
 import { fetchDataContext } from './dataContext';
 import type { UserRole } from './dataContext';
-import { detectActionIntent, executeAction, ActionIntent } from './actions';
+import { handleActionMessage } from './actionFlow';
+import type { PendingAction } from './actionPolicy';
 import {
   filterSearchResultsForTrainingScope,
   type HaiTrainingScope,
@@ -99,6 +100,8 @@ export interface PipelineResult {
     actionType: string;
     data?: unknown;
   };
+  /** A proposed write for the confirmation card, never executed here */
+  pendingAction?: PendingAction;
   error?: string;
 }
 
@@ -416,35 +419,9 @@ export async function processMessage(
   }
 
   try {
-    // Step 0: Check for action intent first (Phase 3 — Write Operations)
-    let actionIntent: ActionIntent | null = null;
-    if (context.userRole) {
-      actionIntent = detectActionIntent(userMessage, {
-        userRole: context.userRole,
-        currentEnablerId: context.currentEnablerId,
-        currentCourseId: context.currentCourseId,
-      });
-    }
-
-    // If action detected, execute it and return narrated result
-    if (actionIntent && actionIntent.confidence >= 0.7) {
-      const actionResult = await executeAction(
-        actionIntent.type,
-        actionIntent.parameters,
-        context.userId
-      );
-
-      return {
-        response: actionResult.message,
-        intent: 'action',
-        citations: [],
-        actionResult: {
-          success: actionResult.success,
-          actionType: actionIntent.type,
-          data: actionResult.data,
-        },
-      };
-    }
+    // Step 0: An action in the message becomes a proposal, never a write
+    const actionResponse = await handleActionMessage(userMessage, context);
+    if (actionResponse) return actionResponse;
 
     // Step 1: Classify intent
     const intent = classifyIntent(userMessage, context.quizState);
@@ -718,36 +695,11 @@ export async function processMessageStream(
   }
 
   try {
-    // Step 0: Check for action intent first (Phase 3 — Write Operations)
-    let actionIntent: ActionIntent | null = null;
-    if (context.userRole) {
-      actionIntent = detectActionIntent(userMessage, {
-        userRole: context.userRole,
-        currentEnablerId: context.currentEnablerId,
-        currentCourseId: context.currentCourseId,
-      });
-    }
-
-    // If action detected, execute it and return narrated result
-    if (actionIntent && actionIntent.confidence >= 0.7) {
-      const actionResult = await executeAction(
-        actionIntent.type,
-        actionIntent.parameters,
-        context.userId
-      );
-
-      onChunk(actionResult.message);
-
-      return {
-        response: actionResult.message,
-        intent: 'action',
-        citations: [],
-        actionResult: {
-          success: actionResult.success,
-          actionType: actionIntent.type,
-          data: actionResult.data,
-        },
-      };
+    // Step 0: An action in the message becomes a proposal, never a write
+    const actionResponse = await handleActionMessage(userMessage, context);
+    if (actionResponse) {
+      onChunk(actionResponse.response);
+      return actionResponse;
     }
 
     const intent = classifyIntent(userMessage, context.quizState);

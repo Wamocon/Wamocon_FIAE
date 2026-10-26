@@ -7,28 +7,46 @@
  * Action Flow:
  * 1. Detect action intent from user message
  * 2. Extract parameters needed for the action
- * 3. Verify user permissions
- * 4. Execute the action via platform APIs
- * 5. Return result for HAI to narrate back to user
+ * 3. Propose the action to the person (the pipeline never executes a write)
+ * 4. After the explicit confirmation, /api/hai/action calls executeAction
+ * 5. executeAction checks role, responsibility and parameters again, then
+ *    executes the action via platform APIs
  *
  * @module lib/hai/actions
  */
 
 import db from '@/db';
-import { eq, and, sql } from 'drizzle-orm';
-import { toHaiRole } from '@/lib/auth-helpers';
+import { eq, and, or, isNull, sql } from 'drizzle-orm';
 import {
     activityReports,
+    courseMembers,
     enablerCompletions,
+    enablerQuizLinks,
+    enablerQuizzes,
+    quizAssignments,
     quizSubmissions,
+    quizzes,
     notifications,
     enablerSubmissions,
     profiles,
     enablers
 } from '@/db/migrations/schemas/schema';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
-import { getUserOrgId } from '@/lib/auth-helpers';
+import { getUserOrgIdStrict } from '@/lib/auth-helpers';
+import { isInOrgScope, scopeOrg, type SessionUser } from '@/lib/auth/session';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import type { CatalogRequestLike } from '@/lib/catalog/scope';
+import {
+    ensureContentAllowed,
+    fail,
+    notFound,
+    requireResponsibleTrainer,
+} from './actionGuards';
+import {
+    isActionAllowedForRole,
+    isWriteAction,
+    sanitizeActionParameters,
+} from './actionPolicy';
 
 // ============================================================================
 // TYPES
@@ -63,6 +81,7 @@ export interface ActionIntent {
     type: ActionType;
     confidence: number; // 0-1, how confident we are about this intent
     parameters: Record<string, unknown>;
+    /** Kept for callers, every write is confirmed (see actionPolicy.ts). */
     requiresConfirmation: boolean;
 }
 
@@ -74,7 +93,22 @@ export interface ActionResult {
     message: string; // Human-readable message for HAI to narrate
     data?: unknown;
     error?: string;
+    /** Why the action failed, the route maps it to the HTTP status. */
+    code?: ActionFailureCode;
 }
+
+/**
+ * invalid: parameters or type not accepted, forbidden: role or occupation not
+ * allowed, not_found: missing or foreign record, conflict: state does not fit,
+ * unavailable: the scope could not be checked, error: unexpected failure.
+ */
+export type ActionFailureCode =
+    | 'invalid'
+    | 'forbidden'
+    | 'not_found'
+    | 'conflict'
+    | 'unavailable'
+    | 'error';
 
 /**
  * Context for action detection
@@ -113,7 +147,7 @@ export function detectActionIntent(
             type: 'create_activity_report',
             confidence: 0.9,
             parameters: extractReportParameters(message),
-            requiresConfirmation: false,
+            requiresConfirmation: true,
         };
     }
 
@@ -170,7 +204,7 @@ export function detectActionIntent(
             type: 'mark_notification_read',
             confidence: 0.7,
             parameters: extractNotificationParameters(message),
-            requiresConfirmation: false,
+            requiresConfirmation: true,
         };
     }
 
@@ -285,97 +319,88 @@ function extractSubmissionParameters(message: string): Record<string, unknown> {
 // ============================================================================
 
 /**
- * Execute an action on behalf of the user
+ * Execute a confirmed action on behalf of the person of the session.
+ *
+ * Only the confirmed call of /api/hai/action reaches this function, the
+ * pipeline never calls it. Every write is checked again here (nothing the
+ * proposal showed is trusted): the type must be on the list, the role must fit
+ * the type, the parameters are whitelisted, and the records must belong to the
+ * trainee or lie inside the organization and occupation the trainer is
+ * responsible for. Anything unclear stops the action (fail closed). A failure
+ * carries a code and a plain message, never raw database details.
  *
  * @param actionType - The action to perform
- * @param parameters - Action parameters
- * @param userId - User ID performing the action
+ * @param parameters - Action parameters (whitelisted here)
+ * @param actor - The person of the session (id, role and organization come
+ *                from the database through the session layer)
+ * @param request - The request, for the chosen occupation (x-catalog)
  * @returns Result of the action
  */
 export async function executeAction(
     actionType: ActionType,
     parameters: Record<string, unknown>,
-    userId: string
+    actor: SessionUser,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     try {
-        // Verify user exists and get role
-        const user = await db
-            .select({ id: profiles.id, role: profiles.role, fullName: profiles.fullName })
-            .from(profiles)
-            .where(eq(profiles.id, userId))
-            .limit(1);
-
-        if (user.length === 0) {
-            return {
-                success: false,
-                message: 'Benutzer nicht gefunden.',
-                error: 'User not found',
-            };
+        if (!isWriteAction(actionType)) {
+            return fail(
+                'invalid',
+                'Diese Aktion wird nicht unterstützt.',
+                'Action not supported'
+            );
         }
 
-        const userRole = toHaiRole(user[0].role);
+        const audience = actor.isTrainerLevel ? 'TRAINER' : 'TRAINEE';
+        if (!isActionAllowedForRole(actionType, audience)) {
+            return fail(
+                'forbidden',
+                audience === 'TRAINER'
+                    ? 'Diese Aktion ist nur für Auszubildende möglich.'
+                    : 'Diese Aktion ist nur für Trainer möglich.',
+                'Permission denied'
+            );
+        }
+
+        const checked = sanitizeActionParameters(actionType, parameters);
+        if (!checked.ok) {
+            return fail('invalid', checked.message, 'Invalid parameters');
+        }
+        const params = checked.parameters;
 
         // Route to specific action handler
         switch (actionType) {
             case 'create_activity_report':
-                return await createActivityReport(userId, parameters);
+                return await createActivityReport(actor.id, params);
 
             case 'submit_activity_report':
-                return await submitActivityReport(userId, parameters);
+                return await submitActivityReport(actor.id, params);
 
             case 'complete_enabler':
-                return await completeEnabler(userId, parameters);
+                return await completeEnabler(actor, params, request);
 
             case 'submit_quiz':
-                return await submitQuiz(userId, parameters);
+                return await submitQuiz(actor, params, request);
 
             case 'mark_notification_read':
-                return await markNotificationRead(userId, parameters);
+                return await markNotificationRead(actor.id, params);
 
             case 'approve_submission':
-                if (userRole !== 'TRAINER') {
-                    return {
-                        success: false,
-                        message: 'Nur Trainer können Abgaben genehmigen.',
-                        error: 'Permission denied',
-                    };
-                }
-                return await approveSubmission(userId, parameters);
+                return await approveSubmission(actor, params, request);
 
             case 'approve_report':
-                if (userRole !== 'TRAINER') {
-                    return {
-                        success: false,
-                        message: 'Nur Trainer können Nachweise genehmigen.',
-                        error: 'Permission denied',
-                    };
-                }
-                return await approveReport(userId, parameters);
+                return await approveReport(actor, params, request);
 
             case 'grade_quiz':
-                if (userRole !== 'TRAINER') {
-                    return {
-                        success: false,
-                        message: 'Nur Trainer können Quizze bewerten.',
-                        error: 'Permission denied',
-                    };
-                }
-                return await gradeQuiz(userId, parameters);
-
-            default:
-                return {
-                    success: false,
-                    message: `Aktion "${actionType}" ist noch nicht implementiert.`,
-                    error: 'Action not implemented',
-                };
+                return await gradeQuiz(actor, params, request);
         }
     } catch (error) {
         console.error(`HAI.ai: Action execution error (${actionType}):`, error);
-        return {
-            success: false,
-            message: 'Ein Fehler ist aufgetreten beim Ausführen der Aktion.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Ein Fehler ist aufgetreten beim Ausführen der Aktion.',
+            'Action failed'
+        );
     }
 }
 
@@ -410,11 +435,11 @@ async function createActivityReport(
             .limit(1);
 
         if (existing.length > 0) {
-            return {
-                success: false,
-                message: `Ein Tätigkeitsnachweis für KW ${weekNumber}/${year} existiert bereits.`,
-                error: 'Report already exists',
-            };
+            return fail(
+                'conflict',
+                `Ein Tätigkeitsnachweis für KW ${weekNumber}/${year} existiert bereits.`,
+                'Report already exists'
+            );
         }
 
         // Calculate period dates (Monday to Sunday of the week)
@@ -444,7 +469,8 @@ async function createActivityReport(
             )
             : 1;
 
-        const organizationId = await getUserOrgId(userId);
+        // A write never falls back to the platform organization
+        const organizationId = await getUserOrgIdStrict(userId);
 
         // Create the report as DRAFT
         const newReport = await db
@@ -463,16 +489,16 @@ async function createActivityReport(
 
         return {
             success: true,
-            message: `📝 **Tätigkeit snachweis erstellt!**\n\n✅ KW ${weekNumber}/${year} wurde als Entwurf gespeichert.\n\n💡 **Nächste Schritte:**\n- Öffne den Nachweis und füge deine Tätigkeiten hinzu\n- Wenn fertig: "Reiche meinen Tätigkeitsnachweis ein"`,
+            message: `📝 **Tätigkeitsnachweis erstellt!**\n\n✅ KW ${weekNumber}/${year} wurde als Entwurf gespeichert.\n\n💡 **Nächste Schritte:**\n- Öffne den Nachweis und füge deine Tätigkeiten hinzu\n- Wenn fertig: "Reiche meinen Tätigkeitsnachweis ein"`,
             data: { reportId: newReport[0].id, weekNumber, year },
         };
     } catch (error) {
         console.error('HAI.ai: Error creating activity report:', error);
-        return {
-            success: false,
-            message: 'Fehler beim Erstellen des Tätigkeitsnachweises.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Fehler beim Erstellen des Tätigkeitsnachweises.',
+            'Action failed'
+        );
     }
 }
 
@@ -531,31 +557,46 @@ async function submitActivityReport(
         }
 
         if (reportToSubmit.length === 0) {
-            return {
-                success: false,
-                message: 'Kein Tätigkeitsnachweis zum Einreichen gefunden.',
-                error: 'Report not found',
-            };
+            return fail(
+                'not_found',
+                'Kein Tätigkeitsnachweis zum Einreichen gefunden.',
+                'Report not found'
+            );
         }
 
         const report = reportToSubmit[0];
 
         if (report.status !== 'DRAFT') {
-            return {
-                success: false,
-                message: `Der Tätigkeitsnachweis wurde bereits eingereicht (Status: ${report.status}).`,
-                error: 'Report already submitted',
-            };
+            return fail(
+                'conflict',
+                `Der Tätigkeitsnachweis wurde bereits eingereicht (Status: ${report.status}).`,
+                'Report already submitted'
+            );
         }
 
-        // Update status to SUBMITTED
-        await db
+        // Update status to SUBMITTED, only the own draft
+        const updated = await db
             .update(activityReports)
             .set({
                 status: 'SUBMITTED',
                 submittedAt: new Date(),
             })
-            .where(eq(activityReports.id, report.id));
+            .where(
+                and(
+                    eq(activityReports.id, report.id),
+                    eq(activityReports.traineeId, userId),
+                    eq(activityReports.status, 'DRAFT')
+                )
+            )
+            .returning({ id: activityReports.id });
+
+        if (updated.length === 0) {
+            return fail(
+                'conflict',
+                'Der Tätigkeitsnachweis hat sich geändert. Bitte versuche es erneut.',
+                'Report changed'
+            );
+        }
 
         return {
             success: true,
@@ -564,46 +605,61 @@ async function submitActivityReport(
         };
     } catch (error) {
         console.error('HAI.ai: Error submitting activity report:', error);
-        return {
-            success: false,
-            message: 'Fehler beim Einreichen des Tätigkeitsnachweises.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Fehler beim Einreichen des Tätigkeitsnachweises.',
+            'Action failed'
+        );
     }
 }
 
 /**
- * Mark an enabler as completed
+ * Mark an enabler as completed. The enabler must lie inside the occupation of
+ * the trainee and belong to a course the trainee is a member of.
  */
 async function completeEnabler(
-    userId: string,
-    parameters: Record<string, unknown>
+    actor: SessionUser,
+    parameters: Record<string, unknown>,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     try {
-        const enablerId = parameters.enablerId as string | undefined;
+        const userId = actor.id;
+        const enablerId = parameters.enablerId as string;
 
-        if (!enablerId) {
-            return {
-                success: false,
-                message: 'Keine Enabler-ID angegeben. Bitte gib an, welchen Enabler du abschließen möchtest.',
-                error: 'Missing enablerId',
-            };
-        }
+        const outOfScope = await ensureContentAllowed(
+            actor,
+            request,
+            'enabler',
+            enablerId
+        );
+        if (outOfScope) return outOfScope;
 
-        // Check if enabler exists
-        const enabler = await db
-            .select({ id: enablers.id, title: enablers.title })
+        const [enabler] = await db
+            .select({
+                id: enablers.id,
+                title: enablers.title,
+                courseId: enablers.courseId,
+                isActive: enablers.isActive,
+            })
             .from(enablers)
             .where(eq(enablers.id, enablerId))
             .limit(1);
 
-        if (enabler.length === 0) {
-            return {
-                success: false,
-                message: 'Enabler nicht gefunden.',
-                error: 'Enabler not found',
-            };
-        }
+        if (!enabler || !enabler.isActive) return notFound();
+
+        // The trainee has to be a member of the course of the enabler
+        const [member] = await db
+            .select({ userId: courseMembers.userId })
+            .from(courseMembers)
+            .where(
+                and(
+                    eq(courseMembers.courseId, enabler.courseId),
+                    eq(courseMembers.userId, userId)
+                )
+            )
+            .limit(1);
+
+        if (!member) return notFound();
 
         // Check if already completed
         const existing = await db
@@ -617,56 +673,150 @@ async function completeEnabler(
             )
             .limit(1);
 
-        if (existing.length > 0) {
-            return {
-                success: false,
-                message: `Der Enabler "${enabler[0].title}" wurde bereits als abgeschlossen markiert.`,
-                error: 'Already completed',
-            };
-        }
+        const alreadyCompleted = fail(
+            'conflict',
+            `Der Enabler "${enabler.title}" wurde bereits als abgeschlossen markiert.`,
+            'Already completed'
+        );
+        if (existing.length > 0) return alreadyCompleted;
 
         // Mark as completed
-        await db.insert(enablerCompletions).values({
-            traineeId: userId,
-            enablerId,
-            completedAt: new Date(),
-        });
+        const inserted = await db
+            .insert(enablerCompletions)
+            .values({
+                traineeId: userId,
+                enablerId,
+                completedAt: new Date(),
+            })
+            .onConflictDoNothing()
+            .returning({ enablerId: enablerCompletions.enablerId });
+
+        if (inserted.length === 0) return alreadyCompleted;
 
         return {
             success: true,
-            message: `🎉 **Glückwunsch!**\n\n✅ "${enabler[0].title}" wurde als abgeschlossen markiert.\n\n🚀 Weiter so! Dein Fortschritt wurde aktualisiert.`,
-            data: { enablerId, enablerTitle: enabler[0].title },
+            message: `🎉 **Glückwunsch!**\n\n✅ "${enabler.title}" wurde als abgeschlossen markiert.\n\n🚀 Weiter so! Dein Fortschritt wurde aktualisiert.`,
+            data: { enablerId, enablerTitle: enabler.title },
         };
     } catch (error) {
         console.error('HAI.ai: Error completing enabler:', error);
-        return {
-            success: false,
-            message: 'Fehler beim Abschließen des Enablers.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Fehler beim Abschließen des Enablers.',
+            'Action failed'
+        );
     }
 }
 
 /**
- * Submit a quiz
+ * The enabler a lesson quiz belongs to (new links first, then the legacy 1:1
+ * link), or null for a quiz without an enabler.
+ */
+async function findEnablerOfQuiz(quizId: string): Promise<string | null> {
+    const [link] = await db
+        .select({ enablerId: enablerQuizLinks.enablerId })
+        .from(enablerQuizLinks)
+        .where(eq(enablerQuizLinks.quizId, quizId))
+        .limit(1);
+    if (link) return String(link.enablerId);
+
+    const [legacy] = await db
+        .select({ enablerId: enablerQuizzes.enablerId })
+        .from(enablerQuizzes)
+        .where(eq(enablerQuizzes.quizId, quizId))
+        .limit(1);
+    return legacy ? String(legacy.enablerId) : null;
+}
+
+/**
+ * Submit a quiz. The quiz must be active and inside the occupation of the
+ * trainee. A global quiz has to be assigned to the trainee, a lesson quiz
+ * belongs to an active enabler of a course the trainee is a member of and
+ * takes a single attempt.
  */
 async function submitQuiz(
-    userId: string,
-    parameters: Record<string, unknown>
+    actor: SessionUser,
+    parameters: Record<string, unknown>,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     try {
-        const quizId = parameters.quizId as string | undefined;
-        const answers = parameters.answers as unknown[] | undefined;
+        const userId = actor.id;
+        const quizId = parameters.quizId as string;
 
-        if (!quizId || !answers) {
-            return {
-                success: false,
-                message: 'Unvollständige Quiz-Daten. Bitte gib Quiz-ID und Antworten an.',
-                error: 'Missing parameters',
-            };
+        const outOfScope = await ensureContentAllowed(actor, request, 'quiz', quizId);
+        if (outOfScope) return outOfScope;
+
+        const [quiz] = await db
+            .select({
+                id: quizzes.id,
+                isActive: quizzes.isActive,
+                quizType: quizzes.quizType,
+            })
+            .from(quizzes)
+            .where(eq(quizzes.id, quizId))
+            .limit(1);
+
+        if (!quiz || !quiz.isActive) return notFound();
+
+        const isGlobal = String(quiz.quizType || '').toUpperCase() === 'GLOBAL';
+
+        if (isGlobal) {
+            const [assignment] = await db
+                .select({ id: quizAssignments.id })
+                .from(quizAssignments)
+                .where(
+                    and(
+                        eq(quizAssignments.quizId, quizId),
+                        eq(quizAssignments.traineeId, userId)
+                    )
+                )
+                .limit(1);
+            if (!assignment) return notFound();
+        } else {
+            const enablerId = await findEnablerOfQuiz(quizId);
+            if (!enablerId) return notFound();
+
+            const [enabler] = await db
+                .select({ isActive: enablers.isActive, courseId: enablers.courseId })
+                .from(enablers)
+                .where(eq(enablers.id, enablerId))
+                .limit(1);
+            if (!enabler || !enabler.isActive) return notFound();
+
+            const [member] = await db
+                .select({ userId: courseMembers.userId })
+                .from(courseMembers)
+                .where(
+                    and(
+                        eq(courseMembers.courseId, enabler.courseId),
+                        eq(courseMembers.userId, userId)
+                    )
+                )
+                .limit(1);
+            if (!member) return notFound();
         }
 
-        const organizationId = await getUserOrgId(userId);
+        const previous = await db
+            .select({ id: quizSubmissions.id })
+            .from(quizSubmissions)
+            .where(
+                and(
+                    eq(quizSubmissions.quizId, quizId),
+                    eq(quizSubmissions.traineeId, userId)
+                )
+            );
+
+        // A lesson quiz takes a single attempt, a global quiz may be repeated
+        if (!isGlobal && previous.length > 0) {
+            return fail(
+                'conflict',
+                'Zu diesem Quiz gibt es bereits eine Abgabe.',
+                'Quiz already submitted'
+            );
+        }
+
+        // A write never falls back to the platform organization
+        const organizationId = await getUserOrgIdStrict(userId);
 
         // Submit quiz
         await db.insert(quizSubmissions).values({
@@ -674,6 +824,7 @@ async function submitQuiz(
             quizId,
             submittedAt: new Date(),
             organizationId,
+            attemptNumber: previous.length + 1,
         });
 
         return {
@@ -683,11 +834,11 @@ async function submitQuiz(
         };
     } catch (error) {
         console.error('HAI.ai: Error submitting quiz:', error);
-        return {
-            success: false,
-            message: 'Fehler beim Einreichen des Quiz.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Fehler beim Einreichen des Quiz.',
+            'Action failed'
+        );
     }
 }
 
@@ -735,19 +886,19 @@ async function markNotificationRead(
                 message: '✓ **Benachrichtigung gelesen!**',
             };
         } else {
-            return {
-                success: false,
-                message: 'Bitte gib an, welche Benachrichtigung(en) markiert werden sollen.',
-                error: 'Missing parameters',
-            };
+            return fail(
+                'invalid',
+                'Bitte gib an, welche Benachrichtigung(en) markiert werden sollen.',
+                'Missing parameters'
+            );
         }
     } catch (error) {
         console.error('HAI.ai: Error marking notification read:', error);
-        return {
-            success: false,
-            message: 'Fehler beim Markieren der Benachrichtigung.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Fehler beim Markieren der Benachrichtigung.',
+            'Action failed'
+        );
     }
 }
 
@@ -756,64 +907,112 @@ async function markNotificationRead(
 // ============================================================================
 
 /**
- * Approve an enabler submission
+ * Approve an enabler submission. The trainee must belong to the organization
+ * (and the chosen occupation) of the trainer, the enabler must lie inside the
+ * catalogs of the trainer. Only an open submission can be approved.
  */
 async function approveSubmission(
-    trainerId: string,
-    parameters: Record<string, unknown>
+    actor: SessionUser,
+    parameters: Record<string, unknown>,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     try {
-        const submissionId = parameters.submissionId as string | undefined;
+        const submissionId = parameters.submissionId as string;
 
-        if (!submissionId) {
-            return {
-                success: false,
-                message: 'Keine Submission-ID angegeben.',
-                error: 'Missing submissionId',
-            };
+        const [submission] = await db
+            .select({
+                id: enablerSubmissions.id,
+                status: enablerSubmissions.status,
+                traineeId: enablerSubmissions.traineeId,
+                enablerId: enablerSubmissions.enablerId,
+                organizationId: enablerSubmissions.organizationId,
+            })
+            .from(enablerSubmissions)
+            .where(eq(enablerSubmissions.id, submissionId))
+            .limit(1);
+
+        if (!submission) return notFound();
+
+        const notResponsible = await requireResponsibleTrainer(
+            actor,
+            request,
+            String(submission.traineeId)
+        );
+        if (notResponsible) return notResponsible;
+
+        if (!isInOrgScope(scopeOrg(actor), String(submission.organizationId))) {
+            return notFound();
         }
 
-        // Update submission status
-        await db
+        const outOfScope = await ensureContentAllowed(
+            actor,
+            request,
+            'enabler',
+            String(submission.enablerId)
+        );
+        if (outOfScope) return outOfScope;
+
+        if (submission.status !== 'PENDING') {
+            return fail(
+                'conflict',
+                `Die Abgabe kann nicht genehmigt werden (Status: ${submission.status}). Nur offene Abgaben können genehmigt werden.`,
+                'Invalid submission status'
+            );
+        }
+
+        // Update submission status, only of this trainee, organization and state
+        const updated = await db
             .update(enablerSubmissions)
             .set({
                 status: 'APPROVED',
                 reviewedAt: new Date(),
+                reviewedById: actor.id,
             })
-            .where(eq(enablerSubmissions.id, submissionId));
+            .where(
+                and(
+                    eq(enablerSubmissions.id, submissionId),
+                    eq(enablerSubmissions.traineeId, submission.traineeId),
+                    eq(enablerSubmissions.organizationId, submission.organizationId),
+                    eq(enablerSubmissions.status, 'PENDING')
+                )
+            )
+            .returning({ id: enablerSubmissions.id });
+
+        if (updated.length === 0) {
+            return fail(
+                'conflict',
+                'Die Abgabe hat sich geändert. Bitte versuche es erneut.',
+                'Submission changed'
+            );
+        }
 
         return {
             success: true,
-            message: '✅ **Abgabe genehmigt!**\n\nDer Azubi wurde benachrichtigt. 📬',
+            message: '✅ **Abgabe genehmigt!**',
             data: { submissionId },
         };
     } catch (error) {
         console.error('HAI.ai: Error approving submission:', error);
-        return {
-            success: false,
-            message: 'Fehler beim Genehmigen der Abgabe.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Fehler beim Genehmigen der Abgabe.',
+            'Action failed'
+        );
     }
 }
 
 /**
- * Approve an activity report
+ * Approve an activity report. Besides the organization and occupation scope
+ * the trainer has to be the trainer assigned to the trainee.
  */
 async function approveReport(
-    trainerId: string,
-    parameters: Record<string, unknown>
+    actor: SessionUser,
+    parameters: Record<string, unknown>,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     try {
-        const reportId = parameters.reportId as string | undefined;
-
-        if (!reportId) {
-            return {
-                success: false,
-                message: 'Keine Report-ID angegeben.',
-                error: 'Missing reportId',
-            };
-        }
+        const trainerId = actor.id;
+        const reportId = parameters.reportId as string;
 
         // Fetch report with trainee assignment info
         const reportRows = await db
@@ -828,101 +1027,168 @@ async function approveReport(
             .where(eq(activityReports.id, reportId))
             .limit(1);
 
-        if (reportRows.length === 0) {
-            return {
-                success: false,
-                message: 'Tätigkeitsnachweis nicht gefunden.',
-                error: 'Report not found',
-            };
-        }
+        if (reportRows.length === 0) return notFound();
 
         const report = reportRows[0];
 
+        // Security: organization and occupation scope of the trainee
+        const notResponsible = await requireResponsibleTrainer(
+            actor,
+            request,
+            String(report.traineeId)
+        );
+        if (notResponsible) return notResponsible;
+
         // Security: verify trainer is assigned to this trainee
-        if (report.assignedTrainerId !== trainerId) {
-            return {
-                success: false,
-                message: 'Sie sind nicht als verantwortlicher Trainer für diesen Auszubildenden eingetragen.',
-                error: 'Trainer not assigned to trainee',
-            };
-        }
+        if (report.assignedTrainerId !== trainerId) return notFound();
 
         // Validate workflow state
         if (report.status !== 'SUBMITTED') {
-            return {
-                success: false,
-                message: `Der Tätigkeitsnachweis kann nicht genehmigt werden (Status: ${report.status}). Nur eingereichte Nachweise können genehmigt werden.`,
-                error: 'Invalid report status',
-            };
+            return fail(
+                'conflict',
+                `Der Tätigkeitsnachweis kann nicht genehmigt werden (Status: ${report.status}). Nur eingereichte Nachweise können genehmigt werden.`,
+                'Invalid report status'
+            );
         }
 
-        // Update report status
-        await db
+        // Update report status, only of this trainee and state
+        const updated = await db
             .update(activityReports)
             .set({
                 status: 'APPROVED',
                 reviewedAt: new Date(),
                 reviewerId: trainerId,
             })
-            .where(eq(activityReports.id, reportId));
+            .where(
+                and(
+                    eq(activityReports.id, reportId),
+                    eq(activityReports.traineeId, report.traineeId),
+                    eq(activityReports.status, 'SUBMITTED')
+                )
+            )
+            .returning({ id: activityReports.id });
+
+        if (updated.length === 0) {
+            return fail(
+                'conflict',
+                'Der Tätigkeitsnachweis hat sich geändert. Bitte versuche es erneut.',
+                'Report changed'
+            );
+        }
 
         return {
             success: true,
-            message: '✅ **Tätigkeitsnachweis genehmigt!**\n\nDer Azubi kann jetzt mit der nächsten Woche fortfahren. 📝',
+            message: '✅ **Tätigkeitsnachweis genehmigt!**',
             data: { reportId },
         };
     } catch (error) {
         console.error('HAI.ai: Error approving report:', error);
-        return {
-            success: false,
-            message: 'Fehler beim Genehmigen des Tätigkeitsnachweises.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Fehler beim Genehmigen des Tätigkeitsnachweises.',
+            'Action failed'
+        );
     }
 }
 
 /**
- * Grade a quiz submission
+ * Grade a quiz submission. The score is a whole percentage from 0 to 100 (the
+ * app stores the rounded share of correct answers). The trainee must belong to
+ * the organization (and the chosen occupation) of the trainer, the quiz must
+ * lie inside the catalogs of the trainer, a graded submission stays as it is.
  */
 async function gradeQuiz(
-    trainerId: string,
-    parameters: Record<string, unknown>
+    actor: SessionUser,
+    parameters: Record<string, unknown>,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     try {
-        const submissionId = parameters.submissionId as string | undefined;
-        const score = parameters.score as number | undefined;
+        const submissionId = parameters.submissionId as string;
+        const score = parameters.score as number;
 
-        if (!submissionId || score === undefined) {
-            return {
-                success: false,
-                message: 'Unvollständige Daten zum Bewerten des Quiz.',
-                error: 'Missing parameters',
-            };
+        const [submission] = await db
+            .select({
+                id: quizSubmissions.id,
+                traineeId: quizSubmissions.traineeId,
+                quizId: quizSubmissions.quizId,
+                organizationId: quizSubmissions.organizationId,
+                isReviewed: quizSubmissions.isReviewed,
+            })
+            .from(quizSubmissions)
+            .where(eq(quizSubmissions.id, submissionId))
+            .limit(1);
+
+        if (!submission) return notFound();
+
+        const notResponsible = await requireResponsibleTrainer(
+            actor,
+            request,
+            String(submission.traineeId)
+        );
+        if (notResponsible) return notResponsible;
+
+        if (!isInOrgScope(scopeOrg(actor), String(submission.organizationId))) {
+            return notFound();
         }
 
-        // Update quiz submission with score
-        await db
+        const outOfScope = await ensureContentAllowed(
+            actor,
+            request,
+            'quiz',
+            String(submission.quizId)
+        );
+        if (outOfScope) return outOfScope;
+
+        if (submission.isReviewed === true) {
+            return fail(
+                'conflict',
+                'Diese Quiz-Abgabe wurde bereits bewertet.',
+                'Already reviewed'
+            );
+        }
+
+        // Update quiz submission with score, only of this trainee, organization and state
+        const updated = await db
             .update(quizSubmissions)
             .set({
                 score,
                 reviewedAt: new Date(),
-                reviewedById: trainerId,
+                reviewedById: actor.id,
                 isReviewed: true,
             })
-            .where(eq(quizSubmissions.id, submissionId));
+            .where(
+                and(
+                    eq(quizSubmissions.id, submissionId),
+                    eq(quizSubmissions.traineeId, submission.traineeId),
+                    eq(quizSubmissions.organizationId, submission.organizationId),
+                    or(
+                        eq(quizSubmissions.isReviewed, false),
+                        isNull(quizSubmissions.isReviewed)
+                    )
+                )
+            )
+            .returning({ id: quizSubmissions.id });
+
+        if (updated.length === 0) {
+            return fail(
+                'conflict',
+                'Die Quiz-Abgabe hat sich geändert. Bitte versuche es erneut.',
+                'Submission changed'
+            );
+        }
 
         return {
             success: true,
-            message: `📊 **Quiz bewertet!**\n\n✅ Bewertung: ${score}%\n\nDer Azubi wurde über die Bewertung informiert. 📬`,
+            message: `📊 **Quiz bewertet!**\n\n✅ Bewertung: ${score}%`,
             data: { submissionId, score },
         };
     } catch (error) {
         console.error('HAI.ai: Error grading quiz:', error);
-        return {
-            success: false,
-            message: 'Fehler beim Bewerten des Quiz.',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return fail(
+            'error',
+            'Fehler beim Bewerten des Quiz.',
+            'Action failed'
+        );
     }
 }
 
