@@ -75,9 +75,18 @@ describe('06-copy-content-from-production.sql: Production is only read', () => {
     const reads = [...statements.matchAll(/\bfrom\s+public\.([a-z_]+)/gi)].map(
       m => m[1]
     );
-    const allowed = new Set([...COPIED, 'lernfelder']);
+    // organizations is only read in the filter of the documents (platform owner)
+    const allowed = new Set([...COPIED, 'lernfelder', 'organizations']);
     expect(reads.length).toBeGreaterThan(COPIED.length);
     expect(reads.filter(name => !allowed.has(name))).toEqual([]);
+    // and there only inside the exists() of that filter
+    const orgReads = [...statements.matchAll(/from\s+public\.organizations/gi)];
+    expect(orgReads.length).toBeGreaterThan(0);
+    for (const m of orgReads) {
+      expect(statements.slice(Math.max(0, m.index! - 40), m.index)).toMatch(
+        /exists\s*\(\s*select\s+1\s*$/i
+      );
+    }
   });
 
   it('does not touch Auth, Storage or any other schema', () => {
@@ -130,6 +139,30 @@ describe('06-copy-content-from-production.sql: only training content', () => {
     expect(statements).not.toMatch(/from\s+public\.profiles/i);
   });
 
+  it('copies only documents without an organization or of the platform owner, and reports the rest', () => {
+    const documents =
+      /insert into public_preview\.content_documents[\s\S]*?on conflict/i.exec(
+        statements
+      )![0];
+    expect(documents).toMatch(/s\.organization_id is null/i);
+    expect(documents).toMatch(/o\.is_platform_owner/i);
+    expect(code).toMatch(/nicht kopiert \(Kundenorganisation\)/);
+  });
+
+  it('keeps the guards of the learning field migration', () => {
+    for (const column of [
+      'code',
+      'training_year',
+      'hours_budget',
+      'order_index',
+    ]) {
+      expect(code).toMatch(
+        new RegExp(`to_jsonb\\(l\\) ->> '${column}' is not null`)
+      );
+    }
+    expect(code).toMatch(/to_jsonb\(l\) ->> 'is_common' = 'false'/);
+  });
+
   it('sets the creator to the platform administrator and leaves organization and uploader empty', () => {
     const courses =
       /insert into public_preview\.courses[\s\S]*?on conflict/i.exec(
@@ -141,14 +174,20 @@ describe('06-copy-content-from-production.sql: only training content', () => {
       /insert into public_preview\.content_documents[\s\S]*?on conflict/i.exec(
         statements
       )![0];
-    expect(documents).not.toMatch(/s\.organization_id/);
-    expect(documents).not.toMatch(/s\.uploaded_by_id/);
+    // the select list (before the filter) never reads the two columns
+    const selectList = documents.slice(
+      0,
+      documents.indexOf('from public.content_documents')
+    );
+    expect(selectList.length).toBeGreaterThan(50);
+    expect(selectList).not.toMatch(/s\.organization_id/);
+    expect(selectList).not.toMatch(/s\.uploaded_by_id/);
   });
 });
 
 describe('06-copy-content-from-production.sql: safety for the person who runs it', () => {
   it('runs in one transaction with time limits', () => {
-    expect(statements).toMatch(/^\s*begin;/im);
+    expect(statements).toMatch(/^\s*begin isolation level repeatable read;/im);
     expect((statements.match(/\bcommit;/gi) ?? []).length).toBe(1);
     expect(statements).toMatch(/set local lock_timeout/i);
     expect(statements).toMatch(/set local statement_timeout/i);
@@ -196,6 +235,12 @@ describe('06-copy-content-from-production.sql: safety for the person who runs it
     for (const clause of conflicts) {
       expect(clause).toMatch(/on conflict (\(id\) )?do nothing/i);
     }
+    // a re-saved quiz in Production gets new ids: only the key can conflict then
+    const links =
+      /insert into public_preview\.enabler_quiz_links[\s\S]*?do nothing;/i.exec(
+        statements
+      )![0];
+    expect(links).toMatch(/on conflict do nothing/i);
   });
 
   it('contains no password, key, token or connection string', () => {
