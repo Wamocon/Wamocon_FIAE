@@ -15,6 +15,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
 // Helper to get ISO week number
 function getISOWeek(date: Date): number {
@@ -55,9 +56,10 @@ function getWeekDates(
 function calculateAusbildungsjahr(
   startDate: Date,
   durationYears?: number | null,
-  atDate: Date = new Date()
+  atDate: Date = new Date(),
+  phaseOneMonths?: number | null
 ): number {
-  return getTrainingPhase(startDate, durationYears, atDate);
+  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
 // GET /api/trainee/school/reports?traineeId=...&status=...&year=...
@@ -197,12 +199,18 @@ export async function POST(req: NextRequest) {
 
     // Calculate week dates
     const weekDates = getWeekDates(reportWeek, reportYear);
+    // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+    const phasePlan =
+      trainee?.startOfTrainingDate
+        ? await loadPhasePlanForUser(traineeId, trainee.ausbildungDurationYears)
+        : null;
     const calculatedAusbildungsjahr =
       trainee?.startOfTrainingDate
         ? calculateAusbildungsjahr(
             trainee.startOfTrainingDate,
             trainee.ausbildungDurationYears,
-            weekDates.start
+            weekDates.start,
+            phasePlan?.phaseMonths[0]
           )
         : ausbildungsjahr || 1;
 

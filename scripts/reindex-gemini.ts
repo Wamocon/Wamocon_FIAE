@@ -35,6 +35,7 @@ import { createHash } from 'crypto';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { buildTrainingComponentMetadata } from '../src/lib/hai/componentMetadata';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
@@ -1021,15 +1022,27 @@ async function indexTrainingComponents(db: postgres.Sql) {
 
   let components: any[];
   try {
+    // phase and kind (catalog columns) go into the metadata as componentPhase
+    // and componentKind, see src/lib/hai/componentMetadata.ts
     components = await db`
       SELECT tc.id, tc.code, tc.title, tc.description, tc.total_weeks, tc.total_hours,
-             tc.training_year, tc.order_index
+             tc.training_year, tc.order_index, tc.phase, tc.kind
       FROM training_components tc
       ORDER BY tc.order_index
     `;
   } catch {
-    warn('training_components table not found — skipping');
-    return { indexed: 0, skipped: 0, failed: 0, total: 0 };
+    try {
+      // A database without the catalog columns: index as before, without them
+      components = await db`
+        SELECT tc.id, tc.code, tc.title, tc.description, tc.total_weeks, tc.total_hours,
+               tc.training_year, tc.order_index
+        FROM training_components tc
+        ORDER BY tc.order_index
+      `;
+    } catch {
+      warn('training_components table not found — skipping');
+      return { indexed: 0, skipped: 0, failed: 0, total: 0 };
+    }
   }
 
   if (components.length === 0) {
@@ -1083,12 +1096,7 @@ async function indexTrainingComponents(db: postgres.Sql) {
       comp.id,
       `${comp.code}: ${comp.title}`,
       content,
-      {
-        componentCode: comp.code,
-        trainingYear: comp.training_year,
-        totalHours: comp.total_hours,
-        useCaseCount: tucs.length,
-      }
+      buildTrainingComponentMetadata(comp, tucs.length)
     );
 
     if (result.skipped) {

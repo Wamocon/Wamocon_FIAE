@@ -18,14 +18,16 @@ import {
 import { sendBlockerInvite } from '@/lib/email';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
   startDate: Date,
   durationYears?: number | null,
-  atDate: Date = new Date()
+  atDate: Date = new Date(),
+  phaseOneMonths?: number | null
 ): number {
-  return getTrainingPhase(startDate, durationYears, atDate);
+  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
 // Helper to get current Schuljahr (e.g., "2026/2027")
@@ -237,11 +239,19 @@ export async function POST(req: NextRequest) {
         const calendarWeek = getISOWeek(start);
         const year = start.getFullYear();
         const schuljahr = getCurrentSchuljahr();
+        // Phase one of the occupation of this trainee (KfBM 15 months, FIAE 18)
+        const phasePlan = trainee.startOfTrainingDate
+          ? await loadPhasePlanForUser(
+              String(tid),
+              trainee.ausbildungDurationYears
+            )
+          : null;
         const ausbildungsjahr = trainee.startOfTrainingDate
           ? calculateAusbildungsjahr(
               trainee.startOfTrainingDate,
               trainee.ausbildungDurationYears,
-              start
+              start,
+              phasePlan?.phaseMonths[0]
             )
           : 1;
 

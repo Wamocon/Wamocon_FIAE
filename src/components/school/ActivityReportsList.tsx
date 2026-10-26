@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useSearchParams } from 'next/navigation';
@@ -84,6 +85,7 @@ const STATUS_CONFIG = {
 
 export function ActivityReportsList() {
   const { profile } = useAuth();
+  const { phaseOneMonthsFor } = useRequestCatalog(profile?.id);
   const { t } = useLanguage();
   const searchParams = useSearchParams();
 
@@ -102,7 +104,11 @@ export function ActivityReportsList() {
 
   const formatPhaseLabel = (phase: number) => {
     if (phase === 3) return t('reports.integrativePhase');
-    const range = getPhaseMonthRange(durationYears, phase as TrainingPhase);
+    const range = getPhaseMonthRange(
+      durationYears,
+      phase as TrainingPhase,
+      phaseOneMonthsFor(durationYears)
+    );
     return t('reports.phaseRange')
       .replace('{phase}', String(phase))
       .replace('{start}', String(range.startMonth))
@@ -415,6 +421,7 @@ function ActivityReportDetail({
   onBack: () => void;
 }) {
   const { profile } = useAuth();
+  const { phaseOneMonthsFor } = useRequestCatalog(profile?.id);
   const { t } = useLanguage();
   const [report, setReport] = useState<any>(null);
   const [entries, setEntries] = useState<any[]>([]);
@@ -428,7 +435,11 @@ function ActivityReportDetail({
 
   const formatPhaseLabel = (phase: number) => {
     if (phase === 3) return t('reports.integrativePhase');
-    const range = getPhaseMonthRange(durationYears, phase as TrainingPhase);
+    const range = getPhaseMonthRange(
+      durationYears,
+      phase as TrainingPhase,
+      phaseOneMonthsFor(durationYears)
+    );
     return t('reports.phaseRange')
       .replace('{phase}', String(phase))
       .replace('{start}', String(range.startMonth))

@@ -90,3 +90,39 @@ export function resolvePhasePlan(
     phaseMonths: [phaseOne, totalMonths - phaseOne],
   };
 }
+
+/**
+ * Phase months of an occupation for both durations, keyed by the years: what
+ * the server tells the browser (GET /api/me/catalogs), so the browser can label
+ * the phases of the user without the catalog settings.
+ */
+export type PhaseMonthsByDuration = Record<'2' | '3', [number, number]>;
+
+export function resolvePhaseMonthsByDuration(
+  settings: unknown
+): PhaseMonthsByDuration {
+  return {
+    '3': resolvePhasePlan(settings, STANDARD_YEARS).phaseMonths,
+    '2': resolvePhasePlan(settings, SHORTENED_YEARS).phaseMonths,
+  };
+}
+
+/**
+ * Length of phase 1 in months for a user of the given duration, from the
+ * answer of the server (resolvePhaseMonthsByDuration). Anything that is not a
+ * valid plan of that duration gives undefined, so the duration helpers keep
+ * the lengths of the time before the catalogs (18 / 12 months).
+ */
+export function phaseOneMonthsFromAnswer(
+  value: unknown,
+  durationYears: number | null | undefined
+): number | undefined {
+  const duration = normalizeDurationYears(durationYears);
+  if (!isRecord(value)) return undefined;
+  const pair = value[String(duration)];
+  if (!Array.isArray(pair) || pair.length !== 2) return undefined;
+  const [one, two] = pair;
+  if (!Number.isInteger(one) || !Number.isInteger(two)) return undefined;
+  if (one < 1 || two < 1 || one + two !== duration * 12) return undefined;
+  return one;
+}

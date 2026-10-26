@@ -4,9 +4,13 @@ import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { authFetch } from '@/lib/authFetch';
+import { phaseOneMonthsFromAnswer } from '@/lib/catalog/phase-plan';
 import { withCatalogParam } from '@/lib/catalog/request-catalog';
 
-type MeCatalogs = { activeCode?: string | null };
+type MeCatalogs = {
+  activeCode?: string | null;
+  catalogs?: { code?: string; phaseMonths?: unknown }[];
+};
 
 /**
  * The occupation to name in requests of the public lists. It is the active
@@ -29,6 +33,13 @@ type MeCatalogs = { activeCode?: string | null };
  * key. A key made of the url alone would hand the answer of the previous user
  * to the next one who signs in within the same tab (the cache survives a
  * sign-out), and a KfBM trainee would get FIAE lists.
+ *
+ * `phaseOneMonthsFor(durationYears)` is the length of phase 1 in months in the
+ * phase plan of the active occupation (KfBM 15, FIAE 18), for the phase labels
+ * and the current phase in the browser. Hand it to getPhaseMonthRange and
+ * getTrainingPhase. It gives nothing while the answer is unknown, without a
+ * usable plan in it or for an unknown occupation, then the lengths of the time
+ * before the occupations (18 / 12 months) apply.
  *
  * @param userId id of the signed-in user, nothing (null or undefined) until then
  */
@@ -58,5 +69,13 @@ export function useRequestCatalog(userId: string | null | undefined) {
     (url: string) => withCatalogParam(url, catalog),
     [catalog]
   );
-  return { ready, catalog, withCatalog };
+  const phaseMonths = catalog
+    ? query.data?.catalogs?.find(entry => entry.code === catalog)?.phaseMonths
+    : undefined;
+  const phaseOneMonthsFor = useCallback(
+    (durationYears: number | null | undefined) =>
+      phaseOneMonthsFromAnswer(phaseMonths, durationYears),
+    [phaseMonths]
+  );
+  return { ready, catalog, withCatalog, phaseOneMonthsFor };
 }

@@ -17,6 +17,7 @@ import { eq } from 'drizzle-orm';
 import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
 // Helper to parse German date format "10.08." or "10.08. - 14.08."
 function parseGermanDateRange(
@@ -112,9 +113,10 @@ function getCurrentSchuljahr(): string {
 function calculateAusbildungsjahr(
   startDate: Date,
   durationYears?: number | null,
-  atDate: Date = new Date()
+  atDate: Date = new Date(),
+  phaseOneMonths?: number | null
 ): number {
-  return getTrainingPhase(startDate, durationYears, atDate);
+  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
 // Determine block type from block number or notes
@@ -179,6 +181,12 @@ export async function POST(req: NextRequest) {
       .from(profiles)
       .where(eq(profiles.id, traineeId));
 
+    // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18), read
+    // once for the whole file
+    const phasePlan = trainee?.startOfTrainingDate
+      ? await loadPhasePlanForUser(traineeId, trainee.ausbildungDurationYears)
+      : null;
+
     const targetSchuljahr = schuljahr || getCurrentSchuljahr();
     const yearForParsing = baseYear || new Date().getFullYear();
 
@@ -235,7 +243,8 @@ export async function POST(req: NextRequest) {
           ? calculateAusbildungsjahr(
               trainee.startOfTrainingDate,
               trainee.ausbildungDurationYears,
-              dateRange.start
+              dateRange.start,
+              phasePlan?.phaseMonths[0]
             )
           : 1;
 

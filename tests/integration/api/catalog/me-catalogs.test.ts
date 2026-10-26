@@ -18,6 +18,11 @@ const DEFAULT_BRANDING = {
   accent: null,
 };
 
+// Phase months per duration in years (phase 1 + phase 2), see
+// src/lib/catalog/phase-plan.ts. FIAE has none in its settings: previous lengths.
+const FIAE_PHASE_MONTHS = { '3': [18, 18], '2': [12, 12] };
+const KFBM_PHASE_MONTHS = { '3': [15, 21], '2': [10, 14] };
+
 const catalogs = [
   {
     id: KFBM,
@@ -113,6 +118,7 @@ describe('GET /api/me/catalogs', () => {
           code: 'FIAE',
           title: 'Fachinformatiker/in Anwendungsentwicklung',
           branding: DEFAULT_BRANDING,
+          phaseMonths: FIAE_PHASE_MONTHS,
         },
       ],
       activeCode: 'FIAE',
@@ -234,6 +240,7 @@ describe('GET /api/me/catalogs', () => {
           code: 'FIAE',
           title: 'Fachinformatiker/in Anwendungsentwicklung',
           branding: DEFAULT_BRANDING,
+          phaseMonths: FIAE_PHASE_MONTHS,
         },
         {
           code: 'KFBM',
@@ -243,17 +250,18 @@ describe('GET /api/me/catalogs', () => {
             shortName: 'KfBM',
             accent: '#0f766e',
           },
+          phaseMonths: KFBM_PHASE_MONTHS,
         },
       ]);
     });
 
-    it('gives out only the branding, never other settings', async () => {
+    it('gives out only the branding and the phase months, never other settings', async () => {
       const { GET } = await load({ organizationCatalogs: both }, trainer());
       const text = JSON.stringify(await (await GET(req())).json());
       expect(text).not.toContain('phase_months');
-      expect(text).not.toContain('phaseMonths');
       expect(text).not.toContain('2.49');
       expect(text).not.toContain('settings');
+      expect(text).not.toContain('shortening_threshold');
     });
 
     it.each([
@@ -301,6 +309,57 @@ describe('GET /api/me/catalogs', () => {
         accent: null,
       });
       expect(JSON.stringify(body)).not.toContain('evil.example');
+    });
+  });
+
+  describe('phase months', () => {
+    it('gives a KfBM trainee the plan of KfBM: 15 + 21 months, shortened 10 + 14', async () => {
+      const { GET } = await load(
+        {
+          organizationCatalogs: both,
+          traineeEnrollments: [
+            { trainingCatalogId: KFBM, startDate: '2026-09-01' },
+          ],
+        },
+        trainee()
+      );
+      const body = await (await GET(req())).json();
+      expect(body.catalogs).toHaveLength(1);
+      expect(body.catalogs[0].phaseMonths).toEqual(KFBM_PHASE_MONTHS);
+    });
+
+    it('gives a FIAE trainee 18 + 18 months, shortened 12 + 12 (unchanged lengths)', async () => {
+      const { GET } = await load(
+        { organizationCatalogs: fiaeOnly, traineeEnrollments: [] },
+        trainee()
+      );
+      const body = await (await GET(req())).json();
+      expect(body.catalogs[0].phaseMonths).toEqual(FIAE_PHASE_MONTHS);
+    });
+
+    it('uses the shortened rules of the settings and the previous lengths for unusable settings', async () => {
+      const { GET } = await load(
+        {
+          organizationCatalogs: both,
+          trainingCatalogs: [
+            {
+              ...catalogs[0],
+              settings: {
+                phase_months: [15, 21],
+                shortened_training_rules: { phase_months: [12, 12] },
+              },
+            },
+            { ...catalogs[1], settings: { phase_months: 'x' } },
+          ],
+        },
+        trainer()
+      );
+      const body = await (await GET(req())).json();
+      const byCode = Object.fromEntries(
+        body.catalogs.map((c: any) => [c.code, c.phaseMonths])
+      );
+      expect(byCode.KFBM).toEqual({ '3': [15, 21], '2': [12, 12] });
+      expect(byCode.FIAE).toEqual(FIAE_PHASE_MONTHS);
     });
   });
 
