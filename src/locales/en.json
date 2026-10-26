@@ -2187,5 +2187,6 @@
   "hai.action.card.error.conflict": "The action no longer matches the current state. Please reload the page and try again.",
   "hai.action.card.error.unavailable": "Your permission cannot be checked right now. Please try again later.",
   "hai.action.card.error.generic": "The action could not be run. Please try again later.",
-  "curriculum.superAdminOnly": "Curriculum content can only be changed by super admins."
+  "curriculum.superAdminOnly": "Curriculum content can only be changed by super admins.",
+  "trainerQuizPages.loadError": "The content could not be loaded. Please try again later."
 }

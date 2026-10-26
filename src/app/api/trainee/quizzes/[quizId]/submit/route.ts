@@ -19,6 +19,29 @@ import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
+/**
+ * Ids of the questions that hold a real answer: a selected option, or a text.
+ * A stored row without either does not count, so the solution of such a
+ * question is not shown.
+ */
+function answeredQuestionIds(
+  stored: Array<{
+    questionId: unknown;
+    selectedOptionId?: unknown;
+    textAnswer?: unknown;
+  }>
+): Set<string> {
+  return new Set(
+    stored
+      .filter(
+        sa =>
+          sa.selectedOptionId != null ||
+          (typeof sa.textAnswer === 'string' && sa.textAnswer.trim() !== '')
+      )
+      .map(sa => String(sa.questionId))
+  );
+}
+
 // POST: submit answers for a quiz attempt
 // Body: { answers: [{ questionId, selectedOptionId? , textAnswer? }] }
 // The session user is the trainee, a traineeId in the body is ignored.
@@ -141,7 +164,10 @@ export async function POST(
       const answerMapText = new Map(
         storedAnswers.map(sa => [String(sa.questionId), (sa as any).textAnswer])
       );
-      const feedback = qs.map(q => {
+      // Only a question the trainee has really answered gets its solution
+      const answeredIds = answeredQuestionIds(storedAnswers);
+      const answeredQs = qs.filter(q => answeredIds.has(String(q.id)));
+      const feedback = answeredQs.map(q => {
         const qType = (q as any).questionType || 'MCQ';
         if (qType === 'TEXT') {
           const given = (answerMapText.get(String(q.id)) || '') as string;
@@ -197,6 +223,25 @@ export async function POST(
       }
       return { questionId: a.questionId, selectedOptionId: a.selectedOptionId };
     });
+
+    // One answer per question of this quiz, and an option has to belong to the
+    // question it answers: otherwise a trainee could send every option of the
+    // quiz, collect the right ones and read the key from the feedback
+    const questionIds = new Set(qs.map(q => String(q.id)));
+    const answeredOnce = new Set<string>();
+    const invalidAnswer = normalized.some(a => {
+      const questionId = String(a.questionId);
+      if (!questionIds.has(questionId) || answeredOnce.has(questionId))
+        return true;
+      answeredOnce.add(questionId);
+      const selected = (a as any).selectedOptionId;
+      if (!selected) return false; // blank: reported as missing below
+      const opt = optMap.get(String(selected));
+      return !opt || String(opt.questionId) !== questionId;
+    });
+    if (invalidAnswer) {
+      return NextResponse.json({ error: 'Invalid answers' }, { status: 400 });
+    }
 
     // Require an answer for every question (MCQ must have selectedOptionId, TEXT must have non-empty textAnswer)
     const answerByQuestionId = new Map<string, any>(
@@ -446,7 +491,10 @@ export async function GET(
     const storedAnswerMapText = new Map(
       storedAnswers.map(sa => [String(sa.questionId), (sa as any).textAnswer])
     );
-    const feedback = qs.map(q => {
+    // Only a question the trainee has really answered gets its solution
+    const answeredIds = answeredQuestionIds(storedAnswers);
+    const answeredQs = qs.filter(q => answeredIds.has(String(q.id)));
+    const feedback = answeredQs.map(q => {
       const qType = (q as any).questionType || 'MCQ';
       if (qType === 'TEXT') {
         const given = (storedAnswerMapText.get(String(q.id)) || '') as string;

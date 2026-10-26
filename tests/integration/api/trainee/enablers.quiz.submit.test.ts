@@ -101,6 +101,88 @@ describe('API: POST /api/trainee/enablers/[enablerId]/quiz/submit', () => {
     expect(byQ.get('q-3')!.correct).toBe(false);
   });
 
+  const twoQuestionTables = () => ({
+    profiles: [orgRow],
+    enablers: [enablerRow],
+    courseMembers: [memberRow],
+    enablerQuizzes: [{ enablerId: 'e1', quizId: 'q1' }],
+    quizzes: [{ id: 'q1', title: 'T' }],
+    questions: [
+      { id: 'q-1', quizId: 'q1', questionText: 'Q1' },
+      { id: 'q-2', quizId: 'q1', questionText: 'Q2' },
+    ],
+    options: [
+      { id: 'o-1', questionId: 'q-1', isCorrect: true },
+      { id: 'o-2', questionId: 'q-1', isCorrect: false },
+      { id: 'o-3', questionId: 'q-2', isCorrect: true },
+      { id: 'o-4', questionId: 'q-2', isCorrect: false },
+    ],
+  });
+
+  async function submitAnswers(answers: unknown[]) {
+    const { db, writes } = createTableDb(twoQuestionTables(), {
+      quizSubmissions: [{ id: 'sub-1' }],
+    });
+    const POST = await importHandlerWithDb(db);
+    const res = await POST(
+      makePost('http://localhost/api/trainee/enablers/e1/quiz/submit', {
+        answers,
+      }),
+      { params: Promise.resolve({ enablerId: 'e1' }) }
+    );
+    return { res: res as any, body: await (res as any).json(), writes };
+  }
+
+  it('an open question is a 400 without any key, nothing is stored', async () => {
+    const { res, body, writes } = await submitAnswers([
+      { questionId: 'q-1', selectedOptionId: 'o-2' },
+    ]);
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(body)).not.toContain('o-1');
+    expect(writes('insert', 'quizSubmissions')).toEqual([]);
+  });
+
+  it('an empty selection is a 400 without any key', async () => {
+    const { res, body } = await submitAnswers([
+      { questionId: 'q-1', selectedOptionId: null },
+      { questionId: 'q-2', selectedOptionId: null },
+    ]);
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(body)).not.toContain('o-3');
+  });
+
+  it('an option of another question is a 400 without any key', async () => {
+    const { res, body } = await submitAnswers([
+      { questionId: 'q-1', selectedOptionId: 'o-3' },
+      { questionId: 'q-2', selectedOptionId: 'o-3' },
+    ]);
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(body)).not.toContain('correctOptionId');
+  });
+
+  it('every option as separate entries is a 400 (no score by trying all)', async () => {
+    const { res } = await submitAnswers([
+      { questionId: 'q-1', selectedOptionId: 'o-1' },
+      { questionId: 'q-1', selectedOptionId: 'o-2' },
+      { questionId: 'q-2', selectedOptionId: 'o-3' },
+      { questionId: 'q-2', selectedOptionId: 'o-4' },
+    ]);
+    expect(res.status).toBe(400);
+  });
+
+  it('a full set of answers is solved question by question', async () => {
+    const { res, body } = await submitAnswers([
+      { questionId: 'q-1', selectedOptionId: 'o-2' },
+      { questionId: 'q-2', selectedOptionId: 'o-3' },
+    ]);
+    expect(res.status).toBe(200);
+    expect(body.score).toBe(50);
+    expect(body.feedback).toEqual([
+      { questionId: 'q-1', correct: false, correctOptionId: 'o-1' },
+      { questionId: 'q-2', correct: true, correctOptionId: 'o-3' },
+    ]);
+  });
+
   it('400 if no quiz linked', async () => {
     const { db } = createTableDb({
       profiles: [orgRow],
