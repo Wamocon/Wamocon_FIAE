@@ -15,11 +15,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/db';
 import haiDb from '@/db/haiDb';
-import { eq, sql } from 'drizzle-orm';
-import { profiles } from '@/db/migrations/schemas/schema';
-import { toHaiRole } from '@/lib/auth-helpers';
+import { sql } from 'drizzle-orm';
+import { isErrorResponse } from '@/lib/auth/session';
+import { requireHaiIndexManager } from '@/lib/hai/guards';
 import {
   indexAllContent,
   indexAllTrainees,
@@ -32,28 +31,9 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
-    // Auth check — require trainer role
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 401 });
-    }
-
-    // Verify the user is a trainer
-    const user = await db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, userId))
-      .limit(1);
-
-    // Privileged roles (ADMIN, TEMP_ADMIN) are allowed alongside TRAINER.
-    if (user.length === 0 || toHaiRole(user[0].role) !== 'TRAINER') {
-      return NextResponse.json(
-        { error: 'Unauthorized — trainer access required' },
-        { status: 403 }
-      );
-    }
+    // Shared index: platform staff only, the role comes from the session
+    const manager = await requireHaiIndexManager(request);
+    if (isErrorResponse(manager)) return manager;
 
     const body = await request.json();
     const { action, traineeId } = body;
@@ -172,12 +152,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 401 });
-    }
+    const manager = await requireHaiIndexManager(request);
+    if (isErrorResponse(manager)) return manager;
 
     // Get embedding counts by source type
     const stats = await haiDb.execute(
