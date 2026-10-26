@@ -2,6 +2,8 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import fs from 'fs';
+import path from 'path';
 import { createTableDb } from '../../../helpers/mockDb';
 import {
   makeRequest,
@@ -22,12 +24,16 @@ import {
 
 const TOKEN = 'valid-token';
 
-// The role that is just below what a guard requires
+// The caller that is just below what a guard requires. The 'user' guard has no
+// role to fall below, an inactive account is the one it turns away with 403.
 const TOO_LOW_ROLE: Record<GuardedRoute['guard'], Record<string, unknown>> = {
+  user: { role: 'TRAINEE', isActive: false },
   trainer: { role: 'TRAINEE' },
   admin: { role: 'TRAINER' },
   // An ADMIN of a customer organization is not a platform-wide admin
   superAdmin: { role: 'ADMIN', isPlatformOwner: false },
+  // A trainer of a customer organization may not touch the shared HAI index
+  haiIndex: { role: 'TRAINER', isPlatformOwner: false },
 };
 
 async function loadHandler(
@@ -57,7 +63,7 @@ function buildCall(entry: GuardedRoute, token: string | null) {
   return [request, { params: Promise.resolve(params) }] as const;
 }
 
-describe('route guards: trainer and admin handlers', () => {
+describe('route guards: trainer, admin and signed-in user handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
@@ -68,7 +74,48 @@ describe('route guards: trainer and admin handlers', () => {
 
   it('covers the expected number of handlers', () => {
     // Guards against the table silently shrinking when files move
-    expect(GUARDED_ROUTES.length).toBeGreaterThanOrEqual(100);
+    expect(GUARDED_ROUTES.length).toBeGreaterThanOrEqual(125);
+  });
+
+  it('lists every notification and trainee school handler', async () => {
+    // A new route file under these folders has to be added to the table
+    const { readdirSync, readFileSync, statSync } = await import('fs');
+    const { join } = await import('path');
+    const base = join(process.cwd(), 'src/app/api');
+    const found: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const full = join(dir, name);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (name === 'route.ts') {
+          const route = full
+            .slice(base.length + 1)
+            .split('\\')
+            .join('/')
+            .replace(/\/route\.ts$/, '');
+          if (
+            route.startsWith('notifications') ||
+            route.startsWith('trainee/school')
+          ) {
+            const source = readFileSync(full, 'utf8');
+            for (const m of source.matchAll(
+              /export async function (GET|POST|PUT|PATCH|DELETE)/g
+            )) {
+              found.push(`${m[1]} ${route}`);
+            }
+          }
+        }
+      }
+    };
+    walk(base);
+    // (the HAI routes of one person are 'user' handlers too, they have a table
+    // check of their own below)
+    const listed = GUARDED_ROUTES.filter(
+      r => r.guard === 'user' && !r.route.startsWith('hai/')
+    ).map(r => `${r.method} ${r.route}`);
+    // lernfelder is master data of the occupation and open without a session
+    const open = ['GET trainee/school/lernfelder'];
+    expect([...listed, ...open].sort()).toEqual(found.sort());
   });
 
   describe.each(GUARDED_ROUTES)('$method /api/$route', entry => {
@@ -81,7 +128,7 @@ describe('route guards: trainer and admin handlers', () => {
       expect(db.select).not.toHaveBeenCalled();
     });
 
-    it(`403 for a role below ${entry.guard}`, async () => {
+    it(`403 for a caller below ${entry.guard}`, async () => {
       const { handler, db } = await loadHandler(
         entry,
         TOO_LOW_ROLE[entry.guard]
@@ -95,6 +142,27 @@ describe('route guards: trainer and admin handlers', () => {
       expect(db.update).not.toHaveBeenCalled();
       expect(db.delete).not.toHaveBeenCalled();
     });
+  });
+
+  it('lists every exported HAI handler in the table', () => {
+    // A new method on a HAI route without a guard entry fails here
+    const dir = path.join(process.cwd(), 'src/app/api/hai');
+    const found: string[] = [];
+    for (const name of fs.readdirSync(dir)) {
+      const file = path.join(dir, name, 'route.ts');
+      if (!fs.existsSync(file)) continue;
+      const source = fs.readFileSync(file, 'utf8');
+      for (const m of source.matchAll(
+        /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g
+      )) {
+        found.push(`${m[1]} hai/${name}`);
+      }
+    }
+    const listed = GUARDED_ROUTES.filter(r => r.route.startsWith('hai/')).map(
+      r => `${r.method} ${r.route}`
+    );
+    expect(found.length).toBeGreaterThanOrEqual(16);
+    expect(listed.sort()).toEqual(found.sort());
   });
 
   it('401 for a token that Supabase rejects', async () => {

@@ -12,13 +12,21 @@ import { eq, and } from 'drizzle-orm';
 import { schoolExams, schoolExamResults, ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
 }
 
+// An exam of someone else is answered like a missing one
+const notFound = () =>
+    NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+
 // GET /api/trainee/school/exams/[id]
 export async function GET(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
 
@@ -31,8 +39,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             .leftJoin(schoolExamResults, eq(schoolExams.id, schoolExamResults.examId))
             .where(eq(schoolExams.id, id as any));
 
-        if (rows.length === 0) {
-            return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+        if (rows.length === 0 || String(rows[0].exam.traineeId) !== session.id) {
+            return notFound();
         }
 
         const { exam, result } = rows[0];
@@ -57,18 +65,21 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
 // PUT /api/trainee/school/exams/[id]
 export async function PUT(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
         const body = await req.json();
 
-        // Check exam exists
+        // Check exam exists and belongs to the session user
         const [existing] = await db
             .select()
             .from(schoolExams)
             .where(eq(schoolExams.id, id as any));
 
-        if (!existing) {
-            return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+        if (!existing || String(existing.traineeId) !== session.id) {
+            return notFound();
         }
 
         // Build update object
@@ -122,7 +133,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         const [updated] = await db
             .update(schoolExams)
             .set(updateData)
-            .where(eq(schoolExams.id, id as any))
+            .where(and(eq(schoolExams.id, id as any), eq(schoolExams.traineeId, session.id as any)))
             .returning();
 
         return NextResponse.json({ exam: updated });
@@ -135,37 +146,42 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 // DELETE /api/trainee/school/exams/[id]
 // Handles both school_exams and ausbildung_blocks (EXAM type) sources
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
+    const session = await requireUser(req);
+    if (isErrorResponse(session)) return session;
+
     try {
         const { id } = await params;
 
         // Try school_exams first
         const [existingExam] = await db
-            .select({ id: schoolExams.id })
+            .select({ id: schoolExams.id, traineeId: schoolExams.traineeId })
             .from(schoolExams)
             .where(eq(schoolExams.id, id as any));
 
         if (existingExam) {
+            // An exam of someone else is answered like a missing one
+            if (String(existingExam.traineeId) !== session.id) return notFound();
             // Delete from school_exams (cascades to results)
             await db
                 .delete(schoolExams)
-                .where(eq(schoolExams.id, id as any));
+                .where(and(eq(schoolExams.id, id as any), eq(schoolExams.traineeId, session.id as any)));
             return NextResponse.json({ success: true, deleted: id });
         }
 
         // Fallback: try ausbildung_blocks (calendar-sourced EXAM entries)
         const [existingBlock] = await db
-            .select({ id: ausbildungBlocks.id, blockType: ausbildungBlocks.blockType })
+            .select({ id: ausbildungBlocks.id, blockType: ausbildungBlocks.blockType, traineeId: ausbildungBlocks.traineeId })
             .from(ausbildungBlocks)
             .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.blockType, 'EXAM')));
 
-        if (existingBlock) {
+        if (existingBlock && String(existingBlock.traineeId) === session.id) {
             await db
                 .delete(ausbildungBlocks)
-                .where(eq(ausbildungBlocks.id, id as any));
+                .where(and(eq(ausbildungBlocks.id, id as any), eq(ausbildungBlocks.traineeId, session.id as any)));
             return NextResponse.json({ success: true, deleted: id });
         }
 
-        return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+        return notFound();
     } catch (e) {
         console.error('Delete exam error:', e);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

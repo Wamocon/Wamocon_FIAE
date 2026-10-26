@@ -445,7 +445,41 @@ select i.indexrelid::regclass as index_name, i.indisunique as is_unique, i.indis
 from pg_index i
 where i.indexrelid = to_regclass('public.trainee_enrollments_trainee_unique');
 
--- C12. Before 20261028000200 (quiz catalog check): quiz links whose quiz and enabler
+-- C12. Before 20261027000100 (HAI index scope): chunks per source_type. The file
+-- derives catalog, organization and visibility for every row in pure SQL (no model
+-- call). Rows without a derivable catalog go to FIAE and are reported per
+-- source_type with RAISE NOTICE while the file runs.
+select source_type, count(*) as chunks
+from public.hai_embeddings
+group by source_type
+order by source_type;
+
+-- C12a. Before 20261027000100: organization of the documents. The HAI search shows
+-- a document chunk only to its own organization or if organization_id is NULL.
+-- The trainer upload routes store the organization of the uploader, so platform
+-- PDFs may carry the platform organization instead of NULL. Then customer
+-- organizations would no longer find them in the HAI: decide before the rollout.
+select d.organization_id, o.name, o.is_platform_owner, count(*) as documents
+from public.content_documents d
+left join public.organizations o on o.id = d.organization_id
+group by d.organization_id, o.name, o.is_platform_owner
+order by documents desc;
+
+-- C12b. After 20261027000100 only: every chunk has a catalog (without_catalog = 0)
+-- and solutions are trainer only. Expect trainer rows for use_case (solution pages)
+-- and quiz (every quiz chunk), and 0 in the second query.
+select source_type, visibility, count(*) as chunks,
+       count(*) filter (where training_catalog_id is null) as without_catalog
+from public.hai_embeddings
+group by source_type, visibility
+order by source_type, visibility;
+
+select count(*) as solutions_visible_to_trainees
+from public.hai_embeddings
+where metadata ->> 'documentType' = 'TRAINER_SOLUTION'
+  and visibility <> 'trainer';
+
+-- C15. Before 20261028000200 (quiz catalog check): quiz links whose quiz and enabler
 -- belong to different catalogs. Expect 0 rows, otherwise the file stops with the
 -- number and nothing is changed. A human decides (fix the catalog or the link).
 select l.id, q.training_catalog_id as quiz_catalog, c.training_catalog_id as enabler_catalog
@@ -455,7 +489,7 @@ join public.enablers e on e.id = l.enabler_id
 join public.courses c on c.id = e.course_id
 where q.training_catalog_id <> c.training_catalog_id;
 
--- C12b. After 20261028000200 only: the two triggers exist and are enabled
+-- C15b. After 20261028000200 only: the two triggers exist and are enabled
 -- (tgenabled = 'O'), the code column and its unique index exist.
 select t.tgname, t.tgenabled, t.tgrelid::regclass as on_table
 from pg_trigger t
@@ -465,14 +499,14 @@ select to_regclass('public.quizzes_catalog_code_unique') as quiz_code_index,
        (select count(*) from information_schema.columns
          where table_schema = 'public' and table_name = 'quizzes' and column_name = 'code') as quiz_code_column;
 
--- C13. Before 20261028000300: a letter that appears more than once in a component.
+-- C16. Before 20261028000300: a letter that appears more than once in a component.
 -- Expect 0 rows, otherwise the file stops with the number and nothing is changed.
 select component_id, letter, count(*) as occurrences
 from public.training_use_cases
 group by component_id, letter
 having count(*) > 1;
 
--- C14. After 20261028000100 only: links between courses and components. For FIAE
+-- C17. After 20261028000100 only: links between courses and components. For FIAE
 -- the expected number of linked courses is 0 (the courses have no code).
 select c.training_catalog_id,
        count(*) as courses,

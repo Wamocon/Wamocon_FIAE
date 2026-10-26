@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { authFetch } from '@/lib/authFetch';
 import {
     Calendar,
     FileText,
@@ -94,14 +95,14 @@ export function SchoolView() {
         const loadStats = async () => {
             try {
                 // Fetch upcoming exams
-                const examsRes = await fetch(
+                const examsRes = await authFetch(
                     `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=true&limit=5`,
                     { cache: 'no-store' }
                 );
                 const examsData = examsRes.ok ? await examsRes.json() : { exams: [] };
 
                 // Fetch pending reports
-                const reportsRes = await fetch(
+                const reportsRes = await authFetch(
                     `/api/trainee/school/reports?traineeId=${profile.id}`,
                     { cache: 'no-store' }
                 );
@@ -109,7 +110,7 @@ export function SchoolView() {
 
                 // Fetch current block
                 const now = new Date();
-                const blocksRes = await fetch(
+                const blocksRes = await authFetch(
                     `/api/trainee/school/blocks?traineeId=${profile.id}&year=${now.getFullYear()}`,
                     { cache: 'no-store' }
                 );

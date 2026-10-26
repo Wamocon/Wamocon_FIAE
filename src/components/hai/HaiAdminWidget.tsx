@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Database, RefreshCw, CheckCircle, AlertCircle, XCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { authFetch } from '@/lib/authFetch';
 
 // ============================================================================
 // TYPES
@@ -52,7 +53,7 @@ export default function HaiAdminWidget() {
     const pollJobStatus = useCallback(async (jobId: string) => {
         if (!user) return;
         try {
-            const response = await fetch(`/api/hai/embed?userId=${user.id}&jobId=${jobId}`);
+            const response = await authFetch(`/api/hai/embed?jobId=${jobId}`);
             const data = await response.json();
 
             if (data.success && data.job) {
@@ -93,7 +94,7 @@ export default function HaiAdminWidget() {
 
         const checkLatestJob = async () => {
             try {
-                const response = await fetch(`/api/hai/embed?userId=${user.id}`);
+                const response = await authFetch('/api/hai/embed');
                 const data = await response.json();
 
                 if (data.latestJob) {
@@ -125,7 +126,7 @@ export default function HaiAdminWidget() {
         setMessage('');
 
         try {
-            const response = await fetch(`/api/hai/embed?userId=${user.id}`, {
+            const response = await authFetch('/api/hai/embed', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'index_all', forceReindex }),
@@ -171,7 +172,7 @@ export default function HaiAdminWidget() {
         setIsCancelling(true);
 
         try {
-            await fetch(`/api/hai/embed?userId=${user.id}`, {
+            await authFetch('/api/hai/embed', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'cancel_job' }),

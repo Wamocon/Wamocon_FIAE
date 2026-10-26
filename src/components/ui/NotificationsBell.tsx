@@ -8,6 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { DB_SCHEMA } from '@/lib/db-schema';
+import { authFetch } from '@/lib/authFetch';
 
 export type UINotification = {
   id: string;
@@ -40,7 +41,7 @@ export default function NotificationsBell() {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/notifications?userId=${profile.id}&limit=30`,
           { cache: 'no-store' }
         );
@@ -137,7 +138,7 @@ export default function NotificationsBell() {
       )
     );
     try {
-      const res = await fetch(`/api/notifications/${id}`, {
+      const res = await authFetch(`/api/notifications/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isRead: true }),
@@ -161,7 +162,7 @@ export default function NotificationsBell() {
       }))
     );
     try {
-      const res = await fetch(`/api/notifications/mark-all-read`, {
+      const res = await authFetch(`/api/notifications/mark-all-read`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id }),
@@ -170,7 +171,7 @@ export default function NotificationsBell() {
     } catch {
       // Revert on failure by re-fetching
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/notifications?userId=${profile.id}&limit=30`,
           { cache: 'no-store' }
         );

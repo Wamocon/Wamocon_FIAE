@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { authFetch } from '@/lib/authFetch';
 import {
   FileText,
   Plus,
@@ -92,7 +93,7 @@ export function ExamManager() {
     setError(null);
 
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/trainee/school/exams?traineeId=${profile.id}&upcoming=${activeView === 'upcoming'}`,
         { cache: 'no-store' }
       );
@@ -111,7 +112,7 @@ export function ExamManager() {
     if (!profile?.id) return;
 
     try {
-      const res = await fetch('/api/trainee/school/exams', {
+      const res = await authFetch('/api/trainee/school/exams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -142,7 +143,7 @@ export function ExamManager() {
     setExams(prev => prev.filter(e => e.id !== examId));
 
     try {
-      const res = await fetch(`/api/trainee/school/exams/${examId}`, {
+      const res = await authFetch(`/api/trainee/school/exams/${examId}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error(t('exams.error.delete'));
