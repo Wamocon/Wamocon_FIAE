@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
@@ -192,6 +193,7 @@ function formatDateKey(date: Date): string {
 
 export function BlockCalendar() {
   const { profile } = useAuth();
+  const { phaseOneMonthsFor } = useRequestCatalog(profile?.id);
   const { t } = useLanguage();
 
   // Helper to get translated month names
@@ -961,6 +963,7 @@ export function BlockCalendar() {
         <BlockDetailModal
           block={selectedBlock}
           durationYears={durationYears}
+          phaseOneMonths={phaseOneMonthsFor(durationYears)}
           onClose={() => setSelectedBlock(null)}
           onDelete={handleDeleteBlock}
         />
@@ -997,11 +1000,14 @@ export function BlockCalendar() {
 function BlockDetailModal({
   block,
   durationYears,
+  phaseOneMonths,
   onClose,
   onDelete,
 }: {
   block: Block;
   durationYears: AusbildungDurationYears;
+  /** Months of phase 1 in the phase plan of the occupation (KfBM 15). */
+  phaseOneMonths?: number;
   onClose: () => void;
   onDelete: (blockId: string) => void;
 }) {
@@ -1030,7 +1036,11 @@ function BlockDetailModal({
 
   const formatPhaseLabel = (phase: number) => {
     if (phase === 3) return t('reports.integrativePhase');
-    const range = getPhaseMonthRange(durationYears, phase as TrainingPhase);
+    const range = getPhaseMonthRange(
+      durationYears,
+      phase as TrainingPhase,
+      phaseOneMonths
+    );
     return t('reports.phaseRange')
       .replace('{phase}', String(phase))
       .replace('{start}', String(range.startMonth))

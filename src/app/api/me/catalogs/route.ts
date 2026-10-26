@@ -4,6 +4,7 @@ import db from '@/db';
 import { trainingCatalogs } from '@/db/migrations/schemas/schema';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { resolveCatalogBranding } from '@/lib/catalog/branding';
+import { resolvePhaseMonthsByDuration } from '@/lib/catalog/phase-plan';
 import { FIAE_CATALOG_ID, requireCatalogScope } from '@/lib/catalog/scope';
 
 const PRIVATE = { 'Cache-Control': 'private, no-store' };
@@ -14,7 +15,9 @@ const PRIVATE = { 'Cache-Control': 'private, no-store' };
 // checks one occupation: unknown, inactive and foreign codes are refused with
 // 403 by the scope. Only code, title and the validated branding leave the
 // server (title, short name and accent for the presentation, see
-// src/lib/catalog/branding.ts), no ids and no other settings.
+// src/lib/catalog/branding.ts) and the phase months for both durations (for
+// the phase labels, see src/lib/catalog/phase-plan.ts), no ids and no other
+// settings.
 export async function GET(req: NextRequest) {
   const session = await requireUser(req);
   if (isErrorResponse(session)) return session;
@@ -57,6 +60,7 @@ export async function GET(req: NextRequest) {
           branding: resolveCatalogBranding(
             (settings as { branding?: unknown } | null)?.branding
           ),
+          phaseMonths: resolvePhaseMonthsByDuration(settings),
         })),
         activeCode: active?.code ?? null,
         selected: scope.selected,

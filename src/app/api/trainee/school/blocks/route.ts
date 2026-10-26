@@ -11,14 +11,16 @@ import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
 // Helper to calculate the module phase for a block date.
 function calculateAusbildungsjahr(
   startDate: Date,
   durationYears?: number | null,
-  atDate: Date = new Date()
+  atDate: Date = new Date(),
+  phaseOneMonths?: number | null
 ): number {
-  return getTrainingPhase(startDate, durationYears, atDate);
+  return getTrainingPhase(startDate, durationYears, atDate, phaseOneMonths);
 }
 
 // Helper to get current Schuljahr (e.g., "2026/2027")
@@ -184,10 +186,16 @@ export async function POST(req: NextRequest) {
       .where(eq(profiles.id, traineeId));
 
     if (trainee?.startOfTrainingDate) {
+      // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+      const phasePlan = await loadPhasePlanForUser(
+        traineeId,
+        trainee.ausbildungDurationYears
+      );
       calculatedAusbildungsjahr = calculateAusbildungsjahr(
         trainee.startOfTrainingDate,
         trainee.ausbildungDurationYears,
-        new Date(startDate)
+        new Date(startDate),
+        phasePlan.phaseMonths[0]
       );
     } else if (!calculatedAusbildungsjahr) {
       calculatedAusbildungsjahr = 1;

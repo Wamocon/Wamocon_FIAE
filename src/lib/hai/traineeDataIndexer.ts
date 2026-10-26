@@ -32,6 +32,7 @@ import {
   lernfelder,
 } from '@/db/migrations/schemas/schema';
 import { indexContent, type SourceType } from './embeddings';
+import { loadPhasePlansForUsers } from '@/lib/catalog/phase-plan-db';
 import {
   getPhaseMonthRange,
   getTrainingEndDate,
@@ -120,8 +121,23 @@ async function buildTraineeProfileText(
     if (p.startOfTrainingDate) {
       const startDate = new Date(p.startOfTrainingDate);
       const durationYears = normalizeDurationYears(p.ausbildungDurationYears);
-      const currentPhase = getTrainingPhase(startDate, durationYears);
-      const phaseRange = getPhaseMonthRange(durationYears, currentPhase);
+      // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18), read
+      // from the HAI database like the profile itself
+      const phasePlan = (
+        await loadPhasePlansForUsers([{ id: traineeId, durationYears }], haiDb)
+      ).get(traineeId);
+      const phaseOneMonths = phasePlan?.phaseMonths[0];
+      const currentPhase = getTrainingPhase(
+        startDate,
+        durationYears,
+        new Date(),
+        phaseOneMonths
+      );
+      const phaseRange = getPhaseMonthRange(
+        durationYears,
+        currentPhase,
+        phaseOneMonths
+      );
       const endDate = getTrainingEndDate(startDate, durationYears);
       lines.push(`Ausbildungsbeginn: ${startDate.toLocaleDateString('de-DE')}`);
       lines.push(`Ausbildungsdauer: ${durationYears} Jahre`);

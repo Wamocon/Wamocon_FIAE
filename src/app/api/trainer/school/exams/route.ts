@@ -6,6 +6,7 @@ import { eq, desc, and } from 'drizzle-orm';
 import { schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
 // GET /api/trainer/school/exams?trainerId=...&traineeId=...
 export async function GET(req: NextRequest) {
@@ -104,10 +105,16 @@ export async function POST(req: NextRequest) {
 
         const now = new Date();
         const startDate = trainee?.startOfTrainingDate || now;
+        // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+        const phasePlan = await loadPhasePlanForUser(
+            String(traineeId),
+            trainee?.ausbildungDurationYears
+        );
         const ausbildungsjahr = getTrainingPhase(
             startDate,
             trainee?.ausbildungDurationYears,
-            new Date(examDate)
+            new Date(examDate),
+            phasePlan.phaseMonths[0]
         );
         const schuljahr = `${now.getFullYear()}/${now.getFullYear() + 1}`;
 
