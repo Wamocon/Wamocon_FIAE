@@ -2127,5 +2127,9 @@
   "admin.seats.error.ROLE_NOT_ASSIGNABLE": "You may not assign this role. Temp admins can only create trainers and trainees, admins cannot create super admins.",
   "admin.userCreate.occupation": "Occupation",
   "admin.userCreate.occupationHint": "The organization offers several occupations. A trainee learns in exactly one occupation.",
-  "admin.userCreate.error.CATALOG_REQUIRED": "The organization offers several occupations. Please choose an occupation for the trainee."
+  "admin.userCreate.error.CATALOG_REQUIRED": "The organization offers several occupations. Please choose an occupation for the trainee.",
+  "catalog.switcher.label": "Choose occupation",
+  "catalog.switcher.current": "Current occupation: {title}",
+  "catalog.switcher.reloadHint": "The page reloads when you switch.",
+  "catalog.branding.badge": "Occupation: {title}"
 }

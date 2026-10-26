@@ -22,6 +22,7 @@ import {
   verifyPlatformOwner,
   verifyTrainer,
 } from '@/lib/auth-helpers';
+import { ensureTraineeInCatalog } from '@/lib/catalog/trainee-scope';
 
 export async function GET(
   req: NextRequest,
@@ -48,6 +49,10 @@ export async function GET(
         }
       }
     }
+
+    // A trainee of another occupation than the chosen one is not found.
+    const outOfCatalog = await ensureTraineeInCatalog(session, req, traineeId);
+    if (outOfCatalog) return outOfCatalog;
 
     // Basic trainee info
     const [p] = await db

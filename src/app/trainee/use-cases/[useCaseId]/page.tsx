@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useApiQuery } from '@/lib/hooks/useApiQuery';
+import { apiQueryKey, useApiQuery } from '@/lib/hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { PageLoader } from '@/components/ui/PageLoader';
@@ -113,7 +113,7 @@ export default function TraineeUseCaseDetailPage() {
 
       // Optimistically update query data
       if (ucUrl) {
-        queryClient.setQueryData<UseCaseResponse>([ucUrl], old => {
+        queryClient.setQueryData<UseCaseResponse>(apiQueryKey(ucUrl), old => {
           if (!old) return old;
           return {
             ...old,

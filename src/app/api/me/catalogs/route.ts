@@ -3,6 +3,7 @@ import { inArray } from 'drizzle-orm';
 import db from '@/db';
 import { trainingCatalogs } from '@/db/migrations/schemas/schema';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { resolveCatalogBranding } from '@/lib/catalog/branding';
 import { FIAE_CATALOG_ID, requireCatalogScope } from '@/lib/catalog/scope';
 
 const PRIVATE = { 'Cache-Control': 'private, no-store' };
@@ -11,7 +12,9 @@ const PRIVATE = { 'Cache-Control': 'private, no-store' };
 // them (trainee: the enrolled occupation, trainer and admin: the enabled and
 // active ones, super admin: all). `?catalog=CODE` (or the header x-catalog)
 // checks one occupation: unknown, inactive and foreign codes are refused with
-// 403 by the scope. Only code and title leave the server, no ids.
+// 403 by the scope. Only code, title and the validated branding leave the
+// server (title, short name and accent for the presentation, see
+// src/lib/catalog/branding.ts), no ids and no other settings.
 export async function GET(req: NextRequest) {
   const session = await requireUser(req);
   if (isErrorResponse(session)) return session;
@@ -25,12 +28,14 @@ export async function GET(req: NextRequest) {
         id: trainingCatalogs.id,
         code: trainingCatalogs.code,
         title: trainingCatalogs.title,
+        settings: trainingCatalogs.settings,
       })
       .from(trainingCatalogs)
       .where(inArray(trainingCatalogs.id, scope.allowedCatalogIds))) as {
       id: string;
       code: string;
       title: string;
+      settings: unknown;
     }[];
 
     const allowed = new Set(scope.allowedCatalogIds);
@@ -46,7 +51,13 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
-        catalogs: catalogs.map(({ code, title }) => ({ code, title })),
+        catalogs: catalogs.map(({ code, title, settings }) => ({
+          code,
+          title,
+          branding: resolveCatalogBranding(
+            (settings as { branding?: unknown } | null)?.branding
+          ),
+        })),
         activeCode: active?.code ?? null,
         selected: scope.selected,
       },

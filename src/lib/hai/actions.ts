@@ -28,6 +28,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
 // ============================================================================
 // TYPES
@@ -430,11 +431,16 @@ async function createActivityReport(
             .where(eq(profiles.id, userId))
             .limit(1);
 
+        // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+        const phasePlan = profile?.startOfTrainingDate
+            ? await loadPhasePlanForUser(userId, profile.ausbildungDurationYears)
+            : null;
         const ausbildungsjahr = profile?.startOfTrainingDate
             ? getTrainingPhase(
                 profile.startOfTrainingDate,
                 profile.ausbildungDurationYears,
-                periodStart
+                periodStart,
+                phasePlan?.phaseMonths[0]
             )
             : 1;
 

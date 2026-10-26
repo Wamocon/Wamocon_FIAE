@@ -1,6 +1,7 @@
 import {
   getCalendarYear,
   getAusbildungDurationLabel,
+  getComponentPhase,
   getPhaseMonthRange,
   getTrainingPhase,
   normalizeDurationYears,
@@ -25,6 +26,11 @@ interface ScopeProfile {
   role?: 'TRAINER' | 'TRAINEE';
   startOfTrainingDate?: Date | string | null;
   ausbildungDurationYears?: number | null;
+  /**
+   * Length of phase 1 in months from the phase plan of the trainee's
+   * occupation (KfBM 15). Without it the legacy 18 or 12 months apply.
+   */
+  phaseOneMonths?: number | null;
 }
 
 function parseDate(value: Date | string | null | undefined): Date | null {
@@ -46,7 +52,7 @@ export function buildHaiTrainingScope(
   const durationYears = normalizeDurationYears(profile.ausbildungDurationYears);
   const startDate = parseDate(profile.startOfTrainingDate);
   const currentPhase = startDate
-    ? getTrainingPhase(startDate, durationYears, now)
+    ? getTrainingPhase(startDate, durationYears, now, profile.phaseOneMonths)
     : 1;
   const currentAusbildungsjahr = startDate
     ? getCalendarYear(startDate, durationYears, now)
@@ -62,7 +68,11 @@ export function buildHaiTrainingScope(
     currentPhase,
     allowedAusbildungsjahre: rangeTo(currentAusbildungsjahr),
     allowedComponentPhases,
-    phaseMonthRange: getPhaseMonthRange(durationYears, currentPhase),
+    phaseMonthRange: getPhaseMonthRange(
+      durationYears,
+      currentPhase,
+      profile.phaseOneMonths
+    ),
   };
 }
 
@@ -83,13 +93,6 @@ function numberArrayFromMeta(value: unknown): number[] {
   return value
     .map(numberFromMeta)
     .filter((item): item is number => item !== null);
-}
-
-function phaseFromComponentOrder(order: number): TrainingComponentPhase | null {
-  if (order >= 1 && order <= 12) return 1;
-  if (order >= 13 && order <= 22) return 2;
-  if (order >= 23 && order <= 26) return 3;
-  return null;
 }
 
 export function isMetadataAllowedForTrainingScope(
@@ -161,8 +164,18 @@ export function isMetadataAllowedForTrainingScope(
       metadata.trainingComponentOrder ??
       metadata.componentOrder
   );
-  const componentPhase =
-    componentOrder === null ? null : phaseFromComponentOrder(componentOrder);
+  // The phase column of the component wins, the order index is the fallback
+  // for components without a filled column (see getComponentPhase).
+  const componentPhase = getComponentPhase({
+    phase: numberFromMeta(
+      metadata.componentPhase ?? metadata.trainingComponentPhase
+    ),
+    kind:
+      typeof metadata.componentKind === 'string'
+        ? metadata.componentKind
+        : null,
+    orderIndex: componentOrder,
+  });
   if (
     componentPhase !== null &&
     !scope.allowedComponentPhases.includes(componentPhase)
