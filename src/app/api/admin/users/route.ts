@@ -10,7 +10,17 @@ import { createClient } from '@supabase/supabase-js';
 import db from '@/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { TRAINER_LEVEL_ROLES, normalizeRole, ROLE } from '@/lib/auth/roles';
-import { getTrainingCatalogCodes } from '@/lib/catalog/admin';
+import {
+  getTrainingCatalogCodes,
+  isUuid,
+  ruleFailureBody,
+} from '@/lib/catalog/admin';
+import { checkRoleForCreate } from '@/lib/admin/roleAssignment';
+import {
+  checkNewUser,
+  createUserRecords,
+  userWriteFailureBody,
+} from '@/lib/admin/userWrites';
 import { profiles, organizations, notifications } from '@/db/migrations/schemas/schema';
 import { sendCredentialsEmail } from '@/lib/email';
 import { DB_OPTION } from '@/lib/db-schema';
@@ -93,6 +103,33 @@ function generatePassword(length = 12): string {
   return Array.from(bytes, b => chars[b % chars.length]).join('');
 }
 
+/**
+ * Remove the auth account of a user whose records could not be written. A
+ * failure is only logged: the answer to the admin stays the original error,
+ * and a leftover account without a profile has a password nobody knows.
+ */
+async function removeAuthUser(
+  admin: {
+    auth: {
+      admin: { deleteUser(id: string): Promise<{ error: unknown }> };
+    };
+  },
+  userId: string
+) {
+  try {
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) {
+      console.error('Admin create user: orphan auth account', userId, error);
+    }
+  } catch (err) {
+    console.error('Admin create user: orphan auth account', userId, err);
+  }
+}
+
+/** Limits of the free text fields of a new user (the form allows far less). */
+const MAX_FULL_NAME_LENGTH = 200;
+const MAX_EMAIL_LENGTH = 254;
+
 export async function POST(req: NextRequest) {
   try {
     // The caller's identity comes from the bearer token, never from the URL
@@ -104,17 +141,42 @@ export async function POST(req: NextRequest) {
     if (blocked) return blocked;
 
     const body = await req.json();
-    const { email, fullName, role, organizationId, sendEmail } = body as {
-      email: string;
-      fullName: string;
-      role: string;
-      organizationId: string;
-      sendEmail?: boolean;
-    };
+    const { email, fullName, role, organizationId, sendEmail, catalogId } =
+      body as {
+        email: string;
+        fullName: string;
+        role: string;
+        organizationId: string;
+        sendEmail?: boolean;
+        /** Occupation of a trainee (training catalog id), optional. */
+        catalogId?: unknown;
+      };
 
-    if (!email || !fullName || !role || !organizationId) {
+    // Every field is checked for its type before anything happens. A value such
+    // as fullName: 123 would pass a plain truthiness check, create the auth
+    // account and then fail on fullName.trim(), which leaves an account without
+    // a profile and blocks the address.
+    if (
+      typeof email !== 'string' ||
+      typeof fullName !== 'string' ||
+      typeof role !== 'string' ||
+      typeof organizationId !== 'string' ||
+      !email.trim() ||
+      !fullName.trim() ||
+      !role ||
+      !organizationId
+    ) {
       return NextResponse.json(
         { error: 'email, fullName, role, and organizationId are required' },
+        { status: 400 }
+      );
+    }
+    if (
+      fullName.trim().length > MAX_FULL_NAME_LENGTH ||
+      email.trim().length > MAX_EMAIL_LENGTH
+    ) {
+      return NextResponse.json(
+        { error: 'fullName or email is too long' },
         { status: 400 }
       );
     }
@@ -129,10 +191,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
     }
 
-    const validRoles = ['TEMP_ADMIN', 'TRAINER', 'TRAINEE'];
-    const upperRole = role.toUpperCase();
-    if (!validRoles.includes(upperRole)) {
-      return NextResponse.json({ error: 'Invalid role. Use TEMP_ADMIN, TRAINER, or TRAINEE.' }, { status: 400 });
+    // The caller may only hand out roles assignableRoles allows
+    const roleDecision = checkRoleForCreate(session, role);
+    if (!roleDecision.ok) {
+      return NextResponse.json(
+        roleDecision.code
+          ? { error: roleDecision.error, code: roleDecision.code }
+          : { error: roleDecision.error },
+        { status: roleDecision.status }
+      );
+    }
+    const upperRole: string = roleDecision.role;
+
+    // The occupation is optional and only a trainee has one. Without it the
+    // trainee gets the default occupation of the organization.
+    let requestedCatalogId: string | null = null;
+    if (catalogId !== undefined && catalogId !== null) {
+      if (upperRole !== ROLE.TRAINEE) {
+        return NextResponse.json(
+          ruleFailureBody({ ok: false, status: 400, code: 'NOT_A_TRAINEE' }),
+          { status: 400 }
+        );
+      }
+      if (!isUuid(catalogId)) {
+        return NextResponse.json(
+          { error: 'catalogId must be a uuid' },
+          { status: 400 }
+        );
+      }
+      requestedCatalogId = catalogId;
     }
 
     // Verify org exists
@@ -153,6 +240,19 @@ export async function POST(req: NextRequest) {
       .limit(1);
     if (existingProfile.length > 0) {
       return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
+    }
+
+    // Early check, so a full organization or a wrong occupation is answered
+    // before an auth account exists. The check that counts runs again inside
+    // the transaction below.
+    const early = await checkNewUser(db, {
+      organizationId,
+      role: roleDecision.role,
+      requestedCatalogId,
+    });
+    if (!early.ok) {
+      const failure = userWriteFailureBody(early);
+      return NextResponse.json(failure.body, { status: failure.status });
     }
 
     const supabaseUrl = process.env.SUPABASE_URL || process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -191,20 +291,31 @@ export async function POST(req: NextRequest) {
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ') || '';
 
-    await db
-      .insert(profiles)
-      .values({
+    // Seat check, profile and enrollment of a trainee are one transaction. If
+    // it fails, the auth account created above is removed again, so no half
+    // user stays behind (account without profile, profile without enrollment).
+    let records;
+    try {
+      records = await createUserRecords({
         id: user.id,
         email: email.trim().toLowerCase(),
         fullName: fullName.trim(),
         firstName,
         lastName,
-        role: upperRole as any,
-        organizationId: organizationId as any,
-        isActive: true,
-        trainerActivated: upperRole !== 'TRAINEE',
-      })
-      .onConflictDoNothing();
+        role: roleDecision.role,
+        organizationId,
+        requestedCatalogId,
+      });
+    } catch (err) {
+      console.error('Admin create user: writing the records failed', err);
+      await removeAuthUser(admin, user.id);
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+    if (!records.ok) {
+      await removeAuthUser(admin, user.id);
+      const failure = userWriteFailureBody(records);
+      return NextResponse.json(failure.body, { status: failure.status });
+    }
 
     // Send credentials email
     let emailSent = false;
@@ -256,6 +367,9 @@ export async function POST(req: NextRequest) {
         role: upperRole,
         organizationId,
         orgName: org.name,
+        ...(records.catalog
+          ? { trainingCatalogCode: records.catalog.code }
+          : {}),
       },
       credentials: { email: email.trim(), password },
       emailSent,

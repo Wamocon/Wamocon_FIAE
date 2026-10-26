@@ -26,6 +26,8 @@ export type RecordedCall = {
   values?: unknown;
   /** Conditions passed to where(), in call order. */
   where?: unknown[];
+  /** Row lock strength passed to for(), for example 'no key update'. */
+  lock?: string;
 };
 
 /** Render a drizzle condition to SQL text and parameters (for assertions). */
@@ -123,6 +125,7 @@ export function createTableDb(
             call.table = toSqlName(tableNameOf(args[0]));
           }
           if (prop === 'values' || prop === 'set') call.values = args[0];
+          if (prop === 'for') call.lock = args[0];
           if (prop === 'where' && args[0]) {
             // drizzle also accepts where(fields => condition)
             const condition =
@@ -171,6 +174,13 @@ export function createTableDb(
         sql: rendered.map(r => r.sql).join(' | '),
         params: rendered.flatMap(r => r.params),
       };
+    },
+    /** Row lock strengths passed to for() on selects of a table. */
+    locks(table: string) {
+      const sqlName = toSqlName(table);
+      return calls
+        .filter(c => c.op === 'select' && c.table === sqlName && c.lock)
+        .map(c => c.lock);
     },
     /** Values passed to insert().values() / update().set() for a table. */
     writes(op: 'insert' | 'update' | 'delete', table: string) {

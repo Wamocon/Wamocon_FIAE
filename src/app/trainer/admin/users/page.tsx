@@ -2,10 +2,17 @@
 
 import { authFetch } from '@/lib/authFetch';
 import { useAuth } from '@/contexts/AuthContext';
-import { canModifyRole, canManageAdmins, isAdminRole } from '@/lib/auth/roles';
+import {
+  assignableRoles,
+  canModifyRole,
+  canManageAdmins,
+  isAdminRole,
+} from '@/lib/auth/roles';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { TraineeEnrollmentDialog } from '@/components/admin/TraineeEnrollmentDialog';
+import { NewUserOccupationSelect } from '@/components/admin/NewUserOccupationSelect';
+import { adminUserErrorMessage } from '@/components/admin/adminUserErrors';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import toast from 'react-hot-toast';
 import {
@@ -55,7 +62,7 @@ const ROLE_CONFIG: Record<string, { labelKey: string; icon: typeof Shield; color
 };
 
 export default function AdminUsersPage() {
-  const { profile, loading } = useAuth() as any;
+  const { profile, loading, isPlatformOwner } = useAuth() as any;
   const { t } = useLanguage();
   const isSuperAdmin = useIsSuperAdmin();
   const [enrollmentUser, setEnrollmentUser] = useState<UserItem | null>(null);
@@ -77,8 +84,15 @@ export default function AdminUsersPage() {
     fullName: '',
     role: 'TRAINEE',
     organizationId: '',
+    catalogId: '',
     sendEmail: true,
   });
+  // The occupation of a trainee, set by the field that only appears for an
+  // organization with more than one usable occupation
+  const setNewUserCatalog = useCallback(
+    (catalogId: string) => setNewUser(f => ({ ...f, catalogId })),
+    []
+  );
 
   const loadUsers = useCallback(async () => {
     if (!profile) return;
@@ -126,8 +140,11 @@ export default function AdminUsersPage() {
         body: JSON.stringify(updates),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || t('admin.users.updateFailed'));
+        throw new Error(
+          await adminUserErrorMessage(res, t, 'admin.users.updateFailed', {
+            isSuperAdmin,
+          })
+        );
       }
       toast.success(t('admin.users.userUpdated'));
       await loadUsers();
@@ -153,10 +170,23 @@ export default function AdminUsersPage() {
       const res = await authFetch(`/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser),
+        body: JSON.stringify({
+          ...newUser,
+          // only a trainee has an occupation, an empty choice means the default
+          catalogId:
+            newUser.role === 'TRAINEE' && newUser.catalogId
+              ? newUser.catalogId
+              : undefined,
+        }),
       });
+      if (!res.ok) {
+        throw new Error(
+          await adminUserErrorMessage(res, t, 'admin.users.createFailed', {
+            isSuperAdmin,
+          })
+        );
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t('admin.users.createFailed'));
       setCreatedCredentials(data.credentials);
       toast.success(data.emailSent ? t('admin.users.userCreated') : t('admin.users.userCreatedNoEmail'));
       await loadUsers();
@@ -218,6 +248,12 @@ export default function AdminUsersPage() {
 
   const callerRole = (profile.role || '').toUpperCase();
   const isFullAdmin = canManageAdmins({ role: callerRole });
+  // The roles the caller may hand out (the API checks it again), ADMIN is
+  // promoted as before
+  const settableRoles: string[] = [
+    ...assignableRoles({ role: callerRole, isPlatformOwner }),
+    ...(isFullAdmin ? ['ADMIN'] : []),
+  ];
 
   const filteredUsers = users.filter(u => {
     if (filterRole && u.role?.toUpperCase() !== filterRole) return false;
@@ -251,7 +287,7 @@ export default function AdminUsersPage() {
             onClick={() => {
               setShowCreateForm(true);
               setCreatedCredentials(null);
-              setNewUser({ email: '', fullName: '', role: 'TRAINEE', organizationId: '', sendEmail: true });
+              setNewUser({ email: '', fullName: '', role: 'TRAINEE', organizationId: '', catalogId: '', sendEmail: true });
             }}
             className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 rounded-xl px-5 py-3 font-medium transition-colors"
           >
@@ -322,7 +358,7 @@ export default function AdminUsersPage() {
                 <button
                   onClick={() => {
                     setCreatedCredentials(null);
-                    setNewUser({ email: '', fullName: '', role: 'TRAINEE', organizationId: '', sendEmail: true });
+                    setNewUser({ email: '', fullName: '', role: 'TRAINEE', organizationId: '', catalogId: '', sendEmail: true });
                   }}
                   className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-5 py-2.5 font-medium transition-colors"
                 >
@@ -365,9 +401,9 @@ export default function AdminUsersPage() {
                     onChange={e => setNewUser(f => ({ ...f, role: e.target.value }))}
                     className="bg-background border-border text-foreground w-full rounded-xl border px-4 py-3 focus:outline-none focus:ring-2 focus:ring-accent"
                   >
-                    <option value="TRAINEE">{t('roles.trainee')}</option>
-                    <option value="TRAINER">{t('roles.trainer')}</option>
-                    <option value="TEMP_ADMIN">{t('roles.tempAdmin')}</option>
+                    {settableRoles.includes('TRAINEE') && <option value="TRAINEE">{t('roles.trainee')}</option>}
+                    {settableRoles.includes('TRAINER') && <option value="TRAINER">{t('roles.trainer')}</option>}
+                    {settableRoles.includes('TEMP_ADMIN') && <option value="TEMP_ADMIN">{t('roles.tempAdmin')}</option>}
                   </select>
                 </div>
                 <div>
@@ -383,6 +419,13 @@ export default function AdminUsersPage() {
                     ))}
                   </select>
                 </div>
+                {newUser.role === 'TRAINEE' && (
+                  <NewUserOccupationSelect
+                    organizationId={newUser.organizationId}
+                    value={newUser.catalogId}
+                    onChange={setNewUserCatalog}
+                  />
+                )}
               </div>
               <div className="mt-4">
                 <label className="flex items-center gap-3 cursor-pointer">
@@ -498,10 +541,10 @@ export default function AdminUsersPage() {
                           onChange={e => updateUser(u.id, { role: e.target.value })}
                           className="bg-background border-border text-foreground rounded-lg border px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
                         >
-                          {isFullAdmin && <option value="ADMIN">{t('roles.admin')}</option>}
-                          <option value="TEMP_ADMIN">{t('roles.tempAdmin')}</option>
-                          <option value="TRAINER">{t('roles.trainer')}</option>
-                          <option value="TRAINEE">{t('roles.trainee')}</option>
+                          {(settableRoles.includes('ADMIN') || upperRole === 'ADMIN') && <option value="ADMIN">{t('roles.admin')}</option>}
+                          {(settableRoles.includes('TEMP_ADMIN') || upperRole === 'TEMP_ADMIN') && <option value="TEMP_ADMIN">{t('roles.tempAdmin')}</option>}
+                          {(settableRoles.includes('TRAINER') || upperRole === 'TRAINER') && <option value="TRAINER">{t('roles.trainer')}</option>}
+                          {(settableRoles.includes('TRAINEE') || upperRole === 'TRAINEE') && <option value="TRAINEE">{t('roles.trainee')}</option>}
                         </select>
                       ) : (
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${rc.color}`}>

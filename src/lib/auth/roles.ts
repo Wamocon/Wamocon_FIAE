@@ -9,9 +9,12 @@
  *   TEMP_ADMIN can never create or change an ADMIN.
  * - TRAINER works with the trainees of their own organization.
  *
- * SUPER_ADMIN is not yet a value of the database enum. Until it is, an ADMIN
- * who belongs to the platform-owner organization (organizations.is_platform_owner)
- * counts as SUPER_ADMIN. That rule lives in isSuperAdmin() and nowhere else.
+ * SUPER_ADMIN is a value of the database enum (migration 20261024001500), but
+ * the profiles of the platform admins only get it with the backfill
+ * 20261025000000 in Production. Until then an ADMIN who belongs to the
+ * platform-owner organization (organizations.is_platform_owner) still counts as
+ * SUPER_ADMIN. That rule lives in isSuperAdmin() and nowhere else, and it stays
+ * until the backfill has run (it is removed in a change of its own).
  */
 
 export const ROLE = {
@@ -55,7 +58,8 @@ export function normalizeRole(role?: string | null): Role | null {
 
 /**
  * Platform-wide administrator. An ADMIN of the platform-owner organization
- * stands in for SUPER_ADMIN until the enum value exists in the database.
+ * stands in for SUPER_ADMIN until the Production backfill has made the platform
+ * admins SUPER_ADMIN (see the header of this file).
  */
 export function isSuperAdmin(subject: RoleSubject | null | undefined): boolean {
   if (!subject) return false;
