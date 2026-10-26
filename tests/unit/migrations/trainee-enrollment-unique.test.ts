@@ -51,8 +51,12 @@ describe('trainee enrollment unique index migration: place in the series', () =>
     }
   });
 
-  it('is the newest migration of the repository', () => {
-    expect(allFiles[allFiles.length - 1]).toBe(FILE);
+  it('is part of the series and comes after the security file', () => {
+    // not "the newest": the next migration must not break this test
+    expect(allFiles).toContain(FILE);
+    expect(allFiles.indexOf(FILE)).toBeGreaterThan(
+      allFiles.indexOf('20261025000100_security_revoke_public_create.sql')
+    );
   });
 });
 

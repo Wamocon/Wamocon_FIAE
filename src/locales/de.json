@@ -2135,6 +2135,7 @@
   "catalog.switcher.current": "Aktueller Beruf: {title}",
   "catalog.switcher.reloadHint": "Beim Wechsel wird die Seite neu geladen.",
   "catalog.branding.badge": "Beruf: {title}",
+  "catalog.switcher.apply": "Wechseln",
   "catalog.tiles.title": "Beruf wählen",
   "catalog.tiles.subtitle": "Wählen Sie den Beruf, in dem Sie arbeiten möchten. Nicht freigeschaltete Berufe sind ausgegraut.",
   "catalog.tiles.signedInAs": "Angemeldet als {name}",

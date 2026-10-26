@@ -1,5 +1,7 @@
 import {
+  CATALOG_LOOKUP_TIMEOUT_MS,
   CATALOG_REQUEST_HEADER,
+  CATALOG_SETTLE_TIMEOUT_MS,
   PREFERRED_CATALOG_KEY,
   getCatalogHeader,
   getCatalogSelection,
@@ -7,6 +9,7 @@ import {
   readPreferredCatalog,
   resetCatalogSelection,
   setCatalogSelection,
+  storedChoiceNeedsCheck,
   subscribeCatalogSelection,
   whenCatalogSettled,
   writePreferredCatalog,
@@ -103,6 +106,26 @@ describe('catalog selection (client state)', () => {
       expect(getCatalogHeader()).toBeNull();
     });
 
+    it.each(['FIAE', 'fiae', ' Fiae '])(
+      'does not start pending for the default occupation (%p): FIAE users get no new delay',
+      stored => {
+        window.localStorage.setItem('lfa.preferredCatalog', stored);
+        resetCatalogSelection();
+        expect(isCatalogPending()).toBe(false);
+        expect(getCatalogHeader()).toBeNull();
+      }
+    );
+
+    it('tells which stored choices have to be checked before a request goes out', () => {
+      expect(storedChoiceNeedsCheck()).toBe(false);
+      writePreferredCatalog('FIAE');
+      expect(storedChoiceNeedsCheck()).toBe(false);
+      writePreferredCatalog('KFBM');
+      expect(storedChoiceNeedsCheck()).toBe(true);
+      writePreferredCatalog(null);
+      expect(storedChoiceNeedsCheck()).toBe(false);
+    });
+
     it('sets header and pending and tells the subscribers once per change', () => {
       const listener = jest.fn();
       const unsubscribe = subscribeCatalogSelection(listener);
@@ -161,6 +184,27 @@ describe('catalog selection (client state)', () => {
       const listener = jest.fn();
       subscribeCatalogSelection(listener)();
       expect(isCatalogPending()).toBe(true);
+    });
+
+    it('never gives up before the lookup of the occupations does', async () => {
+      // otherwise requests would go out without the header while the lookup is
+      // still running, and the server would answer for the default occupation
+      expect(CATALOG_SETTLE_TIMEOUT_MS).toBeGreaterThanOrEqual(
+        CATALOG_LOOKUP_TIMEOUT_MS
+      );
+      setCatalogSelection({ pending: true });
+      let done = false;
+      const waiting = whenCatalogSettled().then(() => {
+        done = true;
+      });
+      jest.advanceTimersByTime(CATALOG_LOOKUP_TIMEOUT_MS);
+      await Promise.resolve();
+      expect(done).toBe(false);
+      jest.advanceTimersByTime(
+        CATALOG_SETTLE_TIMEOUT_MS - CATALOG_LOOKUP_TIMEOUT_MS
+      );
+      await waiting;
+      expect(done).toBe(true);
     });
   });
 });

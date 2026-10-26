@@ -2133,6 +2133,7 @@
   "catalog.switcher.current": "Current occupation: {title}",
   "catalog.switcher.reloadHint": "The page reloads when you switch.",
   "catalog.branding.badge": "Occupation: {title}",
+  "catalog.switcher.apply": "Switch",
   "catalog.tiles.title": "Choose occupation",
   "catalog.tiles.subtitle": "Choose the occupation you want to work in. Occupations that are not enabled are greyed out.",
   "catalog.tiles.signedInAs": "Signed in as {name}",

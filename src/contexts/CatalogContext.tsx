@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -21,13 +22,12 @@ import {
 import { normalizeCatalogCode } from '@/lib/catalog/client';
 import { navigateTo, reloadPage } from '@/lib/catalog/navigation';
 import {
+  CATALOG_LOOKUP_TIMEOUT_MS,
   readPreferredCatalog,
   setCatalogSelection,
+  storedChoiceNeedsCheck,
   writePreferredCatalog,
 } from '@/lib/catalog/selection';
-
-/** How long the lookup of the occupations may take before the app goes on. */
-const LOAD_TIMEOUT_MS = 8000;
 
 export type CatalogOption = {
   code: string;
@@ -54,6 +54,8 @@ export interface CatalogContextValue {
    * goes to `destination` (a path) with a full page load if one is given.
    */
   selectCatalog: (code: string, destination?: string) => void;
+  /** A CatalogProvider is mounted (false for the neutral default value). */
+  inProvider: boolean;
 }
 
 const NO_CATALOGS: CatalogOption[] = [];
@@ -66,6 +68,7 @@ const NEUTRAL: CatalogContextValue = {
   branding: DEFAULT_CATALOG_BRANDING,
   brandingApplied: false,
   selectCatalog: () => {},
+  inProvider: false,
 };
 
 const CatalogContext = createContext<CatalogContextValue>(NEUTRAL);
@@ -129,6 +132,20 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<CatalogStatus>('idle');
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [activeCode, setActiveCode] = useState<string | null>(null);
+  const previousUserId = useRef<string | null>(null);
+  // The user the header in the shared state was set for.
+  const headerOwner = useRef<string | null>(null);
+
+  // The cache of React Query holds lists of one account. When another account
+  // signs in, or the user signs out, they must not show up for the next one
+  // (for up to a minute otherwise). The first sign in of a tab (nobody before)
+  // and every re-render of the same user leave the cache alone, so nobody who
+  // stays signed in loses data they would have kept.
+  useEffect(() => {
+    const previous = previousUserId.current;
+    previousUserId.current = userId;
+    if (previous && previous !== userId) queryClient.clear();
+  }, [userId, queryClient]);
 
   useEffect(() => {
     if (!userId) {
@@ -145,9 +162,24 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
+    const timer = setTimeout(
+      () => controller.abort(),
+      CATALOG_LOOKUP_TIMEOUT_MS
+    );
     setStatus('loading');
-    if (readPreferredCatalog()) setCatalogSelection({ pending: true });
+    // The header of a previous account (another tab may have switched the
+    // account) is not sent for this one. A load again for the same user (the
+    // sign in flag flipped) keeps its header, so the query keys do not flap.
+    // A stored choice other than FIAE holds requests back until it is checked;
+    // for FIAE, and for nobody with a choice, requests go out as they always
+    // did.
+    const sameUser = headerOwner.current === userId;
+    headerOwner.current = userId;
+    setCatalogSelection(
+      sameUser
+        ? { pending: storedChoiceNeedsCheck() }
+        : { header: null, pending: storedChoiceNeedsCheck() }
+    );
 
     (async () => {
       try {
@@ -174,10 +206,17 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setStatus('ready');
       } catch (error) {
         if (cancelled) return;
-        // Fail open to the default view: no header, nothing held back. The
-        // stored choice stays, the next load can use it again.
+        // The list is unknown, so the view is the default one (no switcher, no
+        // branding) and nothing is held back. A stored choice other than FIAE
+        // is still sent: the server checks it against the scope of the user, a
+        // wrong code ends in 403. Without it the requests would go out without
+        // a header, the server would take FIAE, and a user who chose KfBM
+        // would silently read and write in the FIAE catalog. Without a stored
+        // choice nothing is sent (fail open, as before). The stored choice
+        // stays, the next load can use it again.
         console.warn('[catalog] occupations could not be loaded', error);
-        setCatalogSelection({ header: null, pending: false });
+        const stored = storedChoiceNeedsCheck() ? readPreferredCatalog() : null;
+        setCatalogSelection({ header: stored, pending: false });
         setLoaded(null);
         setActiveCode(null);
         setStatus('error');
@@ -221,6 +260,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         brandingApplied && active ? active.branding : DEFAULT_CATALOG_BRANDING,
       brandingApplied,
       selectCatalog,
+      inProvider: true,
     };
   }, [status, catalogs, activeCode, selectCatalog]);
 

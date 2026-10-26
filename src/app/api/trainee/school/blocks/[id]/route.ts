@@ -11,6 +11,7 @@ import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { ausbildungBlocks, profiles } from '@/db/migrations/schemas/schema';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -84,10 +85,16 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
                 .where(eq(profiles.id, existing.traineeId));
 
             if (trainee?.startOfTrainingDate) {
+                // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+                const phasePlan = await loadPhasePlanForUser(
+                    existing.traineeId,
+                    trainee.ausbildungDurationYears
+                );
                 updateData.ausbildungsjahr = getTrainingPhase(
                     trainee.startOfTrainingDate,
                     trainee.ausbildungDurationYears,
-                    body.startDate !== undefined ? new Date(body.startDate) : existing.startDate
+                    body.startDate !== undefined ? new Date(body.startDate) : existing.startDate,
+                    phasePlan.phaseMonths[0]
                 );
             }
         }

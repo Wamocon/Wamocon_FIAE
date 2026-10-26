@@ -17,6 +17,7 @@ import {
   getTrainerScope,
   isTraineeVisibleToTrainer,
 } from '@/lib/trainer-scope';
+import { loadPhasePlansForUsers } from '@/lib/catalog/phase-plan-db';
 
 // GET /api/trainer/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
@@ -143,6 +144,21 @@ export async function GET(req: NextRequest) {
       entriesByReport.set(rid, arr);
     }
 
+    // Phase one of the occupation of each trainee in the list (KfBM 15 months,
+    // FIAE 18), so the browser can label the phases of every trainee
+    const reportTraineeIds = [
+      ...new Set(reports.map(r => String(r.traineeId))),
+    ];
+    const phasePlans =
+      reportTraineeIds.length > 0
+        ? await loadPhasePlansForUsers(
+            reportTraineeIds.map(id => ({
+              id,
+              durationYears: traineeMap.get(id)?.ausbildungDurationYears,
+            }))
+          )
+        : new Map<string, { phaseMonths: [number, number] }>();
+
     const enrichedReports = reports.map(report => {
       const entries = entriesByReport.get(String(report.id)) || [];
       const totalHours = entries.reduce(
@@ -154,6 +170,8 @@ export async function GET(req: NextRequest) {
         traineeName: traineeMap.get(report.traineeId)?.fullName || 'Unknown',
         traineeAusbildungDurationYears:
           traineeMap.get(report.traineeId)?.ausbildungDurationYears ?? 3,
+        traineePhaseOneMonths: phasePlans.get(String(report.traineeId))
+          ?.phaseMonths[0],
         entryCount: entries.length,
         totalHours,
         hasOverbooking: entries.some(e => Boolean(e.isOverbooked)),

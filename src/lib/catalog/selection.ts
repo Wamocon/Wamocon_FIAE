@@ -10,13 +10,17 @@
  *             choice, so a user with a single occupation (all FIAE users today)
  *             never sends the header.
  *  - pending  true while the occupations of the user are still loading and a
- *             choice is stored in the browser. Requests wait for the end of this
- *             state, so they do not start in the wrong occupation.
+ *             choice other than FIAE is stored in the browser. Requests wait for
+ *             the end of this state, so they do not start in the wrong
+ *             occupation. A stored FIAE never holds anything back: FIAE is the
+ *             default of the server, so a request without a header is already
+ *             the right one (no new delay for FIAE users).
  *
  * The choice itself is stored in the browser under lfa.preferredCatalog. Every
  * access is guarded, the app works without localStorage.
  */
 
+import { FIAE_CATALOG_CODE } from '@/lib/catalog/branding';
 import { normalizeCatalogCode } from '@/lib/catalog/client';
 
 export const PREFERRED_CATALOG_KEY = 'lfa.preferredCatalog';
@@ -24,8 +28,20 @@ export const PREFERRED_CATALOG_KEY = 'lfa.preferredCatalog';
 /** Same name as CATALOG_HEADER in src/lib/catalog/scope.ts (server only). */
 export const CATALOG_REQUEST_HEADER = 'x-catalog';
 
-/** How long a request waits for the occupations to load, at most. */
-const SETTLE_TIMEOUT_MS = 5000;
+/**
+ * How long the lookup of the occupations (GET /api/me/catalogs) may take before
+ * the CatalogProvider gives up on it.
+ */
+export const CATALOG_LOOKUP_TIMEOUT_MS = 8000;
+
+/**
+ * How long a request waits for the lookup, at most. It must never be shorter
+ * than the lookup itself: a request that gives up earlier would go out without
+ * the header while the lookup is still running, and the server would answer
+ * for the default occupation. The margin lets the provider end the pending
+ * state (success or failure) before the waiting requests give up.
+ */
+export const CATALOG_SETTLE_TIMEOUT_MS = CATALOG_LOOKUP_TIMEOUT_MS + 1000;
 
 export type CatalogSelection = {
   header: string | null;
@@ -47,6 +63,16 @@ export function readPreferredCatalog(): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A choice other than FIAE is stored: it has to be checked against the
+ * occupations of the user before a request goes out (the lookup is pending).
+ * Nothing stored or FIAE stored needs no check: FIAE is the server default.
+ */
+export function storedChoiceNeedsCheck(): boolean {
+  const stored = readPreferredCatalog();
+  return stored !== null && stored !== FIAE_CATALOG_CODE;
 }
 
 /** Store the choice (a valid code), or remove it with null. Never throws. */
@@ -80,7 +106,7 @@ function current(): CatalogSelection {
     state =
       typeof window === 'undefined'
         ? SERVER_SELECTION
-        : { header: null, pending: readPreferredCatalog() !== null };
+        : { header: null, pending: storedChoiceNeedsCheck() };
   }
   return state;
 }
@@ -125,7 +151,7 @@ export function setCatalogSelection(next: Partial<CatalogSelection>): void {
 
 /** Resolves when no choice is pending any more, or after the timeout. */
 export function whenCatalogSettled(
-  timeoutMs: number = SETTLE_TIMEOUT_MS
+  timeoutMs: number = CATALOG_SETTLE_TIMEOUT_MS
 ): Promise<void> {
   if (!isCatalogPending()) return Promise.resolve();
   return new Promise<void>(resolve => {

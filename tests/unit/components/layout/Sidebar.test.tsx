@@ -107,16 +107,19 @@ describe('Sidebar', () => {
     expect(screen.queryByText('Organisationen')).toBeNull();
   });
 
-  it('TEMP_ADMIN: the users only, no organization entry', () => {
+  it('TEMP_ADMIN: the own organization and the users, no platform entry', () => {
     renderFor('temp_admin');
-    expect(links()).toEqual([...TRAINER_LINKS, USERS, PROFILE]);
-    expect(screen.queryByText('Meine Organisation')).toBeNull();
+    expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+    expect(screen.getByText('Meine Organisation')).toBeInTheDocument();
+    expect(screen.getByText('Benutzerverwaltung')).toBeInTheDocument();
     expect(screen.queryByText('Organisationen und Berufe')).toBeNull();
   });
 
   it('TEMP_ADMIN in the platform organization is still no platform admin', () => {
     renderFor('temp_admin', { isPlatformOwner: true });
-    expect(links()).toEqual([...TRAINER_LINKS, USERS, PROFILE]);
+    expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+    expect(screen.getByText('Meine Organisation')).toBeInTheDocument();
+    expect(screen.queryByText('Organisationen und Berufe')).toBeNull();
   });
 
   it('renders nothing without a profile', () => {
