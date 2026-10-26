@@ -18,6 +18,25 @@ const mockChat = jest.fn();
 jest.mock('@/lib/hai/retrievalAccess', () => ({
   resolveRetrievalAccess: (userId: string) => mockResolveAccess(userId),
 }));
+// The persona is resolved from the access (package H3): FIAE keeps the FIAE
+// texts, another occupation without settings gets the generic persona, and
+// without an access the persona is neutral. Its own tests: persona*.test.ts.
+jest.mock('@/lib/hai/personaAccess', () => {
+  const persona = jest.requireActual('@/lib/hai/persona');
+  return {
+    loadHaiPersona: async (access: { catalogIds: string[] } | null) =>
+      access
+        ? persona.resolveHaiPersona({
+            catalogs: access.catalogIds.map(id => ({
+              id,
+              code: id.endsWith('1') ? 'FIAE' : 'KFBM',
+              title: id.endsWith('1') ? 'Fachinformatik' : 'Kaufleute',
+              settings: {},
+            })),
+          })
+        : persona.NEUTRAL_PERSONA,
+  };
+});
 jest.mock('@/lib/hai/vectorSearch', () => ({
   searchWithContext: (...args: unknown[]) => mockSearchWithContext(...args),
 }));
@@ -331,13 +350,15 @@ describe.each([
     expect(prompt).not.toContain('FIAE');
   });
 
-  it('user without a scope: no index content at all', async () => {
+  it('user without a scope: neutral refusal, no index content, no model call', async () => {
     mockResolveAccess.mockResolvedValue(null);
     const result = await run(QUESTION, context());
-    const prompt = systemPromptOfLastCall();
-    expect(prompt).not.toContain('FIAE');
-    expect(prompt).not.toContain('KfBM');
+    expect(result.response).toContain('kein Ausbildungsberuf zugeordnet');
+    expect(result.intent).toBe('off_topic');
     expect(result.citations).toEqual([]);
+    expect(mockSearchWithContext).not.toHaveBeenCalled();
+    expect(mockFetchPageIndex).not.toHaveBeenCalled();
+    expect(mockChat).not.toHaveBeenCalled();
   });
 
   it('calls the PageIndex with the scope as well', async () => {
@@ -350,13 +371,14 @@ describe.each([
 
   it('does not retrieve for a quiz answer', async () => {
     await run('B', context({ quizState: { active: true } }));
-    expect(mockResolveAccess).not.toHaveBeenCalled();
     expect(mockSearchWithContext).not.toHaveBeenCalled();
+    expect(mockFetchPageIndex).not.toHaveBeenCalled();
   });
 
   it('does not retrieve for a web search', async () => {
     await run('suche nach aktuellen Datenbank News', context());
-    expect(mockResolveAccess).not.toHaveBeenCalled();
+    expect(mockSearchWithContext).not.toHaveBeenCalled();
+    expect(mockFetchPageIndex).not.toHaveBeenCalled();
   });
 });
 
