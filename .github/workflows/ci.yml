@@ -54,6 +54,11 @@ jobs:
       - name: Tests
         run: npm test
 
+      # The script tests also run in db-checks without installed dependencies, where
+      # the tests that need JSZip are skipped. Here they all run.
+      - name: Script tests
+        run: npm run test:scripts
+
       - name: Prettier on changed files (advisory)
         if: github.event_name == 'pull_request'
         continue-on-error: true
