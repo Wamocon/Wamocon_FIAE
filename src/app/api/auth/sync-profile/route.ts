@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { DB_OPTION } from '@/lib/db-schema';
 import db from '@/db';
 import { profiles, organizations } from '@/db/migrations/schemas/schema';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { takeCatalogAdminLock } from '@/lib/catalog/admin';
 import { mergeProfileReferences } from '@/lib/profile-identity';
 
@@ -26,6 +26,25 @@ function deriveNameFromEmail(email: string) {
     .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
     .join(' ');
   return capitalized || local;
+}
+
+/**
+ * The merge hands the enrollment (occupation) of the pre-created profile to the
+ * new one. That is a catalog write, so the transaction takes the lock of the
+ * catalog administration before it touches any other row. The row lock of the
+ * old profile comes first (FOR NO KEY UPDATE, like updateUserChecked in
+ * src/lib/admin/userWrites.ts): there the row lock precedes the seat lock, and
+ * createUserRecords takes seat lock before catalog lock, so row, seat, catalog
+ * is the one order of all flows. Only trainees have enrollments.
+ */
+async function lockForEnrollmentMove(
+  tx: Parameters<typeof takeCatalogAdminLock>[0],
+  oldProfileId: string
+) {
+  await tx.execute(
+    sql`select 1 from "profiles" where "id" = ${oldProfileId} for no key update`
+  );
+  await takeCatalogAdminLock(tx);
 }
 
 export async function POST(request: Request) {
@@ -186,10 +205,7 @@ export async function POST(request: Request) {
       }
       const temporaryEmail = `profile-merge-${user.id}@local.invalid`;
       await db.transaction(async tx => {
-        // The merge hands the enrollment (occupation) of the pre-created
-        // profile to the new one. That is a catalog write, so it takes the
-        // same lock as the catalog administration, before any row.
-        await takeCatalogAdminLock(tx);
+        if (role === 'TRAINEE') await lockForEnrollmentMove(tx, existing.id);
         await tx
           .insert(profiles)
           .values({
@@ -287,7 +303,9 @@ export async function POST(request: Request) {
         if (!orphan[0]?.id) throw drizzleErr;
 
         await db.transaction(async tx => {
-          await takeCatalogAdminLock(tx);
+          if (preservedRole === 'TRAINEE') {
+            await lockForEnrollmentMove(tx, orphan[0].id);
+          }
           await tx
             .insert(profiles)
             .values({

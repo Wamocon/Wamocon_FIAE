@@ -181,8 +181,7 @@ async function deleteConflictingRows(
  *
  * The elective choices hang on the enrollment row (trainee_elective_choices
  * points at the enrollment id), so moving the row moves them too. Only
- * trainee_id changes, the id and the catalog stay, and the cascade of the old
- * profile finds nothing left to delete.
+ * trainee_id changes, the id and the catalog stay.
  *
  * A trainee has one enrollment (unique index
  * trainee_enrollments_trainee_unique), so a row cannot simply be moved when
@@ -195,6 +194,11 @@ async function deleteConflictingRows(
  *    profile. Such a row is a deliberate choice, it is kept and the old FIAE
  *    row goes with the old profile.
  * The rows that lose are deleted (their elective choices follow by cascade).
+ * That includes a row of the new profile in the same catalog as the old row:
+ * the old row, with its start date, duration and choices, replaces it as a
+ * whole. A kept new row can differ in start date and duration from the profile
+ * values the merge takes over, the enrollment row stays what an administrator
+ * set for it.
  *
  * Never part of the generic column lists below: a plain UPDATE would collide
  * with the unique index as soon as both profiles have a row.

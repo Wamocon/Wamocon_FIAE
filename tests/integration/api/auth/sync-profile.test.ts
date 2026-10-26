@@ -203,6 +203,8 @@ describe('API: Auth Sync Profile', () => {
     expect(await res.json()).toEqual({ ok: true, merged: true });
     expect(db.transaction).toHaveBeenCalledTimes(1);
     expect((writes('insert', 'profiles')[0] as any).role).toBe('TRAINER');
+    // Only trainees have an enrollment, so no catalog lock for a trainer
+    expect(db.execute).not.toHaveBeenCalled();
   });
 
   it('takes the catalog lock first and hands both profile ids to the merge', async () => {
@@ -234,11 +236,14 @@ describe('API: Auth Sync Profile', () => {
     expect(mergeProfileReferences).toHaveBeenCalledTimes(1);
     expect(mergeProfileReferences).toHaveBeenCalledWith(db, 'old-id', 'u6');
 
-    // The merge moves the enrollment, a catalog write: the transaction takes
-    // the same advisory lock as every catalog administration write, before
-    // it touches any row.
-    expect(db.execute).toHaveBeenCalledTimes(1);
-    const lock = renderCondition((db.execute as jest.Mock).mock.calls[0][0]);
+    // The merge moves the enrollment, a catalog write: the transaction locks
+    // the old profile row, then takes the same advisory lock as every catalog
+    // administration write, before it touches any other row.
+    expect(db.execute).toHaveBeenCalledTimes(2);
+    const rowLock = renderCondition((db.execute as jest.Mock).mock.calls[0][0]);
+    expect(rowLock.sql).toContain('for no key update');
+    expect(rowLock.params).toEqual(['old-id']);
+    const lock = renderCondition((db.execute as jest.Mock).mock.calls[1][0]);
     expect(lock.sql).toContain('pg_advisory_xact_lock');
     expect(lock.params).toEqual(['catalog_admin']);
 
@@ -288,7 +293,7 @@ describe('API: Auth Sync Profile', () => {
     const { db, writes } = createTableDb({
       // lookup by e-mail finds nothing, then a trainer, then the orphan
       profiles: {
-        sequence: [[], [{ id: 'tr1' }], [{ id: 'orphan-id', role: 'TRAINER' }]],
+        sequence: [[], [{ id: 'tr1' }], [{ id: 'orphan-id', role: 'TRAINEE' }]],
       },
     });
     // The first upsert hits the unique e-mail (23505), the orphan is merged
@@ -314,8 +319,8 @@ describe('API: Auth Sync Profile', () => {
     const { mergeProfileReferences } = await import('@/lib/profile-identity');
     expect(mergeProfileReferences).toHaveBeenCalledWith(db, 'orphan-id', 'u8');
     expect(db.transaction).toHaveBeenCalledTimes(1);
-    expect(db.execute).toHaveBeenCalledTimes(1);
-    const lock = renderCondition((db.execute as jest.Mock).mock.calls[0][0]);
+    expect(db.execute).toHaveBeenCalledTimes(2);
+    const lock = renderCondition((db.execute as jest.Mock).mock.calls[1][0]);
     expect(lock.params).toEqual(['catalog_admin']);
     const order = (fn: unknown) =>
       (fn as jest.Mock).mock.invocationCallOrder[0];

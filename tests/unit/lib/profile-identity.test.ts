@@ -133,7 +133,7 @@ describe('mergeProfileReferences', () => {
     );
   });
 
-  it('resolves the conflicts of the other tables first and keeps their rows', async () => {
+  it('resolves the conflicts of the other tables before it moves any row', async () => {
     const statements = await runMerge();
     const firstUpdate = statements.findIndex(s => s.sql.startsWith('UPDATE'));
     const lastDelete = statements.reduce(
@@ -204,8 +204,9 @@ describe('mergeProfileReferences', () => {
       }
     }
 
-    // A new table that points at profiles must be added to the merge, or the
-    // rows (or, for a cascade, the whole row) are lost with the old profile.
+    // A table of schema.ts that points at profiles must be added to the merge,
+    // or its rows are lost with the old profile (foreign keys that only exist
+    // in a migration are not seen here).
     expect(references).toContain('trainee_enrollments.trainee_id');
     expect(references.filter(r => !handled.has(r))).toEqual([]);
   });
