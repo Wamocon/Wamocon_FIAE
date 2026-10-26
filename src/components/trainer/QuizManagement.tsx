@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 
 // Minimal shadcn-like primitives for this self-contained demo
 function Dialog({
@@ -251,7 +252,8 @@ type QuestionDraft = {
 };
 
 export function QuizManagement() {
-  const { profile, isPlatformOwner } = useAuth();
+  const { profile } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
   const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -556,7 +558,7 @@ export function QuizManagement() {
           <h2 className="text-foreground text-2xl font-bold">
             {t('quiz.managementTitle')}
           </h2>
-          {isPlatformOwner && (
+          {canEditCurriculum && (
             <Button
               onClick={openCreate}
               className="from-accent to-primary text-foreground hover:from-accent/90 hover:to-primary/90 gap-2 bg-gradient-to-r"
@@ -620,7 +622,7 @@ export function QuizManagement() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      {isPlatformOwner && (
+                      {canEditCurriculum && (
                         <Button
                           className="h-8 gap-1 px-3"
                           onClick={() => openEdit(q.id)}
@@ -635,7 +637,7 @@ export function QuizManagement() {
                       >
                         {t('quiz.managementView')}
                       </a>
-                      {isPlatformOwner && (
+                      {canEditCurriculum && (
                         <Button
                           variant="destructive"
                           className="h-8 gap-1 px-3"

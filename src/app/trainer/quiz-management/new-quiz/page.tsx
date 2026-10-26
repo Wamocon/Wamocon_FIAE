@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import { PageLoader } from '@/components/ui/PageLoader';
 
 type ModuleItem = {
@@ -16,7 +17,8 @@ type ModuleItem = {
 
 export default function NewQuizPage() {
   const router = useRouter();
-  const { isPlatformOwner, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
+  const canEditCurriculum = useIsSuperAdmin();
   const { t } = useLanguage();
 
   const [title, setTitle] = useState('');
@@ -33,7 +35,7 @@ export default function NewQuizPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!isPlatformOwner) {
+    if (!canEditCurriculum) {
       setLoading(false);
       return;
     }
@@ -63,7 +65,7 @@ export default function NewQuizPage() {
       }
     };
     load();
-  }, [authLoading, isPlatformOwner, t]);
+  }, [authLoading, canEditCurriculum, t]);
 
   const filteredModules = useMemo(
     () => modules.filter(m => String(m.training_year) === trainingYear),
@@ -103,10 +105,10 @@ export default function NewQuizPage() {
   };
 
   if (authLoading) return <PageLoader />;
-  if (!isPlatformOwner) {
+  if (!canEditCurriculum) {
     return (
       <div className="bg-background flex min-h-full items-center justify-center">
-        <p className="text-muted-foreground">{t('access.quizManagement')}</p>
+        <p className="text-muted-foreground">{t('curriculum.superAdminOnly')}</p>
       </div>
     );
   }

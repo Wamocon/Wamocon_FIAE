@@ -1,4 +1,8 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import {
@@ -6,7 +10,6 @@ import {
   useCases,
 } from '@/db/migrations/schemas/schema';
 import { arrayContains, count, and, eq } from 'drizzle-orm';
-import { verifyPlatformOwner } from '@/lib/auth-helpers';
 import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
 import {
   LEARNING_FIELD_LABEL_CONFLICT,
@@ -75,16 +78,10 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const trainerId = session.id;
-    if (!(await verifyPlatformOwner(trainerId))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
 
     const scope = await requireCatalogScope(session, req);
     if (isErrorResponse(scope)) return scope;

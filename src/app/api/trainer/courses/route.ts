@@ -1,5 +1,6 @@
 import {
   requireTrainer,
+  requireCurriculumEditor,
   isErrorResponse,
   orgScopeCondition,
   scopeOrg,
@@ -16,7 +17,7 @@ import {
   skills,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import {
   catalogCacheKey,
   catalogCondition,
@@ -154,7 +155,7 @@ export async function GET(req: NextRequest) {
 // Create a course with optional skills
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const body = await req.json();
@@ -172,13 +173,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Missing title or createdById' },
         { status: 400 }
-      );
-    }
-
-    if (!(await verifyPlatformOwner(createdById))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
       );
     }
 

@@ -26,6 +26,11 @@ import { traineeSession } from '../../../helpers/mockNext';
 
 const API = 'http://localhost/api/trainer';
 const platformTrainer = () => trainerSession({ isPlatformOwner: true });
+// Quizzes are curriculum content, only the platform wide admin writes them
+const curriculumAdmin = () => ({
+  ...superAdminSession(),
+  isPlatformOwner: true,
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -43,21 +48,20 @@ describe('POST /api/trainer/quizzes: assigned trainees', () => {
       body: { title: 'Q1', quiz_type: 'big', assigned_trainee_ids: ids },
     });
 
-  it('assigns trainees of the own organization', async () => {
+  it('assigns trainees', async () => {
     const { mod, mock } = await loadScoped(route, {
-      session: platformTrainer(),
+      session: curriculumAdmin(),
       tables: { profiles: [{ id: T1 }] },
     });
     const res = await mod.POST(post([T1]));
     expect(res.status).toBe(201);
     expect(mock.writes('insert', 'quiz_assignments')).toHaveLength(1);
-    expect(selectParams(mock, 'profiles')).toContain(ORG);
   });
 
-  it('refuses a trainee of another organization (404) before the quiz is created', async () => {
+  it('refuses a trainee the database does not return (404) before the quiz is created', async () => {
     // the database finds nobody for the scope of the caller
     const { mod, mock } = await loadScoped(route, {
-      session: platformTrainer(),
+      session: curriculumAdmin(),
       tables: { profiles: [] },
     });
     const res = await mod.POST(post([T1]));
@@ -70,7 +74,7 @@ describe('POST /api/trainer/quizzes: assigned trainees', () => {
 
   it('refuses an id that is no uuid without asking the database', async () => {
     const { mod, mock } = await loadScoped(route, {
-      session: platformTrainer(),
+      session: curriculumAdmin(),
       tables: { profiles: [{ id: T1 }] },
     });
     const res = await mod.POST(post(["x' or 1=1 --"]));
@@ -80,7 +84,7 @@ describe('POST /api/trainer/quizzes: assigned trainees', () => {
 
   it('with an occupation (x-catalog) only its trainees can be assigned', async () => {
     const { mod, mock } = await loadScoped(route, {
-      session: platformTrainer(),
+      session: curriculumAdmin(),
       tables: { profiles: [{ id: T1 }] },
     });
     await mod.POST(post([T1], 'KFBM'));
@@ -92,8 +96,7 @@ describe('POST /api/trainer/quizzes: assigned trainees', () => {
 
   it('the super admin may assign trainees of any organization', async () => {
     const { mod, mock } = await loadScoped(route, {
-      // (the curriculum is managed by the platform organization)
-      session: { ...superAdminSession(), isPlatformOwner: true },
+      session: curriculumAdmin(),
       tables: { profiles: [{ id: T1 }, { id: T2 }] },
     });
     const res = await mod.POST(post([T1, T2]));
@@ -103,9 +106,20 @@ describe('POST /api/trainer/quizzes: assigned trainees', () => {
     );
   });
 
-  it('a quiz without assignments asks nothing about trainees', async () => {
+  it('a trainer of the platform organization cannot create a quiz (403)', async () => {
     const { mod, mock } = await loadScoped(route, {
       session: platformTrainer(),
+      tables: { profiles: [{ id: T1 }] },
+    });
+    const res = await mod.POST(post([T1]));
+    expect(res.status).toBe(403);
+    expect(mock.writes('insert', 'quizzes')).toEqual([]);
+    expect(mock.writes('insert', 'quiz_assignments')).toEqual([]);
+  });
+
+  it('a quiz without assignments asks nothing about trainees', async () => {
+    const { mod, mock } = await loadScoped(route, {
+      session: curriculumAdmin(),
     });
     const res = await mod.POST(post([]));
     expect(res.status).toBe(201);
@@ -153,25 +167,24 @@ describe('GET and PATCH /api/trainer/quizzes/[quizId]: assignments', () => {
       body: { assigned_trainee_ids: ids },
     });
 
-  it('PATCH replaces only the assignments inside the scope and keeps the others', async () => {
+  it('PATCH replaces the assignments and keeps the ones of other trainees', async () => {
     const { mod, mock } = await loadScoped(route, {
-      session: platformTrainer(),
+      session: curriculumAdmin(),
       tables: tables({ profiles: [{ id: T1 }] }),
     });
     const res = await mod.PATCH(patch([T1]), params);
     expect(res.status).toBe(200);
     const del = mock.filters('delete', 'quiz_assignments');
     expect(del.sql).toContain('"quiz_assignments"."trainee_id" in (select');
-    expect(del.params).toContain(ORG);
     expect(mock.filters('select', 'quiz_assignments').sql).toContain(
       'in (select'
     );
     expect(mock.writes('insert', 'quiz_assignments')).toHaveLength(1);
   });
 
-  it('PATCH refuses a trainee of another organization (404) and changes nothing', async () => {
+  it('PATCH refuses a trainee the database does not return (404) and changes nothing', async () => {
     const { mod, mock } = await loadScoped(route, {
-      session: platformTrainer(),
+      session: curriculumAdmin(),
       tables: tables({ profiles: [] }),
     });
     const res = await mod.PATCH(patch([T1]), params);
@@ -181,13 +194,16 @@ describe('GET and PATCH /api/trainer/quizzes/[quizId]: assignments', () => {
     ).toEqual([]);
   });
 
-  it('PATCH of a trainer of the platform organization is no exception', async () => {
+  it('PATCH of a trainer of the platform organization is refused (403)', async () => {
     const { mod, mock } = await loadScoped(route, {
       session: platformTrainer(),
       tables: tables({ profiles: [{ id: T1 }] }),
     });
-    await mod.PATCH(patch([T1]), params);
-    expect(selectParams(mock, 'profiles')).toContain(ORG);
+    const res = await mod.PATCH(patch([T1]), params);
+    expect(res.status).toBe(403);
+    expect(
+      mock.calls.filter(c => c.op !== 'select' && c.table !== null)
+    ).toEqual([]);
   });
 });
 

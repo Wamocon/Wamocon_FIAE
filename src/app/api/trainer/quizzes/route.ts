@@ -1,4 +1,8 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  requireCurriculumEditor,
+  isErrorResponse,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, desc, eq, ilike, sql, count } from 'drizzle-orm';
@@ -14,7 +18,7 @@ import {
   notifications,
 } from '@/db/migrations/schemas/schema';
 import { apiCache, ApiCache, cacheHeaders } from '@/lib/api-cache';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import {
   requireTraineeScopeCondition,
   traineeIdInScope,
@@ -136,7 +140,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireTrainer(req);
+    const session = await requireCurriculumEditor(req);
     if (isErrorResponse(session)) return session;
 
     const body = await req.json();
@@ -153,13 +157,6 @@ export async function POST(req: NextRequest) {
     const assignedTraineeIds = (body?.assigned_trainee_ids ||
       body?.assignedTraineeIds ||
       []) as string[];
-
-    if (!(await verifyPlatformOwner(trainer_id))) {
-      return NextResponse.json(
-        { error: 'Only platform administrators can manage curriculum content' },
-        { status: 403 }
-      );
-    }
 
     const organizationId = await getUserOrgId(trainer_id);
 

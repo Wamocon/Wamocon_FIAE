@@ -157,11 +157,11 @@ describe('catalog isolation', () => {
       const write = await load(
         'trainer/courses',
         { organizationCatalogs: fiaeOnly },
-        { session: trainer() }
+        { session: superAdmin() }
       );
       const created = await write.mod.POST(
         req('http://localhost/api/trainer/courses', {
-          header: 'KFBM',
+          header: 'NOPE',
           method: 'POST',
           body: { title: 'New' },
         })
@@ -174,10 +174,11 @@ describe('catalog isolation', () => {
       const { mock, mod } = await load(
         'trainer/courses',
         { organizationCatalogs: kfbmOnly },
-        { session: trainer() }
+        { session: superAdmin() }
       );
       const res = await mod.POST(
         req('http://localhost/api/trainer/courses', {
+          header: 'KFBM',
           method: 'POST',
           body: { title: 'K6.1 course' },
         })
@@ -240,7 +241,7 @@ describe('catalog isolation', () => {
       }
     });
 
-    it('writing below a foreign enabler is rejected (404)', async () => {
+    it('a trainer cannot delete an enabler of any catalog (403)', async () => {
       const { mock, mod } = await load(
         'trainer/enablers/[enablerId]',
         {
@@ -253,7 +254,7 @@ describe('catalog isolation', () => {
         req('http://localhost/api/trainer/enablers/e1', { method: 'DELETE' }),
         { params: Promise.resolve({ enablerId: 'e1' }) }
       );
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
       expect(mock.writes('delete', 'enablers')).toHaveLength(0);
     });
 
@@ -274,10 +275,11 @@ describe('catalog isolation', () => {
       const { mock, mod } = await load(
         'trainer/quizzes',
         { organizationCatalogs: kfbmOnly },
-        { session: trainer() }
+        { session: superAdmin() }
       );
       const res = await mod.POST(
         req('http://localhost/api/trainer/quizzes', {
+          header: 'KFBM',
           method: 'POST',
           body: { title: 'Global K1', quiz_type: 'big' },
         })
@@ -288,7 +290,7 @@ describe('catalog isolation', () => {
       });
     });
 
-    it('a mini quiz for a foreign enabler is rejected', async () => {
+    it('a trainer cannot create a mini quiz for an enabler (403)', async () => {
       const { mock, mod } = await load(
         'trainer/quizzes',
         {
@@ -299,11 +301,12 @@ describe('catalog isolation', () => {
       );
       const res = await mod.POST(
         req('http://localhost/api/trainer/quizzes', {
+          header: 'KFBM',
           method: 'POST',
           body: { title: 'Mini', quiz_type: 'mini', enabler_id: 'e1' },
         })
       );
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
       expect(mock.writes('insert', 'quizzes')).toHaveLength(0);
     });
 
@@ -327,10 +330,11 @@ describe('catalog isolation', () => {
       const { mock, mod } = await load(
         'trainer/lernfelder',
         { organizationCatalogs: kfbmOnly },
-        { session: trainer() }
+        { session: superAdmin() }
       );
       const res = await mod.POST(
         req('http://localhost/api/trainer/lernfelder', {
+          header: 'KFBM',
           method: 'POST',
           body: { title: 'Bueroorganisation', label: 'LF-7' },
         })
@@ -367,12 +371,13 @@ describe('catalog isolation', () => {
         'trainer/lernfelder',
         {},
         {
-          session: trainer(),
+          session: superAdmin(),
           db,
         }
       );
       const res = await mod.POST(
         req('http://localhost/api/trainer/lernfelder', {
+          header: 'KFBM',
           method: 'POST',
           body: { title: 'Duplicate', label: 'LF-7' },
         })
@@ -402,12 +407,13 @@ describe('catalog isolation', () => {
         'trainer/lernfelder',
         {},
         {
-          session: trainer(),
+          session: superAdmin(),
           db,
         }
       );
       const res = await mod.POST(
         req('http://localhost/api/trainer/lernfelder', {
+          header: 'KFBM',
           method: 'POST',
           body: { title: 'X', label: 'LF-9' },
         })
@@ -420,10 +426,11 @@ describe('catalog isolation', () => {
       const { mock, mod } = await load(
         'trainer/lernfelder',
         { organizationCatalogs: kfbmOnly },
-        { session: trainer() }
+        { session: superAdmin() }
       );
       await mod.POST(
         req('http://localhost/api/trainer/lernfelder', {
+          header: 'KFBM',
           method: 'POST',
           body: { title: 'Locked', label: 'LF-2' },
         })
@@ -436,10 +443,11 @@ describe('catalog isolation', () => {
       const { mock, mod } = await load(
         'trainer/lernfelder/[id]',
         { organizationCatalogs: kfbmOnly },
-        { session: trainer() }
+        { session: superAdmin() }
       );
       const res = await mod.PATCH(
         req('http://localhost/api/trainer/lernfelder/lf1', {
+          header: 'KFBM',
           method: 'PATCH',
           body: { label: 'LF-8' },
         }),
