@@ -11,7 +11,10 @@ import {
   useCases,
   useCaseSubmissions,
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+  requireTraineeScopeCondition,
+  traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
 
 export async function GET(req: NextRequest) {
@@ -27,10 +30,11 @@ export async function GET(req: NextRequest) {
     const onlyPending = searchParams.get('onlyPending') === 'true';
     const type = searchParams.get('type'); // 'enabler' | 'usecase' | undefined (all)
 
-    const [trainerOrgId, isPlatformOwner] = await Promise.all([
-      getUserOrgId(trainerId),
-      verifyPlatformOwner(trainerId),
-    ]);
+    // Only submissions of trainees of the own organization (the super admin:
+    // every one) and, with a chosen occupation (x-catalog), of that occupation.
+    // The platform-owner flag of an organization does not widen the list.
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
 
     // Determine courses the trainer can review: creator or member (TRAINER)
     const created = await db
@@ -104,12 +108,11 @@ export async function GET(req: NextRequest) {
     }> = [];
     if (!type || type === 'enabler') {
       // Get enabler submissions for trainer's courses
-      const esWhere = statusFilter
-        ? and(
-            inArray(enablers.courseId, courseIds),
-            eq(enablerSubmissions.status, 'PENDING')
-          )
-        : inArray(enablers.courseId, courseIds);
+      const esWhere = and(
+        inArray(enablers.courseId, courseIds),
+        traineeIdInScope(enablerSubmissions.traineeId, traineeScope.condition),
+        statusFilter ? eq(enablerSubmissions.status, 'PENDING') : undefined
+      );
       const es = await db
         .select({
           id: enablerSubmissions.id,
@@ -160,12 +163,11 @@ export async function GET(req: NextRequest) {
     }
 
     if (!type || type === 'usecase') {
-      const usWhere = onlyPending
-        ? and(
-            inArray(useCases.courseId, courseIds),
-            eq(useCaseSubmissions.status, 'PENDING')
-          )
-        : inArray(useCases.courseId, courseIds);
+      const usWhere = and(
+        inArray(useCases.courseId, courseIds),
+        traineeIdInScope(useCaseSubmissions.traineeId, traineeScope.condition),
+        onlyPending ? eq(useCaseSubmissions.status, 'PENDING') : undefined
+      );
       const us = await db
         .select({
           id: useCaseSubmissions.id,
@@ -208,30 +210,6 @@ export async function GET(req: NextRequest) {
           traineeName: trMap[String(r.traineeId)] || 'Unbekannt',
           attemptNumber: (r as any).attemptNumber,
         }));
-      }
-    }
-
-    if (!isPlatformOwner && trainerOrgId) {
-      const allTraineeIds = new Set([
-        ...enablerRows.map(r => String(r.traineeId)),
-        ...useCaseRows.map(r => String(r.traineeId)),
-      ]);
-      if (allTraineeIds.size > 0) {
-        const traineeProfiles = await db
-          .select({ id: profiles.id, organizationId: profiles.organizationId })
-          .from(profiles)
-          .where(inArray(profiles.id, Array.from(allTraineeIds)));
-        const sameOrgTrainees = new Set(
-          traineeProfiles
-            .filter(p => p.organizationId === trainerOrgId)
-            .map(p => String(p.id))
-        );
-        enablerRows = enablerRows.filter(r =>
-          sameOrgTrainees.has(String(r.traineeId))
-        );
-        useCaseRows = useCaseRows.filter(r =>
-          sameOrgTrainees.has(String(r.traineeId))
-        );
       }
     }
 

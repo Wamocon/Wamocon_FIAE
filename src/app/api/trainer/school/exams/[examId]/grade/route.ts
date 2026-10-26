@@ -2,7 +2,7 @@ import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { schoolExamResults, schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 
@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(exam.traineeId));
+        const access = await requireTraineeAccess(session, String(exam.traineeId), req, 'Exam not found');
         if (isErrorResponse(access)) return access;
 
         const organizationId = await getUserOrgId(String(exam.traineeId));
@@ -66,7 +66,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
                     percentage,
                     passed,
                 })
-                .where(eq(schoolExamResults.examId, examId as any))
+                .where(and(eq(schoolExamResults.examId, examId as any), eq(schoolExamResults.traineeId, access.traineeId as any)))
                 .returning();
         } else {
             // Insert new result

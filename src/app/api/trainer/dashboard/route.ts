@@ -1,7 +1,7 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import {
   profiles,
   courses,
@@ -18,7 +18,7 @@ import {
   activityReports,
 } from '@/db/migrations/schemas/schema';
 import { cacheHeaders } from '@/lib/api-cache';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 import {
   catalogCondition,
   requireCatalogScope,
@@ -30,14 +30,10 @@ const PASS_THRESHOLD = 50;
 
 async function fetchTrainerDashboardData(
   trainerId: string,
-  scope: CatalogScope
+  scope: CatalogScope,
+  traineeCondition: SQL
 ) {
   try {
-    const [trainerOrgId, isPlatformOwner] = await Promise.all([
-      getUserOrgId(trainerId),
-      verifyPlatformOwner(trainerId),
-    ]);
-
     // ── Phase 1: Trainer + trainee lookups (3 queries) ──
     const [createdCourses, memberCoursesRaw] = await Promise.all([
       db
@@ -72,7 +68,9 @@ async function fetchTrainerDashboardData(
       ])
     );
 
-    // Trainers see every trainee in their organization, regardless of direct assignment.
+    // Trainers see every trainee in their organization (the super admin every
+    // one) and, with a chosen occupation, of that occupation, regardless of
+    // direct assignment.
     const traineeRows = await db
       .selectDistinct({
         id: profiles.id,
@@ -82,14 +80,7 @@ async function fetchTrainerDashboardData(
         organizationId: profiles.organizationId,
       })
       .from(profiles)
-      .where(
-        isPlatformOwner
-          ? eq(profiles.role, 'TRAINEE')
-          : and(
-              eq(profiles.role, 'TRAINEE'),
-              eq(profiles.organizationId, trainerOrgId as any)
-            )
-      );
+      .where(traineeCondition);
     const traineeIds = traineeRows.map(t => String(t.id));
     const hasTrainees = traineeIds.length > 0;
 
@@ -470,10 +461,16 @@ export async function GET(req: NextRequest) {
     const scope = await requireCatalogScope(session, req);
     if (isErrorResponse(scope)) return scope;
 
-    const { searchParams } = new URL(req.url);
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
+
     const trainerId = session.id;
 
-    const data = await fetchTrainerDashboardData(trainerId, scope);
+    const data = await fetchTrainerDashboardData(
+      trainerId,
+      scope,
+      traineeScope.condition
+    );
 
     return NextResponse.json(data, { headers: cacheHeaders.none });
   } catch (e) {

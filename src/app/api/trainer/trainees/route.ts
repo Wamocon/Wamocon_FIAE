@@ -1,7 +1,7 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, eq, inArray, or } from 'drizzle-orm';
+import { and, count, eq, inArray } from 'drizzle-orm';
 import {
   profiles,
   enablers,
@@ -10,46 +10,18 @@ import {
   courseMembers,
 } from '@/db/migrations/schemas/schema';
 import { cacheHeaders } from '@/lib/api-cache';
-import { getTrainerScope } from '@/lib/trainer-scope';
-import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await requireTrainer(req);
     if (isErrorResponse(session)) return session;
 
-    const { searchParams } = new URL(req.url);
-    const trainerId = session.id;
-
-    const scope = await getTrainerScope(trainerId);
-    if (!scope) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    // With a chosen occupation (x-catalog) only its trainees, without a choice
-    // everything as before.
-    const catalogFilter = await requireTraineeCatalogFilter(session, req);
-    if (catalogFilter instanceof Response) return catalogFilter;
-
-    const traineeConditions: any[] = [eq(profiles.role, 'TRAINEE')];
-    if (!scope.canSeeOrgWide) {
-      const traineeAccessFilters: any[] = [
-        inArray(profiles.assignedTrainerId, scope.profileIds as any),
-      ];
-      if (scope.organizationId) {
-        traineeAccessFilters.push(
-          eq(profiles.organizationId, scope.organizationId as any)
-        );
-      }
-      traineeConditions.push(or(...traineeAccessFilters)!);
-    } else if (!scope.isPlatformOwner && scope.organizationId) {
-      traineeConditions.push(
-        eq(profiles.organizationId, scope.organizationId as any)
-      );
-    }
-
-    if (catalogFilter.condition)
-      traineeConditions.push(catalogFilter.condition);
+    // Only trainees of the own organization (the super admin sees every one)
+    // and, with a chosen occupation (x-catalog), of that occupation. The
+    // platform-owner flag of an organization does not widen the list.
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
 
     const traineeRows = await db
       .select({
@@ -65,7 +37,7 @@ export async function GET(req: NextRequest) {
         assignedTrainerId: profiles.assignedTrainerId,
       })
       .from(profiles)
-      .where(and(...traineeConditions));
+      .where(traineeScope.condition);
 
     const traineeIds = traineeRows.map(t => String(t.id));
 

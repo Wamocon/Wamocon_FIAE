@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { weeklyEvaluations, profiles } from '@/db/migrations/schemas/schema';
 import { eq, and, sql, inArray } from 'drizzle-orm';
+import {
+    requireTraineeScopeCondition,
+    traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 
 // GET: Get annual performance summaries for all trainees (trainer view)
 export async function GET(request: NextRequest) {
@@ -14,6 +18,10 @@ export async function GET(request: NextRequest) {
         const trainerId = session.id;
         const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : new Date().getFullYear();
 
+        // Only trainees of the own organization (the super admin sees every
+        // one) and, with a chosen occupation (x-catalog), of that occupation
+        const traineeScope = await requireTraineeScopeCondition(session, request);
+        if (isErrorResponse(traineeScope)) return traineeScope;
 
         // Get all trainees that have evaluations with this trainer
         const traineeEvaluations = await db
@@ -24,7 +32,10 @@ export async function GET(request: NextRequest) {
             })
             .from(weeklyEvaluations)
             .leftJoin(profiles, eq(weeklyEvaluations.traineeId, profiles.id))
-            .where(eq(weeklyEvaluations.trainerId, trainerId))
+            .where(and(
+                eq(weeklyEvaluations.trainerId, trainerId),
+                traineeIdInScope(weeklyEvaluations.traineeId, traineeScope.condition)
+            ))
             .groupBy(weeklyEvaluations.traineeId, profiles.fullName, profiles.email);
 
         // For each trainee, calculate their summary

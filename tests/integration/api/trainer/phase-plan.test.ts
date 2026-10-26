@@ -248,19 +248,6 @@ describe('GET /api/trainer/activity-reports', () => {
       activityReportUseCaseEntries: [],
     });
     jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
-    jest.doMock('@/lib/trainer-scope', () => ({
-      __esModule: true,
-      getTrainerScope: async () => ({
-        id: 'tr1',
-        role: 'ADMIN',
-        organizationId: ORG,
-        isPlatformOwner: false,
-        isSuperAdmin: false,
-        canSeeOrgWide: true,
-        profileIds: ['tr1'],
-      }),
-      isTraineeVisibleToTrainer: () => true,
-    }));
     mockSession(fakeSession({ id: 'tr1', organizationId: ORG }));
     const plans = mockPhasePlans();
     const mod = await import('@/app/api/trainer/activity-reports/route');

@@ -9,8 +9,7 @@ import {
   courseMembers,
   activityReports,
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
-import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 
 /**
  * GET /api/trainer/trainees/with-stats
@@ -29,26 +28,11 @@ export async function GET(req: NextRequest) {
     const session = await requireTrainer(req);
     if (isErrorResponse(session)) return session;
 
-    const { searchParams } = new URL(req.url);
-    const trainerId = session.id;
-
-
-
-    const isPlatformOwnerUser = await verifyPlatformOwner(trainerId);
-    const trainerOrgId = await getUserOrgId(trainerId);
-
-    const traineeConditions = [eq(profiles.role, 'TRAINEE')];
-    if (!isPlatformOwnerUser && trainerOrgId) {
-      traineeConditions.push(eq(profiles.organizationId, trainerOrgId));
-    }
-
-    // With a chosen occupation (x-catalog) only its trainees, without a choice
-    // everything as before.
-    const catalogFilter = await requireTraineeCatalogFilter(session, req);
-    if (catalogFilter instanceof Response) return catalogFilter;
-    if (catalogFilter.condition) {
-      traineeConditions.push(catalogFilter.condition);
-    }
+    // Only trainees of the own organization (the super admin sees every one)
+    // and, with a chosen occupation (x-catalog), of that occupation. The
+    // platform-owner flag of an organization does not widen the list.
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
 
     const traineeRows = await db
       .select({
@@ -65,7 +49,7 @@ export async function GET(req: NextRequest) {
         ausbildungDurationYears: profiles.ausbildungDurationYears,
       })
       .from(profiles)
-      .where(and(...traineeConditions));
+      .where(traineeScope.condition);
 
     const traineeIds = traineeRows.map(t => String(t.id));
 

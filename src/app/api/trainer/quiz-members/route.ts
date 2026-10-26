@@ -11,6 +11,10 @@ import {
   isInOrgScope,
   type SessionUser,
 } from '@/lib/auth/session';
+import {
+  isTrainerInOrgScope,
+  profileIdInOrgScope,
+} from '@/lib/auth/trainee-scope-conditions';
 
 
 /**
@@ -148,7 +152,13 @@ export async function GET(req: NextRequest) {
           createdAt: quizMembers.createdAt,
         })
         .from(quizMembers)
-        .where(eq(quizMembers.quizId, quizId as any));
+        .where(
+          and(
+            eq(quizMembers.quizId, quizId as any),
+            // members of other organizations are not listed
+            profileIdInOrgScope(quizMembers.trainerId, session)
+          )
+        );
       return NextResponse.json({ members: rows });
     }
 
@@ -192,6 +202,13 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json(
           { error: access.error },
           { status: access.status }
+        );
+      }
+      // Only a trainer of the caller's organization can be removed
+      if (!(await isTrainerInOrgScope(session, trainerId))) {
+        return NextResponse.json(
+          { error: 'Trainer not found' },
+          { status: 404 }
         );
       }
     }

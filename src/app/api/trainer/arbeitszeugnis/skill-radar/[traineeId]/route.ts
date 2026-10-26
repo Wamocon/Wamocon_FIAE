@@ -35,7 +35,7 @@ export async function GET(
       return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
     }
 
-    const access = await requireTraineeAccess(session, traineeId);
+    const access = await requireTraineeAccess(session, traineeId, request);
     if (isErrorResponse(access)) return access;
 
     const { searchParams } = new URL(request.url);

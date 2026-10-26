@@ -1,9 +1,5 @@
-import {
-  requireTrainer,
-  isErrorResponse,
-  scopeOrg,
-  orgScopeCondition,
-} from '@/lib/auth/session';
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { workCertificates, profiles } from '@/db/migrations/schemas/schema';
@@ -20,7 +16,12 @@ export async function GET(request: NextRequest) {
     const session = await requireTrainer(request);
     if (isErrorResponse(session)) return session;
 
-    // Only certificates of trainees inside the caller's organization
+    // Only certificates of trainees inside the caller's organization (the
+    // super admin sees every one) and, with a chosen occupation (x-catalog),
+    // of that occupation
+    const traineeScope = await requireTraineeScopeCondition(session, request);
+    if (isErrorResponse(traineeScope)) return traineeScope;
+
     const certificates = await db
       .select({
         id: workCertificates.id,
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       })
       .from(workCertificates)
       .innerJoin(profiles, eq(workCertificates.traineeId, profiles.id))
-      .where(orgScopeCondition(profiles.organizationId, scopeOrg(session)))
+      .where(traineeScope.condition)
       .orderBy(desc(workCertificates.issueDate));
 
     return NextResponse.json({

@@ -8,14 +8,15 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
     activityReports,
     activityReportEntries,
     profiles,
     notifications
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -28,8 +29,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         if (isErrorResponse(session)) return session;
 
         const { id } = await params;
-        const { searchParams } = new URL(req.url);
-        const requesterId = session.id;
 
         // Get report
         const [report] = await db
@@ -37,20 +36,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             .from(activityReports)
             .where(eq(activityReports.id, id as any));
 
-        if (!report) {
+        // A DRAFT is the private work of the trainee, not visible to trainer level
+        if (!report || report.status === 'DRAFT') {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
 
-        if (requesterId) {
-            const isPO = await verifyPlatformOwner(requesterId);
-            if (!isPO) {
-                const trainerOrgId = await getUserOrgId(requesterId);
-                const traineeOrgId = await getUserOrgId(report.traineeId);
-                if (trainerOrgId !== traineeOrgId) {
-                    return NextResponse.json({ error: 'Not in your organization' }, { status: 403 });
-                }
-            }
-        }
+        // Only the report of a trainee of the own organization (the super admin:
+        // any) and of the chosen occupation. A foreign report answers like a
+        // missing one.
+        const access = await requireTraineeAccess(session, String(report.traineeId), req, 'Report not found');
+        if (isErrorResponse(access)) return access;
 
         // Get entries
         const entries = await db
@@ -123,9 +118,15 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             .from(activityReports)
             .where(eq(activityReports.id, id as any));
 
-        if (!report) {
+        if (!report || report.status === 'DRAFT') {
             return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
+
+        // Only the report of a trainee of the own organization (the super admin:
+        // any) and of the chosen occupation. A foreign report answers like a
+        // missing one, whatever its status is.
+        const access = await requireTraineeAccess(session, String(report.traineeId), req, 'Report not found');
+        if (isErrorResponse(access)) return access;
 
         // Validate status
         if (report.status !== 'SUBMITTED') {
@@ -134,22 +135,13 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             }, { status: 403 });
         }
 
-        const isPO = await verifyPlatformOwner(trainerId);
-        if (!isPO) {
-            const trainerOrgId = await getUserOrgId(trainerId);
-            const traineeOrgId = await getUserOrgId(report.traineeId);
-            if (trainerOrgId !== traineeOrgId) {
-                return NextResponse.json({ error: 'Not in your organization' }, { status: 403 });
-            }
-        }
-
         // Get trainer info for notification
         const [trainer] = await db
             .select({ fullName: profiles.fullName })
             .from(profiles)
             .where(eq(profiles.id, trainerId));
 
-        const organizationId = await getUserOrgId(trainerId);
+        const organizationId = await getUserOrgId(String(report.traineeId));
 
         const now = new Date();
         let updateData: Record<string, any>;
@@ -187,8 +179,16 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         const [updated] = await db
             .update(activityReports)
             .set(updateData)
-            .where(eq(activityReports.id, id as any))
+            .where(and(
+                eq(activityReports.id, id as any),
+                eq(activityReports.traineeId, access.traineeId as any),
+                // only a report that still waits for the review
+                eq(activityReports.status, 'SUBMITTED')
+            ))
             .returning();
+        if (!updated) {
+            return NextResponse.json({ error: 'Report already reviewed' }, { status: 409 });
+        }
 
         // Send notification to trainee
         await db.insert(notifications).values({

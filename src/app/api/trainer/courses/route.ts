@@ -1,4 +1,9 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  isErrorResponse,
+  orgScopeCondition,
+  scopeOrg,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, count, eq, inArray, ilike } from 'drizzle-orm';
@@ -92,6 +97,8 @@ export async function GET(req: NextRequest) {
           ucCounts.map(r => [String(r.courseId), Number(r.cnt)])
         );
 
+        // Only the members of the caller's organization are counted (the
+        // super admin counts every organization)
         const memberCounts = await db
           .select({
             courseId: courseMembers.courseId,
@@ -99,7 +106,13 @@ export async function GET(req: NextRequest) {
             cnt: count(),
           })
           .from(courseMembers)
-          .where(inArray(courseMembers.courseId, courseIds))
+          .innerJoin(profiles, eq(courseMembers.userId, profiles.id))
+          .where(
+            and(
+              inArray(courseMembers.courseId, courseIds),
+              orgScopeCondition(profiles.organizationId, scopeOrg(session))
+            )
+          )
           .groupBy(courseMembers.courseId, courseMembers.role);
 
         const trainerCountMap = new Map<string, number>();

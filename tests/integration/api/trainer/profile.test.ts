@@ -13,27 +13,12 @@ function makeGet(url: string) {
   return { url } as any;
 }
 
-const scope = {
-  id: 'tr1',
-  role: 'TRAINER',
-  organizationId: 'org1',
-  isPlatformOwner: false,
-  isSuperAdmin: false,
-  canSeeOrgWide: false,
-  profileIds: ['tr1'],
-};
-
 async function importHandler(
   mockDb: any,
-  trainerScope: any = scope,
   session: ReturnType<typeof fakeSession> | null = fakeSession({ id: 'tr1' })
 ) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
-  jest.doMock('@/lib/trainer-scope', () => ({
-    __esModule: true,
-    getTrainerScope: jest.fn().mockResolvedValue(trainerScope),
-  }));
   mockSession(session);
   mockCatalogScope();
   const mod = await import('@/app/api/trainer/profile/route');
@@ -48,7 +33,7 @@ describe('API: Trainer Profile', () => {
 
   it('401 without a session', async () => {
     const { db } = createTableDb();
-    const GET = await importHandler(db, scope, null);
+    const GET = await importHandler(db, null);
     const res = await GET(makeGet('http://localhost/api/trainer/profile'));
     expect(res.status).toBe(401);
   });
@@ -57,16 +42,8 @@ describe('API: Trainer Profile', () => {
     const { db } = createTableDb();
     const GET = await importHandler(
       db,
-      scope,
       fakeSession({ role: 'TRAINEE', isTrainerLevel: false })
     );
-    const res = await GET(makeGet('http://localhost/api/trainer/profile'));
-    expect(res.status).toBe(403);
-  });
-
-  it('403 if the caller has no trainer scope', async () => {
-    const { db } = createTableDb();
-    const GET = await importHandler(db, null);
     const res = await GET(makeGet('http://localhost/api/trainer/profile'));
     expect(res.status).toBe(403);
   });

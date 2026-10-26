@@ -1,8 +1,9 @@
 // Generated from the route files under src/app/api/trainer and src/app/api/admin,
-// plus me/catalog-requests (a trainer-level request for an occupation), the
-// notification routes and every route of a trainee (guard 'user') and the
-// HAI routes (src/app/api/hai), the activity report routes (activity-reports,
-// weekly-evaluations, grade-edit-history) and breadcrumb/label.
+// plus me/catalog-requests (a trainer-level request for an occupation),
+// me/catalogs (the occupations of the caller), the notification routes and
+// every route of a trainee (guard 'user') and the HAI routes (src/app/api/hai),
+// the activity report routes (activity-reports, weekly-evaluations,
+// grade-edit-history) and breadcrumb/label.
 // Every entry is a handler that must reject anonymous callers (401) and callers
 // with a too low role (403). Regenerate when a route is added.
 
@@ -601,6 +602,7 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     guard: 'trainer',
     params: [],
   },
+  { route: 'me/catalogs', method: 'GET', guard: 'user', params: [] },
   {
     route: 'notifications',
     method: 'GET',

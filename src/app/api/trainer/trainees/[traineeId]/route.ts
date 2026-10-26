@@ -9,8 +9,11 @@ import {
   enablerCompletions,
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
-import { ensureTraineeInCatalog } from '@/lib/catalog/trainee-scope';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import {
+  isTrainerInOrgScope,
+  traineeRecordCondition,
+} from '@/lib/auth/trainee-scope-conditions';
 
 export async function GET(
   req: NextRequest,
@@ -21,24 +24,11 @@ export async function GET(
     if (isErrorResponse(session)) return session;
 
     const { traineeId } = await params;
-    const { searchParams } = new URL(req.url);
-    const requesterId = session.id;
 
-    const isPO = await verifyPlatformOwner(requesterId);
-    if (!isPO) {
-      const requesterOrgId = await getUserOrgId(requesterId);
-      const traineeOrgId = await getUserOrgId(traineeId);
-      if (requesterOrgId !== traineeOrgId) {
-        return NextResponse.json(
-          { error: 'Trainee not in your organization' },
-          { status: 403 }
-        );
-      }
-    }
-
-    // A trainee of another occupation than the chosen one is not found.
-    const outOfCatalog = await ensureTraineeInCatalog(session, req, traineeId);
-    if (outOfCatalog) return outOfCatalog;
+    // Only a trainee of the own organization (the super admin: any) and of the
+    // chosen occupation, everything else is not found.
+    const access = await requireTraineeAccess(session, traineeId, req);
+    if (isErrorResponse(access)) return access;
 
     const [p] = await db
       .select({
@@ -120,33 +110,10 @@ export async function PATCH(
     const body = await req.json();
     const trainer_id = session.id;
 
-    const [trainee] = await db
-      .select({
-        id: profiles.id,
-        organizationId: profiles.organizationId,
-        assignedTrainerId: profiles.assignedTrainerId,
-        isActive: profiles.isActive,
-        trainerActivated: profiles.trainerActivated,
-      })
-      .from(profiles)
-      .where(eq(profiles.id, traineeId as any))
-      .limit(1);
-    if (!trainee)
-      return NextResponse.json({ error: 'Trainee not found' }, { status: 404 });
-
-    // Org-scoping: trainer can only manage trainees in their own org (platform owner can manage any)
-    const trainerOrgId = await getUserOrgId(trainer_id);
-    const isPlatform = await verifyPlatformOwner(trainer_id);
-    if (!isPlatform && trainee.organizationId !== trainerOrgId) {
-      return NextResponse.json(
-        { error: 'You can only manage trainees in your organization' },
-        { status: 403 }
-      );
-    }
-
-    // A trainee of another occupation than the chosen one is not found.
-    const outOfCatalog = await ensureTraineeInCatalog(session, req, traineeId);
-    if (outOfCatalog) return outOfCatalog;
+    // Only a trainee of the own organization (the super admin: any) and of the
+    // chosen occupation, everything else is not found and stays untouched.
+    const access = await requireTraineeAccess(session, traineeId, req);
+    if (isErrorResponse(access)) return access;
 
     const updates: any = {};
     if (typeof body?.full_name === 'string')
@@ -165,8 +132,17 @@ export async function PATCH(
       }
       updates.ausbildungDurationYears = duration;
     }
-    if (typeof body?.assigned_trainer_id === 'string')
+    if (typeof body?.assigned_trainer_id === 'string') {
+      // The new trainer has to be a trainer of the same organization scope,
+      // otherwise the trainee would become visible to a foreign trainer
+      if (!(await isTrainerInOrgScope(session, body.assigned_trainer_id))) {
+        return NextResponse.json(
+          { error: 'Trainer not found' },
+          { status: 404 }
+        );
+      }
       updates.assignedTrainerId = body.assigned_trainer_id;
+    }
     if (typeof body?.isActive === 'boolean') updates.isActive = body.isActive;
     if (typeof body?.trainer_activated === 'boolean')
       updates.trainerActivated = body.trainer_activated;
@@ -184,7 +160,7 @@ export async function PATCH(
     const [row] = await db
       .update(profiles)
       .set(updates)
-      .where(eq(profiles.id, traineeId as any))
+      .where(traineeRecordCondition(session, access.traineeId))
       .returning({
         id: profiles.id,
         fullName: profiles.fullName,
@@ -194,6 +170,7 @@ export async function PATCH(
         assignedTrainerId: profiles.assignedTrainerId,
         trainerActivated: profiles.trainerActivated,
       });
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     apiCache.invalidate('trainer_trainees');
     apiCache.invalidate('trainee_dashboard');
