@@ -20,7 +20,10 @@
 --           The columns are those of the allowlist supabase/content-tables.json,
 --           plus the id. The creator of a course or quiz is set to the platform
 --           administrator named below, the organization and the uploader of a
---           document are left empty. NO user data is copied: no profiles, no
+--           document are left empty. Only documents without an organization or of
+--           the platform owner are copied (documents of a customer organization
+--           are left out and counted in the report, they would become visible to
+--           everybody here). NO user data is copied: no profiles, no
 --           organizations, no enrollments, submissions, progress, reports,
 --           evaluations, certificates, notifications and no HAI chats or
 --           embeddings. Files in the storage buckets are not copied (the
@@ -28,6 +31,8 @@
 -- MODES:    v_dry_run = true (the default) performs everything and then rolls it
 --           back with an error that shows the counts per table, nothing is
 --           changed. Set it to false to really copy.
+-- SNAPSHOT: the transaction runs with isolation level repeatable read, so all
+--           reads of public see one state even if Production changes meanwhile.
 -- IDEMPOTENT: a second run inserts nothing new (rows are matched by id or by their key). It is a
 --           seed, not a synchronisation: a row that changed in Production later
 --           is not updated here.
@@ -40,7 +45,7 @@
 --           untouched).
 -- =============================================================================
 
-begin;
+begin isolation level repeatable read;
 set local lock_timeout = '10s';
 set local statement_timeout = '180s';
 
@@ -75,6 +80,7 @@ declare
   v_before bigint;
   v_ins bigint;
   v_after bigint;
+  v_left_out bigint;
   v_i integer := 0;
   v_item record;
 begin
@@ -124,7 +130,19 @@ begin
     raise exception 'Der Katalog FIAE fehlt in public_preview.training_catalogs. Die Katalog-Migration ist unvollständig angewendet. Es wurde nichts geändert.';
   end if;
 
-  -- C. Learning fields: only valid labels, clearly named, no duplicates
+  -- C. Learning fields: the guards of migration 20261024000500 (extra columns must
+  --    be empty, is_common must be true), valid labels, no duplicates. to_jsonb
+  --    keeps the check working whether or not the extra columns exist.
+  if exists (
+    select 1 from public.lernfelder l
+     where to_jsonb(l) ->> 'code' is not null
+        or to_jsonb(l) ->> 'training_year' is not null
+        or to_jsonb(l) ->> 'hours_budget' is not null
+        or to_jsonb(l) ->> 'order_index' is not null
+        or to_jsonb(l) ->> 'is_common' = 'false'
+  ) then
+    raise exception 'public.lernfelder trägt Werte in code, training_year, hours_budget oder order_index oder hat is_common = false. Die Regeln der Migration 20261024000500 würden sie verwerfen. Bitte prüfen. Es wurde nichts geändert.';
+  end if;
   if exists (select 1 from public.lernfelder l where btrim(l.label) = '')
      or exists (select 1 from public.lernfelder l group by btrim(l.label) having count(*) > 1) then
     raise exception 'public.lernfelder hat leere oder doppelte Bezeichnungen. Die Regeln der Migration 20261024000500 (Zusatz # 2) sind hier nicht nachgebaut. Es wurde nichts geändert.';
@@ -170,10 +188,25 @@ begin
   insert into public_preview.content_documents (id, enabler_id, use_case_id, course_id, organization_id, title, description, document_type, visibility, file_name, file_size, mime_type, storage_url, storage_path, page_count, order_index, uploaded_by_id, created_at, updated_at)
   select s.id, s.enabler_id, s.use_case_id, s.course_id, null, s.title, s.description, s.document_type::text::public_preview.content_document_type, s.visibility::text::public_preview.document_visibility, s.file_name, s.file_size, s.mime_type, s.storage_url, s.storage_path, s.page_count, s.order_index, null, s.created_at, s.updated_at
     from public.content_documents s
+   where s.organization_id is null
+      or exists (
+        select 1 from public.organizations o
+         where o.id = s.organization_id and o.is_platform_owner
+      )
   on conflict (id) do nothing;
   get diagnostics v_ins = row_count;
   select count(*) into v_after from public_preview.content_documents;
-  v_report := v_report || jsonb_build_object('content_documents', jsonb_build_object('Quelle', v_src, 'Ziel vorher', v_before, 'eingefügt', v_ins, 'Ziel nachher', v_after));
+  select count(*) into v_left_out
+    from public.content_documents s
+   where s.organization_id is not null
+     and not exists (
+       select 1 from public.organizations o
+        where o.id = s.organization_id and o.is_platform_owner
+     );
+  if v_left_out > 0 then
+    raise notice 'Hinweis: % Dokumentzeile(n) einer Kundenorganisation wurden nicht kopiert.', v_left_out;
+  end if;
+  v_report := v_report || jsonb_build_object('content_documents', jsonb_build_object('Quelle', v_src, 'Ziel vorher', v_before, 'eingefügt', v_ins, 'Ziel nachher', v_after, 'nicht kopiert (Kundenorganisation)', v_left_out));
 
   -- quizzes
   select count(*) into v_src from public.quizzes;
@@ -203,7 +236,7 @@ begin
   insert into public_preview.enabler_quiz_links (id, enabler_id, quiz_id, difficulty)
   select s.id, s.enabler_id, s.quiz_id, s.difficulty::text::public_preview.quiz_difficulty
     from public.enabler_quiz_links s
-  on conflict (id) do nothing;
+  on conflict do nothing;
   get diagnostics v_ins = row_count;
   select count(*) into v_after from public_preview.enabler_quiz_links;
   v_report := v_report || jsonb_build_object('enabler_quiz_links', jsonb_build_object('Quelle', v_src, 'Ziel vorher', v_before, 'eingefügt', v_ins, 'Ziel nachher', v_after));
@@ -253,6 +286,7 @@ begin
     get diagnostics v_ins = row_count;
   else
     v_ins := 0;
+    raise notice 'Hinweis: Der Katalog FIAE hat in public_preview schon % Lernfeld(er), sie wurden nicht erneut kopiert (ein neues Lernfeld wird hier nicht nachgezogen).', v_before;
   end if;
   select count(*) into v_after
     from public_preview.training_catalog_learning_fields f
