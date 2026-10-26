@@ -21,12 +21,12 @@
  */
 
 import haiDb from '@/db/haiDb';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import {
   extractTextByPage,
   type PerPageExtractionResult,
 } from './pdfExtractor';
-import type { SearchResult } from './vectorSearch';
+import { isUuid, type HaiAudience, type SearchResult } from './vectorSearch';
 import {
   isMetadataAllowedForTrainingScope,
   type HaiTrainingScope,
@@ -41,6 +41,8 @@ export interface PageIndexResult {
   documentTitle: string;
   fileName: string;
   storageUrl: string;
+  /** Visibility ALL and not a trainer solution: may be linked in a citation */
+  visibleToTrainees: boolean;
   /** Parent entity (enabler, use_case, or standalone) */
   parentType: 'enabler' | 'use_case' | 'standalone';
   parentId: string | null;
@@ -74,8 +76,26 @@ export interface PageIndexCitation {
   documentTitle: string;
   fileName: string;
   pageNumber: number;
-  storageUrl: string;
+  /**
+   * Public URL of the PDF. Only set if the document is visible to trainees
+   * (visibility ALL, not a trainer solution): the bucket is public, so a URL
+   * in a citation would open a solution without any sign-in.
+   */
+  storageUrl?: string;
   relevanceScore: number;
+}
+
+/** What a PageIndex query may read. Built from the session by the pipeline. */
+export interface PageIndexOptions {
+  currentEnablerId?: string;
+  currentCourseId?: string;
+  trainingScope?: HaiTrainingScope;
+  /** Catalogs (occupations) the caller may read. Empty: no PDF (fail closed). */
+  catalogIds: string[];
+  /** Only 'trainer' gets solution and trainer-only documents. */
+  audience: HaiAudience;
+  /** Own organization and platform documents (NULL) only. */
+  organizationId?: string | null;
 }
 
 // ============================================================================
@@ -121,11 +141,7 @@ const PDF_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 export async function fetchPageIndexContext(
   userQuery: string,
   vectorResults: SearchResult[],
-  options?: {
-    currentEnablerId?: string;
-    currentCourseId?: string;
-    trainingScope?: HaiTrainingScope;
-  }
+  options: PageIndexOptions
 ): Promise<PageIndexContext> {
   const startTime = Date.now();
 
@@ -168,6 +184,7 @@ export async function fetchPageIndexContext(
               documentTitle: pdf.title,
               fileName: pdf.fileName,
               storageUrl: pdf.storageUrl,
+              visibleToTrainees: pdf.visibleToTrainees,
               parentType: pdf.parentType,
               parentId: pdf.parentId,
               parentTitle: pdf.parentTitle,
@@ -190,6 +207,7 @@ export async function fetchPageIndexContext(
       docTitle: string;
       fileName: string;
       storageUrl: string;
+      visibleToTrainees: boolean;
     })[] = [];
 
     for (const result of pdfResults) {
@@ -201,6 +219,7 @@ export async function fetchPageIndexContext(
             docTitle: result.documentTitle,
             fileName: result.fileName,
             storageUrl: result.storageUrl,
+            visibleToTrainees: result.visibleToTrainees,
           });
         }
       }
@@ -219,7 +238,8 @@ export async function fetchPageIndexContext(
       documentTitle: p.docTitle,
       fileName: p.fileName,
       pageNumber: p.pageNumber,
-      storageUrl: p.storageUrl,
+      // no URL for a document that trainees may not see (public bucket)
+      storageUrl: p.visibleToTrainees ? p.storageUrl : undefined,
       relevanceScore: p.relevanceScore,
     }));
 
@@ -254,9 +274,42 @@ interface CandidatePDF {
   title: string;
   fileName: string;
   storageUrl: string;
+  visibleToTrainees: boolean;
   parentType: 'enabler' | 'use_case' | 'standalone';
   parentId: string | null;
   parentTitle: string | null;
+}
+
+/** A trainee-visible PDF: visibility is not TRAINER_ONLY, type is not a solution. */
+function isVisibleToTrainees(row: {
+  document_type?: string | null;
+  visibility?: string | null;
+}): boolean {
+  return (
+    row.document_type !== 'TRAINER_SOLUTION' &&
+    row.visibility !== 'TRAINER_ONLY'
+  );
+}
+
+/**
+ * SQL condition on content_documents (alias cd) for the caller: trainees get
+ * neither TRAINER_SOLUTION nor TRAINER_ONLY documents, everyone gets only
+ * documents of the own organization or of the platform (organization_id NULL).
+ */
+export function documentAccessCondition(
+  options: Pick<PageIndexOptions, 'audience' | 'organizationId'>
+): SQL {
+  const parts: SQL[] = [];
+  if (options.audience !== 'trainer') {
+    parts.push(sql`cd.document_type IS DISTINCT FROM 'TRAINER_SOLUTION'`);
+    parts.push(sql`cd.visibility IS DISTINCT FROM 'TRAINER_ONLY'`);
+  }
+  parts.push(
+    isUuid(options.organizationId)
+      ? sql`(cd.organization_id IS NULL OR cd.organization_id = ${options.organizationId}::uuid)`
+      : sql`cd.organization_id IS NULL`
+  );
+  return sql.join(parts, sql` AND `);
 }
 
 /**
@@ -265,18 +318,28 @@ interface CandidatePDF {
  * Priority:
  *   1. PDFs directly linked to enablers/courses found in vector search
  *   2. PDFs for the current enabler/course (if in an enabler chat)
- *   3. Use Case TRAINER_SOLUTION PDFs for related use cases
+ *   3. Use case PDFs of the related courses: the solution PDFs for trainer
+ *      level, the question PDFs (TRAINEE_QUESTION) for trainees
+ *
+ * Every query joins the catalog of the document (through enabler or use case),
+ * so ids that come from the client (current enabler or course) cannot reach
+ * content of another occupation.
  */
 async function findCandidatePDFs(
   vectorResults: SearchResult[],
-  options?: {
-    currentEnablerId?: string;
-    currentCourseId?: string;
-    trainingScope?: HaiTrainingScope;
-  }
+  options: PageIndexOptions
 ): Promise<CandidatePDF[]> {
   const candidates: CandidatePDF[] = [];
   const seenIds = new Set<string>();
+
+  // Fail closed: without a catalog scope no PDF is read
+  const catalogIds = [...new Set((options.catalogIds ?? []).filter(isUuid))];
+  if (catalogIds.length === 0) return candidates;
+  const catalogList = sql.join(
+    catalogIds.map(id => sql`${id}::uuid`),
+    sql`, `
+  );
+  const access = documentAccessCondition(options);
 
   // Priority 1: PDFs linked to enablers/courses from vector results
   const enablerIds = new Set<string>();
@@ -292,22 +355,28 @@ async function findCandidatePDFs(
     }
   }
 
-  // Add current context
-  if (options?.currentEnablerId) enablerIds.add(options.currentEnablerId);
-  if (options?.currentCourseId) courseIds.add(options.currentCourseId);
+  // Add current context (comes from the client: malformed ids are dropped
+  // instead of failing the ::uuid cast)
+  if (options.currentEnablerId) enablerIds.add(options.currentEnablerId);
+  if (options.currentCourseId) courseIds.add(options.currentCourseId);
+  const validEnablerIds = Array.from(enablerIds).filter(isUuid);
+  const validCourseIds = Array.from(courseIds).filter(isUuid);
 
   // Fetch enabler-linked PDFs
-  if (enablerIds.size > 0) {
+  if (validEnablerIds.length > 0) {
     try {
-      const enablerIdArray = Array.from(enablerIds);
+      const enablerIdArray = validEnablerIds;
       const result = await haiDb.execute(sql`
         SELECT 
           cd.id, cd.title, cd.file_name, cd.storage_url,
+          cd.document_type, cd.visibility,
           cd.enabler_id, e.title AS enabler_title, c.year AS course_year
         FROM content_documents cd
-        LEFT JOIN enablers e ON cd.enabler_id = e.id
+        JOIN enablers e ON cd.enabler_id = e.id
         LEFT JOIN courses c ON e.course_id = c.id
         WHERE cd.enabler_id IN (${sql.join(enablerIdArray.map(id => sql`${id}::uuid`), sql`, `)})
+          AND e.training_catalog_id IN (${catalogList})
+          AND ${access}
           AND cd.storage_url IS NOT NULL
           AND cd.mime_type = 'application/pdf'
         ORDER BY cd.order_index
@@ -319,7 +388,7 @@ async function findCandidatePDFs(
           !isMetadataAllowedForTrainingScope(
             { year: row.course_year },
             'course',
-            options?.trainingScope
+            options.trainingScope
           )
         ) {
           continue;
@@ -332,6 +401,7 @@ async function findCandidatePDFs(
             title: row.title || row.file_name,
             fileName: row.file_name,
             storageUrl: row.storage_url,
+            visibleToTrainees: isVisibleToTrainees(row),
             parentType: 'enabler',
             parentId: row.enabler_id,
             parentTitle: row.enabler_title,
@@ -343,18 +413,24 @@ async function findCandidatePDFs(
     }
   }
 
-  // Fetch use-case TRAINER_SOLUTION PDFs for related courses
-  if (courseIds.size > 0) {
+  // Fetch use case PDFs for related courses: solutions for trainer level, the
+  // question PDFs for trainees (a trainee never gets a solution)
+  if (validCourseIds.length > 0) {
     try {
-      const courseIdArray = Array.from(courseIds);
+      const courseIdArray = validCourseIds;
+      const useCaseDocumentType =
+        options.audience === 'trainer' ? 'TRAINER_SOLUTION' : 'TRAINEE_QUESTION';
       const result = await haiDb.execute(sql`
         SELECT 
           cd.id, cd.title, cd.file_name, cd.storage_url,
+          cd.document_type, cd.visibility,
           cd.use_case_id, uc.title AS use_case_title, uc.year, uc.training_stage
         FROM content_documents cd
         JOIN use_cases uc ON cd.use_case_id = uc.id
         WHERE uc.course_id IN (${sql.join(courseIdArray.map(id => sql`${id}::uuid`), sql`, `)})
-          AND cd.document_type = 'TRAINER_SOLUTION'
+          AND uc.training_catalog_id IN (${catalogList})
+          AND cd.document_type::text = ${useCaseDocumentType}
+          AND ${access}
           AND cd.storage_url IS NOT NULL
         ORDER BY uc.order_index
         LIMIT ${MAX_PDFS_PER_QUERY}
@@ -368,7 +444,7 @@ async function findCandidatePDFs(
               trainingStage: row.training_stage,
             },
             'use_case',
-            options?.trainingScope
+            options.trainingScope
           )
         ) {
           continue;
@@ -381,6 +457,7 @@ async function findCandidatePDFs(
             title: row.title || row.file_name,
             fileName: row.file_name,
             storageUrl: row.storage_url,
+            visibleToTrainees: isVisibleToTrainees(row),
             parentType: 'use_case',
             parentId: row.use_case_id,
             parentTitle: row.use_case_title,

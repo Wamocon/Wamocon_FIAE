@@ -16,6 +16,7 @@ import {
   vector,
   check,
   uniqueIndex,
+  index,
   foreignKey,
   smallint,
   date,
@@ -1092,19 +1093,51 @@ export const haiMessageRole = pgEnum('hai_message_role', [
 ]);
 
 // HAI.ai Embeddings - stores vector embeddings for RAG with PageIndex support
-export const haiEmbeddings = pgTable('hai_embeddings', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  sourceType: text('source_type').notNull(), // 'enabler', 'course', 'document', 'quiz', 'use_case'
-  sourceId: uuid('source_id').notNull(),
-  chunkIndex: integer('chunk_index').notNull().default(0),
-  content: text('content').notNull(),
-  contentHash: text('content_hash').notNull(),
-  embedding: vector('embedding', { dimensions: 3072 }),
-  // Enhanced metadata for PageIndex: { page?: number, documentId?: string, useCaseTitle?: string }
-  metadata: jsonb('metadata').default({}),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
+export const haiEmbeddings = pgTable(
+  'hai_embeddings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sourceType: text('source_type').notNull(), // 'enabler', 'course', 'document', 'quiz', 'use_case'
+    sourceId: uuid('source_id').notNull(),
+    chunkIndex: integer('chunk_index').notNull().default(0),
+    content: text('content').notNull(),
+    contentHash: text('content_hash').notNull(),
+    embedding: vector('embedding', { dimensions: 3072 }),
+    // Enhanced metadata for PageIndex: { page?: number, documentId?: string, useCaseTitle?: string }
+    metadata: jsonb('metadata').default({}),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+    // Index scope (20261027000100): occupation, audience and owner of a chunk.
+    // The search filters by these columns in SQL. NULL catalog = not derived
+    // yet = visible to nobody. A database trigger derives the values for rows
+    // from writers that do not set them.
+    trainingCatalogId: uuid('training_catalog_id'),
+    // 'all' = may be shown to trainees, 'trainer' = trainer level only
+    visibility: text('visibility').notNull().default('all'),
+    // NULL = platform content for every organization
+    organizationId: uuid('organization_id'),
+  },
+  table => ({
+    catalogFk: foreignKey({
+      name: 'hai_embeddings_training_catalog_fk',
+      columns: [table.trainingCatalogId],
+      foreignColumns: [trainingCatalogs.id],
+    }).onDelete('restrict'),
+    organizationFk: foreignKey({
+      name: 'hai_embeddings_organization_fk',
+      columns: [table.organizationId],
+      foreignColumns: [organizations.id],
+    }).onDelete('cascade'),
+    visibilityCheck: check(
+      'hai_embeddings_visibility_check',
+      sql`${table.visibility} in ('all', 'trainer')`
+    ),
+    scopeIdx: index('idx_hai_embeddings_scope').on(
+      table.trainingCatalogId,
+      table.visibility
+    ),
+  })
+);
 
 // HAI.ai Reindex Jobs - tracks background reindexing with progress
 export const haiReindexJobs = pgTable('hai_reindex_jobs', {
