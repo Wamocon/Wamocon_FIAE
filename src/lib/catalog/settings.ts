@@ -4,6 +4,7 @@ import {
   isValidBrandingTitle,
   normalizeBrandingAccent,
 } from '@/lib/catalog/branding';
+import { haiSettingsSchema } from '@/lib/catalog/hai-settings';
 
 /**
  * Configuration of a training catalog (training_catalogs.settings, jsonb).
@@ -20,6 +21,10 @@ import {
  *  - branding                 presentation of the occupation (title, short_name,
  *                             accent), see src/lib/catalog/branding.ts, which
  *                             also reads it (not part of CatalogSettings)
+ *  - hai                      persona of the HAI assistant (occupation name,
+ *                             glossary, topics, exam, refusal text), see
+ *                             src/lib/catalog/hai-settings.ts, which also
+ *                             reads it (not part of CatalogSettings)
  *
  * This module only defines the type, defaults and validation. Callers in the
  * Arbeitszeugnis code still use their own constants; switching them over is
@@ -54,6 +59,7 @@ export const catalogSettingsSchema = z
     department_label: z.string().trim().min(1),
     phase_months: z.tuple([positiveMonths, positiveMonths]),
     branding: brandingSchema,
+    hai: haiSettingsSchema,
   })
   .partial()
   .strict();
