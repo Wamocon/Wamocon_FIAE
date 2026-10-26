@@ -60,6 +60,7 @@ import {
   requestCancellation,
   type ReindexProgress,
 } from '@/lib/hai/reindexJob';
+import { badRequestUnlessUuid, notFoundUnlessUuid } from '@/lib/uuid';
 
 // ============================================================================
 // TYPES
@@ -606,6 +607,8 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
         }
+        const invalidSource = badRequestUnlessUuid('sourceId', sourceId);
+        if (invalidSource) return invalidSource;
         const result = await indexEnabler(sourceId, forceReindex);
         return NextResponse.json({ success: true, result });
       }
@@ -652,6 +655,8 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
         }
+        const invalidSource = badRequestUnlessUuid('sourceId', sourceId);
+        if (invalidSource) return invalidSource;
 
         // For single-source reindex, use UPSERT (no pre-delete needed)
         if (sourceType === 'enabler') {
@@ -701,6 +706,9 @@ export async function GET(req: NextRequest) {
 
     // If jobId provided, return that job's status
     if (jobId) {
+      // An id that is no uuid is a job that cannot exist
+      const jobNotFound = notFoundUnlessUuid(jobId, 'Job not found');
+      if (jobNotFound) return jobNotFound;
       const job = await getJobStatus(jobId);
       if (!job) {
         return NextResponse.json({ error: 'Job not found' }, { status: 404 });
@@ -766,6 +774,8 @@ export async function DELETE(req: NextRequest) {
         { status: 400 }
       );
     }
+    const invalidSource = badRequestUnlessUuid('sourceId', sourceId);
+    if (invalidSource) return invalidSource;
 
     const success = await removeEmbeddings(sourceType, sourceId);
 

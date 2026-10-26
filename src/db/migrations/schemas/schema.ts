@@ -2069,3 +2069,41 @@ export const gradeEditHistory = pgTable('grade_edit_history', {
 });
 
 export type GradeEditHistory = typeof gradeEditHistory.$inferSelect;
+
+// Failed secret checks per check (scope) and person or address (subject), for
+// the lock after too many wrong PINs (src/lib/auth/attempt-limiter.ts). Server
+// only: RLS on, no policy, no grant for anon and authenticated. Created by
+// supabase/migrations/20261029000200_auth_attempts.sql.
+export const authAttempts = pgTable(
+  'auth_attempts',
+  {
+    scope: text('scope').notNull(),
+    subject: text('subject').notNull(),
+    failures: integer('failures').notNull().default(0),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastAllowed: boolean('last_allowed').notNull().default(true),
+  },
+  table => ({
+    pk: primaryKey({
+      name: 'auth_attempts_pkey',
+      columns: [table.scope, table.subject],
+    }),
+    scopeLength: check(
+      'auth_attempts_scope_length',
+      sql`char_length(${table.scope}) <= 64`
+    ),
+    subjectLength: check(
+      'auth_attempts_subject_length',
+      sql`char_length(${table.subject}) <= 128`
+    ),
+    failuresCheck: check(
+      'auth_attempts_failures_check',
+      sql`${table.failures} >= 0`
+    ),
+  })
+);
+
+export type AuthAttempt = typeof authAttempts.$inferSelect;

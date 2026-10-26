@@ -58,6 +58,19 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
       if (res.ok) {
         setAuthenticated(true);
         setPin('');
+      } else if (res.status === 429) {
+        // The server locks the person after several wrong PINs
+        const data = await res.json().catch(() => null);
+        const seconds = Number(data?.retryAfterSec) || 60;
+        setError(
+          t('hai.admin.pinLocked', {
+            minutes: Math.max(1, Math.ceil(seconds / 60)),
+          })
+        );
+        setPin('');
+      } else if (res.status === 503) {
+        setError(t('hai.admin.pinUnavailable'));
+        setPin('');
       } else {
         setError(t('hai.admin.invalidPin') || 'Invalid PIN. Please try again.');
         setPin('');

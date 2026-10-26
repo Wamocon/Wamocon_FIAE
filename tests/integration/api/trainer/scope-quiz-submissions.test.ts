@@ -26,13 +26,13 @@ import { traineeSession } from '../../../helpers/mockNext';
 const LIST = 'trainer/quiz-submissions/route';
 const ONE = 'trainer/quiz-submissions/[submissionId]/route';
 const URL_LIST = 'http://localhost/api/trainer/quiz-submissions';
-const URL_ONE = 'http://localhost/api/trainer/quiz-submissions/s1';
-const params = { params: Promise.resolve({ submissionId: 's1' }) };
+const URL_ONE = 'http://localhost/api/trainer/quiz-submissions/bbbbbbb2-0000-4000-8000-000000000002';
+const params = { params: Promise.resolve({ submissionId: 'bbbbbbb2-0000-4000-8000-000000000002' }) };
 
 const submission = (overrides: Record<string, unknown> = {}) => ({
-  id: 's1',
+  id: 'bbbbbbb2-0000-4000-8000-000000000002',
   traineeId: T1,
-  quizId: 'q1',
+  quizId: 'bbbbbbb1-0000-4000-8000-000000000001',
   score: 80,
   isReviewed: false,
   ...overrides,
@@ -152,7 +152,7 @@ describe('PATCH /api/trainer/quiz-submissions/[submissionId]', () => {
     });
 
   const quiz = (trainingCatalogId = FIAE) => ({
-    id: 'q1',
+    id: 'bbbbbbb1-0000-4000-8000-000000000001',
     trainingCatalogId,
   });
 

@@ -20,7 +20,7 @@ const NEW_ID = '55555555-5555-4555-8555-555555555555';
 const TARGET = '66666666-6666-4666-8666-666666666666';
 
 const admin = fakeSession({
-  id: 'ad1',
+  id: '77777777-7777-4777-8777-777777777777',
   role: 'ADMIN',
   organizationId: ORG,
   isAdmin: true,
@@ -354,7 +354,7 @@ describe('DELETE /api/admin/users/[userId] in Preview', () => {
 
   it('keeps the rule that nobody deletes themselves', async () => {
     const ctx = await loadDelete({ preview: true, lookup: { user: flagged } });
-    const res = await ctx.remove.DELETE(...del('ad1'));
+    const res = await ctx.remove.DELETE(...del('77777777-7777-4777-8777-777777777777'));
     expect(res.status).toBe(400);
     expect(ctx.getUserById).not.toHaveBeenCalled();
     expect(ctx.deleteUser).not.toHaveBeenCalled();

@@ -17,6 +17,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -29,6 +30,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         if (isErrorResponse(session)) return session;
 
         const { id } = await params;
+        const idNotFound = notFoundUnlessUuid(id, 'Report not found');
+        if (idNotFound) return idNotFound;
 
         // Get report
         const [report] = await db
@@ -98,6 +101,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (isErrorResponse(session)) return session;
 
         const { id } = await params;
+        const idNotFound = notFoundUnlessUuid(id, 'Report not found');
+        if (idNotFound) return idNotFound;
         const body = await req.json();
         const { action, feedback } = body;
         const trainerId = session.id;

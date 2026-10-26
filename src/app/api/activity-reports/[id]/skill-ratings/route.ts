@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { activityReports } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
 import { isErrorResponse } from '@/lib/auth/session';
+import { readJsonObject } from '@/lib/input-limits';
 import {
   loadReportForSession,
   requireTraineeSession,
@@ -22,10 +23,15 @@ export async function PATCH(
 
   try {
     const { id } = await params;
-    const body = await request.json();
-    const { skillSelfRatings } = body;
+    const body = await readJsonObject(request);
+    if (isErrorResponse(body)) return body;
+    const { skillSelfRatings } = body as Record<string, any>;
 
-    if (!skillSelfRatings || typeof skillSelfRatings !== 'object') {
+    if (
+      !skillSelfRatings ||
+      typeof skillSelfRatings !== 'object' ||
+      Array.isArray(skillSelfRatings)
+    ) {
       return NextResponse.json(
         { error: 'skillSelfRatings is required' },
         { status: 400 }

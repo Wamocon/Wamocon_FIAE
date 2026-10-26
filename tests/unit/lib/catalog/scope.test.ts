@@ -7,6 +7,7 @@ import { createTableDb } from '../../../helpers/mockDb';
 const FIAE = '00000000-0000-4000-8000-000000000001';
 const KFBM = '00000000-0000-4000-8000-000000000002';
 const ORG = '11111111-1111-4111-8111-111111111111';
+const COURSE = '33333333-3333-4333-8333-333333333333';
 
 const catalogRows = [
   { id: FIAE, code: 'FIAE', isActive: true },
@@ -309,13 +310,13 @@ describe('catalog scope', () => {
       const res = (await ensureContentInScope(
         scope,
         'course',
-        'c1'
+        COURSE
       )) as Response;
       expect(res.status).toBe(404);
       const ok = await ensureContentInScope(
         { ...scope, allowedCatalogIds: [FIAE, KFBM] },
         'course',
-        'c1'
+        COURSE
       );
       expect(ok).toBeNull();
     });
@@ -330,7 +331,44 @@ describe('catalog scope', () => {
       const res = (await ensureContentInScope(
         scope,
         'course',
-        'x'
+        COURSE
+      )) as Response;
+      expect(res.status).toBe(404);
+    });
+
+    // A path id that is no uuid cannot be a record. It is answered like a
+    // missing one, and the database is not asked: it would reject the value and
+    // the route would end in 503 (lookup failed) or 500.
+    it.each(['x', 'c1', '', '1; drop table courses', `${COURSE}0`])(
+      'ensureContentInScope answers 404 for the id %p without a query',
+      async id => {
+        jest.resetModules();
+        const { db } = createTableDb({
+          courses: [{ trainingCatalogId: FIAE }],
+        });
+        jest.doMock('@/db', () => ({ __esModule: true, default: db }));
+        const { ensureContentInScope } = await import('@/lib/catalog/scope');
+        const res = (await ensureContentInScope(
+          { allowedCatalogIds: [FIAE], activeCatalogId: FIAE, selected: false },
+          'course',
+          id
+        )) as Response;
+        expect(res.status).toBe(404);
+        expect(await res.json()).toEqual({ error: 'Not found' });
+        expect(db.select).not.toHaveBeenCalled();
+      }
+    );
+
+    it('requireContentScope answers 404 for an id that is no uuid', async () => {
+      const { requireContentScope } = await load({
+        trainingCatalogs: catalogRows,
+        organizationCatalogs: [{ trainingCatalogId: FIAE, isEnabled: true }],
+      });
+      const res = (await requireContentScope(
+        trainer,
+        req(),
+        'enabler',
+        'not-an-id'
       )) as Response;
       expect(res.status).toBe(404);
     });

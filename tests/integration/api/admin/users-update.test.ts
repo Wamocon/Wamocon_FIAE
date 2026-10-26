@@ -385,8 +385,10 @@ describe('PATCH /api/admin/users/[userId]: locks and a changed user', () => {
 describe('PATCH /api/admin/users/[userId]: a role from trainer level up needs an organization', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  // A user without organization counts as a member of the default
-  // organization for the scope, but not for the seats
+  // A user without organization belongs to nobody (fail closed, like the SQL
+  // conditions): the admin of an organization, also of the default
+  // organization, does not see them. Only the platform admin reaches them, and
+  // a role from trainer level up needs an organization (seats).
   const DEFAULT_ORG = '00000000-0000-0000-0000-000000000001';
   const orphan = {
     id: TARGET,
@@ -396,11 +398,25 @@ describe('PATCH /api/admin/users/[userId]: a role from trainer level up needs an
   };
 
   it.each(['TRAINER', 'TEMP_ADMIN', 'ADMIN'])(
-    'ADMIN of the default organization cannot make a user without organization a %s (400)',
+    'ADMIN of the default organization does not see a user without organization, so cannot make them a %s (404)',
     async role => {
       const { mod, mock } = await load({
         session: admin(DEFAULT_ORG),
         target: orphan,
+      });
+      const res = await call(mod, { role });
+      expect(res.status).toBe(404);
+      expect(mock.writes('update', 'profiles')).toHaveLength(0);
+    }
+  );
+
+  it.each(['TRAINER', 'TEMP_ADMIN', 'ADMIN'])(
+    'the platform admin cannot make a user without organization a %s without giving the organization (400)',
+    async role => {
+      const { mod, mock } = await load({
+        session: superAdmin(),
+        target: orphan,
+        usage: room,
       });
       const res = await call(mod, { role });
       expect(res.status).toBe(400);
@@ -420,14 +436,19 @@ describe('PATCH /api/admin/users/[userId]: a role from trainer level up needs an
     expect(mock.writes('update', 'profiles')).toHaveLength(1);
   });
 
-  it('a change that is no role change still works for a user without organization', async () => {
-    const { mod, mock } = await load({
+  it('a change that is no role change works for the platform admin, not for the ADMIN of the default organization', async () => {
+    const platform = await load({ session: superAdmin(), target: orphan });
+    const allowed = await call(platform.mod, { isActive: false });
+    expect(allowed.status).toBe(200);
+    expect(platform.mock.writes('update', 'profiles')).toHaveLength(1);
+
+    const orgAdmin = await load({
       session: admin(DEFAULT_ORG),
       target: orphan,
     });
-    const res = await call(mod, { isActive: false });
-    expect(res.status).toBe(200);
-    expect(mock.writes('update', 'profiles')).toHaveLength(1);
+    const hidden = await call(orgAdmin.mod, { isActive: false });
+    expect(hidden.status).toBe(404);
+    expect(orgAdmin.mock.writes('update', 'profiles')).toHaveLength(0);
   });
 });
 

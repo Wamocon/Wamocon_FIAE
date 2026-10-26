@@ -44,6 +44,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { withDbRetry } from '@/lib/db-retry';
 import { isSuperAdmin, normalizeRole, ROLE } from '@/lib/auth/roles';
+import { isUuid } from '@/lib/uuid';
 
 export const FIAE_CATALOG_ID: string = TRAINING_CATALOG_IDS.FIAE;
 export const CATALOG_HEADER = 'x-catalog';
@@ -457,6 +458,11 @@ export async function ensureContentInScope(
   kind: CatalogContentKind,
   id: string
 ): Promise<NextResponse | null> {
+  // An id that is no uuid cannot be a record: the same 404 as for a missing
+  // one, without a query the database would reject (503 or 500 otherwise)
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   let catalogId: string | null;
   try {
     catalogId = await getContentCatalogId(kind, id);
