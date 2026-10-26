@@ -1,6 +1,14 @@
 /**
  * HAI.ai Full Reindex Script — Gemini Paid Tier
  *
+ * PROTECTED. The default is a DRY RUN: it reads the sources, counts the chunks
+ * per type, occupation (catalog) and visibility and writes nothing, no model
+ * call is made. A real run needs --apply. Every run needs --target
+ * preview|production|local, which is compared with the connection (host,
+ * current_schema, role) before anything else happens. Production is refused
+ * without --confirm-production and a suspended rollout gate. See
+ * src/lib/hai/reindexArgs.ts.
+ *
  * Indexes ALL DB content + PDFs using Gemini embeddings into hai_embeddings.
  * Uses PAID Gemini API (no rate limiting, parallel requests).
  *
@@ -21,13 +29,20 @@
  *   6. Training Components (IHK Rahmenplan: code, title, use cases)
  *   7. PDF Documents    (text extraction from content_documents)  ← NEW
  *
- * Usage:
- *   npx tsx scripts/reindex-gemini.ts              # Fresh run (skips unchanged)
- *   npx tsx scripts/reindex-gemini.ts --force       # Re-embed everything
- *   npx tsx scripts/reindex-gemini.ts --purge       # Delete ALL embeddings first
- *   npx tsx scripts/reindex-gemini.ts --purge-stale  # Delete non-Gemini embeddings only
- *   npx tsx scripts/reindex-gemini.ts --dry-run     # Show what would be indexed
- *   npx tsx scripts/reindex-gemini.ts --pdfs-only   # Only index PDF documents
+ * Usage (every call needs --target):
+ *   npx tsx scripts/reindex-gemini.ts --target local                 # Dry run (default)
+ *   npx tsx scripts/reindex-gemini.ts --target preview --apply       # Real run (skips unchanged)
+ *   npx tsx scripts/reindex-gemini.ts --target preview --catalog KFBM --apply
+ *                                                  # only the sources of one occupation
+ *   ... --force        # Re-embed everything
+ *   ... --catalog KFBM --purge --apply        # delete the chunks of ONE catalog first
+ *   ... --catalog KFBM --purge-stale --apply  # delete its non-Gemini chunks only
+ *   ... --pdfs-only    # Only index PDF documents
+ *
+ * Chunks carry training_catalog_id, visibility and organization_id (explicit,
+ * see src/lib/hai/indexScope.ts). A quiz is split into questions ('all') and
+ * answers ('trainer') BEFORE the size chunking, the hint of a scenario is its
+ * own chunk (SCENARIO_HINT_VISIBILITY).
  */
 
 import postgres from 'postgres';
@@ -36,6 +51,27 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import { buildTrainingComponentMetadata } from '../src/lib/hai/componentMetadata';
+import {
+  ChunkPlan,
+  checkTargetAgainstConnection,
+  connectionHost,
+  isLoopbackHost,
+  parseReindexArgs,
+} from '../src/lib/hai/reindexArgs';
+import {
+  CHUNK_INDEX_BLOCK,
+  QUIZ_ANSWERS_VISIBILITY,
+  QUIZ_QUESTIONS_VISIBILITY,
+  SCENARIO_HINT_VISIBILITY,
+  TRAINER_PART_CHUNK_OFFSET,
+  documentVisibility,
+  firstCatalogId,
+  type IndexScope,
+} from '../src/lib/hai/indexScope';
+import {
+  buildQuizTexts,
+  type QuizQuestionInput,
+} from '../src/lib/hai/quizIndexText';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
@@ -58,12 +94,29 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 const MAX_EMBED_CHARS = 4000;
 
-// CLI flags
-const IS_FORCE = process.argv.includes('--force');
-const IS_PURGE = process.argv.includes('--purge');
-const IS_PURGE_STALE = process.argv.includes('--purge-stale');
-const IS_DRY_RUN = process.argv.includes('--dry-run');
-const IS_PDFS_ONLY = process.argv.includes('--pdfs-only');
+// CLI flags (validated by parseReindexArgs before anything else happens)
+const parsedArgs = parseReindexArgs(process.argv.slice(2));
+if (!parsedArgs.ok) {
+  console.error('Invalid arguments, nothing was done:');
+  for (const error of parsedArgs.errors) console.error(`  - ${error}`);
+  process.exit(2);
+}
+const OPTIONS = parsedArgs.options;
+const IS_FORCE = OPTIONS.force;
+const IS_PURGE = OPTIONS.purge;
+const IS_PURGE_STALE = OPTIONS.purgeStale;
+// The default is a dry run, a real run needs --apply
+const IS_DRY_RUN = !OPTIONS.apply;
+const IS_PDFS_ONLY = OPTIONS.pdfsOnly;
+
+// Training catalog the run is limited to (resolved from --catalog after the
+// connection is checked), null = all catalogs
+let CATALOG_ID: string | null = null;
+
+// Dry run: chunks per source type, catalog and visibility
+const CATALOG_CODES = new Map<string, string>();
+const PLAN_INVENTORY = new ChunkPlan(); // everything the index holds afterwards
+const PLAN_CHANGES = new ChunkPlan(); // what a real run would write now
 
 // ============================================================================
 // STYLING
@@ -151,20 +204,28 @@ async function isSourceIndexed(
   db: postgres.Sql,
   sourceType: string,
   sourceId: string,
-  chunks: { content: string; index: number }[]
-): Promise<{ allMatch: boolean; existing: number }> {
-  if (IS_FORCE) return { allMatch: false, existing: 0 };
-  if (chunks.length === 0) return { allMatch: true, existing: 0 };
+  chunks: { content: string; index: number }[],
+  scope: IndexScope,
+  part: SourcePart
+): Promise<{ allMatch: boolean; rescope: boolean; existing: number }> {
+  if (IS_FORCE) return { allMatch: false, rescope: false, existing: 0 };
+  if (chunks.length === 0)
+    return { allMatch: true, rescope: false, existing: 0 };
 
-  // Get all existing chunks for this source
+  // Existing chunks of this part of the source (its block of chunk indexes)
   const existing = await db`
-    SELECT chunk_index, content_hash, metadata->>'embeddingModel' as model
+    SELECT chunk_index, content_hash, metadata->>'embeddingModel' as model,
+           training_catalog_id::text as training_catalog_id, visibility,
+           organization_id::text as organization_id
     FROM hai_embeddings
     WHERE source_type = ${sourceType}
       AND source_id = ${sourceId}::uuid
+      AND chunk_index >= ${part.offset}
+      AND chunk_index < ${part.staleBelow ?? 2147483647}
   `;
 
-  if (existing.length === 0) return { allMatch: false, existing: 0 };
+  if (existing.length === 0)
+    return { allMatch: false, rescope: false, existing: 0 };
 
   // Build lookup: chunk_index → { content_hash, model }
   const existingMap = new Map<number, { hash: string; model: string }>();
@@ -179,16 +240,24 @@ async function isSourceIndexed(
   let matchCount = 0;
   for (const chunk of chunks) {
     const hash = createHash('sha256').update(chunk.content).digest('hex');
-    const ex = existingMap.get(chunk.index);
+    const ex = existingMap.get(part.offset + chunk.index);
     if (ex && ex.hash === hash && ex.model === EMBEDDING_MODEL) {
       matchCount++;
     }
   }
 
-  return {
-    allMatch: matchCount === chunks.length && existing.length === chunks.length,
-    existing: existing.length,
-  };
+  const allMatch =
+    matchCount === chunks.length && existing.length === chunks.length;
+  // same text, other occupation, audience or owner: update the columns only
+  const rescope =
+    allMatch &&
+    existing.some(
+      row =>
+        row.training_catalog_id !== scope.trainingCatalogId ||
+        row.visibility !== scope.visibility ||
+        row.organization_id !== scope.organizationId
+    );
+  return { allMatch, rescope, existing: existing.length };
 }
 
 /**
@@ -350,6 +419,32 @@ function chunkText(text: string): { content: string; index: number }[] {
 // UPSERT EMBEDDING (content-hash aware)
 // ============================================================================
 
+/**
+ * One part of a source: its block of chunk indexes. A source with a trainer
+ * only part (the hint of an enabler, the answers of a quiz) writes the public
+ * part at 0 and the trainer part at TRAINER_PART_CHUNK_OFFSET, and every
+ * cleanup of stale chunks stays inside the block of its part.
+ */
+interface SourcePart {
+  /** first chunk index of the part */
+  offset: number;
+  /** end (exclusive) of the block, null = no upper bound (whole source) */
+  staleBelow: number | null;
+}
+
+const WHOLE_SOURCE: SourcePart = { offset: 0, staleBelow: null };
+const PUBLIC_PART: SourcePart = {
+  offset: 0,
+  staleBelow: TRAINER_PART_CHUNK_OFFSET,
+};
+const TRAINER_PART: SourcePart = {
+  offset: TRAINER_PART_CHUNK_OFFSET,
+  staleBelow: TRAINER_PART_CHUNK_OFFSET + CHUNK_INDEX_BLOCK,
+};
+// The use case rows of this script stay below 1000. The solution pages of
+// src/lib/hai/ingestUseCase.ts are page * 1000 + n and are not touched here.
+const USE_CASE_PART: SourcePart = { offset: 0, staleBelow: 1000 };
+
 async function upsertEmbedding(
   db: postgres.Sql,
   sourceType: string,
@@ -357,7 +452,8 @@ async function upsertEmbedding(
   chunkIndex: number,
   content: string,
   embedding: number[],
-  metadata: Record<string, unknown>
+  metadata: Record<string, unknown>,
+  scope: IndexScope
 ): Promise<void> {
   const contentHash = createHash('sha256').update(content).digest('hex');
   const embeddingStr = `[${embedding.join(',')}]`;
@@ -365,7 +461,8 @@ async function upsertEmbedding(
 
   await db`
     INSERT INTO hai_embeddings (
-      id, source_type, source_id, chunk_index, content, content_hash, embedding, metadata
+      id, source_type, source_id, chunk_index, content, content_hash, embedding, metadata,
+      training_catalog_id, visibility, organization_id
     ) VALUES (
       gen_random_uuid(),
       ${sourceType},
@@ -374,7 +471,10 @@ async function upsertEmbedding(
       ${content},
       ${contentHash},
       ${embeddingStr}::vector,
-      ${db.json(taggedMetadata)}
+      ${db.json(taggedMetadata)},
+      ${scope.trainingCatalogId}::uuid,
+      ${scope.visibility},
+      ${scope.organizationId}::uuid
     )
     ON CONFLICT (source_type, source_id, chunk_index)
     DO UPDATE SET
@@ -382,6 +482,9 @@ async function upsertEmbedding(
       content_hash = EXCLUDED.content_hash,
       embedding = EXCLUDED.embedding,
       metadata = EXCLUDED.metadata,
+      training_catalog_id = EXCLUDED.training_catalog_id,
+      visibility = EXCLUDED.visibility,
+      organization_id = EXCLUDED.organization_id,
       updated_at = NOW()
   `;
 }
@@ -390,37 +493,119 @@ async function upsertEmbedding(
 // GENERIC SOURCE INDEXER (with DB-based skip detection)
 // ============================================================================
 
+type SourceResult = { success: boolean; chunks: number; skipped: boolean };
+
+/**
+ * Scope of content that belongs to the platform and may be shown to trainees:
+ * the catalog of the source, visibility 'all', no organization.
+ */
+function platformScope(catalogId: string | null | undefined): IndexScope {
+  return {
+    trainingCatalogId: catalogId ? String(catalogId) : null,
+    visibility: 'all',
+    organizationId: null,
+  };
+}
+
+function catalogLabel(scope: IndexScope): string | null {
+  return scope.trainingCatalogId
+    ? (CATALOG_CODES.get(scope.trainingCatalogId) ?? scope.trainingCatalogId)
+    : null;
+}
+
+/** Result of a source that is written in two parts (public and trainer). */
+function mergeResults(a: SourceResult, b: SourceResult): SourceResult {
+  return {
+    success: a.success && b.success,
+    chunks: a.chunks + b.chunks,
+    skipped: a.skipped && b.skipped,
+  };
+}
+
 async function indexSource(
   db: postgres.Sql,
   sourceType: string,
   sourceId: string,
   title: string,
   content: string,
-  metadata: Record<string, unknown>
-): Promise<{ success: boolean; chunks: number; skipped: boolean }> {
+  metadata: Record<string, unknown>,
+  scope: IndexScope,
+  part: SourcePart = WHOLE_SOURCE
+): Promise<SourceResult> {
   const chunks = chunkText(content);
-  if (chunks.length === 0) return { success: true, chunks: 0, skipped: true };
+  if (chunks.length === 0) {
+    // An empty part removes what an earlier run wrote into its block
+    if (part.staleBelow !== null && !IS_DRY_RUN) {
+      await db`
+        DELETE FROM hai_embeddings
+        WHERE source_type = ${sourceType}
+          AND source_id = ${sourceId}::uuid
+          AND chunk_index >= ${part.offset}
+          AND chunk_index < ${part.staleBelow}
+      `;
+    }
+    return { success: true, chunks: 0, skipped: true };
+  }
+
+  PLAN_INVENTORY.add(
+    sourceType,
+    catalogLabel(scope),
+    scope.visibility,
+    chunks.length
+  );
+
+  // Never write a chunk without an occupation: the search shows it to nobody
+  if (!scope.trainingCatalogId) {
+    fail(`${sourceType}/${title}: no training catalog, not indexed`);
+    return { success: false, chunks: 0, skipped: false };
+  }
 
   // DB-based skip: check if all chunks already exist with matching hashes
-  const { allMatch, existing } = await isSourceIndexed(
+  // and the same scope
+  const { allMatch, rescope, existing } = await isSourceIndexed(
     db,
     sourceType,
     sourceId,
-    chunks
+    chunks,
+    scope,
+    part
   );
 
-  if (allMatch) {
+  if (allMatch && !rescope) {
     return { success: true, chunks: existing, skipped: true };
   }
 
+  PLAN_CHANGES.add(
+    sourceType,
+    catalogLabel(scope),
+    scope.visibility,
+    chunks.length
+  );
+
   if (IS_DRY_RUN) {
     info(
-      `[DRY] Would index ${sourceType}/${title} → ${chunks.length} chunks (${existing} existing)`
+      `[DRY] Would ${allMatch ? 'update the scope of' : 'index'} ${sourceType}/${title} → ${chunks.length} chunks, ${scope.visibility} (${existing} existing)`
     );
     return { success: true, chunks: chunks.length, skipped: false };
   }
 
   try {
+    if (allMatch && rescope) {
+      // Same text, other occupation, audience or owner: no new embedding
+      await db`
+        UPDATE hai_embeddings
+        SET training_catalog_id = ${scope.trainingCatalogId}::uuid,
+            visibility = ${scope.visibility},
+            organization_id = ${scope.organizationId}::uuid,
+            updated_at = NOW()
+        WHERE source_type = ${sourceType}
+          AND source_id = ${sourceId}::uuid
+          AND chunk_index >= ${part.offset}
+          AND chunk_index < ${part.staleBelow ?? 2147483647}
+      `;
+      return { success: true, chunks: chunks.length, skipped: false };
+    }
+
     // Generate embeddings in parallel batches
     const texts = chunks.map(c => c.content);
     const embeddings = await generateEmbeddingsBatch(texts);
@@ -436,20 +621,32 @@ async function indexSource(
         db,
         sourceType,
         sourceId,
-        chunks[i].index,
+        part.offset + chunks[i].index,
         chunks[i].content,
         emb,
-        { ...metadata, title }
+        { ...metadata, title },
+        scope
       );
     }
 
-    // Clean up stale chunks (if content was shortened)
-    await db`
-      DELETE FROM hai_embeddings
-      WHERE source_type = ${sourceType}
-        AND source_id = ${sourceId}::uuid
-        AND chunk_index > ${chunks.length - 1}
-    `;
+    // Clean up stale chunks (if content was shortened), inside the block of
+    // this part
+    if (part.staleBelow === null) {
+      await db`
+        DELETE FROM hai_embeddings
+        WHERE source_type = ${sourceType}
+          AND source_id = ${sourceId}::uuid
+          AND chunk_index > ${chunks.length - 1}
+      `;
+    } else {
+      await db`
+        DELETE FROM hai_embeddings
+        WHERE source_type = ${sourceType}
+          AND source_id = ${sourceId}::uuid
+          AND chunk_index > ${part.offset + chunks.length - 1}
+          AND chunk_index < ${part.staleBelow}
+      `;
+    }
 
     return { success: true, chunks: chunks.length, skipped: false };
   } catch (e: any) {
@@ -465,9 +662,10 @@ async function indexSource(
 async function indexCourses(db: postgres.Sql) {
   log('📦 Indexing Courses...');
   const rows = await db`
-    SELECT id, title, description
+    SELECT id, title, description, training_catalog_id
     FROM courses
     WHERE is_active = true
+      AND (${CATALOG_ID}::uuid IS NULL OR training_catalog_id = ${CATALOG_ID}::uuid)
   `;
 
   let indexed = 0,
@@ -479,9 +677,15 @@ async function indexCourses(db: postgres.Sql) {
       row.description || 'Keine Beschreibung verfügbar.',
     ].join('\n\n');
 
-    const result = await indexSource(db, 'course', row.id, row.title, content, {
-      courseId: row.id,
-    });
+    const result = await indexSource(
+      db,
+      'course',
+      row.id,
+      row.title,
+      content,
+      { courseId: row.id },
+      platformScope(row.training_catalog_id)
+    );
 
     if (result.skipped) {
       skipped++;
@@ -533,20 +737,22 @@ async function indexEnablers(db: postgres.Sql) {
   const rows = await db`
     SELECT e.id, e.title, e.description_text,
            e.course_id, e.scenario_text, e.hint_text, e.scenarios,
+           e.training_catalog_id,
            c.title as course_title
     FROM enablers e
     LEFT JOIN courses c ON c.id = e.course_id
     WHERE e.is_active = true
+      AND (${CATALOG_ID}::uuid IS NULL OR e.training_catalog_id = ${CATALOG_ID}::uuid)
   `;
 
   // Pre-load lernfeld mappings
   const lfMappings = await db`
-    SELECT lm.enabler_id, lf.label, lf.title as lf_title
-    FROM lernfeld_mappings lm
-    JOIN lernfelder lf ON lf.id = lm.lernfeld_id
+    SELECT lm.enabler_id, lf.code AS label, lf.title as lf_title
+    FROM training_catalog_content_mappings lm
+    JOIN training_catalog_learning_fields lf ON lf.id = lm.learning_field_id
     WHERE lm.enabler_id IS NOT NULL
   `.catch(() => {
-    warn('lernfeld_mappings not available — skipping LF enrichment');
+    warn('learning field mappings not available — skipping LF enrichment');
     return [] as any[];
   });
 
@@ -562,14 +768,17 @@ async function indexEnablers(db: postgres.Sql) {
 
   for (const e of rows) {
     const parts: string[] = [`Enabler: ${e.title}`];
+    // The hint of a scenario is its own chunk (SCENARIO_HINT_VISIBILITY), not
+    // part of the enabler text
+    const hintParts: string[] = [];
     if (e.course_title) parts.push(`Kurs: ${e.course_title}`);
     if (e.description_text) parts.push(`Beschreibung: ${e.description_text}`);
     if (e.scenario_text) parts.push(`Szenario: ${e.scenario_text}`);
-    if (e.hint_text) parts.push(`Hinweis: ${e.hint_text}`);
+    if (e.hint_text) hintParts.push(`Hinweis: ${e.hint_text}`);
     if (e.scenarios && Array.isArray(e.scenarios)) {
       for (const s of e.scenarios) {
         if (s.text) parts.push(`Szenario: ${s.text}`);
-        if (s.hint) parts.push(`Hinweis: ${s.hint}`);
+        if (s.hint) hintParts.push(`Hinweis: ${s.hint}`);
       }
     }
 
@@ -580,7 +789,11 @@ async function indexEnablers(db: postgres.Sql) {
     }
 
     const content = parts.join('\n\n');
-    if (content.length < 20) {
+    const hintContent =
+      hintParts.length > 0
+        ? [`Enabler: ${e.title}`, ...hintParts].join('\n\n')
+        : '';
+    if (content.length < 20 && !hintContent) {
       skipped++;
       continue;
     }
@@ -592,13 +805,29 @@ async function indexEnablers(db: postgres.Sql) {
     };
     if (lfs) metadata.lernfelder = lfs.map(l => l.label);
 
-    const result = await indexSource(
+    const scope = platformScope(e.training_catalog_id);
+    let result = await indexSource(
       db,
       'enabler',
       e.id,
       e.title,
-      content,
-      metadata
+      content.length < 20 ? '' : content,
+      metadata,
+      scope,
+      PUBLIC_PART
+    );
+    result = mergeResults(
+      result,
+      await indexSource(
+        db,
+        'enabler',
+        e.id,
+        e.title,
+        hintContent,
+        { ...metadata, contentPart: 'hint' },
+        { ...scope, visibility: SCENARIO_HINT_VISIBILITY },
+        TRAINER_PART
+      )
     );
 
     if (result.skipped) {
@@ -651,16 +880,18 @@ async function indexUseCases(db: postgres.Sql) {
   const rows = await db`
     SELECT uc.id, uc.title, uc.description_text, uc.course_id,
            uc.lernfelder as lernfelder_codes, uc.year, uc.training_stage,
+           uc.training_catalog_id,
            c.title as course_title
     FROM use_cases uc
     LEFT JOIN courses c ON c.id = uc.course_id
     WHERE uc.is_active = true
+      AND (${CATALOG_ID}::uuid IS NULL OR uc.training_catalog_id = ${CATALOG_ID}::uuid)
   `;
 
   const lfMappings = await db`
-    SELECT lm.use_case_id, lf.label, lf.title as lf_title
-    FROM lernfeld_mappings lm
-    JOIN lernfelder lf ON lf.id = lm.lernfeld_id
+    SELECT lm.use_case_id, lf.code AS label, lf.title as lf_title
+    FROM training_catalog_content_mappings lm
+    JOIN training_catalog_learning_fields lf ON lf.id = lm.learning_field_id
     WHERE lm.use_case_id IS NOT NULL
   `.catch(() => [] as any[]);
 
@@ -710,7 +941,9 @@ async function indexUseCases(db: postgres.Sql) {
       uc.id,
       uc.title,
       content,
-      metadata
+      metadata,
+      platformScope(uc.training_catalog_id),
+      USE_CASE_PART
     );
 
     if (result.skipped) {
@@ -763,20 +996,22 @@ async function indexQuizzes(db: postgres.Sql) {
   let allQuizzes: any[];
   try {
     allQuizzes = await db`
-      SELECT q.id, q.title, q.quiz_type,
+      SELECT q.id, q.title, q.quiz_type, q.training_catalog_id,
              eql.enabler_id, eql.difficulty
       FROM quizzes q
       LEFT JOIN enabler_quiz_links eql ON eql.quiz_id = q.id
       WHERE q.is_active = true
+        AND (${CATALOG_ID}::uuid IS NULL OR q.training_catalog_id = ${CATALOG_ID}::uuid)
     `;
   } catch {
     try {
       allQuizzes = await db`
-        SELECT q.id, q.title, q.quiz_type,
+        SELECT q.id, q.title, q.quiz_type, q.training_catalog_id,
                eq.enabler_id, NULL as difficulty
         FROM quizzes q
         LEFT JOIN enabler_quizzes eq ON eq.quiz_id = q.id
         WHERE q.is_active = true
+          AND (${CATALOG_ID}::uuid IS NULL OR q.training_catalog_id = ${CATALOG_ID}::uuid)
       `;
     } catch {
       warn('Quizzes table not found, skipping');
@@ -806,32 +1041,34 @@ async function indexQuizzes(db: postgres.Sql) {
       ORDER BY q.order_index
     `;
 
-    const parts: string[] = [];
     const typeLabel = quiz.quiz_type === 'GLOBAL' ? 'Global Quiz' : 'Quiz';
     const diffLabel = quiz.difficulty ? ` (${quiz.difficulty})` : '';
-    parts.push(`${typeLabel}: ${quiz.title}${diffLabel}`);
+    const quizInput: QuizQuestionInput[] = questionsWithOptions.map(q => ({
+      orderIndex: q.order_index,
+      text: q.question_text,
+      type: q.question_type,
+      expectedAnswer:
+        q.question_type === 'TEXT' && q.expected_answer
+          ? q.expected_answer
+          : null,
+      options: Array.isArray(q.options)
+        ? q.options.map((opt: any) => ({
+            text: opt.text,
+            isCorrect: opt.correct,
+            explanation: opt.explanation,
+          }))
+        : [],
+    }));
 
-    for (const q of questionsWithOptions) {
-      parts.push(
-        `\nFrage ${q.order_index ?? ''}: ${q.question_text} (${q.question_type})`
-      );
-
-      if (q.question_type === 'TEXT' && q.expected_answer) {
-        parts.push(`  Erwartete Antwort: ${q.expected_answer}`);
-      }
-
-      if (q.options && Array.isArray(q.options)) {
-        for (const opt of q.options) {
-          if (!opt.text) continue;
-          const marker = opt.correct ? '✓' : '✗';
-          parts.push(`  ${marker} ${opt.text}`);
-          if (opt.explanation) parts.push(`    Erklärung: ${opt.explanation}`);
-        }
-      }
-    }
-
-    const content = parts.filter(Boolean).join('\n');
-    if (content.length < 20) {
+    // Questions and answers are separate texts BEFORE the size chunking:
+    // every chunk of the questions is visible to trainees, every chunk of the
+    // answers is trainer only, and no chunk of the questions carries a marker
+    // of a correct option, an explanation or an expected answer
+    const texts = buildQuizTexts(
+      `${typeLabel}: ${quiz.title}${diffLabel}`,
+      quizInput
+    );
+    if (texts.questions.length < 20) {
       skipped++;
       continue;
     }
@@ -844,13 +1081,30 @@ async function indexQuizzes(db: postgres.Sql) {
     if (quiz.enabler_id) metadata.enablerId = quiz.enabler_id;
     if (quiz.difficulty) metadata.difficulty = quiz.difficulty;
 
-    const result = await indexSource(
+    const scope = platformScope(quiz.training_catalog_id);
+    let result = await indexSource(
       db,
       'quiz',
       quiz.id,
       quiz.title,
-      content,
-      metadata
+      texts.questions,
+      { ...metadata, contentPart: 'questions' },
+      { ...scope, visibility: QUIZ_QUESTIONS_VISIBILITY },
+      PUBLIC_PART
+    );
+    // a quiz without answer content clears the answers block of an old run
+    result = mergeResults(
+      result,
+      await indexSource(
+        db,
+        'quiz',
+        quiz.id,
+        quiz.title,
+        texts.answers ?? '',
+        { ...metadata, contentPart: 'answers' },
+        { ...scope, visibility: QUIZ_ANSWERS_VISIBILITY },
+        TRAINER_PART
+      )
     );
 
     if (result.skipped) {
@@ -906,13 +1160,17 @@ async function indexLernfelder(db: postgres.Sql) {
 
   let lernfelder: any[];
   try {
+    // training_catalog_learning_fields of every occupation (not the FIAE-only
+    // compatibility view); code is the label (LF-1)
     lernfelder = await db`
-      SELECT id, label, title, description
-      FROM lernfelder
-      ORDER BY label
+      SELECT lf.id, lf.code AS label, lf.title, lf.description,
+             lf.training_catalog_id
+      FROM training_catalog_learning_fields lf
+      WHERE (${CATALOG_ID}::uuid IS NULL OR lf.training_catalog_id = ${CATALOG_ID}::uuid)
+      ORDER BY lf.training_catalog_id, lf.order_index
     `;
   } catch {
-    warn('lernfelder table not found — skipping');
+    warn('training_catalog_learning_fields not found — skipping');
     return { indexed: 0, skipped: 0, failed: 0, total: 0 };
   }
 
@@ -922,10 +1180,10 @@ async function indexLernfelder(db: postgres.Sql) {
   }
 
   const mappings = await db`
-    SELECT lm.lernfeld_id,
+    SELECT lm.learning_field_id AS lernfeld_id,
            e.title as enabler_title,
            uc.title as use_case_title
-    FROM lernfeld_mappings lm
+    FROM training_catalog_content_mappings lm
     LEFT JOIN enablers e ON e.id = lm.enabler_id
     LEFT JOIN use_cases uc ON uc.id = lm.use_case_id
   `.catch(() => [] as any[]);
@@ -970,7 +1228,8 @@ async function indexLernfelder(db: postgres.Sql) {
       lf.id,
       `${lfLabel}: ${lf.title}`,
       content,
-      { lernfeldLabel: lfLabel }
+      { lernfeldLabel: lfLabel },
+      platformScope(lf.training_catalog_id)
     );
 
     if (result.skipped) {
@@ -1026,8 +1285,10 @@ async function indexTrainingComponents(db: postgres.Sql) {
     // and componentKind, see src/lib/hai/componentMetadata.ts
     components = await db`
       SELECT tc.id, tc.code, tc.title, tc.description, tc.total_weeks, tc.total_hours,
-             tc.training_year, tc.order_index, tc.phase, tc.kind
+             tc.training_year, tc.order_index, tc.phase, tc.kind,
+             tc.training_catalog_id
       FROM training_components tc
+      WHERE (${CATALOG_ID}::uuid IS NULL OR tc.training_catalog_id = ${CATALOG_ID}::uuid)
       ORDER BY tc.order_index
     `;
   } catch {
@@ -1035,8 +1296,9 @@ async function indexTrainingComponents(db: postgres.Sql) {
       // A database without the catalog columns: index as before, without them
       components = await db`
         SELECT tc.id, tc.code, tc.title, tc.description, tc.total_weeks, tc.total_hours,
-               tc.training_year, tc.order_index
+               tc.training_year, tc.order_index, tc.training_catalog_id
         FROM training_components tc
+        WHERE (${CATALOG_ID}::uuid IS NULL OR tc.training_catalog_id = ${CATALOG_ID}::uuid)
         ORDER BY tc.order_index
       `;
     } catch {
@@ -1096,7 +1358,8 @@ async function indexTrainingComponents(db: postgres.Sql) {
       comp.id,
       `${comp.code}: ${comp.title}`,
       content,
-      buildTrainingComponentMetadata(comp, tucs.length)
+      buildTrainingComponentMetadata(comp, tucs.length),
+      platformScope(comp.training_catalog_id)
     );
 
     if (result.skipped) {
@@ -1196,13 +1459,21 @@ async function indexPDFDocuments(db: postgres.Sql) {
     SELECT cd.id, cd.title, cd.storage_url, cd.document_type,
            cd.enabler_id, cd.use_case_id, cd.course_id,
            cd.page_count, cd.is_indexed_by_hai,
+           cd.organization_id, cd.visibility,
            e.title as enabler_title,
            c.title as course_title,
-           uc.title as use_case_title
+           uc.title as use_case_title,
+           e.training_catalog_id as enabler_catalog_id,
+           uc.training_catalog_id as use_case_catalog_id,
+           c.training_catalog_id as course_catalog_id
     FROM content_documents cd
     LEFT JOIN enablers e ON e.id = cd.enabler_id
     LEFT JOIN courses c ON c.id = cd.course_id
     LEFT JOIN use_cases uc ON uc.id = cd.use_case_id
+    WHERE (
+      ${CATALOG_ID}::uuid IS NULL
+      OR COALESCE(e.training_catalog_id, uc.training_catalog_id, c.training_catalog_id) = ${CATALOG_ID}::uuid
+    )
     ORDER BY cd.created_at
   `;
 
@@ -1224,6 +1495,36 @@ async function indexPDFDocuments(db: postgres.Sql) {
 
     if (!doc.storage_url) {
       warn(`No storage URL for document: ${docLabel}`);
+      skipped++;
+      continue;
+    }
+
+    // Occupation of the document: its enabler, use case or course. A document
+    // without any of them has no occupation and would be visible to nobody.
+    // Trainer solutions and trainer-only documents are trainer level.
+    const scope: IndexScope = {
+      trainingCatalogId: firstCatalogId(
+        doc.enabler_catalog_id,
+        doc.use_case_catalog_id,
+        doc.course_catalog_id
+      ),
+      visibility: documentVisibility(doc.document_type, doc.visibility),
+      organizationId: doc.organization_id ? String(doc.organization_id) : null,
+    };
+    if (!scope.trainingCatalogId) {
+      warn(`No training catalog for document, not indexed: ${docLabel}`);
+      skipped++;
+      continue;
+    }
+
+    // A dry run does not download the PDF: it counts the document
+    if (IS_DRY_RUN) {
+      PLAN_INVENTORY.add(
+        'document (PDF files, not chunks)',
+        catalogLabel(scope),
+        scope.visibility,
+        1
+      );
       skipped++;
       continue;
     }
@@ -1268,7 +1569,8 @@ async function indexPDFDocuments(db: postgres.Sql) {
       doc.id,
       doc.title,
       fullContent,
-      metadata
+      metadata,
+      scope
     );
 
     if (result.skipped) {
@@ -1337,37 +1639,65 @@ async function indexPDFDocuments(db: postgres.Sql) {
 // PURGE FUNCTIONS
 // ============================================================================
 
+/**
+ * Delete the chunks of ONE catalog (--purge needs --catalog, checked by
+ * parseReindexArgs). A dry run only counts them.
+ */
 async function purgeAllEmbeddings(db: postgres.Sql) {
-  log('🗑️  Purging ALL existing embeddings...');
+  log(
+    `🗑️  Purging the embeddings of catalog ${OPTIONS.catalogCode}${IS_DRY_RUN ? ' (dry run, count only)' : ''}...`
+  );
+  if (!CATALOG_ID) {
+    fail('--purge without a resolved catalog, nothing was deleted');
+    return;
+  }
 
-  const [{ count }] = await db`SELECT COUNT(*) as count FROM hai_embeddings`;
+  const [{ count }] = await db`
+    SELECT COUNT(*) as count FROM hai_embeddings
+    WHERE training_catalog_id = ${CATALOG_ID}::uuid
+  `;
   if (Number(count) === 0) {
-    ok('No embeddings to purge (table is empty)');
+    ok('No embeddings to purge for this catalog');
     return;
   }
 
   const breakdown = await db`
-    SELECT source_type, COUNT(*) as cnt
+    SELECT source_type, visibility, COUNT(*) as cnt
     FROM hai_embeddings
-    GROUP BY source_type
+    WHERE training_catalog_id = ${CATALOG_ID}::uuid
+    GROUP BY source_type, visibility
     ORDER BY cnt DESC
   `;
   for (const row of breakdown) {
-    info(`${row.source_type}: ${row.cnt} chunks`);
+    info(`${row.source_type} (${row.visibility}): ${row.cnt} chunks`);
   }
 
-  await db`DELETE FROM hai_embeddings`;
+  if (IS_DRY_RUN) {
+    info(`[DRY] Would purge ${count} embedding chunks`);
+    return;
+  }
+  await db`
+    DELETE FROM hai_embeddings
+    WHERE training_catalog_id = ${CATALOG_ID}::uuid
+  `;
   ok(`Purged ${count} embedding chunks`);
 }
 
 async function purgeStaleEmbeddings(db: postgres.Sql) {
-  log('🧹 Purging non-Gemini embeddings...');
+  log(
+    `🧹 Purging non-Gemini embeddings of catalog ${OPTIONS.catalogCode}${IS_DRY_RUN ? ' (dry run, count only)' : ''}...`
+  );
+  if (!CATALOG_ID) {
+    fail('--purge-stale without a resolved catalog, nothing was deleted');
+    return;
+  }
 
   const [{ total_count }] = await db`
     SELECT COUNT(*) as total_count FROM hai_embeddings
+    WHERE training_catalog_id = ${CATALOG_ID}::uuid
   `;
   if (Number(total_count) === 0) {
-    ok('No embeddings found — nothing to purge');
+    ok('No embeddings found for this catalog — nothing to purge');
     return;
   }
 
@@ -1376,6 +1706,7 @@ async function purgeStaleEmbeddings(db: postgres.Sql) {
       COALESCE(metadata->>'embeddingModel', '(untagged)') as model,
       COUNT(*) as cnt
     FROM hai_embeddings
+    WHERE training_catalog_id = ${CATALOG_ID}::uuid
     GROUP BY COALESCE(metadata->>'embeddingModel', '(untagged)')
     ORDER BY cnt DESC
   `;
@@ -1387,8 +1718,9 @@ async function purgeStaleEmbeddings(db: postgres.Sql) {
 
   const [{ stale_count }] = await db`
     SELECT COUNT(*) as stale_count FROM hai_embeddings
-    WHERE metadata->>'embeddingModel' IS NULL
-       OR metadata->>'embeddingModel' != ${EMBEDDING_MODEL}
+    WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (metadata->>'embeddingModel' IS NULL
+        OR metadata->>'embeddingModel' != ${EMBEDDING_MODEL})
   `;
   const staleCount = Number(stale_count);
 
@@ -1399,12 +1731,34 @@ async function purgeStaleEmbeddings(db: postgres.Sql) {
     return;
   }
 
+  if (IS_DRY_RUN) {
+    info(`[DRY] Would purge ${staleCount} non-Gemini embedding chunks`);
+    return;
+  }
   await db`
     DELETE FROM hai_embeddings
-    WHERE metadata->>'embeddingModel' IS NULL
-       OR metadata->>'embeddingModel' != ${EMBEDDING_MODEL}
+    WHERE training_catalog_id = ${CATALOG_ID}::uuid
+      AND (metadata->>'embeddingModel' IS NULL
+        OR metadata->>'embeddingModel' != ${EMBEDDING_MODEL})
   `;
   ok(`Purged ${staleCount} non-Gemini embedding chunks`);
+}
+
+function printPlan(title: string, plan: ChunkPlan) {
+  console.log(`  ${title}`);
+  if (plan.rows().length === 0) {
+    console.log('    (nothing)');
+    return;
+  }
+  console.log(
+    `    ${'source type'.padEnd(36)}${'catalog'.padEnd(14)}${'visibility'.padEnd(12)}chunks`
+  );
+  for (const row of plan.rows()) {
+    console.log(
+      `    ${row.sourceType.padEnd(36)}${row.catalog.padEnd(14)}${row.visibility.padEnd(12)}${row.chunks}`
+    );
+  }
+  console.log(`    ${'total'.padEnd(62)}${plan.total()}`);
 }
 
 // ============================================================================
@@ -1421,9 +1775,12 @@ async function main() {
   console.log(
     `${ANSI.cyan}═══════════════════════════════════════════════════${ANSI.reset}`
   );
+  console.log(
+    `${ANSI.dim}  Target: ${OPTIONS.target}  Catalog: ${OPTIONS.catalogCode ?? 'all'}${ANSI.reset}`
+  );
   if (IS_DRY_RUN)
     console.log(
-      `${ANSI.yellow}  *** DRY RUN — no changes will be made ***${ANSI.reset}`
+      `${ANSI.yellow}  *** DRY RUN — no changes, no model call (add --apply for a real run) ***${ANSI.reset}`
     );
   if (IS_FORCE)
     console.log(
@@ -1431,11 +1788,11 @@ async function main() {
     );
   if (IS_PURGE)
     console.log(
-      `${ANSI.red}  Will purge all existing embeddings first${ANSI.reset}`
+      `${ANSI.red}  Will purge the existing embeddings of the catalog first${ANSI.reset}`
     );
   if (IS_PURGE_STALE)
     console.log(
-      `${ANSI.yellow}  Will purge stale (pre-Gemini) embeddings only${ANSI.reset}`
+      `${ANSI.yellow}  Will purge stale (pre-Gemini) embeddings of the catalog only${ANSI.reset}`
     );
   if (IS_PDFS_ONLY)
     console.log(
@@ -1446,15 +1803,103 @@ async function main() {
   );
   console.log();
 
-  // 1. Verify API key
-  if (!GEMINI_API_KEY) {
-    fail('GEMINI_API_KEY not set. Add it to .env.local');
+  // 1. Connect to the database (source data + embeddings target)
+  const connStr =
+    process.env.HAI_DB_CONNECTION_STRING || process.env.DB_CONNECTION_STRING;
+
+  if (!connStr) {
+    fail('HAI_DB_CONNECTION_STRING or DB_CONNECTION_STRING not set');
     process.exit(1);
   }
-  ok('Gemini API key found');
 
-  // 2. Test embedding generation
+  const host = connectionHost(connStr);
+  const db = postgres(connStr, {
+    ssl: isLoopbackHost(host) ? false : 'require',
+    max: 5,
+  });
+
+  // 2. The declared target must fit the connection BEFORE anything else
+  //    happens (no count, no model call, no write)
+  try {
+    const [facts] = await db`
+      SELECT current_schema() AS current_schema, current_user AS current_role
+    `;
+    const problems = checkTargetAgainstConnection(
+      OPTIONS,
+      {
+        host,
+        currentSchema: facts.current_schema,
+        currentUser: facts.current_role,
+      },
+      process.env
+    );
+    if (problems.length > 0) {
+      for (const problem of problems) fail(problem);
+      fail('The target does not fit the connection. Nothing was done.');
+      await db.end();
+      process.exit(1);
+    }
+    ok(
+      `Target ${OPTIONS.target} fits the connection (schema ${facts.current_schema}, role ${facts.current_role})`
+    );
+  } catch (e: any) {
+    fail(`DB connection failed: ${e.message}`);
+    process.exit(1);
+  }
+
+  // 3. The scope columns must exist (migration 20261027000100)
+  try {
+    const columns = await db`
+      SELECT a.attname
+      FROM pg_attribute a
+      WHERE a.attrelid = to_regclass('hai_embeddings')
+        AND a.attname IN ('training_catalog_id', 'visibility', 'organization_id')
+        AND NOT a.attisdropped
+    `;
+    if (columns.length !== 3) {
+      fail(
+        'hai_embeddings has no training_catalog_id, visibility and organization_id yet (migration 20261027000100). Nothing was done.'
+      );
+      await db.end();
+      process.exit(1);
+    }
+  } catch (e: any) {
+    fail(`Column check failed: ${e.message}`);
+    process.exit(1);
+  }
+
+  // 4. Catalogs (labels for the report) and the catalog of --catalog
+  try {
+    const catalogs = await db`SELECT id, code FROM training_catalogs`;
+    for (const row of catalogs) CATALOG_CODES.set(String(row.id), row.code);
+    if (OPTIONS.catalogCode) {
+      const match = catalogs.find(
+        row => String(row.code).toUpperCase() === OPTIONS.catalogCode
+      );
+      if (!match) {
+        fail(
+          `Catalog ${OPTIONS.catalogCode} does not exist. Nothing was done.`
+        );
+        await db.end();
+        process.exit(1);
+      }
+      CATALOG_ID = String(match.id);
+      ok(`Limited to catalog ${match.code}`);
+    }
+  } catch (e: any) {
+    fail(`Catalog lookup failed: ${e.message}`);
+    process.exit(1);
+  }
+
+  // 5. A real run needs the API key and a working model call. A dry run makes
+  //    no model call at all.
   if (!IS_DRY_RUN) {
+    if (!GEMINI_API_KEY) {
+      fail('GEMINI_API_KEY not set. Add it to .env.local');
+      await db.end();
+      process.exit(1);
+    }
+    ok('Gemini API key found');
     log('Testing Gemini embedding...');
     try {
       const testEmb = await generateEmbedding(
@@ -1472,19 +1917,6 @@ async function main() {
     }
   }
 
-  // 3. Connect to database (production = source data + embeddings target)
-  const connStr =
-    process.env.HAI_DB_CONNECTION_STRING || process.env.DB_CONNECTION_STRING;
-
-  if (!connStr) {
-    fail('HAI_DB_CONNECTION_STRING or DB_CONNECTION_STRING not set');
-    process.exit(1);
-  }
-
-  const db = postgres(connStr, { ssl: 'require', max: 5 });
-  ok('Connected to production DB (source + embeddings)');
-
-  // Quick connection test
   try {
     const [{ now }] = await db`SELECT NOW() as now`;
     info(`DB time: ${now}`);
@@ -1496,15 +1928,15 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Purge if requested
-  if (IS_PURGE && !IS_DRY_RUN) {
+  // 6. Purge if requested (of the catalog only; a dry run only counts)
+  if (IS_PURGE) {
     await purgeAllEmbeddings(db);
   }
-  if (IS_PURGE_STALE && !IS_DRY_RUN) {
+  if (IS_PURGE_STALE) {
     await purgeStaleEmbeddings(db);
   }
 
-  // 5. Run indexers
+  // 7. Run indexers
   const startTime = Date.now();
   const startDate = new Date();
 
@@ -1569,6 +2001,8 @@ async function main() {
         dbChunks,
         apiCalls: _totalApiCalls,
         elapsedSeconds: parseFloat(elapsed),
+        target: OPTIONS.target,
+        catalog: OPTIONS.catalogCode,
       },
       totalFailed > 0 ? `${totalFailed} sources failed` : undefined,
       startDate
@@ -1587,6 +2021,8 @@ async function main() {
   console.log(`  Time:          ${elapsed}s`);
   console.log(`  Model:         ${EMBEDDING_MODEL} (${EMBEDDING_DIMS} dims)`);
   console.log(`  API calls:     ${_totalApiCalls}`);
+  console.log(`  Target:        ${OPTIONS.target}`);
+  console.log(`  Catalog:       ${OPTIONS.catalogCode ?? 'all'}`);
   console.log(`  Progress:      DB-based (cross-machine safe)`);
   console.log(`  Sources:       ${totalSources} total`);
 
@@ -1622,6 +2058,18 @@ async function main() {
   console.log(
     `  Failed:        ${totalFailed > 0 ? ANSI.red : ANSI.green}${totalFailed}${ANSI.reset} sources`
   );
+  if (IS_DRY_RUN) {
+    console.log();
+    printPlan(
+      'Chunks the index holds after a real run (type, catalog, visibility):',
+      PLAN_INVENTORY
+    );
+    console.log();
+    printPlan(
+      'Of those, chunks a real run would embed or rescope now:',
+      PLAN_CHANGES
+    );
+  }
   if (!IS_DRY_RUN) {
     console.log(`  DB Chunks:     ${dbChunks} embeddings total`);
     if (typeBreakdown.length > 0) {
@@ -1658,6 +2106,11 @@ async function main() {
   const logData = {
     runAt: new Date().toISOString(),
     mode: IS_DRY_RUN ? 'dry-run' : IS_FORCE ? 'force' : 'incremental',
+    target: OPTIONS.target,
+    catalog: OPTIONS.catalogCode,
+    plan: IS_DRY_RUN
+      ? { inventory: PLAN_INVENTORY.rows(), changes: PLAN_CHANGES.rows() }
+      : undefined,
     model: EMBEDDING_MODEL,
     dimensions: EMBEDDING_DIMS,
     elapsedSeconds: parseFloat(elapsed),

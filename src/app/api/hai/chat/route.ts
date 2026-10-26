@@ -41,6 +41,7 @@ import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { getUserOrgId, requireProPlan, toHaiRole } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
+import { verifyChatContextIds } from '@/lib/hai/chatContext';
 
 // ============================================================================
 // TYPES
@@ -587,13 +588,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // The enabler and course of the client are only kept if they lie inside
+    // the catalog scope of the person (another occupation: ignored)
+    const verified = await verifyChatContextIds(userId, context);
+
     // Determine context type
-    const contextType = context?.enablerId
+    const contextType = verified.enablerId
       ? 'enabler'
-      : context?.courseId
+      : verified.courseId
         ? 'course'
         : 'general';
-    const contextId = context?.enablerId || context?.courseId || undefined;
+    const contextId = verified.enablerId || verified.courseId || undefined;
 
     // Get or create session
     let sessionId: string;
@@ -812,8 +817,8 @@ export async function POST(req: NextRequest) {
 
     // Get context titles
     const { enablerTitle, courseTitle } = await getContextTitles(
-      context?.enablerId,
-      context?.courseId
+      verified.enablerId,
+      verified.courseId
     );
 
     // Build pipeline context (Phase 1: pass userRole for live data context)
@@ -826,8 +831,8 @@ export async function POST(req: NextRequest) {
     const pipelineContext: PipelineContext = {
       userId,
       sessionId,
-      currentEnablerId: context?.enablerId,
-      currentCourseId: context?.courseId,
+      currentEnablerId: verified.enablerId,
+      currentCourseId: verified.courseId,
       enablerTitle,
       courseTitle,
       scenarioText: context?.scenarioText,
