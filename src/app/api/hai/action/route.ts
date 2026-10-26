@@ -4,35 +4,49 @@
  * Endpoint for executing platform actions on behalf of the user.
  * This enables HAI to perform write operations (create, update, delete).
  *
- * POST /api/hai/action - Execute an action
+ * The chat pipeline only PROPOSES a write. This route executes it, and only
+ * after the person has explicitly confirmed it (the confirmation card sends
+ * `confirmed: true`). Everything is checked again here: the session decides
+ * who acts, the role must fit the action type, and the records must belong to
+ * the person or to the trainer's organization and occupation (see
+ * executeAction). The proposal itself carries no authority.
+ *
+ * POST /api/hai/action - Execute a confirmed action
  *
  * Request body:
  * {
  *   actionType: ActionType;
  *   parameters: Record<string, unknown>;
+ *   confirmed: true;
  * }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { executeAction, ActionType } from '@/lib/hai/actions';
-import { requireProPlan, toHaiRole } from '@/lib/auth-helpers';
+import { executeAction, type ActionFailureCode } from '@/lib/hai/actions';
+import { actionsForRole, isWriteAction } from '@/lib/hai/actionPolicy';
+import { requireProPlan } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-interface ActionRequestBody {
-    actionType: ActionType;
-    parameters: Record<string, unknown>;
-}
+/** HTTP status of a failed action, a failure without a code stays a 400. */
+const STATUS_BY_CODE: Record<ActionFailureCode, number> = {
+    invalid: 400,
+    forbidden: 403,
+    not_found: 404,
+    conflict: 409,
+    unavailable: 503,
+    error: 500,
+};
 
 // ============================================================================
 // ROUTE HANDLERS
 // ============================================================================
 
 /**
- * POST - Execute an action
+ * POST - Execute a confirmed action
  */
 export async function POST(req: NextRequest) {
     try {
@@ -49,21 +63,48 @@ export async function POST(req: NextRequest) {
         }
 
         // Parse request body
-        const body: ActionRequestBody = await req.json();
-        const { actionType, parameters } = body;
+        let body: Record<string, unknown> | null = null;
+        try {
+            const parsed: unknown = await req.json();
+            if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                body = parsed as Record<string, unknown>;
+            }
+        } catch {
+            body = null;
+        }
+        if (!body) {
+            return NextResponse.json(
+                { error: 'Ungültige Anfrage.' },
+                { status: 400 }
+            );
+        }
+        const { actionType, parameters, confirmed } = body;
 
-        // Validate action type
-        if (!actionType || typeof actionType !== 'string') {
+        // Only action types on the list are executed
+        if (!isWriteAction(actionType)) {
             return NextResponse.json(
                 { error: 'Ungültiger Aktionstyp.' },
                 { status: 400 }
             );
         }
 
-        // Execute the action
-        const result = await executeAction(actionType, parameters || {}, userId);
+        // A write needs the explicit confirmation of the person
+        if (confirmed !== true) {
+            return NextResponse.json(
+                { error: 'Die Aktion muss ausdrücklich bestätigt werden.' },
+                { status: 400 }
+            );
+        }
 
-        // Return result
+        // Role, responsibility and parameters are checked in executeAction
+        const result = await executeAction(
+            actionType,
+            (parameters ?? {}) as Record<string, unknown>,
+            me,
+            req
+        );
+
+        // Return result, never raw error details
         if (result.success) {
             return NextResponse.json({
                 success: true,
@@ -76,7 +117,7 @@ export async function POST(req: NextRequest) {
                     success: false,
                     error: result.message,
                 },
-                { status: 400 }
+                { status: result.code ? STATUS_BY_CODE[result.code] : 400 }
             );
         }
     } catch (error) {
@@ -101,33 +142,14 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'HAI.ai is only available with a PRO subscription.' }, { status: 403 });
         }
 
-        const userRole = me.role;
-
-        // Define available actions based on role
-        const traineeActions: ActionType[] = [
-            'create_activity_report',
-            'submit_activity_report',
-            'complete_enabler',
-            'submit_quiz',
-            'mark_notification_read',
-            'upload_document',
-        ];
-
-        const trainerActions: ActionType[] = [
-            ...traineeActions,
-            'approve_submission',
-            'reject_submission',
-            'approve_report',
-            'reject_report',
-            'grade_quiz',
-        ];
-
-        const availableActions =
-            toHaiRole(userRole) === 'TRAINER' ? trainerActions : traineeActions;
+        // Trainers only get trainer actions, trainees only trainee actions
+        const availableActions = actionsForRole(
+            me.isTrainerLevel ? 'TRAINER' : 'TRAINEE'
+        );
 
         return NextResponse.json({
             success: true,
-            userRole,
+            userRole: me.role,
             availableActions,
         });
     } catch (error) {

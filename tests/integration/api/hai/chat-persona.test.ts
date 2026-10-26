@@ -64,6 +64,7 @@ async function load(
     ...(jest.requireActual('@/lib/auth-helpers') as object),
     requireProPlan: jest.fn(async () => true),
     getUserOrgId: jest.fn(async () => 'org-1'),
+    getUserOrgIdStrict: jest.fn(async () => 'org-1'),
   }));
   jest.doMock('@/lib/catalog/scope', () => ({
     __esModule: true,

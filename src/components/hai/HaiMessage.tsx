@@ -11,6 +11,7 @@
 
 import React from 'react';
 import { HaiMessage as MessageType, useHai } from './HaiProvider';
+import { HaiActionCard } from './HaiActionCard';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MarkdownText } from '@/components/ui/MarkdownText';
 import { motion } from 'framer-motion';
@@ -30,7 +31,13 @@ interface HaiMessageProps {
 
 export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
   const { t } = useLanguage();
-  const { updateMessage, regenerateFromEdit, setActiveVersion } = useHai();
+  const {
+    updateMessage,
+    regenerateFromEdit,
+    setActiveVersion,
+    confirmPendingAction,
+    cancelPendingAction,
+  } = useHai();
   const isUser = message.role === 'user';
   const hasCitations = message.citations && message.citations.length > 0;
   const isThinking = isStreaming && !message.content;
@@ -136,6 +143,15 @@ export function HaiMessage({ message, isStreaming = false }: HaiMessageProps) {
             </>
           )}
         </div>
+
+        {/* Proposed write: nothing happens before the person confirms */}
+        {!isUser && !isStreaming && message.pendingAction && (
+          <HaiActionCard
+            action={message.pendingAction}
+            onConfirm={() => void confirmPendingAction(message.id)}
+            onCancel={() => cancelPendingAction(message.id)}
+          />
+        )}
 
         {/* Edit button & version navigation for user messages */}
         {isUser && !isStreaming && !isEditing && (

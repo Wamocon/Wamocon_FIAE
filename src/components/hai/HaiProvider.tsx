@@ -60,6 +60,48 @@ export interface HaiMessage {
   }>;
   activeVersionIndex?: number;
   baseUserMessageId?: string;
+  /** A write HAI proposes, shown as a confirmation card */
+  pendingAction?: HaiPendingAction;
+}
+
+/**
+ * A proposed write. HAI never executes it by itself: the card below the answer
+ * asks the person, and only the click on "Confirm" calls /api/hai/action. The
+ * server checks everything again, the proposal is a display only.
+ */
+export interface HaiPendingAction {
+  type: string;
+  parameters: Record<string, unknown>;
+  /** Readable description of what happens on confirmation */
+  description: string;
+  status: 'pending' | 'running' | 'done' | 'cancelled' | 'error';
+  /** Message of the server after a successful execution */
+  resultMessage?: string;
+  /** Suffix of the i18n key hai.action.card.error.<key> */
+  errorKey?: string;
+}
+
+/** The proposal of the server as card state, or undefined if it is malformed. */
+export function toPendingAction(raw: unknown): HaiPendingAction | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const { type, parameters, description } = raw as Record<string, unknown>;
+  if (typeof type !== 'string' || typeof description !== 'string') {
+    return undefined;
+  }
+  const params =
+    typeof parameters === 'object' && parameters !== null
+      ? (parameters as Record<string, unknown>)
+      : {};
+  return { type, parameters: params, description, status: 'pending' };
+}
+
+function actionErrorKey(status: number): string {
+  if (status === 400) return 'invalid';
+  if (status === 403) return 'forbidden';
+  if (status === 404) return 'notFound';
+  if (status === 409) return 'conflict';
+  if (status === 503) return 'unavailable';
+  return 'generic';
 }
 
 export interface HaiContext {
@@ -96,6 +138,8 @@ interface HaiProviderState {
   stopGeneration: () => void;
   updateMessage: (messageId: string, newContent: string) => Promise<void>;
   regenerateFromEdit: (messageId: string, newContent: string) => Promise<void>;
+  confirmPendingAction: (messageId: string) => Promise<void>;
+  cancelPendingAction: (messageId: string) => void;
   setActiveVersion: (messageId: string, versionIndex: number) => void;
   loadSession: (sessionId: string) => Promise<void>;
   newSession: () => void;
@@ -502,6 +546,90 @@ export function HaiProvider({
     [userId, refreshSessions]
   );
 
+  // ========================================================================
+  // PENDING ACTIONS (confirmation card)
+  // ========================================================================
+
+  const attachPendingAction = useCallback((messageId: string, raw: unknown) => {
+    const pending = toPendingAction(raw);
+    if (!pending) return;
+    setMessages(prev =>
+      prev.map(m => (m.id === messageId ? { ...m, pendingAction: pending } : m))
+    );
+  }, []);
+
+  const patchPendingAction = useCallback(
+    (messageId: string, patch: Partial<HaiPendingAction>) => {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId && m.pendingAction
+            ? { ...m, pendingAction: { ...m.pendingAction, ...patch } }
+            : m
+        )
+      );
+    },
+    []
+  );
+
+  const confirmingRef = React.useRef<Set<string>>(new Set());
+
+  const confirmPendingAction = useCallback(
+    async (messageId: string) => {
+      const pending = messagesRef.current.find(
+        m => m.id === messageId
+      )?.pendingAction;
+      if (!pending || pending.status !== 'pending') return;
+      // One click, one call
+      if (confirmingRef.current.has(messageId)) return;
+      confirmingRef.current.add(messageId);
+
+      patchPendingAction(messageId, { status: 'running' });
+      try {
+        const response = await authFetch('/api/hai/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            actionType: pending.type,
+            parameters: pending.parameters,
+            confirmed: true,
+          }),
+        });
+        const data = await response.json().catch(() => null);
+        if (response.ok && data?.success) {
+          patchPendingAction(messageId, {
+            status: 'done',
+            resultMessage:
+              typeof data.message === 'string' ? data.message : undefined,
+          });
+        } else {
+          patchPendingAction(messageId, {
+            status: 'error',
+            errorKey: actionErrorKey(response.status),
+          });
+        }
+      } catch {
+        patchPendingAction(messageId, {
+          status: 'error',
+          errorKey: 'generic',
+        });
+      } finally {
+        confirmingRef.current.delete(messageId);
+      }
+    },
+    [patchPendingAction]
+  );
+
+  const cancelPendingAction = useCallback(
+    (messageId: string) => {
+      const pending = messagesRef.current.find(
+        m => m.id === messageId
+      )?.pendingAction;
+      if (pending?.status !== 'pending') return;
+      patchPendingAction(messageId, { status: 'cancelled' });
+    },
+    [patchPendingAction]
+  );
+
   const regenerateFromEdit = useCallback(
     async (messageId: string, newContent: string) => {
       if (!newContent.trim() || !currentSessionId) return;
@@ -605,6 +733,7 @@ export function HaiProvider({
             ...current,
             content: '',
             citations: [],
+            pendingAction: undefined,
             versions,
             activeVersionIndex: newIndex,
             baseUserMessageId: messageId,
@@ -744,6 +873,7 @@ export function HaiProvider({
                 }
 
                 if (event.done) {
+                  attachPendingAction(assistantId, event.pendingAction);
                   if (event.sessionId && event.sessionId !== currentSessionId) {
                     setCurrentSessionId(event.sessionId);
                   }
@@ -799,6 +929,7 @@ export function HaiProvider({
                   ...m,
                   content: data.response,
                   citations: data.citations,
+                  pendingAction: toPendingAction(data.pendingAction),
                   versions: m.versions
                     ? m.versions.map((v, idx) =>
                       idx === (m.activeVersionIndex ?? 0)
@@ -888,7 +1019,7 @@ export function HaiProvider({
         }
       }
     },
-    [currentSessionId, userId, context, refreshSessions, t]
+    [currentSessionId, userId, context, refreshSessions, t, attachPendingAction]
   );
 
   const sendMessage = useCallback(
@@ -1040,6 +1171,7 @@ export function HaiProvider({
                 }
 
                 if (event.done) {
+                  attachPendingAction(assistantId, event.pendingAction);
                   // Final event — update with citations and sessionId
                   if (event.sessionId && event.sessionId !== currentSessionId) {
                     setCurrentSessionId(event.sessionId);
@@ -1098,6 +1230,7 @@ export function HaiProvider({
                   ...m,
                   content: data.response,
                   citations: data.citations,
+                  pendingAction: toPendingAction(data.pendingAction),
                   versions: m.versions
                     ? m.versions.map((v, idx) =>
                       idx === (m.activeVersionIndex ?? 0)
@@ -1191,7 +1324,7 @@ export function HaiProvider({
         }
       }
     },
-    [userId, currentSessionId, context, refreshSessions, t]
+    [userId, currentSessionId, context, refreshSessions, t, attachPendingAction]
   );
 
   // ========================================================================
@@ -1235,6 +1368,8 @@ export function HaiProvider({
     stopGeneration,
     updateMessage,
     regenerateFromEdit,
+    confirmPendingAction,
+    cancelPendingAction,
     setActiveVersion,
     loadSession,
     newSession,

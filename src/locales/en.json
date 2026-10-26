@@ -2173,5 +2173,18 @@
   "catalog.tiles.request.error.FORBIDDEN": "A request is not possible for your account. Please contact your trainer.",
   "catalog.tiles.request.error.UNAUTHORIZED": "Your session has expired. Please sign in again.",
   "catalog.tiles.request.error.NO_RECIPIENT": "The request could not be delivered. Please try again later.",
-  "catalog.tiles.request.error.GENERIC": "The request could not be sent. Please check your connection and try again."
+  "catalog.tiles.request.error.GENERIC": "The request could not be sent. Please check your connection and try again.",
+  "hai.action.card.title": "Confirm action",
+  "hai.action.card.hint": "HAI only runs this action after you confirm it.",
+  "hai.action.card.confirm": "Confirm",
+  "hai.action.card.cancel": "Cancel",
+  "hai.action.card.running": "Running...",
+  "hai.action.card.done": "Done",
+  "hai.action.card.cancelled": "Cancelled. Nothing was changed.",
+  "hai.action.card.error.invalid": "The details for this action are incomplete or invalid.",
+  "hai.action.card.error.forbidden": "You are not allowed to run this action.",
+  "hai.action.card.error.notFound": "The entry was not found.",
+  "hai.action.card.error.conflict": "The action no longer matches the current state. Please reload the page and try again.",
+  "hai.action.card.error.unavailable": "Your permission cannot be checked right now. Please try again later.",
+  "hai.action.card.error.generic": "The action could not be run. Please try again later."
 }
