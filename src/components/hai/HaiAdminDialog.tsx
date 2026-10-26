@@ -5,6 +5,7 @@ import { X, Lock, ShieldCheck } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import HaiAdminWidget from './HaiAdminWidget';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { authFetch } from '@/lib/authFetch';
 
 interface HaiAdminDialogProps {
   open: boolean;
@@ -48,7 +49,7 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
     setError('');
 
     try {
-      const res = await fetch('/api/hai/verify-pin', {
+      const res = await authFetch('/api/hai/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pin: pin.trim() }),

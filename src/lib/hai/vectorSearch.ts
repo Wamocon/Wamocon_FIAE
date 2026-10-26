@@ -9,7 +9,11 @@
 
 import { getEmbeddingProvider } from './providers';
 import haiDb from '@/db/haiDb';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
+import {
+  filterSearchResultsForTrainingScope,
+  type HaiTrainingScope,
+} from './trainingScope';
 
 // ============================================================================
 // TYPES
@@ -25,7 +29,29 @@ export interface SearchResult {
   metadata: Record<string, unknown>;
 }
 
-export interface SearchOptions {
+/** Who asks: trainees never get trainer-only chunks (solutions, quiz answers). */
+export type HaiAudience = 'trainee' | 'trainer';
+
+/**
+ * Access filter of every search. The pipeline builds it from the session and
+ * the database (resolveRetrievalAccess), never from client input. It is part of
+ * the SQL WHERE clause, so it applies before LIMIT.
+ */
+export interface SearchScope {
+  /** Catalogs (occupations) the caller may read. Empty: no result (fail closed). */
+  catalogIds: string[];
+  /** Only 'trainer' sees chunks with visibility 'trainer'. */
+  audience: HaiAudience;
+  /** Organization of the caller: own and platform content (NULL) only. */
+  organizationId?: string | null;
+  /**
+   * The caller. Personal rows (trainee_*) match only their owner; without a
+   * user id no personal row matches.
+   */
+  userId?: string | null;
+}
+
+export interface SearchOptions extends SearchScope {
   /** Maximum number of results to return */
   topK?: number;
   /** Minimum similarity threshold (0-1, higher = more similar) */
@@ -43,14 +69,71 @@ export interface SearchOptions {
   sourceIds?: string[];
   /** Filter by course ID (for enablers within a course) */
   courseId?: string;
-  /** Filter by user ID (for personal embeddings — schedules, progress, etc.) */
-  userId?: string;
+  /**
+   * Duration-aware content scope of a trainee. It filters after the SQL query,
+   * so more candidates are fetched (CANDIDATE_FACTOR) and cut to topK after.
+   */
+  trainingScope?: HaiTrainingScope;
 }
 
 export interface SearchContext {
   results: SearchResult[];
   query: string;
   totalResults: number;
+}
+
+// ============================================================================
+// ACCESS FILTER
+// ============================================================================
+
+/** Candidates fetched per wanted result when the training scope post filters */
+const CANDIDATE_FACTOR = 3;
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Whether a value is a UUID (ids are cast with ::uuid, a bad one must not throw). */
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+/**
+ * SQL condition of the access scope, or null if the caller has no usable
+ * catalog (the search then returns nothing).
+ *
+ *  - catalog: training_catalog_id must be one of the caller's catalogs; rows
+ *    without a catalog match nobody
+ *  - audience: everyone but 'trainer' sees only visibility 'all'
+ *  - organization: own organization or platform content (NULL)
+ *  - personal rows (trainee_* rows, rows with metadata.userId) match only
+ *    their owner
+ */
+export function buildScopeCondition(scope: SearchScope): SQL | null {
+  const catalogIds = [...new Set((scope.catalogIds ?? []).filter(isUuid))];
+  if (catalogIds.length === 0) return null;
+
+  const parts: SQL[] = [
+    sql`training_catalog_id IN (${sql.join(
+      catalogIds.map(id => sql`${id}::uuid`),
+      sql`, `
+    )})`,
+  ];
+  if (scope.audience !== 'trainer') {
+    parts.push(sql`visibility = 'all'`);
+  }
+  parts.push(
+    isUuid(scope.organizationId)
+      ? sql`(organization_id IS NULL OR organization_id = ${scope.organizationId}::uuid)`
+      : sql`organization_id IS NULL`
+  );
+  // A personal row is a trainee_* row or any row with an owner. A trainee_* row
+  // without an owner matches nobody.
+  parts.push(
+    scope.userId
+      ? sql`((source_type NOT LIKE 'trainee\\_%' AND metadata->>'userId' IS NULL) OR metadata->>'userId' = ${scope.userId})`
+      : sql`(source_type NOT LIKE 'trainee\\_%' AND metadata->>'userId' IS NULL)`
+  );
+  return sql.join(parts, sql` AND `);
 }
 
 // ============================================================================
@@ -67,10 +150,15 @@ export interface SearchContext {
  */
 export async function searchSimilar(
   query: string,
-  options: SearchOptions = {},
+  options: SearchOptions,
   precomputedEmbedding?: string
 ): Promise<SearchResult[]> {
   const { topK = 5, minSimilarity = 0.3, sourceType, sourceIds } = options;
+
+  // Fail closed: without a catalog scope nothing is returned, and no query
+  // embedding is paid for.
+  const scopeCondition = buildScopeCondition(options);
+  if (!scopeCondition) return [];
 
   try {
     // Use pre-computed embedding if available, otherwise generate one
@@ -87,39 +175,31 @@ export async function searchSimilar(
       embeddingVector = JSON.stringify(queryEmbedding.embedding);
     }
 
-    // Build the SQL query with filters
-    let whereClause = sql`1=1`;
+    // Build the SQL query with filters. The scope (catalog, audience,
+    // organization, owner of personal rows) always comes first.
+    let whereClause = scopeCondition;
 
     if (sourceType) {
       whereClause = sql`${whereClause} AND source_type = ${sourceType}`;
     }
 
     if (sourceIds && sourceIds.length > 0) {
-      // Use parameterized ANY() instead of raw SQL IN() to prevent SQL injection
-      whereClause = sql`${whereClause} AND source_id::text = ANY(${sourceIds})`;
+      // Bound parameters, compared as text so a malformed id never raises
+      whereClause = sql`${whereClause} AND source_id::text IN (${sql.join(
+        sourceIds.map(id => sql`${id}`),
+        sql`, `
+      )})`;
     }
 
     if (options.courseId) {
-      // Join with enablers table to filter by course
-      // Note: This requires a join which the current simple query structure doesn't support directly
-      // For now, we'll assuming a metadata field or subquery approach if possible,
-      // BUT simpler approach for now: verify metadata.courseId if it exists, OR
-      // Since we can't easily join in this simple execute block without changing the FROM clause,
-      // we will skip this strict filter for now to avoid breaking the query,
-      // but we SHOULD fix this properly.
-
-      // BETTER FIX: Use the metadata column which usually contains courseId for enablers
+      // Enabler chunks carry the course in their metadata
       whereClause = sql`${whereClause} AND metadata->>'courseId' = ${options.courseId}`;
     }
 
-    // User-aware filter: personal embeddings (trainee_schedule, trainee_profile, trainee_progress)
-    // should only match their owner. Shared content (enablers, courses, docs) matches everyone.
-    if (options.userId) {
-      whereClause = sql`${whereClause} AND (
-                metadata->>'userId' IS NULL 
-                OR metadata->>'userId' = ${options.userId}
-            )`;
-    }
+    // The training scope is a post filter: fetch more candidates, cut later
+    const candidateLimit = options.trainingScope?.applies
+      ? topK * CANDIDATE_FACTOR
+      : topK;
 
     // Execute vector similarity search
     const results = await haiDb.execute(sql`
@@ -135,11 +215,11 @@ export async function searchSimilar(
       WHERE ${whereClause}
         AND embedding IS NOT NULL
       ORDER BY embedding <=> ${embeddingVector}::vector
-      LIMIT ${topK}
+      LIMIT ${candidateLimit}
     `);
 
     // Filter by minimum similarity and format results
-    return (results as any[])
+    const mapped = (results as any[])
       .filter(row => row.similarity >= minSimilarity)
       .map(row => ({
         id: row.id,
@@ -150,6 +230,11 @@ export async function searchSimilar(
         similarity: parseFloat(row.similarity.toFixed(4)),
         metadata: row.metadata || {},
       }));
+
+    return filterSearchResultsForTrainingScope(
+      mapped,
+      options.trainingScope
+    ).slice(0, topK);
   } catch (error) {
     console.error('HAI.ai: Error in vector search:', error);
     return [];
@@ -170,10 +255,15 @@ export async function searchWithContext(
     currentEnablerId?: string;
     currentCourseId?: string;
   },
-  options: SearchOptions = {}
+  options: SearchOptions
 ): Promise<SearchContext> {
   const topK = options.topK ?? 5;
   const results: SearchResult[] = [];
+
+  // Fail closed: no catalog scope, no result, no embedding call
+  if (!buildScopeCondition(options)) {
+    return { results: [], query, totalResults: 0 };
+  }
 
   try {
     // Pre-compute the query embedding ONCE to avoid redundant Gemini API calls.
@@ -212,6 +302,7 @@ export async function searchWithContext(
         ...options,
         topK: topK - results.length,
         sourceType: 'enabler',
+        courseId: context.currentCourseId,
       }, cachedEmbeddingVector);
 
       // Add non-duplicate results
@@ -260,14 +351,21 @@ export async function searchWithContext(
 export async function findRelatedContent(
   sourceType: string,
   sourceId: string,
+  scope: SearchScope,
   limit: number = 5
 ): Promise<SearchResult[]> {
+  // Same access scope as the search: neither the source chunk nor the related
+  // chunks may come from outside the caller's scope.
+  const scopeCondition = buildScopeCondition(scope);
+  if (!scopeCondition) return [];
+
   try {
     // Get the embeddings for this source
     const sourceEmbeddings = await haiDb.execute(sql`
       SELECT embedding, content
       FROM hai_embeddings
       WHERE source_type = ${sourceType} AND source_id = ${sourceId}::uuid
+        AND ${scopeCondition}
       LIMIT 1
     `);
 
@@ -289,6 +387,7 @@ export async function findRelatedContent(
         1 - (embedding <=> ${JSON.stringify(embedding)}::vector) as similarity
       FROM hai_embeddings
       WHERE source_id != ${sourceId}::uuid
+        AND ${scopeCondition}
         AND embedding IS NOT NULL
       ORDER BY embedding <=> ${JSON.stringify(embedding)}::vector
       LIMIT ${limit}

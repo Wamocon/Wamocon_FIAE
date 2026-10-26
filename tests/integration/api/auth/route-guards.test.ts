@@ -2,6 +2,8 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import fs from 'fs';
+import path from 'path';
 import { createTableDb } from '../../../helpers/mockDb';
 import {
   makeRequest,
@@ -30,6 +32,8 @@ const TOO_LOW_ROLE: Record<GuardedRoute['guard'], Record<string, unknown>> = {
   admin: { role: 'TRAINER' },
   // An ADMIN of a customer organization is not a platform-wide admin
   superAdmin: { role: 'ADMIN', isPlatformOwner: false },
+  // A trainer of a customer organization may not touch the shared HAI index
+  haiIndex: { role: 'TRAINER', isPlatformOwner: false },
 };
 
 async function loadHandler(
@@ -105,9 +109,11 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
       }
     };
     walk(base);
-    const listed = GUARDED_ROUTES.filter(r => r.guard === 'user').map(
-      r => `${r.method} ${r.route}`
-    );
+    // (the HAI routes of one person are 'user' handlers too, they have a table
+    // check of their own below)
+    const listed = GUARDED_ROUTES.filter(
+      r => r.guard === 'user' && !r.route.startsWith('hai/')
+    ).map(r => `${r.method} ${r.route}`);
     // Master data without personal data, open without a session: the
     // Lernfelder of an occupation (list and detail, the catalog comes from the
     // optional session or ?catalog=) and the public list of the softskill
@@ -145,6 +151,27 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
       expect(db.update).not.toHaveBeenCalled();
       expect(db.delete).not.toHaveBeenCalled();
     });
+  });
+
+  it('lists every exported HAI handler in the table', () => {
+    // A new method on a HAI route without a guard entry fails here
+    const dir = path.join(process.cwd(), 'src/app/api/hai');
+    const found: string[] = [];
+    for (const name of fs.readdirSync(dir)) {
+      const file = path.join(dir, name, 'route.ts');
+      if (!fs.existsSync(file)) continue;
+      const source = fs.readFileSync(file, 'utf8');
+      for (const m of source.matchAll(
+        /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g
+      )) {
+        found.push(`${m[1]} hai/${name}`);
+      }
+    }
+    const listed = GUARDED_ROUTES.filter(r => r.route.startsWith('hai/')).map(
+      r => `${r.method} ${r.route}`
+    );
+    expect(found.length).toBeGreaterThanOrEqual(16);
+    expect(listed.sort()).toEqual(found.sort());
   });
 
   it('401 for a token that Supabase rejects', async () => {

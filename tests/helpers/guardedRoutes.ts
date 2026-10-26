@@ -1,16 +1,24 @@
 // Generated from the route files under src/app/api/trainer and src/app/api/admin,
 // plus me/catalog-requests (a trainer-level request for an occupation), the
-// notification routes and every route of a trainee (guard 'user').
+// notification routes and every route of a trainee (guard 'user') and the
+// HAI routes (src/app/api/hai).
 // Every entry is a handler that must reject anonymous callers (401) and callers
 // with a too low role (403). Regenerate when a route is added.
 
 // 'user' is any signed-in, active account (no role check): the notification
-// routes and the routes of a trainee, which then work on the data of the
-// session only (a few read routes also let a trainer-level caller read the data
-// of a trainee inside their organization scope). The open exceptions are the
-// master data routes: trainee/lernfelder, trainee/lernfelder/[id],
-// trainee/evaluations/softskills and trainee/school/lernfelder.
-export type GuardKind = 'user' | 'trainer' | 'admin' | 'superAdmin';
+// routes, the routes of a trainee and the HAI routes of one person, which
+// then work on the data of the session only (a few trainee read routes also
+// let a trainer-level caller read the data of a trainee inside their
+// organization scope). The open exceptions are the master data routes:
+// trainee/lernfelder, trainee/lernfelder/[id], trainee/evaluations/softskills
+// and trainee/school/lernfelder. 'haiIndex' handlers manage the shared HAI
+// index (see src/lib/hai/indexAccess.ts).
+export type GuardKind =
+  | 'user'
+  | 'trainer'
+  | 'admin'
+  | 'superAdmin'
+  | 'haiIndex';
 
 export type GuardedRoute = {
   /** Path below src/app/api, also the module path of the route file. */
@@ -918,4 +926,20 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     guard: 'user',
     params: ['useCaseId'],
   },
+  { route: 'hai/chat', method: 'POST', guard: 'user', params: [] },
+  { route: 'hai/chat', method: 'PATCH', guard: 'user', params: [] },
+  { route: 'hai/chat', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/session', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/session', method: 'PATCH', guard: 'user', params: [] },
+  { route: 'hai/session', method: 'DELETE', guard: 'user', params: [] },
+  { route: 'hai/session', method: 'POST', guard: 'user', params: [] },
+  { route: 'hai/action', method: 'POST', guard: 'user', params: [] },
+  { route: 'hai/action', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/insights', method: 'GET', guard: 'user', params: [] },
+  { route: 'hai/embed', method: 'POST', guard: 'haiIndex', params: [] },
+  { route: 'hai/embed', method: 'GET', guard: 'haiIndex', params: [] },
+  { route: 'hai/embed', method: 'DELETE', guard: 'haiIndex', params: [] },
+  { route: 'hai/sync', method: 'POST', guard: 'haiIndex', params: [] },
+  { route: 'hai/sync', method: 'GET', guard: 'haiIndex', params: [] },
+  { route: 'hai/verify-pin', method: 'POST', guard: 'haiIndex', params: [] },
 ];

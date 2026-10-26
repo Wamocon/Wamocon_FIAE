@@ -18,6 +18,7 @@ import React, {
   useEffect,
 } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { authFetch } from '@/lib/authFetch';
 
 // ============================================================================
 // TYPES
@@ -192,8 +193,8 @@ export function HaiProvider({
 
   const refreshSessions = useCallback(async () => {
     try {
-      const response = await fetch(
-        `/api/hai/session?userId=${userId}&includeArchived=true&limit=50`,
+      const response = await authFetch(
+        `/api/hai/session?includeArchived=true&limit=50`,
         { cache: 'no-store' }
       );
       if (response.ok) {
@@ -209,8 +210,8 @@ export function HaiProvider({
     async (query: string): Promise<HaiSession[]> => {
       if (!query || query.trim().length < 2) return [];
       try {
-        const response = await fetch(
-          `/api/hai/session?userId=${userId}&search=${encodeURIComponent(query.trim())}&limit=20`,
+        const response = await authFetch(
+          `/api/hai/session?search=${encodeURIComponent(query.trim())}&limit=20`,
           { cache: 'no-store' }
         );
         if (response.ok) {
@@ -235,8 +236,8 @@ export function HaiProvider({
 
       setIsLoading(true);
       try {
-        const response = await fetch(
-          `/api/hai/session?userId=${userId}&sessionId=${sessionId}`,
+        const response = await authFetch(
+          `/api/hai/session?sessionId=${sessionId}`,
           { cache: 'no-store' }
         );
         if (response.ok) {
@@ -347,8 +348,8 @@ export function HaiProvider({
   const deleteSession = useCallback(
     async (sessionId: string) => {
       try {
-        const response = await fetch(
-          `/api/hai/session?userId=${userId}&sessionId=${sessionId}`,
+        const response = await authFetch(
+          `/api/hai/session?sessionId=${sessionId}`,
           {
             method: 'DELETE',
           }
@@ -374,7 +375,7 @@ export function HaiProvider({
           prev.map(s => (s.id === sessionId ? { ...s, title: newTitle } : s))
         );
 
-        const response = await fetch(`/api/hai/session?userId=${userId}`, {
+        const response = await authFetch('/api/hai/session', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, title: newTitle }),
@@ -484,7 +485,7 @@ export function HaiProvider({
       );
 
       try {
-        const response = await fetch(`/api/hai/chat?userId=${userId}`, {
+        const response = await authFetch('/api/hai/chat', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messageId, content: newContent.trim() }),
@@ -638,7 +639,7 @@ export function HaiProvider({
       }, 60000);
 
       try {
-        const response = await fetch(`/api/hai/chat?userId=${userId}`, {
+        const response = await authFetch('/api/hai/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -942,7 +943,7 @@ export function HaiProvider({
       }, 60000);
 
       try {
-        const response = await fetch(`/api/hai/chat?userId=${userId}`, {
+        const response = await authFetch('/api/hai/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
