@@ -30,6 +30,7 @@ import type {
 import { searchWithContext, SearchResult } from './vectorSearch';
 import { fetchPageIndexContext } from './pageIndexService';
 import { resolveRetrievalAccess } from './retrievalAccess';
+import { citationUrl } from './citationUrl';
 import type { RetrievalAccess } from './retrievalAccess';
 import {
   FIAE_PERSONA,
@@ -722,10 +723,7 @@ export async function processMessage(
           sourceId: r.sourceId,
           title: displayTitle,
           similarity: r.similarity,
-          url:
-            (r.metadata.storageUrl as string) ||
-            (r.metadata.url as string) ||
-            undefined,
+          url: citationUrl(r),
         };
       });
 
@@ -935,10 +933,7 @@ export async function processMessageStream(
           sourceId: r.sourceId,
           title: displayTitle,
           similarity: r.similarity,
-          url:
-            (r.metadata.storageUrl as string) ||
-            (r.metadata.url as string) ||
-            undefined,
+          url: citationUrl(r),
         };
       });
 
