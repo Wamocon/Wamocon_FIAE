@@ -30,8 +30,11 @@ import {
   schoolExamResults,
   activityReports,
   lernfelder,
+  traineeEnrollments,
+  TRAINING_CATALOG_IDS,
 } from '@/db/migrations/schemas/schema';
 import { indexContent, type SourceType } from './embeddings';
+import type { IndexScope } from './indexScope';
 import { loadPhasePlansForUsers } from '@/lib/catalog/phase-plan-db';
 import {
   getPhaseMonthRange,
@@ -61,6 +64,47 @@ export interface AllTraineesIndexResult {
 }
 
 // ============================================================================
+// SCOPE OF THE PERSONAL CHUNKS
+// ============================================================================
+
+/**
+ * Scope of the personal chunks (profile, schedule, progress) of a trainee:
+ * the occupation of the enrollment that started last, FIAE without one (the
+ * rule of the catalog scope), visible to the audience of the search (the
+ * search additionally filters them by metadata.userId), owned by the
+ * organization of the trainee.
+ */
+async function personalIndexScope(traineeId: string): Promise<IndexScope> {
+  const enrollments = await haiDb
+    .select({
+      trainingCatalogId: traineeEnrollments.trainingCatalogId,
+      startDate: traineeEnrollments.startDate,
+    })
+    .from(traineeEnrollments)
+    .where(eq(traineeEnrollments.traineeId, traineeId));
+  // Latest start first; the catalog id breaks a tie so the pick is stable
+  const [latest] = [...enrollments].sort(
+    (a, b) =>
+      String(b.startDate ?? '').localeCompare(String(a.startDate ?? '')) ||
+      String(a.trainingCatalogId).localeCompare(String(b.trainingCatalogId))
+  );
+
+  const [owner] = await haiDb
+    .select({ organizationId: profiles.organizationId })
+    .from(profiles)
+    .where(eq(profiles.id, traineeId))
+    .limit(1);
+
+  return {
+    trainingCatalogId: String(
+      latest?.trainingCatalogId ?? TRAINING_CATALOG_IDS.FIAE
+    ),
+    visibility: 'all',
+    organizationId: owner?.organizationId ? String(owner.organizationId) : null,
+  };
+}
+
+// ============================================================================
 // TRAINEE PROFILE
 // ============================================================================
 
@@ -75,7 +119,6 @@ async function buildTraineeProfileText(
       .select({
         fullName: profiles.fullName,
         firstName: profiles.firstName,
-        email: profiles.email,
         role: profiles.role,
         startOfTrainingDate: profiles.startOfTrainingDate,
         ausbildungDurationYears: profiles.ausbildungDurationYears,
@@ -102,7 +145,7 @@ async function buildTraineeProfileText(
 
     // Get trainer info
     const trainerResult = await haiDb.execute(sql`
-            SELECT t.full_name, t.email
+            SELECT t.full_name
             FROM profiles p
             JOIN profiles t ON t.id = p.assigned_trainer_id
             WHERE p.id = ${traineeId}
@@ -114,7 +157,6 @@ async function buildTraineeProfileText(
       `# Profil: ${p.fullName || p.firstName || 'Auszubildende/r'}`,
       ``,
       `Name: ${p.fullName || p.firstName || 'Unbekannt'}`,
-      `E-Mail: ${p.email}`,
       `Rolle: Auszubildende/r (Trainee)`,
     ];
 
@@ -148,7 +190,7 @@ async function buildTraineeProfileText(
     }
 
     if (trainer) {
-      lines.push(`Ausbilder: ${trainer.full_name} (${trainer.email})`);
+      lines.push(`Ausbilder: ${trainer.full_name}`);
     }
 
     if (enrolledCourses.length > 0) {
@@ -490,6 +532,7 @@ export async function indexTraineeData(
       .where(eq(profiles.id, traineeId))
       .limit(1);
     result.traineeName = profile[0]?.fullName || 'Unknown';
+    const scope = await personalIndexScope(traineeId);
 
     // 1. Index profile
     const profileText = await buildTraineeProfileText(traineeId);
@@ -504,6 +547,7 @@ export async function indexTraineeData(
           dataType: 'profile',
           indexedAt: new Date().toISOString(),
         },
+        ...scope,
       });
       result.profileResult = {
         success: profileIndexResult.success,
@@ -527,6 +571,7 @@ export async function indexTraineeData(
           dataType: 'schedule',
           indexedAt: new Date().toISOString(),
         },
+        ...scope,
       });
       result.scheduleResult = {
         success: scheduleIndexResult.success,
@@ -550,6 +595,7 @@ export async function indexTraineeData(
           dataType: 'progress',
           indexedAt: new Date().toISOString(),
         },
+        ...scope,
       });
       result.progressResult = {
         success: progressIndexResult.success,
@@ -647,6 +693,7 @@ export async function indexAllContent(): Promise<{
         title: courses.title,
         year: courses.year,
         chapter: courses.chapter,
+        trainingCatalogId: courses.trainingCatalogId,
       })
       .from(courses)
       .where(eq(courses.isActive, true));
@@ -663,6 +710,9 @@ export async function indexAllContent(): Promise<{
           year: course.year,
           chapter: course.chapter,
         },
+        trainingCatalogId: String(course.trainingCatalogId),
+        visibility: 'all',
+        organizationId: null,
       });
       if (indexResult.success || indexResult.chunksIndexed > 0) {
         result.coursesIndexed++;
@@ -676,6 +726,7 @@ export async function indexAllContent(): Promise<{
         title: enablers.title,
         courseId: enablers.courseId,
         descriptionText: enablers.descriptionText,
+        trainingCatalogId: enablers.trainingCatalogId,
       })
       .from(enablers)
       .where(eq(enablers.isActive, true));
@@ -701,6 +752,9 @@ export async function indexAllContent(): Promise<{
           courseId: enabler.courseId,
           courseTitle: courseInfo?.title || '',
         },
+        trainingCatalogId: String(enabler.trainingCatalogId),
+        visibility: 'all',
+        organizationId: null,
       });
       if (indexResult.success || indexResult.chunksIndexed > 0) {
         result.enablersIndexed++;

@@ -17,6 +17,12 @@
 import { createHash } from 'crypto';
 import { getEmbeddingProvider } from './providers';
 import { chunkDocument } from './chunker';
+import {
+  CHUNK_INDEX_BLOCK,
+  chunkIndexRange,
+  scopeProblem,
+  type HaiVisibility,
+} from './indexScope';
 import haiDb from '@/db/haiDb';
 import { haiEmbeddings } from '@/db/migrations/schemas/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -42,6 +48,23 @@ export interface IndexContentOptions {
   content: string;
   metadata?: Record<string, unknown>;
   forceReindex?: boolean;
+  /**
+   * Scope of the chunks, always set by the caller (no default): the
+   * occupation (training catalog) of the source, who may see the chunks and
+   * the owning organization (null = platform content). A call without a
+   * complete scope writes nothing: a chunk without an occupation is visible to
+   * nobody.
+   */
+  trainingCatalogId: string | null;
+  visibility: HaiVisibility;
+  organizationId: string | null;
+  /**
+   * First chunk index of this part of the source (default 0). A source with a
+   * trainer-only part (quiz answers) writes that part at
+   * TRAINER_PART_CHUNK_OFFSET, see indexScope.ts. Stale chunks are only
+   * removed inside the block of this part.
+   */
+  chunkIndexOffset?: number;
 }
 
 /** PageIndex-aware indexing options for use cases */
@@ -128,19 +151,36 @@ function generateContentHash(content: string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
+interface ChunkScope {
+  trainingCatalogId: string | null;
+  visibility: HaiVisibility;
+  organizationId: string | null;
+}
+
 /**
- * Check if embedding already exists with same content hash.
- * Returns true if the content is unchanged (skip re-embedding).
+ * State of a stored chunk compared with what the writer wants to store:
+ *  - 'unchanged': same content and same scope, nothing to do
+ *  - 'rescope': same content, other scope; only the scope columns are updated
+ *    (no embedding call)
+ *  - 'missing': no such chunk or other content; embed and upsert
  */
-async function embeddingExists(
+type ChunkState = 'unchanged' | 'rescope' | 'missing';
+
+async function chunkState(
   sourceType: SourceType,
   sourceId: string,
   chunkIndex: number,
-  contentHash: string
-): Promise<boolean> {
+  contentHash: string,
+  scope: ChunkScope
+): Promise<ChunkState> {
   try {
     const existing = await haiDb
-      .select({ contentHash: haiEmbeddings.contentHash })
+      .select({
+        contentHash: haiEmbeddings.contentHash,
+        trainingCatalogId: haiEmbeddings.trainingCatalogId,
+        visibility: haiEmbeddings.visibility,
+        organizationId: haiEmbeddings.organizationId,
+      })
       .from(haiEmbeddings)
       .where(
         and(
@@ -151,11 +191,38 @@ async function embeddingExists(
       )
       .limit(1);
 
-    return existing.length > 0 && existing[0].contentHash === contentHash;
+    if (existing.length === 0 || existing[0].contentHash !== contentHash) {
+      return 'missing';
+    }
+    const row = existing[0];
+    return row.trainingCatalogId === scope.trainingCatalogId &&
+      row.visibility === scope.visibility &&
+      row.organizationId === scope.organizationId
+      ? 'unchanged'
+      : 'rescope';
   } catch (error) {
     console.error('HAI.ai: Error checking existing embedding:', error);
-    return false;
+    return 'missing';
   }
+}
+
+/** Update the scope columns of a chunk whose content did not change. */
+async function updateChunkScope(
+  sourceType: SourceType,
+  sourceId: string,
+  chunkIndex: number,
+  scope: ChunkScope
+): Promise<void> {
+  await haiDb.execute(sql`
+            UPDATE hai_embeddings
+            SET training_catalog_id = ${scope.trainingCatalogId}::uuid,
+                visibility = ${scope.visibility},
+                organization_id = ${scope.organizationId}::uuid,
+                updated_at = NOW()
+            WHERE source_type = ${sourceType}
+              AND source_id = ${sourceId}::uuid
+              AND chunk_index = ${chunkIndex}
+        `);
 }
 
 /**
@@ -184,19 +251,23 @@ async function deleteExistingEmbeddings(
 
 /**
  * Clean up stale chunks after reindexing.
- * If the content now has fewer chunks than before, remove the extras.
+ * If the content now has fewer chunks than before, remove the extras. Only the
+ * block of this part of the source is touched (the trainer part of a source
+ * lives in its own block, see indexScope.ts).
  */
 async function removeStaleChunks(
   sourceType: SourceType,
   sourceId: string,
-  maxChunkIndex: number
+  maxChunkIndex: number,
+  offset: number
 ): Promise<void> {
   try {
     await haiDb.execute(sql`
             DELETE FROM hai_embeddings
             WHERE source_type = ${sourceType}
               AND source_id = ${sourceId}::uuid
-              AND chunk_index > ${maxChunkIndex}
+              AND chunk_index > ${offset + maxChunkIndex}
+              AND chunk_index < ${chunkIndexRange(offset).to}
         `);
   } catch (error) {
     console.error('HAI.ai: Error removing stale chunks:', error);
@@ -233,7 +304,25 @@ export async function indexContent(
     content,
     metadata = {},
     forceReindex = false,
+    chunkIndexOffset = 0,
   } = options;
+  const scope: ChunkScope = {
+    trainingCatalogId: options.trainingCatalogId,
+    visibility: options.visibility,
+    organizationId: options.organizationId,
+  };
+
+  // No complete scope, no write (fail closed, nothing is embedded)
+  const problem = scopeProblem(scope);
+  if (problem) {
+    return {
+      success: false,
+      chunksIndexed: 0,
+      chunksSkipped: 0,
+      chunksFailed: 0,
+      error: `Index scope incomplete for ${sourceType}/${sourceId}: ${problem}`,
+    };
+  }
 
   try {
     const provider = getEmbeddingProvider();
@@ -255,6 +344,17 @@ export async function indexContent(
       preserveParagraphs: true,
       preserveSentences: true,
     });
+
+    // The public part must never reach the block of the trainer part
+    if (chunks.length >= CHUNK_INDEX_BLOCK) {
+      return {
+        success: false,
+        chunksIndexed: 0,
+        chunksSkipped: 0,
+        chunksFailed: 0,
+        error: `Too many chunks (${chunks.length}) for ${sourceType}/${sourceId}`,
+      };
+    }
 
     if (chunks.length === 0) {
       return {
@@ -284,14 +384,35 @@ export async function indexContent(
       }
 
       const contentHash = generateContentHash(chunk.content);
+      const chunkIndex = chunkIndexOffset + chunk.index;
 
       // Check if already indexed with same content (skip unchanged chunks)
-      if (
-        !forceReindex &&
-        (await embeddingExists(sourceType, sourceId, chunk.index, contentHash))
-      ) {
-        skipped++;
-        continue;
+      if (!forceReindex) {
+        const state = await chunkState(
+          sourceType,
+          sourceId,
+          chunkIndex,
+          contentHash,
+          scope
+        );
+        if (state === 'rescope') {
+          // Same text, other occupation, audience or owner: no new embedding
+          try {
+            await updateChunkScope(sourceType, sourceId, chunkIndex, scope);
+            skipped++;
+          } catch (scopeError) {
+            failed++;
+            console.error(
+              `HAI.ai: Failed to update the scope of chunk ${chunkIndex} for ${sourceType}/${sourceId}:`,
+              scopeError instanceof Error ? scopeError.message : scopeError
+            );
+          }
+          continue;
+        }
+        if (state === 'unchanged') {
+          skipped++;
+          continue;
+        }
       }
 
       try {
@@ -318,15 +439,21 @@ export async function indexContent(
                         content,
                         content_hash,
                         embedding,
-                        metadata
+                        metadata,
+                        training_catalog_id,
+                        visibility,
+                        organization_id
                     ) VALUES (
                         ${sourceType},
                         ${sourceId}::uuid,
-                        ${chunk.index},
+                        ${chunkIndex},
                         ${chunk.content},
                         ${contentHash},
                         ${JSON.stringify(embeddingResult.embedding)}::vector,
-                        ${embeddingMetadata}::jsonb
+                        ${JSON.stringify(embeddingMetadata)}::jsonb,
+                        ${scope.trainingCatalogId}::uuid,
+                        ${scope.visibility},
+                        ${scope.organizationId}::uuid
                     )
                     ON CONFLICT (source_type, source_id, chunk_index)
                     DO UPDATE SET
@@ -334,6 +461,9 @@ export async function indexContent(
                         content_hash = EXCLUDED.content_hash,
                         embedding = EXCLUDED.embedding,
                         metadata = EXCLUDED.metadata,
+                        training_catalog_id = EXCLUDED.training_catalog_id,
+                        visibility = EXCLUDED.visibility,
+                        organization_id = EXCLUDED.organization_id,
                         updated_at = NOW()
                 `);
 
@@ -342,7 +472,7 @@ export async function indexContent(
         // Error isolation: log and continue, don't crash the whole batch
         failed++;
         console.error(
-          `HAI.ai: Failed to embed chunk ${chunk.index} for ${sourceType}/${sourceId}:`,
+          `HAI.ai: Failed to embed chunk ${chunkIndex} for ${sourceType}/${sourceId}:`,
           chunkError instanceof Error ? chunkError.message : chunkError
         );
       }
@@ -350,7 +480,12 @@ export async function indexContent(
 
     // Clean up stale chunks (e.g., if content was shortened)
     if (indexed > 0 || skipped > 0) {
-      await removeStaleChunks(sourceType, sourceId, chunks.length - 1);
+      await removeStaleChunks(
+        sourceType,
+        sourceId,
+        chunks.length - 1,
+        chunkIndexOffset
+      );
     }
 
     return {
@@ -401,6 +536,26 @@ export async function indexContentBatch(
   }
 
   return { total: items.length, successful, failed };
+}
+
+/**
+ * Remove the chunks of one part of a source (the block of chunk indexes that
+ * starts at `offset`), for example the answers of a quiz that has none any
+ * more.
+ */
+export async function removeChunkPart(
+  sourceType: SourceType,
+  sourceId: string,
+  offset: number
+): Promise<void> {
+  const range = chunkIndexRange(offset);
+  await haiDb.execute(sql`
+            DELETE FROM hai_embeddings
+            WHERE source_type = ${sourceType}
+              AND source_id = ${sourceId}::uuid
+              AND chunk_index >= ${range.from}
+              AND chunk_index < ${range.to}
+        `);
 }
 
 /**

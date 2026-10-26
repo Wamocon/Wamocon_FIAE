@@ -278,7 +278,9 @@ describe('hai_embeddings scope migration: backfill rules', () => {
     expect(visibilityFn).not.toMatch(/p_content like/);
     expect(visibilityFn).not.toMatch(/chr\(1000[37]\)/);
     expect(header).toMatch(/EVERY quiz chunk/);
-    // the writers do mix questions and answers in one text, which is why
+    // this file keeps the rule of package H1. Since package H2 the writers
+    // split questions from answers (migration 20261029000100 adapts the
+    // trigger), see tests/unit/hai/quizIndexText.test.ts.
     const reindex = fs.readFileSync(
       path.join(ROOT, 'scripts', 'reindex-gemini.ts'),
       'utf-8'
@@ -288,9 +290,8 @@ describe('hai_embeddings scope migration: backfill rules', () => {
       'utf-8'
     );
     for (const writer of [reindex, embedRoute]) {
-      expect(writer).toContain("'✓' : '✗'");
-      expect(writer).toContain('Erwartete Antwort:');
-      expect(writer).toContain('Erklärung:');
+      expect(writer).toContain('buildQuizTexts');
+      expect(writer).not.toContain("'✓' : '✗'");
     }
   });
 
@@ -400,13 +401,11 @@ describe('hai_embeddings scope migration: trigger for the existing writers', () 
   });
 });
 
-describe('writers of hai_embeddings (expected gap, follow-up package H2)', () => {
+describe('writers of hai_embeddings (gap closed by package H2)', () => {
   /**
-   * Every INSERT into hai_embeddings in the code base. None of them sets the
-   * new columns yet: the trigger of the migration derives them. This is the
-   * documented gap. A new writer, or a writer that starts to set the columns,
-   * fails this test on purpose so that the follow-up package H2 (explicit
-   * columns from the scope, separate quiz chunks) is a conscious change.
+   * Every INSERT into hai_embeddings in the code base. Since package H2 each
+   * of them sets the three scope columns itself (the trigger of the migration
+   * stays as a safety net). A new writer that leaves a column out fails here.
    */
   const KNOWN_WRITERS = [
     'scripts/reindex-gemini.ts',
@@ -426,16 +425,18 @@ describe('writers of hai_embeddings (expected gap, follow-up package H2)', () =>
     });
   }
 
-  const insertPaths = [
+  const files = [
     ...walk(path.join(ROOT, 'src')),
     ...walk(path.join(ROOT, 'scripts')),
-  ]
-    .map(file => ({
-      file: path.relative(ROOT, file).split(path.sep).join('/'),
-      text: fs.readFileSync(file, 'utf-8'),
-    }))
+  ].map(file => ({
+    file: path.relative(ROOT, file).split(path.sep).join('/'),
+    text: fs.readFileSync(file, 'utf-8'),
+  }));
+
+  const insertPaths = files
     .map(({ file, text }) => ({
       file,
+      text,
       statements: [
         ...text.matchAll(
           /INSERT INTO hai_embeddings\s*\(([\s\S]*?)\)\s*VALUES/g
@@ -448,29 +449,67 @@ describe('writers of hai_embeddings (expected gap, follow-up package H2)', () =>
     expect(insertPaths.map(entry => entry.file).sort()).toEqual(KNOWN_WRITERS);
   });
 
-  it('reports the gap: no writer sets the scope columns itself yet', () => {
+  it('every INSERT sets the scope columns itself', () => {
     for (const entry of insertPaths) {
       for (const columns of entry.statements) {
-        expect(columns).not.toMatch(/training_catalog_id/);
-        expect(columns).not.toMatch(/\bvisibility\b/);
-        expect(columns).not.toMatch(/organization_id/);
+        expect(columns).toMatch(/training_catalog_id/);
+        expect(columns).toMatch(/\bvisibility\b/);
+        expect(columns).toMatch(/organization_id/);
       }
     }
   });
 
-  it('is closed by the trigger: a row without the columns still gets them', () => {
+  it('every upsert updates the scope columns of an existing chunk', () => {
+    for (const entry of insertPaths) {
+      const updates = [
+        ...entry.text.matchAll(/DO UPDATE SET([\s\S]*?)`/g),
+      ].map(match => match[1]);
+      expect(updates.length).toBeGreaterThan(0);
+      for (const update of updates) {
+        expect(update).toMatch(/training_catalog_id = EXCLUDED/);
+        expect(update).toMatch(/visibility = EXCLUDED/);
+        expect(update).toMatch(/organization_id = EXCLUDED/);
+      }
+    }
+  });
+
+  /** Text of the object literal after `indexContent(` up to its closing brace. */
+  function callObjects(text: string): string[] {
+    const found: string[] = [];
+    for (const match of text.matchAll(/\bindexContent\(\{/g)) {
+      let depth = 0;
+      let i = match.index! + match[0].length - 1;
+      const begin = i;
+      for (; i < text.length; i++) {
+        if (text[i] === '{') depth++;
+        if (text[i] === '}' && --depth === 0) break;
+      }
+      found.push(text.slice(begin, i + 1));
+    }
+    return found;
+  }
+
+  it('every caller of indexContent states catalog, visibility and organization', () => {
+    const callers = files
+      .filter(entry => /\bindexContent\(\{/.test(entry.text))
+      .filter(entry => entry.file !== 'src/lib/hai/embeddings.ts');
+    expect(callers.map(entry => entry.file).sort()).toEqual([
+      'src/app/api/hai/embed/route.ts',
+      'src/lib/hai/traineeDataIndexer.ts',
+    ]);
+    for (const entry of callers) {
+      for (const call of callObjects(entry.text)) {
+        expect(call).toMatch(/trainingCatalogId|\.\.\.scope|\.\.\.quizBase/);
+        expect(call).toMatch(/visibility|\.\.\.scope/);
+        expect(call).toMatch(/organizationId|\.\.\.scope|\.\.\.quizBase/);
+      }
+    }
+  });
+
+  it('the trigger stays as a safety net for rows that miss a column', () => {
     expect(sql).toMatch(
       /before insert or update of source_type, source_id, content, metadata/
     );
-    // the upsert of every writer updates content and metadata, so a changed
-    // chunk is derived again (visibility can only go up)
-    for (const file of KNOWN_WRITERS) {
-      const text = fs.readFileSync(path.join(ROOT, file), 'utf-8');
-      expect(text).toMatch(
-        /ON CONFLICT \(source_type, source_id, chunk_index\)/
-      );
-      expect(text).toMatch(/metadata = EXCLUDED\.metadata/);
-    }
   });
 });
 
