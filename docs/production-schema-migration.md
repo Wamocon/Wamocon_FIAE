@@ -51,7 +51,8 @@ column needs a safe default.
 
 Dieser Abschnitt gilt für die Dateien `supabase/migrations/20261024000100` bis
 `20261024001500`, `20261025000000`, die Sicherheitsdatei `20261025000100` und
-die Folgedatei `20261026000100` (PR 83 und später). Die Migration von
+die Folgedateien `20261026000100` und `20261027000100` (PR 83 und später). Die
+Migration von
 `202606260001` oben ist bereits in Produktion
 angewendet und bleibt unverändert. Die Reihe ist in Produktion noch nicht
 angewendet. Geprüft ist sie auf einer lokalen Wegwerf-Datenbank (PostgreSQL 15
@@ -99,11 +100,13 @@ also nur strukturell geprüft, nicht mit den echten Zeilen.
 | 20261025000000 | Backfill ADMIN der Plattform-Organisation zu SUPER_ADMIN, **technisch gesperrt** bis PR 89 angewendet ist und der App-Release bestätigt wurde (siehe Reihenfolge, Punkt 5) |
 | 20261025000100 | Sicherheitsdatei: `revoke create on schema public from public`. Eine einzige Anweisung, ändert keine Daten. Sie liegt hinter dem Backfill und wird deshalb erst nach dessen Freigabe angewendet (Punkt 6). Rückweg: `grant create on schema public to public;` |
 | 20261026000100 | Genau eine Einschreibung je Azubi: eindeutiger Index `trainee_enrollments_trainee_unique` auf `trainee_enrollments (trainee_id)`. Die Vorprüfung bricht mit einer Meldung samt Anzahl ab, wenn ein Azubi mehr als eine Einschreibung hat, und löscht nichts. Ändert keine Daten, `create unique index` ohne `concurrently` (die Datei läuft in einer Transaktion), die Tabelle ist klein. Sie liegt hinter dem Backfill und wird deshalb ebenfalls erst nach dessen Freigabe angewendet. Rückweg: `drop index public.trainee_enrollments_trainee_unique;` |
+| 20261027000100 | HAI-Index, Beruf und Lösungsschutz (Paket H1): Spalten `training_catalog_id`, `visibility` (`all` oder `trainer`) und `organization_id` an `hai_embeddings`, Index `idx_hai_embeddings_scope`, drei Ableitungsfunktionen, ein BEFORE-Trigger auf `hai_embeddings`, der die Spalten für Zeilen der bestehenden Schreibpfade füllt, und ein AFTER-Trigger auf `content_documents`, der Chunks mitnimmt, wenn ein Dokument später Lösung oder `TRAINER_ONLY` wird oder die Organisation wechselt. Backfill in reinem SQL, ohne Modellaufruf, kein erneutes Einbetten: Der Katalog kommt je Quelle aus Enabler, Kurs, Use Case, Quiz, Dokument, Lernfeld oder Komponente, persönliche Zeilen über die Einschreibung. Zeilen ohne ableitbaren Katalog gehen an FIAE, die Zahl je `source_type` steht als `raise notice` im Lauf, die Datei bricht deshalb nicht ab. `visibility = 'trainer'` für Lösungsseiten (`TRAINER_SOLUTION`), Dokumente mit `TRAINER_ONLY` und jeden Quiz-Chunk (Fragen und Antworten liegen im selben Text, ein Folge-Chunk kann das Ende einer Antwort ohne Marker tragen). Abbruch nur in den Vorprüfungen (Tabelle, Katalogreihe, FIAE-Katalog fehlen). Ein UPDATE berührt jede Zeile, die einen Wert braucht, einmal, `create index` ohne `concurrently`. Die Sperre des `alter table` (ACCESS EXCLUSIVE auf `hai_embeddings`) gilt bis zum Ende der Datei, also auch während des Backfills: im Wartungsfenster anwenden. Die Datei liegt hinter dem Katalog und wird deshalb erst nach der Freigabe angewendet. Der App-Code von H1 setzt die Spalten voraus: App-Release erst nach dieser Datei. Rückweg: Kopfkommentar der Datei. |
 
 Daten werden verändert in: 000300 (UPDATE enablers, use_cases, mappings),
 000500 (Kopie der Lernfelder), 000700 (UPDATE training_components), 001000
 (INSERT Organisationen), 001200 (INSERT Einschreibungen), 001300 (UPDATE
-training_components), 20261025000000 (UPDATE profiles). Die Aussage "keine
+training_components), 20261025000000 (UPDATE profiles), 20261027000100 (UPDATE
+hai_embeddings). Die Aussage "keine
 Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
 
 ## Reihenfolge
@@ -149,7 +152,14 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
    `true` auf `false` wechseln. Als Nächstes läuft `20261026000100` (eindeutiger
    Index auf `trainee_enrollments (trainee_id)`). Vorcheck (nur lesend): Abfrage
    C11 der Verifikations-SQL muss null Zeilen liefern, sonst bricht die Datei
-   mit einer Meldung ab und ändert nichts. Nachcheck: Abfrage C11b.
+   mit einer Meldung ab und ändert nichts. Nachcheck: Abfrage C11b. Danach läuft
+   `20261027000100` (HAI-Index, Beruf und Lösungsschutz). Vorcheck (nur lesend):
+   Abfrage C12 der Verifikations-SQL zeigt die Zeilen je `source_type`. Im Lauf die
+   Meldungen `raise notice` lesen: Zeilen ohne ableitbaren Katalog gehen an FIAE.
+   Nachcheck: Abfrage C12b (keine Zeile ohne Katalog, Lösungsseiten und alle
+   Quiz-Chunks haben `trainer`). Vor der Freigabe die Organisationsverteilung der
+   Dokumente prüfen (Abfrage C12a): Tragen die Plattform-PDFs die Organisation der
+   Plattform statt NULL, sehen Kundenorganisationen sie in der HAI nicht mehr. Ein Reindex ist nicht nötig.
 7. **Nachchecks** (Abschnitt "Katalogreihe, Nachchecks" in der Verifikations-SQL):
    Zeilenzahlen der Bestandstabellen unverändert, alle Kurse und Komponenten im
    Katalog FIAE, `lernfelder` (View) liefert so viele Zeilen wie
@@ -211,6 +221,16 @@ Produktivdaten geändert" gilt nur, solange die Reihe nicht angewendet ist.
   `setTraineeEnrollment`). Ab `20261026000100` sichert ein eindeutiger Index auf
   `trainee_id` das in der Datenbank ab: Eine zweite Einschreibung desselben
   Azubis scheitert mit `unique_violation`.
+
+- HAI-Index (ab `20261027000100`): Die Suche der HAI filtert im SQL, vor dem
+  `LIMIT`, nach Beruf (`training_catalog_id` aus dem Katalogbereich des Nutzers),
+  Sichtbarkeit und Organisation. Azubis bekommen keine Lösungen (Use-Case-Lösungsseiten,
+  Quiz-Antworten, erwartete Antworten), weder im Kontext noch in Zitaten, und keine
+  Inhalte eines anderen Berufs. Zeilen ohne Katalog sind für niemanden sichtbar. Der
+  PageIndex liest keine Lösungs-PDFs für Azubis und setzt in Zitaten nur dann die
+  öffentliche `storage_url`, wenn das Dokument für Azubis sichtbar ist. Die
+  Schreibpfade setzen die neuen Spalten noch nicht selbst, ein Trigger leitet sie aus
+  der Quelle ab (Folgepaket H2 setzt sie ausdrücklich).
 
 ## Rollback
 
