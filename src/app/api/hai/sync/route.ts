@@ -24,6 +24,7 @@ import {
   indexAllTrainees,
   indexTraineeData,
 } from '@/lib/hai/traineeDataIndexer';
+import { badRequestUnlessUuid } from '@/lib/uuid';
 
 // ============================================================================
 // POST — Trigger sync operations
@@ -113,6 +114,8 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
+        const invalidTrainee = badRequestUnlessUuid('traineeId', traineeId);
+        if (invalidTrainee) return invalidTrainee;
 
         console.log(`HAI.ai Sync: Syncing trainee ${traineeId}...`);
         const traineeResult = await indexTraineeData(traineeId);

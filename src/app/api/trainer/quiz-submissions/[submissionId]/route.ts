@@ -17,6 +17,7 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 // GET /api/trainer/quiz-submissions/[submissionId]
 // The review of one submission: the questions with the marker of the correct
@@ -148,6 +149,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ submissio
     if (isErrorResponse(session)) return session;
 
     const { submissionId } = await ctx.params;
+    const submissionIdNotFound = notFoundUnlessUuid(submissionId, 'Submission not found');
+    if (submissionIdNotFound) return submissionIdNotFound;
     if (!submissionId) return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
     const body = await req.json();
     const is_reviewed = body?.is_reviewed !== undefined ? Boolean(body.is_reviewed) : undefined;

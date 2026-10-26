@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { documentVisibilityCondition } from '@/lib/auth/document-scope';
 import db from '@/db';
 import { eq, and, or, ne, sql } from 'drizzle-orm';
 import { contentDocuments, useCases, courseMembers, profiles } from '@/db/migrations/schemas/schema';
@@ -92,7 +93,9 @@ export async function GET(
                         sql`${contentDocuments.visibility} IS NULL`
                     ),
                     // Also exclude TRAINER_SOLUTION document type
-                    ne(contentDocuments.documentType as any, 'TRAINER_SOLUTION')
+                    ne(contentDocuments.documentType as any, 'TRAINER_SOLUTION'),
+                    // The shared curriculum, the platform and the own organization
+                    documentVisibilityCondition(contentDocuments.organizationId, session)
                 )
             )
             .orderBy(contentDocuments.orderIndex);

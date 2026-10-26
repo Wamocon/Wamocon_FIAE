@@ -978,6 +978,8 @@ describe('POST /api/weekly-evaluations', () => {
     profiles: [traineeProfile],
     weeklyEvaluations: [],
     weeklySoftskillRatings: [],
+    // the criterion of the ratings has to exist
+    mesSoftskillCriteria: [{ id: CRIT }],
     ...extra,
   });
 

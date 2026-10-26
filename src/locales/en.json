@@ -2188,5 +2188,7 @@
   "hai.action.card.error.unavailable": "Your permission cannot be checked right now. Please try again later.",
   "hai.action.card.error.generic": "The action could not be run. Please try again later.",
   "curriculum.superAdminOnly": "Curriculum content can only be changed by super admins.",
+  "hai.admin.pinLocked": "Too many attempts. Please try again in {minutes} min.",
+  "hai.admin.pinUnavailable": "The PIN check is not available right now. Please try again later.",
   "trainerQuizPages.loadError": "The content could not be loaded. Please try again later."
 }

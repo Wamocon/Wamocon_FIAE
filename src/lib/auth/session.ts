@@ -341,11 +341,20 @@ export function orgScopeCondition(
     : eq(column, scope.organizationId as any);
 }
 
-/** Whether an entity of `organizationId` lies inside the caller's scope. */
+/**
+ * Whether an entity of `organizationId` lies inside the caller's scope. Fail
+ * closed: a row without an organization belongs to nobody, only the
+ * platform-wide view (organizationId null, super admin) reaches it. This is
+ * the same rule as orgScopeCondition, which leaves such a row out of every
+ * list. (A profile without an organization still gets DEFAULT_ORG_ID as the
+ * organization of its own SESSION, see authenticate.)
+ */
 export function isInOrgScope(
   scope: OrgScope,
   organizationId: string | null | undefined
 ): boolean {
   if (scope.organizationId === null) return true;
-  return String(organizationId ?? DEFAULT_ORG_ID) === scope.organizationId;
+  if (organizationId === null || organizationId === undefined) return false;
+  const value = String(organizationId);
+  return value !== '' && value === scope.organizationId;
 }

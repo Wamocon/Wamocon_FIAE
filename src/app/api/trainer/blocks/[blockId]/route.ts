@@ -12,6 +12,7 @@ import db from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { ausbildungBlocks, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 // Helper to get ISO week number
 function getISOWeek(date: Date): number {
@@ -32,6 +33,8 @@ export async function DELETE(
         if (isErrorResponse(session)) return session;
 
         const { blockId } = await params;
+        const blockIdNotFound = notFoundUnlessUuid(blockId, 'Block not found');
+        if (blockIdNotFound) return blockIdNotFound;
 
         if (!blockId) {
             return NextResponse.json({ error: 'Block ID required' }, { status: 400 });
@@ -98,6 +101,8 @@ export async function PATCH(
         if (isErrorResponse(session)) return session;
 
         const { blockId } = await params;
+        const blockIdNotFound = notFoundUnlessUuid(blockId, 'Block not found');
+        if (blockIdNotFound) return blockIdNotFound;
         const body = await req.json();
 
         if (!blockId) {

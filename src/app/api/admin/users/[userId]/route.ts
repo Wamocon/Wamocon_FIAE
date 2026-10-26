@@ -13,6 +13,7 @@ import {
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
@@ -25,6 +26,9 @@ export async function PATCH(
     // The caller's identity comes from the bearer token, never from the URL
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
+
+    const userNotFound = notFoundUnlessUuid(userId, 'User not found');
+    if (userNotFound) return userNotFound;
 
     const [targetUser] = await db
       .select({
@@ -143,6 +147,9 @@ export async function DELETE(
     // The caller's identity comes from the bearer token, never from the URL
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
+
+    const userNotFound = notFoundUnlessUuid(userId, 'User not found');
+    if (userNotFound) return userNotFound;
 
     if (session.id === userId) {
       return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });

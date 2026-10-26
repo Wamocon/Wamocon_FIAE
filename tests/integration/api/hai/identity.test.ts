@@ -117,7 +117,10 @@ describe('HAI session route: the person is the session', () => {
       tables: { haiChatSessions: [] },
     });
     const res = await mod.GET(
-      call('GET', `session?userId=${VICTIM}&sessionId=s-victim`)
+      call(
+        'GET',
+        `session?userId=${VICTIM}&sessionId=9b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11`
+      )
     );
     expect(res.status).toBe(404);
     expectSessionOnly(rec.filters('select', 'haiChatSessions').params);
@@ -140,7 +143,10 @@ describe('HAI session route: the person is the session', () => {
       tables: { haiChatSessions: [] },
     });
     const res = await mod.PATCH(
-      call('PATCH', `session?userId=${VICTIM}`, { sessionId: 's1', title: 'x' })
+      call('PATCH', `session?userId=${VICTIM}`, {
+        sessionId: '7b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11',
+        title: 'x',
+      })
     );
     expect(res.status).toBe(404);
     expectSessionOnly(rec.filters('select', 'haiChatSessions').params);
@@ -152,7 +158,10 @@ describe('HAI session route: the person is the session', () => {
       tables: { haiChatSessions: [{ id: 's1' }] },
     });
     const res = await mod.PATCH(
-      call('PATCH', `session?userId=${VICTIM}`, { sessionId: 's1', title: 'x' })
+      call('PATCH', `session?userId=${VICTIM}`, {
+        sessionId: '7b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11',
+        title: 'x',
+      })
     );
     expect(res.status).toBe(200);
     expect(rec.writes('update', 'haiChatSessions')).toEqual([{ title: 'x' }]);
@@ -163,7 +172,10 @@ describe('HAI session route: the person is the session', () => {
       tables: { haiChatSessions: [] },
     });
     const res = await mod.DELETE(
-      call('DELETE', `session?userId=${VICTIM}&sessionId=s-victim`)
+      call(
+        'DELETE',
+        `session?userId=${VICTIM}&sessionId=9b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11`
+      )
     );
     expect(res.status).toBe(404);
     expectSessionOnly(rec.filters('select', 'haiChatSessions').params);
@@ -175,7 +187,10 @@ describe('HAI session route: the person is the session', () => {
       tables: { haiChatSessions: [{ id: 's1' }] },
     });
     const res = await mod.DELETE(
-      call('DELETE', `session?userId=${VICTIM}&sessionId=s1`)
+      call(
+        'DELETE',
+        `session?userId=${VICTIM}&sessionId=7b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11`
+      )
     );
     expect(res.status).toBe(200);
     expect(rec.db.delete).toHaveBeenCalledTimes(1);
@@ -242,7 +257,7 @@ describe('HAI chat route: the person is the session', () => {
     });
     const res = await mod.PATCH(
       call('PATCH', `chat?userId=${VICTIM}`, {
-        messageId: 'm-victim',
+        messageId: '6b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11',
         content: 'changed',
       })
     );

@@ -19,6 +19,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { requireProPlan } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { badRequestUnlessUuid, isUuid } from '@/lib/uuid';
 
 // ============================================================================
 // TYPES
@@ -121,6 +122,14 @@ export async function GET(req: NextRequest) {
 
     // Single session with messages
     if (sessionId) {
+      // An id that is no uuid is a session that cannot exist
+      if (!isUuid(sessionId)) {
+        return NextResponse.json(
+          { error: 'Session nicht gefunden.' },
+          { status: 404 }
+        );
+      }
+
       // Get session
       const session = await db
         .select({
@@ -281,6 +290,8 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
+    const invalidSession = badRequestUnlessUuid('sessionId', sessionId);
+    if (invalidSession) return invalidSession;
 
     // Verify session belongs to user
     const session = await db
@@ -357,6 +368,14 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    // An id that is no uuid is a session that cannot exist
+    if (!isUuid(sessionId)) {
+      return NextResponse.json(
+        { error: 'Session nicht gefunden.' },
+        { status: 404 }
+      );
+    }
+
     // Verify session belongs to user
     const session = await db
       .select({ id: haiChatSessions.id })
@@ -410,6 +429,12 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { contextType, contextId, title } = body;
+
+    // The context id goes into a uuid column
+    const invalidContext = contextId
+      ? badRequestUnlessUuid('contextId', contextId)
+      : null;
+    if (invalidContext) return invalidContext;
 
     // Create new session
     const organizationId = me.organizationId;

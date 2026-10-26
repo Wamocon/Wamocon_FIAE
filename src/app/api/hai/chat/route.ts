@@ -46,6 +46,7 @@ import {
 } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
+import { badRequestUnlessUuid } from '@/lib/uuid';
 
 // ============================================================================
 // TYPES
@@ -626,29 +627,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Determine context type
-    const contextType = context?.enablerId
+    // Determine context type. The context id is stored in a uuid column, so an
+    // id that is no uuid is not stored (the session is a general one).
+    const validContextId = (id?: string) =>
+      id && isValidUUID(String(id)) ? id : undefined;
+    const enablerContextId = validContextId(context?.enablerId);
+    const courseContextId = validContextId(context?.courseId);
+    const contextType = enablerContextId
       ? 'enabler'
-      : context?.courseId
+      : courseContextId
         ? 'course'
         : 'general';
-    const contextId = context?.enablerId || context?.courseId || undefined;
+    const contextId = enablerContextId || courseContextId;
 
     // Get or create session
     let sessionId: string;
     let isNewSession = false;
     if (providedSessionId) {
-      // Verify session exists and belongs to user
-      const existingSession = await db
-        .select({ id: haiChatSessions.id })
-        .from(haiChatSessions)
-        .where(
-          and(
-            eq(haiChatSessions.id, providedSessionId),
-            eq(haiChatSessions.userId, userId)
-          )
-        )
-        .limit(1);
+      // Verify session exists and belongs to user. An id that is no uuid cannot
+      // be a session of the person (the column is a uuid): no lookup.
+      const existingSession = isValidUUID(String(providedSessionId))
+        ? await db
+            .select({ id: haiChatSessions.id })
+            .from(haiChatSessions)
+            .where(
+              and(
+                eq(haiChatSessions.id, providedSessionId),
+                eq(haiChatSessions.userId, userId)
+              )
+            )
+            .limit(1)
+        : [];
 
       if (existingSession.length === 0) {
         if (validEditMessageId) {
@@ -1128,6 +1137,8 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
+    const invalidMessage = badRequestUnlessUuid('messageId', messageId);
+    if (invalidMessage) return invalidMessage;
 
     // Verify message belongs to user (via session) and is a user message
     const messageRecord = await db

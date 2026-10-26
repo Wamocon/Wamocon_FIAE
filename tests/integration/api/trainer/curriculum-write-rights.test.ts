@@ -240,10 +240,12 @@ describe('curriculum write rights', () => {
 describe('curriculum write handlers use the new check (source scan)', () => {
   // A route file that writes a curriculum table must guard every write handler
   // with requireCurriculumEditor. A new file is found by the scan, so the rule
-  // cannot be forgotten. The two document routes are handled with the
-  // trainer scope in their own change, remove them from this list when the
-  // same rule is applied there.
-  const OPEN_DOCUMENT_ROUTES = [
+  // cannot be forgotten. The two document routes hold curriculum documents
+  // (no organization, or the platform organization) next to documents of a
+  // customer organization, which the trainer of that organization may still
+  // change. They apply the rule with the organization of the document
+  // (src/lib/auth/document-scope.ts) and are checked by their own scan below.
+  const DOCUMENT_ROUTES = [
     'enablers/[enablerId]/documents/route.ts',
     'use-cases/[useCaseId]/documents/route.ts',
   ];
@@ -278,10 +280,41 @@ describe('curriculum write handlers use the new check (source scan)', () => {
   const files = walk(base).filter(f => {
     const rel = path.relative(base, f).split(path.sep).join('/');
     return (
-      !OPEN_DOCUMENT_ROUTES.includes(rel) &&
+      !DOCUMENT_ROUTES.includes(rel) &&
       writesCurriculum.test(fs.readFileSync(f, 'utf8'))
     );
   });
+
+  describe.each(DOCUMENT_ROUTES)(
+    '%s applies the curriculum rule by the organization of the document',
+    rel => {
+      const source = fs.readFileSync(path.join(base, rel), 'utf8');
+      const byMethod = Object.fromEntries(
+        handlers(source).map(h => [h.method, h.body])
+      );
+
+      it('checks canCreateDocument on POST and canDeleteDocument on DELETE', () => {
+        expect(byMethod.POST).toContain('canCreateDocument(');
+        expect(byMethod.DELETE).toContain('canDeleteDocument(');
+      });
+
+      it('refuses a curriculum document with the curriculum message', () => {
+        expect(byMethod.POST).toContain('CURRICULUM_WRITE_FORBIDDEN');
+      });
+
+      it('limits the list to the organizations of the person', () => {
+        expect(byMethod.GET).toContain('documentVisibilityCondition(');
+      });
+
+      it('does not use the platform flag of the person', () => {
+        expect(source).not.toContain('verifyPlatformOwner');
+      });
+
+      it('has no write handler besides POST and DELETE', () => {
+        expect(Object.keys(byMethod).sort()).toEqual(['DELETE', 'GET', 'POST']);
+      });
+    }
+  );
 
   it('finds the curriculum route files', () => {
     expect(files.length).toBeGreaterThanOrEqual(17);

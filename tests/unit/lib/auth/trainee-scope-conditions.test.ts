@@ -220,7 +220,7 @@ describe('isTrainerInOrgScope', () => {
     expect(await isTrainerInOrgScope(superAdmin as any, A)).toBe(true);
   });
 
-  it('treats a profile without an organization as the default organization', async () => {
+  it('does not count a profile without an organization as the default organization (fail closed)', async () => {
     const defaultOrg = '00000000-0000-0000-0000-000000000001';
     const { isTrainerInOrgScope } = await load(row('TRAINER', null));
     expect(
@@ -228,6 +228,11 @@ describe('isTrainerInOrgScope', () => {
         fakeSession({ organizationId: defaultOrg }) as any,
         A
       )
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it('lets only the super admin pick a trainer without an organization', async () => {
+    const { isTrainerInOrgScope } = await load(row('TRAINER', null));
+    expect(await isTrainerInOrgScope(superAdmin as any, A)).toBe(true);
   });
 });

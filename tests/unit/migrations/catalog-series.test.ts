@@ -53,6 +53,7 @@ const FOLLOW_UP_FILES = [
   '20261028000200_quiz_code_and_link_catalog_check.sql',
   '20261028000300_use_case_letter_unique_option_order.sql',
   '20261029000100_hai_embeddings_quiz_visibility.sql',
+  '20261029000200_auth_attempts.sql',
 ];
 const catalogFiles = seriesFiles.filter(
   name => !SECURITY_FILES.includes(name) && !FOLLOW_UP_FILES.includes(name)
