@@ -18,25 +18,35 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import haiDb from '@/db/haiDb';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   enablers,
   courses,
   quizzes,
   questions,
   options,
-  lernfelderSchema,
-  lernfeldMappings,
+  trainingCatalogLearningFields,
+  trainingCatalogContentMappings,
 } from '@/db/migrations/schemas/schema';
 import { isErrorResponse } from '@/lib/auth/session';
 import { requireHaiIndexManager } from '@/lib/hai/guards';
 import {
   indexContent,
+  removeChunkPart,
   removeEmbeddings,
   getEmbeddingCount,
   getIndexedSources,
   SourceType,
 } from '@/lib/hai';
+import {
+  QUIZ_ANSWERS_VISIBILITY,
+  QUIZ_QUESTIONS_VISIBILITY,
+  TRAINER_PART_CHUNK_OFFSET,
+} from '@/lib/hai/indexScope';
+import {
+  buildQuizTexts,
+  type QuizQuestionInput,
+} from '@/lib/hai/quizIndexText';
 import {
   createReindexJob,
   getJobStatus,
@@ -79,6 +89,7 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
       title: enablers.title,
       descriptionText: enablers.descriptionText,
       courseId: enablers.courseId,
+      trainingCatalogId: enablers.trainingCatalogId,
     })
     .from(enablers)
     .where(eq(enablers.id, enablerId))
@@ -131,6 +142,9 @@ async function indexEnabler(enablerId: string, forceReindex: boolean = false) {
     content,
     metadata: { courseId: e.courseId, courseTitle },
     forceReindex,
+    trainingCatalogId: String(e.trainingCatalogId),
+    visibility: 'all',
+    organizationId: null,
   });
 
   return {
@@ -186,6 +200,7 @@ async function runBackgroundReindex(
         title: courses.title,
         year: courses.year,
         chapter: courses.chapter,
+        trainingCatalogId: courses.trainingCatalogId,
       })
       .from(courses)
       .where(eq(courses.isActive, true));
@@ -196,44 +211,37 @@ async function runBackgroundReindex(
       .where(eq(enablers.isActive, true));
 
     const allQuizzes = await haiDb
-      .select({ id: quizzes.id, title: quizzes.title })
+      .select({
+        id: quizzes.id,
+        title: quizzes.title,
+        trainingCatalogId: quizzes.trainingCatalogId,
+      })
       .from(quizzes)
       .where(eq(quizzes.isActive, true));
 
-    // Lernfelder table may not exist on all environments — check first
+    // Learning fields of every occupation (training_catalog_learning_fields,
+    // not the FIAE-only compatibility view). The table may not exist on all
+    // environments, so a failing query only skips the learning fields.
     let allLernfelder: Array<{
       id: string;
       label: string;
       title: string;
       description: string | null;
+      trainingCatalogId: string;
     }> = [];
     try {
-      const tableCheck = await haiDb.execute(sql`
-        SELECT EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'lernfelder_schema'
-        ) as exists
-      `);
-      const tableExists =
-        (tableCheck as any)?.[0]?.exists === true ||
-        (tableCheck as any)?.rows?.[0]?.exists === true;
-      if (tableExists) {
-        allLernfelder = await haiDb
-          .select({
-            id: lernfelderSchema.id,
-            label: lernfelderSchema.label,
-            title: lernfelderSchema.title,
-            description: lernfelderSchema.description,
-          })
-          .from(lernfelderSchema);
-      } else {
-        console.log(
-          'HAI.ai: lernfelder_schema table not found — skipping lernfelder indexing'
-        );
-      }
+      allLernfelder = await haiDb
+        .select({
+          id: trainingCatalogLearningFields.id,
+          label: trainingCatalogLearningFields.code,
+          title: trainingCatalogLearningFields.title,
+          description: trainingCatalogLearningFields.description,
+          trainingCatalogId: trainingCatalogLearningFields.trainingCatalogId,
+        })
+        .from(trainingCatalogLearningFields);
     } catch (lfError) {
       console.warn(
-        'HAI.ai: Failed to query lernfelder_schema (skipping):',
+        'HAI.ai: Failed to query training_catalog_learning_fields (skipping):',
         lfError
       );
     }
@@ -270,6 +278,9 @@ async function runBackgroundReindex(
             chapter: course.chapter,
           },
           forceReindex,
+          trainingCatalogId: String(course.trainingCatalogId),
+          visibility: 'all',
+          organizationId: null,
         });
         if (result.success || result.chunksIndexed > 0) {
           progress.totalChunksIndexed += result.chunksIndexed;
@@ -366,51 +377,91 @@ async function runBackgroundReindex(
           .orderBy(questions.orderIndex);
 
         if (quizQuestions.length > 0) {
-          const contentParts: string[] = [`# Quiz: ${quiz.title}`, ``];
-
+          const quizInput: QuizQuestionInput[] = [];
           for (const q of quizQuestions) {
-            const qNum = (q.orderIndex ?? 0) + 1;
-            contentParts.push(`## Frage ${qNum}: ${q.questionText}`);
-
-            if (q.questionType === 'MCQ') {
-              // Get options for MCQ questions
-              const qOptions = await haiDb
-                .select({
-                  optionText: options.optionText,
-                  isCorrect: options.isCorrect,
-                  explanation: options.explanation,
-                })
-                .from(options)
-                .where(eq(options.questionId, q.id));
-
-              for (const opt of qOptions) {
-                const marker = opt.isCorrect ? '✓' : '✗';
-                contentParts.push(`  ${marker} ${opt.optionText}`);
-                if (opt.explanation) {
-                  contentParts.push(`    Erklärung: ${opt.explanation}`);
-                }
-              }
-            } else if (q.expectedAnswer) {
-              contentParts.push(`  Erwartete Antwort: ${q.expectedAnswer}`);
-            }
-            contentParts.push(``);
+            // Options only for MCQ questions, expected answer only for the rest
+            const qOptions =
+              q.questionType === 'MCQ'
+                ? await haiDb
+                    .select({
+                      optionText: options.optionText,
+                      isCorrect: options.isCorrect,
+                      explanation: options.explanation,
+                    })
+                    .from(options)
+                    .where(eq(options.questionId, q.id))
+                : [];
+            quizInput.push({
+              orderIndex: (q.orderIndex ?? 0) + 1,
+              text: q.questionText,
+              type: null,
+              expectedAnswer:
+                q.questionType === 'MCQ' ? null : q.expectedAnswer,
+              options: qOptions.map(opt => ({
+                text: opt.optionText,
+                isCorrect: opt.isCorrect,
+                explanation: opt.explanation,
+              })),
+            });
           }
 
-          const quizContent = contentParts.join('\n');
-          const result = await indexContent({
+          // Questions and answers are separate texts BEFORE they are chunked
+          // by size: the questions are visible to trainees, every chunk of
+          // the answers is trainer only
+          const texts = buildQuizTexts(`# Quiz: ${quiz.title}`, quizInput);
+          const quizBase = {
             sourceType: 'quiz' as SourceType,
             sourceId: quiz.id,
             title: quiz.title,
-            content: quizContent,
-            metadata: { quizId: quiz.id, questionCount: quizQuestions.length },
             forceReindex,
+            trainingCatalogId: String(quiz.trainingCatalogId),
+            organizationId: null,
+          };
+          const questionResult = await indexContent({
+            ...quizBase,
+            content: texts.questions,
+            metadata: {
+              quizId: quiz.id,
+              questionCount: quizQuestions.length,
+              contentPart: 'questions',
+            },
+            visibility: QUIZ_QUESTIONS_VISIBILITY,
           });
-          progress.totalChunksIndexed += result.chunksIndexed;
-          progress.totalChunksSkipped += result.chunksSkipped;
-          if (result.chunksFailed > 0) {
+          const results = [questionResult];
+          if (texts.answers) {
+            results.push(
+              await indexContent({
+                ...quizBase,
+                content: texts.answers,
+                metadata: {
+                  quizId: quiz.id,
+                  questionCount: quizQuestions.length,
+                  contentPart: 'answers',
+                },
+                visibility: QUIZ_ANSWERS_VISIBILITY,
+                chunkIndexOffset: TRAINER_PART_CHUNK_OFFSET,
+              })
+            );
+          } else {
+            await removeChunkPart(
+              'quiz' as SourceType,
+              quiz.id,
+              TRAINER_PART_CHUNK_OFFSET
+            );
+          }
+          for (const result of results) {
+            progress.totalChunksIndexed += result.chunksIndexed;
+            progress.totalChunksSkipped += result.chunksSkipped;
+          }
+          const failedResult = results.find(result => !result.success);
+          if (failedResult) {
             progress.failedSources++;
             progress.errors.push(
-              `Quiz "${quiz.title}": ${result.chunksFailed} chunk(s) failed`
+              `Quiz "${quiz.title}": ${
+                failedResult.chunksFailed > 0
+                  ? `${failedResult.chunksFailed} chunk(s) failed`
+                  : failedResult.error
+              }`
             );
           }
         }
@@ -453,11 +504,11 @@ async function runBackgroundReindex(
         // Get mapped enablers and use cases
         const mappings = await haiDb
           .select({
-            enablerId: lernfeldMappings.enablerId,
-            useCaseId: lernfeldMappings.useCaseId,
+            enablerId: trainingCatalogContentMappings.enablerId,
+            useCaseId: trainingCatalogContentMappings.useCaseId,
           })
-          .from(lernfeldMappings)
-          .where(eq(lernfeldMappings.lernfeldId, lf.id));
+          .from(trainingCatalogContentMappings)
+          .where(eq(trainingCatalogContentMappings.learningFieldId, lf.id));
 
         if (mappings.length > 0) {
           const enablerMappings = mappings.filter(m => m.enablerId);
@@ -486,6 +537,9 @@ async function runBackgroundReindex(
               label: lf.label,
             },
             forceReindex,
+            trainingCatalogId: String(lf.trainingCatalogId),
+            visibility: 'all',
+            organizationId: null,
           });
           progress.totalChunksIndexed += result.chunksIndexed;
           progress.totalChunksSkipped += result.chunksSkipped;

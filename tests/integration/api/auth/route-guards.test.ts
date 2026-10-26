@@ -28,6 +28,8 @@ const TOKEN = 'valid-token';
 // role to fall below, an inactive account is the one it turns away with 403.
 const TOO_LOW_ROLE: Record<GuardedRoute['guard'], Record<string, unknown>> = {
   user: { role: 'TRAINEE', isActive: false },
+  // A trainer-level caller is not a trainee
+  trainee: { role: 'TRAINER' },
   trainer: { role: 'TRAINEE' },
   admin: { role: 'TRAINER' },
   // An ADMIN of a customer organization is not a platform-wide admin
@@ -74,10 +76,10 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
 
   it('covers the expected number of handlers', () => {
     // Guards against the table silently shrinking when files move
-    expect(GUARDED_ROUTES.length).toBeGreaterThanOrEqual(180);
+    expect(GUARDED_ROUTES.length).toBeGreaterThanOrEqual(193);
   });
 
-  it('lists every notification and trainee handler', async () => {
+  it('lists every notification, trainee and activity report handler', async () => {
     // A new route file under these folders has to be added to the table, or to
     // the short list of open master data routes below (a decision to review)
     const { readdirSync, readFileSync, statSync } = await import('fs');
@@ -96,7 +98,11 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
             .replace(/\/route\.ts$/, '');
           if (
             route.startsWith('notifications') ||
-            route.startsWith('trainee/')
+            route.startsWith('trainee/') ||
+            route.startsWith('activity-reports') ||
+            route.startsWith('weekly-evaluations') ||
+            route.startsWith('grade-edit-history') ||
+            route.startsWith('breadcrumb/')
           ) {
             const source = readFileSync(full, 'utf8');
             for (const m of source.matchAll(
@@ -110,11 +116,19 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
     };
     walk(base);
     // (the HAI routes of one person and me/catalogs are 'user' handlers too,
-    // they are not part of this folder scan)
+    // they are not part of this folder scan, the folders trainer/, admin/ and
+    // me/ have a scan of their own below)
     const listed = GUARDED_ROUTES.filter(
       r =>
-        r.guard === 'user' &&
-        (r.route.startsWith('notifications') || r.route.startsWith('trainee/'))
+        (r.guard === 'user' ||
+          r.guard === 'trainee' ||
+          // trainer handlers of the activity report group (the folders under
+          // trainer/ are covered by the table made from their files)
+          (r.guard === 'trainer' &&
+            !r.route.startsWith('trainer/') &&
+            !r.route.startsWith('me/'))) &&
+        !r.route.startsWith('hai/') &&
+        !r.route.startsWith('me/')
     ).map(r => `${r.method} ${r.route}`);
     // Master data without personal data, open without a session: the
     // Lernfelder of an occupation (list and detail, the catalog comes from the

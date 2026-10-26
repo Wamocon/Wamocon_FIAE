@@ -53,7 +53,7 @@ Dieser Abschnitt gilt für die Dateien `supabase/migrations/20261024000100` bis
 `20261024001500`, `20261025000000`, die Sicherheitsdatei `20261025000100`,
 die Folgedateien `20261026000100` und `20261027000100` und die drei Dateien
 `20261028000100` bis `20261028000300` zur Vorbereitung des KfBM-Inhaltsimports
-(PR 83 und später). Die Migration von
+sowie `20261029000100` (HAI-Index, Quiz-Sichtbarkeit) (PR 83 und später). Die Migration von
 `202606260001` oben ist bereits in Produktion
 angewendet und bleibt unverändert. Die Reihe ist in Produktion noch nicht
 angewendet. Geprüft ist sie auf einer lokalen Wegwerf-Datenbank (PostgreSQL 15
@@ -105,6 +105,7 @@ also nur strukturell geprüft, nicht mit den echten Zeilen.
 | 20261028000100 | Kurs und Komponente verbinden: `courses.training_component_id` (nullable), zusammengesetzter Fremdschlüssel `courses_component_catalog_fk` auf `training_components (id, training_catalog_id)` (`on delete restrict`), eindeutiger Index `courses_training_component_unique` (höchstens ein Kurs je Komponente). Backfill nur dort, wo Kurs und Komponente im selben Katalog denselben Code tragen und die Komponente noch frei ist. Die FIAE-Kurse haben keinen Code und bleiben `NULL`, das ist kein Fehler (die Datei meldet die Zahlen mit `raise notice`). Rückweg: Index, Constraint und Spalte entfernen (Kopfkommentar der Datei). |
 | 20261028000200 | `quizzes.code` (nullable, gleiches Format wie die anderen Codes, eindeutig je Katalog wo gesetzt) und Katalogprüfung für Quiz-Verknüpfungen: Trigger `enabler_quiz_links_catalog_check` verlangt, dass Quiz und Enabler (über den Kurs) im selben Katalog liegen, ein zweiter Trigger schützt den Katalog eines schon verknüpften Quiz. Die Vorprüfung bricht mit der Zahl der Verstöße ab und ändert nichts. Rückweg im Kopfkommentar der Datei. |
 | 20261028000300 | Eindeutig `(component_id, letter)` auf `training_use_cases` (Vorprüfung bricht mit der Zahl der Dubletten ab, löscht nichts) und `options.order_index` (nullable, ohne Standardwert, kein Umschreiben der Tabelle). Rückweg im Kopfkommentar der Datei. |
+| 20261029000100 | HAI-Index, Quiz-Sichtbarkeit (Paket H2): ersetzt die Funktion `hai_embedding_visibility` und den Trigger `hai_embeddings_set_scope`. Ein Quiz-Chunk bleibt `trainer`, außer er ist ein als `contentPart = 'questions'` gekennzeichneter Fragen-Chunk ohne Antwortmarker (Haken, Kreuz, "Erklärung:", "Erwartete Antwort:"). Bisher war jeder Quiz-Chunk `trainer`. Der Trigger läuft jetzt auch beim Ändern von `visibility`, `training_catalog_id` und `organization_id`. Keine Daten gelesen oder geändert, kein Backfill, bestehende Quiz-Chunks bleiben `trainer`, bis das Quiz neu indexiert wird. Abbruch in der Vorprüfung, wenn 20261027000100 fehlt. Die Datei liegt hinter dem Katalog und wird deshalb erst nach der Freigabe angewendet. Rückweg: Kopfkommentar der Datei. |
 
 Daten werden verändert in: 000300 (UPDATE enablers, use_cases, mappings),
 000500 (Kopie der Lernfelder), 000700 (UPDATE training_components), 001000
@@ -256,9 +257,26 @@ gilt nur, solange die Reihe nicht angewendet ist.
   Quiz-Antworten, erwartete Antworten), weder im Kontext noch in Zitaten, und keine
   Inhalte eines anderen Berufs. Zeilen ohne Katalog sind für niemanden sichtbar. Der
   PageIndex liest keine Lösungs-PDFs für Azubis und setzt in Zitaten nur dann die
-  öffentliche `storage_url`, wenn das Dokument für Azubis sichtbar ist. Die
-  Schreibpfade setzen die neuen Spalten noch nicht selbst, ein Trigger leitet sie aus
-  der Quelle ab (Folgepaket H2 setzt sie ausdrücklich).
+  öffentliche `storage_url`, wenn das Dokument für Azubis sichtbar ist.
+  Ab Paket H2 setzen alle Schreibwege (`embeddings.ts`, `ingestUseCase.ts`, der
+  Embed-Job, `traineeDataIndexer.ts`, `scripts/reindex-gemini.ts`) Beruf,
+  Sichtbarkeit und Organisation ausdrücklich, der Trigger bleibt als Sicherung.
+  Ein Quiz wird vor dem Chunking in Fragen (`all`) und Antworten (`trainer`)
+  getrennt, der Szenario-Hinweis ist ein eigener Chunk (`trainer`, umkehrbar über
+  `SCENARIO_HINT_VISIBILITY`). Vorhandene Quiz-Chunks bleiben `trainer`, bis neu
+  indexiert wird. Das Reindex-Skript läuft standardmäßig als Trockenlauf und
+  braucht `--target preview|production|local`, für einen echten Lauf `--apply`;
+  Production wird ohne `--confirm-production <Host der Verbindung>` und ohne
+  freigegebenes Rollout-Gate abgelehnt (der Wert von `KFBM_ROLLOUT_APPROVED` kommt
+  aus der Umgebung des Prozesses, nicht aus `.env.local`). Grenze der Prüfung: Ein
+  Tunnel oder Proxy auf `127.0.0.1`, der auf Production zeigt, sieht für das Skript
+  wie `local` aus. `--purge` und `--purge-stale` löschen nur Chunks, die das Skript
+  selbst aufbaut (Kurs, Enabler, Quiz, Dokument, Use-Case-Zeilen unter Index 1000),
+  keine persönlichen Chunks und keine Lösungsseiten.
+  Nach dem Rollout ist ein Reindex nötig: Alte Enabler-Chunks enthalten den
+  Hinweistext noch mit `all` (Abfrage C19), alte persönliche Chunks enthalten noch
+  E-Mail-Adressen (Abfrage C20, `traineeDataIndexer` ersetzt sie beim nächsten Lauf
+  je Azubi) und alte Quiz-Chunks bleiben `trainer`.
 
 ## Rollback
 

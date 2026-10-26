@@ -4,21 +4,22 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
-// The notification routes, every route of a trainee and every route of a
-// trainer, an admin or the signed-in person (/api/trainer, /api/admin,
-// /api/me) answer only with a bearer session. A browser call with a plain
-// fetch() carries no token and would be answered with 401, so every caller has
-// to use authFetch (src/lib/authFetch.ts). This test reads the sources and
-// fails for a plain fetch() whose url is one of these routes, including a url
-// kept in a variable before the call. A new caller that forgets authFetch
-// fails here.
+// The notification routes, every route of a trainee, of a trainer, of an admin
+// or of the signed-in person (/api/trainer, /api/admin, /api/me), the
+// activity report routes (activity-reports, weekly-evaluations,
+// grade-edit-history) and the breadcrumb labels answer only with a bearer
+// session. A browser call with a plain fetch() carries no token and would be
+// answered with 401, so every caller has to use authFetch
+// (src/lib/authFetch.ts). This test reads the sources and fails for a plain
+// fetch() whose url is one of these routes, including a url kept in a
+// variable before the call. A new caller that forgets authFetch fails here.
 //
 // Not listed on purpose: /api/trainee/lernfelder (master data, open without a
 // session) and /api/trainee/evaluations/softskills (the public list of the
 // softskill criteria).
 
 const PROTECTED =
-  /\/api\/(notifications|trainer|admin|me\/catalog(?:s|-requests)|trainee\/(school|annual-summary|courses|dashboard|enablers|evaluations(?!\/softskills(?![\w-]))|feedback|knowledge-notes|lesson-progress|lessons|progress|quizzes|use-case-hours|use-cases))(?![\w-])/;
+  /\/api\/(notifications|trainer|admin|me\/catalog(?:s|-requests)|activity-reports|weekly-evaluations|grade-edit-history|breadcrumb\/label|trainee\/(school|annual-summary|courses|dashboard|enablers|evaluations(?!\/softskills(?![\w-]))|feedback|knowledge-notes|lesson-progress|lessons|progress|quizzes|use-case-hours|use-cases))(?![\w-])/;
 const SRC = join(process.cwd(), 'src');
 const API = join(SRC, 'app', 'api');
 // The wrapper itself calls fetch() with the url it is given, and names a route
@@ -85,6 +86,37 @@ describe('plainFetchViolations (the scanner itself)', () => {
     expect(plainFetchViolations('window.fetch("/api/notifications")')).toEqual(
       []
     );
+  });
+
+  it('flags a plain fetch to every activity report route', () => {
+    const urls = [
+      '/api/activity-reports?userId=1&limit=500',
+      '/api/activity-reports',
+      '/api/activity-reports/r1',
+      '/api/activity-reports/r1/entries',
+      '/api/activity-reports/r1/skill-ratings',
+      '/api/weekly-evaluations?activityReportId=r1',
+      '/api/weekly-evaluations',
+      '/api/grade-edit-history?entityType=USE_CASE_ENTRY&entityId=e1',
+      '/api/breadcrumb/label?entity=module&id=m1',
+    ];
+    for (const url of urls) {
+      expect(plainFetchViolations(`fetch('${url}')`)).toHaveLength(1);
+      expect(plainFetchViolations(`fetch(\`${url}\`)`)).toHaveLength(1);
+      expect(plainFetchViolations(`authFetch('${url}')`)).toEqual([]);
+    }
+  });
+
+  it('flags the trainer routes of the same name as well, they need a token too', () => {
+    expect(
+      plainFetchViolations("fetch('/api/trainer/activity-reports/r1')")
+    ).toHaveLength(1);
+    expect(
+      plainFetchViolations("authFetch('/api/trainer/activity-reports/r1')")
+    ).toEqual([]);
+    expect(
+      plainFetchViolations("fetch('/api/trainee/school/reports')")
+    ).toHaveLength(1);
   });
 
   it('flags a plain fetch to every other route of a trainee', () => {
@@ -163,7 +195,7 @@ describe('plainFetchViolations for the trainer, admin and me routes', () => {
 });
 
 describe('browser code calls the protected routes with authFetch', () => {
-  it('finds no plain fetch() to /api/notifications or a protected /api/trainee, /api/trainer, /api/admin or /api/me route', () => {
+  it('finds no plain fetch() to a protected route (notifications, trainee, trainer, admin, me, activity reports, breadcrumb labels)', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(SRC)) {
       for (const target of plainFetchViolations(readFileSync(file, 'utf8'))) {

@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { authFetch } from '@/lib/authFetch';
 
 export interface BreadcrumbItem {
   label: string;
@@ -166,7 +167,7 @@ export function BreadcrumbProvider({
         let label = labelCache.current.get(cacheKey);
         if (!label) {
           try {
-            const res = await fetch(
+            const res = await authFetch(
               `/api/breadcrumb/label?entity=${entity}&id=${segment}`,
               { cache: 'no-store' }
             );
