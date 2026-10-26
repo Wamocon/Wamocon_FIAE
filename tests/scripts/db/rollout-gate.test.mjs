@@ -56,6 +56,18 @@ test('every file of the rebuild and every newer one is gated', () => {
   ]);
 });
 
+test('the model gap files of the KfBM content import are gated, production is not migrated', () => {
+  const gaps = [
+    '20261028000100_course_training_component_link.sql',
+    '20261028000200_quiz_code_and_link_catalog_check.sql',
+    '20261028000300_use_case_letter_unique_option_order.sql',
+  ];
+  assert.deepEqual(gatedInPlan(plan([...HARDENING, ...gaps])), gaps);
+  assert.equal(rolloutGate(plan(gaps), undefined).ok, false);
+  assert.equal(rolloutGate(plan(gaps), 'false').ok, false);
+  assert.equal(rolloutGate(plan(gaps), 'true').ok, true);
+});
+
 test('a plan with the rebuild is blocked unless the value is exactly true', () => {
   const text = plan([...HARDENING, ...CATALOG]);
   for (const value of [
