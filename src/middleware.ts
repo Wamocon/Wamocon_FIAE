@@ -9,9 +9,15 @@ const CC_LONG = 'public, s-maxage=900, stale-while-revalidate=1800'; // 15 min �
 const CC_MEDIUM = 'private, no-cache'; // mutable data – always reach origin
 const CC_SHORT = 'private, no-cache'; // mutable data – always reach origin
 
-/** Static / reference data — rarely or never changes */
+/**
+ * Static / reference data — rarely or never changes. Only routes whose answer
+ * is the same for every caller belong here (the catalog of the public lists is
+ * part of the URL). /api/trainee/lernfelder/[id] is not listed: its answer
+ * depends on the occupation of the session, which is not part of the URL, so it
+ * gets the private tier below.
+ */
 const LONG_RE =
-  /^\/api\/(training-(use-cases|components)|softskill-criteria|trainee\/evaluations\/softskills|trainee\/lernfelder\/|verify\/)/;
+  /^\/api\/(training-(use-cases|components)|softskill-criteria|trainee\/evaluations\/softskills|verify\/)/;
 
 /** Trainer & trainee data routes — changes on writes, 5 min TTL */
 const MEDIUM_RE = /^\/api\/(trainer|trainee)\//;
