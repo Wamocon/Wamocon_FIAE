@@ -2,6 +2,7 @@ import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { DB_OPTION } from '@/lib/db-schema';
+import { blockPreviewAccountInProduction } from '@/lib/preview-guard';
 import db from '@/db';
 import { profiles, organizations } from '@/db/migrations/schemas/schema';
 import { and, eq, ne, sql } from 'drizzle-orm';
@@ -80,6 +81,9 @@ export async function POST(request: Request) {
     }
 
     const user = userRes.user;
+    // An account created in Preview gets no profile in Production
+    const rejected = blockPreviewAccountInProduction(user);
+    if (rejected) return rejected;
     const email = (user.email || '').trim().toLowerCase();
     if (!email) {
       return NextResponse.json(

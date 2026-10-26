@@ -5,8 +5,11 @@ import { updateUserChecked, userWriteFailureBody } from '@/lib/admin/userWrites'
 import { getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { DB_OPTION } from '@/lib/db-schema';
-import { blockInPreview } from '@/lib/preview-guard';
+import { DB_OPTION, IS_PREVIEW_SCHEMA } from '@/lib/db-schema';
+import {
+  deleteAuthAccountIfPreviewOnly,
+  type AuthKeptReason,
+} from '@/lib/preview-account';
 import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
@@ -141,10 +144,6 @@ export async function DELETE(
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
 
-    // auth.admin.deleteUser would delete an account of the shared Production auth
-    const blocked = blockInPreview();
-    if (blocked) return blocked;
-
     if (session.id === userId) {
       return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });
     }
@@ -191,6 +190,13 @@ export async function DELETE(
 
     await db.delete(profiles).where(eq(profiles.id, userId as any));
 
+    // Preview shares the auth of Production: the profile above lives in the
+    // Preview schema and may always go, but the auth account only goes when it
+    // was created in Preview (app_metadata.preview_only, read from the auth
+    // server). A real, shared account stays.
+    let previewKept: AuthKeptReason | 'NOT_CONFIGURED' | null =
+      IS_PREVIEW_SCHEMA ? 'NOT_CONFIGURED' : null;
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = getSupabaseSecretKey();
     if (supabaseUrl && serviceRoleKey) {
@@ -198,9 +204,28 @@ export async function DELETE(
         auth: { autoRefreshToken: false, persistSession: false },
         db: DB_OPTION,
       });
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (IS_PREVIEW_SCHEMA) {
+        const outcome = await deleteAuthAccountIfPreviewOnly(
+          supabaseAdmin,
+          userId
+        );
+        previewKept = outcome.deleted ? null : outcome.reason;
+      } else {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+      }
     }
 
+    if (IS_PREVIEW_SCHEMA) {
+      return NextResponse.json(
+        previewKept
+          ? {
+              success: true,
+              authAccountKept: true,
+              authAccountKeptReason: previewKept,
+            }
+          : { success: true, authAccountKept: false }
+      );
+    }
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error('Admin delete user error', e);

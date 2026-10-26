@@ -37,8 +37,19 @@ function supabaseReturning(user: any, error: any = null) {
   };
 }
 
-async function importHandlerWithDb(mockDb: any, mockSupa: any) {
+async function importHandlerWithDb(
+  mockDb: any,
+  mockSupa: any,
+  preview?: boolean
+) {
   jest.resetModules();
+  if (preview !== undefined) {
+    const actual: any = jest.requireActual('@/lib/db-schema');
+    jest.doMock('@/lib/db-schema', () => ({
+      ...actual,
+      IS_PREVIEW_SCHEMA: preview,
+    }));
+  }
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
   jest.doMock('@/lib/profile-identity', () => ({
     __esModule: true,
@@ -326,5 +337,123 @@ describe('API: Auth Sync Profile', () => {
       (fn as jest.Mock).mock.invocationCallOrder[0];
     expect(order(db.execute)).toBeLessThan(order(mergeProfileReferences));
     expect(writes('delete', 'profiles')).toHaveLength(1);
+  });
+});
+
+describe('API: Auth Sync Profile, accounts created in Preview', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    process.env.SUPABASE_URL = 'http://test';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'key';
+    delete process.env.DEFAULT_TRAINER_ID;
+    delete process.env.DEFAULT_TRAINER_EMAIL;
+  });
+
+  const flaggedUser = {
+    id: 'pv1',
+    email: 'preview.user@example.com',
+    email_confirmed_at: '2025-01-01T00:00:00Z',
+    user_metadata: { full_name: 'Preview User' },
+    app_metadata: { preview_only: true },
+  };
+  const call = (POST: (req: any) => Promise<Response>) =>
+    POST(makePost('http://localhost/api/auth/sync-profile', authed));
+
+  it('Production rejects a flagged account with 403, a German message and no database access', async () => {
+    const { db, calls } = createTableDb({ profiles: { sequence: [[], []] } });
+    const POST = await importHandlerWithDb(
+      db,
+      supabaseReturning(flaggedUser),
+      false
+    );
+    const res = await call(POST);
+    expect(res.status).toBe(403);
+    const json: any = await res.json();
+    expect(json.code).toBe('PREVIEW_ACCOUNT_REJECTED');
+    expect(json.error).toMatch(/Preview/);
+    expect(json.error).toMatch(/Production/);
+    expect(calls).toHaveLength(0);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('Production does not merge a flagged account into a pre-created profile with the same address', async () => {
+    const { db, writes } = createTableDb({
+      profiles: [
+        {
+          id: 'old-id',
+          role: 'ADMIN',
+          organizationId: 'org1',
+          trainerActivated: true,
+        },
+      ],
+    });
+    const POST = await importHandlerWithDb(
+      db,
+      supabaseReturning(flaggedUser),
+      false
+    );
+    const res = await call(POST);
+    expect(res.status).toBe(403);
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(writes('insert', 'profiles')).toHaveLength(0);
+    expect(writes('update', 'profiles')).toHaveLength(0);
+    expect(writes('delete', 'profiles')).toHaveLength(0);
+  });
+
+  it('Preview creates the profile of a flagged account as before', async () => {
+    const { db, writes } = createTableDb({
+      profiles: { sequence: [[], [{ id: 'tr1' }]] },
+    });
+    const POST = await importHandlerWithDb(
+      db,
+      supabaseReturning(flaggedUser),
+      true
+    );
+    const res = await call(POST);
+    expect(res.status).toBe(200);
+    expect(writes('insert', 'profiles')[0]).toMatchObject({
+      id: 'pv1',
+      email: 'preview.user@example.com',
+    });
+  });
+
+  it('Production creates the profile of a normal account as before', async () => {
+    const normal = {
+      id: 'n1',
+      email: 'normal@example.com',
+      user_metadata: {},
+      app_metadata: { provider: 'email', providers: ['email'] },
+    };
+    const { db, writes } = createTableDb({
+      profiles: { sequence: [[], [{ id: 'tr1' }]] },
+    });
+    const POST = await importHandlerWithDb(
+      db,
+      supabaseReturning(normal),
+      false
+    );
+    const res = await call(POST);
+    expect(res.status).toBe(200);
+    expect(writes('insert', 'profiles')).toHaveLength(1);
+  });
+
+  it('Production treats a user_metadata flag as nothing (the user can set it)', async () => {
+    const forged = {
+      id: 'n2',
+      email: 'forged@example.com',
+      user_metadata: { preview_only: true },
+    };
+    const { db, writes } = createTableDb({
+      profiles: { sequence: [[], [{ id: 'tr1' }]] },
+    });
+    const POST = await importHandlerWithDb(
+      db,
+      supabaseReturning(forged),
+      false
+    );
+    const res = await call(POST);
+    expect(res.status).toBe(200);
+    expect(writes('insert', 'profiles')).toHaveLength(1);
   });
 });

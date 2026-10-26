@@ -24,7 +24,11 @@ import {
 import { profiles, organizations, notifications } from '@/db/migrations/schemas/schema';
 import { sendCredentialsEmail } from '@/lib/email';
 import { DB_OPTION } from '@/lib/db-schema';
-import { blockInPreview } from '@/lib/preview-guard';
+import {
+  createUserFailureMessage,
+  previewAccountAppMetadata,
+  shouldSendCredentialsEmail,
+} from '@/lib/preview-account';
 import crypto from 'crypto';
 
 export async function GET(req: NextRequest) {
@@ -136,10 +140,9 @@ export async function POST(req: NextRequest) {
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
 
-    // auth.admin.createUser would create an account in the shared Production auth
-    const blocked = blockInPreview();
-    if (blocked) return blocked;
-
+    // Preview shares the auth of Production. An account created there carries
+    // app_metadata.preview_only, which Production does not accept as a user
+    // (src/lib/preview-account.ts).
     const body = await req.json();
     const { email, fullName, role, organizationId, sendEmail, catalogId } =
       body as {
@@ -273,11 +276,12 @@ export async function POST(req: NextRequest) {
       password,
       email_confirm: true,
       user_metadata: { full_name: fullName, role: upperRole },
+      ...previewAccountAppMetadata(),
     });
 
     if (createError) {
       return NextResponse.json(
-        { error: (createError as any)?.message || 'Failed to create auth user' },
+        { error: createUserFailureMessage(createError) },
         { status: 400 }
       );
     }
@@ -317,9 +321,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(failure.body, { status: failure.status });
     }
 
-    // Send credentials email
+    // Send credentials email. Preview sends it only when asked for (sendEmail
+    // true), the credentials are in the answer either way.
     let emailSent = false;
-    if (sendEmail !== false) {
+    if (shouldSendCredentialsEmail(sendEmail)) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL
         || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
       const result = await sendCredentialsEmail(
