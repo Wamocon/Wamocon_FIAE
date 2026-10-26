@@ -1,6 +1,11 @@
 // The tables the apply step may touch, with the columns it may write. This
 // list is the whole write surface: a table or column that is not listed here
 // cannot be read or written through PgDb. There is no delete anywhere.
+//
+// The content import (TABLE_ORDER) writes the first eight tables. The learning
+// field import (phase 4.5, src/lib/content-import/learning-fields) writes the
+// last two, training_catalog_learning_fields and
+// training_catalog_content_mappings.
 
 export type TableName =
   | 'training_components'
@@ -10,7 +15,9 @@ export type TableName =
   | 'questions'
   | 'options'
   | 'enabler_quiz_links'
-  | 'content_documents';
+  | 'content_documents'
+  | 'training_catalog_learning_fields'
+  | 'training_catalog_content_mappings';
 
 export interface TableSpec {
   /** Columns of a row without the id (all of them may be inserted). */
@@ -159,8 +166,42 @@ export const TABLES: Record<TableName, TableSpec> = {
     ],
     touch: true,
   },
+  training_catalog_learning_fields: {
+    columns: [
+      'training_catalog_id',
+      'code',
+      'title',
+      'description',
+      'training_year',
+      'hours_budget',
+      'order_index',
+    ],
+    // Only the title is updated. The school year and the order are part of
+    // the identity of a learning field, the hours have no source.
+    updatable: ['title'],
+    uuid: ['id', 'training_catalog_id'],
+    touch: true,
+  },
+  training_catalog_content_mappings: {
+    columns: [
+      'learning_field_id',
+      'enabler_id',
+      'use_case_id',
+      'training_catalog_id',
+    ],
+    updatable: [],
+    uuid: [
+      'id',
+      'learning_field_id',
+      'enabler_id',
+      'use_case_id',
+      'training_catalog_id',
+    ],
+    touch: false,
+  },
 };
 
+/** The tables of the content import, in the order they are written. */
 export const TABLE_ORDER: TableName[] = [
   'training_components',
   'courses',

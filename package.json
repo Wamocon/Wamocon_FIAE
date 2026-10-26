@@ -48,7 +48,8 @@
     "db:content:dry-run": "node scripts/db/content-sync.mjs --linked",
     "import:kfbm:inventory": "node scripts/import/kfbm-inventory.mjs",
     "import:kfbm:parse-check": "node scripts/import/kfbm-parse-check.mjs",
-    "import:kfbm:apply": "node scripts/import/kfbm-apply.mjs"
+    "import:kfbm:apply": "node scripts/import/kfbm-apply.mjs",
+    "import:kfbm:learning-fields": "node scripts/import/kfbm-learning-fields.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
