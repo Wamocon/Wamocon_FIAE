@@ -20,6 +20,7 @@ import {
   labelTrainingYear,
   legacyLearningFieldSelect,
 } from '@/lib/catalog/learning-fields';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 /**
  * GET /api/trainer/lernfelder/[id]
@@ -37,6 +38,8 @@ export async function GET(
     if (isErrorResponse(scope)) return scope;
 
     const { id } = await params;
+    const idNotFound = notFoundUnlessUuid(id);
+    if (idNotFound) return idNotFound;
     const [row] = await db
       .select(legacyLearningFieldSelect)
       .from(learningFields)
@@ -98,6 +101,8 @@ export async function PATCH(
     if (isErrorResponse(session)) return session;
 
     const { id } = await params;
+    const idNotFound = notFoundUnlessUuid(id);
+    if (idNotFound) return idNotFound;
     const trainerId = session.id;
     const scope = await requireCatalogScope(session, req);
     if (isErrorResponse(scope)) return scope;
@@ -157,6 +162,8 @@ export async function DELETE(
     if (isErrorResponse(session)) return session;
 
     const { id } = await params;
+    const idNotFound = notFoundUnlessUuid(id);
+    if (idNotFound) return idNotFound;
     const trainerId = session.id;
     const scope = await requireCatalogScope(session, req);
     if (isErrorResponse(scope)) return scope;

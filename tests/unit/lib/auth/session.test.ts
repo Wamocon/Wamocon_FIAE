@@ -320,15 +320,6 @@ describe('auth/session', () => {
       expect(
         isInOrgScope({ organizationId: 'org-1', isGlobal: false }, 'org-2')
       ).toBe(false);
-      expect(
-        isInOrgScope(
-          {
-            organizationId: '00000000-0000-0000-0000-000000000001',
-            isGlobal: false,
-          },
-          null
-        )
-      ).toBe(true);
       const schema = await import('@/db/migrations/schemas/schema');
       expect(
         orgScopeCondition(schema.profiles.organizationId, {
@@ -342,6 +333,71 @@ describe('auth/session', () => {
           isGlobal: false,
         })
       ).toBeDefined();
+    });
+
+    // A row without an organization (a profile or record that never got one)
+    // belongs to nobody. It used to count as the default organization here,
+    // while the SQL conditions (orgScopeCondition and the helpers built on it)
+    // excluded it. Now both fail closed: only the platform-wide view of the
+    // super admin reaches it.
+    describe('a row without an organization', () => {
+      const DEFAULT_ORG = '00000000-0000-0000-0000-000000000001';
+
+      it.each([
+        ['null', null],
+        ['undefined', undefined],
+        ['an empty string', ''],
+      ])('is outside every organization scope (%s)', async (_name, value) => {
+        const { isInOrgScope } = await load({});
+        for (const organizationId of [DEFAULT_ORG, 'org-1']) {
+          expect(isInOrgScope({ organizationId, isGlobal: false }, value)).toBe(
+            false
+          );
+        }
+      });
+
+      it('is inside the platform-wide scope of the super admin', async () => {
+        const { isInOrgScope } = await load({});
+        expect(
+          isInOrgScope({ organizationId: null, isGlobal: true }, null)
+        ).toBe(true);
+        expect(
+          isInOrgScope({ organizationId: null, isGlobal: true }, undefined)
+        ).toBe(true);
+      });
+
+      it('is outside the scope of a super admin who narrowed the view to one organization', async () => {
+        const { isInOrgScope, scopeOrg } = await load({});
+        const narrowed = scopeOrg(
+          {
+            id: 'sa',
+            email: null,
+            fullName: null,
+            role: 'SUPER_ADMIN',
+            organizationId: DEFAULT_ORG,
+            isPlatformOwner: true,
+            isSuperAdmin: true,
+            isAdmin: true,
+            isTrainerLevel: true,
+          },
+          'org-1'
+        );
+        expect(isInOrgScope(narrowed, null)).toBe(false);
+      });
+
+      it('does not match the default organization any more', async () => {
+        const { isInOrgScope } = await load({});
+        // the default organization itself still matches by id
+        expect(
+          isInOrgScope(
+            { organizationId: DEFAULT_ORG, isGlobal: false },
+            DEFAULT_ORG
+          )
+        ).toBe(true);
+        expect(
+          isInOrgScope({ organizationId: DEFAULT_ORG, isGlobal: false }, null)
+        ).toBe(false);
+      });
     });
   });
 });

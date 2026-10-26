@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lessons, subLessons } from '@/db/migrations/schemas/schema';
 import { eq } from 'drizzle-orm';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ lessonId: string }> }) {
   try {
@@ -10,6 +11,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ le
     if (isErrorResponse(session)) return session;
 
     const { lessonId } = await params;
+    const lessonIdNotFound = notFoundUnlessUuid(lessonId);
+    if (lessonIdNotFound) return lessonIdNotFound;
     const trainerId = session.id;
     const body = await req.json();
     const updates: any = {};
@@ -33,6 +36,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ l
     if (isErrorResponse(session)) return session;
 
     const { lessonId } = await params;
+    const lessonIdNotFound = notFoundUnlessUuid(lessonId);
+    if (lessonIdNotFound) return lessonIdNotFound;
     const trainerId = session.id;
     await db.delete(subLessons).where(eq(subLessons.lesson_id, lessonId));
     await db.delete(lessons).where(eq(lessons.id, lessonId));

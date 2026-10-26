@@ -82,11 +82,24 @@ describe('resolveTraineeForRead', () => {
       );
     });
 
-    it('treats a profile without an organization as the default organization', async () => {
+    it('does not count a profile without an organization as the default organization (fail closed)', async () => {
       const defaultOrg = '00000000-0000-0000-0000-000000000001';
+      const { resolve, ensureTraineeInCatalog } = await load([
+        traineeRow({ organizationId: null }),
+      ]);
+      const result = (await resolve(
+        fakeSession({ organizationId: defaultOrg }),
+        req(),
+        TRAINEE
+      )) as NextResponse;
+      expect(result.status).toBe(404);
+      expect(ensureTraineeInCatalog).not.toHaveBeenCalled();
+    });
+
+    it('lets only the super admin read a trainee without an organization', async () => {
       const { resolve } = await load([traineeRow({ organizationId: null })]);
       const result = await resolve(
-        fakeSession({ organizationId: defaultOrg }),
+        fakeSession({ isSuperAdmin: true, role: 'SUPER_ADMIN' }),
         req(),
         TRAINEE
       );

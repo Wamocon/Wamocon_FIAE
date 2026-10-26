@@ -12,6 +12,7 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { eq, and } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -24,6 +25,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         if (isErrorResponse(session)) return session;
 
         const { id } = await params;
+        const idNotFound = notFoundUnlessUuid(id, 'Evaluation not found');
+        if (idNotFound) return idNotFound;
 
         // Fetch evaluation
         const evaluationRows = await db
@@ -80,6 +83,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         if (isErrorResponse(session)) return session;
 
         const { id } = await params;
+        const idNotFound = notFoundUnlessUuid(id, 'Evaluation not found');
+        if (idNotFound) return idNotFound;
 
         // Fetch evaluation
         const evaluationRows = await db
@@ -117,21 +122,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Trainer rating is required' }, { status: 400 });
         }
 
+        // The status this decision was made on. The write carries it, so an
+        // evaluation that was approved (or rejected) in the meantime is not
+        // overwritten: nothing is changed then and the route answers 409.
+        const changedMeanwhile = () =>
+            NextResponse.json({ error: 'Evaluation was changed in the meantime' }, { status: 409 });
+        const stillInStatus = and(
+            eq(weeklyEvaluations.id, id as any),
+            eq(weeklyEvaluations.traineeId, access.traineeId as any),
+            eq(weeklyEvaluations.status, evaluation.status as any)
+        );
+
         if (isReleaseEdit) {
             // Release grade edit on APPROVED evaluation
             const updateData: Record<string, unknown> = { updatedAt: new Date() };
+            const history: Array<{ fieldName: string; oldValue: string | null; newValue: string }> = [];
 
             if (releaseRating !== undefined) {
-                // Log audit trail if rating changed
+                // Audit trail if rating changed (written together with the update)
                 if (evaluation.releaseRating !== releaseRating && session.id) {
-                    await db.insert(gradeEditHistory).values({
-                        entityType: 'WEEKLY_EVALUATION',
-                        entityId: id,
+                    history.push({
                         fieldName: 'releaseRating',
                         oldValue: evaluation.releaseRating || null,
                         newValue: releaseRating,
-                        changedBy: session.id,
-                        changeReason: editReason || null,
                     });
                 }
                 updateData.releaseRating = releaseRating;
@@ -143,29 +156,93 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             // Also allow editing trainer rating on release edit
             if (trainerRating !== undefined) {
                 if (evaluation.trainerRating !== trainerRating && session.id) {
-                    await db.insert(gradeEditHistory).values({
-                        entityType: 'WEEKLY_EVALUATION',
-                        entityId: id,
+                    history.push({
                         fieldName: 'trainerRating',
                         oldValue: evaluation.trainerRating || null,
                         newValue: trainerRating,
-                        changedBy: session.id,
-                        changeReason: editReason || null,
                     });
                 }
                 updateData.trainerRating = trainerRating;
                 updateData.trainerComment = trainerComment?.substring(0, 500) || null;
             }
 
-            await db
-                .update(weeklyEvaluations)
-                .set(updateData)
-                .where(and(eq(weeklyEvaluations.id, id as any), eq(weeklyEvaluations.traineeId, access.traineeId as any)));
+            const saved = await db.transaction(async (tx) => {
+                const [row] = await tx
+                    .update(weeklyEvaluations)
+                    .set(updateData)
+                    .where(stillInStatus)
+                    .returning({ id: weeklyEvaluations.id });
+                if (!row) return false;
 
-            // Update softskill release ratings
+                for (const entry of history) {
+                    await tx.insert(gradeEditHistory).values({
+                        entityType: 'WEEKLY_EVALUATION',
+                        entityId: id,
+                        fieldName: entry.fieldName,
+                        oldValue: entry.oldValue,
+                        newValue: entry.newValue,
+                        changedBy: session.id,
+                        changeReason: editReason || null,
+                    });
+                }
+
+                // Update softskill release ratings
+                if (softskillRatings && Array.isArray(softskillRatings)) {
+                    for (const { criterionId, releaseRating: sRating, releaseComment: sComment, trainerRating: tRating, trainerComment: tComment } of softskillRatings) {
+                        const existingRating = await tx
+                            .select()
+                            .from(weeklySoftskillRatings)
+                            .where(and(
+                                eq(weeklySoftskillRatings.weeklyEvaluationId, id as any),
+                                eq(weeklySoftskillRatings.softskillCriterionId, criterionId as any)
+                            ))
+                            .limit(1);
+
+                        if (existingRating.length > 0) {
+                            const updatePayload: Record<string, unknown> = { updatedAt: new Date() };
+                            if (sRating !== undefined) {
+                                updatePayload.releaseRating = sRating;
+                                updatePayload.releaseComment = sComment?.substring(0, 500) || null;
+                            }
+                            if (tRating !== undefined) {
+                                updatePayload.trainerRating = tRating;
+                                updatePayload.trainerComment = tComment?.substring(0, 500) || null;
+                            }
+                            await tx
+                                .update(weeklySoftskillRatings)
+                                .set(updatePayload)
+                                .where(eq(weeklySoftskillRatings.id, existingRating[0].id));
+                        }
+                    }
+                }
+                return true;
+            });
+            if (!saved) return changedMeanwhile();
+
+            return NextResponse.json({
+                success: true,
+                message: 'Release grade saved',
+            });
+        }
+
+        // Standard trainer assessment (non-release edit)
+        const savedAssessment = await db.transaction(async (tx) => {
+            // Update evaluation
+            const [row] = await tx
+                .update(weeklyEvaluations)
+                .set({
+                    trainerRating,
+                    trainerComment: trainerComment?.substring(0, 500) || null,
+                    updatedAt: new Date(),
+                })
+                .where(stillInStatus)
+                .returning({ id: weeklyEvaluations.id });
+            if (!row) return false;
+
+            // Update softskill ratings
             if (softskillRatings && Array.isArray(softskillRatings)) {
-                for (const { criterionId, releaseRating: sRating, releaseComment: sComment, trainerRating: tRating, trainerComment: tComment } of softskillRatings) {
-                    const existingRating = await db
+                for (const { criterionId, trainerRating: rating, trainerComment: comment } of softskillRatings) {
+                    const existingRating = await tx
                         .select()
                         .from(weeklySoftskillRatings)
                         .where(and(
@@ -175,72 +252,28 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
                         .limit(1);
 
                     if (existingRating.length > 0) {
-                        const updatePayload: Record<string, unknown> = { updatedAt: new Date() };
-                        if (sRating !== undefined) {
-                            updatePayload.releaseRating = sRating;
-                            updatePayload.releaseComment = sComment?.substring(0, 500) || null;
-                        }
-                        if (tRating !== undefined) {
-                            updatePayload.trainerRating = tRating;
-                            updatePayload.trainerComment = tComment?.substring(0, 500) || null;
-                        }
-                        await db
+                        await tx
                             .update(weeklySoftskillRatings)
-                            .set(updatePayload)
+                            .set({
+                                trainerRating: rating,
+                                trainerComment: comment?.substring(0, 500) || null,
+                                updatedAt: new Date(),
+                            })
                             .where(eq(weeklySoftskillRatings.id, existingRating[0].id));
+                    } else {
+                        await tx
+                            .insert(weeklySoftskillRatings)
+                            .values({
+                                weeklyEvaluationId: id,
+                                softskillCriterionId: criterionId,
+                                trainerRating: rating,
+                            });
                     }
                 }
             }
-
-            return NextResponse.json({
-                success: true,
-                message: 'Release grade saved',
-            });
-        }
-
-        // Standard trainer assessment (non-release edit)
-        // Update evaluation
-        await db
-            .update(weeklyEvaluations)
-            .set({
-                trainerRating,
-                trainerComment: trainerComment?.substring(0, 500) || null,
-                updatedAt: new Date(),
-            })
-            .where(and(eq(weeklyEvaluations.id, id as any), eq(weeklyEvaluations.traineeId, access.traineeId as any)));
-
-        // Update softskill ratings
-        if (softskillRatings && Array.isArray(softskillRatings)) {
-            for (const { criterionId, trainerRating: rating, trainerComment: comment } of softskillRatings) {
-                const existingRating = await db
-                    .select()
-                    .from(weeklySoftskillRatings)
-                    .where(and(
-                        eq(weeklySoftskillRatings.weeklyEvaluationId, id as any),
-                        eq(weeklySoftskillRatings.softskillCriterionId, criterionId as any)
-                    ))
-                    .limit(1);
-
-                if (existingRating.length > 0) {
-                    await db
-                        .update(weeklySoftskillRatings)
-                        .set({
-                            trainerRating: rating,
-                            trainerComment: comment?.substring(0, 500) || null,
-                            updatedAt: new Date(),
-                        })
-                        .where(eq(weeklySoftskillRatings.id, existingRating[0].id));
-                } else {
-                    await db
-                        .insert(weeklySoftskillRatings)
-                        .values({
-                            weeklyEvaluationId: id,
-                            softskillCriterionId: criterionId,
-                            trainerRating: rating,
-                        });
-                }
-            }
-        }
+            return true;
+        });
+        if (!savedAssessment) return changedMeanwhile();
 
         return NextResponse.json({
             success: true,
@@ -262,6 +295,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         if (isErrorResponse(session)) return session;
 
         const { id } = await params;
+        const idNotFound = notFoundUnlessUuid(id, 'Evaluation not found');
+        if (idNotFound) return idNotFound;
 
         const evaluationRows = await db
             .select()
@@ -294,7 +329,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
         const newStatus = action === 'approve' ? 'APPROVED' : 'REJECTED';
 
-        await db
+        // The write carries the status the decision was made on: an evaluation
+        // that was approved or rejected in the meantime is not overwritten and
+        // gets no second notification
+        const [changed] = await db
             .update(weeklyEvaluations)
             .set({
                 status: newStatus,
@@ -302,7 +340,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
                 rejectionReason: action === 'reject' ? rejectionReason : null,
                 updatedAt: new Date(),
             })
-            .where(and(eq(weeklyEvaluations.id, id as any), eq(weeklyEvaluations.traineeId, access.traineeId as any)));
+            .where(and(
+                eq(weeklyEvaluations.id, id as any),
+                eq(weeklyEvaluations.traineeId, access.traineeId as any),
+                eq(weeklyEvaluations.status, evaluation.status as any)
+            ))
+            .returning({ id: weeklyEvaluations.id });
+        if (!changed) {
+            return NextResponse.json({ error: 'Evaluation was changed in the meantime' }, { status: 409 });
+        }
 
         // Create notification for trainee
         if (trainerId) {

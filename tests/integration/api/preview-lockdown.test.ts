@@ -15,7 +15,7 @@ jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(),
 }));
 
-const admin = { id: 'a1', role: 'ADMIN', organizationId: 'org1' };
+const admin = { id: '77777777-7777-4777-8777-777777777777', role: 'ADMIN', organizationId: 'org1' };
 
 async function load(preview: boolean) {
   jest.resetModules();
@@ -81,7 +81,7 @@ describe('Preview lockdown of the public self-registration', () => {
     await load(true);
     const { DELETE } = await import('@/app/api/admin/users/[userId]/route');
     const res = await DELETE(jsonRequest({}), {
-      params: Promise.resolve({ userId: 'a1' }),
+      params: Promise.resolve({ userId: '77777777-7777-4777-8777-777777777777' }),
     });
     // reaches the normal logic ("cannot delete yourself"), not the lockdown
     expect(res.status).toBe(400);

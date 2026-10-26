@@ -19,6 +19,15 @@ import {
   notGradable,
   UUID,
 } from '@/lib/auth/activity-report-access';
+import {
+  MAX_COMMENT_LENGTH,
+  MAX_REASON_LENGTH,
+  invalidText,
+  readJsonObject,
+} from '@/lib/input-limits';
+
+/** Most grades one request may carry (a report has a few dozen entries). */
+const MAX_ENTRY_GRADES = 200;
 
 // GET: Get report entries for a specific report
 // A trainee reaches the entries of their own reports, trainer level the ones of
@@ -116,8 +125,9 @@ export async function PATCH(
 
   try {
     const { id } = await params;
-    const body = await request.json();
-    const { entryGrades, editReason } = body;
+    const body = await readJsonObject(request);
+    if (isErrorResponse(body)) return body;
+    const { entryGrades, editReason } = body as Record<string, any>;
 
     // entryGrades: Array of { entryId, grade, comment }
     if (!entryGrades || !Array.isArray(entryGrades)) {
@@ -126,6 +136,30 @@ export async function PATCH(
         { status: 400 }
       );
     }
+
+    // Shape and length of what goes into the database, checked before anything
+    // is read: a report has a few dozen entries, the limit only stops a runaway
+    // request
+    if (entryGrades.length > MAX_ENTRY_GRADES) {
+      return NextResponse.json(
+        { error: 'Too many entryGrades' },
+        { status: 400 }
+      );
+    }
+    if (
+      entryGrades.some(g => !g || typeof g !== 'object' || Array.isArray(g))
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid entryGrades' },
+        { status: 400 }
+      );
+    }
+    const invalidTextInput =
+      invalidText('editReason', editReason, MAX_REASON_LENGTH) ??
+      entryGrades
+        .map(g => invalidText('comment', g.comment, MAX_COMMENT_LENGTH))
+        .find(Boolean);
+    if (invalidTextInput) return invalidTextInput;
 
     // H-2 fix: Validate all trainer grades are in valid range
     const validGrades = ['1', '2', '3', '4', '5', '6'];

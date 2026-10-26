@@ -347,7 +347,7 @@ describe('trainee lists per occupation', () => {
       req(`${traineeUrl}/activate`, {
         header,
         method: 'PATCH',
-        body: { itemType: 'ENABLER', itemId: 'e1', isActive: true },
+        body: { itemType: 'ENABLER', itemId: 'bbbbbbb4-0000-4000-8000-000000000004', isActive: true },
       });
     // the enabler of the item lies in the occupation of the caller
     const item = { enablers: [{ trainingCatalogId: FIAE }] };

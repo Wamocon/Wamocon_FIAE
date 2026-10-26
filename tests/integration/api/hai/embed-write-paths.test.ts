@@ -148,7 +148,7 @@ describe('embed route write paths state the scope', () => {
     const res = await mod.POST(
       makeRequest('POST', 'http://localhost/api/hai/embed', {
         token: 't',
-        body: { action: 'index_enabler', sourceId: 'e1' },
+        body: { action: 'index_enabler', sourceId: '3b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11' },
       })
     );
     expect(res.status).toBe(200);
