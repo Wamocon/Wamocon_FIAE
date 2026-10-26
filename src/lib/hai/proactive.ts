@@ -27,7 +27,7 @@ import {
     enablerSubmissions,
     notifications
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, toHaiRole } from '@/lib/auth-helpers';
+import { getUserOrgIdStrict, toHaiRole } from '@/lib/auth-helpers';
 
 // ============================================================================
 // TYPES
@@ -211,6 +211,8 @@ async function checkUpcomingExams(userId: string): Promise<ProactiveInsight[]> {
             .from(ausbildungBlocks)
             .where(
                 and(
+                    // Only the exams of this trainee, never those of others
+                    eq(ausbildungBlocks.traineeId, userId),
                     eq(ausbildungBlocks.blockType, 'EXAM'),
                     gte(ausbildungBlocks.startDate, now),
                     lte(ausbildungBlocks.startDate, twoWeeksLater)
@@ -358,11 +360,19 @@ async function checkPendingReviews(trainerId: string): Promise<ProactiveInsight[
     const insights: ProactiveInsight[] = [];
 
     try {
+        // Only the organization of the trainer, never the counts of others
+        const organizationId = await getUserOrgIdStrict(trainerId);
+
         // Count pending enabler submissions
         const pendingSubmissions = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(enablerSubmissions)
-            .where(eq(enablerSubmissions.status, 'PENDING'));
+            .where(
+                and(
+                    eq(enablerSubmissions.status, 'PENDING'),
+                    eq(enablerSubmissions.organizationId, organizationId)
+                )
+            );
 
         const submissionCount = pendingSubmissions[0]?.count || 0;
 
@@ -382,7 +392,12 @@ async function checkPendingReviews(trainerId: string): Promise<ProactiveInsight[
         const pendingReports = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(activityReports)
-            .where(eq(activityReports.status, 'SUBMITTED'));
+            .where(
+                and(
+                    eq(activityReports.status, 'SUBMITTED'),
+                    eq(activityReports.organizationId, organizationId)
+                )
+            );
 
         const reportCount = pendingReports[0]?.count || 0;
 
@@ -458,7 +473,8 @@ export async function createNotificationFromInsight(
     insight: ProactiveInsight
 ): Promise<void> {
     try {
-        const organizationId = await getUserOrgId(userId);
+        // A write never falls back to the platform organization
+        const organizationId = await getUserOrgIdStrict(userId);
         await db.insert(notifications).values({
             userId,
             organizationId,

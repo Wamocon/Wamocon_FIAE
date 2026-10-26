@@ -2175,5 +2175,18 @@
   "catalog.tiles.request.error.FORBIDDEN": "Für Ihr Konto ist keine Anfrage möglich. Bitte wenden Sie sich an Ihren Ausbilder.",
   "catalog.tiles.request.error.UNAUTHORIZED": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
   "catalog.tiles.request.error.NO_RECIPIENT": "Die Anfrage konnte nicht zugestellt werden. Bitte versuchen Sie es später erneut.",
-  "catalog.tiles.request.error.GENERIC": "Die Anfrage konnte nicht gesendet werden. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+  "catalog.tiles.request.error.GENERIC": "Die Anfrage konnte nicht gesendet werden. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+  "hai.action.card.title": "Aktion bestätigen",
+  "hai.action.card.hint": "HAI führt die Aktion erst nach deiner Bestätigung aus.",
+  "hai.action.card.confirm": "Bestätigen",
+  "hai.action.card.cancel": "Abbrechen",
+  "hai.action.card.running": "Wird ausgeführt...",
+  "hai.action.card.done": "Erledigt",
+  "hai.action.card.cancelled": "Abgebrochen. Es wurde nichts geändert.",
+  "hai.action.card.error.invalid": "Die Angaben für diese Aktion sind unvollständig oder ungültig.",
+  "hai.action.card.error.forbidden": "Diese Aktion ist für dich nicht erlaubt.",
+  "hai.action.card.error.notFound": "Der Eintrag wurde nicht gefunden.",
+  "hai.action.card.error.conflict": "Die Aktion passt nicht mehr zum aktuellen Stand. Bitte lade die Seite neu und versuche es erneut.",
+  "hai.action.card.error.unavailable": "Die Berechtigung kann gerade nicht geprüft werden. Bitte versuche es später erneut.",
+  "hai.action.card.error.generic": "Die Aktion konnte nicht ausgeführt werden. Bitte versuche es später erneut."
 }

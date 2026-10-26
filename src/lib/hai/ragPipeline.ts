@@ -47,7 +47,8 @@ import {
 } from './prompts';
 import { fetchDataContext } from './dataContext';
 import type { UserRole } from './dataContext';
-import { detectActionIntent, executeAction, ActionIntent } from './actions';
+import { handleActionMessage } from './actionFlow';
+import type { PendingAction } from './actionPolicy';
 import type { HaiTrainingScope } from './trainingScope';
 
 // ============================================================================
@@ -110,6 +111,8 @@ export interface PipelineResult {
     actionType: string;
     data?: unknown;
   };
+  /** A proposed write for the confirmation card, never executed here */
+  pendingAction?: PendingAction;
   error?: string;
 }
 
@@ -578,36 +581,6 @@ export async function processMessage(
   }
 
   try {
-    // Step 0: Check for action intent first (Phase 3 — Write Operations)
-    let actionIntent: ActionIntent | null = null;
-    if (context.userRole) {
-      actionIntent = detectActionIntent(userMessage, {
-        userRole: context.userRole,
-        currentEnablerId: context.currentEnablerId,
-        currentCourseId: context.currentCourseId,
-      });
-    }
-
-    // If action detected, execute it and return narrated result
-    if (actionIntent && actionIntent.confidence >= 0.7) {
-      const actionResult = await executeAction(
-        actionIntent.type,
-        actionIntent.parameters,
-        context.userId
-      );
-
-      return {
-        response: actionResult.message,
-        intent: 'action',
-        citations: [],
-        actionResult: {
-          success: actionResult.success,
-          actionType: actionIntent.type,
-          data: actionResult.data,
-        },
-      };
-    }
-
     // Step 1a: Persona of the occupation (server side), refusal without a
     // scope or for a question about another occupation
     const { access, persona } = await resolveTurnPersona(context);
@@ -615,6 +588,12 @@ export async function processMessage(
     if (refusal) {
       return { response: refusal, intent: 'off_topic', citations: [] };
     }
+
+    // Step 1b: An action in the message becomes a proposal, never a write.
+    // Behind the persona gate: without a scope or for a message about another
+    // occupation there is no proposal.
+    const actionResponse = await handleActionMessage(userMessage, context);
+    if (actionResponse) return actionResponse;
 
     // Step 1: Classify intent
     const intent = classifyIntent(userMessage, context.quizState, persona);
@@ -826,44 +805,20 @@ export async function processMessageStream(
   }
 
   try {
-    // Step 0: Check for action intent first (Phase 3 — Write Operations)
-    let actionIntent: ActionIntent | null = null;
-    if (context.userRole) {
-      actionIntent = detectActionIntent(userMessage, {
-        userRole: context.userRole,
-        currentEnablerId: context.currentEnablerId,
-        currentCourseId: context.currentCourseId,
-      });
-    }
-
-    // If action detected, execute it and return narrated result
-    if (actionIntent && actionIntent.confidence >= 0.7) {
-      const actionResult = await executeAction(
-        actionIntent.type,
-        actionIntent.parameters,
-        context.userId
-      );
-
-      onChunk(actionResult.message);
-
-      return {
-        response: actionResult.message,
-        intent: 'action',
-        citations: [],
-        actionResult: {
-          success: actionResult.success,
-          actionType: actionIntent.type,
-          data: actionResult.data,
-        },
-      };
-    }
-
     // Persona of the occupation (server side), same gate as processMessage
     const { access, persona } = await resolveTurnPersona(context);
     const refusal = personaRefusal(userMessage, persona);
     if (refusal) {
       onChunk(refusal);
       return { response: refusal, intent: 'off_topic', citations: [] };
+    }
+
+    // An action in the message becomes a proposal, never a write (behind the
+    // persona gate, like in processMessage)
+    const actionResponse = await handleActionMessage(userMessage, context);
+    if (actionResponse) {
+      onChunk(actionResponse.response);
+      return actionResponse;
     }
 
     const intent = classifyIntent(userMessage, context.quizState, persona);

@@ -7,6 +7,8 @@
  * @module lib/hai/actionStreaming
  */
 
+import type { SessionUser } from '@/lib/auth/session';
+import type { CatalogRequestLike } from '@/lib/catalog/scope';
 import { ActionType, ActionResult, executeAction } from './actions';
 
 // ============================================================================
@@ -32,15 +34,17 @@ export type ProgressCallback = (progress: ActionProgress) => void;
  *
  * @param actionType - The action to perform
  * @param parameters - Action parameters
- * @param userId - User ID performing the action
+ * @param actor - The person of the session performing the (confirmed) action
  * @param onProgress - Callback for progress updates
+ * @param request - The request, for the chosen occupation
  * @returns Final action result
  */
 export async function executeActionWithProgress(
     actionType: ActionType,
     parameters: Record<string, unknown>,
-    userId: string,
-    onProgress: ProgressCallback
+    actor: SessionUser,
+    onProgress: ProgressCallback,
+    request?: CatalogRequestLike | null
 ): Promise<ActionResult> {
     const steps = getActionSteps(actionType);
 
@@ -65,7 +69,7 @@ export async function executeActionWithProgress(
             status: 'running',
         });
 
-        const result = await executeAction(actionType, parameters, userId);
+        const result = await executeAction(actionType, parameters, actor, request);
 
         await delay(200);
 
@@ -314,13 +318,15 @@ function delay(ms: number): Promise<void> {
  *
  * @param actionType - The action to perform
  * @param parameters - Action parameters
- * @param userId - User ID
+ * @param actor - The person of the session
+ * @param request - The request, for the chosen occupation
  * @returns ReadableStream for SSE
  */
 export function createActionProgressStream(
     actionType: ActionType,
     parameters: Record<string, unknown>,
-    userId: string
+    actor: SessionUser,
+    request?: CatalogRequestLike | null
 ): ReadableStream {
     const encoder = new TextEncoder();
 
@@ -330,11 +336,12 @@ export function createActionProgressStream(
                 await executeActionWithProgress(
                     actionType,
                     parameters,
-                    userId,
+                    actor,
                     (progress) => {
                         const data = JSON.stringify(progress);
                         controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-                    }
+                    },
+                    request
                 );
 
                 controller.close();

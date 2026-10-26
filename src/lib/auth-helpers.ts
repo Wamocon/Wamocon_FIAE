@@ -253,6 +253,30 @@ export async function getUserOrgId(userId: string): Promise<string> {
 }
 
 /**
+ * Like getUserOrgId, for writes: never falls back to the platform organization.
+ * A missing id, a missing profile, a profile without an organization and a
+ * failed lookup all throw, so the write stops instead of landing in the wrong
+ * organization.
+ */
+export async function getUserOrgIdStrict(userId: string): Promise<string> {
+  if (!userId) {
+    throw new Error('[getUserOrgIdStrict] empty userId');
+  }
+  const [row] = await withDbRetry(() =>
+    db
+      .select({ organizationId: profiles.organizationId })
+      .from(profiles)
+      .where(eq(profiles.id, userId as any))
+  );
+  if (!row?.organizationId) {
+    throw new Error(
+      `[getUserOrgIdStrict] no organization for userId=${userId}`
+    );
+  }
+  return String(row.organizationId);
+}
+
+/**
  * Get the subscription plan for a user's organization.
  * Platform owner (Wamocon) always returns 'PRO'.
  */
