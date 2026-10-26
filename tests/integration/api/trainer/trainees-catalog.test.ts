@@ -22,14 +22,6 @@ const catalogs = [
 const fiaeOnly = [{ trainingCatalogId: FIAE, isEnabled: true }];
 const both = [...fiaeOnly, { trainingCatalogId: KFBM, isEnabled: true }];
 
-const requester = {
-  id: 'tr1',
-  email: 'tr1@example.com',
-  fullName: 'Trainer One',
-  role: 'TRAINER',
-  organizationId: ORG,
-};
-
 const traineeRow = {
   id: 't1',
   fullName: 'Azubi Eins',
@@ -94,11 +86,9 @@ describe('trainee lists per occupation', () => {
     [
       'list',
       'route',
-      () => ({
-        profiles: { sequence: [[requester], [{ id: 'tr1' }], [traineeRow]] },
-      }),
-      // index of the first query of the catalog scope (after the trainer scope)
-      2,
+      () => ({ profiles: { sequence: [[traineeRow]] } }),
+      // index of the first query of the catalog scope
+      0,
     ],
     [
       'list with stats',

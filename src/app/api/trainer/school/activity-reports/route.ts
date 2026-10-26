@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, desc, and } from 'drizzle-orm';
 import { activityReports, activityReportEntries, profiles } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+    requireTraineeScopeCondition,
+    traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 
 // GET /api/trainer/school/activity-reports?trainerId=...&status=...
 export async function GET(req: NextRequest) {
@@ -12,23 +15,23 @@ export async function GET(req: NextRequest) {
         if (isErrorResponse(session)) return session;
 
         const url = new URL(req.url);
-        const trainerId = session.id;
         const status = url.searchParams.get('status');
 
+        // Only reports of trainees of the own organization (the super admin:
+        // every one) and, with a chosen occupation (x-catalog), of that
+        // occupation. The platform-owner flag of an organization does not
+        // widen the list.
+        const traineeScope = await requireTraineeScopeCondition(session, req);
+        if (isErrorResponse(traineeScope)) return traineeScope;
 
-
-        const isPO = await verifyPlatformOwner(trainerId);
-        const trainerOrgId = await getUserOrgId(trainerId);
-
-        const conditions: any[] = [];
+        const conditions: any[] = [
+            traineeIdInScope(activityReports.traineeId, traineeScope.condition),
+        ];
         if (status) conditions.push(eq(activityReports.status, status as any));
-        if (!isPO && trainerOrgId) {
-            conditions.push(eq(activityReports.organizationId, trainerOrgId));
-        }
 
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-        // Get reports with trainee info (org-scoped)
+        // Get reports with trainee info (scoped)
         const reportsRaw = await db
             .select({
                 id: activityReports.id,

@@ -6,6 +6,10 @@ import {
     profiles,
 } from '@/db/migrations/schemas/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import {
+    requireTraineeScopeCondition,
+    traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 
 // GET: Fetch pending evaluations for trainer review
 export async function GET(request: NextRequest) {
@@ -19,9 +23,17 @@ export async function GET(request: NextRequest) {
         const traineeId = searchParams.get('traineeId');
         const year = searchParams.get('year');
 
+        // Only evaluations of trainees of the own organization (the super admin
+        // sees every one) and, with a chosen occupation (x-catalog), of that
+        // occupation
+        const traineeScope = await requireTraineeScopeCondition(session, request);
+        if (isErrorResponse(traineeScope)) return traineeScope;
 
         // Build query conditions
-        const conditions = [eq(weeklyEvaluations.trainerId, trainerId as any)];
+        const conditions = [
+            eq(weeklyEvaluations.trainerId, trainerId as any),
+            traineeScope.condition,
+        ];
 
         if (status) {
             conditions.push(eq(weeklyEvaluations.status, status as any));
@@ -50,7 +62,8 @@ export async function GET(request: NextRequest) {
             .from(weeklyEvaluations)
             .where(and(
                 eq(weeklyEvaluations.trainerId, trainerId as any),
-                eq(weeklyEvaluations.status, 'SUBMITTED')
+                eq(weeklyEvaluations.status, 'SUBMITTED'),
+                traineeIdInScope(weeklyEvaluations.traineeId, traineeScope.condition)
             ));
 
         return NextResponse.json({

@@ -1,7 +1,7 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, count, desc, eq, gte, inArray, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte } from 'drizzle-orm';
 import {
   profiles,
   courses,
@@ -12,7 +12,10 @@ import {
   useCases,
   trainingCatalogLearningFields,
 } from '@/db/migrations/schemas/schema';
-import { getTrainerScope } from '@/lib/trainer-scope';
+import {
+  requireTraineeScopeCondition,
+  traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 import { catalogCondition, requireCatalogScope } from '@/lib/catalog/scope';
 
 export async function GET(req: NextRequest) {
@@ -23,26 +26,19 @@ export async function GET(req: NextRequest) {
     const catalogScope = await requireCatalogScope(session, req);
     if (isErrorResponse(catalogScope)) return catalogScope;
 
-    const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
-    const scope = await getTrainerScope(trainerId);
-    if (!scope) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const traineeConditions: any[] = [eq(profiles.role, 'TRAINEE')];
-    if (!scope.isPlatformOwner && scope.organizationId) {
-      traineeConditions.push(eq(profiles.organizationId, scope.organizationId as any));
-    } else if (!scope.isPlatformOwner) {
-      traineeConditions.push(inArray(profiles.assignedTrainerId, scope.profileIds as any));
-    }
+    // Only trainees of the own organization (the super admin sees every one)
+    // and, with a chosen occupation (x-catalog), of that occupation. Every
+    // count and list below stays inside this scope.
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
 
     // Get all trainees visible to this trainer through the organization scope.
     const traineeRows = await db
       .select({ id: profiles.id, fullName: profiles.fullName })
       .from(profiles)
-      .where(and(...traineeConditions));
+      .where(traineeScope.condition);
     const traineeIds = traineeRows.map(t => t.id);
 
     // Active courses created by this trainer
@@ -128,17 +124,27 @@ export async function GET(req: NextRequest) {
     let pendingQuizzes = 0;
     let pendingUseCases = 0;
 
-    // Count all pending reviews (not just from assigned trainees)
+    // Count the pending reviews of the trainees inside the scope
     const [{ c: pq = 0 } = { c: 0 }] = await db
       .select({ c: count() })
       .from(quizSubmissions)
-      .where(eq(quizSubmissions.isReviewed, false));
+      .where(
+        and(
+          eq(quizSubmissions.isReviewed, false),
+          traineeIdInScope(quizSubmissions.traineeId, traineeScope.condition)
+        )
+      );
     pendingQuizzes = Number(pq);
 
     const [{ c: pu = 0 } = { c: 0 }] = await db
       .select({ c: count() })
       .from(useCaseSubmissions)
-      .where(eq(useCaseSubmissions.status, 'PENDING'));
+      .where(
+        and(
+          eq(useCaseSubmissions.status, 'PENDING'),
+          traineeIdInScope(useCaseSubmissions.traineeId, traineeScope.condition)
+        )
+      );
     pendingUseCases = Number(pu);
 
     pendingReviews = pendingQuizzes + pendingUseCases;
@@ -156,6 +162,7 @@ export async function GET(req: NextRequest) {
         createdAt: activityLog.createdAt,
       })
       .from(activityLog)
+      .where(traineeIdInScope(activityLog.userId, traineeScope.condition))
       .orderBy(desc(activityLog.createdAt))
       .limit(10);
 
@@ -176,7 +183,12 @@ export async function GET(req: NextRequest) {
     const [{ c: c7 = 0 } = { c: 0 }] = await db
       .select({ c: count() })
       .from(activityLog)
-      .where(gte(activityLog.createdAt, lastWeek));
+      .where(
+        and(
+          gte(activityLog.createdAt, lastWeek),
+          traineeIdInScope(activityLog.userId, traineeScope.condition)
+        )
+      );
     let recentCount7d = Number(c7) || 0;
 
     // If no activity log entries, get recent submissions instead
@@ -192,6 +204,9 @@ export async function GET(req: NextRequest) {
           score: quizSubmissions.score,
         })
         .from(quizSubmissions)
+        .where(
+          traineeIdInScope(quizSubmissions.traineeId, traineeScope.condition)
+        )
         .orderBy(desc(quizSubmissions.submittedAt))
         .limit(5);
 
@@ -214,6 +229,9 @@ export async function GET(req: NextRequest) {
           status: useCaseSubmissions.status,
         })
         .from(useCaseSubmissions)
+        .where(
+          traineeIdInScope(useCaseSubmissions.traineeId, traineeScope.condition)
+        )
         .orderBy(desc(useCaseSubmissions.submittedAt))
         .limit(5);
 

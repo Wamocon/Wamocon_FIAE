@@ -6,8 +6,9 @@ import {
 } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { and, eq, ilike, or } from 'drizzle-orm';
+import { and, eq, ilike, ne, or } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
+import { requireTraineeCatalogFilter } from '@/lib/catalog/trainee-scope';
 
 // GET /api/trainer/profiles?role=TRAINER|TRAINEE&q=text
 export async function GET(req: NextRequest) {
@@ -25,6 +26,17 @@ export async function GET(req: NextRequest) {
     );
     const where: any[] = orgCondition ? [orgCondition] : [];
     if (role === 'TRAINER' || role === 'TRAINEE') where.push(eq(profiles.role, role as any));
+    // With a chosen occupation (x-catalog) the trainees of other occupations
+    // are not found. People who are no trainees are not narrowed.
+    if (role !== 'TRAINER') {
+      const catalogFilter = await requireTraineeCatalogFilter(session, req);
+      if (catalogFilter instanceof Response) return catalogFilter;
+      if (catalogFilter.condition) {
+        where.push(
+          or(ne(profiles.role, 'TRAINEE' as any), catalogFilter.condition) as any
+        );
+      }
+    }
     if (q) where.push(or(ilike(profiles.fullName, `%${q}%`), ilike(profiles.email, `%${q}%`)) as any);
 
     const rows = await db
