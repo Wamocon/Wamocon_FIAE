@@ -390,6 +390,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   },
   {
     route: 'trainer/quiz-submissions/[submissionId]',
+    method: 'GET',
+    guard: 'trainer',
+    params: ['submissionId'],
+  },
+  {
+    route: 'trainer/quiz-submissions/[submissionId]',
     method: 'PATCH',
     guard: 'trainer',
     params: ['submissionId'],

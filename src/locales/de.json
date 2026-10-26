@@ -2191,5 +2191,6 @@
   "hai.action.card.error.generic": "Die Aktion konnte nicht ausgeführt werden. Bitte versuche es später erneut.",
   "curriculum.superAdminOnly": "Lehrplan-Inhalte dürfen nur von Superadmins geändert werden.",
   "hai.admin.pinLocked": "Zu viele Fehlversuche. Bitte versuchen Sie es in {minutes} min erneut.",
-  "hai.admin.pinUnavailable": "Die PIN-Prüfung ist gerade nicht verfügbar. Bitte versuchen Sie es später erneut."
+  "hai.admin.pinUnavailable": "Die PIN-Prüfung ist gerade nicht verfügbar. Bitte versuchen Sie es später erneut.",
+  "trainerQuizPages.loadError": "Der Inhalt konnte nicht geladen werden. Bitte versuche es später erneut."
 }

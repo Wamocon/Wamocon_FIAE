@@ -6,6 +6,7 @@ import {
   mockCatalogScope,
   mockTraineeSession,
 } from '../../../helpers/mockNext';
+import { findSolutionKeys } from '../../../helpers/solutionKeys';
 
 // helper to import the route handler with a mocked DB
 async function importHandlerWithDb(mockDb: any) {
@@ -178,6 +179,66 @@ describe('API: GET /api/trainee/enablers/[enablerId]/quiz', () => {
         { id: 'q-1', questionText: 'A', options: [{ id: 'o-1', optionText: 'A1' }] },
       ],
     });
+  });
+
+  it('carries no solution key, whatever the rows hold (recursive scan)', async () => {
+    const sequence: any[] = [
+      [{ id: 'e1', isActive: true, courseId: 'c1' }],
+      [{ userId: 't1', courseId: 'c1' }],
+      [{ enablerId: 'e1', quizId: 'q1' }],
+      [{ id: 'q1', title: 'Quiz Title' }],
+      {
+        withOrderBy: true,
+        data: [
+          {
+            id: 'q-1',
+            quizId: 'q1',
+            questionText: 'A',
+            orderIndex: 1,
+            expectedAnswer: 'SECRET-EXPECTED',
+          },
+        ],
+      },
+      [
+        {
+          id: 'o-1',
+          questionId: 'q-1',
+          optionText: 'A1',
+          isCorrect: true,
+          explanation: 'SECRET-REASONING',
+        },
+        {
+          id: 'o-2',
+          questionId: 'q-1',
+          optionText: 'A2',
+          isCorrect: false,
+          explanation: null,
+        },
+      ],
+    ];
+    let idx = 0;
+    const mockDb = {
+      select: jest.fn().mockImplementation(() => ({
+        from: () => ({
+          where: () => {
+            const ret = sequence[idx++];
+            if (ret && ret.withOrderBy) {
+              return { orderBy: () => ret.data };
+            }
+            return ret;
+          },
+        }),
+      })),
+    };
+    const GET = await importHandlerWithDb(mockDb);
+    const res = await GET(
+      makeGet('http://localhost/api/trainee/enablers/e1/quiz?traineeId=t1'),
+      { params: Promise.resolve({ enablerId: 'e1' }) }
+    );
+    const body = await (res as any).json();
+    expect((res as any).status).toBe(200);
+    expect(findSolutionKeys(body)).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain('SECRET');
   });
 
   it('500 if an unexpected error occurs', async () => {

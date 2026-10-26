@@ -70,14 +70,29 @@ export async function GET(
     if (!quiz || !quiz.isActive)
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    // Questions and options as the trainee sees them before answering: the
+    // text and the id, never is_correct, explanation or expected_answer. The
+    // columns are named, so the solution does not even leave the database.
     const qs = await db
-      .select()
+      .select({
+        id: questions.id,
+        questionText: questions.questionText,
+        questionType: questions.questionType,
+      })
       .from(questions)
       .where(eq(questions.quizId, quiz.id))
       .orderBy(questions.orderIndex);
     const qIds = qs.map(q => q.id);
     const opts = qIds.length
-      ? await db.select().from(options).where(inArray(options.questionId, qIds))
+      ? await db
+          .select({
+            id: options.id,
+            questionId: options.questionId,
+            optionText: options.optionText,
+            orderIndex: options.orderIndex,
+          })
+          .from(options)
+          .where(inArray(options.questionId, qIds))
       : [];
     return NextResponse.json({
       quiz: {
@@ -87,14 +102,17 @@ export async function GET(
         questions: qs.map(q => ({
           id: q.id,
           questionText: q.questionText,
-          questionType: (q as any).questionType || 'MCQ',
+          questionType: q.questionType || 'MCQ',
+          // The order of the author. Without a stored position (old rows) the
+          // stored order stays, the sort is stable.
           options: opts
             .filter(o => String(o.questionId) === String(q.id))
-            .map(o => ({
-              id: o.id,
-              optionText: o.optionText,
-              explanation: o.explanation ?? null,
-            })),
+            .sort(
+              (a, b) =>
+                (a.orderIndex ?? Number.MAX_SAFE_INTEGER) -
+                (b.orderIndex ?? Number.MAX_SAFE_INTEGER)
+            )
+            .map(o => ({ id: o.id, optionText: o.optionText })),
         })),
       },
     });

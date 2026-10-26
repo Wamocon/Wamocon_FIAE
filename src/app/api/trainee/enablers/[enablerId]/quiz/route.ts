@@ -63,14 +63,22 @@ export async function GET(
       .from(quizzes)
       .where(eq(quizzes.id, link.quizId));
     if (!quiz) return NextResponse.json({ quiz: null });
+    // The columns of the trainee view only: no is_correct, no explanation
     const qs = await db
-      .select()
+      .select({ id: questions.id, questionText: questions.questionText })
       .from(questions)
       .where(eq(questions.quizId, quiz.id))
       .orderBy(questions.orderIndex);
     const qIds = qs.map(q => q.id);
     const opts = qIds.length
-      ? await db.select().from(options).where(inArray(options.questionId, qIds))
+      ? await db
+          .select({
+            id: options.id,
+            questionId: options.questionId,
+            optionText: options.optionText,
+          })
+          .from(options)
+          .where(inArray(options.questionId, qIds))
       : [];
     const out = {
       id: quiz.id,

@@ -34,10 +34,11 @@ import {
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
+// A question reaches the page with the id and the text of its options only.
+// The reasoning comes with the result of the submission (QuizFeedback).
 type QuizOption = {
   id: string;
   optionText: string;
-  explanation?: string | null;
 };
 type QuizQuestion = {
   id: string;
@@ -202,7 +203,6 @@ export default function TraineeEnablerPage() {
           options: (q.options || []).map((o: any) => ({
             id: String(o.id),
             optionText: String(o.optionText || o.text || o.value),
-            explanation: o.explanation ? String(o.explanation) : null,
           })),
         })),
       };
@@ -1011,8 +1011,7 @@ export default function TraineeEnablerPage() {
                     const correctOption = q.options.find(
                       o => String(o.id) === String(fb?.correctOptionId || '')
                     );
-                    const explanation =
-                      fb?.explanation || correctOption?.explanation;
+                    const explanation = fb?.explanation;
                     return (
                       <li
                         key={q.id}
