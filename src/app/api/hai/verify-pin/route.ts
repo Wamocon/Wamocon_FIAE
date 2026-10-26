@@ -3,7 +3,8 @@ import { isErrorResponse } from '@/lib/auth/session';
 import { requireHaiIndexManager } from '@/lib/hai/guards';
 
 export async function POST(request: Request) {
-  // The PIN is a second factor on top of the session, not a replacement
+  // Only platform staff may even try the PIN. The PIN is a gate of the admin
+  // dialog, embed and sync check the session and do not ask for it.
   const manager = await requireHaiIndexManager(request);
   if (isErrorResponse(manager)) return manager;
 

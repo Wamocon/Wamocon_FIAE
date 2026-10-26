@@ -40,6 +40,7 @@ import { buildHaiTrainingScope } from '@/lib/hai/trainingScope';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 import { getUserOrgId, requireProPlan, toHaiRole } from '@/lib/auth-helpers';
 import { isErrorResponse, requireUser } from '@/lib/auth/session';
+import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 
 // ============================================================================
 // TYPES
@@ -1183,7 +1184,8 @@ export async function GET(req: NextRequest) {
     // Include provider status for diagnostics
     let providerInfo;
     try {
-      providerInfo = getProviderStatus();
+      // Diagnostics are for platform staff, not for every PRO user
+      providerInfo = canManageHaiIndex(me) ? getProviderStatus() : null;
     } catch {
       providerInfo = null;
     }

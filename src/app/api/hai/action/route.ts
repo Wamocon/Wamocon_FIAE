@@ -75,7 +75,6 @@ export async function POST(req: NextRequest) {
                 {
                     success: false,
                     error: result.message,
-                    details: result.error,
                 },
                 { status: 400 }
             );

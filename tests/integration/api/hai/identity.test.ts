@@ -23,14 +23,25 @@ type Rows = Record<string, any[]>;
 
 async function load(
   route: 'chat' | 'session' | 'action' | 'insights',
-  options: { tables?: Rows; pro?: boolean; role?: 'TRAINEE' | 'TRAINER' } = {}
+  options: {
+    tables?: Rows;
+    pro?: boolean;
+    role?: 'TRAINEE' | 'TRAINER';
+    platform?: boolean;
+  } = {}
 ) {
-  const { tables = {}, pro = true, role = 'TRAINEE' } = options;
+  const {
+    tables = {},
+    pro = true,
+    role = 'TRAINEE',
+    platform = false,
+  } = options;
   jest.resetModules();
   const session = fakeSession({
     id: ME,
     role,
     isTrainerLevel: role === 'TRAINER',
+    isPlatformOwner: platform,
     organizationId: 'org-me',
   });
   mockSession(session);
@@ -186,10 +197,33 @@ describe('HAI session route: the person is the session', () => {
     expect(res.status).toBe(403);
     expect(rec.db.select).not.toHaveBeenCalled();
   });
+
+  it('POST answers 403 without the PRO plan and creates nothing', async () => {
+    const { mod, rec } = await load('session', { pro: false });
+    const res = await mod.POST(call('POST', 'session', {}));
+    expect(res.status).toBe(403);
+    expect(rec.db.insert).not.toHaveBeenCalled();
+  });
 });
 
 describe('HAI chat route: the person is the session', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it('GET shows the provider diagnostics to platform staff only', async () => {
+    const trainee = await load('chat', { tables: { haiChatSessions: [] } });
+    const traineeBody = await (
+      await trainee.mod.GET(call('GET', 'chat'))
+    ).json();
+    expect(traineeBody.providers).toBeNull();
+
+    const staff = await load('chat', {
+      tables: { haiChatSessions: [] },
+      role: 'TRAINER',
+      platform: true,
+    });
+    const staffBody = await (await staff.mod.GET(call('GET', 'chat'))).json();
+    expect(staffBody.providers).toEqual({ primary: 'test' });
+  });
 
   it('GET lists only the sessions of the session user', async () => {
     const { mod, rec, requireProPlan } = await load('chat', {
@@ -305,6 +339,8 @@ describe('HAI action route: the person is the session', () => {
       })
     );
     expect(res.status).toBe(400);
+    // The raw error text (SQL, constraint names) stays on the server
+    expect(await res.json()).toEqual({ success: false, error: 'no' });
   });
 
   it('lists the trainee actions for a trainee session, even with a trainer id', async () => {

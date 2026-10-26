@@ -401,6 +401,13 @@ export async function POST(req: NextRequest) {
     if (isErrorResponse(me)) return me;
     const userId = me.id;
 
+    if (!(await requireProPlan(userId))) {
+      return NextResponse.json(
+        { error: 'HAI.ai is only available with a PRO subscription.' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { contextType, contextId, title } = body;
 
