@@ -112,7 +112,14 @@
     },
     {
       "name": "content_documents",
-      "key": ["title", "file_name", "document_type"],
+      "key": [
+        "enabler_id",
+        "use_case_id",
+        "course_id",
+        "title",
+        "file_name",
+        "document_type"
+      ],
       "columns": [
         "enabler_id",
         "use_case_id",
@@ -160,7 +167,7 @@
     },
     {
       "name": "quizzes",
-      "key": ["title", "quiz_type"],
+      "key": ["title", "quiz_type", "created_at"],
       "columns": [
         "title",
         "quiz_type",
@@ -211,7 +218,7 @@
     },
     {
       "name": "questions",
-      "key": ["quiz_id", "question_text"],
+      "key": ["quiz_id", "order_index"],
       "columns": [
         "quiz_id",
         "question_text",
@@ -229,7 +236,7 @@
     },
     {
       "name": "options",
-      "key": ["question_id", "option_text"],
+      "key": ["question_id", "option_text", "is_correct"],
       "columns": ["question_id", "option_text", "is_correct", "explanation"],
       "status": "provisional",
       "remap": {
