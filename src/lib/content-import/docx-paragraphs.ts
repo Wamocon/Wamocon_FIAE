@@ -8,7 +8,7 @@
 // bombs: size of the input, number of entries and size of the unpacked
 // word/document.xml.
 
-import JSZip from 'jszip';
+import type JSZip from 'jszip';
 
 import type { Paragraph } from './types';
 
@@ -221,7 +221,10 @@ async function load(data: DocxData, limits: DocxLimits = {}) {
   if (data.byteLength > maxInputBytes) {
     throw new Error(`The document is larger than ${maxInputBytes} bytes.`);
   }
-  const zip = await JSZip.loadAsync(data);
+  // JSZip is loaded on first use, so the scripts that only need the path
+  // derivation or the parsers start without the dependency installed.
+  const { default: Zip } = await import('jszip');
+  const zip = await Zip.loadAsync(data);
   if (Object.keys(zip.files).length > maxEntries) {
     throw new Error(`The document has more than ${maxEntries} entries.`);
   }

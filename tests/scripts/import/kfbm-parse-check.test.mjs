@@ -14,7 +14,13 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import JSZip from 'jszip';
+// JSZip builds the invented documents. The workflow db-checks runs these tests
+// without installed dependencies, then the tests that need it are skipped.
+const JSZip = await import('jszip').then(
+  module => module.default,
+  () => null
+);
+const needsZip = { skip: JSZip ? false : 'jszip is not installed' };
 import {
   checkParsed,
   renderCheckSummary,
@@ -182,115 +188,126 @@ test('an enabler text only needs a heading and some text, and keeps its metadata
   assert.deepEqual(codes(empty), ['ENABLER_EMPTY']);
 });
 
-test('reads only the available files, skips placeholders, K18 and archive', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'kfbm-check-'));
-  try {
-    const write = async (rel, content) => {
+test(
+  'reads only the available files, skips placeholders, K18 and archive',
+  needsZip,
+  async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'kfbm-check-'));
+    try {
+      const write = async (rel, content) => {
+        const full = path.join(dir, ...rel.split('/'));
+        mkdirSync(path.dirname(full), { recursive: true });
+        writeFileSync(full, content);
+      };
+      await write(quizPath('1a', 'Low'), await docx(quizParagraphs()));
+      await write(
+        quizPath('1a', 'Medium'),
+        await docx(quizParagraphs({ level: 'mittel', breakQ: 1 }))
+      );
+      await write(quizPath('1a', 'High'), 'das ist kein docx');
+      await write(
+        `${T1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
+        await docx(scenarioParagraphs())
+      );
+      await write(
+        `${T1}/Enablers/1a_Thema/1a.docx`,
+        await docx([p('Titel'), p('Text hier.')], 2)
+      );
+      await write(
+        `${K18}/Enablers/18a) Kunden/Quiz/18a_Quiz_Low.docx`,
+        await docx(quizParagraphs({ code: '18a' }))
+      );
+      await write(`${T1}/Enablers/1a_Thema/Archiv/alt.docx`, 'x');
+      await write(`${T1}/Use-Cases/egal.pdf`, 'x');
+      await write(quizPath('1b', 'Low'), 'noch nicht geladen');
+
+      const placeholders = new Map([
+        [`${quizPath('1b', 'Low')}`.toLowerCase(), 0x400000],
+      ]);
+      const entries = [
+        quizPath('1a', 'Low'),
+        quizPath('1a', 'Medium'),
+        quizPath('1a', 'High'),
+        `${T1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
+        `${T1}/Enablers/1a_Thema/1a.docx`,
+        `${K18}/Enablers/18a) Kunden/Quiz/18a_Quiz_Low.docx`,
+        `${T1}/Enablers/1a_Thema/Archiv/alt.docx`,
+        `${T1}/Use-Cases/egal.pdf`,
+        quizPath('1b', 'Low'),
+      ].map(rel => ({
+        rel,
+        size: 10,
+        mtimeMs: 0,
+        attributes: placeholders.get(rel.toLowerCase()) ?? 32,
+        placeholder: placeholders.has(rel.toLowerCase()),
+      }));
+
+      const run = await runCheck(dir, entries);
+      assert.deepEqual(
+        run.results.map(r => [path.basename(r.rel), r.status]),
+        [
+          ['1a_Quiz_Low.docx', 'ok'],
+          ['1a_Quiz_Medium.docx', 'error'],
+          ['1a_Quiz_High.docx', 'read-error'],
+          ['Szenario_1a.docx', 'ok'],
+          ['1a.docx', 'ok'],
+        ]
+      );
+      assert.equal(run.results[4].stats.images, 2);
+      assert.deepEqual(run.skipped.placeholders, [quizPath('1b', 'Low')]);
+      assert.equal(run.skipped.excluded, 1);
+      assert.equal(run.skipped.archive, 1);
+      assert.deepEqual(run.skipped.notParsed, { other: 1 });
+      // the source files are untouched
+      assert.equal(
+        readFileSync(
+          path.join(dir, ...quizPath('1b', 'Low').split('/')),
+          'utf8'
+        ),
+        'noch nicht geladen'
+      );
+
+      const only = await runCheck(dir, entries, { only: ['scenario'] });
+      assert.deepEqual(
+        only.results.map(r => r.type),
+        ['scenario']
+      );
+      const limited = await runCheck(dir, entries, { limit: 2 });
+      assert.equal(limited.results.length, 2);
+      const withK18 = await runCheck(dir, entries, { includeExcluded: true });
+      assert.ok(withK18.results.some(r => r.rel.includes('18a_Quiz_Low')));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  'with hydrate the placeholders are read too, one after the other',
+  needsZip,
+  async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'kfbm-hydrate-'));
+    try {
+      const rel = quizPath('1a', 'Low');
       const full = path.join(dir, ...rel.split('/'));
       mkdirSync(path.dirname(full), { recursive: true });
-      writeFileSync(full, content);
-    };
-    await write(quizPath('1a', 'Low'), await docx(quizParagraphs()));
-    await write(
-      quizPath('1a', 'Medium'),
-      await docx(quizParagraphs({ level: 'mittel', breakQ: 1 }))
-    );
-    await write(quizPath('1a', 'High'), 'das ist kein docx');
-    await write(
-      `${T1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
-      await docx(scenarioParagraphs())
-    );
-    await write(
-      `${T1}/Enablers/1a_Thema/1a.docx`,
-      await docx([p('Titel'), p('Text hier.')], 2)
-    );
-    await write(
-      `${K18}/Enablers/18a) Kunden/Quiz/18a_Quiz_Low.docx`,
-      await docx(quizParagraphs({ code: '18a' }))
-    );
-    await write(`${T1}/Enablers/1a_Thema/Archiv/alt.docx`, 'x');
-    await write(`${T1}/Use-Cases/egal.pdf`, 'x');
-    await write(quizPath('1b', 'Low'), 'noch nicht geladen');
-
-    const placeholders = new Map([
-      [`${quizPath('1b', 'Low')}`.toLowerCase(), 0x400000],
-    ]);
-    const entries = [
-      quizPath('1a', 'Low'),
-      quizPath('1a', 'Medium'),
-      quizPath('1a', 'High'),
-      `${T1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
-      `${T1}/Enablers/1a_Thema/1a.docx`,
-      `${K18}/Enablers/18a) Kunden/Quiz/18a_Quiz_Low.docx`,
-      `${T1}/Enablers/1a_Thema/Archiv/alt.docx`,
-      `${T1}/Use-Cases/egal.pdf`,
-      quizPath('1b', 'Low'),
-    ].map(rel => ({
-      rel,
-      size: 10,
-      mtimeMs: 0,
-      attributes: placeholders.get(rel.toLowerCase()) ?? 32,
-      placeholder: placeholders.has(rel.toLowerCase()),
-    }));
-
-    const run = await runCheck(dir, entries);
-    assert.deepEqual(
-      run.results.map(r => [path.basename(r.rel), r.status]),
-      [
-        ['1a_Quiz_Low.docx', 'ok'],
-        ['1a_Quiz_Medium.docx', 'error'],
-        ['1a_Quiz_High.docx', 'read-error'],
-        ['Szenario_1a.docx', 'ok'],
-        ['1a.docx', 'ok'],
-      ]
-    );
-    assert.equal(run.results[4].stats.images, 2);
-    assert.deepEqual(run.skipped.placeholders, [quizPath('1b', 'Low')]);
-    assert.equal(run.skipped.excluded, 1);
-    assert.equal(run.skipped.archive, 1);
-    assert.deepEqual(run.skipped.notParsed, { other: 1 });
-    // the source files are untouched
-    assert.equal(
-      readFileSync(path.join(dir, ...quizPath('1b', 'Low').split('/')), 'utf8'),
-      'noch nicht geladen'
-    );
-
-    const only = await runCheck(dir, entries, { only: ['scenario'] });
-    assert.deepEqual(
-      only.results.map(r => r.type),
-      ['scenario']
-    );
-    const limited = await runCheck(dir, entries, { limit: 2 });
-    assert.equal(limited.results.length, 2);
-    const withK18 = await runCheck(dir, entries, { includeExcluded: true });
-    assert.ok(withK18.results.some(r => r.rel.includes('18a_Quiz_Low')));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
+      writeFileSync(full, await docx(quizParagraphs()));
+      const entries = [
+        { rel, size: 10, mtimeMs: 0, attributes: 0x400000, placeholder: true },
+      ];
+      const skipped = await runCheck(dir, entries);
+      assert.equal(skipped.results.length, 0);
+      assert.deepEqual(skipped.skipped.placeholders, [rel]);
+      const run = await runCheck(dir, entries, { hydrate: true });
+      assert.equal(run.results.length, 1);
+      assert.equal(run.results[0].status, 'ok');
+      assert.equal(run.results[0].hydrated, true);
+      assert.equal(summarize(run).files.hydrated, 1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
-});
-
-test('with hydrate the placeholders are read too, one after the other', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'kfbm-hydrate-'));
-  try {
-    const rel = quizPath('1a', 'Low');
-    const full = path.join(dir, ...rel.split('/'));
-    mkdirSync(path.dirname(full), { recursive: true });
-    writeFileSync(full, await docx(quizParagraphs()));
-    const entries = [
-      { rel, size: 10, mtimeMs: 0, attributes: 0x400000, placeholder: true },
-    ];
-    const skipped = await runCheck(dir, entries);
-    assert.equal(skipped.results.length, 0);
-    assert.deepEqual(skipped.skipped.placeholders, [rel]);
-    const run = await runCheck(dir, entries, { hydrate: true });
-    assert.equal(run.results.length, 1);
-    assert.equal(run.results[0].status, 'ok');
-    assert.equal(run.results[0].hydrated, true);
-    assert.equal(summarize(run).files.hydrated, 1);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+);
 
 test('a read that does not finish ends as read error and the run stops after three in a row', async () => {
   const entries = Array.from({ length: 6 }, (_, i) => ({
@@ -382,35 +399,39 @@ test('the summary counts questions and lists the deviations with count and examp
   assert.ok(!md.includes('Erfundene Frage'));
 });
 
-test('the command reports on a small tree and writes JSON and Markdown', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'kfbm-check-cli-'));
-  try {
-    const full = path.join(dir, ...quizPath('1a', 'Low').split('/'));
-    mkdirSync(path.dirname(full), { recursive: true });
-    writeFileSync(full, await docx(quizParagraphs()));
-    const out = path.join(dir, 'check.json');
-    const run = spawnSync(
-      process.execPath,
-      [
-        'scripts/import/kfbm-parse-check.mjs',
-        dir,
-        '--out',
-        out,
-        '--no-attributes',
-      ],
-      { encoding: 'utf8' }
-    );
-    assert.equal(run.status, 0, run.stderr);
-    const json = JSON.parse(readFileSync(out, 'utf8'));
-    assert.equal(json.summary.files.processed, 1);
-    assert.equal(json.summary.questions, 3);
-    assert.ok(existsSync(path.join(dir, 'check.md')));
-    // the report holds no solution texts
-    assert.ok(!readFileSync(out, 'utf8').includes('Erfunden.'));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
+test(
+  'the command reports on a small tree and writes JSON and Markdown',
+  needsZip,
+  async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'kfbm-check-cli-'));
+    try {
+      const full = path.join(dir, ...quizPath('1a', 'Low').split('/'));
+      mkdirSync(path.dirname(full), { recursive: true });
+      writeFileSync(full, await docx(quizParagraphs()));
+      const out = path.join(dir, 'check.json');
+      const run = spawnSync(
+        process.execPath,
+        [
+          'scripts/import/kfbm-parse-check.mjs',
+          dir,
+          '--out',
+          out,
+          '--no-attributes',
+        ],
+        { encoding: 'utf8' }
+      );
+      assert.equal(run.status, 0, run.stderr);
+      const json = JSON.parse(readFileSync(out, 'utf8'));
+      assert.equal(json.summary.files.processed, 1);
+      assert.equal(json.summary.questions, 3);
+      assert.ok(existsSync(path.join(dir, 'check.md')));
+      // the report holds no solution texts
+      assert.ok(!readFileSync(out, 'utf8').includes('Erfunden.'));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
-});
+);
 
 test('the command stops with a message when the folder does not exist', () => {
   const run = spawnSync(
