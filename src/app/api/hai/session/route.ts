@@ -16,9 +16,9 @@ import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import {
   haiChatSessions,
   haiChatMessages,
-  profiles,
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, requireProPlan } from '@/lib/auth-helpers';
+import { requireProPlan } from '@/lib/auth-helpers';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 // ============================================================================
 // TYPES
@@ -39,39 +39,21 @@ interface UpdateSessionBody {
  */
 export async function GET(req: NextRequest) {
   try {
+    // The person is the session, a userId in the query is ignored
+    const me = await requireUser(req);
+    if (isErrorResponse(me)) return me;
+    const userId = me.id;
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
     const sessionId = searchParams.get('sessionId');
     const includeArchived = searchParams.get('includeArchived') === 'true';
     const search = searchParams.get('search')?.trim();
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Nicht authentifiziert.' },
-        { status: 401 }
-      );
-    }
-
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
         { error: 'HAI.ai is only available with a PRO subscription.' },
         { status: 403 }
-      );
-    }
-
-    // Verify user exists
-    const user = await db
-      .select({ id: profiles.id })
-      .from(profiles)
-      .where(eq(profiles.id, userId))
-      .limit(1);
-
-    if (user.length === 0) {
-      return NextResponse.json(
-        { error: 'Benutzer nicht gefunden.' },
-        { status: 404 }
       );
     }
 
@@ -279,15 +261,9 @@ export async function GET(req: NextRequest) {
  */
 export async function PATCH(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Nicht authentifiziert.' },
-        { status: 401 }
-      );
-    }
+    const me = await requireUser(req);
+    if (isErrorResponse(me)) return me;
+    const userId = me.id;
 
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
@@ -361,16 +337,11 @@ export async function PATCH(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
+    const me = await requireUser(req);
+    if (isErrorResponse(me)) return me;
+    const userId = me.id;
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
     const sessionId = searchParams.get('sessionId');
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Nicht authentifiziert.' },
-        { status: 401 }
-      );
-    }
 
     if (!(await requireProPlan(userId))) {
       return NextResponse.json(
@@ -426,13 +397,14 @@ export async function DELETE(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
+    const me = await requireUser(req);
+    if (isErrorResponse(me)) return me;
+    const userId = me.id;
 
-    if (!userId) {
+    if (!(await requireProPlan(userId))) {
       return NextResponse.json(
-        { error: 'Nicht authentifiziert.' },
-        { status: 401 }
+        { error: 'HAI.ai is only available with a PRO subscription.' },
+        { status: 403 }
       );
     }
 
@@ -440,7 +412,7 @@ export async function POST(req: NextRequest) {
     const { contextType, contextId, title } = body;
 
     // Create new session
-    const organizationId = await getUserOrgId(userId);
+    const organizationId = me.organizationId;
     const newSession = await db
       .insert(haiChatSessions)
       .values({
