@@ -12,6 +12,11 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
+import {
+  requireTraineeScopeCondition,
+  traineeIdInScope,
+  traineeIdsInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 
 export async function GET(
   _req: NextRequest,
@@ -42,10 +47,19 @@ export async function GET(
           .from(options)
           .where(inArray(options.questionId, qIds as any))
       : [];
+    // Only the assignments of trainees of the caller's organization (the super
+    // admin sees every one) and of the chosen occupation
+    const traineeScope = await requireTraineeScopeCondition(session, _req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
     const assignedRows = await db
       .select({ traineeId: quizAssignments.traineeId })
       .from(quizAssignments)
-      .where(eq(quizAssignments.quizId, quizId as any));
+      .where(
+        and(
+          eq(quizAssignments.quizId, quizId as any),
+          traineeIdInScope(quizAssignments.traineeId, traineeScope.condition)
+        )
+      );
 
     const questionsOut = qRows
       .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
@@ -195,6 +209,24 @@ export async function PATCH(
 
     const organizationId = await getUserOrgId(trainerId || '');
 
+    // The assignments of the caller are replaced, the ones of trainees outside
+    // the caller's organization and occupation are neither read, deleted nor
+    // created. Everything is checked before anything is changed.
+    const traineeScope = await requireTraineeScopeCondition(session, req);
+    if (isErrorResponse(traineeScope)) return traineeScope;
+    const allowedTrainees = await traineeIdsInScope(
+      session,
+      req,
+      Array.isArray(assignedTraineeIds) ? assignedTraineeIds : []
+    );
+    if (isErrorResponse(allowedTrainees)) return allowedTrainees;
+    if (
+      Array.isArray(assignedTraineeIds) &&
+      assignedTraineeIds.some(tid => !allowedTrainees.has(String(tid)))
+    ) {
+      return NextResponse.json({ error: 'Trainee not found' }, { status: 404 });
+    }
+
     // Update quiz details
     if (title !== undefined || is_active !== undefined) {
       await db
@@ -254,7 +286,12 @@ export async function PATCH(
       const existingAssignments = await db
         .select({ traineeId: quizAssignments.traineeId })
         .from(quizAssignments)
-        .where(eq(quizAssignments.quizId, quizId as any));
+        .where(
+          and(
+            eq(quizAssignments.quizId, quizId as any),
+            traineeIdInScope(quizAssignments.traineeId, traineeScope.condition)
+          )
+        );
       const previousIds = new Set(
         existingAssignments.map(a => String(a.traineeId))
       );
@@ -262,7 +299,15 @@ export async function PATCH(
       await db.transaction(async tx => {
         await tx
           .delete(quizAssignments)
-          .where(eq(quizAssignments.quizId, quizId as any));
+          .where(
+            and(
+              eq(quizAssignments.quizId, quizId as any),
+              traineeIdInScope(
+                quizAssignments.traineeId,
+                traineeScope.condition
+              )
+            )
+          );
 
         if (assignedTraineeIds.length > 0) {
 

@@ -1,17 +1,20 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { and, eq } from 'drizzle-orm';
 import {
-  profiles,
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
   quizAssignments,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
-import { ensureTraineeInCatalog } from '@/lib/catalog/trainee-scope';
+import { getUserOrgId } from '@/lib/auth-helpers';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
+import {
+  ensureContentInScope,
+  requireCatalogScope,
+  type CatalogContentKind,
+} from '@/lib/catalog/scope';
 
 type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
 
@@ -30,30 +33,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     // The acting trainer is the authenticated user, never a client value
     const trainerId = session.id;
 
-    if (trainerId) {
-      const [t] = await db.select({ role: profiles.role }).from(profiles).where(eq(profiles.id, trainerId as any)).limit(1);
-      if (!t || !isTrainerLevelRole(t.role))
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-
-      const isPO = await verifyPlatformOwner(trainerId);
-      if (!isPO) {
-        const trainerOrgId = await getUserOrgId(trainerId);
-        const traineeOrgId = await getUserOrgId(traineeId);
-        if (trainerOrgId !== traineeOrgId) {
-          return NextResponse.json({ error: 'Trainee not in your organization' }, { status: 403 });
-        }
-      }
-    }
-
-    // A trainee of another occupation than the chosen one is not found.
-    const outOfCatalog = await ensureTraineeInCatalog(session, req, traineeId);
-    if (outOfCatalog) return outOfCatalog;
+    // Only a trainee of the own organization (the super admin: any) and of the
+    // chosen occupation, everything else is not found and stays untouched.
+    const access = await requireTraineeAccess(session, traineeId, req);
+    if (isErrorResponse(access)) return access;
 
     if (!itemType || !itemId || typeof isActive !== 'boolean') {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const organizationId = await getUserOrgId(trainerId || traineeId);
+    // The item has to lie inside the occupations of the caller
+    const itemKinds: Record<ItemType, CatalogContentKind> = {
+      ENABLER: 'enabler',
+      USE_CASE: 'useCase',
+      GLOBAL_QUIZ: 'quiz',
+    };
+    const itemKind = itemKinds[itemType];
+    if (itemKind) {
+      const catalogScope = await requireCatalogScope(session, req);
+      if (isErrorResponse(catalogScope)) return catalogScope;
+      const deniedItem = await ensureContentInScope(catalogScope, itemKind, String(itemId));
+      if (deniedItem) return deniedItem;
+    }
+
+    const organizationId = await getUserOrgId(traineeId);
 
     switch (itemType) {
       case 'ENABLER': {

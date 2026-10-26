@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, desc, and } from 'drizzle-orm';
 import { schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
+import {
+    requireTraineeScopeCondition,
+    traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
 
@@ -15,22 +19,19 @@ export async function GET(req: NextRequest) {
         if (isErrorResponse(session)) return session;
 
         const url = new URL(req.url);
-        const trainerId = session.id;
         const traineeId = url.searchParams.get('traineeId');
-        if (traineeId) {
-            const access = await requireTraineeAccess(session, traineeId);
-            if (isErrorResponse(access)) return access;
-        }
 
-
-
-        const isPO = await verifyPlatformOwner(trainerId);
-        const trainerOrgId = await getUserOrgId(trainerId);
-
+        // One trainee of the own organization and chosen occupation, or all
+        // trainees inside that scope (the super admin sees every organization)
         const conditions: any[] = [];
-        if (traineeId) conditions.push(eq(schoolExams.traineeId, traineeId as any));
-        if (!isPO && trainerOrgId) {
-            conditions.push(eq(schoolExams.organizationId, trainerOrgId));
+        if (traineeId) {
+            const access = await requireTraineeAccess(session, traineeId, req);
+            if (isErrorResponse(access)) return access;
+            conditions.push(eq(schoolExams.traineeId, access.traineeId as any));
+        } else {
+            const traineeScope = await requireTraineeScopeCondition(session, req);
+            if (isErrorResponse(traineeScope)) return traineeScope;
+            conditions.push(traineeIdInScope(schoolExams.traineeId, traineeScope.condition));
         }
 
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -81,27 +82,24 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const access = await requireTraineeAccess(session, String(traineeId));
+        const access = await requireTraineeAccess(session, String(traineeId), req);
         if (isErrorResponse(access)) return access;
 
-        const organizationId = await getUserOrgId(trainerId);
-
-        const isPO = await verifyPlatformOwner(trainerId);
-        if (!isPO) {
-            const traineeOrgId = await getUserOrgId(traineeId);
-            if (organizationId !== traineeOrgId) {
-                return NextResponse.json({ error: 'Trainee not in your organization' }, { status: 403 });
-            }
-        }
+        const trainerOrganizationId = await getUserOrgId(trainerId);
 
         const [trainee] = await db
             .select({
                 fullName: profiles.fullName,
+                organizationId: profiles.organizationId,
                 startOfTrainingDate: profiles.startOfTrainingDate,
                 ausbildungDurationYears: profiles.ausbildungDurationYears
             })
             .from(profiles)
             .where(eq(profiles.id, traineeId));
+
+        // The exam belongs to the organization of the trainee (for everybody
+        // but the super admin that is the organization of the trainer)
+        const organizationId = trainee?.organizationId ?? trainerOrganizationId;
 
         const now = new Date();
         const startDate = trainee?.startOfTrainingDate || now;
@@ -121,7 +119,7 @@ export async function POST(req: NextRequest) {
         const [exam] = await db
             .insert(schoolExams)
             .values({
-                traineeId: traineeId as any,
+                traineeId: access.traineeId as any,
                 examDate: new Date(examDate),
                 subject,
                 examTypeValue: examTypeValue || 'KLAUSUR',

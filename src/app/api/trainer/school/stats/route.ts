@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, sql, and, gte, lte } from 'drizzle-orm';
 import { activityReports, profiles, schoolExams } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import {
+    requireTraineeScopeCondition,
+    traineeIdInScope,
+} from '@/lib/auth/trainee-scope-conditions';
 
 // GET /api/trainer/school/stats?trainerId=...
 export async function GET(req: NextRequest) {
@@ -11,55 +14,43 @@ export async function GET(req: NextRequest) {
         const session = await requireTrainer(req);
         if (isErrorResponse(session)) return session;
 
-        const url = new URL(req.url);
-        const trainerId = session.id;
+        // Everything is counted for the trainees of the own organization (the
+        // super admin: every one) and, with a chosen occupation (x-catalog), of
+        // that occupation. The platform-owner flag of an organization does not
+        // widen the numbers.
+        const traineeScope = await requireTraineeScopeCondition(session, req);
+        if (isErrorResponse(traineeScope)) return traineeScope;
 
-
-
-        const isPO = await verifyPlatformOwner(trainerId);
-        const trainerOrgId = await getUserOrgId(trainerId);
-
-        const orgFilter = (!isPO && trainerOrgId)
-            ? eq(activityReports.organizationId, trainerOrgId)
-            : undefined;
-
-        const orgFilterExams = (!isPO && trainerOrgId)
-            ? eq(schoolExams.organizationId, trainerOrgId)
-            : undefined;
-
-        const orgFilterProfiles = (!isPO && trainerOrgId)
-            ? eq(profiles.organizationId, trainerOrgId)
-            : undefined;
-
-        // Count pending activity reports (org-scoped)
-        const reportConditions = [eq(activityReports.status, 'SUBMITTED')];
-        if (orgFilter) reportConditions.push(orgFilter);
+        // Count pending activity reports (trainee-scoped)
+        const reportConditions: any[] = [
+            eq(activityReports.status, 'SUBMITTED'),
+            traineeIdInScope(activityReports.traineeId, traineeScope.condition),
+        ];
         const pendingReportsResult = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(activityReports)
             .where(and(...reportConditions));
         const pendingReports = pendingReportsResult[0]?.count || 0;
 
-        // Count upcoming exams (next 30 days, org-scoped)
+        // Count upcoming exams (next 30 days, trainee-scoped)
         const now = new Date();
         const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
         const examConditions: any[] = [
             gte(schoolExams.examDate, now),
             lte(schoolExams.examDate, thirtyDaysLater),
+            traineeIdInScope(schoolExams.traineeId, traineeScope.condition),
         ];
-        if (orgFilterExams) examConditions.push(orgFilterExams);
         const upcomingExamsResult = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(schoolExams)
             .where(and(...examConditions));
         const upcomingExams = upcomingExamsResult[0]?.count || 0;
 
-        // Count active trainees (org-scoped)
+        // Count active trainees (scoped)
         const traineeConditions: any[] = [
-            eq(profiles.role, 'TRAINEE'),
+            traineeScope.condition,
             eq(profiles.isActive, true),
         ];
-        if (orgFilterProfiles) traineeConditions.push(orgFilterProfiles);
         const traineesResult = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(profiles)

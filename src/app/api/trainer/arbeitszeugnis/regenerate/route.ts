@@ -1,9 +1,5 @@
-import {
-  requireTrainer,
-  isErrorResponse,
-  scopeOrg,
-  orgScopeCondition,
-} from '@/lib/auth/session';
+import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { workCertificates, profiles } from '@/db/migrations/schemas/schema';
@@ -26,11 +22,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { certificateId } = body;
 
-    // Get all certificates (or a specific one), limited to the caller's
-    // organization (the super admin sees all organizations)
+    // Get all certificates (or a specific one), limited to the trainees of the
+    // caller's organization (the super admin sees all organizations) and, with
+    // a chosen occupation (x-catalog), of that occupation
+    const traineeScope = await requireTraineeScopeCondition(session, request);
+    if (isErrorResponse(traineeScope)) return traineeScope;
     const conditions = and(
       certificateId ? eq(workCertificates.id, certificateId) : undefined,
-      orgScopeCondition(profiles.organizationId, scopeOrg(session))
+      traineeScope.condition
     );
 
     const certificates = await db
@@ -93,7 +92,12 @@ export async function POST(request: NextRequest) {
         await db
           .update(workCertificates)
           .set({ snapshotData: updatedSnapshot })
-          .where(eq(workCertificates.id, cert.id));
+          .where(
+            and(
+              eq(workCertificates.id, cert.id),
+              eq(workCertificates.traineeId, cert.traineeId)
+            )
+          );
 
         updatedCount++;
       }

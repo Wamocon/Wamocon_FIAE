@@ -1,14 +1,15 @@
 import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   useCases,
   useCaseSubmissions,
   notifications,
 } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
 
 export async function PATCH(
@@ -45,6 +46,17 @@ export async function PATCH(
       );
     }
 
+    // The submission has to belong to a trainee the caller is responsible for
+    // (own organization, chosen occupation). A foreign one answers like a
+    // missing one, so nothing is leaked and nothing is changed.
+    const access = await requireTraineeAccess(
+      session,
+      String(sub.traineeId),
+      req,
+      'Submission not found'
+    );
+    if (isErrorResponse(access)) return access;
+
     // The reviewed content must lie inside the caller's catalogs
     const catalogScope = await requireCatalogScope(session, req);
     if (isErrorResponse(catalogScope)) return catalogScope;
@@ -67,17 +79,7 @@ export async function PATCH(
     }
 
 
-    const organizationId = await getUserOrgId(trainerId);
-    const isPO = await verifyPlatformOwner(trainerId);
-    if (!isPO && sub.traineeId) {
-      const traineeOrgId = await getUserOrgId(String(sub.traineeId));
-      if (organizationId !== traineeOrgId) {
-        return NextResponse.json(
-          { error: 'Trainee not in your organization' },
-          { status: 403 }
-        );
-      }
-    }
+    const organizationId = await getUserOrgId(String(sub.traineeId));
 
     const [row] = await db
       .update(useCaseSubmissions)
@@ -87,7 +89,12 @@ export async function PATCH(
         reviewedById: trainerId,
         reviewedAt: new Date(),
       })
-      .where(eq(useCaseSubmissions.id, submissionId))
+      .where(
+        and(
+          eq(useCaseSubmissions.id, submissionId),
+          eq(useCaseSubmissions.traineeId, access.traineeId as any)
+        )
+      )
       .returning();
 
     // Notify trainee about feedback/status

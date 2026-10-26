@@ -215,6 +215,7 @@ export function mockTraineeAccess(
           );
         }
         return {
+          traineeId,
           trainee: {
             id: traineeId,
             role: 'TRAINEE',

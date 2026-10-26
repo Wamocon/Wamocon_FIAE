@@ -115,8 +115,9 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
       }
     };
     walk(base);
-    // (the HAI routes of one person are 'user' handlers too, they have a table
-    // check of their own below)
+    // (the HAI routes of one person and me/catalogs are 'user' handlers too,
+    // they are not part of this folder scan, the folders trainer/, admin/ and
+    // me/ have a scan of their own below)
     const listed = GUARDED_ROUTES.filter(
       r =>
         (r.guard === 'user' ||
@@ -126,7 +127,8 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
           (r.guard === 'trainer' &&
             !r.route.startsWith('trainer/') &&
             !r.route.startsWith('me/'))) &&
-        !r.route.startsWith('hai/')
+        !r.route.startsWith('hai/') &&
+        !r.route.startsWith('me/')
     ).map(r => `${r.method} ${r.route}`);
     // Master data without personal data, open without a session: the
     // Lernfelder of an occupation (list and detail, the catalog comes from the
@@ -139,6 +141,41 @@ describe('route guards: trainer, admin and signed-in user handlers', () => {
       'GET trainee/evaluations/softskills',
     ];
     expect([...listed, ...open].sort()).toEqual(found.sort());
+  });
+
+  it('lists every trainer, admin and me handler', async () => {
+    // A new route file under these folders has to be added to the table, so it
+    // is tested for 401 and 403 and cannot be forgotten
+    const { readdirSync, readFileSync, statSync } = await import('fs');
+    const { join } = await import('path');
+    const base = join(process.cwd(), 'src/app/api');
+    const found: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const full = join(dir, name);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (name === 'route.ts') {
+          const route = full
+            .slice(base.length + 1)
+            .split('\\')
+            .join('/')
+            .replace(/\/route\.ts$/, '');
+          if (/^(trainer|admin|me)\//.test(route)) {
+            const source = readFileSync(full, 'utf8');
+            for (const m of source.matchAll(
+              /export async function (GET|POST|PUT|PATCH|DELETE)/g
+            )) {
+              found.push(`${m[1]} ${route}`);
+            }
+          }
+        }
+      }
+    };
+    walk(base);
+    const listed = GUARDED_ROUTES.filter(r =>
+      /^(trainer|admin|me)\//.test(r.route)
+    ).map(r => `${r.method} ${r.route}`);
+    expect(listed.sort()).toEqual(found.sort());
   });
 
   describe.each(GUARDED_ROUTES)('$method /api/$route', entry => {

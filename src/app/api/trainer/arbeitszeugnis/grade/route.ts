@@ -40,11 +40,12 @@ export async function POST(request: NextRequest) {
             .where(eq(activityReports.id, reportId))
             .limit(1);
 
-        if (!report[0]) {
+        // A DRAFT is the private work of the trainee, not visible to trainer level
+        if (!report[0] || report[0].status === 'DRAFT') {
             return NextResponse.json({ error: 'Activity report not found' }, { status: 404 });
         }
 
-        const access = await requireTraineeAccess(session, String(report[0].traineeId));
+        const access = await requireTraineeAccess(session, String(report[0].traineeId), request);
         if (isErrorResponse(access)) return access;
 
         // Update each entry with grade
@@ -116,14 +117,14 @@ export async function GET(request: NextRequest) {
 
         // The report must belong to a trainee the caller is responsible for
         const [report] = await db
-            .select({ traineeId: activityReports.traineeId })
+            .select({ traineeId: activityReports.traineeId, status: activityReports.status })
             .from(activityReports)
             .where(eq(activityReports.id, reportId))
             .limit(1);
-        if (!report) {
+        if (!report || report.status === 'DRAFT') {
             return NextResponse.json({ error: 'Activity report not found' }, { status: 404 });
         }
-        const access = await requireTraineeAccess(session, String(report.traineeId));
+        const access = await requireTraineeAccess(session, String(report.traineeId), request);
         if (isErrorResponse(access)) return access;
 
         const entries = await db

@@ -53,10 +53,7 @@ function req(url: string, header?: string) {
   } as any;
 }
 
-async function load(
-  tables: Record<string, any> = {},
-  scopeOverrides: Record<string, unknown> = {}
-) {
+async function load(tables: Record<string, any> = {}) {
   jest.resetModules();
   const mock = createTableDb({
     trainingCatalogs: catalogs,
@@ -67,20 +64,6 @@ async function load(
     ...tables,
   });
   jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
-  jest.doMock('@/lib/trainer-scope', () => ({
-    __esModule: true,
-    getTrainerScope: async () => ({
-      id: 'tr1',
-      role: 'ADMIN',
-      organizationId: ORG,
-      isPlatformOwner: false,
-      isSuperAdmin: false,
-      canSeeOrgWide: true,
-      profileIds: ['tr1'],
-      ...scopeOverrides,
-    }),
-    isTraineeVisibleToTrainer: () => true,
-  }));
   jest.doMock('@/lib/catalog/phase-plan-db', () => ({
     __esModule: true,
     loadPhasePlansForUsers: async (users: { id: string }[]) =>
@@ -189,12 +172,16 @@ describe('GET /api/trainer/activity-reports per occupation', () => {
     expect(reportFilter.params).not.toContain('k2');
   });
 
-  it('FIAE regression: without a header a foreign traineeId behaves as before', async () => {
+  it('a traineeId outside the scope gives an empty list, also without a header', async () => {
+    // t1 is not among the trainees of the organization scope (only k1 is)
     const { mock, mod } = await load({ profiles: [trainee('k1')] });
     const res = await mod.GET(req(`${URL_LIST}?traineeId=t1`));
     expect(res.status).toBe(200);
-    expect(selectsFrom(mock, 'activity_reports')).toHaveLength(1);
-    expect(mock.filters('select', 'activity_reports').params).toContain('k1');
+    expect(await res.json()).toEqual({
+      reports: [],
+      meta: { total: 0, pending: 0 },
+    });
+    expect(selectsFrom(mock, 'activity_reports')).toHaveLength(0);
   });
 
   it('answers an empty list without asking for reports when no trainee is left', async () => {
@@ -208,15 +195,13 @@ describe('GET /api/trainer/activity-reports per occupation', () => {
     expect(selectsFrom(mock, 'activity_reports')).toHaveLength(0);
   });
 
-  it('combines the occupation with the trainer visibility of a normal trainer', async () => {
-    const { mock, mod } = await load(
-      {},
-      { canSeeOrgWide: false, profileIds: ['tr1'] }
-    );
+  it('combines the occupation with the organization of the trainer', async () => {
+    const { mock, mod } = await load();
     const res = await mod.GET(req(URL_LIST, 'KFBM'));
     expect(res.status).toBe(200);
     const filter = mock.filters('select', 'profiles');
-    expect(filter.sql).toContain('"profiles"."assigned_trainer_id"');
+    expect(filter.sql).toContain('"profiles"."organization_id" = $');
+    expect(filter.params).toContain(ORG);
     expect(filter.sql).toContain('exists (select 1 from "trainee_enrollments"');
   });
 

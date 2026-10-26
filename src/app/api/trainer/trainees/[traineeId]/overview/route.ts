@@ -17,12 +17,7 @@ import {
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
 } from '@/db/migrations/schemas/schema';
-import {
-  getUserOrgId,
-  verifyPlatformOwner,
-  verifyTrainer,
-} from '@/lib/auth-helpers';
-import { ensureTraineeInCatalog } from '@/lib/catalog/trainee-scope';
+import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 
 export async function GET(
   req: NextRequest,
@@ -34,25 +29,10 @@ export async function GET(
 
     const { traineeId } = await params;
 
-    const { searchParams } = new URL(req.url);
-    const requesterId = session.id;
-    if (requesterId && (await verifyTrainer(requesterId))) {
-      const isPO = await verifyPlatformOwner(requesterId);
-      if (!isPO) {
-        const requesterOrgId = await getUserOrgId(requesterId);
-        const traineeOrgId = await getUserOrgId(traineeId);
-        if (requesterOrgId !== traineeOrgId) {
-          return NextResponse.json(
-            { error: 'Trainee not in your organization' },
-            { status: 403 }
-          );
-        }
-      }
-    }
-
-    // A trainee of another occupation than the chosen one is not found.
-    const outOfCatalog = await ensureTraineeInCatalog(session, req, traineeId);
-    if (outOfCatalog) return outOfCatalog;
+    // Only a trainee of the own organization (the super admin: any) and of the
+    // chosen occupation, everything else is not found.
+    const access = await requireTraineeAccess(session, traineeId, req);
+    if (isErrorResponse(access)) return access;
 
     // Basic trainee info
     const [p] = await db

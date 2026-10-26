@@ -1,10 +1,14 @@
-import { requireTrainer, isErrorResponse } from '@/lib/auth/session';
+import {
+  requireTrainer,
+  isErrorResponse,
+  orgScopeCondition,
+  scopeOrg,
+} from '@/lib/auth/session';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { TRAINER_LEVEL_ROLES } from '@/lib/auth/roles';
-import { eq, ilike, and, ne, inArray } from 'drizzle-orm';
+import { ilike, and, ne, inArray } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,18 +18,18 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q')?.trim();
     const excludeId = searchParams.get('excludeId');
-    const requesterId = session.id;
-
 
     const conditions: any[] = [
       inArray(profiles.role, [...TRAINER_LEVEL_ROLES]),
     ];
 
-    const isPO = await verifyPlatformOwner(requesterId);
-    if (!isPO) {
-      const orgId = await getUserOrgId(requesterId);
-      if (orgId) conditions.push(eq(profiles.organizationId, orgId));
-    }
+    // Everybody but the super admin only finds trainers of the own
+    // organization, the platform-owner flag of an organization does not widen it
+    const orgCondition = orgScopeCondition(
+      profiles.organizationId,
+      scopeOrg(session)
+    );
+    if (orgCondition) conditions.push(orgCondition);
 
     if (q) conditions.push(ilike(profiles.fullName, `%${q}%`));
     if (excludeId) conditions.push(ne(profiles.id, excludeId));
