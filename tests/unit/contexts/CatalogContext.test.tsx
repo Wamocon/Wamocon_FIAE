@@ -10,6 +10,7 @@ import {
   isCatalogPending,
   readPreferredCatalog,
   resetCatalogSelection,
+  setCatalogSelection,
   writePreferredCatalog,
 } from '@/lib/catalog/selection';
 
@@ -128,6 +129,28 @@ describe('CatalogProvider', () => {
       expect(result.current.branding).toEqual(DEFAULT_BRANDING);
     });
 
+    it('does not hold a single request back when FIAE is stored (the occupation page links FIAE too)', async () => {
+      writePreferredCatalog('FIAE');
+      resetCatalogSelection();
+      // a lookup that never answers: the dashboard must not wait for it
+      authFetchMock.mockImplementation(() => new Promise(() => {}));
+      const { result } = setup();
+      expect(isCatalogPending()).toBe(false);
+      await waitFor(() => expect(result.current.status).toBe('loading'));
+      expect(isCatalogPending()).toBe(false);
+      expect(getCatalogHeader()).toBeNull();
+    });
+
+    it('ends without a header and not pending for stored FIAE, after the lookup too', async () => {
+      writePreferredCatalog('FIAE');
+      resetCatalogSelection();
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(isCatalogPending()).toBe(false);
+      expect(getCatalogHeader()).toBeNull();
+      expect(readPreferredCatalog()).toBeNull();
+    });
+
     it('forgets an old stored choice (it is not needed and would hold requests back)', async () => {
       writePreferredCatalog('KFBM');
       resetCatalogSelection();
@@ -238,7 +261,7 @@ describe('CatalogProvider', () => {
   });
 
   describe('failures', () => {
-    it.each([
+    const lookupFailures: [string, () => void][] = [
       ['a server error', () => respond({ error: 'x' }, 503)],
       ['a broken answer', () => respond({ catalogs: 'x' })],
       ['an empty list', () => respond({ catalogs: [], activeCode: null })],
@@ -249,8 +272,10 @@ describe('CatalogProvider', () => {
             Promise.reject(new Error('offline'))
           ),
       ],
-    ])(
-      'after %s the requests go on without a header',
+    ];
+
+    it.each(lookupFailures)(
+      'after %s a stored choice keeps being sent, the server checks it (no silent fall back to FIAE)',
       async (_label, arrange) => {
         writePreferredCatalog('KFBM');
         resetCatalogSelection();
@@ -259,13 +284,36 @@ describe('CatalogProvider', () => {
         expect(isCatalogPending()).toBe(true);
         await waitFor(() => expect(result.current.status).toBe('error'));
         expect(isCatalogPending()).toBe(false);
-        expect(getCatalogHeader()).toBeNull();
+        // a wrong code ends in 403, never in data of the wrong occupation
+        expect(getCatalogHeader()).toBe('KFBM');
         expect(result.current.isMultiple).toBe(false);
         expect(result.current.brandingApplied).toBe(false);
         // the stored choice stays, a later load can use it again
         expect(readPreferredCatalog()).toBe('KFBM');
       }
     );
+
+    it.each(lookupFailures)(
+      'after %s without a stored choice the requests go on without a header (fail open, as before)',
+      async (_label, arrange) => {
+        arrange();
+        const { result } = setup();
+        await waitFor(() => expect(result.current.status).toBe('error'));
+        expect(isCatalogPending()).toBe(false);
+        expect(getCatalogHeader()).toBeNull();
+        expect(readPreferredCatalog()).toBeNull();
+      }
+    );
+
+    it('after a failure with stored FIAE nothing is sent either (FIAE is the default)', async () => {
+      writePreferredCatalog('FIAE');
+      resetCatalogSelection();
+      respond({ error: 'x' }, 503);
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('error'));
+      expect(getCatalogHeader()).toBeNull();
+      expect(isCatalogPending()).toBe(false);
+    });
 
     it('gives up after a timeout, so a hanging request does not block the app', async () => {
       jest.useFakeTimers();
@@ -287,6 +335,7 @@ describe('CatalogProvider', () => {
         });
         await waitFor(() => expect(result.current.status).toBe('error'));
         expect(isCatalogPending()).toBe(false);
+        expect(getCatalogHeader()).toBe('KFBM');
       } finally {
         jest.useRealTimers();
       }
@@ -371,6 +420,84 @@ describe('CatalogProvider', () => {
       expect(authFetchMock).toHaveBeenCalledTimes(2);
     });
 
+    it('does not send the header of the previous account while the next one loads', async () => {
+      // a second tab switched the account: the module state still holds the
+      // header of the account that signed out
+      setCatalogSelection({ header: 'KFBM', pending: false });
+      authFetchMock.mockImplementation(() => new Promise(() => {}));
+      setup();
+      await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
+      expect(getCatalogHeader()).toBeNull();
+      expect(isCatalogPending()).toBe(false);
+    });
+
+    it('holds requests back while the next account loads if its stored choice is not FIAE', async () => {
+      writePreferredCatalog('KFBM');
+      resetCatalogSelection();
+      setCatalogSelection({ header: 'OTHER', pending: false });
+      authFetchMock.mockImplementation(() => new Promise(() => {}));
+      setup();
+      await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
+      expect(getCatalogHeader()).toBeNull();
+      expect(isCatalogPending()).toBe(true);
+    });
+
+    it('keeps the header of the same user while a load runs again (the sign in flag flipped)', async () => {
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
+      const { result, rerender } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(getCatalogHeader()).toBe('FIAE');
+      authFetchMock.mockImplementation(() => new Promise(() => {}));
+      signedIn('user-1', true);
+      rerender();
+      await waitFor(() => expect(result.current.status).toBe('loading'));
+      expect(getCatalogHeader()).toBe('FIAE');
+    });
+
+    describe('the query cache belongs to one account', () => {
+      it('is emptied when another account signs in', async () => {
+        respond({ catalogs: [FIAE], activeCode: 'FIAE' });
+        const { result, rerender, clear } = setup();
+        await waitFor(() => expect(result.current.status).toBe('ready'));
+        expect(clear).not.toHaveBeenCalled();
+        signedIn('user-2');
+        rerender();
+        await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
+      });
+
+      it('is emptied when the user signs out', async () => {
+        respond({ catalogs: [FIAE], activeCode: 'FIAE' });
+        const { result, rerender, clear } = setup();
+        await waitFor(() => expect(result.current.status).toBe('ready'));
+        signedIn(null);
+        rerender();
+        await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
+      });
+
+      it('is kept for a user who stays signed in (re-renders, sign in flag)', async () => {
+        respond({ catalogs: [FIAE], activeCode: 'FIAE' });
+        const { result, rerender, clear } = setup();
+        await waitFor(() => expect(result.current.status).toBe('ready'));
+        rerender();
+        signedIn('user-1', true);
+        rerender();
+        signedIn('user-1', false);
+        rerender();
+        await waitFor(() => expect(result.current.status).toBe('ready'));
+        expect(clear).not.toHaveBeenCalled();
+      });
+
+      it('is kept when the first sign in is recognised (nothing of another account is in it)', async () => {
+        signedIn(null, true);
+        respond({ catalogs: [FIAE], activeCode: 'FIAE' });
+        const { result, rerender, clear } = setup();
+        signedIn('user-1');
+        rerender();
+        await waitFor(() => expect(result.current.status).toBe('ready'));
+        expect(clear).not.toHaveBeenCalled();
+      });
+    });
+
     it('does not load again on a re-render of the same user', async () => {
       respond({ catalogs: [FIAE], activeCode: 'FIAE' });
       const { result, rerender } = setup();
@@ -402,6 +529,16 @@ describe('CatalogProvider', () => {
   });
 
   describe('without a provider', () => {
+    it('tells its consumers whether a provider is mounted', async () => {
+      respond({ catalogs: [FIAE], activeCode: 'FIAE' });
+      expect(renderHook(() => useCatalog()).result.current.inProvider).toBe(
+        false
+      );
+      const { result } = setup();
+      expect(result.current.inProvider).toBe(true);
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+    });
+
     it('gives a neutral value (no occupations, nothing applied)', () => {
       const { result } = renderHook(() => useCatalog());
       expect(result.current.catalogs).toEqual([]);

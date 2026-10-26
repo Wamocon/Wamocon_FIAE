@@ -8,7 +8,11 @@ jest.mock('@/lib/authFetch');
 
 // The occupation the user chose in the switcher. Without a provider the real
 // context is neutral (idle), which most tests below rely on.
-const mockCatalog: { status: string; activeCode: string | null } = {
+const mockCatalog: {
+  status: string;
+  activeCode: string | null;
+  inProvider?: boolean;
+} = {
   status: 'idle',
   activeCode: null,
 };
@@ -41,6 +45,7 @@ describe('useRequestCatalog', () => {
     jest.clearAllMocks();
     mockCatalog.status = 'idle';
     mockCatalog.activeCode = null;
+    delete mockCatalog.inProvider;
   });
 
   it('is not ready before the own occupations are known', async () => {
@@ -175,6 +180,68 @@ describe('useRequestCatalog', () => {
     expect(result.current.ready).toBe(false);
   });
 
+  describe('with the provider of the occupations mounted', () => {
+    beforeEach(() => {
+      mockCatalog.inProvider = true;
+    });
+
+    it('is not ready while the provider has not started yet (idle), also if the lookup of this hook is cached', async () => {
+      // sign in again within the five minutes of the cache: the query of this
+      // hook is answered at once, the provider has not loaded anything yet
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      client.setQueryData(['me-catalogs', 'u1'], {
+        catalogs: [{ code: 'FIAE', title: 'F' }],
+        activeCode: 'FIAE',
+      });
+      const cached = ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      );
+      answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
+      const { result, rerender } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: cached,
+      });
+      expect(result.current.ready).toBe(false);
+      mockCatalog.status = 'loading';
+      rerender();
+      expect(result.current.ready).toBe(false);
+      mockCatalog.status = 'ready';
+      mockCatalog.activeCode = 'KFBM';
+      rerender();
+      expect(result.current.ready).toBe(true);
+      expect(result.current.catalog).toBe('KFBM');
+    });
+
+    it('is ready when the provider failed, the lookup of this hook answered', async () => {
+      mockCatalog.status = 'error';
+      answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+    });
+
+    it('is ready for a FIAE user as soon as both have answered (nothing is waited for beyond that)', async () => {
+      mockCatalog.status = 'ready';
+      mockCatalog.activeCode = 'FIAE';
+      answer({ catalogs: [{ code: 'FIAE', title: 'F' }], activeCode: 'FIAE' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.withCatalog('/api/x')).toBe('/api/x');
+    });
+
+    it('does not become ready without a user id', () => {
+      mockCatalog.status = 'ready';
+      const { result } = renderHook(() => useRequestCatalog(null), {
+        wrapper: wrapper(),
+      });
+      expect(result.current.ready).toBe(false);
+    });
+  });
+
   it('falls back to the answer of the server when the context failed', async () => {
     mockCatalog.status = 'error';
     mockCatalog.activeCode = null;
@@ -184,6 +251,113 @@ describe('useRequestCatalog', () => {
     });
     await waitFor(() => expect(result.current.ready).toBe(true));
     expect(result.current.catalog).toBe('KFBM');
+  });
+
+  describe('phase one of the occupation (phaseOneMonthsFor)', () => {
+    const fiae = {
+      code: 'FIAE',
+      title: 'F',
+      phaseMonths: { '3': [18, 18], '2': [12, 12] },
+    };
+    const kfbm = {
+      code: 'KFBM',
+      title: 'K',
+      phaseMonths: { '3': [15, 21], '2': [10, 14] },
+    };
+
+    it('FIAE: 18 months, 12 shortened (the labels stay as before)', async () => {
+      answer({ catalogs: [fiae], activeCode: 'FIAE' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBe(18);
+      expect(result.current.phaseOneMonthsFor(2)).toBe(12);
+    });
+
+    it('KfBM: 15 months, 10 shortened', async () => {
+      answer({ catalogs: [kfbm], activeCode: 'KFBM' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBe(15);
+      expect(result.current.phaseOneMonthsFor(2)).toBe(10);
+      expect(result.current.phaseOneMonthsFor(null)).toBe(15);
+    });
+
+    it('takes the plan of the active occupation, not of the first one', async () => {
+      answer({ catalogs: [fiae, kfbm], activeCode: 'KFBM' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBe(15);
+    });
+
+    it('takes the plan of the occupation chosen in the switcher', async () => {
+      mockCatalog.status = 'ready';
+      mockCatalog.activeCode = 'KFBM';
+      answer({ catalogs: [fiae, kfbm], activeCode: 'FIAE' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBe(15);
+    });
+
+    it('gives nothing without a phase plan in the answer (the previous lengths apply)', async () => {
+      answer({ catalogs: [{ code: 'KFBM', title: 'K' }], activeCode: 'KFBM' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+    });
+
+    it('gives nothing for an invalid phase plan', async () => {
+      answer({
+        catalogs: [
+          { code: 'KFBM', title: 'K', phaseMonths: { '3': [15, 20] } },
+        ],
+        activeCode: 'KFBM',
+      });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+    });
+
+    it('gives nothing when the occupation is not in the list', async () => {
+      answer({ catalogs: [fiae], activeCode: 'KFBM' });
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+    });
+
+    it('gives nothing when the lookup fails or is not done yet', async () => {
+      answer({ error: 'Unauthorized' }, false, 401);
+      const { result } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.phaseOneMonthsFor(3)).toBeUndefined();
+    });
+
+    it('keeps the same function while the plan does not change', async () => {
+      answer({ catalogs: [kfbm], activeCode: 'KFBM' });
+      const { result, rerender } = renderHook(() => useRequestCatalog('u1'), {
+        wrapper: wrapper(),
+      });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      const first = result.current.phaseOneMonthsFor;
+      rerender();
+      expect(result.current.phaseOneMonthsFor).toBe(first);
+    });
   });
 
   it('keeps the same function while the occupation does not change', async () => {

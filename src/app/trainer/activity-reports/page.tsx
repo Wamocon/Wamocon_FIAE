@@ -62,6 +62,8 @@ interface ActivityReport {
   trainee?: TraineeProfile;
   hasOverbooking?: boolean;
   skillSelfRatings?: Record<string, string> | null;
+  /** Months of phase 1 in the phase plan of the occupation of the trainee. */
+  traineePhaseOneMonths?: number | null;
 }
 
 interface ReportUseCaseEntry {
@@ -668,11 +670,18 @@ export default function TrainerActivityReportsPage() {
       ? normalizeDurationYears(trainees[traineeFilter]?.ausbildungDurationYears)
       : null;
 
+  // Phase one of the occupation of the chosen trainee, from their reports
+  const selectedPhaseOneMonths =
+    traineeFilter !== 'all'
+      ? reports.find(r => r.traineeId === traineeFilter)?.traineePhaseOneMonths
+      : null;
+
   const formatPhaseRange = (
     phase: TrainingPhase,
-    durationYears: AusbildungDurationYears
+    durationYears: AusbildungDurationYears,
+    phaseOneMonths?: number | null
   ) => {
-    const range = getPhaseMonthRange(durationYears, phase);
+    const range = getPhaseMonthRange(durationYears, phase, phaseOneMonths);
     return t('trainer.reports.phaseRange')
       .replace('{phase}', String(phase))
       .replace('{start}', String(range.startMonth))
@@ -686,7 +695,7 @@ export default function TrainerActivityReportsPage() {
         String(phase)
       );
     }
-    return formatPhaseRange(phase, selectedDuration);
+    return formatPhaseRange(phase, selectedDuration, selectedPhaseOneMonths);
   };
 
   const formatReportPhase = (report: ActivityReport) => {
@@ -695,7 +704,11 @@ export default function TrainerActivityReportsPage() {
       report.trainee?.ausbildungDurationYears ??
         trainees[report.traineeId]?.ausbildungDurationYears
     );
-    return formatPhaseRange(report.ausbildungsjahr as TrainingPhase, durationYears);
+    return formatPhaseRange(
+      report.ausbildungsjahr as TrainingPhase,
+      durationYears,
+      report.traineePhaseOneMonths
+    );
   };
 
   if (authLoading || loading) {

@@ -6,9 +6,11 @@
  *    the platform, that is all organizations with their occupations, and the
  *    users of every organization.
  *  - ADMIN: the own organization (seats, contact data) and the users of it.
- *  - TEMP_ADMIN: the users only. The organization page would show a TEMP_ADMIN
- *    nothing to do, the routes behind it only let the platform admin change
- *    plan, seats and activation.
+ *  - TEMP_ADMIN: the same entries as the ADMIN, with fewer rights. An admin of
+ *    the own organization (only that one): the route lets a TEMP_ADMIN change
+ *    the master data (name, contact data, notes, logo) of it, plan, seats and
+ *    activation stay with the platform admin for both, and the seats are shown
+ *    to read.
  *  - Everyone else: no admin entry.
  *
  * The menu is never the protection. The routes check the role themselves (the
@@ -54,7 +56,7 @@ export function adminMenuItems(
     ];
   }
   const role = normalizeRole(subject?.role);
-  if (role === ROLE.ADMIN) {
+  if (role === ROLE.ADMIN || role === ROLE.TEMP_ADMIN) {
     return [
       {
         id: 'adminOrgs',
@@ -64,6 +66,5 @@ export function adminMenuItems(
       USERS_ITEM,
     ];
   }
-  if (role === ROLE.TEMP_ADMIN) return [USERS_ITEM];
   return [];
 }

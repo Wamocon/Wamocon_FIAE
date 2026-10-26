@@ -121,7 +121,11 @@ export default function TraineeActivityReportsPage() {
     : null;
   // The lists belong to the occupation of the user (?catalog= only for an
   // occupation other than FIAE, so FIAE requests stay unchanged)
-  const { ready: catalogReady, withCatalog } = useRequestCatalog(profile?.id);
+  const {
+    ready: catalogReady,
+    withCatalog,
+    phaseOneMonthsFor,
+  } = useRequestCatalog(profile?.id);
   const { data: compData } = useApiQuery<{ components: TrainingComponent[] }>(
     catalogReady ? withCatalog('/api/training-components') : null
   );
@@ -163,7 +167,11 @@ export default function TraineeActivityReportsPage() {
 
   const formatPhaseLabel = (phase: number) => {
     if (phase === 3) return t('reports.integrativePhase');
-    const range = getPhaseMonthRange(durationYears, phase as TrainingPhase);
+    const range = getPhaseMonthRange(
+      durationYears,
+      phase as TrainingPhase,
+      phaseOneMonthsFor(durationYears)
+    );
     return t('reports.phaseRange')
       .replace('{phase}', String(phase))
       .replace('{start}', String(range.startMonth))
@@ -676,6 +684,7 @@ export default function TraineeActivityReportsPage() {
           initialEntries={editingEntries}
           existingReports={reports}
           durationYears={durationYears}
+          phaseOneMonths={phaseOneMonthsFor(durationYears)}
           userId={profile?.id || ''}
           onClose={() => {
             setShowCreateModal(false);
@@ -719,6 +728,7 @@ function CreateReportModal({
   initialEntries,
   existingReports,
   durationYears,
+  phaseOneMonths,
   userId,
   onClose,
   onCreated,
@@ -731,6 +741,8 @@ function CreateReportModal({
   initialEntries?: ReportUseCaseEntry[];
   existingReports: ActivityReport[];
   durationYears: AusbildungDurationYears;
+  /** Months of phase 1 in the phase plan of the occupation (KfBM 15). */
+  phaseOneMonths?: number;
   userId: string;
   onClose: () => void;
   onCreated: () => void;
@@ -763,7 +775,7 @@ function CreateReportModal({
   const [error, setError] = useState<string | null>(null);
 
   const formatModalPhaseLabel = (phase: TrainingPhase) => {
-    const range = getPhaseMonthRange(durationYears, phase);
+    const range = getPhaseMonthRange(durationYears, phase, phaseOneMonths);
     return t('reports.phaseRange')
       .replace('{phase}', String(phase))
       .replace('{start}', String(range.startMonth))
@@ -1678,6 +1690,7 @@ function ReportDetailModal({
 }) {
   const { t } = useLanguage();
   const { profile } = useAuth();
+  const { phaseOneMonthsFor } = useRequestCatalog(profile?.id);
   const [entries, setEntries] = useState<ReportUseCaseEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1878,7 +1891,8 @@ function ReportDetailModal({
     if (phase === 3) return t('reports.integrativePhase');
     const range = getPhaseMonthRange(
       detailDurationYears,
-      phase as TrainingPhase
+      phase as TrainingPhase,
+      phaseOneMonthsFor(detailDurationYears)
     );
     return t('reports.phaseRange')
       .replace('{phase}', String(phase))

@@ -4,9 +4,13 @@ import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCatalog } from '@/contexts/CatalogContext';
 import { authFetch } from '@/lib/authFetch';
+import { phaseOneMonthsFromAnswer } from '@/lib/catalog/phase-plan';
 import { withCatalogParam } from '@/lib/catalog/request-catalog';
 
-type MeCatalogs = { activeCode?: string | null };
+type MeCatalogs = {
+  activeCode?: string | null;
+  catalogs?: { code?: string; phaseMonths?: unknown }[];
+};
 
 /**
  * The occupation to name in requests of the public lists. It is the active
@@ -17,6 +21,13 @@ type MeCatalogs = { activeCode?: string | null };
  * `ready` turns true once the answer is known (also if the lookup failed, then
  * the urls stay plain, as before the occupations). Wait for it before the first
  * request, otherwise a KfBM user would briefly get FIAE lists.
+ *
+ * With the provider mounted `ready` also needs the provider to be done (ready
+ * or error), not just "not loading": after a sign in within the five minutes
+ * of the cache the query of this hook is answered at once while the provider
+ * has not started yet (idle), and the first request would go out with the
+ * server default. Without a provider (tests, neutral context) only the answer
+ * of this hook counts.
  *
  * A user with several occupations chooses one in the switcher (CatalogContext).
  * GET /api/me/catalogs is asked without the choice, so its `activeCode` is only
@@ -29,6 +40,13 @@ type MeCatalogs = { activeCode?: string | null };
  * key. A key made of the url alone would hand the answer of the previous user
  * to the next one who signs in within the same tab (the cache survives a
  * sign-out), and a KfBM trainee would get FIAE lists.
+ *
+ * `phaseOneMonthsFor(durationYears)` is the length of phase 1 in months in the
+ * phase plan of the active occupation (KfBM 15, FIAE 18), for the phase labels
+ * and the current phase in the browser. Hand it to getPhaseMonthRange and
+ * getTrainingPhase. It gives nothing while the answer is unknown, without a
+ * usable plan in it or for an unknown occupation, then the lengths of the time
+ * before the occupations (18 / 12 months) apply.
  *
  * @param userId id of the signed-in user, nothing (null or undefined) until then
  */
@@ -47,9 +65,15 @@ export function useRequestCatalog(userId: string | null | undefined) {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
-  const { status: catalogStatus, activeCode: chosenCode } = useCatalog();
-  const ready =
-    (query.isSuccess || query.isError) && catalogStatus !== 'loading';
+  const {
+    status: catalogStatus,
+    activeCode: chosenCode,
+    inProvider,
+  } = useCatalog();
+  const providerDone = inProvider
+    ? catalogStatus === 'ready' || catalogStatus === 'error'
+    : catalogStatus !== 'loading';
+  const ready = (query.isSuccess || query.isError) && providerDone;
   const catalog =
     (catalogStatus === 'ready' ? chosenCode : null) ??
     query.data?.activeCode ??
@@ -58,5 +82,13 @@ export function useRequestCatalog(userId: string | null | undefined) {
     (url: string) => withCatalogParam(url, catalog),
     [catalog]
   );
-  return { ready, catalog, withCatalog };
+  const phaseMonths = catalog
+    ? query.data?.catalogs?.find(entry => entry.code === catalog)?.phaseMonths
+    : undefined;
+  const phaseOneMonthsFor = useCallback(
+    (durationYears: number | null | undefined) =>
+      phaseOneMonthsFromAnswer(phaseMonths, durationYears),
+    [phaseMonths]
+  );
+  return { ready, catalog, withCatalog, phaseOneMonthsFor };
 }

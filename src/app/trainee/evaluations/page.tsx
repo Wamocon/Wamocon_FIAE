@@ -30,6 +30,7 @@ import {
 import WeeklyEvaluationForm from '@/components/arbeitszeugnis/WeeklyEvaluationForm';
 import AnnualPerformanceOverview from '@/components/arbeitszeugnis/AnnualPerformanceOverview';
 import { getTrainingPhase } from '@/lib/ausbildung/duration';
+import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 
 interface Evaluation {
   id: string;
@@ -57,6 +58,8 @@ function getCurrentWeek(): number {
 export default function TraineeEvaluationsPage() {
   const { profile, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  // Phase one of the occupation of the trainee (KfBM 15 months, FIAE 18)
+  const { phaseOneMonthsFor } = useRequestCatalog(profile?.id);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showNewForm, setShowNewForm] = useState(false);
@@ -70,7 +73,9 @@ export default function TraineeEvaluationsPage() {
     if (!profile?.training_start_date) return 1;
     return getTrainingPhase(
       new Date(profile.training_start_date),
-      profile.ausbildung_duration_years
+      profile.ausbildung_duration_years,
+      new Date(),
+      phaseOneMonthsFor(profile.ausbildung_duration_years)
     );
   };
 
