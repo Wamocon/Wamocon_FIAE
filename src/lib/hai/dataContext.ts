@@ -38,6 +38,7 @@ import { toHaiRole } from '@/lib/auth-helpers';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
 import { buildHaiTrainingScope } from './trainingScope';
 import { getCatalogScopeForUserId } from '@/lib/catalog/scope';
+import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 
 // ============================================================================
 // TYPES
@@ -281,14 +282,24 @@ export async function fetchUserSnapshot(userId: string): Promise<UserSnapshot | 
         // Privileged roles (ADMIN, TEMP_ADMIN) are treated as TRAINER so HAI
         // builds the trainer-facing context for them.
         const role = toHaiRole(user[0].role);
+
+        // Only content of the user's catalogs (fail closed: no scope, no progress)
+        const catalogScope = await getCatalogScopeForUserId(userId);
+        // Phase one of the trainee's occupation (KfBM 15 months, FIAE 18)
+        const phasePlan =
+            role === 'TRAINEE' && user[0].startOfTrainingDate
+                ? await loadPhasePlan(
+                    catalogScope?.activeCatalogId,
+                    user[0].ausbildungDurationYears
+                )
+                : null;
         const trainingScope = buildHaiTrainingScope({
             role,
             startOfTrainingDate: user[0].startOfTrainingDate,
             ausbildungDurationYears: user[0].ausbildungDurationYears,
+            phaseOneMonths: phasePlan?.phaseMonths[0],
         });
 
-        // Only content of the user's catalogs (fail closed: no scope, no progress)
-        const catalogScope = await getCatalogScopeForUserId(userId);
         const snapshotCatalogIds = sql.join(
             (catalogScope?.allowedCatalogIds ?? []).map(id => sql`${id}::uuid`),
             sql`, `

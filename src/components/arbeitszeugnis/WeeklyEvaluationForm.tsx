@@ -32,6 +32,7 @@ import {
 import { toast } from 'sonner';
 import SoftskillRatingGrid from './SoftskillRatingGrid';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRequestCatalog } from '@/lib/hooks/useRequestCatalog';
 
 interface ARPUseCase {
   id: string;
@@ -120,6 +121,9 @@ export default function WeeklyEvaluationForm({
   onSubmit,
 }: WeeklyEvaluationFormProps) {
   const { profile } = useAuth();
+  // The use cases belong to the occupation of the user (?catalog= only for an
+  // occupation other than FIAE, so FIAE requests stay unchanged)
+  const { ready: catalogReady, withCatalog } = useRequestCatalog(profile?.id);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [arpUseCases, setArpUseCases] = useState<ARPUseCase[]>([]);
@@ -152,9 +156,10 @@ export default function WeeklyEvaluationForm({
 
   // Fetch ARP use cases
   useEffect(() => {
+    if (!catalogReady) return;
     async function fetchArpUseCases() {
       try {
-        const res = await fetch('/api/training-use-cases', {
+        const res = await fetch(withCatalog('/api/training-use-cases'), {
           cache: 'no-store',
         });
         if (res.ok) {
@@ -166,7 +171,7 @@ export default function WeeklyEvaluationForm({
       }
     }
     fetchArpUseCases();
-  }, []);
+  }, [catalogReady, withCatalog]);
 
   // Group use cases by component
   const groupedUseCases = useMemo(() => {

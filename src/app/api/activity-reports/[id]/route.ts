@@ -5,6 +5,7 @@ import {
   activityReports,
   profiles,
   activityReportUseCaseEntries,
+  trainingComponents,
   trainingUseCases,
 } from '@/db/migrations/schemas/schema';
 import { apiCache } from '@/lib/api-cache';
@@ -15,6 +16,11 @@ import {
   getTrainerScope,
   isTraineeVisibleToTrainer,
 } from '@/lib/trainer-scope';
+import {
+  allowedCatalogCondition,
+  requireCatalogScopeForUser,
+} from '@/lib/catalog/scope';
+import { loadPhasePlan } from '@/lib/catalog/phase-plan-db';
 
 // GET: Get a single activity report
 export async function GET(
@@ -177,6 +183,13 @@ export async function PUT(
       );
     }
 
+    // Occupation of the report owner: use cases and the phase plan follow it
+    const catalogScope = await requireCatalogScopeForUser(
+      String(report.traineeId),
+      request
+    );
+    if (catalogScope instanceof Response) return catalogScope;
+
     // Validate actualHours are non-negative numbers
     if (entries && entries.length > 0) {
       const invalidHours = entries.filter(
@@ -208,7 +221,8 @@ export async function PUT(
     if (entries && entries.length > 0) {
       const entryUseCaseIds = entries.map((e: any) => e.useCaseId);
 
-      // Get planned hours from master data
+      // Get planned hours from master data (only use cases of the owner's
+      // occupation count)
       const masterUseCases = await db
         .select({
           id: trainingUseCases.id,
@@ -216,10 +230,28 @@ export async function PUT(
           plannedHours: trainingUseCases.plannedHours,
         })
         .from(trainingUseCases)
-        .where(inArray(trainingUseCases.id, entryUseCaseIds as any));
+        .innerJoin(
+          trainingComponents,
+          eq(trainingUseCases.componentId, trainingComponents.id)
+        )
+        .where(
+          and(
+            inArray(trainingUseCases.id, entryUseCaseIds as any),
+            allowedCatalogCondition(
+              trainingComponents.trainingCatalogId,
+              catalogScope
+            )
+          )
+        );
       plannedMap = new Map(
         masterUseCases.map((uc: any) => [uc.id, normalizePlannedHours(uc)])
       );
+      if (entryUseCaseIds.some((id: string) => !plannedMap.has(id))) {
+        return NextResponse.json(
+          { error: 'Unbekannte Tätigkeit im Nachweis.' },
+          { status: 400 }
+        );
+      }
 
       // Get already-used hours from all non-rejected reports EXCLUDING this one
       const otherReports = await db
@@ -336,11 +368,18 @@ export async function PUT(
       })
       .from(profiles)
       .where(eq(profiles.id, report.traineeId as any));
+    const phasePlan = traineeProfile?.startOfTrainingDate
+      ? await loadPhasePlan(
+          catalogScope.activeCatalogId,
+          traineeProfile.ausbildungDurationYears
+        )
+      : null;
     const calculatedAusbildungsjahr = traineeProfile?.startOfTrainingDate
       ? getTrainingPhase(
           traineeProfile.startOfTrainingDate,
           traineeProfile.ausbildungDurationYears,
-          nextPeriodStart
+          nextPeriodStart,
+          phasePlan?.phaseMonths[0]
         )
       : Number(ausbildungsjahr) || report.ausbildungsjahr;
 
