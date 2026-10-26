@@ -4,6 +4,7 @@ import db from '@/db';
 import { lessons, modules, subLessons } from '@/db/migrations/schemas/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { verifyPlatformOwner } from '@/lib/auth-helpers';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
@@ -11,6 +12,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ mod
     if (isErrorResponse(session)) return session;
 
     const { moduleId } = await params;
+    const moduleIdNotFound = notFoundUnlessUuid(moduleId);
+    if (moduleIdNotFound) return moduleIdNotFound;
     const [mod] = await db
       .select({ id: modules.id, title: modules.title, training_year: modules.training_year, order_index: modules.order_index })
       .from(modules)
@@ -34,6 +37,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ mo
     if (isErrorResponse(session)) return session;
 
     const { moduleId } = await params;
+    const moduleIdNotFound = notFoundUnlessUuid(moduleId);
+    if (moduleIdNotFound) return moduleIdNotFound;
     const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
@@ -113,6 +118,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ m
     if (isErrorResponse(session)) return session;
 
     const { moduleId } = await params;
+    const moduleIdNotFound = notFoundUnlessUuid(moduleId);
+    if (moduleIdNotFound) return moduleIdNotFound;
     const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(

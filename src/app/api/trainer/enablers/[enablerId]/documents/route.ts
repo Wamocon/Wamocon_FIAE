@@ -3,10 +3,16 @@ import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { DB_OPTION } from '@/lib/db-schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { contentDocuments, enablers } from '@/db/migrations/schemas/schema';
-import { getUserOrgId, verifyPlatformOwner } from '@/lib/auth-helpers';
+import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
+import {
+  canDeleteDocument,
+  documentVisibilityCondition,
+  loadPlatformOrgIds,
+} from '@/lib/auth/document-scope';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 // GET documents for an enabler
 export async function GET(
@@ -34,7 +40,13 @@ export async function GET(
     const docs = await db
       .select()
       .from(contentDocuments)
-      .where(eq(contentDocuments.enablerId, enablerId as any))
+      .where(
+        and(
+          eq(contentDocuments.enablerId, enablerId as any),
+          // the shared curriculum, the platform and the own organization
+          documentVisibilityCondition(contentDocuments.organizationId, session)
+        )
+      )
       .orderBy(contentDocuments.orderIndex);
 
     return NextResponse.json({ documents: docs });
@@ -135,7 +147,6 @@ export async function DELETE(
     const catalogScope = await requireContentScope(session, req, 'enabler', enablerId);
     if (isErrorResponse(catalogScope)) return catalogScope;
     const { searchParams } = new URL(req.url);
-    const trainerId = session.id;
     const documentId = searchParams.get('documentId');
 
     if (!documentId) {
@@ -144,6 +155,9 @@ export async function DELETE(
         { status: 400 }
       );
     }
+    // An id that is no uuid is a document that cannot exist
+    const documentNotFound = notFoundUnlessUuid(documentId, 'Document not found');
+    if (documentNotFound) return documentNotFound;
 
     // Verify enabler exists
     const [enabler] = await db
@@ -154,12 +168,16 @@ export async function DELETE(
       return NextResponse.json({ error: 'Enabler not found' }, { status: 404 });
     }
 
-    // Shared curriculum: any valid trainer can delete documents
-
+    // The document has to belong to the enabler of the path
     const [doc] = await db
       .select()
       .from(contentDocuments)
-      .where(eq(contentDocuments.id, documentId as any));
+      .where(
+        and(
+          eq(contentDocuments.id, documentId as any),
+          eq(contentDocuments.enablerId, enablerId as any)
+        )
+      );
     if (!doc) {
       return NextResponse.json(
         { error: 'Document not found' },
@@ -167,10 +185,10 @@ export async function DELETE(
       );
     }
 
-    // Org-scoped delete: trainers can only delete their own org's docs
-    const trainerOrgId = await getUserOrgId(trainerId);
-    const isPlatform = await verifyPlatformOwner(trainerId);
-    if (!isPlatform && doc.organizationId !== trainerOrgId) {
+    // Own organization only. The shared curriculum and the platform documents
+    // are deleted by the super admin only, the platform flag of a person
+    // widens nothing.
+    if (!canDeleteDocument(session, doc, await loadPlatformOrgIds())) {
       return NextResponse.json(
         { error: 'You can only delete documents uploaded by your organization' },
         { status: 403 }

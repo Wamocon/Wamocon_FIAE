@@ -115,9 +115,9 @@ describe('POST /api/trainer/quizzes: assigned trainees', () => {
 
 describe('GET and PATCH /api/trainer/quizzes/[quizId]: assignments', () => {
   const route = 'trainer/quizzes/[quizId]/route';
-  const params = { params: Promise.resolve({ quizId: 'q1' }) };
+  const params = { params: Promise.resolve({ quizId: 'bbbbbbb1-0000-4000-8000-000000000001' }) };
   const quiz = {
-    id: 'q1',
+    id: 'bbbbbbb1-0000-4000-8000-000000000001',
     title: 'Q1',
     isActive: true,
     quizType: 'GLOBAL',
@@ -133,7 +133,7 @@ describe('GET and PATCH /api/trainer/quizzes/[quizId]: assignments', () => {
 
   it('GET lists only the assignments of trainees inside the scope', async () => {
     const { mod, mock } = await loadScoped(route, { tables: tables() });
-    const res = await mod.GET(scopeReq(`${API}/quizzes/q1`), params);
+    const res = await mod.GET(scopeReq(`${API}/quizzes/bbbbbbb1-0000-4000-8000-000000000001`), params);
     expect(res.status).toBe(200);
     const filter = mock.filters('select', 'quiz_assignments');
     expect(filter.sql).toContain('"quiz_assignments"."trainee_id" in (select');
@@ -143,12 +143,12 @@ describe('GET and PATCH /api/trainer/quizzes/[quizId]: assignments', () => {
 
   it('GET with an occupation lists only the assignments of its trainees', async () => {
     const { mod, mock } = await loadScoped(route, { tables: tables() });
-    await mod.GET(scopeReq(`${API}/quizzes/q1`, { header: 'KFBM' }), params);
+    await mod.GET(scopeReq(`${API}/quizzes/bbbbbbb1-0000-4000-8000-000000000001`, { header: 'KFBM' }), params);
     expect(mock.filters('select', 'quiz_assignments').params).toContain(KFBM);
   });
 
   const patch = (ids: unknown[]) =>
-    scopeReq(`${API}/quizzes/q1`, {
+    scopeReq(`${API}/quizzes/bbbbbbb1-0000-4000-8000-000000000001`, {
       method: 'PATCH',
       body: { assigned_trainee_ids: ids },
     });
@@ -193,11 +193,11 @@ describe('GET and PATCH /api/trainer/quizzes/[quizId]: assignments', () => {
 
 describe('/api/trainer/courses/[courseId]/members', () => {
   const route = 'trainer/courses/[courseId]/members/route';
-  const params = { params: Promise.resolve({ courseId: 'c1' }) };
+  const params = { params: Promise.resolve({ courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }) };
   const base = {
-    courses: [{ id: 'c1', title: 'Kurs', trainingCatalogId: FIAE }],
+    courses: [{ id: 'bbbbbbb3-0000-4000-8000-000000000003', title: 'Kurs', trainingCatalogId: FIAE }],
   };
-  const url = `${API}/courses/c1/members`;
+  const url = `${API}/courses/bbbbbbb3-0000-4000-8000-000000000003/members`;
 
   it('GET lists only members of the own organization', async () => {
     const { mod, mock } = await loadScoped(route, {
@@ -353,7 +353,7 @@ describe('/api/trainer/courses/[courseId]/members', () => {
   });
 
   const remove = scopeReq(`${url}?userId=${T1}`, { method: 'DELETE' });
-  const member = [{ courseId: 'c1', userId: T1, role: 'TRAINEE' }];
+  const member = [{ courseId: 'bbbbbbb3-0000-4000-8000-000000000003', userId: T1, role: 'TRAINEE' }];
 
   it('DELETE removes a member of the own organization', async () => {
     const { mod, mock } = await loadScoped(route, {
@@ -393,7 +393,7 @@ describe('/api/trainer/quiz-members', () => {
     const { mod, mock } = await loadScoped(route, {
       tables: { quizzes: quiz, quizMembers: [] },
     });
-    const res = await mod.GET(scopeReq(`${API}/quiz-members?quizId=q1`));
+    const res = await mod.GET(scopeReq(`${API}/quiz-members?quizId=bbbbbbb1-0000-4000-8000-000000000001`));
     expect(res.status).toBe(200);
     const filter = mock.filters('select', 'quiz_members');
     expect(filter.sql).toContain('"quiz_members"."trainer_id" in (select');
@@ -403,7 +403,7 @@ describe('/api/trainer/quiz-members', () => {
   const del = (trainerId: string) =>
     scopeReq(`${API}/quiz-members`, {
       method: 'DELETE',
-      body: { quiz_id: 'q1', trainer_id: trainerId },
+      body: { quiz_id: 'bbbbbbb1-0000-4000-8000-000000000001', trainer_id: trainerId },
     });
 
   it('DELETE refuses to remove a trainer of another organization (404)', async () => {
@@ -436,11 +436,11 @@ describe('counts of trainees in the course and quiz lists', () => {
     const { mod, mock } = await loadScoped('trainer/courses/route', {
       tables: {
         courses: [
-          { id: 'c1', title: 'Kurs', year: 1, chapter: 1, examPart: 1 },
+          { id: 'bbbbbbb3-0000-4000-8000-000000000003', title: 'Kurs', year: 1, chapter: 1, examPart: 1 },
         ],
         enablers: [],
         useCases: [],
-        courseMembers: [{ courseId: 'c1', role: 'TRAINEE', cnt: 2 }],
+        courseMembers: [{ courseId: 'bbbbbbb3-0000-4000-8000-000000000003', role: 'TRAINEE', cnt: 2 }],
       },
     });
     const res = await mod.GET(scopeReq(`${API}/courses`));
@@ -455,7 +455,7 @@ describe('counts of trainees in the course and quiz lists', () => {
     const { mod, mock } = await loadScoped('trainer/courses/route', {
       session: superAdminSession(),
       tables: {
-        courses: [{ id: 'c1', title: 'Kurs' }],
+        courses: [{ id: 'bbbbbbb3-0000-4000-8000-000000000003', title: 'Kurs' }],
         enablers: [],
         useCases: [],
         courseMembers: [],
@@ -472,7 +472,7 @@ describe('counts of trainees in the course and quiz lists', () => {
       tables: {
         quizzes: [
           {
-            id: 'q1',
+            id: 'bbbbbbb1-0000-4000-8000-000000000001',
             title: 'Q',
             quizType: 'GLOBAL',
             isActive: true,

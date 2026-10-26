@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { lessons } from '@/db/migrations/schemas/schema';
 import { verifyPlatformOwner } from '@/lib/auth-helpers';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ moduleId: string }> }) {
   try {
@@ -10,6 +11,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mod
     if (isErrorResponse(session)) return session;
 
     const { moduleId } = await params;
+    const moduleIdNotFound = notFoundUnlessUuid(moduleId);
+    if (moduleIdNotFound) return moduleIdNotFound;
     const body = await req.json();
     const title: string | undefined = body?.title;
     const order_index: number | undefined = body?.order_index ? Number(body.order_index) : undefined;

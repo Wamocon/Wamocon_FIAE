@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { eq, count } from 'drizzle-orm';
 import { organizations, profiles } from '@/db/migrations/schemas/schema';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 export async function GET(
   req: NextRequest,
@@ -19,6 +20,9 @@ export async function GET(
     // The caller's identity comes from the bearer token, never from the URL
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
+
+    const orgNotFound = notFoundUnlessUuid(orgId, 'Organization not found');
+    if (orgNotFound) return orgNotFound;
 
     // Org admins can only open their own organization
     if (!isInOrgScope(scopeOrg(session), orgId)) {
@@ -51,6 +55,9 @@ export async function PATCH(
     // The caller's identity comes from the bearer token, never from the URL
     const session = await requireAdmin(req);
     if (isErrorResponse(session)) return session;
+
+    const orgNotFound = notFoundUnlessUuid(orgId, 'Organization not found');
+    if (orgNotFound) return orgNotFound;
 
     if (!isInOrgScope(scopeOrg(session), orgId)) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
@@ -132,6 +139,9 @@ export async function DELETE(
     // Deleting an organization is a platform-wide action
     const session = await requireSuperAdmin(req);
     if (isErrorResponse(session)) return session;
+
+    const orgNotFound = notFoundUnlessUuid(orgId, 'Organization not found');
+    if (orgNotFound) return orgNotFound;
 
     const [target] = await db
       .select({

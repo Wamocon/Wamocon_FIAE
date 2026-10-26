@@ -4,6 +4,7 @@ import db from '@/db';
 import { lessons, subLessons } from '@/db/migrations/schemas/schema';
 import { eq } from 'drizzle-orm';
 import { verifyPlatformOwner } from '@/lib/auth-helpers';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ lessonId: string }> }) {
   try {
@@ -11,6 +12,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ le
     if (isErrorResponse(session)) return session;
 
     const { lessonId } = await params;
+    const lessonIdNotFound = notFoundUnlessUuid(lessonId);
+    if (lessonIdNotFound) return lessonIdNotFound;
     const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(
@@ -40,6 +43,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ l
     if (isErrorResponse(session)) return session;
 
     const { lessonId } = await params;
+    const lessonIdNotFound = notFoundUnlessUuid(lessonId);
+    if (lessonIdNotFound) return lessonIdNotFound;
     const trainerId = session.id;
     if (!(await verifyPlatformOwner(trainerId))) {
       return NextResponse.json(

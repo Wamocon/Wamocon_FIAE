@@ -93,7 +93,7 @@ async function load(
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   const mod = (await import('@/app/api/hai/chat/route')) as any;
-  return { mod, processMessage };
+  return { mod, processMessage, rec };
 }
 
 const post = (context: Record<string, unknown>) =>
@@ -214,5 +214,97 @@ describe('HAI chat route: scenarioText and the occupation of the enabler', () =>
     const ctx = contextOf(processMessage as never);
     expect(ctx.currentEnablerId).toBeUndefined();
     expect(ctx.enablerTitle).toBeUndefined();
+  });
+});
+
+// The session id and the context id go into uuid columns (the session lookup
+// and the new session). A value that is no uuid made the database reject the
+// query and the route answer 500. Such an id cannot be a session of the
+// person, so the chat starts a new one, and a context id that is no uuid is not
+// stored: the session is a general one.
+describe('HAI chat route: ids that are no uuid', () => {
+  beforeEach(() => jest.clearAllMocks());
+  const SCOPE = { allowedCatalogIds: [FIAE_CATALOG_ID] };
+  const sessionInserts = (rec: any) =>
+    rec.writes('insert', 'hai_chat_sessions') as Array<Record<string, unknown>>;
+
+  it('does not store a context id that is no uuid', async () => {
+    const { mod, rec } = await load(SCOPE, FIAE_CATALOG_ID);
+    const res = await mod.POST(post({ enablerId: "1'; drop table x; --" }));
+    expect(res.status).toBe(200);
+    const [session] = sessionInserts(rec);
+    expect(session.contextType).toBe('general');
+    expect(session.contextId ?? null).toBeNull();
+  });
+
+  it('stores the context id of an enabler that is a uuid', async () => {
+    const { mod, rec } = await load(SCOPE, FIAE_CATALOG_ID);
+    await mod.POST(post({ enablerId: ENABLER_FIAE }));
+    const [session] = sessionInserts(rec);
+    expect(session.contextType).toBe('enabler');
+    expect(session.contextId).toBe(ENABLER_FIAE);
+  });
+
+  it('falls back to a valid course id when the enabler id is no uuid', async () => {
+    const { mod, rec } = await load(SCOPE, FIAE_CATALOG_ID);
+    await mod.POST(post({ enablerId: 'nope', courseId: COURSE_FIAE }));
+    const [session] = sessionInserts(rec);
+    expect(session.contextType).toBe('course');
+    expect(session.contextId).toBe(COURSE_FIAE);
+  });
+
+  it.each(['s1', "x'; drop table hai_chat_sessions; --"])(
+    'starts a new session for the sessionId %p without looking it up',
+    async bad => {
+      const { mod, rec, processMessage } = await load(SCOPE, FIAE_CATALOG_ID);
+      const res = await mod.POST(
+        makeRequest('POST', 'http://localhost/api/hai/chat', {
+          token: 't',
+          body: { message: 'Hallo', sessionId: bad },
+        })
+      );
+      expect(res.status).toBe(200);
+      expect(processMessage).toHaveBeenCalledTimes(1);
+      expect(sessionInserts(rec)).toHaveLength(1);
+      // the id never reached a query on the sessions
+      expect(rec.filters('select', 'hai_chat_sessions').params).not.toContain(
+        bad
+      );
+    }
+  );
+
+  it.each(['temp-1', "x'; --"])(
+    'PATCH of the message %p answers 400 without a lookup',
+    async bad => {
+      const { mod, rec } = await load(SCOPE, FIAE_CATALOG_ID);
+      const res = await mod.PATCH(
+        makeRequest('PATCH', 'http://localhost/api/hai/chat', {
+          token: 't',
+          body: { messageId: bad, content: 'neu' },
+        })
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'Invalid messageId' });
+      expect(rec.calls.filter(c => c.op !== 'select')).toEqual([]);
+      expect(rec.filters('select', 'hai_chat_messages').params).not.toContain(
+        bad
+      );
+    }
+  );
+
+  it('answers 404 for an edit of a session whose id is no uuid', async () => {
+    const { mod, processMessage } = await load(SCOPE, FIAE_CATALOG_ID);
+    const res = await mod.POST(
+      makeRequest('POST', 'http://localhost/api/hai/chat', {
+        token: 't',
+        body: {
+          message: 'Hallo',
+          sessionId: 's1',
+          editMessageId: '3a0e4e4c-9f1e-4f3e-9c55-2f6a9d6a0009',
+        },
+      })
+    );
+    expect(res.status).toBe(404);
+    expect(processMessage).not.toHaveBeenCalled();
   });
 });

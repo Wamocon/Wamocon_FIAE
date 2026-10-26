@@ -5,6 +5,7 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { schoolExamResults, schoolExams, profiles, notifications } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { notFoundUnlessUuid } from '@/lib/uuid';
 
 interface RouteParams {
     params: Promise<{ examId: string }>;
@@ -17,6 +18,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         if (isErrorResponse(session)) return session;
 
         const { examId } = await params;
+        const examIdNotFound = notFoundUnlessUuid(examId, 'Exam not found');
+        if (examIdNotFound) return examIdNotFound;
         const body = await req.json();
         const { points, maxPoints } = body;
 

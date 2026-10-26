@@ -11,6 +11,9 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { apiCache } from '@/lib/api-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
 import { ensureContentInScope, requireCatalogScope } from '@/lib/catalog/scope';
+import { notFoundUnlessUuid } from '@/lib/uuid';
+
+const REVIEW_STATUSES: string[] = ['PENDING', 'APPROVED', 'REJECTED'];
 
 export async function PATCH(
   req: NextRequest,
@@ -21,6 +24,8 @@ export async function PATCH(
     if (isErrorResponse(session)) return session;
 
     const { submissionId } = await params;
+    const submissionIdNotFound = notFoundUnlessUuid(submissionId, 'Submission not found');
+    if (submissionIdNotFound) return submissionIdNotFound;
     const { searchParams } = new URL(req.url);
     const trainerId = session.id;
 
@@ -33,6 +38,10 @@ export async function PATCH(
 
     if (!status) {
       return NextResponse.json({ error: 'Missing status' }, { status: 400 });
+    }
+    // The status goes into an enum column
+    if (!REVIEW_STATUSES.includes(status as string)) {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
     const [sub] = await db
@@ -92,10 +101,19 @@ export async function PATCH(
       .where(
         and(
           eq(useCaseSubmissions.id, submissionId),
-          eq(useCaseSubmissions.traineeId, access.traineeId as any)
+          eq(useCaseSubmissions.traineeId, access.traineeId as any),
+          // the status this review was decided on: a submission that was
+          // reviewed in the meantime is not overwritten
+          eq(useCaseSubmissions.status, sub.status as any)
         )
       )
       .returning();
+    if (!row) {
+      return NextResponse.json(
+        { error: 'Submission was changed in the meantime' },
+        { status: 409 }
+      );
+    }
 
     // Notify trainee about feedback/status
     try {

@@ -53,14 +53,14 @@ type Case = {
 const API = 'http://localhost/api/trainer';
 
 const report = {
-  id: 'r1',
+  id: 'aaaaaaa1-0000-4000-8000-000000000001',
   traineeId: T1,
   status: 'SUBMITTED',
   weekNumber: 1,
   year: 2027,
 };
 const evaluation = {
-  id: 'ev1',
+  id: 'aaaaaaa2-0000-4000-8000-000000000002',
   traineeId: T1,
   status: 'SUBMITTED',
   trainerRating: '2',
@@ -116,7 +116,7 @@ const cases: Case[] = [
     method: 'PATCH',
     url: `${API}/trainees/${T1}/activate`,
     params: { traineeId: T1 },
-    body: { itemType: 'ENABLER', itemId: 'e1', isActive: true },
+    body: { itemType: 'ENABLER', itemId: 'aaaaaaa6-0000-4000-8000-000000000006', isActive: true },
     tables: { enablers: [{ trainingCatalogId: FIAE }] },
     write: { op: 'insert', table: 'trainee_enabler_overrides' },
     ok: 200,
@@ -125,8 +125,8 @@ const cases: Case[] = [
     name: 'GET /activity-reports/[id]',
     route: 'trainer/activity-reports/[id]/route',
     method: 'GET',
-    url: `${API}/activity-reports/r1`,
-    params: { id: 'r1' },
+    url: `${API}/activity-reports/aaaaaaa1-0000-4000-8000-000000000001`,
+    params: { id: 'aaaaaaa1-0000-4000-8000-000000000001' },
     tables: { activityReports: [report], activityReportEntries: [] },
     ok: 200,
   },
@@ -134,8 +134,8 @@ const cases: Case[] = [
     name: 'PUT /activity-reports/[id]',
     route: 'trainer/activity-reports/[id]/route',
     method: 'PUT',
-    url: `${API}/activity-reports/r1`,
-    params: { id: 'r1' },
+    url: `${API}/activity-reports/aaaaaaa1-0000-4000-8000-000000000001`,
+    params: { id: 'aaaaaaa1-0000-4000-8000-000000000001' },
     body: { action: 'approve' },
     tables: { activityReports: [report] },
     returns: { activityReports: [{ ...report, status: 'APPROVED' }] },
@@ -147,8 +147,8 @@ const cases: Case[] = [
     name: 'GET /evaluations/[id]',
     route: 'trainer/evaluations/[id]/route',
     method: 'GET',
-    url: `${API}/evaluations/ev1`,
-    params: { id: 'ev1' },
+    url: `${API}/evaluations/aaaaaaa2-0000-4000-8000-000000000002`,
+    params: { id: 'aaaaaaa2-0000-4000-8000-000000000002' },
     tables: {
       weeklyEvaluations: [evaluation],
       weeklySoftskillRatings: [],
@@ -159,8 +159,8 @@ const cases: Case[] = [
     name: 'PUT /evaluations/[id]',
     route: 'trainer/evaluations/[id]/route',
     method: 'PUT',
-    url: `${API}/evaluations/ev1`,
-    params: { id: 'ev1' },
+    url: `${API}/evaluations/aaaaaaa2-0000-4000-8000-000000000002`,
+    params: { id: 'aaaaaaa2-0000-4000-8000-000000000002' },
     body: { trainerRating: '2' },
     tables: { weeklyEvaluations: [evaluation], weeklySoftskillRatings: [] },
     write: { op: 'update', table: 'weekly_evaluations' },
@@ -171,8 +171,8 @@ const cases: Case[] = [
     name: 'PATCH /evaluations/[id]',
     route: 'trainer/evaluations/[id]/route',
     method: 'PATCH',
-    url: `${API}/evaluations/ev1`,
-    params: { id: 'ev1' },
+    url: `${API}/evaluations/aaaaaaa2-0000-4000-8000-000000000002`,
+    params: { id: 'aaaaaaa2-0000-4000-8000-000000000002' },
     body: { action: 'approve' },
     tables: { weeklyEvaluations: [evaluation] },
     write: { op: 'update', table: 'weekly_evaluations' },
@@ -183,20 +183,20 @@ const cases: Case[] = [
     name: 'PATCH /blocks/[id]',
     route: 'trainer/blocks/[blockId]/route',
     method: 'PATCH',
-    url: `${API}/blocks/b1`,
-    params: { blockId: 'b1' },
+    url: `${API}/blocks/aaaaaaa3-0000-4000-8000-000000000003`,
+    params: { blockId: 'aaaaaaa3-0000-4000-8000-000000000003' },
     body: { title: 'Neu' },
     tables: {
       ausbildungBlocks: [
         {
-          id: 'b1',
+          id: 'aaaaaaa3-0000-4000-8000-000000000003',
           traineeId: T1,
           blockType: 'TRAINER_BLOCKER',
           createdByTrainerId: T3,
         },
       ],
     },
-    returns: { ausbildungBlocks: [{ id: 'b1', title: 'Neu' }] },
+    returns: { ausbildungBlocks: [{ id: 'aaaaaaa3-0000-4000-8000-000000000003', title: 'Neu' }] },
     write: { op: 'update', table: 'ausbildung_blocks' },
     whereTrainee: '"ausbildung_blocks"."trainee_id" = $',
     ok: 200,
@@ -205,12 +205,12 @@ const cases: Case[] = [
     name: 'DELETE /blocks/[id]',
     route: 'trainer/blocks/[blockId]/route',
     method: 'DELETE',
-    url: `${API}/blocks/b1`,
-    params: { blockId: 'b1' },
+    url: `${API}/blocks/aaaaaaa3-0000-4000-8000-000000000003`,
+    params: { blockId: 'aaaaaaa3-0000-4000-8000-000000000003' },
     tables: {
       ausbildungBlocks: [
         {
-          id: 'b1',
+          id: 'aaaaaaa3-0000-4000-8000-000000000003',
           traineeId: T1,
           blockType: 'TRAINER_BLOCKER',
           createdByTrainerId: T3,
@@ -241,8 +241,8 @@ const cases: Case[] = [
     name: 'PUT /school/exams/[id]/grade',
     route: 'trainer/school/exams/[examId]/grade/route',
     method: 'PUT',
-    url: `${API}/school/exams/x1/grade`,
-    params: { examId: 'x1' },
+    url: `${API}/school/exams/aaaaaaa4-0000-4000-8000-000000000004/grade`,
+    params: { examId: 'aaaaaaa4-0000-4000-8000-000000000004' },
     body: { points: 40, maxPoints: 50 },
     tables: {
       schoolExams: [{ traineeId: T1, subject: 'Mathe' }],
@@ -256,15 +256,15 @@ const cases: Case[] = [
     name: 'PATCH /reviews/enablers/[id]',
     route: 'trainer/reviews/enablers/[submissionId]/route',
     method: 'PATCH',
-    url: `${API}/reviews/enablers/s1`,
-    params: { submissionId: 's1' },
+    url: `${API}/reviews/enablers/aaaaaaa5-0000-4000-8000-000000000005`,
+    params: { submissionId: 'aaaaaaa5-0000-4000-8000-000000000005' },
     body: { status: 'APPROVED' },
     tables: {
-      enablerSubmissions: [{ id: 's1', enablerId: 'e1', traineeId: T1 }],
-      enablers: [{ id: 'e1', trainingCatalogId: FIAE }],
+      enablerSubmissions: [{ id: 'aaaaaaa5-0000-4000-8000-000000000005', enablerId: 'aaaaaaa6-0000-4000-8000-000000000006', traineeId: T1 }],
+      enablers: [{ id: 'aaaaaaa6-0000-4000-8000-000000000006', trainingCatalogId: FIAE }],
     },
     returns: {
-      enablerSubmissions: [{ id: 's1', enablerId: 'e1', traineeId: T1 }],
+      enablerSubmissions: [{ id: 'aaaaaaa5-0000-4000-8000-000000000005', enablerId: 'aaaaaaa6-0000-4000-8000-000000000006', traineeId: T1 }],
     },
     write: { op: 'update', table: 'enabler_submissions' },
     whereTrainee: '"enabler_submissions"."trainee_id" = $',
@@ -274,15 +274,15 @@ const cases: Case[] = [
     name: 'PATCH /reviews/use-cases/[id]',
     route: 'trainer/reviews/use-cases/[submissionId]/route',
     method: 'PATCH',
-    url: `${API}/reviews/use-cases/s1`,
-    params: { submissionId: 's1' },
+    url: `${API}/reviews/use-cases/aaaaaaa5-0000-4000-8000-000000000005`,
+    params: { submissionId: 'aaaaaaa5-0000-4000-8000-000000000005' },
     body: { status: 'APPROVED' },
     tables: {
-      useCaseSubmissions: [{ id: 's1', useCaseId: 'u1', traineeId: T1 }],
-      useCases: [{ id: 'u1', trainingCatalogId: FIAE }],
+      useCaseSubmissions: [{ id: 'aaaaaaa5-0000-4000-8000-000000000005', useCaseId: 'aaaaaaa7-0000-4000-8000-000000000007', traineeId: T1 }],
+      useCases: [{ id: 'aaaaaaa7-0000-4000-8000-000000000007', trainingCatalogId: FIAE }],
     },
     returns: {
-      useCaseSubmissions: [{ id: 's1', useCaseId: 'u1', traineeId: T1 }],
+      useCaseSubmissions: [{ id: 'aaaaaaa5-0000-4000-8000-000000000005', useCaseId: 'aaaaaaa7-0000-4000-8000-000000000007', traineeId: T1 }],
     },
     write: { op: 'update', table: 'use_case_submissions' },
     whereTrainee: '"use_case_submissions"."trainee_id" = $',
@@ -441,7 +441,7 @@ describe('a DRAFT report is private to the trainee', () => {
   });
 
   const draft = { ...report, status: 'DRAFT' };
-  const params = { params: Promise.resolve({ id: 'r1' }) };
+  const params = { params: Promise.resolve({ id: 'aaaaaaa1-0000-4000-8000-000000000001' }) };
 
   it('GET and PUT answer 404 for an own trainee and change nothing', async () => {
     const { mod, mock } = await loadScoped(
@@ -450,7 +450,7 @@ describe('a DRAFT report is private to the trainee', () => {
         tables: { profiles: [traineeRow()], activityReports: [draft] },
       }
     );
-    const url = `${API}/activity-reports/r1`;
+    const url = `${API}/activity-reports/aaaaaaa1-0000-4000-8000-000000000001`;
     expect((await mod.GET(scopeReq(url), params)).status).toBe(404);
     const put = await mod.PUT(
       scopeReq(url, { method: 'PUT', body: { action: 'approve' } }),
@@ -490,7 +490,7 @@ describe('a DRAFT report is private to the trainee', () => {
       }
     );
     const res = await mod.PUT(
-      scopeReq(`${API}/activity-reports/r1`, {
+      scopeReq(`${API}/activity-reports/aaaaaaa1-0000-4000-8000-000000000001`, {
         method: 'PUT',
         body: { action: 'approve' },
       }),
@@ -644,7 +644,7 @@ describe('PATCH /api/trainer/trainees/[traineeId]/activate: the item', () => {
 
   const url = `${API}/trainees/${T1}/activate`;
   const params = { params: Promise.resolve({ traineeId: T1 }) };
-  const body = { itemType: 'ENABLER', itemId: 'e1', isActive: true };
+  const body = { itemType: 'ENABLER', itemId: 'aaaaaaa6-0000-4000-8000-000000000006', isActive: true };
 
   it('refuses an item of an occupation the caller has not enabled (404)', async () => {
     const { mod, mock } = await loadScoped(

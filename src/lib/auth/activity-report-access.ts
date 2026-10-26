@@ -37,7 +37,6 @@ import {
 } from '@/db/migrations/schemas/schema';
 import { withDbRetry } from '@/lib/db-retry';
 import {
-  DEFAULT_ORG_ID,
   isErrorResponse,
   requireUser,
   scopeOrg,
@@ -111,8 +110,8 @@ export async function loadReportForSession(
  * exists() over the trainee profile of `traineeIdColumn`: the trainee lies in
  * the organization scope and, if given, matches the catalog condition (a
  * condition on `profiles`). undefined means no restriction (platform-wide view
- * without a chosen occupation). A profile without an organization belongs to
- * the default organization, like isInOrgScope.
+ * without a chosen occupation). A profile without an organization is outside
+ * every organization scope (fail closed), like isInOrgScope.
  */
 export function traineeScopeCondition(
   traineeIdColumn: PgColumn,
@@ -121,9 +120,7 @@ export function traineeScopeCondition(
 ): SQL | undefined {
   const parts: SQL[] = [sql`${profiles.id} = ${traineeIdColumn}`];
   if (org.organizationId !== null) {
-    parts.push(
-      sql`coalesce(${profiles.organizationId}, ${DEFAULT_ORG_ID}::uuid) = ${org.organizationId}::uuid`
-    );
+    parts.push(sql`${profiles.organizationId} = ${org.organizationId}::uuid`);
   }
   if (catalogCondition) parts.push(catalogCondition);
   if (parts.length === 1) return undefined;

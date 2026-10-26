@@ -107,7 +107,7 @@ describe('catalog isolation', () => {
         'trainer/courses',
         {
           organizationCatalogs: fiaeOnly,
-          courses: [{ id: 'c1', title: 'C', year: 1, chapter: 1 }],
+          courses: [{ id: 'bbbbbbb3-0000-4000-8000-000000000003', title: 'C', year: 1, chapter: 1 }],
         },
         { session: trainer() }
       );
@@ -195,14 +195,14 @@ describe('catalog isolation', () => {
         {
           organizationCatalogs: kfbmOnly,
           courses: [
-            { id: 'c1', title: 'FIAE course', trainingCatalogId: FIAE },
+            { id: 'bbbbbbb3-0000-4000-8000-000000000003', title: 'FIAE course', trainingCatalogId: FIAE },
           ],
         },
         { session: trainer() }
       );
       const res = await mod.GET(
-        req('http://localhost/api/trainer/courses/c1'),
-        { params: Promise.resolve({ courseId: 'c1' }) }
+        req('http://localhost/api/trainer/courses/bbbbbbb3-0000-4000-8000-000000000003'),
+        { params: Promise.resolve({ courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }) }
       );
       expect(res.status).toBe(404);
     });
@@ -213,14 +213,14 @@ describe('catalog isolation', () => {
         {
           organizationCatalogs: fiaeOnly,
           courses: [
-            { id: 'c1', title: 'FIAE course', trainingCatalogId: FIAE },
+            { id: 'bbbbbbb3-0000-4000-8000-000000000003', title: 'FIAE course', trainingCatalogId: FIAE },
           ],
         },
         { session: trainer() }
       );
       const res = await mod.GET(
-        req('http://localhost/api/trainer/courses/c1'),
-        { params: Promise.resolve({ courseId: 'c1' }) }
+        req('http://localhost/api/trainer/courses/bbbbbbb3-0000-4000-8000-000000000003'),
+        { params: Promise.resolve({ courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }) }
       );
       expect(res.status).toBe(200);
     });
@@ -229,12 +229,12 @@ describe('catalog isolation', () => {
       for (const catalogId of [FIAE, KFBM]) {
         const { mod } = await load(
           'trainer/courses/[courseId]',
-          { courses: [{ id: 'c1', title: 'C', trainingCatalogId: catalogId }] },
+          { courses: [{ id: 'bbbbbbb3-0000-4000-8000-000000000003', title: 'C', trainingCatalogId: catalogId }] },
           { session: superAdmin() }
         );
         const res = await mod.GET(
-          req('http://localhost/api/trainer/courses/c1'),
-          { params: Promise.resolve({ courseId: 'c1' }) }
+          req('http://localhost/api/trainer/courses/bbbbbbb3-0000-4000-8000-000000000003'),
+          { params: Promise.resolve({ courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }) }
         );
         expect(res.status).toBe(200);
       }
@@ -245,13 +245,13 @@ describe('catalog isolation', () => {
         'trainer/enablers/[enablerId]',
         {
           organizationCatalogs: kfbmOnly,
-          enablers: [{ id: 'e1', trainingCatalogId: FIAE }],
+          enablers: [{ id: 'bbbbbbb4-0000-4000-8000-000000000004', trainingCatalogId: FIAE }],
         },
         { session: trainer() }
       );
       const res = await mod.DELETE(
-        req('http://localhost/api/trainer/enablers/e1', { method: 'DELETE' }),
-        { params: Promise.resolve({ enablerId: 'e1' }) }
+        req('http://localhost/api/trainer/enablers/bbbbbbb4-0000-4000-8000-000000000004', { method: 'DELETE' }),
+        { params: Promise.resolve({ enablerId: 'bbbbbbb4-0000-4000-8000-000000000004' }) }
       );
       expect(res.status).toBe(404);
       expect(mock.writes('delete', 'enablers')).toHaveLength(0);
@@ -293,14 +293,14 @@ describe('catalog isolation', () => {
         'trainer/quizzes',
         {
           organizationCatalogs: kfbmOnly,
-          enablers: [{ id: 'e1', trainingCatalogId: FIAE }],
+          enablers: [{ id: 'bbbbbbb4-0000-4000-8000-000000000004', trainingCatalogId: FIAE }],
         },
         { session: trainer() }
       );
       const res = await mod.POST(
         req('http://localhost/api/trainer/quizzes', {
           method: 'POST',
-          body: { title: 'Mini', quiz_type: 'mini', enabler_id: 'e1' },
+          body: { title: 'Mini', quiz_type: 'mini', enabler_id: 'bbbbbbb4-0000-4000-8000-000000000004' },
         })
       );
       expect(res.status).toBe(404);
@@ -439,11 +439,11 @@ describe('catalog isolation', () => {
         { session: trainer() }
       );
       const res = await mod.PATCH(
-        req('http://localhost/api/trainer/lernfelder/lf1', {
+        req('http://localhost/api/trainer/lernfelder/bbbbbbb5-0000-4000-8000-000000000005', {
           method: 'PATCH',
           body: { label: 'LF-8' },
         }),
-        { params: Promise.resolve({ id: 'lf1' }) }
+        { params: Promise.resolve({ id: 'bbbbbbb5-0000-4000-8000-000000000005' }) }
       );
       expect(res.status).toBe(200);
       expect(
@@ -492,7 +492,7 @@ describe('catalog isolation', () => {
         traineeEnrollments: [
           { trainingCatalogId: KFBM, startDate: '2026-08-01' },
         ],
-        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        courseMembers: [{ userId: 't1', courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }],
         courses: [],
       });
       const res = await mod.GET(
@@ -509,7 +509,7 @@ describe('catalog isolation', () => {
         profiles: [traineeProfile],
         organizationCatalogs: fiaeOnly,
         traineeEnrollments: [],
-        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        courseMembers: [{ userId: 't1', courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }],
         courses: [],
       });
       const res = await mod.GET(
@@ -528,7 +528,7 @@ describe('catalog isolation', () => {
         traineeEnrollments: [
           { trainingCatalogId: KFBM, startDate: '2026-08-01' },
         ],
-        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        courseMembers: [{ userId: 't1', courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }],
         courses: [],
       });
       const res = await mod.GET(
@@ -546,7 +546,7 @@ describe('catalog isolation', () => {
         traineeEnrollments: [
           { trainingCatalogId: FIAE, startDate: '2026-08-01' },
         ],
-        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        courseMembers: [{ userId: 't1', courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }],
         courses: [],
       });
       const res = await mod.GET(
@@ -564,7 +564,7 @@ describe('catalog isolation', () => {
         traineeEnrollments: [
           { trainingCatalogId: FIAE, startDate: '2026-08-01' },
         ],
-        courseMembers: [{ userId: 't1', courseId: 'c1' }],
+        courseMembers: [{ userId: 't1', courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }],
         courses: [],
       });
       const denied = await other.mod.GET(
@@ -591,11 +591,11 @@ describe('catalog isolation', () => {
         traineeEnrollments: [
           { trainingCatalogId: KFBM, startDate: '2026-08-01' },
         ],
-        courses: [{ id: 'c1', trainingCatalogId: FIAE }],
+        courses: [{ id: 'bbbbbbb3-0000-4000-8000-000000000003', trainingCatalogId: FIAE }],
       });
       const res = await mod.GET(
-        req('http://localhost/api/trainee/courses/c1?traineeId=t1'),
-        { params: Promise.resolve({ courseId: 'c1' }) }
+        req('http://localhost/api/trainee/courses/bbbbbbb3-0000-4000-8000-000000000003?traineeId=t1'),
+        { params: Promise.resolve({ courseId: 'bbbbbbb3-0000-4000-8000-000000000003' }) }
       );
       expect(res.status).toBe(404);
     });
@@ -607,11 +607,11 @@ describe('catalog isolation', () => {
         traineeEnrollments: [
           { trainingCatalogId: KFBM, startDate: '2026-08-01' },
         ],
-        enablers: [{ id: 'e1', trainingCatalogId: FIAE, isActive: true }],
+        enablers: [{ id: 'bbbbbbb4-0000-4000-8000-000000000004', trainingCatalogId: FIAE, isActive: true }],
       });
       const res = await mod.GET(
-        req('http://localhost/api/trainee/enablers/e1?traineeId=t1'),
-        { params: Promise.resolve({ enablerId: 'e1' }) }
+        req('http://localhost/api/trainee/enablers/bbbbbbb4-0000-4000-8000-000000000004?traineeId=t1'),
+        { params: Promise.resolve({ enablerId: 'bbbbbbb4-0000-4000-8000-000000000004' }) }
       );
       expect(res.status).toBe(404);
     });
@@ -642,17 +642,17 @@ describe('catalog isolation', () => {
         traineeEnrollments: [
           { trainingCatalogId: KFBM, startDate: '2026-08-01' },
         ],
-        quizzes: [{ id: 'q1', trainingCatalogId: FIAE, isActive: true }],
+        quizzes: [{ id: 'bbbbbbb1-0000-4000-8000-000000000001', trainingCatalogId: FIAE, isActive: true }],
       });
       const res = await mod.POST(
-        req('http://localhost/api/trainee/quizzes/q1/submit', {
+        req('http://localhost/api/trainee/quizzes/bbbbbbb1-0000-4000-8000-000000000001/submit', {
           method: 'POST',
           body: {
             traineeId: 't1',
             answers: [{ questionId: 'x', selectedOptionId: 'y' }],
           },
         }),
-        { params: Promise.resolve({ quizId: 'q1' }) }
+        { params: Promise.resolve({ quizId: 'bbbbbbb1-0000-4000-8000-000000000001' }) }
       );
       expect(res.status).toBe(404);
       expect(mock.writes('insert', 'quiz_submissions')).toHaveLength(0);
