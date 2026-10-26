@@ -8,7 +8,8 @@ import { GUARDED_ROUTES } from '../../../helpers/guardedRoutes';
 //  - SUPER_ADMIN (and an ADMIN of the platform organization): the platform,
 //    that is organizations with their occupations, and the users
 //  - ADMIN: the own organization (seats, contact data) and the users
-//  - TEMP_ADMIN: only the users (trainers and trainees)
+//  - TEMP_ADMIN: the own organization (master data, seats to read) and the
+//    users (trainers and trainees), like the ADMIN but with fewer rights
 //  - trainers and trainees: nothing
 // The menu is never the protection. Every entry opens a page whose API routes
 // check the role themselves (route-guards.test.ts runs every guarded route
@@ -57,9 +58,29 @@ describe('adminMenuItems', () => {
     ]);
   });
 
-  it('TEMP_ADMIN sees the users only, also in the platform organization', () => {
-    expect(ids(adminMenuItems(tempAdmin))).toEqual(['adminUsers']);
-    expect(ids(adminMenuItems(platformTempAdmin))).toEqual(['adminUsers']);
+  it.each([
+    ['TEMP_ADMIN of a customer organization', tempAdmin],
+    ['TEMP_ADMIN of the platform organization', platformTempAdmin],
+  ])(
+    '%s sees the own organization and the users, never the platform',
+    (_name, subject) => {
+      expect(adminMenuItems(subject)).toEqual([
+        {
+          id: 'adminOrgs',
+          href: '/trainer/admin/organizations',
+          labelKey: 'admin.menu.ownOrganization',
+        },
+        {
+          id: 'adminUsers',
+          href: '/trainer/admin/users',
+          labelKey: 'nav.userManagement',
+        },
+      ]);
+    }
+  );
+
+  it('TEMP_ADMIN and ADMIN of a customer organization see the same entries', () => {
+    expect(adminMenuItems(tempAdmin)).toEqual(adminMenuItems(admin));
   });
 
   it('roles below the admin levels and unknown values see nothing', () => {
@@ -76,7 +97,10 @@ describe('adminMenuItems', () => {
   });
 
   it('reads the role in any letter case, as the profile stores it', () => {
-    expect(ids(adminMenuItems({ role: 'temp_admin' }))).toEqual(['adminUsers']);
+    expect(ids(adminMenuItems({ role: 'temp_admin' }))).toEqual([
+      'adminOrgs',
+      'adminUsers',
+    ]);
     expect(ids(adminMenuItems({ role: 'admin' }))).toEqual([
       'adminOrgs',
       'adminUsers',
@@ -146,6 +170,21 @@ describe('the menu is not the protection', () => {
           true
         );
       }
+    }
+  });
+
+  it('what the organization page does without platform rights is open to ADMIN and TEMP_ADMIN', () => {
+    // The page of ADMIN and TEMP_ADMIN loads the own organization and sends
+    // the master data (name, contact data, notes). Plan, seats and activation
+    // are refused by the route itself (see organization-own.test.ts), the
+    // platform buttons are not rendered for them.
+    for (const { route, method } of [
+      { route: 'admin/organizations', method: 'GET' },
+      { route: 'admin/organizations/[orgId]', method: 'GET' },
+      { route: 'admin/organizations/[orgId]', method: 'PATCH' },
+      { route: 'admin/organizations/[orgId]/catalogs', method: 'GET' },
+    ]) {
+      expect(guardOf(route, method)).toBe('admin');
     }
   });
 
