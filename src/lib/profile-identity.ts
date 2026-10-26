@@ -1,4 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
+import { TRAINING_CATALOG_IDS } from '@/db/migrations/schemas/schema';
 
 type SqlExecutor = {
   execute: (query: SQL) => Promise<unknown>;
@@ -175,6 +176,58 @@ async function deleteConflictingRows(
   `);
 }
 
+/**
+ * Hands the enrollment (the occupation) of the trainee to the new profile.
+ *
+ * The elective choices hang on the enrollment row (trainee_elective_choices
+ * points at the enrollment id), so moving the row moves them too. Only
+ * trainee_id changes, the id and the catalog stay, and the cascade of the old
+ * profile finds nothing left to delete.
+ *
+ * A trainee has one enrollment (unique index
+ * trainee_enrollments_trainee_unique), so a row cannot simply be moved when
+ * the new profile has one already:
+ *  - The enrollment of the pre-created profile wins. An administrator set it
+ *    for this person, like the role, the organization, the start date and the
+ *    duration that the merge takes over from the pre-created profile as well.
+ *  - Exception: FIAE is the default (a trainee without a row works in FIAE),
+ *    so an old FIAE row never replaces a row of another catalog on the new
+ *    profile. Such a row is a deliberate choice, it is kept and the old FIAE
+ *    row goes with the old profile.
+ * The rows that lose are deleted (their elective choices follow by cascade).
+ *
+ * Never part of the generic column lists below: a plain UPDATE would collide
+ * with the unique index as soon as both profiles have a row.
+ */
+async function moveEnrollment(
+  executor: SqlExecutor,
+  fromProfileId: string,
+  toProfileId: string
+) {
+  await executor.execute(sql`
+    DELETE FROM "trainee_enrollments" new_row
+    WHERE new_row."trainee_id" = ${toProfileId}
+      AND EXISTS (
+        SELECT 1 FROM "trainee_enrollments" old_row
+        WHERE old_row."trainee_id" = ${fromProfileId}
+          AND (
+            old_row."training_catalog_id" <> ${TRAINING_CATALOG_IDS.FIAE}
+            OR new_row."training_catalog_id" = ${TRAINING_CATALOG_IDS.FIAE}
+          )
+      )
+  `);
+
+  await executor.execute(sql`
+    UPDATE "trainee_enrollments"
+    SET "trainee_id" = ${toProfileId}
+    WHERE "trainee_id" = ${fromProfileId}
+      AND NOT EXISTS (
+        SELECT 1 FROM "trainee_enrollments" keep_row
+        WHERE keep_row."trainee_id" = ${toProfileId}
+      )
+  `);
+}
+
 export async function mergeProfileReferences(
   executor: SqlExecutor,
   fromProfileId: string,
@@ -183,6 +236,7 @@ export async function mergeProfileReferences(
   if (!fromProfileId || !toProfileId || fromProfileId === toProfileId) return;
 
   await deleteConflictingRows(executor, fromProfileId, toProfileId);
+  await moveEnrollment(executor, fromProfileId, toProfileId);
 
   for (const [table, column] of [
     ...profileReferenceColumns,

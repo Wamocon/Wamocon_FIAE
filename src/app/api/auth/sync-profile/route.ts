@@ -5,6 +5,7 @@ import { DB_OPTION } from '@/lib/db-schema';
 import db from '@/db';
 import { profiles, organizations } from '@/db/migrations/schemas/schema';
 import { and, eq, ne } from 'drizzle-orm';
+import { takeCatalogAdminLock } from '@/lib/catalog/admin';
 import { mergeProfileReferences } from '@/lib/profile-identity';
 
 function getAdminClient() {
@@ -185,6 +186,10 @@ export async function POST(request: Request) {
       }
       const temporaryEmail = `profile-merge-${user.id}@local.invalid`;
       await db.transaction(async tx => {
+        // The merge hands the enrollment (occupation) of the pre-created
+        // profile to the new one. That is a catalog write, so it takes the
+        // same lock as the catalog administration, before any row.
+        await takeCatalogAdminLock(tx);
         await tx
           .insert(profiles)
           .values({
@@ -282,6 +287,7 @@ export async function POST(request: Request) {
         if (!orphan[0]?.id) throw drizzleErr;
 
         await db.transaction(async tx => {
+          await takeCatalogAdminLock(tx);
           await tx
             .insert(profiles)
             .values({
