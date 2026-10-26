@@ -3,6 +3,7 @@ import db from '@/db';
 import { and, desc, eq } from 'drizzle-orm';
 import { knowledgeNotes } from '@/db/migrations/schemas/schema';
 import { getUserOrgId } from '@/lib/auth-helpers';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
 // Helper to encode lernfeld code in title
 function encodeLernfeldInTitle(title: string, lernfeldCode: string | null): string {
@@ -19,12 +20,14 @@ function decodeLernfeldFromTitle(encodedTitle: string): { title: string; lernfel
   return { lernfeldCode: null, title: encodedTitle };
 }
 
-// GET /api/trainee/knowledge-notes?traineeId=...
+// GET /api/trainee/knowledge-notes
+// The notes of the session user, a traineeId in the query is ignored.
 export async function GET(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
-    const { searchParams } = new URL(req.url);
-    const traineeId = searchParams.get('traineeId');
-    if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     const rows = await db
       .select({
@@ -61,17 +64,20 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/trainee/knowledge-notes
-// Body: { trainee_id, title, content, one_drive_link?, lernfeld_code? }
+// Body: { title, content, one_drive_link?, lernfeld_code? }
+// The note belongs to the session user, a trainee_id in the body is ignored.
 export async function POST(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const trainee_id = session.id;
+
   try {
     const body = await req.json();
-    const trainee_id = body?.trainee_id as string | undefined;
     const rawTitle = String(body?.title || '').trim();
     const content = String(body?.content || '').trim();
     const one_drive_link = body?.one_drive_link ? String(body.one_drive_link) : null;
     const lernfeld_code = body?.lernfeld_code ? String(body.lernfeld_code) : null;
 
-    if (!trainee_id) return NextResponse.json({ error: 'trainee_id required' }, { status: 400 });
     if (!rawTitle) return NextResponse.json({ error: 'title required' }, { status: 400 });
     if (!content) return NextResponse.json({ error: 'content required' }, { status: 400 });
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
@@ -19,19 +20,23 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 
 // POST: submit answers for a quiz attempt
-// Body: { traineeId: string, answers: [{ questionId, selectedOptionId? , textAnswer? }] }
+// Body: { answers: [{ questionId, selectedOptionId? , textAnswer? }] }
+// The session user is the trainee, a traineeId in the body is ignored.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ quizId: string }> }
 ) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const { quizId } = await params;
     const body = await req.json();
-    const traineeId: string | undefined = body?.traineeId;
     const answers: Array<any> = Array.isArray(body?.answers)
       ? body.answers
       : [];
-    if (!traineeId || answers.length === 0)
+    if (answers.length === 0)
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
     // The quiz must lie inside the catalog scope of the trainee
@@ -384,17 +389,17 @@ export async function POST(
 }
 
 // GET: fetch latest submission with per-question feedback for review
+// The data of the session user, a traineeId or userId in the query is ignored.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ quizId: string }> }
 ) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
     const { quizId } = await params;
-    const traineeId = String(
-      new URL(req.url).searchParams.get('traineeId') || ''
-    );
-    if (!traineeId)
-      return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     // The quiz must lie inside the catalog scope of the trainee
     const catalogScope = await requireContentScopeForUser(traineeId, req, 'quiz', quizId);

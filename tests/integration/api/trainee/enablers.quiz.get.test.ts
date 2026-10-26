@@ -2,12 +2,16 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { mockCatalogScope } from '../../../helpers/mockNext';
+import {
+  mockCatalogScope,
+  mockTraineeSession,
+} from '../../../helpers/mockNext';
 
 // helper to import the route handler with a mocked DB
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  mockTraineeSession();
   mockCatalogScope();
   const mod = await import('@/app/api/trainee/enablers/[enablerId]/quiz/route');
   return mod.GET as (req: any, ctx: { params: Promise<{ enablerId: string }> }) => Promise<Response>;
@@ -21,17 +25,6 @@ describe('API: GET /api/trainee/enablers/[enablerId]/quiz', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
-  });
-
-  it('400 if missing traineeId', async () => {
-    const GET = await importHandlerWithDb({});
-    const res = await GET(
-      makeGet('http://localhost/api/trainee/enablers/e1/quiz'),
-      { params: Promise.resolve({ enablerId: 'e1' }) }
-    );
-    const body = await (res as any).json();
-    expect((res as any).status).toBe(400);
-    expect(body).toEqual({ error: 'Missing traineeId' });
   });
 
   it('returns {quiz:null} if no quiz linked', async () => {

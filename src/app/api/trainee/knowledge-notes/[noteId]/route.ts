@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { knowledgeNotes } from '@/db/migrations/schemas/schema';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
-// GET /api/trainee/knowledge-notes/[noteId]?traineeId=...
+// GET /api/trainee/knowledge-notes/[noteId]
+// Only a note of the session user, one of someone else is answered like a
+// missing one. A traineeId in the query is ignored.
 export async function GET(req: NextRequest, ctx: { params: Promise<{ noteId: string }> }) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+
   try {
-    const url = new URL(req.url);
-    const traineeId = url.searchParams.get('traineeId');
     const { noteId } = await ctx.params;
     if (!noteId) return NextResponse.json({ error: 'Missing noteId' }, { status: 400 });
 
@@ -24,9 +28,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ noteId: str
       .from(knowledgeNotes)
       .where(eq(knowledgeNotes.id, noteId as any));
     const note = rows[0];
-    if (!note) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (traineeId && String(note.traineeId) !== String(traineeId)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!note || String(note.traineeId) !== session.id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     return NextResponse.json({ note });
   } catch (e) {
@@ -35,14 +38,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ noteId: str
   }
 }
 
-// DELETE /api/trainee/knowledge-notes/[noteId]?traineeId=...
+// DELETE /api/trainee/knowledge-notes/[noteId]
+// Deletes a note of the session user only, a traineeId in the query is ignored.
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ noteId: string }> }) {
+  const session = await requireUser(_req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
-    const url = new URL(_req.url);
-    const traineeId = url.searchParams.get('traineeId');
     const { noteId } = await ctx.params;
     if (!noteId) return NextResponse.json({ error: 'Missing noteId' }, { status: 400 });
-    if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     await db.delete(knowledgeNotes).where(and(eq(knowledgeNotes.id, noteId as any), eq(knowledgeNotes.traineeId, traineeId as any)));
 
@@ -54,14 +59,17 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ noteId:
 }
 
 // PATCH /api/trainee/knowledge-notes/[noteId]
-// Body: { trainee_id, title?, content?, one_drive_link? }
+// Body: { title?, content?, one_drive_link? }
+// Changes a note of the session user only, a trainee_id in the body is ignored.
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ noteId: string }> }) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const trainee_id = session.id;
+
   try {
     const { noteId } = await ctx.params;
     if (!noteId) return NextResponse.json({ error: 'Missing noteId' }, { status: 400 });
     const body = await req.json();
-    const trainee_id = body?.trainee_id as string | undefined;
-    if (!trainee_id) return NextResponse.json({ error: 'Missing trainee_id' }, { status: 400 });
 
     const updates: any = {};
     if (body?.title !== undefined) updates.title = String(body.title);

@@ -10,13 +10,16 @@ import {
   quizzes,
   enablerQuizzes,
 } from '@/db/migrations/schemas/schema';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 
-// GET /api/trainee/feedback?traineeId=...
+// GET /api/trainee/feedback
+// The feedback of the session user, a traineeId in the query is ignored.
 export async function GET(req: NextRequest) {
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
+
   try {
-    const { searchParams } = new URL(req.url);
-    const traineeId = searchParams.get('traineeId');
-    if (!traineeId) return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
 
     // Enabler submissions with titles
     const enablerRows = await db

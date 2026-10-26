@@ -4,14 +4,19 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
-// The notification routes and the school routes of a trainee answer only with
-// a bearer session. A browser call with a plain fetch() carries no token and
+// The notification routes and every route of a trainee answer only with a
+// bearer session. A browser call with a plain fetch() carries no token and
 // would be answered with 401, so every caller has to use authFetch
 // (src/lib/authFetch.ts). This test reads the sources and fails for a plain
 // fetch() whose url is one of these routes, including a url kept in a variable
 // before the call. A new caller that forgets authFetch fails here.
+//
+// Not listed on purpose: /api/trainee/lernfelder (master data, open without a
+// session) and /api/trainee/evaluations/softskills (the public list of the
+// softskill criteria).
 
-const PROTECTED = /\/api\/(notifications|trainee\/school)(?![\w-])/;
+const PROTECTED =
+  /\/api\/(notifications|trainee\/(school|annual-summary|courses|dashboard|enablers|evaluations(?!\/softskills(?![\w-]))|feedback|knowledge-notes|lesson-progress|lessons|progress|quizzes|use-case-hours|use-cases))(?![\w-])/;
 const SRC = join(process.cwd(), 'src');
 const API = join(SRC, 'app', 'api');
 
@@ -68,16 +73,45 @@ describe('plainFetchViolations (the scanner itself)', () => {
       plainFetchViolations("authFetch('/api/notifications?limit=30')")
     ).toEqual([]);
     expect(
-      plainFetchViolations("fetch('/api/trainee/knowledge-notes')")
+      plainFetchViolations("fetch('/api/trainee/lernfelder', {})")
+    ).toEqual([]);
+    expect(
+      plainFetchViolations("fetch('/api/trainee/evaluations/softskills')")
     ).toEqual([]);
     expect(plainFetchViolations('window.fetch("/api/notifications")')).toEqual(
       []
     );
   });
+
+  it('flags a plain fetch to every other route of a trainee', () => {
+    const urls = [
+      '/api/trainee/annual-summary?traineeId=1',
+      '/api/trainee/courses?traineeId=1',
+      '/api/trainee/courses/c1?traineeId=1',
+      '/api/trainee/dashboard?userId=1',
+      '/api/trainee/enablers/e1/quiz/submit',
+      '/api/trainee/evaluations?userId=1',
+      '/api/trainee/evaluations/ev1',
+      '/api/trainee/feedback?traineeId=1',
+      '/api/trainee/knowledge-notes',
+      '/api/trainee/knowledge-notes/n1?traineeId=1',
+      '/api/trainee/lesson-progress?userId=1&lessonId=2',
+      '/api/trainee/lessons?userId=1',
+      '/api/trainee/progress',
+      '/api/trainee/quizzes?userId=1',
+      '/api/trainee/quizzes/q1/submit',
+      '/api/trainee/use-case-hours?traineeId=1',
+      '/api/trainee/use-cases/u1/submit',
+    ];
+    for (const url of urls) {
+      expect(plainFetchViolations(`fetch('${url}')`)).toHaveLength(1);
+      expect(plainFetchViolations(`authFetch('${url}')`)).toEqual([]);
+    }
+  });
 });
 
 describe('browser code calls the protected routes with authFetch', () => {
-  it('finds no plain fetch() to /api/notifications or /api/trainee/school', () => {
+  it('finds no plain fetch() to /api/notifications or a protected /api/trainee route', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(SRC)) {
       for (const target of plainFetchViolations(readFileSync(file, 'utf8'))) {

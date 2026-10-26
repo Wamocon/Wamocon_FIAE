@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isErrorResponse, requireUser } from '@/lib/auth/session';
 import db from '@/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
@@ -78,14 +79,13 @@ async function calculateEnablerCompletion(
 // An enabler is complete ONLY when:
 // - ALL linked quizzes are passed (score >= 50%)
 // - ALL scenarios are approved by trainer
-// query: traineeId
+// The data of the session user, a traineeId or userId in the query is ignored.
 export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const traineeId = searchParams.get('traineeId');
-    if (!traineeId)
-      return NextResponse.json({ error: 'Missing traineeId' }, { status: 400 });
+  const session = await requireUser(req);
+  if (isErrorResponse(session)) return session;
+  const traineeId = session.id;
 
+  try {
     const scope = await requireCatalogScopeForUser(traineeId, req);
     if (scope instanceof Response) return scope;
 

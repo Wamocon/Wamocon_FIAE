@@ -3,7 +3,10 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { createTableDb } from '../../../helpers/mockDb';
-import { mockCatalogScope } from '../../../helpers/mockNext';
+import {
+  mockCatalogScope,
+  mockTraineeSession,
+} from '../../../helpers/mockNext';
 
 // Dashboard deadlines come from the phase plan of the trainee's occupation
 // (KfBM S4). FIAE keeps 18 + 18 months (shortened 12 + 12).
@@ -55,6 +58,7 @@ async function dashboard(options: {
     ],
   });
   jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
+  mockTraineeSession();
   mockCatalogScope({
     allowedCatalogIds: [options.catalogId],
     activeCatalogId: options.catalogId,

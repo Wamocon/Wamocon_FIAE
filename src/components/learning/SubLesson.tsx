@@ -8,6 +8,7 @@ import type { SubLessonDetail } from '@/db/queries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { authFetch } from '@/lib/authFetch';
 
 export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
     const load = async () => {
       if (!profile?.id || !data?.lesson.id || !data?.id) return;
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/trainee/lesson-progress?userId=${profile.id}&lessonId=${data.lesson.id}`,
           { cache: 'no-store' }
         );
@@ -53,7 +54,7 @@ export default function SubLesson({ data }: { data: SubLessonDetail | null }) {
     setSaving(true);
     try {
       setCompleted(next);
-      await fetch('/api/trainee/progress', {
+      await authFetch('/api/trainee/progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
