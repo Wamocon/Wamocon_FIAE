@@ -117,7 +117,9 @@ export const TABLES: Record<TableName, TableSpec> = {
       'expected_answer',
       'order_index',
     ],
-    updatable: ['question_text'],
+    // order_index is only changed by the extension of a quiz (engine.ts,
+    // extendQuizzes), --update-existing never names it.
+    updatable: ['question_text', 'order_index'],
     uuid: ['id', 'quiz_id'],
     touch: false,
   },

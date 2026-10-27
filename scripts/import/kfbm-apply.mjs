@@ -5,23 +5,46 @@
 // that target. Production is refused in every case, there is no switch for it.
 //
 // Commands:
-//   plan  <source folder> [--out <plan.json>] [--decisions <file>]
+//   plan  [<source folder>] [--quizzes-json <file>]
+//         [--global-quizzes-json <file>] [--prefer-json-quizzes]
+//         [--out <plan.json>] [--decisions <file>]
 //         [--components K1,K6.2] [--hydrate] [--timeout <seconds>]
 //         [--no-attributes]
 //         Reads the source documents (read only) and writes the plan. No
 //         database, no network. Next to the JSON a summary in Markdown without
-//         any content (same name, .md).
+//         any content (same name, .md). Besides the Word tree (or instead of
+//         it) the quizzes can come from the quiz JSON files (schema 1.0, see
+//         src/lib/content-import/quiz-json): a quiz of the JSON with the same
+//         content key as a Word quiz is left out and listed as an older copy,
+//         unless --prefer-json-quizzes asks for the JSON.
 //   check (<source folder> | --plan <plan.json>) --target local|preview
 //         --created-by <profile uuid> [--report-out <file.md>]
 //         Compares the plan with the target database in a read-only
 //         transaction: what is new, what exists, what differs, what conflicts.
+//         The quiz JSON options of plan work here as well (instead of --plan).
+//         With --extend-quizzes the comparison counts the questions that a
+//         quiz lacks ("n Fragen ergänzt") instead of reporting a conflict.
 //   run   (<source folder> | --plan <plan.json>) --target local|preview
 //         --created-by <profile uuid> [--apply] [--update-existing]
+//         [--extend-quizzes]
 //         [--confirm-host <host>] [--report-out <file.md>]
 //         Dry run (default): everything is written inside a transaction, the
 //         counts per table are printed, then the transaction is rolled back.
 //         With --apply the transaction is committed. A real run against the
 //         Preview also needs --confirm-host <host of the connection>.
+//         Rows that exist stay as they are, also when the quiz JSON names
+//         other texts (only --update-existing changes the named columns).
+//         --extend-quizzes adds the questions that an existing quiz lacks (and
+//         their options), but only when every existing question is in the plan
+//         with the same text and in the same order. Nothing is deleted, no
+//         question, option or answer is changed, the order_index of existing
+//         questions moves where a new question comes before them. Off by
+//         default (then another number of questions is a conflict).
+//   check-quizzes [--quizzes-json <file>] [--global-quizzes-json <file>]
+//         [--report-out <file.md>]
+//         Reads the quiz JSON files and reports numbers and ids only: counts
+//         per component, level and number of questions, and the findings. No
+//         database, no network, nothing is written except the report file.
 //
 // The connection comes from the environment variable DB_CONNECTION_STRING and
 // from nowhere else (no .env file is read). The script prints neither the
@@ -39,13 +62,18 @@ import {
   checkTargetFacts,
   checkTargetHost,
   isLoopbackHost,
+  mergeQuizSources,
   parseApplyArgs,
   parseConnectionString,
   parseDecisions,
   planCounts,
+  readGlobalQuizzes,
+  readLessonQuizzes,
   renderPlanSummary,
+  renderQuizJsonReport,
   runJob,
   selectFiles,
+  summarizeQuizJson,
   validatePlan,
 } from './kfbm-apply-modules.mjs';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -183,25 +211,126 @@ export async function loadSourceFiles(root, files, decisions, options = {}) {
   return out;
 }
 
-/** Plan from a source folder (read only). */
-export async function planFromSource(root, args, decisions) {
-  const attributes = args.noAttributes ? null : readAttributes(root);
-  if (!attributes && !args.noAttributes) {
-    console.error(
-      'File attributes are not available, placeholders cannot be told apart.'
+/** Upper size of a quiz JSON file (the real files are below 8 MB). */
+export const MAX_QUIZ_JSON_BYTES = 32 * 1024 * 1024;
+
+/**
+ * Reads and parses a quiz JSON file. The messages name the file and a position
+ * but never quote its content.
+ */
+export function readQuizJsonFile(file, maxBytes = MAX_QUIZ_JSON_BYTES) {
+  let stat;
+  try {
+    stat = statSync(file);
+  } catch {
+    throw new Error(`The quiz JSON ${file} does not exist or cannot be read.`);
+  }
+  if (!stat.isFile()) throw new Error(`The quiz JSON ${file} is not a file.`);
+  if (stat.size > maxBytes) {
+    throw new Error(
+      `The quiz JSON ${file} is larger than ${maxBytes} bytes, that is over the limit.`
     );
   }
-  const entries = walkSource(root, { attributes });
-  const files = entries.map(entry => ({ ...entry, info: pathInfo(entry.rel) }));
-  const loaded = await loadSourceFiles(root, files, decisions, {
-    components: args.components,
-    hydrate: args.hydrate,
-    timeoutMs: args.timeoutSeconds ? args.timeoutSeconds * 1000 : undefined,
-    onProgress: (done, total) => {
-      if (done % 50 === 0) console.error(`${done} of ${total} files read`);
-    },
+  let buffer;
+  try {
+    buffer = readFileSync(file);
+  } catch (error) {
+    throw new Error(
+      `The quiz JSON ${file} cannot be read (${error?.code ?? 'error'}).`
+    );
+  }
+  // A file that grew after the size check is still held to the limit.
+  if (buffer.length > maxBytes) {
+    throw new Error(
+      `The quiz JSON ${file} is larger than ${maxBytes} bytes, that is over the limit.`
+    );
+  }
+  let text = buffer.toString('utf8');
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const at = String(error?.message).match(/position (\d+)/);
+    throw new Error(
+      `The quiz JSON ${file} is not valid JSON${at ? ` (near position ${at[1]})` : ''}.`
+    );
+  }
+}
+
+/**
+ * Reads the quiz JSON files named in the arguments. A file whose structure is
+ * refused (schema version, head, limits) stops the run with its finding codes.
+ */
+export function readQuizSources(args, decisions) {
+  const reads = [];
+  const options = {
+    expectedGlobalQuestions: decisions.content.globalQuizQuestions,
+  };
+  for (const [file, read] of [
+    [args.quizzesJson, readLessonQuizzes],
+    [args.globalQuizzesJson, readGlobalQuizzes],
+  ]) {
+    if (!file) continue;
+    const result = read(readQuizJsonFile(file), options);
+    if (result.fatal) {
+      const reasons = result.findings
+        .filter(f => f.severity === 'error')
+        .map(f => `${f.code} (${f.message})`)
+        .join('; ');
+      throw new Error(`The quiz JSON ${file} was refused: ${reasons}.`);
+    }
+    const errors = result.findings.filter(f => f.severity === 'error').length;
+    console.error(
+      `Quiz JSON (${result.kind}): ${result.quizzes} quizzes, ${result.sets.length} sets, ${errors} errors, ${result.findings.length - errors} notes (details: check-quizzes).`
+    );
+    reads.push(result);
+  }
+  return reads;
+}
+
+/**
+ * Plan from a source folder and/or the quiz JSON files (read only). The folder
+ * may be null when a quiz JSON file is given.
+ */
+export async function planFromSource(root, args, decisions) {
+  // The JSON files are small: a bad one stops the run before the Word tree is read.
+  const reads = readQuizSources(args, decisions);
+  let loaded = [];
+  if (root) {
+    const attributes = args.noAttributes ? null : readAttributes(root);
+    if (!attributes && !args.noAttributes) {
+      console.error(
+        'File attributes are not available, placeholders cannot be told apart.'
+      );
+    }
+    const entries = walkSource(root, { attributes });
+    const files = entries.map(entry => ({
+      ...entry,
+      info: pathInfo(entry.rel),
+    }));
+    loaded = await loadSourceFiles(root, files, decisions, {
+      components: args.components,
+      hydrate: args.hydrate,
+      timeoutMs: args.timeoutSeconds ? args.timeoutSeconds * 1000 : undefined,
+      onProgress: (done, total) => {
+        if (done % 50 === 0) console.error(`${done} of ${total} files read`);
+      },
+    });
+  }
+  if (reads.length === 0) {
+    return buildImportPlan(loaded, decisions, { limitedTo: args.components });
+  }
+  const merged = mergeQuizSources(loaded, reads, {
+    preferJson: args.preferJsonQuizzes,
+    limitedTo: args.components,
   });
-  return buildImportPlan(loaded, decisions, { limitedTo: args.components });
+  console.error(
+    `Quiz JSON in the plan: ${merged.counts.jsonQuizFiles} quiz files and ${merged.counts.jsonEnablerFiles} enablers added, ${merged.counts.leftOutForWord} left out for the Word quiz of the same key, ${merged.counts.replacedWord} Word quizzes replaced, ${merged.counts.filledForWord} quizzes taken because the Word file of the key cannot be used.`
+  );
+  return buildImportPlan(merged.files, decisions, {
+    limitedTo: args.components,
+    extra: { skipped: merged.skipped, superseded: merged.superseded },
+  });
 }
 
 function writeText(file, text) {
@@ -273,6 +402,19 @@ export function renderRunReport(report, info) {
     }
     out.push('');
   }
+  if (report.extended?.length) {
+    const added = report.extended.reduce((n, e) => n + e.added, 0);
+    out.push('## Ergänzte Quizze');
+    out.push('');
+    out.push(
+      `${added} Fragen ergänzt in ${report.extended.length} Quizzen (Positionen bestehender Fragen verschoben: ${report.extended.reduce((n, e) => n + e.moved, 0)}). Bestehende Fragen, Optionen und Antworten bleiben unverändert.`
+    );
+    out.push('');
+    for (const e of report.extended) {
+      out.push(`- ${e.quiz}: ${e.added} ergänzt, ${e.moved} verschoben`);
+    }
+    out.push('');
+  }
   if (report.conflicts.length > 0) {
     out.push('## Konflikte');
     out.push('');
@@ -300,29 +442,52 @@ async function readPlan(args, decisions) {
     }
     return raw;
   }
-  const stat = (() => {
-    try {
-      return statSync(args.source);
-    } catch {
-      return null;
+  if (args.source) {
+    const stat = (() => {
+      try {
+        return statSync(args.source);
+      } catch {
+        return null;
+      }
+    })();
+    if (!stat?.isDirectory()) {
+      throw new Error(`${args.source} is not a folder or does not exist.`);
     }
-  })();
-  if (!stat?.isDirectory()) {
-    throw new Error(`${args.source} is not a folder or does not exist.`);
   }
   return planFromSource(args.source, args, decisions);
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
-  const parsed = parseApplyArgs(argv);
+  const parsed = parseApplyArgs(argv, { quizJson: true });
   if (!parsed.ok) {
     for (const error of parsed.errors) console.error(`Error: ${error}`);
     console.error(
-      'Usage: node scripts/import/kfbm-apply.mjs plan|check|run ... (see the header of the script)'
+      'Usage: node scripts/import/kfbm-apply.mjs plan|check|run|check-quizzes ... (see the header of the script)'
     );
     return 2;
   }
   const args = parsed.args;
+
+  // The output files must not be the input files (a report named like the JSON would overwrite it).
+  const inputs = [args.quizzesJson, args.globalQuizzesJson]
+    .filter(Boolean)
+    .map(file => path.resolve(file).toLowerCase());
+  for (const output of [args.out, args.reportOut].filter(Boolean)) {
+    if (inputs.includes(path.resolve(output).toLowerCase())) {
+      console.error(
+        'Error: an output file must not be a quiz JSON input file.'
+      );
+      return 2;
+    }
+  }
+  if (
+    args.command === 'check-quizzes' &&
+    args.reportOut &&
+    !/\.md$/i.test(args.reportOut)
+  ) {
+    console.error('Error: --report-out must be a .md file.');
+    return 2;
+  }
 
   let decisions;
   try {
@@ -330,6 +495,40 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   } catch (error) {
     console.error(`Error: ${error.message}`);
     return 2;
+  }
+
+  // check-quizzes -------------------------------------------------------------
+  if (args.command === 'check-quizzes') {
+    const options = {
+      expectedGlobalQuestions: decisions.content.globalQuizQuestions,
+    };
+    let lesson = null;
+    let global = null;
+    try {
+      if (args.quizzesJson) {
+        lesson = readLessonQuizzes(readQuizJsonFile(args.quizzesJson), options);
+      }
+      if (args.globalQuizzesJson) {
+        global = readGlobalQuizzes(
+          readQuizJsonFile(args.globalQuizzesJson),
+          options
+        );
+      }
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      return 2;
+    }
+    const report = renderQuizJsonReport(summarizeQuizJson(lesson, global));
+    console.log(report);
+    if (args.reportOut) {
+      writeText(args.reportOut, report);
+      console.log(`Report written: ${args.reportOut}`);
+    }
+    const failed = [lesson, global].some(
+      read =>
+        read && (read.fatal || read.findings.some(f => f.severity === 'error'))
+    );
+    return failed ? 1 : 0;
   }
 
   // plan ---------------------------------------------------------------------
@@ -492,6 +691,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         updateExisting: args.updateExisting,
         activate: decisions.content.activate,
         scenarioSolutions: args.scenarioSolutions,
+        extendQuizzes: args.extendQuizzes,
       });
       printReport(report, info);
       if (args.reportOut) {
