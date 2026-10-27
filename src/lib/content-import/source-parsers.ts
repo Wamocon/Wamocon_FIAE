@@ -42,6 +42,9 @@ const clean = (text: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+/** The text cleaning of the parsers (NFC, no invisible marks, one space), shared with the quiz JSON reader. */
+export const cleanText = clean;
+
 /**
  * Normalizes the input to paragraphs. In plain text a line wrapped in ** is
  * bold. Whitespace is collapsed, empty paragraphs stay (they separate blocks).

@@ -17,12 +17,21 @@
 // Modelled on src/lib/hai/reindexArgs.ts.
 
 export type ApplyTarget = 'local' | 'preview';
-export type ApplyCommand = 'plan' | 'check' | 'run';
+export type ApplyCommand = 'plan' | 'check' | 'run' | 'check-quizzes';
 
 export interface ApplyArgs {
   command: ApplyCommand;
-  /** Folder of the source documents (plan, or check and run without --plan). */
+  /**
+   * Folder of the source documents (plan, or check and run without --plan).
+   * Optional when a quiz JSON file is given.
+   */
   source: string | null;
+  /** Quiz JSON with the enabler quizzes (schema 1.0), see quiz-json/. */
+  quizzesJson: string | null;
+  /** Quiz JSON with the global quizzes. */
+  globalQuizzesJson: string | null;
+  /** A quiz of the JSON replaces the Word quiz of the same content key. */
+  preferJsonQuizzes: boolean;
   /** Plan file written by `plan`. */
   plan: string | null;
   /** plan: file for the plan JSON. */
@@ -72,6 +81,7 @@ export const PREVIEW_SCHEMA = 'public_preview';
 export const PRODUCTION_SCHEMA = 'public';
 
 const COMMANDS: ApplyCommand[] = ['plan', 'check', 'run'];
+const QUIZ_JSON_COMMANDS: ApplyCommand[] = [...COMMANDS, 'check-quizzes'];
 const TARGETS: ApplyTarget[] = ['local', 'preview'];
 const FLAGS = new Set([
   '--apply',
@@ -80,6 +90,8 @@ const FLAGS = new Set([
   '--hydrate',
   '--no-attributes',
 ]);
+const QUIZ_JSON_FLAGS = new Set(['--prefer-json-quizzes']);
+const QUIZ_JSON_VALUES = new Set(['--quizzes-json', '--global-quizzes-json']);
 const VALUE_OPTIONS = new Set([
   '--out',
   '--report-out',
@@ -103,13 +115,33 @@ function splitToken(token: string): [string, string | undefined] {
     : [token, undefined];
 }
 
-export function parseApplyArgs(argv: string[]): ParsedApplyArgs {
+export interface ParseApplyOptions {
+  /**
+   * Accept the quiz JSON sources (--quizzes-json, --global-quizzes-json,
+   * --prefer-json-quizzes) and the command check-quizzes. Only the content
+   * import script has them.
+   */
+  quizJson?: boolean;
+}
+
+export function parseApplyArgs(
+  argv: string[],
+  parseOptions: ParseApplyOptions = {}
+): ParsedApplyArgs {
   const errors: string[] = [];
+  const quizJson = parseOptions.quizJson === true;
   const [first, ...rest] = argv;
-  if (!first || !COMMANDS.includes(first as ApplyCommand)) {
+  if (
+    !first ||
+    !(quizJson ? QUIZ_JSON_COMMANDS : COMMANDS).includes(first as ApplyCommand)
+  ) {
     return {
       ok: false,
-      errors: ['The first argument must be plan, check or run'],
+      errors: [
+        quizJson
+          ? 'The first argument must be plan, check, run or check-quizzes'
+          : 'The first argument must be plan, check or run',
+      ],
     };
   }
   const command = first as ApplyCommand;
@@ -121,9 +153,15 @@ export function parseApplyArgs(argv: string[]): ParsedApplyArgs {
     const [name, inline] = splitToken(rest[i]);
     if (/production/i.test(name)) {
       errors.push(PRODUCTION_MESSAGE);
-    } else if (FLAGS.has(name) && inline === undefined) {
+    } else if (
+      (FLAGS.has(name) || (quizJson && QUIZ_JSON_FLAGS.has(name))) &&
+      inline === undefined
+    ) {
       flags.add(name);
-    } else if (VALUE_OPTIONS.has(name)) {
+    } else if (
+      VALUE_OPTIONS.has(name) ||
+      (quizJson && QUIZ_JSON_VALUES.has(name))
+    ) {
       const value = inline ?? rest[++i];
       if (value === undefined || value === '' || value.startsWith('--')) {
         errors.push(`${name} needs a value`);
@@ -145,10 +183,68 @@ export function parseApplyArgs(argv: string[]): ParsedApplyArgs {
   const source = positional[0] ?? null;
   const plan = values.get('--plan') ?? null;
   const writes = command === 'run';
-  const database = command !== 'plan';
+  const database = command === 'check' || command === 'run';
+  const quizzesJson = values.get('--quizzes-json') ?? null;
+  const globalQuizzesJson = values.get('--global-quizzes-json') ?? null;
+  const hasJson = quizzesJson !== null || globalQuizzesJson !== null;
+  const preferJsonQuizzes = flags.has('--prefer-json-quizzes');
+  for (const [name, value] of [
+    ['--quizzes-json', quizzesJson],
+    ['--global-quizzes-json', globalQuizzesJson],
+  ]) {
+    if (value !== null && !/\.json$/i.test(value)) {
+      errors.push(`${name} must name a .json file`);
+    }
+  }
+  if (preferJsonQuizzes && !(source && hasJson)) {
+    errors.push(
+      '--prefer-json-quizzes needs the source folder and a quiz JSON file'
+    );
+  }
+  if (plan && hasJson) {
+    errors.push('Give either --plan or the quiz JSON files, not both');
+  }
 
-  if (command === 'plan') {
-    if (!source) errors.push('plan needs the source folder');
+  if (command === 'check-quizzes') {
+    if (!hasJson) {
+      errors.push(
+        'check-quizzes needs --quizzes-json and/or --global-quizzes-json'
+      );
+    }
+    if (source) errors.push('check-quizzes takes no source folder');
+    for (const name of [
+      '--plan',
+      '--out',
+      '--target',
+      '--created-by',
+      '--confirm-host',
+      '--decisions',
+      '--components',
+      '--timeout',
+    ]) {
+      if (values.has(name)) {
+        errors.push(`${name} does not belong to check-quizzes`);
+      }
+    }
+    for (const name of [
+      '--apply',
+      '--update-existing',
+      '--scenario-solutions',
+      '--hydrate',
+      '--no-attributes',
+    ]) {
+      if (flags.has(name)) {
+        errors.push(`${name} does not belong to check-quizzes`);
+      }
+    }
+  } else if (command === 'plan') {
+    if (!source && !hasJson) {
+      errors.push(
+        quizJson
+          ? 'plan needs the source folder or a quiz JSON file'
+          : 'plan needs the source folder'
+      );
+    }
     if (plan) errors.push('--plan belongs to check and run');
     for (const name of [
       '--target',
@@ -162,20 +258,26 @@ export function parseApplyArgs(argv: string[]): ParsedApplyArgs {
     if (source && plan) {
       errors.push('Give either the source folder or --plan, not both');
     }
-    if (!source && !plan) {
-      errors.push('check and run need the source folder or --plan <file>');
+    if (!source && !plan && !hasJson) {
+      errors.push(
+        quizJson
+          ? 'check and run need the source folder, a quiz JSON file or --plan <file>'
+          : 'check and run need the source folder or --plan <file>'
+      );
     }
     if (values.has('--out')) errors.push('--out belongs to plan');
+    if (plan && values.has('--components')) {
+      errors.push('--components only works together with the source folder');
+    }
+  }
+  if (command !== 'check-quizzes') {
     for (const name of ['--hydrate', '--no-attributes']) {
       if (flags.has(name) && !source) {
         errors.push(`${name} only works together with the source folder`);
       }
     }
-    if (plan && values.has('--components')) {
-      errors.push('--components only works together with the source folder');
-    }
   }
-  if (!writes) {
+  if (!writes && command !== 'check-quizzes') {
     if (flags.has('--apply')) errors.push('--apply belongs to run');
     if (flags.has('--update-existing')) {
       errors.push('--update-existing belongs to run');
@@ -198,7 +300,11 @@ export function parseApplyArgs(argv: string[]): ParsedApplyArgs {
     }
   }
 
-  if (flags.has('--scenario-solutions') && !database) {
+  if (
+    flags.has('--scenario-solutions') &&
+    !database &&
+    command !== 'check-quizzes'
+  ) {
     errors.push('--scenario-solutions belongs to check and run');
   }
   if (flags.has('--scenario-solutions') && target === 'preview') {
@@ -258,6 +364,9 @@ export function parseApplyArgs(argv: string[]): ParsedApplyArgs {
     args: {
       command,
       source,
+      quizzesJson,
+      globalQuizzesJson,
+      preferJsonQuizzes,
       plan,
       out: values.get('--out') ?? null,
       reportOut: values.get('--report-out') ?? null,

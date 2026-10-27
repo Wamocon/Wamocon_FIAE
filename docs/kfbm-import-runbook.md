@@ -297,3 +297,67 @@ rollback; -- zur Kontrolle der Zahlen, dann mit commit wiederholen
 - `tests/scripts/import/kfbm-apply.test.mjs` (`npm run test:scripts`): die Befehle, Ablehnung von Production und fremden Hosts vor der ersten Verbindung, keine Geheimnisse in der Ausgabe.
 - `tests/unit/content-import/learning-fields` (Tabelle lesen, Lernfeldangaben, Plan, Engine mit Speicherdatenbank, Transaktion mit aufzeichnender Verbindung, Aufrufe) und `tests/scripts/import/kfbm-learning-fields.test.mjs` (`npm run test:scripts`: Befehle, Ablehnung von Production und fremden Hosts vor der ersten Verbindung, keine Geheimnisse in der Ausgabe, kein `.env`, kein Netzwerk).
 - Der Rauchtest gegen eine echte Datenbank steht im Bericht des Pull Requests.
+
+## Quiz-JSON als Quelle (Schema 1.0)
+
+Stand: 27.10.2026. Die Quizze liegen neben den Word-Dateien auch als JSON vor (zwei Dateien, Schema 1.0): eine mit den Enabler-Quizzen in drei Stufen (Kopf mit `schema_version`, `quiz_count`, `difficulty_levels`) und eine mit den Global-Quizzen (je Komponente 20 Fragen). Das Skript nimmt sie als zusätzliche oder alleinige Quelle für die Quizze. Der Code liegt in `src/lib/content-import/quiz-json/` (reine Funktionen, kein Dateizugriff im Kern). Dieses Paket enthält keine Migration und hat keine Wirkung auf Production.
+
+**Die JSON-Dateien werden nur gelesen.** Sie gehören nicht ins Repository und nicht in Tickets, sie enthalten wie die Word-Dateien die Lösungen. Die Tests arbeiten mit erfundenen Beispielen im selben Schema.
+
+### Befehle
+
+```
+npm run import:kfbm:apply -- check-quizzes --quizzes-json "<alle_quizze.json>" --global-quizzes-json "<global_quizze.json>" --report-out quiz-json-bericht.md
+npm run import:kfbm:apply -- plan --quizzes-json "<alle_quizze.json>" --global-quizzes-json "<global_quizze.json>" --out kfbm-plan.json
+npm run import:kfbm:apply -- plan "<Pfad zu Komponente>" --quizzes-json "<alle_quizze.json>" --global-quizzes-json "<global_quizze.json>" --out kfbm-plan.json
+```
+
+- `check-quizzes` ist nur lesend und nennt Zahlen, Komponenten, Kennungen und Codes, nie einen Text der Dateien: Zählung je Komponente und Stufe, Fragen je Satz (ein Satz ist ein Quiz in einer Stufe) und alle Befunde mit der Kennung des Quizzes, der Stufe und der Fragenummer. Exit-Code 0 ohne Fehler (Hinweise sind erlaubt), 1 bei mindestens einem Fehler, 2 bei einer Datei, die nicht gelesen werden kann. Der Bericht (`--report-out`) muss auf `.md` enden, und eine Ausgabedatei darf nie eine der JSON-Eingaben sein.
+- `plan`, `check` und `run` nehmen dieselben Optionen. Ohne Quellordner genügt eine JSON-Datei. Mit Quellordner kommen die Quizze aus beiden Quellen, `--components` begrenzt auch die JSON-Quizze. `--plan` und die JSON-Optionen schließen sich aus (ein Plan enthält seinen Inhalt schon).
+- Die Dateien müssen auf `.json` enden und dürfen höchstens 32 MB groß sein. Die Meldungen nennen die Datei und eine Position, nie den Inhalt.
+- Alles Übrige gilt wie bisher: Probelauf ist der Standard, Ziele nur `local` und `preview`, `--apply` und bei der Preview `--confirm-host`, Antworten und Erklärungen nur in ihren Spalten, keine Ausgabe von Inhalten.
+
+### Wie dieselben Zeilen getroffen werden
+
+Jeder Satz (Quiz und Stufe) und jedes Global-Quiz wird für den Planer zu einer Datei im Schema des Quellbaums, abgeleitet aus `id`, `curriculum_component` und `training_section`. Die Funktion `pathInfo`, die auch die Word-Dateien einordnet, bildet daraus Schlüssel, Enabler und Komponente. Die Pläne aus Word und aus JSON benennen deshalb dieselben Zeilen, ein Lauf aus der einen Quelle nach einem Lauf aus der anderen legt nichts doppelt an (getestet mit der Speicherdatenbank der Engine und mit einer Wegwerf-Datenbank).
+
+| JSON                                        | Plan                                         |
+| ------------------------------------------- | -------------------------------------------- |
+| Quiz `10a`, Komponente `10`, Stufe `leicht`  | Quiz `K10-a-low`, Schlüssel `quiz:10a:low`   |
+| Quiz `6a`, Komponente `06.1`, Stufe `mittel` | Quiz `K6.1-a-medium`, Enabler `K6.1-a`       |
+| Quiz `24_1a`, Komponente `24.1`, Stufe `schwer` | Quiz `K24.1-a-high`                       |
+| Global-Quiz `06.2`                          | Quiz `K6.2-global`, Schlüssel `global-quiz:06.2` |
+
+Die Stufen `leicht`, `mittel`, `schwer` entsprechen `Low`, `Medium`, `High`. Die Kennung eines Quizzes ohne Teilnummer (`6a`) erhält die Teilnummer der Komponente (`06.1`), eine Kennung mit Teilnummer (`24_1a`) muss zur Komponente passen, sonst ist der Eintrag ein Fehler.
+
+### Zusammenspiel mit dem Word-Baum und der Datenbank
+
+- **Der Word-Baum gilt.** Hat ein Quiz der JSON denselben Schlüssel wie eine Word-Datei, bleibt die Word-Datei und das JSON-Quiz steht im Plan unter "Ältere Kopien". Nur mit `--prefer-json-quizzes` (braucht den Quellordner und eine JSON-Datei) ersetzt das JSON-Quiz die Word-Quiz-Dateien desselben Schlüssels, die dann unter "Ältere Kopien" stehen, und auch nur, wenn der JSON-Satz fehlerfrei ist. Eine Word-Datei, die der Planer nicht verwenden kann (Formatfehler, Platzhalter, nicht lesbar, Pfad passt nicht), hält ihren Schlüssel nicht besetzt: Das JSON-Quiz füllt die Lücke und die Word-Datei steht unter "Ältere Kopien" (die Konsole nennt die Zahl). Sonst bliebe das fehlerhafte Word-Quiz und das gültige JSON-Quiz ginge verloren.
+- **Enabler:** Das Word-Dokument eines Enablers hat immer Vorrang. Fehlt es, legt der Plan den Enabler aus der Überschrift des JSON-Titels an (`10a) Titel`), ohne Lehrtext. Passt der Titel nicht zu Kennung und Komponente, entsteht kein Enabler und die Quizze stehen mit `ENABLER_MISSING` unter den übersprungenen, der Enabler muss dann aus dem Word-Baum kommen.
+- **Komponenten:** Kennt der Word-Baum die Komponente, kommen Titel, Paragraf und Gruppe (und damit die Phase) immer von dort, die JSON ändert sie nie. Nur eine Komponente, die allein die JSON kennt, nimmt Titel, Paragraf und Gruppe aus `curriculum_component` und `training_section`. Art und Phase kommen aus `kfbm-decisions.json` wie bisher. Zwei Quizze derselben Komponente mit verschiedenem Titel oder Abschnitt sind ein Fehler (`COMPONENT_CONFLICT`).
+- **Datenbank:** Bestehende Zeilen bleiben unverändert, auch wenn die JSON andere Texte nennt (der Bericht führt die Abweichungen). Nur `--update-existing` ändert die benannten Spalten (Fragen- und Optionstexte, Erklärung, Titel). Eine andere Fragenzahl als in der Datenbank ist wie bisher ein Konflikt (Exit-Code 3). Ein Enabler, der schon mit Lehrtext besteht, verliert ihn nie, ein fehlender Wert im Plan löscht nichts.
+
+### Strenge Prüfung (nichts wird geraten)
+
+Ein Fehler überspringt die Stufe (oder bei Fehlern im Kopf die ganze Datei) mit Kennung und Grund, ohne einen Text der Datei zu nennen. Ein Hinweis kommt in die Hinweise des Plans, die Stufe bleibt im Plan.
+
+| Code                                              | Art     | Bedeutung                                                                                                          |
+| ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `SCHEMA_VERSION`, `QUIZ_COUNT`, `LEVELS_HEADER`, `NOT_OBJECT`, `QUIZZES_MISSING` | Fehler, die ganze Datei wird nicht gelesen | Kopf passt nicht (andere Fassung, abgeschnittene Datei) |
+| `UNKNOWN_FIELD`, `UNKNOWN_LEVEL`                  | Fehler  | Ein Feld oder eine Stufe, die das Schema 1.0 nicht kennt (im Kopf, im Quiz, in der Stufe, in Frage und Option). Nur Feldnamen werden genannt. |
+| `TOO_MANY_QUIZZES`, `TOO_MANY_QUESTIONS`, `TEXT_TOO_LONG`, `OPTION_TOO_LONG`, `RATIONALE_TOO_LONG` | Fehler | Obergrenzen: 1000 Quizze, 100 Fragen je Satz, 50.000 Fragen je Datei, Frage 2000, Option 1000, Erklärung 4000 Zeichen |
+| `OPTION_COUNT`, `OPTION_ORDER`, `OPTION_EMPTY`, `OPTION_DUPLICATE`, `OPTION_INVALID` | Fehler | Genau vier Optionen A bis D in dieser Reihenfolge, keine leere, keine doppelte (ohne Rücksicht auf Groß und Kleinschreibung) |
+| `ANSWER_MISSING`, `ANSWER_INVALID`                | Fehler  | `correct_answer` fehlt oder ist keine der Optionen A bis D                                                         |
+| `TEXT_EMPTY`, `RATIONALE_MISSING`, `TEXT_CONTROL`, `QUESTION_DUPLICATE`, `QUESTION_NOT_OBJECT` | Fehler | Leere Frage oder Erklärung, Steuerzeichen (ein NUL bräche das Einfügen), dieselbe Frage zweimal im Satz |
+| `ID_INVALID`, `ID_DUPLICATE`, `KEY_DUPLICATE`, `NUMBER_SEQUENCE` | Fehler | Kennung ohne Form (`10a`, `24_1a`, Global `06.1`), Kennung oder Enabler doppelt (keiner der Einträge wird gelesen), Fragenummern nicht 1 bis n |
+| `COMPONENT_INVALID`, `COMPONENT_MISMATCH`, `SECTION_INVALID`, `PATH_MAPPING`, `COMPONENT_CONFLICT`, `COMPONENT_TITLE` | Fehler | Komponente, Abschnitt oder Kennung passen nicht zusammen oder ergeben keinen gültigen Schlüssel |
+| `LEVEL_MISSING`, `LABEL_MISMATCH`, `NO_QUESTIONS`, `SOURCE_TYPE`, `SOURCE_WARNINGS_INVALID`, `QUIZ_NOT_OBJECT` | Fehler | Stufe fehlt oder falsch beschriftet, keine Fragen, ein Quellfeld ist kein Text, Eintrag ist kein Objekt |
+| `QUESTION_COUNT`                                  | Hinweis bei Enabler-Quizzen (nicht 10 Fragen), Fehler bei Global-Quizzen (nicht 20) | Das Word-Verfahren kennt für Enabler-Quizze keine feste Zahl, deshalb nur ein Hinweis |
+| `SOURCE_WARNING`                                  | Hinweis | Die Quelle markiert die Frage (zum Beispiel redaktionell ergänzte Optionen). Der Eigentümer prüft sie vor der Aktivierung. |
+| `TITLE_HEADING`, `CATEGORY_MISMATCH`, `SOURCE_FILES`, `SOURCE_PATH_MISMATCH`, `SOURCE_NULL` | Hinweis | Der Titel nennt keine Überschrift des Enablers, `category` weicht ab, `source_files` fehlt oder nennt einen anderen Schlüssel, ein Quellfeld ist `null` |
+
+Der Lösungsschutz der Planung gilt unverändert: Eine Lösungsmarke in einem sichtbaren Feld (`SOLUTION_MARKER`) überspringt das Quiz, Erklärung und richtige Antwort stehen nur in `options.explanation` und `options.is_correct`.
+
+### Zählung der echten Dateien (Stand 27.10.2026)
+
+`check-quizzes` zählt in `alle_quizze 1.json` 226 Quizze mal drei Stufen (678 Sätze, 6744 Fragen, davon 18 Sätze mit 8 statt 10 Fragen) und in `global_quizze 1.json` 27 Quizze mit je 20 Fragen. Fehler gibt es keine, die Hinweise sind unter den Befunden aufgeführt. Der Plan aus beiden Dateien ohne Word-Baum ergibt 27 Komponenten, 225 Enabler (ohne Lehrtext), 672 Enabler-Quizze und 27 Global-Quizze, 6 Quizze werden übersprungen (Enabler 6.2g: Titel ohne gültige Überschrift, K14-a: Lösungsmarke im sichtbaren Text). Die Einzelheiten stehen im Bericht des Pull Requests.
