@@ -358,7 +358,7 @@ function warningCodes(result: ParseResult<unknown>): string[] {
 const HEADING_CODE =
   /^(?:Szenario[\s_]+|Quiz\s+)?(\d{1,2})(?:[._/](\d))?([a-z])\s*[:.)\-–—]\s*(.+)$/;
 
-function splitEnablerHeading(heading: string): {
+export function splitEnablerHeading(heading: string): {
   code: string | null;
   title: string;
 } {

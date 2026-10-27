@@ -183,7 +183,7 @@ export async function extractTextFromPDF(
  * Clean extracted PDF text
  * Removes excessive whitespace, page breaks, headers/footers
  */
-function cleanPDFText(text: string): string {
+export function cleanPDFText(text: string): string {
   return (
     text
       // Normalize line endings

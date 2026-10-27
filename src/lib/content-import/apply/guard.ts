@@ -20,14 +20,31 @@ import type { ImportPlan } from './types';
  * running text, a question may ask for "the right answer"), and the headings of
  * the scenario solution. Tested on the raw text, line by line.
  */
-const SOLUTION_MARKERS = [
+//
+// The list is shared with the upload excerpts (src/lib/content-upload) and also
+// holds the markers of the use case documents and the variants of a solution
+// heading ("Lösung", "Korrekte Antwort", "Antwortschlüssel", "Lösungsvorschlag").
+// A marker that needs a line of its own ("Lösung", "Bewertungskriterien") is not
+// found in running text, a tasks uses these words often. The newer patterns use
+// [^\S\n] (white space without a line break) so a long run of white space cannot
+// make the scan quadratic.
+export const SOLUTION_MARKERS: readonly RegExp[] = Object.freeze([
   /(?:^|\n)\s*Richtige\s+Antwort\b/i,
   /Richtige\s+Antwort\s*:/i,
   /(?:^|\n)\s*Kurzbegr(?:ü|ue)ndung\b/i,
   /Kurzbegr(?:ü|ue)ndung\s*:/i,
   /L(?:ö|oe)sungs?szenario/i,
   /Fachwissen\s+zur\s+L(?:ö|oe)sung/i,
-];
+  // Use case documents
+  /(?:^|\n)[^\S\n]*Musterl(?:ö|oe)sung\b/i,
+  /Musterl(?:ö|oe)sung[^\S\n]*:/i,
+  /(?:^|\n)[^\S\n]*Bewertungskriterien[^\S\n]*(?::[^\S\n]*)?(?:\n|$)/i,
+  // The bare heading of a solution (the scenario parser reads it as one)
+  /(?:^|\n)[^\S\n]*L(?:ö|oe)sung[^\S\n]*(?::[^\S\n]*)?(?:\n|$)/i,
+  // Variants of the label of an answer or a solution
+  /(?:^|\n)[^\S\n]*(?:Korrekte[^\S\n]+Antwort|Antwortschl(?:ü|ue)ssel|L(?:ö|oe)sungsvorschlag)\b/i,
+  /(?:Korrekte[^\S\n]+Antwort|Antwortschl(?:ü|ue)ssel|L(?:ö|oe)sungsvorschlag)[^\S\n]*:/i,
+]);
 
 /** A solution text must be at least this long to be searched inside others. */
 const MIN_SOLUTION_LENGTH = 20;
@@ -210,14 +227,27 @@ export function findRowLeaks(
     const trainerOnly =
       row.document_type === 'TRAINER_SOLUTION' &&
       row.visibility === 'TRAINER_ONLY';
-    const traineeSafe =
+    const traineeQuestion =
       row.document_type === 'TRAINEE_QUESTION' && row.visibility === 'ALL';
-    if (!trainerOnly && !traineeSafe) {
+    // The original of an enabler text (upload): a theory document for everyone
+    // that hangs on an enabler. The theory documents of a use case belong to the
+    // use case import and are not written here.
+    const theory = row.document_type === 'THEORY' && row.visibility === 'ALL';
+    if (!trainerOnly && !traineeQuestion && !theory) {
       problems.push(
         'content_documents row has an unexpected type or visibility'
       );
       continue;
     }
+    if (theory && !row.enabler_id) {
+      problems.push('content_documents THEORY row names no enabler');
+      continue;
+    }
+    if (theory && row.use_case_id) {
+      problems.push('content_documents THEORY row belongs to a use case');
+      continue;
+    }
+    const traineeSafe = traineeQuestion || theory;
     const title = typeof row.title === 'string' ? row.title : '';
     if (leakOf(title, solutions)) {
       problems.push('content_documents.title contains a solution');
