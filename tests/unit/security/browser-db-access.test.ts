@@ -160,10 +160,9 @@ describe('browser access to the database', () => {
       'src/app/api/auth/sync-profile/route.ts',
       'src/app/api/register/route.ts',
       'src/app/api/trainer/courses/[courseId]/members/route.ts',
-      'src/app/api/trainer/enablers/[enablerId]/documents/route.ts',
-      'src/app/api/trainer/use-cases/[useCaseId]/documents/route.ts',
       'src/lib/auth-helpers.ts',
       'src/lib/auth/session.ts',
+      'src/lib/document-file-cleanup.ts',
       'src/lib/supabase.ts',
       'src/utils/supabase/server.ts',
     ]);
