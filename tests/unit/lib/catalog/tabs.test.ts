@@ -23,6 +23,7 @@ describe('catalogFromSearch', () => {
     '?catalog=x',
     '?catalog=<script>',
     '?catalog=KFBM&catalog=FIAE',
+    '?catalog=KFBM&catalog=KFBM',
     '?catalog=A B',
     '?other=KFBM',
   ])('gives nothing for %p (fail closed)', search => {

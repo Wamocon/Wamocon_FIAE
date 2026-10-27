@@ -215,6 +215,8 @@ describe('CatalogProvider tabs', () => {
       await waitFor(() => expect(result.current.status).toBe('ready'));
       act(() => result.current.selectTab('OFF'));
       expect(result.current.activeCode).toBe('FIAE');
+      expect(getCatalogHeader()).toBe('FIAE');
+      expect(pushCatalogUrl).not.toHaveBeenCalled();
     });
 
     it('does nothing for a trainee (no tabs)', async () => {
@@ -279,6 +281,115 @@ describe('CatalogProvider tabs', () => {
       await waitFor(() => expect(result.current.status).toBe('ready'));
       expect(result.current.activeCode).toBe('KFBM');
       expect(result.current.epoch).toBe(0);
+    });
+  });
+
+  describe('pages without tabs and a catalog list without an active occupation', () => {
+    it('reads the URL only on a page that has tabs', async () => {
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
+      window.history.replaceState(null, '', '/trainer/profile?catalog=KFBM');
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.activeCode).toBe('FIAE');
+    });
+
+    it('does not load a page without tabs again for the first header', async () => {
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
+      window.history.replaceState(null, '', '/trainer/profile');
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(getCatalogHeader()).toBe('FIAE');
+      expect(result.current.epoch).toBe(0);
+    });
+
+    it('does not load the page of a trainee again either', async () => {
+      signedInAs('trainee');
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.epoch).toBe(0);
+    });
+
+    it('sends no header and shows no tab when no occupation is active (never an inactive one)', async () => {
+      respond({
+        catalogs: [
+          { ...OFF, code: 'OFA' },
+          { ...OFF, code: 'OFB' },
+        ],
+        activeCode: null,
+      });
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.tabs).toEqual([]);
+      expect(getCatalogHeader()).toBeNull();
+    });
+
+    it('a stored inactive choice is not used', async () => {
+      respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' });
+      writePreferredCatalog('OFF');
+      resetCatalogSelection();
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.activeCode).toBe('FIAE');
+      expect(getCatalogHeader()).toBe('FIAE');
+    });
+  });
+
+  describe('the popstate listener', () => {
+    beforeEach(() =>
+      respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' })
+    );
+
+    it('ignores an inactive occupation in the URL', async () => {
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      setUrl('?catalog=OFF');
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(result.current.activeCode).toBe('FIAE');
+      expect(getCatalogHeader()).toBe('FIAE');
+    });
+
+    it('is not registered for a trainee and not on a page without tabs', async () => {
+      const add = jest.spyOn(window, 'addEventListener');
+      signedInAs('trainee');
+      const trainee = setup();
+      await waitFor(() => expect(trainee.result.current.status).toBe('ready'));
+      expect(add.mock.calls.filter(c => c[0] === 'popstate')).toHaveLength(0);
+      trainee.unmount();
+
+      signedInAs('trainer');
+      resetCatalogSelection();
+      window.history.replaceState(null, '', '/trainer/profile');
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      window.history.replaceState(null, '', '/trainer/profile?catalog=KFBM');
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(result.current.activeCode).toBe('FIAE');
+      add.mockRestore();
+    });
+
+    it('is removed when the provider unmounts', async () => {
+      const remove = jest.spyOn(window, 'removeEventListener');
+      const { result, unmount } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      unmount();
+      expect(remove.mock.calls.some(c => c[0] === 'popstate')).toBe(true);
+      remove.mockRestore();
+    });
+
+    it('does not push the URL again after a switch by the buttons', async () => {
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      setUrl('?catalog=KFBM');
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(result.current.activeCode).toBe('KFBM');
+      expect(pushCatalogUrl).not.toHaveBeenCalled();
     });
   });
 });

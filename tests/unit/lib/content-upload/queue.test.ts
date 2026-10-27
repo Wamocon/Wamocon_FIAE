@@ -5,6 +5,7 @@ import { announceFiles, completeFiles } from '@/lib/content-upload/staging/files
 import {
   DEFAULT_STEPS,
   MAX_ATTEMPTS,
+  MAX_HELD_PER_RUN,
   buildSteps,
   clampBudget,
   pumpRun,
@@ -447,6 +448,59 @@ describe('pumpRun', () => {
     for (const id of ids) {
       expect((await statusOf(ctx, run.id, id)).status).toBe('verified');
     }
+  });
+
+  it('holds at most MAX_HELD_PER_RUN files of a run however many pumps run', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    const ids = await uploadedFiles(ctx, run.id, 40);
+    const { step, seen, max } = countingStep(ctx);
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        pumpRun(ctx.deps, run.id, { steps: [step], concurrency: 3 })
+      )
+    );
+    expect(MAX_HELD_PER_RUN).toBe(6);
+    expect(max()).toBeLessThanOrEqual(MAX_HELD_PER_RUN);
+    // the limit slows the work down, it never loses a file
+    expect([...seen].sort()).toEqual([...ids].sort());
+    expect(results.reduce((n, r) => n + r.processed, 0)).toBe(40);
+  });
+
+  it('refuses a held limit that is no positive whole number', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    for (const bad of [0, -1, 1.5, Infinity, NaN]) {
+      await expect(
+        pumpRun(ctx.deps, run.id, { maxHeld: bad })
+      ).rejects.toThrow(RangeError);
+    }
+  });
+
+  it('lets a pump that finds the limit used up leave without working', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    await uploadedFiles(ctx, run.id, 5);
+    // two callers that took files and have not finished: the limit is used up
+    const held = await ctx.repo.claimFiles(run.id, {
+      statuses: ['uploaded'],
+      limit: 2,
+      lockSeconds: 90,
+      maxAttempts: MAX_ATTEMPTS,
+    });
+    expect(held).toHaveLength(2);
+    const { step, seen } = countingStep(ctx);
+    const blocked = await pumpRun(ctx.deps, run.id, {
+      steps: [step],
+      maxHeld: 2,
+    });
+    expect(blocked.processed).toBe(0);
+    expect(seen).toHaveLength(0);
+    expect(blocked.pending.locked).toBe(2);
+    expect(blocked.done).toBe(false);
+    // with room left the same call works
+    const free = await pumpRun(ctx.deps, run.id, { steps: [step], maxHeld: 3 });
+    expect(free.processed).toBe(3);
   });
 
   it('takes up a file again after the call that held it died', async () => {

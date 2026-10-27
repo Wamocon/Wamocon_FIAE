@@ -59,6 +59,21 @@ describe('buildTransferPlan', () => {
     expect(result.plannedFiles).toHaveLength(4);
   });
 
+  it('reads the tree below the folder that the person chose, like the rule stage does', async () => {
+    const plain = await plan(await enablerFiles({ tree: true }), []);
+    const fixtures = await enablerFiles({ tree: true });
+    // the browser reports the name of the chosen folder first
+    for (const f of fixtures) f.file.relPath = `KfBM Upload/${f.file.relPath}`;
+    const result = await plan(fixtures, []);
+    expect(result.skipped).toEqual([]);
+    expect(result.importPlan.components.map(c => [c.code, c.group])).toEqual([
+      ['K4', 'teil1'],
+    ]);
+    expect(result.importPlan.enablers.map(e => e.code)).toEqual(['K4-a']);
+    expect(result.counts).toEqual(plain.counts);
+    expect(result.useCaseCounts).toEqual(plain.useCaseCounts);
+  });
+
   it('builds the same plan for files without a tree, with the facts of the component row', async () => {
     const withTree = await plan(await enablerFiles({ tree: true }), []);
     const flat = await plan(await enablerFiles({ tree: false }), [K4]);

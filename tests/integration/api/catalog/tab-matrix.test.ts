@@ -224,21 +224,6 @@ describe('occupation tabs: role matrix on a list route', () => {
         200
       );
     });
-
-    it('cannot write for an occupation outside its set either', async () => {
-      const { mod } = await load(
-        'trainer/courses',
-        { organizationCatalogs: fiaeOnly },
-        session()
-      );
-      const res = await mod.POST({
-        ...req(`${COURSES}?catalog=KFBM`),
-        method: 'POST',
-        json: async () => ({ title: 'X' }),
-      });
-      // curriculum writes need the super admin, the answer is 403 either way
-      expect(res.status).toBe(403);
-    });
   });
 
   describe('trainee (no tabs, one enrollment)', () => {

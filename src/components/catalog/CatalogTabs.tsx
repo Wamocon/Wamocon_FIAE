@@ -41,6 +41,8 @@ export function CatalogTabs() {
     event: KeyboardEvent<HTMLButtonElement>,
     index: number
   ) => {
+    // Alt+Arrow is back and forward of the browser, the history is used here
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     switch (event.key) {
       case 'ArrowRight':
         event.preventDefault();
@@ -66,6 +68,11 @@ export function CatalogTabs() {
       className="bg-card/80 border-border/60 sticky top-0 z-20 overflow-x-auto border-b px-4 backdrop-blur-md sm:px-6"
       data-tour="catalog-tabs"
     >
+      <p role="status" className="sr-only">
+        {t('catalog.tabs.current', {
+          title: tabs[activeIndex]?.title ?? activeCode,
+        })}
+      </p>
       <div
         role="tablist"
         aria-label={t('catalog.tabs.label')}

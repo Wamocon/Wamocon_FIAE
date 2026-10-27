@@ -114,7 +114,7 @@ const TYPE_OF: Record<string, OriginalType | undefined> = {
 };
 
 /** The path from the first group folder on, or null when there is none. */
-function fromGroupFolder(path: string): string | null {
+export function fromGroupFolder(path: string): string | null {
   const segments = path
     .split(/[\\/]+/)
     .map(segment => segment.normalize('NFC').trim());

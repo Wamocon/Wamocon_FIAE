@@ -2485,5 +2485,7 @@
   "contentUpload.confirm.reopen": "Review again",
   "contentUpload.notice.reopened": "The run is back in review.",
   "contentUpload.notice.reopenState": "The run cannot be reviewed again in this state.",
-  "catalog.tabs.label": "Choose training"
+  "contentUpload.code.UNREADABLE": "The browser could not read the file (for example a path that is too long). Shorten the path or choose the file on its own.",
+"catalog.tabs.label": "Choose training",
+  "catalog.tabs.current": "Showing: {title}"
 }

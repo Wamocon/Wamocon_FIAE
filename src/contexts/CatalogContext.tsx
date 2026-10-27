@@ -34,7 +34,11 @@ import {
   storedChoiceNeedsCheck,
   writePreferredCatalog,
 } from '@/lib/catalog/selection';
-import { catalogFromSearch, pickTabCatalog } from '@/lib/catalog/tabs';
+import {
+  catalogFromSearch,
+  isCatalogTabPath,
+  pickTabCatalog,
+} from '@/lib/catalog/tabs';
 
 export type CatalogOption = {
   code: string;
@@ -128,10 +132,20 @@ function parseCatalogs(data: unknown): Loaded | null {
   };
 }
 
-/** The occupations that can be worked in (active ones, else all). */
+/**
+ * The occupations that can be worked in: the active ones. A super admin also
+ * gets inactive ones from the server, they are no view to choose (the server
+ * answers 403 for them), so they are never a tab and never sent as a header.
+ */
 function usableCatalogs(catalogs: CatalogOption[]): CatalogOption[] {
-  const active = catalogs.filter(c => c.isActive);
-  return active.length > 0 ? active : catalogs;
+  return catalogs.filter(c => c.isActive);
+}
+
+/** The code of the URL, only on a page that has tabs. */
+function catalogFromTabPage(): string | null {
+  return isCatalogTabPath(window.location.pathname)
+    ? catalogFromSearch(window.location.search)
+    : null;
 }
 
 /**
@@ -214,10 +228,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     // sign in flag flipped) keeps its header, so the query keys do not flap.
     // A stored choice other than FIAE holds requests back until it is checked;
     // for FIAE, and for nobody with a choice, requests go out as they always
-    // did.
-    // A choice other than FIAE holds requests back, so none goes out for the
-    // wrong occupation. Otherwise the first requests may have gone out without
-    // the header, then the page content loads again once it is set (epoch).
+    // did. Then the first requests may have gone out without the header, and
+    // the content of a page with tabs loads again once it is set (epoch).
     const gated = storedChoiceNeedsCheck();
     const sameUser = headerOwner.current === userId;
     headerOwner.current = userId;
@@ -238,12 +250,13 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         if (!data) throw new Error('unusable answer');
         if (cancelled) return;
 
-        const multiple = data.catalogs.length > 1;
+        // Several occupations and at least one that can be worked in. Without
+        // an active one nothing is sent (the server default applies).
+        const multiple =
+          data.catalogs.length > 1 && usableCatalogs(data.catalogs).length > 0;
         const active = chooseActive(
           data,
-          trainerLevelRef.current
-            ? catalogFromSearch(window.location.search)
-            : null
+          trainerLevelRef.current ? catalogFromTabPage() : null
         );
         const headerBefore = getCatalogHeader();
         // Only a user with several occupations has a choice to remember and
@@ -253,7 +266,13 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           header: multiple ? active : null,
           pending: false,
         });
-        if (multiple && !gated && headerBefore === null) {
+        if (
+          multiple &&
+          !gated &&
+          headerBefore === null &&
+          trainerLevelRef.current &&
+          isCatalogTabPath(window.location.pathname)
+        ) {
           setEpoch(value => value + 1);
         }
         setLoaded(data);
@@ -320,7 +339,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (tabs.length === 0) return;
     const onPopState = () => {
-      const fromUrl = catalogFromSearch(window.location.search);
+      const fromUrl = catalogFromTabPage();
       if (!fromUrl || fromUrl === activeRef.current) return;
       if (!tabs.some(c => c.code === fromUrl)) return;
       applyTab(fromUrl);

@@ -53,14 +53,10 @@ export function catalogFromSearch(
   search: string | null | undefined
 ): string | null {
   if (!search) return null;
-  try {
-    const values = new URLSearchParams(search).getAll(CATALOG_TAB_PARAM);
-    // a repeated parameter is ambiguous: ignore it
-    if (values.length !== 1) return null;
-    return normalizeCatalogCode(values[0]) ?? null;
-  } catch {
-    return null;
-  }
+  const values = new URLSearchParams(search).getAll(CATALOG_TAB_PARAM);
+  // a repeated parameter is ambiguous: ignore it
+  if (values.length !== 1) return null;
+  return normalizeCatalogCode(values[0]) ?? null;
 }
 
 /** `pathname` and `search` with `catalog=CODE` set, other parameters kept. */
@@ -71,7 +67,7 @@ export function withCatalogInUrl(
   hash = ''
 ): string {
   const params = new URLSearchParams(search ?? '');
-  params.set(CATALOG_TAB_PARAM, code);
+  params.set(CATALOG_TAB_PARAM, normalizeCatalogCode(code) ?? code);
   return `${pathname}?${params.toString()}${hash}`;
 }
 

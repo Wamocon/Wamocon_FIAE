@@ -118,6 +118,17 @@ describe('CatalogTabs', () => {
       expect(selectTab).not.toHaveBeenCalled();
     });
 
+    it('leaves Alt, Ctrl and Meta with the arrows to the browser (history)', async () => {
+      context();
+      renderWithProviders(<CatalogTabs />);
+      await userEvent.tab();
+      const [fiae] = screen.getAllByRole('tab');
+      for (const modifier of ['Alt', 'Control', 'Meta']) {
+        await userEvent.keyboard(`{${modifier}>}{ArrowRight}{/${modifier}}`);
+        expect(fiae).toHaveFocus();
+      }
+    });
+
     it('chooses the focused tab with Enter and with Space', async () => {
       context();
       renderWithProviders(<CatalogTabs />);
@@ -128,6 +139,14 @@ describe('CatalogTabs', () => {
       await userEvent.keyboard(' ');
       expect(selectTab).toHaveBeenCalledWith('KFBM');
     });
+  });
+
+  it('announces the shown training in a polite status', () => {
+    context({ activeCode: 'KFBM' });
+    renderWithProviders(<CatalogTabs />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Angezeigt wird: Kaufmann/-frau für Büromanagement'
+    );
   });
 
   it('scrolls sideways on a narrow screen and does not widen the page', () => {
