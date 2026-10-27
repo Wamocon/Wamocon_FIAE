@@ -1317,3 +1317,66 @@ Geprüft mit `ecc:security-reviewer`, `ecc:react-reviewer` und `ecc:typescript-r
 - **Nur Administratoren, ein Mandant:** Läufe sieht der Ersteller, ein SUPER_ADMIN alle.
 - Die Lesestrecken laden den ganzen Lauf (bis 1500 Zeilen) und filtern im Speicher. Das trägt für den Zweck, eine Seite mit mehr Läufen oder Dateien brauchte SQL-Filter.
 - Der Hinweis in den Gründen (`reason.text`) ist fester deutscher Text der Regelstufe, auch in der englischen Oberfläche.
+
+## 18. Stand U8 (Abnahme)
+
+Stand: 27.10.2026. Paket U8 ist umgesetzt, ohne Migration und ohne Wirkung auf Production. Es gibt kein Modell und keine gehostete Umgebung in dieser Abnahme. Das Runbook für Niko steht in `docs/kfbm-upload-runbook.md`.
+
+### 18.1 Was gebaut ist
+
+| Teil | Inhalt |
+| ---- | ------ |
+| Golden-Set-Werkzeug | `scripts/import/kfbm-golden-set.mjs`, Befehlszeile außerhalb von Next, liest die Quelle nur lesend, gibt nur Zahlen aus, Ausgang 1 bei unter 92 Prozent ohne KI oder bei einem falschen Band Sicher. Tests in `tests/scripts/import/kfbm-golden-set.test.mjs`. Der Modulauflöser der Skripte (`ts-resolve-hook.mjs`) kennt jetzt den Alias `@/` (nur unter `src/`) |
+| Obergrenze gleichzeitiger Claims | `claimFiles` hat die Option `maxHeld`, die Pumpe setzt `MAX_HELD_PER_RUN = 6`. In SQL zählt eine Transaktion unter einer Advisory-Sperre je Lauf die gehaltenen Dateien (Anspruch gesetzt, Sperre nicht abgelaufen) und vergibt höchstens den Rest. Speicher und SQL liegen im Vertragstest nebeneinander (unter anderem erhalten zwölf gleichzeitige Aufrufer bei `maxHeld` 5 zusammen genau fünf Dateien) |
+| Spur der Dateien im Build | `next.config.ts`: `outputFileTracingIncludes` für `pump`, `dry-run` und `apply` nennt `pdf-parse/package.json`, `pdf.js`, `pdf.worker.js` (v1.10.100) und `node-ensure`. Ohne diese Zeilen fehlten die Dateien in den Funktionen von Vercel |
+| Fehler beim Plan (gefunden in der Abnahme) | Der Planbau der Übernahme las den Pfad ohne den Ordner, den die Person gewählt hat. Ein Ordner oberhalb der Struktur (jeder Name außer `Komponente`) ließ alle 27 Komponenten ohne Gruppe (`NO_GROUP`), der Plan war leer (`NO_ENABLERS`). Die Regelstufe findet die Gruppe unter jedem Elternordner, die Übernahme jetzt auch (`fromGroupFolder`). Test in `transfer-plan.test.ts` |
+| Upload-Client | Eine Datei, die der Browser nicht lesen kann (Pfad über 259 Zeichen unter Windows), beendete den ganzen Upload ("Upload fehlgeschlagen"). Jetzt steht sie mit dem Code `UNREADABLE` in der Problemliste, der Rest läuft weiter. Der Zähler "Uploads werden bestätigt" zählte außerdem mehr als es gab, korrigiert |
+
+### 18.2 Golden Set (Regelstufe, ohne Modell)
+
+Quelle: 1447 Word- und PDF-Dateien, davon 1445 lesbar, 1414 in der Messung (ohne Archiv, Übersicht, K18). Das Werkzeug wiederholt die Messung von U4 und bestätigt sie.
+
+| Fall | Sicher | Mittel | Unklar | Widerspruch | ohne KI richtig | falsch mit Sicher |
+| ---- | ------ | ------ | ------ | ----------- | --------------- | ----------------- |
+| volle Pfadstruktur | 1388 (98,16 %) | 25 | 0 | 1 | 99,93 % | 0 |
+| nur Dateiname | 1330 (94,06 %) | 80 | 4 (0,28 %) | 0 | 99,65 % | 0 (dazu 1 bekannter Fehler der Quelle) |
+
+Ziel 92 Prozent ohne KI: erreicht, U4 (99,6 Prozent) bestätigt. Der eine falsche Treffer im Namensfall ist Szenario 23b (der Ordner heißt 23b, der Text ist 23c). Das Werkzeug zählt ihn nur dann nicht gegen das harte Kriterium, wenn der Vorschlag genau `scenario:23c` lautet, jeder andere Vorschlag auf dieser Datei zählt. Unklar im Namensfall: `global-quiz:13`, `quiz:1a:high`, `quiz:6.2g:low`, `enabler:12l`. Bekannte Dubletten erkannt: 4 von 4 (Global-Quiz 01 als exakte Kopie, 03 und 04, Use Case 5b), dazu 10 Fassungsgruppen und eine Ähnlichkeitsgruppe, 22 von 22 PDF an ihre Word-Datei gebunden. Lesezeit je Datei im Median 6 ms, Zuordnung je Datei im Median 0,5 ms, ganzer Lauf 17 Sekunden.
+
+### 18.3 PDF-Leser im Next-Build
+
+`next build` lokal gelaufen. **Ohne** `outputFileTracingIncludes` enthielt die Spurdatei der Route `pump` keinen Eintrag von `pdf-parse` (der Leser lädt `pdf.js` über einen Pfad, der erst zur Laufzeit gebildet wird, die Ablaufverfolgung sieht ihn nicht). **Mit** den Zeilen enthalten genau `pump`, `dry-run` und `apply` die acht Dateien (`route.js.nft.json`), alle anderen Routen nicht. `serverExternalPackages` ist nicht nötig, `pdf-parse` wird nie statisch eingebunden. Im Produktionsmodus gestartet (`next start`, https-Attrappe des Speichers, weil der Server im Produktionsmodus nur https-Adressen des eigenen Projekts liest) las die Pumpe eine echte PDF der Quelle (Typ `pdf_original`, 6 Seiten). **Nicht geprüft:** die Funktion bei Vercel selbst. Der Nachweis dort steht über die Spurdateien, nicht über einen Aufruf. Ein Standalone-Build ist dafür ungeeignet: Bei verknüpfter `node_modules` legt Next dort eine Verknüpfung an, und der nächste Build leerte darüber das Original (zweimal erlebt, mit `npm ci` behoben). Das Runbook warnt davor.
+
+### 18.4 Ende-zu-Ende-Abnahme (lokal)
+
+Aufbau: Wegwerf-Postgres (Supabase-Image 17, Struktur von Production, Migrationen bis 20261030000100), Dev-Server, Attrappe für Auth und Speicher im Arbeitsspeicher (**nicht gegen den echten Speicher**), playwright-core mit Chrome. Lauf anlegen, Auswahl, Upload und Verarbeitung in der Seite, Prüfliste, "Alle sicheren übernehmen" in der Seite. Die mittleren Vorschläge, die Dublettenwahl, Probelauf, Übernahme und Rückbau-SQL über die Routen (die Oberfläche kennt diese drei Schritte noch nicht). Zwei Formen: öffentliche Form (eigener Container ohne Preview-Rollen, Ziel `local`) und Preview-Form (Rebuild, Rolle `app_preview`, Schema `public_preview`, Host als gehostet erkannt, Ziel `preview`).
+
+| Lauf | Datenbank | Dateien | Upload und Verarbeitung | Probelauf | Übernahme | Rückbau-SQL erzeugen, Probe, echt |
+| ---- | --------- | ------- | ----------------------- | --------- | --------- | --------------------------------- |
+| A, nur Pfadstruktur | public, leer | 1383 gewählt, 1256 hochgeladen (715 MB) | 138 s | 14,5 s | 22,8 s | 3,2 s, 0,37 s, 0,31 s |
+| A, nur Pfadstruktur | Preview-Form, leer | gleich | 165 s | nicht gemessen | nicht gemessen (Probelauf und Übernahme nur, um die Struktur für Lauf B anzulegen, Ziel `preview` wurde angenommen) | nicht gemessen |
+| B, nur Dateinamen | Preview-Form, Struktur vorhanden | 1447 gewählt, 1256 hochgeladen | 173 s | 11,1 s | 11,3 s | 3,4 s, 0,28 s, 0,27 s |
+
+Ergebnis Lauf A (public): 27 Komponenten, 27 Kurse, 195 Enabler, 556 Quizze, 5784 Fragen, 23 136 Optionen, 530 Verknüpfungen, 331 Dokumente, 194 Use Cases eingefügt, nichts aktiv, 1206 Dateien angenommen, 6 abgelehnt (Dubletten), 16 offen (unklar, Widerspruch, Dubletten ohne Vorschlag), 28 übersprungen (Archiv oder ausgeschlossene Komponente K18). Der Probelauf änderte keine Tabelle (Hash je Tabelle gleich), die Übernahme mit falscher Bestätigung schrieb nichts, die Übernahme setzte `purge_after` auf 30 Tage. Das Rückbau-SQL (2,95 MB, 754 Zeilen) lief als Probe ohne Fehler, danach war der Zustand der neun Inhaltstabellen unverändert, nach dem echten Rückbau **gleich dem Zustand vor dem Upload** (Zeilenzahl und Hash je Tabelle), der Lauf als zurückgebaut markiert. Dasselbe in Lauf B (Preview-Form): 552 Quizze, 5734 Fragen, 22 936 Optionen, 331 Dokumente, 195 Use Cases eingefügt, Komponenten, Kurse und 194 Enabler unverändert, nach dem Rückbau blieb genau die Struktur. 16 von 16 Prüfungen je Lauf bestanden (Lauf A in der Preview-Form lief nur bis zu den Entscheidungen, dort 4 von 4), keine Modellaufrufe.
+
+Bänder in der Seite: **Lauf A (leerer Katalog): 0 Sicher, 1228 Mittel (97,8 %), 28 Unklar.** Die Komponenten und Enabler kommen nur aus dem Ordnerbaum, also ist jeder Code neu. "Alle sicheren übernehmen" hat nichts zu tun, und die Oberfläche kennt keine Sammelannahme für Mittel (es sind 1228 Einzelklicks). Das Runbook sagt: Struktur zuerst mit den Skripten. **Lauf B (Struktur da, nur Dateiname):** Sicher 1070 (85,2 %), Mittel 54, Unklar 132 (10,5 %). Die Unklaren sind Dateien zu Enablern, die in der Struktur nicht stehen (der Katalog hatte nur die 195 Enabler aus der Übernahme von A), mit voller Struktur liegt der Wert bei 0,28 Prozent (18.2).
+
+### 18.5 Befunde der Abnahme
+
+- **Fehler im Planbau (behoben, 18.1).** Mit jedem Ordnernamen außer `Komponente` blieb der Plan leer. Die Abnahme mit dem Ordnernamen `u` hat ihn gefunden.
+- **Windows und lange Pfade (nicht behebbar, abgefangen).** Chrome liest keine Dateien, deren Pfad über 259 Zeichen lang ist. Von den 1447 Dateien der Quelle sind je nach Länge des Wurzelpfads 183 (Wurzel `D:\u`) bis 257 betroffen (gemessen: 125 nicht lesbar, 2 über 25 MB, 1256 hochgeladen). Folgen und Abhilfe im Runbook.
+- **Größe der Quelle.** 715 MB in 1383 lesbaren Dateien, 2 Enabler über 25 MB (größte 36 MB). Ein ganzer Lauf liegt nah an der Grenze von 1 GB je Lauf, das Konto des Speichers (Kontingent) ist nicht geprüft.
+- **Rückbau-SQL ist 2,8 bis 3 MB groß.** Für die Zwischenablage und die Konsole unhandlich, besser als Datei mit `psql -f`.
+- **Zwei bestehende Enabler zeigen im Namensfall Unterschiede im Probelauf** (K6.2-d, K6.2-e, Spalte `description_text`), obwohl derselbe Inhalt zuvor mit der Pfadstruktur geladen wurde. Mögliche Ursache: gleicher Code in K6.1 und K6.2, ohne Ordner nicht trennbar. Der Probelauf zeigt es als Unterschied, nichts wurde geschrieben. **Nicht untersucht.**
+- **Ohne Oberfläche für Probelauf, Übernahme, Rückbau** muss Niko die Konsole benutzen (Runbook, Schritt 6). Das ist der größte offene Punkt für den Betrieb.
+
+### 18.6 Gutachten
+
+Geprüft mit `ecc:security-reviewer` und `ecc:typescript-reviewer` (nur lesend). Eingearbeitet: der Ausnahmefall für Szenario 23b gilt nur noch bei genau dem erwarteten Vorschlag (mittel), `summarizeRows` ist rein und getestet (mittel), strenge Auswertung der Befehlszeile mit Ablehnung unbekannter Schalter und fehlender Werte (niedrig), Schreibfehler der `--out`-Datei verdecken das Ergebnis nicht mehr (niedrig), `maxHeld` mit ungültigem Wert (Infinity, 0, Bruch) wirft in der Pumpe einen Fehler statt still nichts zu tun (niedrig), der Alias `@/` bleibt unter `src/` und die Wiederholung mit `.ts` gilt nur für relative und Alias-Angaben (niedrig), `node-ensure` nur mit den zwei benötigten Dateien (niedrig). Nicht übernommen: die drei `set local` in eine Anweisung zu fassen. Ein begrenzter Anspruch kostet etwa sechs Umläufe auf dem Pfad der Pumpe, das ist bei einer Obergrenze von sechs Dateien vertretbar.
+
+### 18.7 Offen
+
+- **Lange Läufe an der echten Preview** (Laufzeit von Probelauf und Übernahme, Supavisor, gehosteter Speicher, `maxDuration`): nicht gemessen, Anleitung im Runbook, Abschnitt 10.
+- **Freigabebedingungen vor Production** (Runbook, Abschnitt 8): PDF-Leser ohne Sandbox, Obergrenze gleichzeitiger Claims (erledigt in U8), unbenutzte signierte Upload-URL nach Löschen des Objekts, Docx-Metadaten der Originale, Sichtbarkeit der Originale vor der Aktivierung (Entscheidung von Niko offen, Empfehlung: erst nach der Aktivierung).
+- **Oberfläche für Probelauf, Übernahme und Rückbau**, Sammelannahme für das Band Mittel.
+- **Abdeckung:** die Module von U2 bis U7 und das Golden-Set-Werkzeug stehen nicht in der Schwelle von 100 Prozent (`jest.config.ts`).
