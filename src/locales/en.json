@@ -2129,15 +2129,11 @@
   "admin.userCreate.occupationHint": "The organization offers several occupations. A trainee learns in exactly one occupation.",
   "admin.userCreate.error.ORGANIZATION_REQUIRED": "A role from trainer level up needs an organization. Assign the account to an organization first (a task of the platform administration).",
   "admin.userCreate.error.CATALOG_REQUIRED": "The organization offers several occupations. Please choose an occupation for the trainee.",
-  "catalog.switcher.label": "Choose occupation",
-  "catalog.switcher.current": "Current occupation: {title}",
-  "catalog.switcher.reloadHint": "The page reloads when you switch.",
   "catalog.branding.badge": "Occupation: {title}",
   "admin.users.previewNotice": "Preview: Accounts you create here are for tests only. Production does not accept them, and a sign-in there is rejected. If you delete an account that Production also uses, the Preview only removes the Preview profile.",
   "admin.users.previewMailHint": "The Preview sends no e-mail by default. The credentials appear here after the account is created.",
   "admin.users.userDeletedAccountShared": "Preview profile deleted. The sign-in account stays, because Production uses it too.",
   "admin.users.userDeletedAccountKept": "Preview profile deleted. The sign-in account could not be checked or deleted and stays.",
-  "catalog.switcher.apply": "Switch",
   "catalog.tiles.title": "Choose occupation",
   "catalog.tiles.subtitle": "Choose the occupation you want to work in. Occupations that are not enabled are greyed out.",
   "catalog.tiles.signedInAs": "Signed in as {name}",
@@ -2488,5 +2484,6 @@
   "contentUpload.confirm.reopenText": "The run goes back to review. Decisions can be changed again. An earlier dry run is no longer valid, a new one is needed before another apply. Files that were already applied stay applied.",
   "contentUpload.confirm.reopen": "Review again",
   "contentUpload.notice.reopened": "The run is back in review.",
-  "contentUpload.notice.reopenState": "The run cannot be reviewed again in this state."
+  "contentUpload.notice.reopenState": "The run cannot be reviewed again in this state.",
+  "catalog.tabs.label": "Choose training"
 }

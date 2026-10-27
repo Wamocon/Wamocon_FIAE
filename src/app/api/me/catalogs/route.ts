@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
         code: trainingCatalogs.code,
         title: trainingCatalogs.title,
         settings: trainingCatalogs.settings,
+        isActive: trainingCatalogs.isActive,
       })
       .from(trainingCatalogs)
       .where(inArray(trainingCatalogs.id, scope.allowedCatalogIds))) as {
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
       code: string;
       title: string;
       settings: unknown;
+      isActive: boolean | null;
     }[];
 
     const allowed = new Set(scope.allowedCatalogIds);
@@ -54,9 +56,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
-        catalogs: catalogs.map(({ code, title, settings }) => ({
+        catalogs: catalogs.map(({ code, title, settings, isActive }) => ({
           code,
           title,
+          // a super admin also gets inactive catalogs, they have no tab
+          isActive: isActive !== false,
           branding: resolveCatalogBranding(
             (settings as { branding?: unknown } | null)?.branding
           ),

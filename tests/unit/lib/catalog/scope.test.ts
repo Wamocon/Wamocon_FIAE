@@ -226,10 +226,32 @@ describe('catalog scope', () => {
         activeCatalogId: FIAE,
         selected: false,
       });
+      // an inactive catalog is allowed for records, but not a view to choose
+      await expect(
+        getCatalogScope(superAdmin, req({ header: 'KFBM' }))
+      ).rejects.toMatchObject({ status: 403 });
       expect(
-        (await getCatalogScope(superAdmin, req({ header: 'KFBM' })))
+        (await getCatalogScope(superAdmin, req({ header: 'FIAE' })))
+          .activeCatalogId
+      ).toBe(FIAE);
+    });
+
+    it('chooses an active catalog with the header or the query', async () => {
+      const { getCatalogScope } = await load({ trainingCatalogs: catalogRows });
+      expect(
+        await getCatalogScope(superAdmin, req({ header: 'kfbm' }))
+      ).toEqual({
+        allowedCatalogIds: [FIAE, KFBM],
+        activeCatalogId: KFBM,
+        selected: true,
+      });
+      expect(
+        (await getCatalogScope(superAdmin, req({ query: 'KFBM' })))
           .activeCatalogId
       ).toBe(KFBM);
+      await expect(
+        getCatalogScope(superAdmin, req({ query: 'NOPE' }))
+      ).rejects.toMatchObject({ status: 403 });
     });
   });
 
