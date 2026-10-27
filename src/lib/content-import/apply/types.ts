@@ -90,7 +90,14 @@ export interface PlanComponent {
   orderIndex: number;
   totalWeeks: number;
   totalHours: number;
-  /** True when weeks and hours are placeholders. */
+  /**
+   * Where totalWeeks comes from: the training framework plan
+   * (component-weeks.ts), a decision of the owner, none (the plan prints no
+   * weeks for the component, 0 is the right value) or a placeholder (nobody
+   * named a value). Plans of older runs have no such field.
+   */
+  weeksSource?: 'rahmenplan' | 'decision' | 'none' | 'placeholder';
+  /** True when the weeks or the hours are placeholders. */
   provisionalTotals: boolean;
 }
 
@@ -249,6 +256,11 @@ export interface Difference {
   table: string;
   key: string;
   columns: string[];
+  /**
+   * The columns of this difference that a run writes even without
+   * --update-existing (tables.ts fillWhenEmpty: the value is still empty).
+   */
+  filled?: string[];
 }
 
 export interface TableCount {

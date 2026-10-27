@@ -18,6 +18,9 @@ const TABLE_LABEL: Record<string, string> = {
   training_catalog_learning_fields: 'Lernfelder',
   training_catalog_content_mappings: 'Zuordnungen (Enabler zu Lernfeld)',
 };
+const USE_CASE_MAPPING_LABEL = 'Zuordnungen (Use Case zu Lernfeld)';
+const USE_CASE_CODES_LABEL =
+  'Use Cases (Lernfeld-Codes in der Spalte lernfelder)';
 
 const MODE_TEXT: Record<JobMode, string> = {
   check: 'Prüfung (nur lesend)',
@@ -46,7 +49,37 @@ export function renderLearningFieldRunReport(
       `| ${TABLE_LABEL[table] ?? table} | ${count.insert} | ${count.update} | ${count.unchanged} |`
     );
   }
+  out.push(
+    `| ${USE_CASE_MAPPING_LABEL} | ${report.useCaseMappings.insert} | ${report.useCaseMappings.update} | ${report.useCaseMappings.unchanged} |`
+  );
+  out.push(
+    `| ${USE_CASE_CODES_LABEL} | ${report.useCaseCodes.insert} | ${report.useCaseCodes.update} | ${report.useCaseCodes.unchanged} |`
+  );
   out.push('');
+  const listCodes = (heading: string, text: string, codes: string[]) => {
+    if (codes.length === 0) return;
+    out.push(heading);
+    out.push('');
+    out.push(text);
+    out.push('');
+    out.push(
+      codes.slice(0, MAX_LISTED).join(', ') +
+        (codes.length > MAX_LISTED
+          ? ` und ${codes.length - MAX_LISTED} weitere`
+          : '')
+    );
+    out.push('');
+  };
+  listCodes(
+    '## Enabler ohne Use Case',
+    `Enabler mit Lernfeld, aber ohne Use Case: ${report.enablersWithoutUseCase.length}. Für sie gibt es keine Use-Case-Zuordnung (kommt der Use-Case-Import später, den Lauf wiederholen).`,
+    report.enablersWithoutUseCase
+  );
+  listCodes(
+    '## Use Cases ohne Enabler',
+    `Use Cases des Katalogs ohne Enabler: ${report.useCasesWithoutEnabler.length}. Sie bekommen kein Lernfeld.`,
+    report.useCasesWithoutEnabler
+  );
   if (report.skipped.length > 0) {
     out.push('## Übersprungen: Enabler fehlt in der Zieldatenbank');
     out.push('');
@@ -78,8 +111,8 @@ export function renderLearningFieldRunReport(
     out.push('');
     out.push(
       info.updateExisting
-        ? 'Mit --update-existing nur Titel und Stunden aktualisiert, der Titel nur durch den amtlichen Titel, einen Titel des Eigentümers oder wenn noch der Platzhalter steht. Abweichungen der Reihenfolge bleiben unverändert.'
-        : 'Nicht geändert (dafür gibt es --update-existing).'
+        ? 'Mit --update-existing nur Titel, Beschreibung und Stunden aktualisiert, der Titel nur durch den amtlichen Titel, einen Titel des Eigentümers oder wenn noch der Platzhalter steht. Abweichungen der Reihenfolge bleiben unverändert.'
+        : 'Nicht geändert (dafür gibt es --update-existing), außer einer leeren Beschreibung: sie wird mit der amtlichen Zielformulierung gefüllt.'
     );
     out.push('');
     for (const d of report.differences.slice(0, MAX_LISTED)) {

@@ -55,6 +55,7 @@ const seed = (db: MemoryImportDb, over: Record<string, unknown> = {}) =>
     training_catalog_id: KFBM_CATALOG_ID,
     code: 'LF1',
     title: OFFICIAL_LEARNING_FIELDS[0].title,
+    description: OFFICIAL_LEARNING_FIELDS[0].description,
     training_year: 1,
     order_index: 1,
     hours_budget: null,

@@ -16,6 +16,7 @@ import type {
   PathInfo,
 } from '../types';
 import { hasSolutionHeadingLine } from '../source-parsers';
+import { officialWeeksOf, validateComponentWeeks } from './component-weeks';
 import { kindOfComponent } from './decisions';
 import {
   findSolutionLeaks,
@@ -94,6 +95,10 @@ const LEVEL_LABEL: Record<QuizLevel, string> = {
 };
 /** Same pattern as the CHECK constraints of courses.code, enablers.code and quizzes.code. */
 const CODE_FORMAT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/** Upper bounds of the weeks and hours of a component (3 years of 52 weeks). */
+const MAX_WEEKS = 156;
+const MAX_HOURS = 10000;
 
 const componentOrder = (number: number, split: number | null) =>
   number * 10 + (split ?? 0);
@@ -399,6 +404,12 @@ export function buildImportPlan(
   decisions: Decisions,
   options: BuildOptions = {}
 ): ImportPlan {
+  const weeksProblems = validateComponentWeeks();
+  if (weeksProblems.length > 0) {
+    throw new Error(
+      `The weeks of the training framework plan are not sound: ${weeksProblems.join('; ')}`
+    );
+  }
   const limitedTo = [...(options.limitedTo ?? [])];
   const selection = selectFiles(files, decisions, { limitedTo });
   const skipped = [...selection.skipped, ...(options.extra?.skipped ?? [])];
@@ -415,9 +426,28 @@ export function buildImportPlan(
         componentOrder(a.number, a.split) - componentOrder(b.number, b.split)
     )
     .map(c => {
-      const weeks = decisions.components.totalWeeks[c.code];
+      // Weeks: a decision of the owner first, then the training framework plan
+      // (component-weeks.ts, null = the plan prints none for this component),
+      // else the placeholder. The plan has no hours, so they stay placeholders
+      // until the owner names them.
+      const decided = decisions.components.totalWeeks[c.code];
+      const official = officialWeeksOf(c.code);
       const hours = decisions.components.totalHours[c.code];
-      const provisional = weeks === undefined || hours === undefined;
+      let weeks: number;
+      let weeksSource: NonNullable<PlanComponent['weeksSource']>;
+      if (decided !== undefined) {
+        weeks = decided;
+        weeksSource = 'decision';
+      } else if (typeof official === 'number') {
+        weeks = official;
+        weeksSource = 'rahmenplan';
+      } else if (official === null) {
+        weeks = 0;
+        weeksSource = 'none';
+      } else {
+        weeks = decisions.components.placeholderWeeks;
+        weeksSource = 'placeholder';
+      }
       return {
         code: c.code,
         key: c.key,
@@ -429,9 +459,10 @@ export function buildImportPlan(
         kind: c.kind,
         phase: c.phase,
         orderIndex: componentOrder(c.number, c.split),
-        totalWeeks: weeks ?? decisions.components.placeholderWeeks,
+        totalWeeks: weeks,
         totalHours: hours ?? decisions.components.placeholderHours,
-        provisionalTotals: provisional,
+        weeksSource,
+        provisionalTotals: weeksSource === 'placeholder' || hours === undefined,
       };
     });
   const componentByCode = new Map(components.map(c => [c.code, c]));
@@ -911,10 +942,18 @@ export function buildImportPlan(
 
   // Open questions -------------------------------------------------------------
   const open = [...decisions.open];
-  const provisional = components.filter(c => c.provisionalTotals);
-  if (provisional.length > 0) {
+  const weeksOpen = components.filter(c => c.weeksSource === 'placeholder');
+  const hoursOpen = components.filter(
+    c => decisions.components.totalHours[c.code] === undefined
+  );
+  if (hoursOpen.length > 0) {
     open.unshift(
-      `Weeks and planned hours are placeholders (${decisions.components.placeholderWeeks} and ${decisions.components.placeholderHours}) for ${provisional.length} component(s) until the owner names them.`
+      `Planned hours are placeholders (${decisions.components.placeholderHours}) for ${hoursOpen.length} component(s): the training framework plan names no hours, the owner decides them.`
+    );
+  }
+  if (weeksOpen.length > 0) {
+    open.unshift(
+      `Weeks are placeholders (${decisions.components.placeholderWeeks}) for ${weeksOpen.length} component(s): neither the training framework plan nor the presets name them.`
     );
   }
 
@@ -1048,6 +1087,42 @@ export function validatePlan(raw: unknown): string[] {
     }
     if (c.kind === 'integrativ' && c.phase !== null) {
       errors.push(`component ${c.code} is integrative and must have no phase`);
+    }
+    // The weeks and hours are written into number columns: only sane numbers
+    // may pass (a training has 3 years of 52 weeks, 10000 hours is generous).
+    if (
+      typeof c.totalWeeks !== 'number' ||
+      !Number.isFinite(c.totalWeeks) ||
+      c.totalWeeks < 0 ||
+      c.totalWeeks > MAX_WEEKS
+    ) {
+      errors.push(`component ${c.code} has weeks that are not a sane number`);
+    }
+    if (
+      c.weeksSource !== undefined &&
+      !['rahmenplan', 'decision', 'none', 'placeholder'].includes(
+        c.weeksSource
+      )
+    ) {
+      errors.push(`component ${c.code} has an unknown weeks source`);
+    }
+    // Weeks that claim to come from the training framework plan must be the
+    // weeks of the table, so an edited plan file cannot pass off other numbers.
+    if (
+      c.weeksSource === 'rahmenplan' &&
+      c.totalWeeks !== officialWeeksOf(c.code)
+    ) {
+      errors.push(
+        `component ${c.code} has weeks that differ from the training framework plan`
+      );
+    }
+    if (
+      typeof c.totalHours !== 'number' ||
+      !Number.isFinite(c.totalHours) ||
+      c.totalHours < 0 ||
+      c.totalHours > MAX_HOURS
+    ) {
+      errors.push(`component ${c.code} has hours that are not a sane number`);
     }
   }
   // Every item names its source file, which is written as file_name of a
@@ -1232,9 +1307,9 @@ export function renderPlanSummary(plan: ImportPlan): string {
   out.push('## Komponenten');
   out.push('');
   out.push(
-    '| Komponente | Art | Phase | Enabler | Szenarien | Quizze | Global-Quiz |'
+    '| Komponente | Art | Phase | Wochen | Enabler | Szenarien | Quizze | Global-Quiz |'
   );
-  out.push('|---|---|---|---|---|---|---|');
+  out.push('|---|---|---|---|---|---|---|---|');
   for (const c of plan.components) {
     const enablers = plan.enablers.filter(e => e.componentCode === c.code);
     const lesson = plan.quizzes.filter(
@@ -1247,7 +1322,7 @@ export function renderPlanSummary(plan: ImportPlan): string {
       q => q.kind === 'global' && q.componentCode === c.code
     );
     out.push(
-      `| ${c.code} | ${c.kind} | ${c.phase ?? '-'} | ${enablers.length} | ${scenarioCount} | ${lesson.length} | ${hasGlobal ? 'ja' : 'nein'} |`
+      `| ${c.code} | ${c.kind} | ${c.phase ?? '-'} | ${c.totalWeeks} | ${enablers.length} | ${scenarioCount} | ${lesson.length} | ${hasGlobal ? 'ja' : 'nein'} |`
     );
   }
   out.push('');

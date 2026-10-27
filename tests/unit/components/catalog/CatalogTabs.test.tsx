@@ -141,6 +141,21 @@ describe('CatalogTabs', () => {
     });
   });
 
+  it('names an inactive occupation with text, not only with color', () => {
+    context({
+      tabs: [FIAE, { ...KFBM, isActive: false }],
+      activeCode: 'KFBM',
+    });
+    renderWithProviders(<CatalogTabs />);
+    const inactive = screen.getByRole('tab', { name: /KfBM/ });
+    expect(inactive).toHaveTextContent('inaktiv');
+    expect(inactive.getAttribute('title')).toContain('inaktiv');
+    expect(screen.getByRole('tab', { name: 'FIAE' })).not.toHaveTextContent(
+      'inaktiv'
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('inaktiv');
+  });
+
   it('announces the shown training in a polite status', () => {
     context({ activeCode: 'KFBM' });
     renderWithProviders(<CatalogTabs />);

@@ -2540,5 +2540,8 @@
   "contentStats.form.saveFailed": "Die Soll-Werte konnten nicht gespeichert werden.",
   "contentStats.form.catalogNotFound": "Die Ausbildung wurde nicht gefunden.",
   "contentStats.loading": "Statistik wird geladen",
-  "contentStats.loaded": "Statistik aktualisiert"
+  "contentStats.loaded": "Statistik aktualisiert",
+"catalog.tabs.label": "Ausbildung wählen",
+  "catalog.tabs.current": "Angezeigt wird: {title}",
+  "catalog.tabs.inactive": "inaktiv"
 }
