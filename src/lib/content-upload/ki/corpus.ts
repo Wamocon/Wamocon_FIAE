@@ -15,19 +15,24 @@
 
 import { createHash } from 'crypto';
 import type { Paragraph } from '@/lib/content-import/types';
-import type { FileRow } from '@/lib/content-upload/staging/types';
+import {
+  OBJECT_DELETED_KEY,
+  type FileRow,
+} from '@/lib/content-upload/staging/types';
 
 /** Hard limits against a hostile run. */
 export const CORPUS_LIMITS = Object.freeze({
   /** Texts of one file. */
   perFile: 2000,
   /** Texts of the whole list. */
-  total: 60_000,
-  /** Characters of one text. */
-  textChars: 5000,
+  total: 40_000,
+  /** Characters of one text (a longer one is cut: the first characters are what is searched for). */
+  textChars: 3000,
 });
 
 const MAX_READ_TRIES = 3;
+/** A file that could not be read waits this long before its next try. */
+const RETRY_GAP_MS = 5000;
 
 export interface CorpusDeps {
   /** The files of the run. */
@@ -45,6 +50,8 @@ export interface CorpusDeps {
 
 export interface CorpusOptions {
   concurrency?: number;
+  /** Wait between two tries to read one file (default 5 s). */
+  retryGapMs?: number;
 }
 
 /**
@@ -68,6 +75,8 @@ function relevant(file: FileRow): boolean {
     // enabler folder still holds solutions. (A PDF is only an original of a Word
     // file, and its solutions stand in that file too.)
     file.ext === 'docx' &&
+    // a file whose object is gone cannot be read, and is not an error of the run
+    file.parseSummary?.[OBJECT_DELETED_KEY] !== true &&
     // a file that never got read or was left out carries nothing to search for
     file.status !== 'failed' &&
     file.status !== 'rejected' &&
@@ -84,6 +93,9 @@ export class SolutionCorpus {
   private existingLoaded = false;
   private unreadable = 0;
   private attempts = new Map<string, number>();
+  private lastTry = new Map<string, number>();
+  /** A text was dropped because of a limit: the list is not complete. */
+  private overflowed = false;
 
   constructor(
     private readonly deps: CorpusDeps,
@@ -95,13 +107,21 @@ export class SolutionCorpus {
     return this.unreadable;
   }
 
+  /** True when a limit cut the list: a solution may be missing, nothing is sent. */
+  get isOverflowed(): boolean {
+    return this.overflowed;
+  }
+
   private add(texts: readonly string[], limit: number) {
     const seen = new Set<string>();
     for (const text of texts) {
-      if (this.texts.length >= CORPUS_LIMITS.total) return;
-      if (seen.size >= limit) return;
       const t = text.slice(0, CORPUS_LIMITS.textChars);
       if (t.trim().length === 0 || seen.has(t)) continue;
+      if (this.texts.length >= CORPUS_LIMITS.total || seen.size >= limit) {
+        // fail closed: a text that does not fit is a text the guard cannot look for
+        this.overflowed = true;
+        return;
+      }
       seen.add(t);
       this.texts.push(t);
     }
@@ -116,18 +136,24 @@ export class SolutionCorpus {
   async advance(budgetMs: number): Promise<boolean> {
     const started = this.deps.clock();
     if (!this.existingLoaded) {
-      this.add(
-        await this.deps.existing(CORPUS_LIMITS.total),
-        CORPUS_LIMITS.total
-      );
+      // one more than fits: seeing it means that the database holds more than the list
+      const existing = await this.deps.existing(CORPUS_LIMITS.total + 1);
+      if (existing.length > CORPUS_LIMITS.total) this.overflowed = true;
+      this.add(existing, CORPUS_LIMITS.total);
       this.existingLoaded = true;
     }
     this.pending ??= (await this.deps.listFiles()).filter(relevant);
     const concurrency = Math.max(1, this.options.concurrency ?? 4);
+    const gap = this.options.retryGapMs ?? RETRY_GAP_MS;
     const tried = new Set<string>();
     for (;;) {
       const open = this.pending.filter(f => !this.done.has(f.id));
-      if (open.length === 0) return this.unreadable === 0;
+      if (open.length === 0) return this.unreadable === 0 && !this.overflowed;
+      // a file that failed a moment ago waits (one glitch is one try, not three)
+      for (const f of open) {
+        const last = this.lastTry.get(f.id);
+        if (last !== undefined && this.deps.clock() - last < gap) tried.add(f.id);
+      }
       const batch = open.filter(f => !tried.has(f.id)).slice(0, concurrency);
       // nothing left that this call may try, or no time: the list is not complete
       if (batch.length === 0 || this.deps.clock() - started >= budgetMs) {
@@ -136,6 +162,7 @@ export class SolutionCorpus {
       await Promise.all(
         batch.map(async file => {
           tried.add(file.id);
+          this.lastTry.set(file.id, this.deps.clock());
           let texts: string[] | null = null;
           try {
             const bytes = await this.deps.loadBytes(file);

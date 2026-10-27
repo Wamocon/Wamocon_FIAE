@@ -31,7 +31,11 @@ import { readDocx } from '../read-docx';
 import { checkAnswer, type KiAnswer } from '@/lib/content-upload/ki/answer';
 import { fileBlock, runBlock } from '@/lib/content-upload/ki/budget';
 import type { KiConfig, KiConfigResult } from '@/lib/content-upload/ki/config';
-import type { KiCallResult, KiClient } from '@/lib/content-upload/ki/client';
+import {
+  KiPolicyError,
+  type KiCallResult,
+  type KiClient,
+} from '@/lib/content-upload/ki/client';
 import type { SolutionCorpus } from '@/lib/content-upload/ki/corpus';
 import { checkRequest } from '@/lib/content-upload/ki/guard';
 import {
@@ -86,10 +90,15 @@ export interface KiStepEnv {
   /** A client for these limits and this timeout. */
   client(config: KiConfig, timeoutMs: number): KiClient;
   ki: KiRepo;
-  review: Pick<ReviewRepo, 'currentProposal' | 'writeProposal'>;
+  review: Pick<ReviewRepo, 'latestRuleProposal' | 'writeProposal'>;
   getRun(): Promise<RunRow | null>;
   catalog(): Promise<KiCatalog>;
   corpus(): Promise<SolutionCorpus>;
+  /**
+   * Works on the list of solution texts and says whether it is complete. One call of
+   * the pump has ONE budget of time for it, however often the pump asks.
+   */
+  advanceCorpus(): Promise<boolean>;
   clock(): number;
 }
 
@@ -123,8 +132,7 @@ export async function kiReady(
     config.config.limits.breakerFailures
   );
   if (runBlock(config.config.limits, usage)) return false;
-  const corpus = await env.corpus();
-  return corpus.advance(CORPUS_BUDGET_MS);
+  return env.advanceCorpus();
 }
 
 // ---------------------------------------------------------------------------
@@ -159,12 +167,26 @@ interface CallOutcome {
   failure: { state: KiState; code: string } | null;
   /** Calls made, for the second stage's decision. */
   calls: number;
+  /** The server refused the key or the address: a problem of the run, not of the file. */
+  runBlocked?: boolean;
 }
 
 function statusOf(result: KiCallResult): KiCallStatus {
   if (result.ok) return 'ok';
   return result.kind === 'timeout' ? 'timeout' : 'http_error';
 }
+
+/** The code a file is settled with for a failed call, by what went wrong. */
+const FAILURE_CODES = {
+  timeout: 'KI_TIMEOUT',
+  http_error: 'KI_HTTP',
+  network: 'KI_NETWORK',
+  too_large: 'KI_TOO_LARGE',
+  bad_response: 'KI_BAD_RESPONSE',
+} as const;
+
+/** The key or the address is wrong (401, 403, 404): every file would meet the same answer. */
+const RUN_BLOCKING_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 
 /** The checked answer as JSON for the log: no reason text, no excerpt. */
 const answerJson = (a: KiAnswer) =>
@@ -211,8 +233,8 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
         status: KiCallStatus,
         stage: KiStage,
         fields: Partial<KiCallWrite> = {}
-      ) =>
-        env.ki.recordCall({
+      ) => {
+        const row: KiCallWrite = {
           runId: run.id,
           fileId: file.id,
           stage,
@@ -229,7 +251,22 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
           attempt: Math.max(1, file.attempts),
           answer: null,
           ...fields,
-        });
+        };
+        try {
+          await env.ki.recordCall(row);
+        } catch (error) {
+          // Nothing was sent: a failing log stops the step, it is tried again.
+          if (row.model === null) throw error;
+          // A call was made: its answer must not be lost to a failing log. One more try,
+          // and then the step goes on (the write of the proposal fails with the same
+          // database, so a real outage still ends in a retry of the step).
+          try {
+            await env.ki.recordCall(row);
+          } catch {
+            // the answer stands, the row is missing: the caps count one call less
+          }
+        }
+      };
 
       // Not a file for the model: a PDF is only ever an original of a Word file
       if (file.ext !== 'docx') {
@@ -267,7 +304,9 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
       }
 
       const [rule, catalog] = await Promise.all([
-        env.review.currentProposal(file.id),
+        // the proposal of the RULES: an earlier proposal of the model (a step that died
+        // after writing it) must not count as a rule
+        env.review.latestRuleProposal(file.id),
         env.catalog(),
       ]);
 
@@ -300,10 +339,23 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
           };
         }
         const client = env.client(config, timeoutMs);
-        const result = await client.call({
-          system: prompt.system,
-          user: prompt.user,
-        });
+        let result: KiCallResult;
+        try {
+          result = await client.call({
+            system: prompt.system,
+            user: prompt.user,
+          });
+        } catch (error) {
+          // The client refused the target (a configuration bug): nothing was sent
+          if (!(error instanceof KiPolicyError)) throw error;
+          await log('refused_by_guard', stage);
+          return {
+            answer: null,
+            retryable: false,
+            failure: { state: 'not_sent', code: 'KI_POLICY' },
+            calls: 0,
+          };
+        }
         const base: Partial<KiCallWrite> = {
           model: client.model,
           endpointHost: client.host,
@@ -318,11 +370,12 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
           return {
             answer: null,
             retryable: result.retryable,
-            failure: {
-              state: 'failed',
-              code: result.kind === 'timeout' ? 'KI_TIMEOUT' : 'KI_HTTP',
-            },
+            failure: { state: 'failed', code: FAILURE_CODES[result.kind] },
             calls: 1,
+            runBlocked:
+              result.kind === 'http_error' &&
+              result.httpStatus !== null &&
+              RUN_BLOCKING_STATUSES.has(result.httpStatus),
           };
         }
         const checked = checkAnswer(result.text, {
@@ -364,6 +417,9 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
       // Stage one: type and component (and the enabler, if the model names it)
       const first = await askOnce('type_component', limits.timeoutMs);
       if (!first.answer) {
+        // A refused key or a wrong address is the same for every file: the file is not
+        // settled, it waits (the breaker stops the stage of the run after a few calls)
+        if (first.runBlocked) return back();
         if (first.retryable && file.attempts < limits.maxAttempts) {
           return {
             kind: 'retry',
@@ -389,7 +445,12 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
         component &&
         component.enablers.length > 0 &&
         usage.file + first.calls < limits.maxCallsPerFile &&
-        left >= MIN_SECOND_CALL_MS
+        left >= MIN_SECOND_CALL_MS &&
+        // the caps and the breaker are looked at again: the first call changed them
+        !fileBlock(
+          limits,
+          await env.ki.usage(run.id, file.id, limits.breakerFailures)
+        )
       ) {
         const second = await askOnce(
           'enabler',

@@ -283,7 +283,10 @@ if (!url) {
       const logged = await rows<{ status: string }>(
         sql`select status from content_upload_ki_calls where run_id = ${h.run.id}::uuid order by requested_at, id`
       );
+      // a refused key is a problem of the run, so the file was asked up to its own limit
       expect(logged.map(l => l.status).sort()).toEqual([
+        'http_error',
+        'http_error',
         'http_error',
         'refused_by_guard',
       ]);

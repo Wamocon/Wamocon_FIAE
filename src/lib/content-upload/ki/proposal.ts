@@ -34,7 +34,8 @@ export type KiOutcome =
 
 /** Medium needs at least this confidence from the model. */
 export const MEDIUM_FROM = 0.6;
-const MAX_REASONS = 10;
+// the reasons of the rules are never cut (one of them may be what asks for a person)
+const MAX_REASONS = 25;
 
 const NEEDS_ENABLER = new Set(['enabler', 'quiz', 'scenario', 'use_case']);
 

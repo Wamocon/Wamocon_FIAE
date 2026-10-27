@@ -126,6 +126,14 @@ export class MemoryReviewRepo implements ReviewRepo {
     return this.currentProposalOf(fileId);
   }
 
+  async latestRuleProposal(fileId: string): Promise<ProposalRecord | null> {
+    await this.tick();
+    const rules = this.proposals.filter(
+      p => p.fileId === fileId && p.source !== 'ki'
+    );
+    return rules.length > 0 ? rules[rules.length - 1] : null;
+  }
+
   /** Test helper: solution texts that "already stand in the database". */
   existingSolutions: string[] = [];
 

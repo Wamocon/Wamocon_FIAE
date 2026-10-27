@@ -259,6 +259,34 @@ export function runReviewContract(
         expect(await h.review.currentProposal('not-a-uuid')).toBeNull();
       });
 
+      it('hands back the newest proposal of the rules, also under a proposal of the model', async () => {
+        const { files } = await runWithFiles(1);
+        const claim = (await h.review.listRecords(files[0].runId))[0].file
+          .claimId!;
+        expect(await h.review.latestRuleProposal(files[0].id)).toMatchObject({
+          source: 'path_content',
+          band: 'high',
+        });
+        await h.review.writeProposal(
+          files[0].id,
+          claim,
+          proposal({ source: 'content', band: 'medium', confidence: 0.7 })
+        );
+        await h.review.writeProposal(
+          files[0].id,
+          claim,
+          proposal({ source: 'ki', band: 'medium', confidence: 0.7, model: 'm' })
+        );
+        // the model is the current proposal, the rules are still the newest rule proposal
+        expect((await h.review.currentProposal(files[0].id))?.source).toBe('ki');
+        expect(await h.review.latestRuleProposal(files[0].id)).toMatchObject({
+          source: 'content',
+          band: 'medium',
+        });
+        expect(await h.review.latestRuleProposal(randomUUID())).toBeNull();
+        expect(await h.review.latestRuleProposal('not-a-uuid')).toBeNull();
+      });
+
       it('retires the old proposal and keeps it as history', async () => {
         const { files } = await runWithFiles(1);
         const claim = (await h.review.listRecords(files[0].runId))[0].file

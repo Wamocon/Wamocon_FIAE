@@ -867,3 +867,39 @@ describe('steps that wait for a condition and files that are done with a step', 
     ).toThrow();
   });
 });
+
+describe('a step whose condition cannot be answered', () => {
+  it('is not ready, and the other steps go on', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    const ids = await uploadedFiles(ctx, run.id, 2, 'r');
+    for (const id of ids) ctx.repo.files.get(id)!.status = 'unclear';
+    const waiting: QueueStep = {
+      name: 'waits',
+      from: 'unclear',
+      ready: async () => {
+        throw new Error('the database is gone SECRET-DETAIL');
+      },
+      async run() {
+        return { kind: 'advance', to: 'ki_pending' };
+      },
+    };
+    const [more] = await uploadedFiles(ctx, run.id, 1, 'm');
+    const logged = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const result = await pumpRun(ctx.deps, run.id, {
+      steps: [verifyMetadataStep, waiting],
+      closeUpload: true,
+    });
+    // the step of the upload check still worked, the waiting step took nothing
+    expect((await statusOf(ctx, run.id, more)).status).toBe('verified');
+    for (const id of ids) {
+      expect((await statusOf(ctx, run.id, id)).status).toBe('unclear');
+    }
+    expect(result.advanced).toBeGreaterThanOrEqual(1);
+    expect(result.runStatus).toBe('review');
+    // only the name of the error is logged, never its text
+    const printed = JSON.stringify(logged.mock.calls);
+    expect(printed).toContain('step not ready');
+    expect(printed).not.toContain('SECRET-DETAIL');
+  });
+});

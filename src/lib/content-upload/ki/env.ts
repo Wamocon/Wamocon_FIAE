@@ -18,13 +18,19 @@ import {
 import { corpusFor, type SolutionCorpus } from '@/lib/content-upload/ki/corpus';
 import { safeTitle, type KiCatalog } from '@/lib/content-upload/ki/prompt';
 import type { KiRepo } from '@/lib/content-upload/ki/repo';
-import type { KiStepEnv } from '@/lib/content-upload/ki/steps';
+import {
+  CORPUS_BUDGET_MS,
+  type KiStepEnv,
+} from '@/lib/content-upload/ki/steps';
 import {
   optionsOf,
   type ReviewDeps,
 } from '@/lib/content-upload/review/service';
 import { LIMITS } from '@/lib/content-upload/staging/config';
 import type { FileRow } from '@/lib/content-upload/staging/types';
+
+const COMPONENT_CODE = /^K\d{1,2}(?:\.\d)?$/;
+const ENABLER_CODE = /^K\d{1,2}(?:\.\d)?-[a-z]$/;
 
 export interface KiEnvOptions {
   deps: ReviewDeps;
@@ -62,8 +68,10 @@ export function createKiStepEnv(options: KiEnvOptions): KiStepEnv {
   let corpus: Promise<SolutionCorpus> | undefined;
 
   const getRun = () => (run ??= deps.repo.getRun(runId));
+  // time that this call of the pump spent on the list of solution texts
+  let corpusSpentMs = 0;
 
-  return {
+  const env: KiStepEnv = {
     config() {
       config ??= options.config
         ? options.config()
@@ -100,15 +108,20 @@ export function createKiStepEnv(options: KiEnvOptions): KiStepEnv {
         );
         // A title only for what the database knows: a title of the plan comes from
         // a folder name of the upload, which must never reach the model
+        // Only codes of the known shape go into the prompt and the list of answers
         return {
-          components: merged.components.map(c => ({
-            code: c.code,
-            title: c.isNew ? null : safeTitle(c.title),
-            enablers: c.enablers.map(e => ({
-              code: e.code,
-              title: e.isNew ? null : safeTitle(e.title),
+          components: merged.components
+            .filter(c => COMPONENT_CODE.test(c.code))
+            .map(c => ({
+              code: c.code,
+              title: c.isNew ? null : safeTitle(c.title),
+              enablers: c.enablers
+                .filter(e => ENABLER_CODE.test(e.code))
+                .map(e => ({
+                  code: e.code,
+                  title: e.isNew ? null : safeTitle(e.title),
+                })),
             })),
-          })),
         };
       })().catch(error => {
         catalog = undefined;
@@ -134,6 +147,15 @@ export function createKiStepEnv(options: KiEnvOptions): KiStepEnv {
       });
       return corpus;
     },
+    async advanceCorpus() {
+      const list = await env.corpus();
+      const left = Math.max(0, CORPUS_BUDGET_MS - corpusSpentMs);
+      const started = clock();
+      const complete = await list.advance(left);
+      corpusSpentMs += Math.max(0, clock() - started);
+      return complete;
+    },
     clock,
   };
+  return env;
 }

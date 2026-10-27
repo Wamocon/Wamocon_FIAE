@@ -1,6 +1,5 @@
 'use client';
 
-import { useId } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 /**
@@ -11,11 +10,9 @@ import { useLanguage } from '@/contexts/LanguageContext';
  */
 export function KiBadge() {
   const { t } = useLanguage();
-  const hintId = useId();
   return (
     <span className="inline-flex flex-col gap-0.5">
       <span
-        aria-describedby={hintId}
         className="text-foreground inline-flex w-fit items-center gap-1.5 rounded-lg border border-violet-500 bg-violet-500/10 px-2 py-1 text-sm font-medium"
       >
         <span aria-hidden="true" className="w-4 text-center font-bold">
@@ -23,7 +20,7 @@ export function KiBadge() {
         </span>
         <span>{t('contentUpload.ki.badge')}</span>
       </span>
-      <span id={hintId} className="text-muted text-xs">
+      <span className="text-muted text-xs">
         {t('contentUpload.ki.badgeHint')}
       </span>
     </span>

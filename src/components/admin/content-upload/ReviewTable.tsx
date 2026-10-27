@@ -61,6 +61,8 @@ export function canAcceptAsProposed(row: ReviewRowDto): boolean {
   if (row.decision?.action === 'accept') return true;
   const proposal = row.proposal;
   if (!proposal) return false;
+  // a proposal of the model needs a person who names the assignment (as the route says)
+  if (proposal.source === 'ki') return false;
   if (proposal.band !== 'high' && proposal.band !== 'medium') return false;
   return !proposal.reasons.some(r => UNCHECKED_REASONS.has(r.code));
 }

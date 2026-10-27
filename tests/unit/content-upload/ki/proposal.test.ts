@@ -148,7 +148,8 @@ describe('from the answer of the model to a proposal', () => {
     );
     expect(outcome.kind).toBe('proposal');
     if (outcome.kind !== 'proposal') return;
-    expect(outcome.write.reasons).toHaveLength(10);
+    // the reasons of the rules are not cut away for the one of the model
+    expect(outcome.write.reasons).toHaveLength(25);
     for (const r of outcome.write.reasons) {
       expect(r.text.length).toBeLessThanOrEqual(200);
     }

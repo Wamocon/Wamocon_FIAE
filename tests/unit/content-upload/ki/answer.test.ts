@@ -113,6 +113,34 @@ describe('the check of the answer of the model', () => {
     }
   });
 
+  it('does not guess the component of an enabler code that two components share', () => {
+    const shared: KiCatalog = {
+      components: [
+        { code: 'K6.1', title: null, enablers: [{ code: 'K6-d', title: null }] },
+        { code: 'K6.2', title: null, enablers: [{ code: 'K6-d', title: null }] },
+      ],
+    };
+    // no component named: two owners, no answer
+    expect(
+      checkAnswer(ok({ komponente: null, enabler: 'K6-d' }), { catalog: shared })
+    ).toEqual({ ok: false, status: 'not_in_whitelist' });
+    // the component named: it counts, whichever of the two it is
+    for (const komponente of ['K6.1', 'K6.2']) {
+      const r = checkAnswer(ok({ komponente, enabler: 'K6-d' }), {
+        catalog: shared,
+      });
+      expect(r.ok && r.answer.componentCode).toBe(komponente);
+    }
+    // a component that does not own it
+    expect(
+      checkAnswer(ok({ komponente: 'K1', enabler: 'K6-d' }), {
+        catalog: {
+          components: [...shared.components, { code: 'K1', title: null, enablers: [] }],
+        },
+      })
+    ).toEqual({ ok: false, status: 'not_in_whitelist' });
+  });
+
   it('takes the component from the enabler when only the enabler is named', () => {
     const result = checkAnswer(ok({ komponente: null, enabler: 'K6.1-a' }), {
       catalog,

@@ -316,14 +316,12 @@ describe('ReviewView: the table', () => {
       const row = rowOf('K_Quiz.docx');
       const badge = within(row).getByText('KI-Vorschlag');
       expect(badge).toBeInTheDocument();
-      // the hint is text on the page and tied to the mark
-      const hint = within(row).getByText(
-        'Vorschlag von Sokrates, nicht von den Regeln. Bitte prüfen.'
-      );
-      expect(badge.closest('[aria-describedby]')).toHaveAttribute(
-        'aria-describedby',
-        hint.id
-      );
+      // the hint is text on the page, right next to the mark
+      expect(
+        within(row).getByText(
+          'Vorschlag von Sokrates, nicht von den Regeln. Bitte prüfen.'
+        )
+      ).toBeInTheDocument();
       // a proposal of the rules has no such mark
       expect(
         within(rowOf('A_Quiz.docx')).queryByText('KI-Vorschlag')

@@ -432,7 +432,18 @@ export async function pumpRun(
   const activeScope = async () => {
     const active: QueueStep[] = [];
     for (const step of steps) {
-      if (!step.ready || (await step.ready({ runId, deps }))) active.push(step);
+      let ready = false;
+      try {
+        ready = !step.ready || (await step.ready({ runId, deps }));
+      } catch (error) {
+        // A failing condition (a database hiccup in the model step) must not stop
+        // the other steps: the step is not ready, the code is the only thing logged
+        console.error('[content-upload] step not ready', {
+          step: step.name,
+          code: error instanceof Error ? error.name : 'unknown',
+        });
+      }
+      if (ready) active.push(step);
     }
     return scopeOf(active);
   };

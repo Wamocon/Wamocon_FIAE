@@ -4,7 +4,6 @@
 // When the model step may take files of a run: every condition on its own.
 import { DEFAULT_LIMITS } from '@/lib/content-upload/ki/config';
 import { kiReady, type KiStepEnv } from '@/lib/content-upload/ki/steps';
-import type { SolutionCorpus } from '@/lib/content-upload/ki/corpus';
 import type { KiUsage } from '@/lib/content-upload/ki/repo';
 import type { QueueState } from '@/lib/content-upload/staging/repo';
 import type { RunStatus } from '@/lib/content-upload/staging/status';
@@ -54,11 +53,9 @@ function check(setup: Setup = {}) {
         return { run: 0, day: 0, file: 0, recent: [], ...setup.usage };
       },
     },
-    corpus: async () => {
+    advanceCorpus: async () => {
       calls.corpus += 1;
-      return {
-        advance: async () => setup.corpusComplete !== false,
-      } as unknown as SolutionCorpus;
+      return setup.corpusComplete !== false;
     },
   } as unknown as KiStepEnv;
   const deps = {

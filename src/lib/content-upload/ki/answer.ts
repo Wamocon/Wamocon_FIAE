@@ -135,12 +135,15 @@ export function checkAnswer(
   const value = parsed.data;
   const docType = TYPE_OF_ANSWER[value.typ] ?? null;
 
-  const enablerOwner = new Map<string, string>();
+  // an enabler code can belong to more than one component of a catalog: all owners count
+  const enablerOwners = new Map<string, Set<string>>();
   const components = new Set<string>();
   for (const component of context.catalog.components) {
     components.add(component.code);
     for (const enabler of component.enablers) {
-      enablerOwner.set(enabler.code, component.code);
+      const owners = enablerOwners.get(enabler.code) ?? new Set<string>();
+      owners.add(component.code);
+      enablerOwners.set(enabler.code, owners);
     }
   }
 
@@ -150,13 +153,17 @@ export function checkAnswer(
     return { ok: false, status: 'not_in_whitelist' };
   }
   if (enablerCode !== null) {
-    const owner = enablerOwner.get(enablerCode);
-    if (owner === undefined) return { ok: false, status: 'not_in_whitelist' };
+    const owners = enablerOwners.get(enablerCode);
+    if (owners === undefined) return { ok: false, status: 'not_in_whitelist' };
     // an enabler of another component than the named one: not trusted at all
-    if (componentCode !== null && owner !== componentCode) {
+    if (componentCode !== null && !owners.has(componentCode)) {
       return { ok: false, status: 'not_in_whitelist' };
     }
-    componentCode = owner;
+    // the component is the named one, or the only owner; two owners and none named is no answer
+    if (componentCode === null) {
+      if (owners.size !== 1) return { ok: false, status: 'not_in_whitelist' };
+      componentCode = [...owners][0];
+    }
   }
   if (
     context.expectedComponent !== undefined &&

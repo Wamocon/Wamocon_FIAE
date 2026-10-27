@@ -151,7 +151,7 @@ describe('the list of solution texts of a run', () => {
 
   it('is not complete while a file cannot be read, and gives up on it after three tries', async () => {
     const d = deps([file('a'), file('b')], { a: quiz, b: null });
-    const corpus = new SolutionCorpus(d);
+    const corpus = new SolutionCorpus(d, { retryGapMs: 0 });
     // each call tries the unreadable file once
     expect(await corpus.advance(1000)).toBe(false);
     expect(await corpus.advance(1000)).toBe(false);
@@ -162,6 +162,75 @@ describe('the list of solution texts of a run', () => {
     expect(d.loads.filter(id => id === 'b')).toHaveLength(3);
     // the good file was read once
     expect(d.loads.filter(id => id === 'a')).toHaveLength(1);
+  });
+
+  it('lets a file that failed a moment ago rest, so one glitch is one try', async () => {
+    let now = 0;
+    const d = deps([file('a')], { a: null }, { clock: () => now });
+    const corpus = new SolutionCorpus(d, { retryGapMs: 5000 });
+    expect(await corpus.advance(1000)).toBe(false);
+    // asked again within the gap, in the same breath: no new try
+    now += 1000;
+    expect(await corpus.advance(1000)).toBe(false);
+    expect(await corpus.advance(1000)).toBe(false);
+    expect(d.loads).toHaveLength(1);
+    now += 5000;
+    expect(await corpus.advance(1000)).toBe(false);
+    expect(d.loads).toHaveLength(2);
+  });
+
+  it('is not complete when a limit cut the list: a solution may be missing', async () => {
+    const tooMany = Array.from(
+      { length: CORPUS_LIMITS.total + 1 },
+      (_, i) => `Eine erfundene Datenbanklösung Nummer ${i} mit genug Text`
+    );
+    const asked: number[] = [];
+    const d = deps([file('a')], { a: quiz }, {
+      existing: async limit => {
+        asked.push(limit);
+        return tooMany.slice(0, limit);
+      },
+    });
+    const corpus = new SolutionCorpus(d);
+    expect(await corpus.advance(1000)).toBe(false);
+    expect(corpus.isOverflowed).toBe(true);
+    // the database was asked for one more than fits, which is how the cut shows
+    expect(asked).toEqual([CORPUS_LIMITS.total + 1]);
+    expect(corpus.texts.length).toBeLessThanOrEqual(CORPUS_LIMITS.total);
+    // and it stays incomplete
+    expect(await corpus.advance(1000)).toBe(false);
+
+    const perFile = new SolutionCorpus(
+      deps([file('a')], { a: quiz }, {
+        solutionsOf: () =>
+          Array.from({ length: CORPUS_LIMITS.perFile + 1 }, (_, i) => `Text ${i} lang genug`),
+      })
+    );
+    expect(await perFile.advance(1000)).toBe(false);
+    expect(perFile.isOverflowed).toBe(true);
+  });
+
+  it('is complete with exactly as many texts as fit', async () => {
+    const exact = Array.from(
+      { length: CORPUS_LIMITS.total },
+      (_, i) => `Eine erfundene Datenbanklösung Nummer ${i} mit genug Text`
+    );
+    const d = deps([], {}, { existing: async limit => exact.slice(0, limit) });
+    const corpus = new SolutionCorpus(d);
+    expect(await corpus.advance(1000)).toBe(true);
+    expect(corpus.texts).toHaveLength(CORPUS_LIMITS.total);
+  });
+
+  it('leaves out a file whose object is gone: it is no error of the run', async () => {
+    const d = deps(
+      [
+        file('a'),
+        file('gone', { parseSummary: { objectDeleted: true } }),
+      ],
+      { a: quiz }
+    );
+    expect(await new SolutionCorpus(d).advance(1000)).toBe(true);
+    expect(d.loads).toEqual(['a']);
   });
 
   it('survives a file whose reader throws', async () => {
