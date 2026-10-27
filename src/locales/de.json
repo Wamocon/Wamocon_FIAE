@@ -2491,6 +2491,7 @@
   "contentUpload.confirm.reopen": "Erneut prüfen",
   "contentUpload.notice.reopened": "Der Lauf ist wieder in der Prüfung.",
   "contentUpload.notice.reopenState": "Der Lauf lässt sich in diesem Zustand nicht erneut prüfen.",
+  "contentUpload.code.UNREADABLE": "Der Browser konnte die Datei nicht lesen (zum Beispiel ein zu langer Pfad). Kürzen Sie den Pfad oder wählen Sie die Datei einzeln.",
   "contentStats.menu": "Inhaltsstatistik",
   "contentStats.title": "Inhaltsstatistik",
   "contentStats.subtitle": "Was je Ausbildung an Inhalt vorhanden ist (Ist), was geplant ist (Soll) und wie groß die Abweichung ist.",

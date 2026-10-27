@@ -45,6 +45,7 @@ import {
   countUseCasePlan,
   type SourceFile as UseCaseSourceFile,
 } from '@/lib/content-import/use-cases/plan';
+import { fromGroupFolder } from '@/lib/content-upload/classify/path-rule';
 import { readDocx } from '@/lib/content-upload/read-docx';
 import { mapLimit } from '@/lib/content-upload/staging/pool';
 import type {
@@ -138,7 +139,14 @@ function infoFor(
   decisions: Decisions
 ): { info: PathInfo; fromTree: boolean } {
   const d = file.decision;
-  const tree = pathInfo(file.relPath);
+  // A folder upload starts with the name of the chosen folder. The rule stage
+  // finds the group folder below such a parent (classifyByPath), so the plan must
+  // read the tree the same way, or every component would end without a group
+  let tree = pathInfo(file.relPath);
+  if (tree.issues.includes('unknown-group')) {
+    const below = fromGroupFolder(file.relPath);
+    if (below) tree = pathInfo(below);
+  }
   const row = byCode.get(d.componentCode as string);
   const fromRow = row
     ? {
