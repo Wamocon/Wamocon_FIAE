@@ -33,6 +33,7 @@ const SERIES_PREFIXES = [
   '20261027',
   '20261028',
   '20261029',
+  '20261030',
 ];
 const MAX_IDENTIFIER_LENGTH = 63;
 
@@ -55,6 +56,7 @@ const FOLLOW_UP_FILES = [
   '20261029000100_hai_embeddings_quiz_visibility.sql',
   '20261029000200_auth_attempts.sql',
   '20261029000300_security_revoke_api_table_access.sql',
+  '20261030000100_content_upload_tables.sql',
 ];
 const catalogFiles = seriesFiles.filter(
   name => !SECURITY_FILES.includes(name) && !FOLLOW_UP_FILES.includes(name)

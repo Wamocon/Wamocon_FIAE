@@ -1028,11 +1028,31 @@ Jede Entscheidung mit Empfehlung. Ohne Antwort gilt die Empfehlung als Voreinste
 | Release, Preview, geteilter Speicher                           | `docs/release-prozess.md`, `vercel.json`                                                                                     |
 | Runbook der Importe, Originale als eigenes Paket               | `docs/kfbm-import-runbook.md`                                                                                                |
 
-## 13. Stand U3 (Auslesen, Auszugsbildung, Lösungsschutz)
+## 13. Stand U1 (27.10.2026)
+
+Dieser Abschnitt hält fest, was Paket U1 umgesetzt hat und wo es vom Konzept abweicht. Die Abschnitte 3 und 11 bleiben die Quelle.
+
+- **Migration:** `supabase/migrations/20261030000100_content_upload_tables.sql` (das Konzept nannte `2026103000xx_content_upload.sql`). Sieben Tabellen `content_upload_*` nach Abschnitt 3.2, wiederholbar, RLS an ohne Richtlinie, `revoke all` für `anon` und `authenticated` mit einer Prüfung am Ende, die den Lauf abbricht, wenn dort noch ein Recht steht. Sie liegt über `GATED_FROM` des Rollout-Gates und ist in Production gesperrt. Die Preview-Ableitung verarbeitet sie ohne Befund (`npm run db:preview:check`, Skripttest `tests/scripts/db/content-upload-pipeline.test.mjs`). Drizzle-Schema und Typen stehen in `src/db/migrations/schemas/schema.ts`.
+- **Rückbau-Vorlage:** `supabase/manual/rollback-content-upload-tables.sql` (Konzept: `rollback-content-upload.sql`). Eine Transaktion, bricht bei Zeilen ab, außer der Eigentümer setzt den Schalter `content_upload.rollback_allow_data` ausdrücklich.
+- **Bucket:** `content-upload` wurde vom Eigentümer bereits angelegt (privat, 25 MB, nur PDF und docx, ohne Richtlinie). Eine Bucket-Vorlage (Entscheidung O8) ist nicht mehr nötig.
+- **Abweichungen vom Konzept:**
+  - Fremdschlüssel und Prüfungen stehen in der Anweisung `create table if not exists` (atomar mit der Tabelle) statt in `do`-Blöcken. Das entspricht `20261024001100_trainee_enrollments.sql`.
+  - `content_upload_applies.target_schema` ist als Muster `^public(_preview)?$` geprüft, nicht als Liste. Die Preview-Ableitung weist ein wörtliches `'public'` und den Namen des Preview-Schemas in einer Migration ab.
+  - `content_upload_applied_rows.file_id` hat einen Fremdschlüssel auf die Dateizeile (`on delete set null`), das Konzept nannte nur die Spalte. `row_id` bleibt ohne Fremdschlüssel.
+  - Zusätzliche Prüfungen der Datenbank: Vorschlag der KI höchstens 0,80 und nie `high`, eine angenommene Entscheidung braucht einen Dokumenttyp, höchstens eine laufende Übernahme je Lauf (Teilindex), `before` genau bei `update`, SHA-256 als 64 Hexzeichen, Host im Protokoll der KI ohne Pfad und Zugangsdaten, eine Datei ist nicht ihre eigene Dublette.
+  - `content_upload_ki_calls.model` und `endpoint_host` sind leer erlaubt (Status `skipped` und `refused_by_guard` rufen nichts auf). Die Sicherheitsgrenze des Auszugs in der Datenbank ist 5000 Zeichen, die Regel von 2500 gilt im Code (Abschnitt 5.3).
+  - Ein Profil, das einen Lauf angelegt, entschieden oder übernommen hat, lässt sich nicht löschen (`on delete restrict`), ebenso ein Lauf mit Übernahmen. Das Protokoll muss sie überleben.
+  - Die Tabellen stehen nicht in `supabase/content-tables.json` (Test), der Release kopiert sie nicht.
+  - Vier zusätzliche Indizes auf Fremdschlüsselspalten (`training_catalog_id`, `decided_by_id`, `started_by_id`, `content_upload_applied_rows.file_id`), damit Löschen und Kaskaden nicht die Tabellen durchsuchen. Kein Index für die Aufräumläufe (`purge_after`, Alter der KI-Auszüge, abgelaufene Dateien): die Tabellen sind klein, der Index kommt mit dem Aufräumjob (U2).
+  - Die Datenbank prüft nicht, dass Entscheidung, KI-Aufruf oder Übernahmezeile und ihre Datei zum selben Lauf gehören (`run_id` und `file_id` stehen getrennt). Das prüft die Anwendung bei jedem Zugriff (Abschnitt 9.2). Ebenso ist das Löschen der KI-Auszüge nach 30 Tagen ein Auftrag der Anwendung, nicht der Datenbank.
+  - Folgen von `on delete restrict` auf `profiles`: Das Zusammenführen von Profilen (`src/lib/profile-identity.ts`) führt die drei neuen Spalten mit (Liste ergänzt). Das Löschen eines Administrators mit Läufen (`src/app/api/admin/users/[userId]/route.ts`) endet mit einem Fremdschlüsselfehler (23503). Die Route soll das mit 409 und einem lesbaren Text beantworten, das gehört zu U2.
+- **Spike Verbindungsadapter:** `docs/ki-upload-spike-verbindungsadapter.md`. Ergebnis: Die Engine läuft unverändert über eine reservierte Verbindung (`sql.reserve()` oder `pg`) hinter einem Pooler im Transaktionsmodus (lokal PgBouncer als Ersatz für Supavisor). Voller Plan lokal 1,5 bis 2,1 Sekunden für den Probelauf mit 91 Anweisungen, bei 20 Millisekunden je Anweisung etwa 4 Sekunden. Der Adapter steht in `src/lib/content-upload/connection.ts` (getestet gegen Fälschungen). Die Begründung in Abschnitt 8.1 Punkt 5 ist zu präzisieren: `sql.begin` scheitert nicht, weil das zweite `begin` ignoriert würde, sondern weil dessen Optionen nur vor der ersten Abfrage wirken (Reihenfolgeabhängigkeit, doppelte Hinweise des Servers). Die Schlussfolgerung bleibt. Nicht getestet: gehostete Preview und Supavisor, Planbau, Use-Case-Engine, Protokollschreiben.
+
+## 14. Stand U3 (Auslesen, Auszugsbildung, Lösungsschutz)
 
 Stand: 27.10.2026. Paket U3 ist umgesetzt, ohne Migration und ohne Wirkung auf Production. Die neuen Module liegen unter `src/lib/content-upload/` und sind reine Funktionen (kein Dateisystem, keine Datenbank, kein Netz, kein Modell). Sie sind noch von keiner Route aufgerufen, das ist Sache von U2, U4 und U7.
 
-### 13.1 Was gebaut ist
+### 14.1 Was gebaut ist
 
 | Teil                         | Inhalt                                                                                                                                                                                                                                                                                                  |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1041,7 +1061,7 @@ Stand: 27.10.2026. Paket U3 ist umgesetzt, ohne Migration und ohne Wirkung auf P
 | `buildExcerpt(...)`          | Auszug von höchstens 2500 Zeichen aus der Positivliste je Dokumenttyp, mit Lösungsschutz, Musterfiltern und Anweisungserkennung. Ergebnis: `{ excerpt, findings, sendable, reason, docType, redactions }`                                                                                               |
 | Änderungen am Bestand (11.1) | Absatzleser (Zip-Verzeichnis vor `loadAsync`, versteckter Text), Guard (gemeinsame exportierte Markenliste, `THEORY`/`ALL` mit Enabler), `cleanPDFText` und `splitEnablerHeading` exportiert, `sanitizePromptData` in `src/lib/prompt-sanitize.ts` (Verhalten unverändert, Test gegen die alte Fassung) |
 
-### 13.2 Abweichungen vom Konzept
+### 14.2 Abweichungen vom Konzept
 
 - **Zip-Verzeichnis.** Der Leser liest das Verzeichnis selbst und wählt den Endsatz wie JSZip (die letzte Signatur). Dazu gilt: Der Kommentar muss bis zum Dateiende reichen, das Verzeichnis endet genau vor dem Endsatz, jeder Eintrag trägt im lokalen Kopf denselben Namen, und nach dem Öffnen müssen JSZip und Verzeichnis dieselben Einträge nennen. Sonst sähen beide Leser verschiedene Dateien, und die Vorprüfungen (Makro, Zähler, Namen) wären umgehbar. Das Konzept sprach nur von der Zählung der letzten 64 KB.
 - **Versteckter Text** wird auch über Formatvorlagen übersprungen (Zeichenvorlage, Absatzvorlage, `basedOn` bis Tiefe 50, höchstens 5000 Vorlagen, `styles.xml` höchstens 4 MB). Nicht gelesen werden Vorgaben der Tabellenvorlage und `docDefaults`, ein anderer Namensraum als `w:` und weiße oder winzige Schrift. Kommentare, CDATA und DOCTYPE im Text lehnt `readDocx` ab, weil sie Text vor dem Scan verbergen können, den Word zeigt oder nicht zeigt.
@@ -1051,7 +1071,7 @@ Stand: 27.10.2026. Paket U3 ist umgesetzt, ohne Migration und ohne Wirkung auf P
 - **Personenmuster** zählen im fertigen Auszug (Platzhalter), nicht im ganzen Text. Mehr als 3 Platzhalter für E-Mail, IBAN, Telefon, Steuernummer oder Name sperren die Datei, Links und Dateinamen werden ersetzt und nicht gezählt.
 - **Kundendokumente.** Ein Zeichen zählt nur mit Wert (zum Beispiel `Rechnungsnummer: R-2026-0815`, eine echte IBAN), nicht als bloßes Wort im Lehrtext. Zwei Klassen sperren die Datei, eine Klasse ist ein Hinweis. Der eigene Briefkopf der WAMOCON GmbH wird ignoriert (er steht in den eigenen PDF). Die erste Fassung mit bloßen Wörtern sperrte 9 von 71 eigenen Dateien zu Unrecht.
 
-### 13.3 PDF: gewählte Option
+### 14.3 PDF: gewählte Option
 
 Gewählt ist der Worker-Thread mit der vorhandenen Bibliothek (`pdf-parse` 1.1.1, darin pdf.js 1.10.100). Es kommt keine neue Abhängigkeit dazu. Der Thread bekommt nur eine Kopie der Bytes, eine leere Umgebung und kein `fetch`, pdf.js liest nur Text (`isEvalSupported = false`, der Pfad von CVE-2024-4367 ist in dieser Fassung nur im Anzeigeteil und wird beim Textlesen nicht erreicht, nachgeprüft im gebündelten Code). Grenzen: 300 Seiten, 2 MB Text, 20 Sekunden (Thread wird beendet), 256 MB Heap, 600 MB Wachstum des Prozessspeichers (die Dekoder legen ArrayBuffers außerhalb des Heaps an, eine 0,8 MB große PDF kann zu über 2 GB werden), höchstens zwei Threads zugleich. Vorprüfung der Rohbytes: Kopf, Größe, `/Encrypt` (abgelehnt), `/JavaScript`, `/JS`, `/Launch`, `/URI`, `/OpenAction`, `/AA`, `/EmbeddedFile`, `/SubmitForm`, `/GoToR`, `/RichMedia`, `/XFA` als Befund, Namen auch mit Hex-Schreibweise. Die Vorprüfung ist ein Hinweis und kein Beweis, Aktionen in komprimierten Objektströmen sieht sie nicht (Befund `OBJECT_STREAMS`).
 
@@ -1059,7 +1079,7 @@ Gewählt ist der Worker-Thread mit der vorhandenen Bibliothek (`pdf-parse` 1.1.1
 
 Offen für den Betrieb (U2, Spike): Der Worker läuft lokal und in den Tests. Ob `worker_threads` und der Pfad `pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js` in der Vercel-Laufzeit verfügbar sind, ist nicht geprüft. Dafür braucht die Route voraussichtlich `serverExternalPackages: ['pdf-parse']` und `outputFileTracingIncludes` in `next.config.ts` (nicht Teil dieses Pakets). Fehlt der Pfad, meldet der Leser `ENGINE_UNAVAILABLE` und die Datei bleibt unverarbeitet.
 
-### 13.4 Messlauf an echten Quelldateien
+### 14.4 Messlauf an echten Quelldateien
 
 Lokal, nur lesend, mit der Hydrate-Technik der Skripte (eine Datei nach der anderen, Frist 60 Sekunden). Die Dateien wurden nie kopiert, es werden nur Zahlen gezeigt. Auswahl in gleichmäßigem Abstand: 124 Dateien (30 Quiz, 24 Szenarien, 24 Enabler, 24 Use Cases, 12 Global-Quizze, 10 PDF), davon 123 gelesen (eine Enabler-Datei ist wie bekannt nicht ladbar).
 
@@ -1081,11 +1101,11 @@ Lokal, nur lesend, mit der Hydrate-Technik der Skripte (eine Datei nach der ande
 
 **Beweis zum Lösungsschutz:** 111 nichtleere Auszüge wurden gegen 1175 Lösungstexte geprüft, die die Parser aus 90 Dateien kennzeichnen (Begründungen, Text der richtigen Option, Lösungsszenario, Fachwissen, Musterlösung, Kriterien). Ergebnis: kein Lösungstext ab 20 Zeichen steht in einem Auszug, kein 30-Zeichen-Fenster eines Lösungstexts (außer Text, der auch im öffentlichen Teil oder in der Überschrift derselben Datei steht), kein Lösungstext einer anderen Datei. Zwei Treffer bleiben: der Text einer richtigen Option von 16 und von 17 Zeichen, der auch in einer Frage beziehungsweise in der Überschrift derselben Datei steht. Beide liegen unter der Schwelle von 20 Zeichen des Guards und sind kurze Fachbegriffe des öffentlichen Teils.
 
-### 13.5 Nicht geprüft und bekannte Grenzen
+### 14.5 Nicht geprüft und bekannte Grenzen
 
-- Worker und Modulpfad in der Vercel-Laufzeit (siehe 13.3). Der Test auf den Speicher setzt auf den Zuwachs des Prozessspeichers und kann auf einem stark belasteten Rechner anders reagieren.
+- Worker und Modulpfad in der Vercel-Laufzeit (siehe 14.3). Der Test auf den Speicher setzt auf den Zuwachs des Prozessspeichers und kann auf einem stark belasteten Rechner anders reagieren.
 - Das Auslesen in einem Next.js-Build ist nicht gebaut worden (kein Aufruf aus einer Route).
 - Die Musterfilter sind Blocklisten. Billige Umgehungen bleiben (Name ohne Anrede, `max(at)firma.de`, andere Sprachen, Umschreibung eines Lösungstexts). Der eigentliche Schutz ist die Prüfung der Antwort in U5. Zu strenge Muster treffen Fachtexte, etwa `Antworte mit ...` in Aufgaben oder `>>>` in Programmierbeispielen (dort ist `>>>` bewusst kein Muster mehr).
-- Versteckte oder weiße Schrift, Vorgaben der Tabellenvorlage und `docDefaults` werden nicht erkannt (13.2). In einer PDF werden unsichtbarer Text (Modus 3) und Text aus ausgeblendeten Ebenen mitgelesen.
+- Versteckte oder weiße Schrift, Vorgaben der Tabellenvorlage und `docDefaults` werden nicht erkannt (14.2). In einer PDF werden unsichtbarer Text (Modus 3) und Text aus ausgeblendeten Ebenen mitgelesen.
 - Lösungstexte unter 20 Zeichen findet die Fremdtextprüfung nie, ein Text wird nur bei gleicher Schreibweise erkannt (Groß und Kleinschreibung, Leerraum, Akzente und ähnliche Buchstaben werden geglättet, andere Anführungszeichen und Silbentrennung nicht).
 - Die Abdeckung der neuen Module liegt bei 93 bis 100 Prozent, sie sind nicht in die Schwelle von 100 Prozent aufgenommen (`jest.config.ts`).

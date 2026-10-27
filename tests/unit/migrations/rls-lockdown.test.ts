@@ -66,12 +66,18 @@ describe('lockdown migration', () => {
     .filter(line => line.trim().startsWith('--'))
     .join('\n');
 
-  it('is the newest file and sorts behind the gated start of the series', () => {
+  it('sorts behind the gated start of the series and behind the other files of 20261029', () => {
     const files = fs
       .readdirSync(MIGRATIONS)
       .filter(name => /^\d{14}_/.test(name))
       .sort();
-    expect(files[files.length - 1]).toBe(MIGRATION);
+    // not "the newest": later migrations (20261030*) must not break this test
+    expect(files.indexOf(MIGRATION)).toBeGreaterThan(-1);
+    expect(files.filter(name => name.startsWith('20261029'))).toEqual([
+      '20261029000100_hai_embeddings_quiz_visibility.sql',
+      '20261029000200_auth_attempts.sql',
+      MIGRATION,
+    ]);
     const gate = fs.readFileSync(
       path.join(ROOT, 'scripts', 'db', 'rollout-gate.mjs'),
       'utf-8'

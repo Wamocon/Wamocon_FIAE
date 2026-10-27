@@ -31,6 +31,9 @@ const profileReferenceColumns = [
   ['work_certificates', 'approved_by_trainer_id'],
   ['certificate_text_templates', 'created_by'],
   ['grade_edit_history', 'changed_by'],
+  ['content_upload_runs', 'created_by_id'],
+  ['content_upload_decisions', 'decided_by_id'],
+  ['content_upload_applies', 'started_by_id'],
 ] as const;
 
 const traineeOwnedColumns = [
