@@ -2,7 +2,11 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeRole } from '@/lib/auth/roles';
-import { adminMenuItems, contentUploadMenuItems } from '@/lib/auth/adminMenu';
+import {
+  adminMenuItems,
+  contentStatsMenuItems,
+  contentUploadMenuItems,
+} from '@/lib/auth/adminMenu';
 import { IS_PREVIEW_SCHEMA } from '@/lib/db-schema';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -21,6 +25,7 @@ import {
   ShieldCheck,
   Briefcase,
   Upload,
+  BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -41,6 +46,7 @@ const ADMIN_MENU_ICONS = {
   adminOrgs: Building2,
   adminUsers: ShieldCheck,
   contentUpload: Upload,
+  contentStats: BarChart3,
 } as const;
 
 interface SidebarProps {
@@ -187,6 +193,10 @@ export function Sidebar({
             // the routes check the role themselves)
             ...[
               ...adminMenuItems({ role: profile?.role, isPlatformOwner }),
+              ...contentStatsMenuItems({
+                role: profile?.role,
+                isPlatformOwner,
+              }),
               ...contentUploadMenuItems(
                 { role: profile?.role, isPlatformOwner },
                 {

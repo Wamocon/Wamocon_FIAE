@@ -28,6 +28,7 @@ const TRAINER_LINKS = [
 const PROFILE = '/trainer/profile';
 const ORGS = '/trainer/admin/organizations';
 const USERS = '/trainer/admin/users';
+const CONTENT_STATS = '/trainer/admin/content-stats';
 const CONTENT_UPLOAD = '/trainer/admin/content-upload';
 
 function renderFor(
@@ -111,6 +112,7 @@ describe('Sidebar', () => {
       ...TRAINER_LINKS,
       ORGS,
       USERS,
+      CONTENT_STATS,
       CONTENT_UPLOAD,
       PROFILE,
     ]);
@@ -125,7 +127,13 @@ describe('Sidebar', () => {
     env.NODE_ENV = 'production';
     try {
       renderFor('SUPER_ADMIN', { isPlatformOwner: true });
-      expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+      expect(links()).toEqual([
+      ...TRAINER_LINKS,
+      ORGS,
+      USERS,
+      CONTENT_STATS,
+      PROFILE,
+    ]);
       expect(screen.queryByText('Inhalts-Upload')).toBeNull();
     } finally {
       env.NODE_ENV = before;
@@ -138,6 +146,7 @@ describe('Sidebar', () => {
       ...TRAINER_LINKS,
       ORGS,
       USERS,
+      CONTENT_STATS,
       CONTENT_UPLOAD,
       PROFILE,
     ]);
@@ -146,7 +155,13 @@ describe('Sidebar', () => {
 
   it('ADMIN of a customer organization: the own organization and the users', () => {
     renderFor('admin');
-    expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+    expect(links()).toEqual([
+      ...TRAINER_LINKS,
+      ORGS,
+      USERS,
+      CONTENT_STATS,
+      PROFILE,
+    ]);
     expect(screen.getByText('Meine Organisation')).toBeInTheDocument();
     expect(screen.queryByText('Organisationen und Berufe')).toBeNull();
     expect(screen.queryByText('Organisationen')).toBeNull();
@@ -154,7 +169,13 @@ describe('Sidebar', () => {
 
   it('TEMP_ADMIN: the own organization and the users, no platform entry', () => {
     renderFor('temp_admin');
-    expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+    expect(links()).toEqual([
+      ...TRAINER_LINKS,
+      ORGS,
+      USERS,
+      CONTENT_STATS,
+      PROFILE,
+    ]);
     expect(screen.getByText('Meine Organisation')).toBeInTheDocument();
     expect(screen.getByText('Benutzerverwaltung')).toBeInTheDocument();
     expect(screen.queryByText('Organisationen und Berufe')).toBeNull();
@@ -162,7 +183,13 @@ describe('Sidebar', () => {
 
   it('TEMP_ADMIN in the platform organization is still no platform admin', () => {
     renderFor('temp_admin', { isPlatformOwner: true });
-    expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+    expect(links()).toEqual([
+      ...TRAINER_LINKS,
+      ORGS,
+      USERS,
+      CONTENT_STATS,
+      PROFILE,
+    ]);
     expect(screen.getByText('Meine Organisation')).toBeInTheDocument();
     expect(screen.queryByText('Organisationen und Berufe')).toBeNull();
   });
