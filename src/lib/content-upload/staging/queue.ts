@@ -15,7 +15,8 @@
 //
 //   extract  U3  verified       -> extracted | failed     read the text and the structure
 //   rules    U4  extracted      -> proposed_rules | unclear
-//   ki       U5  unclear        -> ki_pending -> proposed_ki | unclear
+//   ki       U5  unclear        -> ki_pending   reserves a file for the model
+//   kiCall   U5  ki_pending     -> proposed_ki | unclear   the one call per step
 //
 // A step gets the file and a lazy, cached read of its bytes, and answers with the
 // next state (and the numbers it found) or with "try again". It never touches the
@@ -27,7 +28,10 @@
 
 import { createHash } from 'crypto';
 import { LIMITS } from '@/lib/content-upload/staging/config';
-import type { QueueState } from '@/lib/content-upload/staging/repo';
+import type {
+  QueueState,
+  UnlessMarked,
+} from '@/lib/content-upload/staging/repo';
 import type { UploadDeps } from '@/lib/content-upload/staging/result';
 import {
   canTransitionFile,
@@ -71,22 +75,47 @@ export type StepResult =
       /** Numbers and finding codes, never document text. */
       patch?: FilePatch;
     }
-  | { kind: 'retry'; reason: string };
+  | {
+      kind: 'retry';
+      reason: string;
+      /** How long the file waits for the next try (default: delay times attempts). */
+      delaySeconds?: number;
+    };
+
+/** What a step may ask before the pump takes files for it. */
+export interface StepReadyContext {
+  runId: string;
+  deps: UploadDeps;
+}
 
 export interface QueueStep {
   name: string;
   /** The state of the files this step works on. One step per state. */
   from: FileStatus;
+  /**
+   * A step whose state also holds files that are done with it (the model step: a
+   * file it could not help stays `unclear`) names the key of parse_summary that
+   * marks them. A file with this key is never claimed again, and does not count as
+   * work that is left.
+   */
+  unlessMarked?: string;
+  /**
+   * Asked before every batch. When it says no, the files of this state are not
+   * claimed and do not count as work that is left (the run may reach review without
+   * them). Not asked for a step without it.
+   */
+  ready?(context: StepReadyContext): Promise<boolean>;
   run(context: StepContext): Promise<StepResult>;
 }
 
-/** The slots for the packages that are not merged yet. */
-export type ExtensionSlot = 'extract' | 'rules' | 'ki';
+/** The slots for the packages that fill in a step. */
+export type ExtensionSlot = 'extract' | 'rules' | 'ki' | 'kiCall';
 
 export const EXTENSION_SLOT_STATES: Record<ExtensionSlot, FileStatus> = {
   extract: 'verified',
   rules: 'extracted',
   ki: 'unclear',
+  kiCall: 'ki_pending',
 };
 
 // ---------------------------------------------------------------------------
@@ -280,7 +309,7 @@ async function processClaim(
       tally.retried += 1;
     }
   };
-  const again = async (code: string) => {
+  const again = async (code: string, delaySeconds?: number) => {
     if (file.attempts >= options.maxAttempts) return giveUp(code);
     // The file waits before its next attempt: a transient fault (the storage, a
     // slow network) is not hit three times in one breath, and the retry is a
@@ -288,7 +317,7 @@ async function processClaim(
     const released = await deps.repo.releaseClaim(
       file.id,
       claimId,
-      options.retryDelaySeconds * file.attempts
+      delaySeconds ?? options.retryDelaySeconds * file.attempts
     );
     if (released) tally.retried += 1;
     else tally.lostClaims += 1;
@@ -319,7 +348,7 @@ async function processClaim(
     return again('STEP_ERROR');
   }
 
-  if (result.kind === 'retry') return again('STEP_ERROR');
+  if (result.kind === 'retry') return again('STEP_ERROR', result.delaySeconds);
   if (!canTransitionFile(file.status, result.to)) {
     // A step must answer with a state of the model: a bug, not a retry
     logStepFailure(step.name, file, new Error('InvalidTransition'));
@@ -339,6 +368,18 @@ async function processClaim(
   if (result.to === 'rejected') tally.rejected += 1;
   else if (result.to === 'failed') tally.failed += 1;
   else tally.advanced += 1;
+}
+
+/** The states of some steps and the markers of the ones that have one. */
+function scopeOf(steps: readonly QueueStep[]): {
+  statuses: FileStatus[];
+  unlessMarked: UnlessMarked;
+} {
+  const unlessMarked: UnlessMarked = {};
+  for (const step of steps) {
+    if (step.unlessMarked) unlessMarked[step.from] = step.unlessMarked;
+  }
+  return { statuses: steps.map(s => s.from), unlessMarked };
 }
 
 /** States of a run in which the pump may work. */
@@ -367,16 +408,28 @@ export async function pumpRun(
   const lockSeconds = options.lockSeconds ?? DEFAULT_LOCK_SECONDS;
   const stepTimeoutMs = options.stepTimeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
   const retryDelaySeconds = options.retryDelaySeconds ?? RETRY_DELAY_SECONDS;
-  const statuses = steps.map(s => s.from);
   const stepByState = new Map(steps.map(s => [s.from, s]));
   const started = clock();
 
+  // The steps that may work now: one that is not ready (the model step while the
+  // run is still being read, or while the stage is off) takes no files and its
+  // state does not count as work that is left
+  const activeScope = async () => {
+    const active: QueueStep[] = [];
+    for (const step of steps) {
+      if (!step.ready || (await step.ready({ runId, deps }))) active.push(step);
+    }
+    return scopeOf(active);
+  };
+
   // Files whose holder died too often are failed first
+  const everything = scopeOf(steps);
   const timedOut = await deps.repo.failExhausted(
     runId,
-    statuses,
+    everything.statuses,
     maxAttempts,
-    'TIMEOUT'
+    'TIMEOUT',
+    everything.unlessMarked
   );
 
   const tally: Tally = {
@@ -393,8 +446,10 @@ export async function pumpRun(
       budgetExhausted = true;
       break;
     }
+    const scope = await activeScope();
     const claimed = await deps.repo.claimFiles(runId, {
-      statuses,
+      statuses: scope.statuses,
+      unlessMarked: scope.unlessMarked,
       limit: concurrency,
       lockSeconds,
       maxAttempts,
@@ -414,7 +469,21 @@ export async function pumpRun(
     );
   }
 
-  const pending = await deps.repo.queueState(runId, statuses, maxAttempts);
+  // The upload is closed first: a step that waits for the processing state (the
+  // model step) must see the state this very call leads to
+  if (options.closeUpload === true) {
+    const announced = await deps.repo.queueState(runId, [], maxAttempts);
+    if (announced.announced === 0) {
+      await deps.repo.transitionRun(runId, ['uploading'], 'processing');
+    }
+  }
+  const last = await activeScope();
+  const pending = await deps.repo.queueState(
+    runId,
+    last.statuses,
+    maxAttempts,
+    last.unlessMarked
+  );
   const runStatus = await moveRunOn(
     deps,
     runId,

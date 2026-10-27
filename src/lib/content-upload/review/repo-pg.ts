@@ -195,6 +195,43 @@ export class PgReviewRepo implements ReviewRepo {
     });
   }
 
+  async currentProposal(fileId: string): Promise<ProposalRecord | null> {
+    if (!isUuid(fileId)) return null;
+    const rows = rowsOf(
+      await this.db.execute(
+        sql`select ${fileId}::uuid as id,
+              p.id as p_id, p.source as p_source, p.doc_type as p_doc_type,
+              p.component_code as p_component_code, p.enabler_code as p_enabler_code,
+              p.quiz_level as p_quiz_level, p.confidence as p_confidence,
+              p.band as p_band, p.reasons as p_reasons, p.model as p_model,
+              p.created_at as p_created_at
+            from content_upload_proposals p
+            where p.file_id = ${fileId}::uuid and p.is_current`
+      )
+    );
+    return rows[0] ? mapProposal(rows[0]) : null;
+  }
+
+  async existingSolutionTexts(limit: number): Promise<string[]> {
+    const rows = rowsOf(
+      await this.db.execute(
+        sql`select t from (
+              select left(explanation, 5000) as t from options
+                where explanation is not null and char_length(explanation) >= 20
+              union all
+              select left(option_text, 5000) from options
+                where is_correct and char_length(option_text) >= 20
+              union all
+              select left(description, 5000) from content_documents
+                where document_type = 'TRAINER_SOLUTION'
+                  and description is not null and char_length(description) >= 20
+            ) s
+            limit ${Math.max(0, Math.floor(limit))}::int`
+      )
+    );
+    return rows.map(r => String(r.t));
+  }
+
   async catalogComponents(catalogId: string): Promise<CatalogComponentRow[]> {
     if (!isUuid(catalogId)) return [];
     const components = rowsOf(

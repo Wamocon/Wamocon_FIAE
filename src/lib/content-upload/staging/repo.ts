@@ -47,9 +47,19 @@ export type AnnounceRepoResult =
   | { ok: false; reason: 'RUN_NOT_FOUND' }
   | { ok: false; reason: 'RUN_STATE'; status: RunStatus };
 
+/**
+ * For a state, the key of parse_summary that marks a file as done with the step of
+ * that state. A file with the key is neither claimed nor counted as work that is
+ * left. This is how a file that stays `unclear` after the model step is not taken
+ * again and again.
+ */
+export type UnlessMarked = Partial<Record<FileStatus, string>>;
+
 export interface ClaimOptions {
   /** Claim files in these states only (the states that have a step). */
   statuses: readonly FileStatus[];
+  /** Files carrying the key of their state are left out. */
+  unlessMarked?: UnlessMarked;
   limit: number;
   /** How long the claim holds, in seconds (fractions allowed). */
   lockSeconds: number;
@@ -166,12 +176,14 @@ export interface UploadRepo {
     runId: string,
     statuses: readonly FileStatus[],
     maxAttempts: number,
-    code: string
+    code: string,
+    unlessMarked?: UnlessMarked
   ): Promise<number>;
   queueState(
     runId: string,
     statuses: readonly FileStatus[],
-    maxAttempts: number
+    maxAttempts: number,
+    unlessMarked?: UnlessMarked
   ): Promise<QueueState>;
 
   // ---- rate limit --------------------------------------------------------

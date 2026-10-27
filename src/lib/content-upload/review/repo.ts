@@ -23,6 +23,7 @@ import type {
   CatalogComponentRow,
   DecisionAction,
   DupChoice,
+  ProposalRecord,
   ProposalWrite,
   ReviewRecord,
 } from '@/lib/content-upload/review/types';
@@ -117,5 +118,13 @@ export interface ReviewRepo {
   ): Promise<boolean>;
   /** The components of a catalog with their enablers (the positive list of the database). */
   catalogComponents(catalogId: string): Promise<CatalogComponentRow[]>;
+  /** The current proposal of a file, or null (the Sokrates stage reads the rule proposal). */
+  currentProposal(fileId: string): Promise<ProposalRecord | null>;
+  /**
+   * Texts of solutions that already stand in the database (rationales and correct
+   * options of questions, documents for the trainer), at most `limit`, each at most
+   * 5000 characters. They are only searched for in an excerpt, never sent.
+   */
+  existingSolutionTexts(limit: number): Promise<string[]>;
   applyDecisions(input: ApplyDecisionsInput): Promise<ApplyDecisionsResult>;
 }
