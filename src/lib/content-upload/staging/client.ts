@@ -329,13 +329,23 @@ export function createUploadClient(partial: Partial<UploadClientDeps> = {}) {
 
   type Phase = 'hashing' | 'announcing' | 'uploading' | 'completing';
 
+  /**
+   * Hash of every file, or null for a file that cannot be read (the browser
+   * refuses it: a path over the limit of the system, a file that changed or was
+   * removed). One such file must not end the upload of all the others.
+   */
   async function hashAll(
     candidates: readonly UploadCandidate[],
     onProgress: (done: number) => void
-  ): Promise<string[]> {
+  ): Promise<(string | null)[]> {
     let done = 0;
     return mapLimit(candidates, HASH_CONCURRENCY, async c => {
-      const hash = await sha256OfFile(c.file, deps.digest);
+      let hash: string | null = null;
+      try {
+        hash = await sha256OfFile(c.file, deps.digest);
+      } catch {
+        hash = null;
+      }
       onProgress(++done);
       return hash;
     });
@@ -402,14 +412,26 @@ export function createUploadClient(partial: Partial<UploadClientDeps> = {}) {
       };
 
       // 1. hash
-      const hashes = await hashAll(candidates, done =>
+      const allHashes = await hashAll(candidates, done =>
         progress('hashing', done, candidates.length)
       );
       stop();
+      // Files that could not be read are reported, the rest goes on
+      const readable: UploadCandidate[] = [];
+      const hashes: string[] = [];
+      candidates.forEach((c, i) => {
+        const hash = allHashes[i];
+        if (hash === null) {
+          summary.failed.push({ path: c.path, code: 'UNREADABLE' });
+        } else {
+          readable.push(c);
+          hashes.push(hash);
+        }
+      });
 
       // 2. announce, in batches of 50
       const toUpload: { fileId: string; candidate: UploadCandidate }[] = [];
-      const entries = candidates.map((c, i) => ({
+      const entries = readable.map((c, i) => ({
         path: c.path,
         size: c.file.size,
         sha256: hashes[i],
@@ -424,7 +446,7 @@ export function createUploadClient(partial: Partial<UploadClientDeps> = {}) {
         );
         summary.warnings.push(...answer.warnings.map(w => w.code));
         answer.results.forEach((r: AnnounceItemResult) => {
-          const candidate = candidates[batch[r.index]];
+          const candidate = readable[batch[r.index]];
           if (r.status === 'rejected') {
             summary.rejected.push({
               path: candidate.path,
@@ -446,11 +468,12 @@ export function createUploadClient(partial: Partial<UploadClientDeps> = {}) {
           }
         });
         announcedDone += batch.length;
-        progress('announcing', announcedDone, candidates.length);
+        progress('announcing', announcedDone, readable.length);
       }
 
       // 3. to 5. urls, upload, report as done: per batch of 50
       let uploadedDone = 0;
+      let completedDone = 0;
       for (const batch of makeBatches(toUpload)) {
         stop();
         const urls = await client.requestUrls(
@@ -492,11 +515,8 @@ export function createUploadClient(partial: Partial<UploadClientDeps> = {}) {
                 code: r.code ?? r.status,
               });
           }
-          progress(
-            'completing',
-            summary.uploaded + summary.failed.length,
-            toUpload.length
-          );
+          completedDone += done.results.length;
+          progress('completing', completedDone, toUpload.length);
         }
       }
       return summary;
