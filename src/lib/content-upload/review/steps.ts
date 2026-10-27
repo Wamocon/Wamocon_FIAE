@@ -12,7 +12,9 @@
 // Two states because the model allows one step per state; the second one reads no
 // file. Nothing of the document is kept: the proposal holds type, codes, confidence
 // and reasons (code and fixed text), the file row holds numbers and finding codes.
-// The excerpt for the model is not built here, that is package U5.
+// The excerpt for the model is not built here, that is the stage of package U5
+// (src/lib/content-upload/ki): when the environment has a model step it takes the
+// files the rules left `unclear`, in the two slots `ki` and `kiCall`.
 
 import type { Decisions } from '@/lib/content-import/apply/types';
 import { readDocx } from '@/lib/content-upload/read-docx';
@@ -28,6 +30,13 @@ import {
   positiveListFromPaths,
 } from '@/lib/content-upload/classify/positive-list';
 import { OBJECT_DELETED_KEY } from '@/lib/content-upload/staging/types';
+import { contentUploadAvailability } from '@/lib/content-upload/staging/config';
+import { createKiStepEnv, type KiEnvOptions } from '@/lib/content-upload/ki/env';
+import {
+  createKiCallStep,
+  createKiReserveStep,
+  type KiStepEnv,
+} from '@/lib/content-upload/ki/steps';
 import {
   buildSteps,
   pumpRun,
@@ -47,6 +56,8 @@ import type { Paragraph } from '@/lib/content-import/types';
 
 /** What the steps need from outside (replaced in the tests). */
 export interface ReviewStepEnv {
+  /** The model step. Absent: the files the rules left unclear stay as they are. */
+  ki?: KiStepEnv;
   /** Positive list and presets of the run, loaded once and kept for the call of the pump. */
   context(): Promise<{ list: PositiveList; decisions: Decisions }>;
   writeProposal(
@@ -207,11 +218,14 @@ export function createRulesStep(): QueueStep {
   };
 }
 
-/** The steps with the slots of U6 filled in. */
+/** The steps with the slots of U6 filled in, and the model step when the environment has one. */
 export function reviewSteps(env: ReviewStepEnv): QueueStep[] {
   return buildSteps({
     extract: createExtractStep(env),
     rules: createRulesStep(),
+    ...(env.ki
+      ? { ki: createKiReserveStep(env.ki), kiCall: createKiCallStep(env.ki) }
+      : {}),
   });
 }
 
@@ -220,9 +234,27 @@ export function reviewSteps(env: ReviewStepEnv): QueueStep[] {
  * positive list (the components of the catalog plus the plan of the folder tree of
  * the run) is loaded on first use and kept for the call.
  */
-export function reviewStepEnv(deps: ReviewDeps, runId: string): ReviewStepEnv {
+export function reviewStepEnv(
+  deps: ReviewDeps,
+  runId: string,
+  ki: Partial<
+    Pick<KiEnvOptions, 'env' | 'available' | 'fetchImpl' | 'config'>
+  > = {}
+): ReviewStepEnv {
   let loaded: Promise<{ list: PositiveList; decisions: Decisions }> | undefined;
   return {
+    ki: deps.ki
+      ? createKiStepEnv({
+          deps,
+          ki: deps.ki,
+          runId,
+          env: ki.env ?? (() => process.env),
+          available:
+            ki.available ?? (() => contentUploadAvailability().enabled),
+          fetchImpl: ki.fetchImpl,
+          config: ki.config,
+        })
+      : undefined,
     context() {
       loaded ??= (async () => {
         const run = await deps.repo.getRun(runId);

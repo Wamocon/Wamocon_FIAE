@@ -7,6 +7,7 @@ import type { UploadDeps } from '@/lib/content-upload/staging/result';
 import { guardUploadStorage } from '@/lib/content-upload/staging/storage';
 import type { RunRow } from '@/lib/content-upload/staging/types';
 import type { ReviewDeps } from '@/lib/content-upload/review/service';
+import { MemoryKiRepo } from './memoryKiRepo';
 import { MemoryReviewRepo } from './memoryReviewRepo';
 import { MemoryUploadRepo } from './memoryUploadRepo';
 import { MemoryUploadStorage } from './memoryUploadStorage';
@@ -45,8 +46,10 @@ export function setup(schema: 'public' | 'public_preview' = 'public') {
   };
   // the review list on the same runs and files
   const review = new MemoryReviewRepo(repo);
-  const reviewDeps: ReviewDeps = { ...deps, review };
-  return { repo, mem, storage, deps, review, reviewDeps };
+  // the log of the model stage: the stage is off unless a test switches it on
+  const ki = new MemoryKiRepo(() => repo.now().getTime());
+  const reviewDeps: ReviewDeps = { ...deps, review, ki };
+  return { repo, mem, storage, deps, review, ki, reviewDeps };
 }
 
 export async function newRun(

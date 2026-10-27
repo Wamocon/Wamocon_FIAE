@@ -395,15 +395,6 @@ function quizParts(paragraphs: readonly Paragraph[], global: boolean): Parts {
   const docType: ExcerptDocType =
     quiz.kind === 'global' ? 'global_quiz' : 'quiz';
   const view = toTraineeQuiz(parsed);
-  if (!view) {
-    return {
-      lines: [],
-      solutions: [],
-      refused: true,
-      issues: errorCodes(parsed.issues),
-      docType,
-    };
-  }
   const solutions: string[] = [];
   for (const question of quiz.questions) {
     if (question.rationale) solutions.push(question.rationale);
@@ -412,6 +403,15 @@ function quizParts(paragraphs: readonly Paragraph[], global: boolean): Parts {
         solutions.push(option.text);
       }
     }
+  }
+  if (!view) {
+    return {
+      lines: [],
+      solutions,
+      refused: true,
+      issues: errorCodes(parsed.issues),
+      docType,
+    };
   }
   const lines: Line[] = [titleLine(paragraphs)];
   if (quiz.kind === 'global') lines.push({ text: 'Global Quiz' });
@@ -550,6 +550,53 @@ function unknownParts(paragraphs: readonly Paragraph[]): Parts {
 
 // --- the excerpt -------------------------------------------------------------
 
+/** Step 1 of the excerpt: every paragraph cleaned, with limits on the work. */
+function cleanParagraphs(input: readonly Paragraph[]): {
+  paragraphs: Paragraph[];
+  truncated: boolean;
+} {
+  let truncated = input.length > MAX_PARAGRAPHS;
+  let budget = MAX_FULL_TEXT_CHARS;
+  const paragraphs: Paragraph[] = input
+    .slice(0, MAX_PARAGRAPHS)
+    .map(paragraph => {
+      const raw = String(paragraph.text ?? '');
+      if (raw.length > MAX_PARAGRAPH_CHARS) truncated = true;
+      // the work on the text has a total budget, whatever the caller passes
+      const take = raw.slice(
+        0,
+        Math.min(MAX_PARAGRAPH_CHARS, Math.max(0, budget))
+      );
+      if (take.length < raw.length) truncated = true;
+      budget -= take.length;
+      return {
+        ...paragraph,
+        text: sanitizeExcerptText(take),
+      };
+    })
+    // the page header of an own PDF is no part of the text
+    .filter(paragraph => !isOwnLetterheadLine(paragraph.text));
+  return { paragraphs, truncated };
+}
+
+/**
+ * The solution texts a document names (rationales, the text of the correct
+ * option, the solution and the knowledge text of a scenario, the solution and the
+ * criteria of a use case), cleaned like the lines of an excerpt. They are only
+ * searched for in the excerpts of OTHER files, never sent. Also for a file that
+ * a parser refuses: its solutions can still stand in another file.
+ */
+export function solutionTextsOf(input: readonly Paragraph[]): string[] {
+  const { paragraphs } = cleanParagraphs(input);
+  const lines = paragraphs.flatMap(p => linesOf(p.text));
+  if (lines.length === 0) return [];
+  const { kind, global } = recognize(paragraphs, lines);
+  if (kind === 'quiz') return quizParts(paragraphs, global).solutions;
+  if (kind === 'scenario') return scenarioParts(paragraphs).solutions;
+  if (kind === 'use_case') return partsOfUseCase(paragraphs).solutions;
+  return [];
+}
+
 const nothing = (
   findings: Finding[],
   reason: ExcerptReason,
@@ -575,27 +622,7 @@ export function buildExcerpt(input: BuildExcerptInput): ExcerptResult {
   );
 
   // 1. clean every paragraph, with limits on the work
-  let truncated = input.paragraphs.length > MAX_PARAGRAPHS;
-  let budget = MAX_FULL_TEXT_CHARS;
-  const paragraphs: Paragraph[] = input.paragraphs
-    .slice(0, MAX_PARAGRAPHS)
-    .map(paragraph => {
-      const raw = String(paragraph.text ?? '');
-      if (raw.length > MAX_PARAGRAPH_CHARS) truncated = true;
-      // the work on the text has a total budget, whatever the caller passes
-      const take = raw.slice(
-        0,
-        Math.min(MAX_PARAGRAPH_CHARS, Math.max(0, budget))
-      );
-      if (take.length < raw.length) truncated = true;
-      budget -= take.length;
-      return {
-        ...paragraph,
-        text: sanitizeExcerptText(take),
-      };
-    })
-    // the page header of an own PDF is no part of the text
-    .filter(paragraph => !isOwnLetterheadLine(paragraph.text));
+  const { paragraphs, truncated } = cleanParagraphs(input.paragraphs);
   if (truncated) {
     findings.push(
       finding(

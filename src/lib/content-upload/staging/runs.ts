@@ -159,7 +159,8 @@ export function parseCreateRunBody(
       'CATALOG_UNSUPPORTED'
     );
   }
-  return ok({ label, kiEnabled: input.kiEnabled !== false });
+  // The model stage is an opt in: a run without the choice does not send anything
+  return ok({ label, kiEnabled: input.kiEnabled === true });
 }
 
 export async function createRun(

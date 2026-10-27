@@ -141,6 +141,21 @@ export interface RowDuplicateDto {
   ambiguous: boolean;
 }
 
+/**
+ * How the model stage ended for a file that the rules left unclear (the marker
+ * `kiState` in the summary of the file). A proposal of the model is not listed
+ * here: it is the proposal itself, with the source `ki`.
+ */
+export const KI_STATES = [
+  'proposed',
+  'conflict',
+  'not_sent',
+  'failed',
+  'invalid',
+  'no_result',
+] as const;
+export type KiStateName = (typeof KI_STATES)[number];
+
 export interface ReviewRowDto {
   id: string;
   fileName: string;
@@ -160,6 +175,8 @@ export interface ReviewRowDto {
   duplicate: RowDuplicateDto | null;
   /** Exact copy of another file of the run (the copy has no object of its own). */
   copyOfId: string | null;
+  /** The end of the model stage for this file, or null when it did not take part. */
+  ki: KiStateName | null;
 }
 
 export interface ReviewCounts {

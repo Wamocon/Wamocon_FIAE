@@ -24,6 +24,7 @@ import {
   type ReviewContext,
 } from '@/lib/content-upload/review/build';
 import { facetsOf, pageRows } from '@/lib/content-upload/review/filter';
+import type { KiRepo } from '@/lib/content-upload/ki/repo';
 import type { ReviewRepo } from '@/lib/content-upload/review/repo';
 import {
   ASSIGNABLE_DOC_TYPES,
@@ -48,6 +49,11 @@ import presets from '../../../../scripts/import/kfbm-decisions.json';
 /** What the review services run on. */
 export interface ReviewDeps extends UploadDeps {
   review: ReviewRepo;
+  /**
+   * The log of the Sokrates stage. Without it the pump has no model step at all
+   * (the unit tests of the rule stage run like that).
+   */
+  ki?: KiRepo;
 }
 
 let presetCache: Decisions | undefined;

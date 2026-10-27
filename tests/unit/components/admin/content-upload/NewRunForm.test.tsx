@@ -48,9 +48,9 @@ describe('NewRunForm', () => {
         /Die Dateien sind eigenes Lehrmaterial und enthalten keine Kundendokumente/
       )
     ).toBeInTheDocument();
-    // the opt in is on by default, as the concept says, and tells that it does nothing yet
-    expect(ki()).toBeChecked();
-    expect(ki()).toHaveAccessibleDescription(/noch nicht verfügbar/);
+    // the opt in is a choice: off until the person makes it, and it says what it does
+    expect(ki()).not.toBeChecked();
+    expect(ki()).toHaveAccessibleDescription(/ohne Lösungsteile und ohne Dateinamen/);
     expect(
       screen.getByRole('link', { name: 'Zurück zu den Läufen' })
     ).toHaveAttribute('href', '/trainer/admin/content-upload');
@@ -91,7 +91,7 @@ describe('NewRunForm', () => {
     await waitFor(() =>
       expect(client.createRun).toHaveBeenCalledWith({
         label: 'KfBM Teil 2 Wahl',
-        kiEnabled: false,
+        kiEnabled: true,
       })
     );
     expect(

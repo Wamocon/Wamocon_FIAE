@@ -273,10 +273,103 @@ describe('ReviewView: the table', () => {
   it('names a file that was not sent to the model (unclear) in its row', async () => {
     await open();
     expect(
-      within(rowOf('C_lose.docx')).getByText(
-        'Struktur unbekannt, nicht an die KI gesendet'
-      )
+      within(rowOf('C_lose.docx')).getByText('Nicht an die KI gesendet')
     ).toBeInTheDocument();
+  });
+
+  describe('what comes from the model', () => {
+    const kiRow = () =>
+      rowDto({
+        band: 'medium',
+        fileName: 'K_Quiz.docx',
+        status: 'proposed_ki',
+        proposal: {
+          source: 'ki',
+          docType: 'quiz',
+          componentCode: 'K6.2',
+          enablerCode: 'K6.2-a',
+          quizLevel: 'low',
+          band: 'medium',
+          confidence: 0.8,
+          reasons: [
+            {
+              code: 'KI_PROPOSAL',
+              text: 'Vorschlag von Sokrates: Die Überschrift nennt ein Quiz.',
+            },
+            { code: 'AMBIGUOUS_CODE', text: 'Der Code passt zu mehreren Komponenten.' },
+          ],
+          isNew: false,
+        },
+        effective: {
+          docType: 'quiz',
+          componentCode: 'K6.2',
+          enablerCode: 'K6.2-a',
+          quizLevel: 'low',
+        },
+      });
+
+    it('marks a proposal of the model in the source column, in words and with a hint', async () => {
+      await open(fakeClient(), fakeUpload(), [
+        kiRow(),
+        rowDto({ band: 'high', fileName: 'A_Quiz.docx' }),
+      ]);
+      const row = rowOf('K_Quiz.docx');
+      const badge = within(row).getByText('KI-Vorschlag');
+      expect(badge).toBeInTheDocument();
+      // the hint is text on the page, right next to the mark
+      expect(
+        within(row).getByText(
+          'Vorschlag von Sokrates, nicht von den Regeln. Bitte prüfen.'
+        )
+      ).toBeInTheDocument();
+      // a proposal of the rules has no such mark
+      expect(
+        within(rowOf('A_Quiz.docx')).queryByText('KI-Vorschlag')
+      ).not.toBeInTheDocument();
+      expect(within(rowOf('A_Quiz.docx')).getByText('Pfad und Inhalt')).toBeInTheDocument();
+    });
+
+    it('says in the details that it is a proposal and that the excerpt is not stored', async () => {
+      const { user } = await open(fakeClient(), fakeUpload(), [kiRow()]);
+      await user.click(
+        screen.getByRole('button', { name: 'Details zu K_Quiz.docx anzeigen' })
+      );
+      expect(
+        screen.getByText(/Dieser Vorschlag stammt von Sokrates, der eigenen KI/)
+      ).toBeInTheDocument();
+      expect(screen.getByText('(KI_PROPOSAL)')).toBeInTheDocument();
+      // the reasons of the rules stay next to it
+      expect(screen.getByText('(AMBIGUOUS_CODE)')).toBeInTheDocument();
+    });
+
+    it('names how the model stage ended for an unclear file', async () => {
+      const rows = (
+        ['not_sent', 'failed', 'invalid', 'conflict', 'no_result'] as const
+      ).map(ki => rowDto({ band: 'low', fileName: `${ki}.docx`, ki }));
+      await open(fakeClient(), fakeUpload(), rows);
+      for (const [name, text] of [
+        ['not_sent', 'Nicht an die KI gesendet'],
+        ['failed', 'KI nicht erreichbar oder ohne Antwort'],
+        ['invalid', 'Antwort der KI nicht verwertbar'],
+        ['conflict', 'KI widerspricht den Regeln'],
+        ['no_result', 'KI konnte nicht einordnen'],
+      ]) {
+        expect(within(rowOf(`${name}.docx`)).getByText(text)).toBeInTheDocument();
+      }
+    });
+
+    it('does not take the proposal of the model as it stands when it needs a person (low band)', async () => {
+      const row = kiRow();
+      row.proposal!.band = 'low';
+      const { user, client } = await open(fakeClient(), fakeUpload(), [row]);
+      await user.click(
+        within(decisionGroup('K_Quiz.docx')).getByRole('button', {
+          name: 'Übernehmen',
+        })
+      );
+      // the editor opens instead of a decision being written
+      expect(client.decide).not.toHaveBeenCalled();
+    });
   });
 
   it('says in words and symbols what the band is, not by colour alone', async () => {
