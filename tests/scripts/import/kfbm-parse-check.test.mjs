@@ -168,6 +168,49 @@ test('checks a scenario and its code', () => {
   assert.deepEqual(codes(bad), ['CODE_MISMATCH']);
 });
 
+const useCaseParagraphs = (code = '1a', { solution = true } = {}) => [
+  p(`${code}) Erfundener Titel`),
+  p('Behandelte Themen', true),
+  p('Erfundenes Thema.'),
+  p('Ausgangssituation', true),
+  p('Eine erfundene Lage.'),
+  p('Eckdaten', true),
+  p('Zielsetzung', true),
+  p('Ein erfundenes Ziel.'),
+  p('Weg zum Ziel', true),
+  p('Ein erfundener Schritt.'),
+  ...(solution
+    ? [p('Musterlösung', true), p('Eine erfundene Lösung OMEGA.')]
+    : []),
+];
+
+test('checks a use case: sections, code and folder without model solution', () => {
+  const rel = `${T1}/K1_Use-Cases/UC_1a_Aufgabe.docx`;
+  const ok = checkParsed(rel, pathInfo(rel), {
+    paragraphs: useCaseParagraphs(),
+  });
+  assert.equal(ok.status, 'ok');
+  assert.equal(ok.stats.code, '1a');
+  assert.ok(ok.stats.solutionCharacters > 0);
+  // the report keeps counts, no text
+  assert.ok(!JSON.stringify(ok).includes('OMEGA'));
+
+  const bad = checkParsed(rel, pathInfo(rel), {
+    paragraphs: useCaseParagraphs('1b'),
+  });
+  assert.deepEqual(codes(bad), ['CODE_MISMATCH']);
+
+  const without = `${T1}/K1_Use-Cases/Ohne Musterlösung/UC_1a_Aufgabe.docx`;
+  const noSolution = checkParsed(without, pathInfo(without), {
+    paragraphs: useCaseParagraphs('1a', { solution: false }),
+  });
+  assert.deepEqual(codes(noSolution).sort(), [
+    'FOLDER_WITHOUT_SOLUTION',
+    'SECTION_MISSING',
+  ]);
+  assert.equal(noSolution.status, 'error');
+});
+
 test('an enabler text only needs a heading and some text, and keeps its metadata', () => {
   const rel = `${T1}/Enablers/1a_Thema/1a.docx`;
   const ok = checkParsed(rel, pathInfo(rel), {

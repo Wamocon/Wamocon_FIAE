@@ -49,7 +49,8 @@
     "import:kfbm:inventory": "node scripts/import/kfbm-inventory.mjs",
     "import:kfbm:parse-check": "node scripts/import/kfbm-parse-check.mjs",
     "import:kfbm:apply": "node scripts/import/kfbm-apply.mjs",
-    "import:kfbm:learning-fields": "node scripts/import/kfbm-learning-fields.mjs"
+    "import:kfbm:learning-fields": "node scripts/import/kfbm-learning-fields.mjs",
+    "import:kfbm:use-cases": "node scripts/import/kfbm-use-cases.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",

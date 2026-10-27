@@ -182,6 +182,34 @@ describe('pathInfo: use cases, global quizzes, overview', () => {
     );
     expect(c.type).toBe('use-case');
     expect(c.key).toBe('use-case:5b');
+    expect(c.flags).toContain('without-solution');
+    expect(a.flags).not.toContain('without-solution');
+  });
+
+  it('treats an archive folder or file in a use case folder as archive', () => {
+    const base = `${T2_12}/K12_Use-Case`;
+    expect(pathInfo(`${base}/UC_12e_Old_To_Delete.docx`).type).toBe('archive');
+    expect(pathInfo(`${base}/Archiv/UC_12e_Titel.docx`).type).toBe('archive');
+    // the whole word only: a topic like Archivierung is a use case
+    expect(
+      pathInfo(`${base}/UC_12e_Dokumente_Archivierung_pruefen.docx`).type
+    ).toBe('use-case');
+  });
+
+  it('flags a use case folder without a model solution, in both spellings', () => {
+    const base =
+      'Komponente Teil 1 (1-15 Monate)\\05 - Kundenbeziehungen (§ 4 Abs. 2 Nr. 5)\\K5_Use-Cases';
+    for (const folder of [
+      'Ohne Musterlösung',
+      'ohne Musterloesung',
+      'Ohne  Musterlösung (alt)',
+    ]) {
+      const info = pathInfo(`${base}\\${folder}\\UC_5b_Titel.docx`);
+      expect(info.flags).toContain('without-solution');
+    }
+    // A file name alone does not carry the flag, only a folder does.
+    const named = pathInfo(`${base}\\UC_5b_ohne Musterlösung.docx`);
+    expect(named.flags).not.toContain('without-solution');
   });
 
   it('reads global quizzes of the global folder and of the component folder', () => {
