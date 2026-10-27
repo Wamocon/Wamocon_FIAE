@@ -2,7 +2,10 @@
 
 import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { DECIDABLE } from '@/lib/content-upload/review/states';
+import {
+  DECIDABLE,
+  UNCHECKED_REASONS,
+} from '@/lib/content-upload/review/states';
 import type {
   AssignmentDto,
   DecisionAction,
@@ -11,6 +14,7 @@ import type {
   SortKey,
 } from '@/lib/content-upload/review/types';
 import { BandBadge } from '@/components/admin/content-upload/BandBadge';
+import { StockBadge } from '@/components/admin/content-upload/StockBadge';
 import { KiBadge } from '@/components/admin/content-upload/KiBadge';
 import {
   KIND_KEYS,
@@ -49,12 +53,6 @@ export function describeAssignment(t: Translate, a: AssignmentDto): string {
  * Reasons that say the content was not checked with full certainty: such a
  * proposal is not taken as it stands either (the same list as the route has).
  */
-const UNCHECKED_REASONS: ReadonlySet<string> = new Set([
-  'SOLUTION_MARKER',
-  'CONTENT_UNREADABLE',
-  'INPUT_TRUNCATED',
-  'ARCHIVE_ABOVE_TREE',
-]);
 
 /** The proposal is taken as it stands only in the band high or medium without such a reason (as the route does). */
 export function canAcceptAsProposed(row: ReviewRowDto): boolean {
@@ -87,7 +85,7 @@ type Props = {
   onOpenDuplicate: (key: string) => void;
 };
 
-const COLUMNS = 6;
+const COLUMNS = 7;
 
 export function ReviewTable({
   rows,
@@ -165,6 +163,9 @@ export function ReviewTable({
             </th>
             <th scope="col" aria-sort={ariaSort('band')} className="px-3 py-3">
               {sortButton('band', t('contentUpload.col.confidence'))}
+            </th>
+            <th scope="col" className="px-3 py-3 font-semibold">
+              {t('contentUpload.col.stock')}
             </th>
             <th scope="col" className="px-3 py-3 font-semibold">
               {t('contentUpload.col.decision')}
@@ -358,6 +359,13 @@ function Row({
             band={row.proposal.band}
             confidence={row.proposal.confidence}
           />
+        ) : (
+          <span className="text-muted">-</span>
+        )}
+      </td>
+      <td className="px-3 py-3">
+        {DECIDABLE.includes(row.status) ? (
+          <StockBadge stock={row.stock} />
         ) : (
           <span className="text-muted">-</span>
         )}

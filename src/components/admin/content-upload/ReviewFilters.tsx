@@ -5,14 +5,18 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import {
   BAND_FILTERS,
   STATUS_FILTERS,
+  STOCK_FILTERS,
   type ReviewCounts,
   type ReviewFacets,
   type ReviewFilter,
   type StatusFilter,
+  type StockFilter,
 } from '@/lib/content-upload/review/types';
 import type { ProposalBand } from '@/lib/content-upload/classify/types';
 import {
   BAND_SYMBOL,
+  STOCK_SYMBOL,
+  stockLabel,
   typeLabel,
 } from '@/components/admin/content-upload/labels';
 import {
@@ -37,6 +41,7 @@ export function hasActiveFilter(filter: ReviewFilter): boolean {
     filter.docType ||
     filter.component ||
     (filter.status && filter.status !== 'all') ||
+    filter.stock ||
     filter.duplicates ||
     filter.query?.trim()
   );
@@ -92,6 +97,8 @@ export function ReviewFilters({ filter, counts, facets, onChange }: Props) {
 
   const toggleBand = (band: ProposalBand) =>
     set({ band: filter.band === band ? undefined : band });
+  const toggleStock = (stock: StockFilter) =>
+    set({ stock: filter.stock === stock ? undefined : stock });
 
   return (
     <section
@@ -129,6 +136,26 @@ export function ReviewFilters({ filter, counts, facets, onChange }: Props) {
             set({
               status: filter.status === 'problems' ? undefined : 'problems',
             })
+        )}
+      </div>
+
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label={t('contentUpload.filters.stockGroup')}
+      >
+        <span className="text-foreground text-sm font-medium">
+          {t('contentUpload.filters.stockTitle')}
+        </span>
+        {STOCK_FILTERS.map(key =>
+          chip(
+            `stock-${key}`,
+            key === 'none' ? t('contentUpload.stock.none') : stockLabel(t, key),
+            counts.stock[key],
+            filter.stock === key,
+            () => toggleStock(key),
+            key === 'none' ? undefined : STOCK_SYMBOL[key]
+          )
         )}
       </div>
 

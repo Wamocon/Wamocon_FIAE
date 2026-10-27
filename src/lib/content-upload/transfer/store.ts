@@ -15,8 +15,10 @@
 
 import type { Queryable } from '@/lib/content-import/apply/pg-db';
 import type { TableName } from '@/lib/content-import/apply/tables';
+import type { StoredStock } from '@/lib/content-upload/transfer/stock';
 import type {
   ComponentFact,
+  EnablerFact,
   TransferFile,
 } from '@/lib/content-upload/transfer/types';
 
@@ -67,14 +69,47 @@ export interface ProtocolWriter {
    * is cleared so the next apply needs a new dry run. False if the run is not applying.
    */
   finishRunApplied(runId: string, purgeDays: number): Promise<boolean>;
+  /**
+   * Takes the stored status of the supply (parse_summary.stock) off every file of the
+   * run: after an apply the database is another one and the old comparison is stale.
+   */
+  clearStock(runId: string): Promise<void>;
+}
+
+/** The status of the supply of one file, as it is stored. */
+export interface StockWrite {
+  fileId: string;
+  stock: StoredStock;
 }
 
 export interface TransferStore {
   getRunState(runId: string): Promise<RunState | null>;
   /** Gives a run that has been applying for `minutes` back to review. */
   releaseStale(runId: string, minutes: number): Promise<boolean>;
-  loadFiles(runId: string): Promise<TransferFile[]>;
+  /**
+   * The files of the run with their current decision. With `effective` every file that
+   * has a decision or a proposal: a file without a decision counts as accepted with the
+   * assignment of its proposal (the comparison of the supply, nothing is written).
+   */
+  loadFiles(
+    runId: string,
+    options?: { effective?: boolean }
+  ): Promise<TransferFile[]>;
+  /**
+   * Stores the status of the supply per file, only while the run is in review. Returns
+   * how many files were written.
+   */
+  saveStock(runId: string, entries: readonly StockWrite[]): Promise<number>;
+  /**
+   * Makes `entries` the stored status of the run in ONE statement: the files named get
+   * their status, every other file of the run loses an older one. Only while the run is
+   * in review (the row of the run is locked for the statement). Returns how many of the
+   * entries were stored.
+   */
+  replaceStock(runId: string, entries: readonly StockWrite[]): Promise<number>;
   loadComponents(catalogId: string): Promise<ComponentFact[]>;
+  /** The enablers of the catalog with the code of their component (course). */
+  loadEnablers(catalogId: string): Promise<EnablerFact[]>;
   /**
    * The gate: review -> applying, only if the decisions are still at `version`
    * and, for an apply, only if the last dry run hash is `requireHash`. One
@@ -186,6 +221,15 @@ export class PgProtocolWriter implements ProtocolWriter {
     );
     return result.rows.length === 1;
   }
+
+  async clearStock(runId: string): Promise<void> {
+    await this.q.query(
+      `update content_upload_files
+          set parse_summary = parse_summary - 'stock'
+        where run_id = $1 and (parse_summary -> 'stock') is not null`,
+      [runId]
+    );
+  }
 }
 
 export class PgTransferStore implements TransferStore {
@@ -229,10 +273,16 @@ export class PgTransferStore implements TransferStore {
     return result.rows.length === 1;
   }
 
-  async loadFiles(runId: string): Promise<TransferFile[]> {
+  async loadFiles(
+    runId: string,
+    options: { effective?: boolean } = {}
+  ): Promise<TransferFile[]> {
     // The decision must belong to the same run as the file (the database does not
     // check that, the application does, docs 9.2). Only files that have an object
     // after the extraction can be part of a transfer.
+    // With `effective` a file without a decision takes the assignment of its current
+    // proposal as an acceptance (never written anywhere: only the comparison uses it).
+    const effective = options.effective === true;
     const result = await this.q.query(
       `select f.id, f.rel_path, f.file_name, f.ext, f.size_bytes, f.sha256,
               f.client_mtime_ms,
@@ -240,12 +290,17 @@ export class PgTransferStore implements TransferStore {
               f.storage_path, f.status, f.dup_key,
               (coalesce(f.parse_summary ->> 'objectDeleted', '') = 'true') as object_deleted,
               d.id as decision_id, d.action, d.doc_type, d.component_code,
-              d.enabler_code, d.quiz_level, d.dup_choice, d.decisions_version
+              d.enabler_code, d.quiz_level, d.dup_choice, d.decisions_version,
+              p.id as proposal_id, p.doc_type as p_doc_type,
+              p.component_code as p_component_code,
+              p.enabler_code as p_enabler_code, p.quiz_level as p_quiz_level
          from content_upload_files f
-         join content_upload_decisions d
+         ${effective ? 'left ' : ''}join content_upload_decisions d
            on d.file_id = f.id and d.run_id = f.run_id and d.is_current
+         ${effective ? 'left join content_upload_proposals p on p.file_id = f.id and p.is_current' : 'left join content_upload_proposals p on false'}
         where f.run_id = $1
           and f.status in ('proposed_rules', 'unclear', 'proposed_ki', 'decided', 'applied')
+          ${effective ? 'and (d.id is not null or p.id is not null)' : ''}
         order by f.id`,
       [runId]
     );
@@ -264,17 +319,56 @@ export class PgTransferStore implements TransferStore {
       status: String(r.status),
       dupKey: text(r.dup_key),
       objectDeleted: r.object_deleted === true,
-      decision: {
-        id: String(r.decision_id),
-        action: String(r.action) as 'accept' | 'reject' | 'defer',
-        docType: text(r.doc_type),
-        componentCode: text(r.component_code),
-        enablerCode: text(r.enabler_code),
-        quizLevel: text(r.quiz_level),
-        dupChoice: text(r.dup_choice) as 'keep' | 'skip' | null,
-        decisionsVersion: Number(r.decisions_version),
-      },
+      decision:
+        r.decision_id !== null && r.decision_id !== undefined
+          ? {
+              id: String(r.decision_id),
+              action: String(r.action) as 'accept' | 'reject' | 'defer',
+              docType: text(r.doc_type),
+              componentCode: text(r.component_code),
+              enablerCode: text(r.enabler_code),
+              quizLevel: text(r.quiz_level),
+              dupChoice: text(r.dup_choice) as 'keep' | 'skip' | null,
+              decisionsVersion: Number(r.decisions_version),
+            }
+          : {
+              // no decision yet: the proposal counts as accepted (effective only)
+              id: String(r.proposal_id),
+              action: 'accept' as const,
+              docType: text(r.p_doc_type),
+              componentCode: text(r.p_component_code),
+              enablerCode: text(r.p_enabler_code),
+              quizLevel: text(r.p_quiz_level),
+              dupChoice: null,
+              decisionsVersion: 0,
+            },
     }));
+  }
+
+  async saveStock(
+    runId: string,
+    entries: readonly StockWrite[]
+  ): Promise<number> {
+    let written = 0;
+    for (const chunk of chunks(entries, 500)) {
+      const result = await this.q.query(
+        `update content_upload_files f
+            set parse_summary = coalesce(f.parse_summary, '{}'::jsonb)
+                                || jsonb_build_object('stock', v.stock::text::jsonb)
+           from (select unnest($2::uuid[]) as id, unnest($3::text[]) as stock) v
+          where f.run_id = $1 and f.id = v.id
+            and f.status in ('proposed_rules', 'unclear', 'proposed_ki', 'decided')
+            and exists (select 1 from content_upload_runs r
+                         where r.id = $1 and r.status = 'review')`,
+        [
+          runId,
+          chunk.map(e => e.fileId),
+          chunk.map(e => JSON.stringify(e.stock)),
+        ]
+      );
+      written += result.rowCount ?? 0;
+    }
+    return written;
   }
 
   async loadComponents(catalogId: string): Promise<ComponentFact[]> {
@@ -290,6 +384,23 @@ export class PgTransferStore implements TransferStore {
       reference: text(r.description),
       kind: text(r.kind),
       phase: r.phase === null || r.phase === undefined ? null : Number(r.phase),
+    }));
+  }
+
+  async loadEnablers(catalogId: string): Promise<EnablerFact[]> {
+    const result = await this.q.query(
+      `select e.code, e.title, e.order_index, c.code as component_code
+         from enablers e
+         join courses c on c.id = e.course_id
+        where e.training_catalog_id = $1 and e.code is not null and c.code is not null
+        order by e.id`,
+      [catalogId]
+    );
+    return result.rows.map(r => ({
+      code: String(r.code),
+      title: String(r.title),
+      componentCode: String(r.component_code),
+      orderIndex: Number(r.order_index ?? 0),
     }));
   }
 
@@ -321,6 +432,37 @@ export class PgTransferStore implements TransferStore {
       [runId, hash]
     );
     return result.rows.length === 1;
+  }
+
+  async replaceStock(
+    runId: string,
+    entries: readonly StockWrite[]
+  ): Promise<number> {
+    const result = await this.q.query(
+      `with run as (
+         select id from content_upload_runs where id = $1 and status = 'review' for share
+       ),
+       v as (select unnest($2::uuid[]) as id, unnest($3::text[]) as stock)
+       update content_upload_files f
+          set parse_summary = case
+                when exists (select 1 from v where v.id = f.id)
+                then coalesce(f.parse_summary, '{}'::jsonb)
+                     || jsonb_build_object('stock', (select v.stock from v where v.id = f.id)::text::jsonb)
+                else f.parse_summary - 'stock'
+              end
+        where f.run_id = $1
+          and f.status in ('proposed_rules', 'unclear', 'proposed_ki', 'decided')
+          and exists (select 1 from run)
+          and (exists (select 1 from v where v.id = f.id)
+               or (f.parse_summary -> 'stock') is not null)
+        returning exists (select 1 from v where v.id = f.id) as stored`,
+      [
+        runId,
+        entries.map(e => e.fileId),
+        entries.map(e => JSON.stringify(e.stock)),
+      ]
+    );
+    return result.rows.filter(r => r.stored === true).length;
   }
 
   recordAttempt(record: ApplyRecord): Promise<string> {

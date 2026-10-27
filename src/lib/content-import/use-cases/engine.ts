@@ -30,7 +30,12 @@ import type { Db, Row } from '../apply/db';
 import { ImportAbort } from '../apply/db';
 import { TABLES } from '../apply/tables';
 import type { TableName } from '../apply/tables';
-import type { Conflict, Difference, TableCount } from '../apply/types';
+import type {
+  Conflict,
+  Difference,
+  ItemEvent,
+  TableCount,
+} from '../apply/types';
 import {
   findUseCaseRowLeaks,
   leakInUseCaseText,
@@ -53,6 +58,16 @@ export interface UseCaseRunOptions {
   activate: boolean;
   /** Also write the model solution and the criteria (trainer only rows). */
   solutions: boolean;
+  /**
+   * Called for every item the comparison classifies (new, unchanged, differs,
+   * conflict), with the key of the differences and conflicts. Gets no row content.
+   */
+  observe?: (event: ItemEvent) => void;
+  /**
+   * With updateExisting: asks for every row that differs whether it may be
+   * updated. A refused row stays as it is and is still reported as a difference.
+   */
+  updateFilter?: (table: TableName, key: string) => boolean;
 }
 
 export interface UseCaseSkipInDb {
@@ -250,8 +265,11 @@ export async function executeUseCasePlan(
     patch: Row;
     visible: boolean;
   }> = [];
-  const conflict = (table: string, key: string, reason: string) =>
+  const observe = (event: ItemEvent) => options.observe?.(event);
+  const conflict = (table: string, key: string, reason: string) => {
     conflicts.push({ table, key, reason });
+    observe({ table, key, status: 'conflict' });
+  };
 
   /** Columns of the table in which the existing row differs from the desired one. */
   const diffColumns = (table: TableName, existing: Row, desired: Row) =>
@@ -275,10 +293,15 @@ export async function executeUseCasePlan(
     const columns = diffColumns(table, existing, desired);
     if (columns.length === 0) {
       counts[table].unchanged += 1;
+      observe({ table, key, status: 'unchanged' });
       return;
     }
     differences.push({ table, key, columns });
-    if (options.updateExisting) {
+    observe({ table, key, status: 'differs' });
+    if (
+      options.updateExisting &&
+      (options.updateFilter?.(table, key) ?? true)
+    ) {
       counts[table].update += 1;
       updates.push({
         table,
@@ -372,6 +395,7 @@ export async function executeUseCasePlan(
         } else {
           counts.content_documents.insert += 1;
           freshDocsOfExisting.push(row);
+          observe({ table: DOCUMENTS, key, status: 'new' });
         }
       }
       continue;
@@ -392,6 +416,7 @@ export async function executeUseCasePlan(
       options.solutions
     );
     counts.use_cases.insert += 1;
+    observe({ table: USE_CASES, key: useCase.code, status: 'new' });
     counts.content_documents.insert += docs.length;
     fresh.push({
       useCase,

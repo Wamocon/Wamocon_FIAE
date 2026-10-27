@@ -270,7 +270,7 @@ Eindeutig: `(run_id, rel_path, sha256)`. Indizes: `(run_id, status, locked_until
 | `note`                                                     | text, null             | Anmerkung, höchstens 500 Zeichen                                                       |
 | `is_current`, `decided_at`                                 | boolean, timestamptz   | höchstens eine aktuelle Entscheidung je Datei (Teilindex `(file_id) where is_current`) |
 
-Den Schalter "bestehende Zeilen aktualisieren" kennt die Engine nur einmal je Lauf (`RunOptions.updateExisting` in `apply/engine.ts`). Er steht deshalb je Übernahme in `content_upload_applies.update_existing`, nicht je Entscheidung.
+Den Schalter "bestehende Zeilen aktualisieren" kennt die Engine nur einmal je Lauf (`RunOptions.updateExisting` in `apply/engine.ts`). Seit UP1 wird er nur noch mit einer Dateiauswahl (`replaceFiles`, `RunOptions.updateFilter`) benutzt, siehe Abschnitt 19. `content_upload_applies.update_existing` heißt jetzt: mindestens eine Datei wird ersetzt.
 
 **`content_upload_ki_calls`** (Protokoll jeder Übermittlung)
 
@@ -1222,7 +1222,7 @@ Stand: 27.10.2026. Paket U7 ist umgesetzt, ohne Migration und ohne Wirkung auf P
 | Protokoll (`transfer/record.ts`, `attribution.ts`) | Ein Decorator um die `Db`-Schnittstelle der Engine liefert Zeilen-IDs und Vorwerte, die Engines blieben unverändert. Eine Zeile je Tabelle und ID, `file_id` aus dem Plan. Alles in derselben Transaktion wie der Inhalt |
 | Festgelegt (`FIXED_ENGINE_OPTIONS`) | `activate` und beide Lösungsschalter sind `false`. Ein Test liest die Quelltexte (`transfer-policy.test.ts`), ein weiterer prüft mit Voreinstellungen `activate: true`, dass trotzdem alles inaktiv bleibt |
 | Tippbestätigung | `confirm` muss genau `KFBM` sein, sonst 400 ohne jede Wirkung |
-| Schalter "Bestehende Zeilen aktualisieren" | je Übernahme (`update_existing` im Protokoll), Teil des Hashes: ein Probelauf mit Schalter öffnet das Tor nicht für eine Übernahme ohne |
+| Schalter "Bestehende Zeilen aktualisieren" | seit UP1 je Datei (`replaceFiles`, Abschnitt 19), Teil des Hashes: ein Probelauf mit anderer Auswahl öffnet das Tor nicht |
 | `purge_after` | Beim Übernehmen jetzt plus 30 Tage (Entscheidung O3), im selben Update, das den Lauf auf `applied` setzt |
 | Rückbau (`transfer/rollback.ts`) | SQL-Text aus `applied_rows`, ausgeführt vom Eigentümer, erst als Probe. Siehe 16.3 |
 | Originale (`transfer/originals.ts`, `content-bucket.ts`, Engine) | Neue Operation der Engine (`enablerOriginals`): eine Zeile `THEORY`/`ALL` am Enabler mit Dateiangaben, nur für Enabler-Lehrtexte. Siehe 16.4 |
@@ -1433,3 +1433,19 @@ Geprüft mit `ecc:security-reviewer` (Pflicht: Daten an Dritte, SSRF) und `ecc:t
 - **Zähler der Obergrenzen** werden vor dem Aufruf geprüft, bei gleichzeitigen Aufrufen sind wenige mehr möglich. Ein Absturz zwischen Senden und Protokoll lässt eine Zeile fehlen.
 - **Standard `ki_enabled` in der Datenbank** ist weiter `true` (Migration nicht erlaubt). Heute schreibt jeder Pfad den Wert ausdrücklich.
 - Zusammenführen mit UP1 (Prüfliste und Planbau) und ST1: die Änderungen an `ReviewTable.tsx`, `review/build.ts` und `review/types.ts` sind klein und am Rand.
+
+## 19. Stand UP1 (Nachschub)
+
+Umgesetzt: Bestandsabgleich je Datei, Nachschub in der Übernahme, Bedienung von Probelauf, Übernahme und Rückbau in der Prüfliste. Bedienung und Regeln für Anwender: Runbook, Abschnitt 12.
+
+**8.9 Nachschub (Regeln)**
+
+- **Status je Datei** (`transfer/stock.ts`): `new`, `unchanged`, `extended`, `differs`, `conflict`. Die Engines melden jeden Posten über `RunOptions.observe` (neues Ereignis `ItemEvent` in `apply/types.ts`), `transfer/stock.ts` ordnet sie über die Quellpfade des Plans den Dateien zu. Rangfolge je Datei: Konflikt, abweichend, ergänzt (auch: neue Teile neben unveränderten), neu, unverändert.
+- **Abgleich** (`transfer/compare.ts`, Route `POST .../runs/[runId]/stock`): derselbe Planbau und dieselben Engines wie der Probelauf, aber eine Transaktion `read-only` mit `rollback` und `write: false`, der Lauf behält seinen Zustand. Der Status liegt je Datei in `content_upload_files.parse_summary.stock` (Status, Zahlen, Zuordnung als Fingerabdruck, Zeit). Keine Migration. Ändert sich die Zuordnung, ist er veraltet. Die Übernahme löscht alle Abgleiche des Laufs in ihrer Transaktion. Ein Probelauf speichert den Status seiner Dateien ebenfalls.
+- **Ergänzen immer an** (`FIXED_ENGINE_OPTIONS.extendQuizzes`, Teil des Hashes, `TRANSFER_ENGINE_VERSION` auf `upload-transfer/2`). Quizze und Szenarien ohne Enabler-Text: `BuildOptions.existingEnablers`, der Enabler der Datenbank steht mit `source: database:<Code>` stellvertretend im Plan (kein Posten einer Datei, die Engine findet ihn unverändert).
+- **Ersetzen je Datei statt Schalter für alle:** `replaceFiles` (Body von `dry-run` und `apply`), `RunOptions.updateFilter` lässt nur Zeilen der genannten Dateien zu. Im Hash. Eine Datei, die nicht Posten des Plans ist, wird mit 409 `REPLACE_NOT_PLANNED` abgelehnt. Der alte Schalter `updateExisting` im Body und im Bericht entfällt (`content_upload_applies.update_existing` bleibt und heißt jetzt: mindestens eine Datei wird ersetzt). Das ändert die Aussage in 8.1 und 8.2 ("je Übernahme").
+- **Sammelannahmen** (`accept_stock`, `accept_medium` in `review/decisions.ts`): nie bei Band Unklar oder Widerspruch, nie bei unsicherem Inhalt (`SOLUTION_MARKER`, `CONTENT_UNREADABLE`, `INPUT_TRUNCATED`, `ARCHIVE_ABOVE_TREE`, für die Mittelgruppe zusätzlich `PARSER_ERRORS`), nie bei einer zweiten Fassung.
+
+**Gemessen an einem Wegwerf-Postgres** (Supabase-Image 17, Bestand als Ausgangslage, erfundene Daten): drei Quizze mit 3 statt 5 Fragen werden um 6 Fragen ergänzt (30 Einfügungen im Protokoll, keine Änderung), ein zweiter und dritter Lauf schreiben nichts, ein fehlendes Szenario fügt genau eine Zeile (nur Teil für Lernende) ein, ein Quiz ohne Enabler-Text wird ergänzt, ein Konflikt benennt seine Datei und schreibt nichts, der Abgleich ändert keine Inhaltstabelle.
+
+**Offen: JSON und Excel im Upload.** Nicht gebaut, weil es eine Migration braucht (Verbot im Auftrag). Der Check `content_upload_files_ext_check` erlaubt nur `docx` und `pdf`. Nötig wären: (1) Migration, die den Check um `json` und `xlsx` erweitert (eine Zeile, wie der `doc_type`-Check bleibt gültig), (2) Magic Bytes und Pfadregeln in `staging/magic.ts` und `staging/paths.ts` (JSON hat keine feste Signatur: erstes Zeichen `{`, gültiges UTF-8, strenges Schema 1.0, Obergrenze 32 MB, Modul `content-import/quiz-json` wiederverwenden), (3) für xlsx eine Vorprüfung (Zip-Bombe, Makros `vbaProject.bin`, Grenzen für Größe und Zeilen) und ein Leser ohne Auswerten aktiver Inhalte (`learning-fields/xlsx-sheet.ts` liest ohne Fremdbibliothek, eine Vorprüfung fehlt dort für den Upload), (4) am Bucket `content-upload` die MIME-Liste und für JSON 32 MB (Niko, nicht per Agent am gehosteten Supabase), (5) Auszug ohne Lösungsteile für JSON-Quizze und eine Regelstufe, die den Schlüssel aus dem Inhalt der JSON-Datei nimmt. Bis dahin gilt der Weg über die Skripte (Runbook 12.4).

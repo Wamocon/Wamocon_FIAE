@@ -36,6 +36,7 @@ import type {
   Difference,
   EnablerOriginal,
   ImportPlan,
+  ItemEvent,
   PlanQuestion,
   PlanQuiz,
   PlanScenario,
@@ -78,6 +79,18 @@ export interface RunOptions {
    * new document row THEORY/ALL at its enabler. Left out, nothing changes.
    */
   enablerOriginals?: readonly EnablerOriginal[];
+  /**
+   * Called for every item the comparison classifies (new, unchanged, extended,
+   * differs, conflict), with the key of the differences and conflicts. The upload
+   * maps the findings to its files. It must not throw and gets no row content.
+   */
+  observe?: (event: ItemEvent) => void;
+  /**
+   * With updateExisting: asks for every row that differs whether it may be
+   * updated. A row that is refused stays as it is and is still reported as a
+   * difference. Left out, every differing row is updated.
+   */
+  updateFilter?: (table: TableName, key: string) => boolean;
 }
 
 const DIFFICULTY: Record<QuizLevel, string> = {
@@ -411,8 +424,11 @@ export async function executePlan(
   const counts = emptyCounts();
   const conflicts: Conflict[] = [];
   const differences: Difference[] = [];
-  const conflict = (table: string, key: string, reason: string) =>
+  const observe = (event: ItemEvent) => options.observe?.(event);
+  const conflict = (table: string, key: string, reason: string) => {
     conflicts.push({ table, key, reason });
+    observe({ table, key, status: 'conflict' });
+  };
   const updates: Array<{
     table: TableName;
     key: string;
@@ -428,6 +444,7 @@ export async function executePlan(
     const columns = diffColumns(table, existing, desired);
     if (columns.length === 0) {
       counts[table].unchanged += 1;
+      observe({ table, key, status: 'unchanged' });
       return;
     }
     // Columns that are written without --update-existing: the ones that are
@@ -443,7 +460,11 @@ export async function executePlan(
       columns,
       ...(filled.length > 0 ? { filled } : {}),
     });
-    const written = options.updateExisting ? columns : filled;
+    observe({ table, key, status: 'differs' });
+    // A person may allow the update for some rows only (the upload: per file)
+    const allowed =
+      options.updateExisting && (options.updateFilter?.(table, key) ?? true);
+    const written = allowed ? columns : filled;
     if (written.length > 0) {
       counts[table].update += 1;
       updates.push({
@@ -519,6 +540,7 @@ export async function executePlan(
     if (!existing) {
       newEnablers.push(e);
       counts.enablers.insert += 1;
+      observe({ table: 'enablers', key: e.code, status: 'new' });
       continue;
     }
     const course = courseByCode.get(e.componentCode);
@@ -566,6 +588,7 @@ export async function executePlan(
     const planQuestions = quiz.questions.length;
     if (!existing) {
       counts.quizzes.insert += 1;
+      observe({ table: 'quizzes', key: quiz.code, status: 'new' });
       counts.questions.insert += planQuestions;
       counts.options.insert += quiz.questions.reduce(
         (n, q) => n + q.options.length,
@@ -615,6 +638,13 @@ export async function executePlan(
     item.existingQuestions = questions;
     if (questions.length === 0) {
       item.fillQuestions = true;
+      observe({
+        table: 'quizzes',
+        key: quiz.code,
+        status: 'extended',
+        added: planQuestions,
+        moved: 0,
+      });
       counts.questions.insert += planQuestions;
       counts.options.insert += quiz.questions.reduce(
         (n, q) => n + q.options.length,
@@ -633,6 +663,13 @@ export async function executePlan(
       item.extension = result.extension;
       extended.push({
         quiz: quiz.code,
+        added: result.extension.added.length,
+        moved: result.extension.moves.length,
+      });
+      observe({
+        table: 'quizzes',
+        key: quiz.code,
+        status: 'extended',
         added: result.extension.added.length,
         moved: result.extension.moves.length,
       });
@@ -764,6 +801,11 @@ export async function executePlan(
         level: quiz.level,
       });
       counts.enabler_quiz_links.insert += 1;
+      observe({
+        table: 'enabler_quiz_links',
+        key: `${quiz.enablerCode}/${difficulty}`,
+        status: 'new',
+      });
     }
   }
 
@@ -786,6 +828,13 @@ export async function executePlan(
     if (!enabler) {
       counts.content_documents.insert += wanted.length;
       newDocs.push({ scenario, rows: wanted });
+      for (const row of wanted) {
+        observe({
+          table: 'content_documents',
+          key: `${scenario.enablerCode}:${String(row.title)}`,
+          status: 'new',
+        });
+      }
       continue;
     }
     const existingDocs = docsByEnabler.get(String(enabler.id)) ?? [];
@@ -810,6 +859,11 @@ export async function executePlan(
       } else {
         missing.push(row);
         counts.content_documents.insert += 1;
+        observe({
+          table: 'content_documents',
+          key: `${scenario.enablerCode}:${String(row.title)}`,
+          status: 'new',
+        });
       }
     }
     if (missing.length > 0) newDocs.push({ scenario, rows: missing });
