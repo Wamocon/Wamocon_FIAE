@@ -8,12 +8,14 @@ import {
   MAX_PAGE_SIZE,
   SORTS,
   STATUS_FILTERS,
+  STOCK_FILTERS,
   type ReviewFacets,
   type ReviewFilter,
   type ReviewPage,
   type ReviewRowDto,
   type SortKey,
   type StatusFilter,
+  type StockFilter,
 } from '@/lib/content-upload/review/types';
 import type { ProposalBand } from '@/lib/content-upload/classify/types';
 import {
@@ -61,6 +63,11 @@ export function matchesStatus(
   }
 }
 
+/** The status of the supply a filter sees: a stale or missing comparison counts as none. */
+export function stockKeyOf(row: ReviewRowDto): StockFilter {
+  return row.stock && !row.stock.stale ? row.stock.status : 'none';
+}
+
 function matchesQuery(row: ReviewRowDto, query: string): boolean {
   const needle = query.toLowerCase();
   return (
@@ -87,6 +94,7 @@ export function filterRows(
     if (filter.component && row.effective.componentCode !== filter.component)
       return false;
     if (filter.status && !matchesStatus(row, filter.status)) return false;
+    if (filter.stock && stockKeyOf(row) !== filter.stock) return false;
     if (filter.duplicates && row.duplicate === null) return false;
     if (query && !matchesQuery(row, query)) return false;
     return true;
@@ -197,6 +205,10 @@ export function parseFilter(params: URLSearchParams): ReviewFilter {
   if (status && (STATUS_FILTERS as readonly string[]).includes(status)) {
     filter.status = status as StatusFilter;
   }
+  const stock = params.get('stock');
+  if (stock && (STOCK_FILTERS as readonly string[]).includes(stock)) {
+    filter.stock = stock as StockFilter;
+  }
   if (params.get('duplicates') === '1') filter.duplicates = true;
   const query = params.get('q');
   if (query) {
@@ -226,6 +238,7 @@ export function filterToParams(filter: ReviewFilter): URLSearchParams {
   if (filter.component) params.set('component', filter.component);
   if (filter.status && filter.status !== 'all')
     params.set('status', filter.status);
+  if (filter.stock) params.set('stock', filter.stock);
   if (filter.duplicates) params.set('duplicates', '1');
   if (filter.query?.trim()) params.set('q', filter.query.trim());
   if (filter.sort && filter.sort !== 'path') params.set('sort', filter.sort);

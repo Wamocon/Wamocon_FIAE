@@ -163,6 +163,7 @@ export interface SetItemInput {
 export type DecisionCommandInput =
   | { command: 'set'; items: SetItemInput[] }
   | { command: 'accept_high' }
+  | { command: 'accept_stock' }
   | {
       command: 'bulk';
       action: Exclude<DecisionAction, 'accept'>;
@@ -267,6 +268,8 @@ export function parseDecisionRequest(
       return done({ command: 'accept_high' });
     case 'accept_newest':
       return done({ command: 'accept_newest' });
+    case 'accept_stock':
+      return done({ command: 'accept_stock' });
     case 'set': {
       const raw = body.items;
       if (!Array.isArray(raw) || raw.length < 1 || raw.length > MAX_ITEMS) {

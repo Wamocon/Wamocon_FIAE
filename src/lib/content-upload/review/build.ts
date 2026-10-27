@@ -23,6 +23,7 @@ import type {
 import {
   DECIDABLE,
   GROUPABLE,
+  UNCHECKED_REASONS,
   isLeftOut,
   isProblem,
 } from '@/lib/content-upload/review/states';
@@ -33,7 +34,12 @@ import type {
   ReviewCounts,
   ReviewRecord,
   ReviewRowDto,
+  StockDto,
 } from '@/lib/content-upload/review/types';
+import {
+  assignmentFingerprint,
+  readStoredStock,
+} from '@/lib/content-upload/transfer/stock';
 
 export interface ReviewContext {
   list: PositiveList;
@@ -108,6 +114,22 @@ export function analyzeRun(
     now: context.now,
     ambiguousWithinHours: context.decisions.duplicates.ambiguousWithinHours,
   });
+}
+
+/** The status of the supply of a file from its parse summary, stale when the assignment moved on. */
+export function stockOf(
+  record: ReviewRecord,
+  effective: AssignmentDto
+): StockDto | null {
+  if (!DECIDABLE.includes(record.file.status)) return null;
+  const stored = readStoredStock(record.file.parseSummary);
+  if (!stored) return null;
+  return {
+    status: stored.status,
+    added: stored.added,
+    at: stored.at,
+    stale: stored.assign !== assignmentFingerprint(effective),
+  };
 }
 
 function derivedOf(
@@ -215,8 +237,28 @@ export function buildRows(
           }
         : null,
       copyOfId: file.duplicateOfId,
+      stock: stockOf(record, effective),
     };
   });
+}
+
+/**
+ * Whether "accept new and added" takes the row: the status of the supply is new or
+ * extended and current, nothing is decided, the file is no version of another one, and
+ * the proposal is one a click may take (not unclear, not contradicting, not unchecked).
+ */
+export function acceptableByStock(row: ReviewRowDto): boolean {
+  return (
+    row.status === 'proposed_rules' &&
+    row.decision === null &&
+    row.duplicate === null &&
+    row.stock !== null &&
+    !row.stock.stale &&
+    (row.stock.status === 'new' || row.stock.status === 'extended') &&
+    row.proposal !== null &&
+    (row.proposal.band === 'high' || row.proposal.band === 'medium') &&
+    !row.proposal.reasons.some(r => UNCHECKED_REASONS.has(r.code))
+  );
 }
 
 export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
@@ -234,8 +276,14 @@ export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
     deferred: 0,
     open: 0,
     acceptableHigh: 0,
+    stock: { conflict: 0, differs: 0, extended: 0, new: 0, unchanged: 0, none: 0 },
+    acceptableStock: 0,
   };
   for (const row of rows) {
+    if (DECIDABLE.includes(row.status)) {
+      counts.stock[row.stock && !row.stock.stale ? row.stock.status : 'none'] += 1;
+    }
+    if (acceptableByStock(row)) counts.acceptableStock += 1;
     // a file that is left out (a copy, an archive) is no work for the band filter
     if (row.proposal && !isLeftOut(row.status)) counts[row.proposal.band] += 1;
     if (row.duplicate) counts.duplicates += 1;

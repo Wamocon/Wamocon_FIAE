@@ -15,6 +15,7 @@ import type {
   ApplyRecord,
   ProtocolWriter,
   RunState,
+  StockWrite,
   TransferStore,
 } from '@/lib/content-upload/transfer/store';
 import type {
@@ -35,6 +36,11 @@ export class MemoryTransferStore implements TransferStore {
   attempts: ApplyRecord[] = [];
   appliedRows: AppliedRowInput[] = [];
   markedFiles: string[] = [];
+  /** What saveStock was asked to write, in order, and how often the stock was cleared. */
+  stockWrites: StockWrite[] = [];
+  stockCleared = 0;
+  /** The options loadFiles was called with. */
+  loadOptions: Array<{ effective?: boolean } | undefined> = [];
   gateCalls: Array<{ version: number; requireHash: string | null }> = [];
   /** Called before the gate answers: lets a test change the run behind its back. */
   beforeGate?: (state: RunState) => void;
@@ -79,8 +85,21 @@ export class MemoryTransferStore implements TransferStore {
     return false;
   }
 
-  async loadFiles() {
+  async loadFiles(_runId?: string, options?: { effective?: boolean }) {
+    this.loadOptions.push(options);
     return this.files;
+  }
+
+  async saveStock(_runId: string, entries: readonly StockWrite[]) {
+    this.timeline.events.push('store.saveStock');
+    if (this.state.status !== 'review') return 0;
+    this.stockWrites.push(...entries);
+    return entries.length;
+  }
+
+  async clearStock() {
+    this.timeline.events.push('store.clearStock');
+    this.stockCleared += 1;
   }
 
   async loadComponents() {
@@ -141,6 +160,10 @@ export class MemoryTransferStore implements TransferStore {
         note('markFilesApplied');
         this.markedFiles.push(...ids);
         return ids.length;
+      },
+      clearStock: async () => {
+        note('clearStock');
+        this.stockCleared += 1;
       },
       finishRunApplied: async () => {
         note('finishRunApplied');

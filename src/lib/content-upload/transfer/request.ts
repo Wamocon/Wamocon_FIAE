@@ -1,6 +1,7 @@
 // The body of the dry run and apply routes.
 //
-//   { updateExisting?: boolean,        update rows that exist and differ (per apply, off by default)
+//   { replaceFiles?: string[],         ids of files whose DIFFERING rows are replaced (default: none,
+//                                      only new rows and added questions are written)
 //     publishOriginals?: string[],     ids of enabler text files whose original goes to the document bucket
 //     confirm?: string }               apply only: the catalog code, typed by the person
 //
@@ -17,25 +18,39 @@ import { isUuid } from '@/lib/uuid';
 /** Most originals one request can name. */
 export const MAX_PUBLISH_ORIGINALS = 25;
 
+/** Most files whose differing rows one request can replace. */
+export const MAX_REPLACE_FILES = 100;
+
 export interface TransferBody {
-  updateExisting: boolean;
+  replaceFiles: string[];
   publishOriginals: string[];
   confirm?: string;
 }
 
 export function parseTransferBody(body: unknown): ServiceResult<TransferBody> {
   if (body === undefined || body === null) {
-    return ok({ updateExisting: false, publishOriginals: [] });
+    return ok({ replaceFiles: [], publishOriginals: [] });
   }
   if (typeof body !== 'object' || Array.isArray(body)) {
     return fail(400, 'The request body must be an object', 'BODY_INVALID');
   }
   const input = body as Record<string, unknown>;
-  if (
-    input.updateExisting !== undefined &&
-    typeof input.updateExisting !== 'boolean'
-  ) {
-    return fail(400, 'updateExisting must be true or false', 'BODY_INVALID');
+  let replaceFiles: string[] = [];
+  if (input.replaceFiles !== undefined) {
+    if (
+      !Array.isArray(input.replaceFiles) ||
+      input.replaceFiles.length > MAX_REPLACE_FILES ||
+      !input.replaceFiles.every(isUuid)
+    ) {
+      return fail(
+        400,
+        `replaceFiles must be a list of at most ${MAX_REPLACE_FILES} file ids`,
+        'BODY_INVALID'
+      );
+    }
+    replaceFiles = [
+      ...new Set((input.replaceFiles as string[]).map(id => id.toLowerCase())),
+    ].sort();
   }
   let publishOriginals: string[] = [];
   if (input.publishOriginals !== undefined) {
@@ -60,7 +75,7 @@ export function parseTransferBody(body: unknown): ServiceResult<TransferBody> {
     return fail(400, 'confirm must be a text', 'BODY_INVALID');
   }
   return ok({
-    updateExisting: input.updateExisting === true,
+    replaceFiles,
     publishOriginals,
     ...(typeof input.confirm === 'string' ? { confirm: input.confirm } : {}),
   });

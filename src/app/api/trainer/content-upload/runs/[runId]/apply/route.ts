@@ -20,7 +20,7 @@ export const maxDuration = 60;
 
 /**
  * POST /api/trainer/content-upload/runs/[runId]/apply
- * Body: { confirm: "KFBM", updateExisting?: boolean, publishOriginals?: string[] }
+ * Body: { confirm: "KFBM", replaceFiles?: string[], publishOriginals?: string[] }
  *
  * Writes the confirmed files to the content tables in ONE transaction (content and
  * use cases), together with the protocol (the apply, every row it wrote with the
@@ -61,7 +61,7 @@ export async function POST(
       runId: run.data.id,
       callerId: session.id,
       mode: 'apply',
-      updateExisting: body.data.updateExisting,
+      replaceFiles: body.data.replaceFiles,
       publishOriginals: body.data.publishOriginals,
       confirm: body.data.confirm,
     });

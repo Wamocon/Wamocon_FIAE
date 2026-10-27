@@ -20,7 +20,9 @@
 // to ReviewRepo.applyDecisions, which writes them in one transaction.
 
 import {
+  acceptableByStock,
   analyzeRun,
+  buildRows,
   effectiveOf,
   originalTypeOfKey,
   type ReviewContext,
@@ -29,7 +31,10 @@ import type {
   ReviewRepo,
   DecisionWriteItem,
 } from '@/lib/content-upload/review/repo';
-import { DECIDABLE } from '@/lib/content-upload/review/states';
+import {
+  DECIDABLE,
+  UNCHECKED_REASONS,
+} from '@/lib/content-upload/review/states';
 import type {
   AssignmentDto,
   DecisionAction,
@@ -63,7 +68,7 @@ export interface DecisionOutcome {
   version: number;
   written: number;
   skipped: { fileId: string; code: SkipCode }[];
-  /** Files an accept_high or accept_newest looked at (what was eligible). */
+  /** Files an accept_high, accept_stock or accept_newest looked at (what was eligible). */
   eligible?: number;
   /** Groups an accept_newest left alone because they have no suggestion. */
   ambiguousGroups?: number;
@@ -75,20 +80,6 @@ interface Plan {
   eligible?: number;
   ambiguousGroups?: number;
 }
-
-/**
- * Reasons of a proposal in the band medium that say the content was not checked
- * with full certainty (a marker word of a solution, a file that could not be read or
- * was cut, an archive folder above the tree). A click does not take such a proposal
- * as it stands: the person names the assignment (decision O13, the protection of
- * the solutions must not be one click away).
- */
-const UNCHECKED_REASONS = new Set([
-  'SOLUTION_MARKER',
-  'CONTENT_UNREADABLE',
-  'INPUT_TRUNCATED',
-  'ARCHIVE_ABOVE_TREE',
-]);
 
 const NOTHING: AssignmentDto = {
   docType: null,
@@ -325,6 +316,24 @@ function planAcceptHigh(planner: Planner, context: ReviewContext): Plan {
   return planner.plan({ eligible });
 }
 
+/**
+ * "Accept new and added": the files that the comparison with the database found new or
+ * extended (a missing document, missing questions of a quiz) and whose proposal a click
+ * may take. What differs from the database or conflicts is never taken here.
+ */
+function planAcceptStock(planner: Planner, context: ReviewContext): Plan {
+  const byId = new Map(planner.records.map(r => [r.file.id, r]));
+  let eligible = 0;
+  for (const row of buildRows(planner.records, context)) {
+    if (!acceptableByStock(row)) continue;
+    const record = byId.get(row.id);
+    if (!record) continue;
+    eligible += 1;
+    planner.accept(record, effectiveOf(record), null, null);
+  }
+  return planner.plan({ eligible });
+}
+
 function planDuplicate(
   command: Extract<DecisionRequest['command'], { command: 'duplicate' }>,
   planner: Planner,
@@ -478,6 +487,9 @@ export async function writeDecisions(
       break;
     case 'accept_newest':
       plan = planAcceptNewest(planner, context);
+      break;
+    case 'accept_stock':
+      plan = planAcceptStock(planner, context);
       break;
     case 'duplicate': {
       const planned = planDuplicate(command, planner, context);

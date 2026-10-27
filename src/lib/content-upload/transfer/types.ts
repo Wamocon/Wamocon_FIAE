@@ -13,6 +13,10 @@ import type {
   UseCasePlan,
   UseCasePlanCounts,
 } from '@/lib/content-import/use-cases/types';
+import type {
+  FileStock,
+  StockCounts,
+} from '@/lib/content-upload/transfer/stock';
 
 /** The decision of a person about one file (the current row of content_upload_decisions). */
 export interface TransferDecision {
@@ -103,6 +107,13 @@ export interface OriginalRefusal {
   reason: string;
 }
 
+/** The status of the supply per file, as far as the comparison reached it. */
+export interface StockReport {
+  /** Files per status. */
+  counts: StockCounts;
+  files: Array<FileStock & { fileId: string }>;
+}
+
 /** What a dry run or an apply reports to the person. Never a text of a file. */
 export interface TransferReport {
   mode: TransferMode;
@@ -111,7 +122,12 @@ export interface TransferReport {
   applyId: string | null;
   decisionsHash: string;
   decisionsVersion: number;
-  updateExisting: boolean;
+  /** The files whose differing rows the person chose to replace (empty: only new and added). */
+  replaceFiles: string[];
+  /** Status of the supply per file and the counts per status (docs 8.9). */
+  stock: StockReport;
+  /** Existing quizzes that get missing questions, with the numbers (the quiz code is no secret). */
+  extended: Array<{ quiz: string; added: number; moved: number }>;
   tables: Record<string, TableCount>;
   conflicts: Conflict[];
   differences: Difference[];

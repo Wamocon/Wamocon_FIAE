@@ -21,7 +21,7 @@ export const maxDuration = 60;
 
 /**
  * POST /api/trainer/content-upload/runs/[runId]/dry-run
- * Body (optional): { updateExisting?: boolean, publishOriginals?: string[] }
+ * Body (optional): { replaceFiles?: string[], publishOriginals?: string[] }
  *
  * Runs the whole transfer in a transaction and rolls it back: the counts per table,
  * the conflicts, the files that are skipped and why. Writes nothing to the content.
@@ -60,7 +60,7 @@ export async function POST(
       runId: run.data.id,
       callerId: session.id,
       mode: 'dry_run',
-      updateExisting: body.data.updateExisting,
+      replaceFiles: body.data.replaceFiles,
       publishOriginals: body.data.publishOriginals,
     });
     return result.ok ? NextResponse.json(result.data) : respond(result);

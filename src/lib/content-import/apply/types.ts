@@ -257,6 +257,34 @@ export interface TableCount {
   unchanged: number;
 }
 
+/**
+ * What an engine finds out about one item of a plan when it compares the plan
+ * with the target (the status of a supply of content, docs/ki-upload-konzept.md
+ * section 8.9):
+ *  - new        the row does not exist and is inserted
+ *  - unchanged  the row exists and equals the plan
+ *  - extended   an existing quiz lacks questions that the plan has (added)
+ *  - differs    the row exists and an updatable column differs from the plan
+ *  - conflict   the row exists with another meaning, nothing is written
+ */
+export type ItemStatus =
+  | 'new'
+  | 'unchanged'
+  | 'extended'
+  | 'differs'
+  | 'conflict';
+
+/** One finding of an engine, keyed like the differences and conflicts of its report. */
+export interface ItemEvent {
+  table: string;
+  key: string;
+  status: ItemStatus;
+  /** Questions added to an existing quiz (status extended). */
+  added?: number;
+  /** Existing questions whose position moves on (status extended). */
+  moved?: number;
+}
+
 export interface RunReport {
   catalog: string;
   tables: Record<string, TableCount>;
