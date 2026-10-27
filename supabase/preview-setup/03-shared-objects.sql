@@ -97,8 +97,17 @@ drop policy if exists content_delete_preview on storage.objects;
 create policy content_delete_preview on storage.objects for delete to authenticated
   using (bucket_id = 'content' and (storage.foldername(name))[1] = 'preview' and (storage.foldername(name))[2] = auth.uid()::text and preview_support.has_preview_profile(auth.uid()));
 
+-- The storage service reads a new row back after an insert, so every upload also needs a
+-- select policy for the same path (the production policies cover only <user id>/...).
+drop policy if exists avatar_select_preview on storage.objects;
+create policy avatar_select_preview on storage.objects for select to authenticated
+  using (bucket_id = 'avatar' and (storage.foldername(name))[1] = 'preview' and (storage.foldername(name))[2] = auth.uid()::text and preview_support.has_preview_profile(auth.uid()));
+drop policy if exists content_select_preview on storage.objects;
+create policy content_select_preview on storage.objects for select to authenticated
+  using (bucket_id = 'content' and (storage.foldername(name))[1] = 'preview' and (storage.foldername(name))[2] = auth.uid()::text and preview_support.has_preview_profile(auth.uid()));
+
 -- UNDO (only if needed):
---   drop policy if exists avatar_insert_preview on storage.objects;  (and the five others above)
+--   drop policy if exists avatar_insert_preview on storage.objects;  (and the seven others above)
 --   drop function if exists preview_support.has_preview_profile(uuid);
 --   drop schema if exists preview_support;
 --   alter publication supabase_realtime drop table public_preview.notifications, public_preview.profiles;

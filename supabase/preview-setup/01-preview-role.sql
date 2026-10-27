@@ -169,22 +169,28 @@ grant usage on schema preview_support to postgres, anon, authenticated, service_
 grant execute on all functions in schema preview_support to postgres, anon, authenticated, service_role, app_preview_migrator, app_preview;
 
 -- 4. Rights of the objects the migration role creates in public_preview.
---    The migration role owns them; the API roles and the app role get access
---    through default privileges, so a new table needs no extra grant.
+--    The migration role owns them; the app role gets access through default
+--    privileges, so a new table needs no extra grant. The API roles anon and
+--    authenticated get nothing by default (as in public since migration
+--    20261029000300): what the browser needs is granted by the migrations.
 grant usage on schema public_preview to postgres, anon, authenticated, service_role, app_preview;
 grant usage on schema extensions to app_preview;
-alter default privileges for role app_preview_migrator in schema public_preview grant all on tables to postgres, anon, authenticated, service_role, app_preview;
-alter default privileges for role app_preview_migrator in schema public_preview grant all on sequences to postgres, anon, authenticated, service_role, app_preview;
-alter default privileges for role app_preview_migrator in schema public_preview grant all on functions to postgres, anon, authenticated, service_role, app_preview;
+alter default privileges for role app_preview_migrator in schema public_preview grant all on tables to postgres, service_role, app_preview;
+alter default privileges for role app_preview_migrator in schema public_preview grant all on sequences to postgres, service_role, app_preview;
+alter default privileges for role app_preview_migrator in schema public_preview grant all on functions to postgres, service_role, app_preview;
+-- Takes back what an earlier run of this file handed out by default (no effect on what exists)
+alter default privileges for role app_preview_migrator in schema public_preview revoke all on tables from anon, authenticated;
+alter default privileges for role app_preview_migrator in schema public_preview revoke all on sequences from anon, authenticated;
+alter default privileges for role app_preview_migrator in schema public_preview revoke execute on functions from anon, authenticated;
 -- Functions created by the migration role get no EXECUTE for PUBLIC (a SECURITY DEFINER
 -- function must not be callable by everybody). Global form on purpose: schema scoped
 -- default privileges cannot remove the built-in default of PUBLIC. The role can only
 -- create objects in public_preview and preview_meta.
 alter default privileges for role app_preview_migrator revoke execute on functions from public;
 -- Rights on what exists already (a no-op on a fresh schema)
-grant all on all tables in schema public_preview to postgres, anon, authenticated, service_role, app_preview;
-grant all on all sequences in schema public_preview to postgres, anon, authenticated, service_role, app_preview;
-grant all on all functions in schema public_preview to postgres, anon, authenticated, service_role, app_preview;
+grant all on all tables in schema public_preview to postgres, service_role, app_preview;
+grant all on all sequences in schema public_preview to postgres, service_role, app_preview;
+grant all on all functions in schema public_preview to postgres, service_role, app_preview;
 
 -- 5. NO rights on public for the app role. Production tables carry grants for anon,
 --    authenticated and service_role only, so a new role has none; the revokes make
