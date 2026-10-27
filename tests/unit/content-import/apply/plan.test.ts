@@ -43,29 +43,68 @@ describe('buildImportPlan: structure', () => {
     expect(k1.reference).toBe('§ 4 Abs. 2 Nr. 1');
   });
 
-  it('writes provisional totals as placeholders and says so', () => {
+  it('takes the weeks from the training framework plan and leaves the hours as placeholders', () => {
+    expect(
+      plan.components.map(c => [c.code, c.totalWeeks, c.weeksSource])
+    ).toEqual([
+      ['K1', 11, 'rahmenplan'],
+      ['K6.1', 6, 'rahmenplan'],
+      ['K6.2', 11, 'rahmenplan'],
+      ['K10', 22, 'rahmenplan'],
+      // the plan prints no weeks for the integrative positions
+      ['K20', 0, 'none'],
+    ]);
     for (const c of plan.components) {
-      expect(c.totalWeeks).toBe(0);
+      // the plan has no hours: they stay 0 until the owner decides
       expect(c.totalHours).toBe(0);
       expect(c.provisionalTotals).toBe(true);
     }
-    expect(plan.open.join(' ')).toMatch(/Weeks and planned hours/);
+    const text = plan.open.join(' ');
+    expect(text).toMatch(
+      /Planned hours are placeholders \(0\) for 5 component/
+    );
+    expect(text).not.toMatch(/Weeks are placeholders/);
   });
 
-  it('uses the totals of the decisions where they exist', () => {
+  it('writes a placeholder for the weeks of a component the table does not know', () => {
+    const files = [
+      ...sampleTree(),
+      ...completeEnabler(DIR.k26, '26', 'a'),
+      file(
+        `${DIR.k26}/Global Quiz/26_Global_Quiz_Thema.docx`,
+        globalQuizContent('26')
+      ),
+    ];
+    const d = loadDecisions(raw => {
+      raw.components.mandatoryNumbers.push(26);
+    });
+    const p = build(files, d);
+    const unknown = p.components.find(c => c.code === 'K26');
+    expect(unknown).toMatchObject({
+      totalWeeks: 0,
+      weeksSource: 'placeholder',
+      provisionalTotals: true,
+    });
+    expect(p.open.join(' ')).toMatch(
+      /Weeks are placeholders \(0\) for 1 component/
+    );
+  });
+
+  it('uses the totals of the decisions where they exist, before the plan', () => {
     const d = loadDecisions(raw => {
       raw.components.totalWeeks = { K1: 4 };
       raw.components.totalHours = { K1: 160 };
     });
     const p = build(sampleTree(), d);
     const k1 = p.components.find(c => c.code === 'K1')!;
-    expect([k1.totalWeeks, k1.totalHours, k1.provisionalTotals]).toEqual([
-      4,
-      160,
-      false,
-    ]);
+    expect([
+      k1.totalWeeks,
+      k1.weeksSource,
+      k1.totalHours,
+      k1.provisionalTotals,
+    ]).toEqual([4, 'decision', 160, false]);
     const k10 = p.components.find(c => c.code === 'K10')!;
-    expect(k10.provisionalTotals).toBe(true);
+    expect([k10.totalWeeks, k10.provisionalTotals]).toEqual([22, true]);
   });
 
   it('plans enablers with the code of the plan and the title of the heading', () => {
@@ -642,7 +681,9 @@ describe('renderPlanSummary', () => {
     const text = renderPlanSummary(p);
     expect(text).toMatch(/Komponenten/);
     expect(text).toMatch(/quiz:1a:medium/);
-    expect(text).toMatch(/Weeks and planned hours/);
+    expect(text).toMatch(/Planned hours are placeholders/);
+    expect(text).toMatch(/\| K6\.2 \| pflicht \| 2 \| 11 \|/);
+    expect(text).toMatch(/\| K20 \| integrativ \| - \| 0 \|/);
     for (const secret of [
       'Erfundene Frage',
       'ZETA',

@@ -29,6 +29,12 @@ export interface TableSpec {
    * (is_active, ids, authors, storage columns) is never overwritten.
    */
   updatable: readonly string[];
+  /**
+   * Columns of `updatable` that are also written without --update-existing
+   * where the value of the existing row is still empty (null or 0) and the plan
+   * names a positive number. A plan value of 0 or null never writes.
+   */
+  fillWhenEmpty?: readonly string[];
   /** Columns of the type uuid (for array comparisons). */
   uuid: readonly string[];
   /** The table has an updated_at column that an update refreshes. */
@@ -49,7 +55,17 @@ export const TABLES: Record<TableName, TableSpec> = {
       'kind',
       'order_index',
     ],
-    updatable: ['title', 'description', 'phase', 'kind', 'order_index'],
+    // total_weeks: only the weeks, never total_hours (the training framework
+    // plan has no hours, the owner decides them).
+    updatable: [
+      'title',
+      'description',
+      'total_weeks',
+      'phase',
+      'kind',
+      'order_index',
+    ],
+    fillWhenEmpty: ['total_weeks'],
     uuid: ['id', 'training_catalog_id'],
     touch: false,
   },
