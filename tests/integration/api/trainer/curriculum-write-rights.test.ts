@@ -37,7 +37,13 @@ const TOKEN = 'valid-token';
 const CURRICULUM_403 =
   'Only platform administrators can manage curriculum content';
 
-const WRITES = GUARDED_ROUTES.filter(r => r.guard === 'curriculum');
+const ALL_CURRICULUM = GUARDED_ROUTES.filter(r => r.guard === 'curriculum');
+// The content upload (trainer/content-upload) has its own tests; its handlers,
+// reads included, are part of the rights check below
+const CONTENT_UPLOAD = ALL_CURRICULUM.filter(r =>
+  r.route.startsWith('trainer/content-upload/')
+);
+const WRITES = ALL_CURRICULUM;
 
 // Read handlers of the same routes, they stay open to the trainer level
 const READ_ROUTES = [
@@ -154,8 +160,9 @@ describe('curriculum write rights', () => {
     jest.restoreAllMocks();
   });
 
-  it('knows every curriculum write handler (25) and the read handlers', () => {
-    expect(WRITES.length).toBe(25);
+  it('knows every curriculum write handler (25), the 11 of the content upload and the read handlers', () => {
+    expect(WRITES.length - CONTENT_UPLOAD.length).toBe(25);
+    expect(CONTENT_UPLOAD.length).toBe(11);
     expect(READS.length).toBe(READ_ROUTES.length);
   });
 

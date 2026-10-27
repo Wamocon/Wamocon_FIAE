@@ -153,6 +153,8 @@ describe('browser access to the database', () => {
       .map(file => file.rel)
       .sort();
     // the browser client, the session check and the admin clients of the server
+    // (the staging storage of the content upload uses the secret key for the
+    // private bucket content-upload only, on the server)
     // (a new one needs a look at the key it uses)
     expect(creators).toEqual([
       'src/app/api/admin/users/[userId]/route.ts',
@@ -162,6 +164,7 @@ describe('browser access to the database', () => {
       'src/app/api/trainer/courses/[courseId]/members/route.ts',
       'src/lib/auth-helpers.ts',
       'src/lib/auth/session.ts',
+      'src/lib/content-upload/staging/storage.ts',
       'src/lib/document-file-cleanup.ts',
       'src/lib/supabase.ts',
       'src/utils/supabase/server.ts',
