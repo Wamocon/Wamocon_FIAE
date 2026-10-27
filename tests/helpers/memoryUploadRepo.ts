@@ -359,6 +359,19 @@ export class MemoryUploadRepo implements UploadRepo {
     }
     const now = this.clockMs;
     const claimed: FileRow[] = [];
+    let limit = options.limit;
+    if (options.maxHeld !== undefined) {
+      if (!Number.isInteger(options.maxHeld) || options.maxHeld < 1) return [];
+      const held = [...this.files.values()].filter(
+        f =>
+          f.runId === runId &&
+          f.claimId !== null &&
+          f.lockedUntil !== null &&
+          f.lockedUntil.getTime() > now
+      ).length;
+      limit = Math.min(limit, options.maxHeld - held);
+      if (limit <= 0) return [];
+    }
     const candidates = [...this.files.values()]
       .filter(
         f =>
@@ -373,7 +386,7 @@ export class MemoryUploadRepo implements UploadRepo {
           a.createdAt.getTime() - b.createdAt.getTime() ||
           a.id.localeCompare(b.id)
       )
-      .slice(0, options.limit);
+      .slice(0, limit);
     for (const f of candidates) {
       f.claimId = randomUUID();
       f.lockedUntil = new Date(now + options.lockSeconds * 1000);
