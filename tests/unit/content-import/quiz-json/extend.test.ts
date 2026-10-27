@@ -253,6 +253,21 @@ describe('--extend-quizzes', () => {
     ]);
   });
 
+  it('stays a conflict when the plan names a question text twice', async () => {
+    const db = await eightFirst();
+    const plan = planOf(full());
+    const quiz = plan.quizzes.find(q => q.code === 'K1-a-low')!;
+    quiz.questions[8].text = quiz.questions[0].text;
+    const check = await executePlan(
+      db,
+      plan,
+      options({ write: false, extendQuizzes: true })
+    );
+    expect(check.conflicts[0].reason).toMatch(
+      /two questions with the same text/
+    );
+  });
+
   it('stays a conflict when the options of an existing question have another structure', async () => {
     const db = await eightFirst();
     const quiz = db.tables.quizzes.find(q => q.code === 'K1-a-low')!;

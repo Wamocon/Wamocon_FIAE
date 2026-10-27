@@ -224,6 +224,18 @@ function planExtension(
   existing: Row[],
   optionsOf: (question: Row) => Row[]
 ): { extension: QuizExtension } | { reason: string } {
+  // A text that the plan names twice cannot be told apart, so nothing is guessed.
+  const seen = new Set<string>();
+  for (const planned of quiz.questions) {
+    const text = squash(planned.text);
+    if (seen.has(text)) {
+      return {
+        reason:
+          'The plan has two questions with the same text, so the existing questions cannot be matched and the quiz cannot be extended.',
+      };
+    }
+    seen.add(text);
+  }
   const matched: Array<{ row: Row; planned: PlanQuestion }> = [];
   let next = 0;
   for (const planned of quiz.questions) {
