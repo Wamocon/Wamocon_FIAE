@@ -111,6 +111,8 @@ const OPTION_FIELDS = ['key', 'text'] as const;
 
 const LESSON_ID = /^(\d{1,2})(?:_(\d))?([a-z])$/;
 const COMPONENT_ID = /^(\d{2})(?:\.(\d))?$/;
+const STRAY_PREFIX_HEADING =
+  /^[^\d\s)]{1,2}(\d{1,2})(?:[._/](\d))?([a-z])\)\s*(.+)$/;
 const GLOBAL_TITLE = /^(\d{2}(?:\.\d)?)\)\s*\S/;
 const ANSWER_KEY = /^[A-D]$/;
 const SHORT_STRING_MAX = 200;
@@ -877,13 +879,39 @@ export function readLessonQuizzes(
       );
     }
     const titleRead = readText(own(head.raw, 'title'), limits.maxTitleChars);
-    const heading =
+    let headingText = titleRead.text;
+    let heading =
       titleRead.problem === null ? splitEnablerHeading(titleRead.text) : null;
+    let repaired = false;
+    if (
+      heading !== null &&
+      !(
+        heading.code !== null && enablerKeysMatch(heading.code, head.enablerKey)
+      )
+    ) {
+      // One or two stray characters before the code ("x6g) Title"): the id of
+      // the quiz confirms the code, so the heading is read without them.
+      const stray = STRAY_PREFIX_HEADING.exec(titleRead.text);
+      if (stray) {
+        const code = `${Number(stray[1])}${stray[2] ? `.${stray[2]}` : ''}${stray[3]}`;
+        if (enablerKeysMatch(code, head.enablerKey)) {
+          headingText = `${code}) ${stray[4].trim()}`;
+          heading = splitEnablerHeading(headingText);
+          repaired = true;
+        }
+      }
+    }
     const headingOk =
       heading !== null &&
       heading.code !== null &&
       enablerKeysMatch(heading.code, head.enablerKey);
-    if (!headingOk) {
+    if (repaired) {
+      flag(
+        'warning',
+        'TITLE_REPAIRED',
+        `The title has stray characters before the code of the enabler ${head.enablerKey}, the heading was read without them`
+      );
+    } else if (!headingOk) {
       flag(
         'warning',
         'TITLE_HEADING',
@@ -1051,7 +1079,7 @@ export function readLessonQuizzes(
           },
           {
             type: 'enabler',
-            paragraphs: [{ text: titleRead.text, bold: true }],
+            paragraphs: [{ text: headingText, bold: true }],
           }
         )
       );

@@ -20,7 +20,7 @@ describe('the report of check-quizzes', () => {
   const lesson = sampleLesson();
   lesson.quizzes[0].difficulties.leicht.questions.length = 8;
   lesson.quizzes[1].difficulties.mittel.questions[2].correct_answer = 'Z';
-  lesson.quizzes[2].title = 'w6d) Erfundenes Thema';
+  lesson.quizzes[2].title = 'Erfundenes Thema ohne Kennung';
   const global = clone(sampleGlobal());
   global.quizzes[3].questions.pop();
   const summary = summarizeQuizJson(

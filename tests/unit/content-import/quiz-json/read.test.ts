@@ -482,7 +482,7 @@ describe('readLessonQuizzes: levels, labels and sources', () => {
 
 describe('readLessonQuizzes: the title and the enabler', () => {
   it('a title that is no heading of the enabler gives no enabler file and a warning', () => {
-    const read = lessonWith(q => (q.title = 'w1a) Erfundenes Thema'));
+    const read = lessonWith(q => (q.title = 'Erfundenes Thema ohne Kennung'));
     expect(read.findings.map(f => [f.severity, f.code])).toEqual([
       ['warning', 'TITLE_HEADING'],
     ]);
@@ -494,6 +494,39 @@ describe('readLessonQuizzes: the title and the enabler', () => {
       'ENABLER_MISSING',
       'ENABLER_MISSING',
     ]);
+  });
+
+  it('one stray character before the code is read without it, with a warning', () => {
+    const read = lessonWith(q => (q.title = 'w1a) Erfundenes Thema'));
+    expect(read.findings.map(f => [f.severity, f.code])).toEqual([
+      ['warning', 'TITLE_REPAIRED'],
+    ]);
+    const enabler = read.files.find(f => f.rel === 'quiz-json#1a/enabler');
+    expect((enabler?.content as any).paragraphs[0].text).toBe(
+      '1a) Erfundenes Thema'
+    );
+    const plan = buildImportPlan(read.files, decisions, { now: NOW });
+    expect(plan.enablers.find(e => e.code === 'K1-a')).toMatchObject({
+      title: 'Erfundenes Thema',
+      descriptionText: null,
+    });
+    expect(plan.skipped).toEqual([]);
+    expect(plan.warnings).toContain('quiz:1a:low: TITLE_REPAIRED');
+  });
+
+  it('a stray prefix is only repaired when the id of the quiz confirms the code', () => {
+    for (const title of [
+      'w1b) Erfundenes Thema',
+      'abc1a) Erfundenes Thema',
+      'w 1a) Erfundenes Thema',
+      'w1a Erfundenes Thema',
+    ]) {
+      const read = lessonWith(q => (q.title = title));
+      expect(codes(read, 'warning')).toEqual(['TITLE_HEADING']);
+      expect(read.files.some(f => f.rel === 'quiz-json#1a/enabler')).toBe(
+        false
+      );
+    }
   });
 
   it('a heading of another enabler does not count', () => {
