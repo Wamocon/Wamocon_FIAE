@@ -2205,5 +2205,6 @@
   "traineeQuiz.yourAnswer": "Your answer",
   "traineeQuiz.correctAnswer": "Correct answer",
   "traineeQuiz.explanation": "Explanation",
-  "traineeQuiz.tryAgain": "Try again"
+  "traineeQuiz.tryAgain": "Try again",
+  "auth.signInTimeout": "Signing in is taking too long. Please reload the page and try again."
 }

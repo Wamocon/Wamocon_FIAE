@@ -11,6 +11,8 @@
 // Note: pdf-parse is a server-side only library
 // This file should only be used in API routes, not client components
 
+import { readableStorageUrl } from '@/lib/document-storage';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -20,6 +22,8 @@ export interface PDFExtractionResult {
   text: string;
   pageCount: number;
   error?: string;
+  /** The storage url was refused before any request (see readableStorageUrl). */
+  rejected?: boolean;
   metadata?: {
     title?: string;
     author?: string;
@@ -41,6 +45,8 @@ export interface PerPageExtractionResult {
   totalPages: number;
   totalCharacters: number;
   error?: string;
+  /** The storage url was refused before any request (see readableStorageUrl). */
+  rejected?: boolean;
   metadata?: {
     title?: string;
     author?: string;
@@ -58,13 +64,67 @@ export interface ContentDocument {
 }
 
 // ============================================================================
+// FETCHING THE FILE
+// ============================================================================
+
+/** A download that takes longer is dropped, and a file above this is not read. */
+const FETCH_TIMEOUT_MS = 30_000;
+const MAX_PDF_BYTES = 50 * 1024 * 1024;
+
+type PdfBuffer =
+  | { ok: true; buffer: Buffer }
+  | { ok: false; error: string; rejected?: boolean };
+
+/**
+ * The bytes of the file of a document. `storageUrl` comes from a row of
+ * content_documents and can be an old row, so it is checked first: only the
+ * own Supabase project is fetched, a redirect is never followed, and a path on
+ * the local disk is never read. A refused url is a result, not an exception,
+ * so a batch can skip it and go on.
+ */
+async function fetchPdfBuffer(storageUrl: unknown): Promise<PdfBuffer> {
+  const readable = readableStorageUrl(storageUrl);
+  if (!readable.ok) {
+    console.warn(`[PDF Warning] Storage url rejected: ${readable.reason}`);
+    return {
+      ok: false,
+      rejected: true,
+      error: `Storage url rejected: ${readable.reason}`,
+    };
+  }
+
+  // redirect: 'error' because a redirect would leave the checked host
+  const response = await fetch(readable.url, {
+    cache: 'no-store',
+    redirect: 'error',
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok || (response.status >= 300 && response.status < 400)) {
+    return {
+      ok: false,
+      error: `Failed to fetch PDF: ${response.status} ${response.statusText}`,
+    };
+  }
+  const declared = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) {
+    return { ok: false, error: 'PDF is too large to read.' };
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length > MAX_PDF_BYTES) {
+    return { ok: false, error: 'PDF is too large to read.' };
+  }
+  return { ok: true, buffer };
+}
+
+// ============================================================================
 // MAIN FUNCTIONS
 // ============================================================================
 
 /**
  * Extract text from a PDF URL
  *
- * @param url - Public URL of the PDF in Supabase storage
+ * @param url - Public URL of the PDF in the own Supabase storage (or the bare
+ *   path of an upload). Any other url is refused, see readableStorageUrl.
  * @returns Extracted text content
  */
 export async function extractTextFromPDF(
@@ -76,63 +136,17 @@ export async function extractTextFromPDF(
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pdfParse = require('pdf-parse/lib/pdf-parse');
 
-    let buffer: Buffer;
-
-    // Check if it's a remote URL or local file path
-    if (url.startsWith('http')) {
-      // Fetch remote PDF
-      const response = await fetch(url, { cache: 'no-store' });
-
-      if (!response.ok) {
-        return {
-          success: false,
-          text: '',
-          pageCount: 0,
-          error: `Failed to fetch PDF: ${response.status} ${response.statusText}`,
-        };
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
-    } else {
-      // Read local file
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fs = require('fs');
-
-      // Robustly handle file paths
-      let filePath = url;
-      if (filePath.startsWith('file://')) {
-        // handle file:/// and file:// prefixes
-        filePath = filePath.replace(/^file:\/\/\/?/, '');
-        // Decode URI encoding (e.g. %20 -> space)
-        filePath = decodeURIComponent(filePath);
-      }
-
-      if (!fs.existsSync(filePath)) {
-        console.warn(`[PDF Warning] File not found, skipping: ${filePath}`);
-        return {
-          success: false,
-          text: '',
-          pageCount: 0,
-          error: `File not found: ${filePath}`,
-        };
-      }
-
-      try {
-        buffer = fs.readFileSync(filePath);
-      } catch (fsError: any) {
-        console.warn(
-          `[PDF Warning] Could not read file: ${filePath}`,
-          fsError.message
-        );
-        return {
-          success: false,
-          text: '',
-          pageCount: 0,
-          error: `Read error: ${fsError.message}`,
-        };
-      }
+    const file = await fetchPdfBuffer(url);
+    if (!file.ok) {
+      return {
+        success: false,
+        text: '',
+        pageCount: 0,
+        error: file.error,
+        ...(file.rejected ? { rejected: true } : {}),
+      };
     }
+    const buffer = file.buffer;
 
     // Parse the PDF
     // Returns: { text, numpages, info, metadata, version }
@@ -261,7 +275,8 @@ export function estimateTokenCount(text: string): number {
  *
  * Uses pdf-parse with custom page render callback to capture per-page text.
  *
- * @param url - Public URL of the PDF in Supabase storage
+ * @param url - Public URL of the PDF in the own Supabase storage (or the bare
+ *   path of an upload). Any other url is refused, see readableStorageUrl.
  * @returns Per-page extraction result with page numbers and text
  */
 export async function extractTextByPage(
@@ -272,46 +287,18 @@ export async function extractTextByPage(
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pdfParse = require('pdf-parse/lib/pdf-parse');
 
-    let buffer: Buffer;
-
-    // Check if it's a remote URL or local file path
-    if (url.startsWith('http')) {
-      const response = await fetch(url, { cache: 'no-store' });
-
-      if (!response.ok) {
-        return {
-          success: false,
-          pages: [],
-          totalPages: 0,
-          totalCharacters: 0,
-          error: `Failed to fetch PDF: ${response.status} ${response.statusText}`,
-        };
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fs = require('fs');
-
-      let filePath = url;
-      if (filePath.startsWith('file://')) {
-        filePath = filePath.replace(/^file:\/\/\/?/, '');
-        filePath = decodeURIComponent(filePath);
-      }
-
-      if (!fs.existsSync(filePath)) {
-        return {
-          success: false,
-          pages: [],
-          totalPages: 0,
-          totalCharacters: 0,
-          error: `File not found: ${filePath}`,
-        };
-      }
-
-      buffer = fs.readFileSync(filePath);
+    const file = await fetchPdfBuffer(url);
+    if (!file.ok) {
+      return {
+        success: false,
+        pages: [],
+        totalPages: 0,
+        totalCharacters: 0,
+        error: file.error,
+        ...(file.rejected ? { rejected: true } : {}),
+      };
     }
+    const buffer = file.buffer;
 
     // Collect pages during parsing
     const pages: PageExtractionResult[] = [];

@@ -2207,5 +2207,6 @@
   "traineeQuiz.yourAnswer": "Deine Antwort",
   "traineeQuiz.correctAnswer": "Richtige Antwort",
   "traineeQuiz.explanation": "Begründung",
-  "traineeQuiz.tryAgain": "Noch einmal versuchen"
+  "traineeQuiz.tryAgain": "Noch einmal versuchen",
+  "auth.signInTimeout": "Die Anmeldung dauert zu lange. Bitte laden Sie die Seite neu und versuchen Sie es erneut."
 }
