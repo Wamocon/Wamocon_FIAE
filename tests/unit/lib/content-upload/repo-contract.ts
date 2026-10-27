@@ -842,6 +842,104 @@ export function runRepoContract(
         ).toBe(0);
       });
 
+      describe('files that carry the marker of their state', () => {
+        const unclearFiles = async (runId: string) => {
+          const files = await uploaded(runId, 3);
+          for (const f of files) await h.forceFileStatus(f.id, 'unclear');
+          return files;
+        };
+        /** Marks a file the way the model step does: through a finished claim. */
+        const mark = async (runId: string, fileId: string) => {
+          const got = await repo.claimFiles(runId, {
+            statuses: ['unclear'],
+            limit: 10,
+            lockSeconds: 60,
+            maxAttempts: 3,
+          });
+          for (const f of got) {
+            if (f.id === fileId) {
+              const done = await repo.finishClaim(
+                f.id,
+                f.claimId!,
+                'unclear',
+                'ki_pending',
+                { patch: { parseSummary: { kiState: 'conflict' } } }
+              );
+              expect(done).toBe(true);
+            } else {
+              await repo.releaseClaim(f.id, f.claimId!);
+            }
+          }
+          await h.forceFileStatus(fileId, 'unclear');
+        };
+
+        it('leaves a marked file out of the claim, the count and nothing else', async () => {
+          const run = await newRun();
+          const files = await unclearFiles(run.id);
+          await mark(run.id, files[0].id);
+          const scope = {
+            statuses: ['unclear'] as FileStatus[],
+            limit: 10,
+            lockSeconds: 60,
+            maxAttempts: 3,
+          };
+          // without the marker rule the marked file is a claimable one like the others
+          expect(await repo.queueState(run.id, ['unclear'], 3)).toMatchObject({
+            claimable: 3,
+          });
+          expect(
+            await repo.queueState(run.id, ['unclear'], 3, { unclear: 'kiState' })
+          ).toEqual({ announced: 0, claimable: 2, locked: 0 });
+          const taken = await repo.claimFiles(run.id, {
+            ...scope,
+            unlessMarked: { unclear: 'kiState' },
+          });
+          expect(taken.map(f => f.id).sort()).toEqual(
+            [files[1].id, files[2].id].sort()
+          );
+          expect(taken.every(f => f.id !== files[0].id)).toBe(true);
+        });
+
+        it('applies the marker to the state it names only', async () => {
+          const run = await newRun();
+          const files = await unclearFiles(run.id);
+          await mark(run.id, files[0].id);
+          await h.forceFileStatus(files[1].id, 'uploaded');
+          // the rule names `unclear`: an `uploaded` file is not touched by it
+          const taken = await repo.claimFiles(run.id, {
+            statuses: ['unclear', 'uploaded'],
+            unlessMarked: { unclear: 'kiState' },
+            limit: 10,
+            lockSeconds: 60,
+            maxAttempts: 3,
+          });
+          expect(taken.map(f => f.id).sort()).toEqual(
+            [files[1].id, files[2].id].sort()
+          );
+        });
+
+        it('lets the sweeper fail a held file of the model step that ran out of attempts', async () => {
+          const run = await newRun();
+          const [file] = await uploaded(run.id, 1);
+          await h.forceFileStatus(file.id, 'ki_pending');
+          for (let i = 0; i < 3; i++) {
+            const got = await repo.claimFiles(run.id, {
+              statuses: ['ki_pending'],
+              limit: 1,
+              lockSeconds: 60,
+              maxAttempts: 3,
+            });
+            expect(got).toHaveLength(1);
+            await h.advance(61_000);
+          }
+          expect(
+            await repo.failExhausted(run.id, ['ki_pending'], 3, 'TIMEOUT')
+          ).toBe(1);
+          const [after] = await repo.getFiles(run.id, [file.id]);
+          expect(after).toMatchObject({ status: 'failed', statusCode: 'TIMEOUT' });
+        });
+      });
+
       it('reports what is waiting, claimable and held', async () => {
         const run = await newRun();
         await uploaded(run.id, 3);

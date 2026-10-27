@@ -232,6 +232,33 @@ export function runReviewContract(
         expect(proposals[0].band).toBe('high');
       });
 
+      it('hands back the current proposal of a file, or nothing', async () => {
+        const { files } = await runWithFiles(1);
+        const claim = (await h.review.listRecords(files[0].runId))[0].file
+          .claimId!;
+        expect(await h.review.currentProposal(files[0].id)).toMatchObject({
+          fileId: files[0].id,
+          band: 'high',
+          docType: 'quiz',
+          componentCode: 'K1',
+          source: 'path_content',
+        });
+        await h.review.writeProposal(
+          files[0].id,
+          claim,
+          proposal({ source: 'ki', band: 'medium', confidence: 0.7, model: 'm' })
+        );
+        // the new one, not the retired one
+        expect(await h.review.currentProposal(files[0].id)).toMatchObject({
+          source: 'ki',
+          band: 'medium',
+          confidence: 0.7,
+          model: 'm',
+        });
+        expect(await h.review.currentProposal(randomUUID())).toBeNull();
+        expect(await h.review.currentProposal('not-a-uuid')).toBeNull();
+      });
+
       it('retires the old proposal and keeps it as history', async () => {
         const { files } = await runWithFiles(1);
         const claim = (await h.review.listRecords(files[0].runId))[0].file

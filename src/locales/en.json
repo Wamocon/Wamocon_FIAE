@@ -2220,8 +2220,7 @@
   "contentUpload.noAccess": "The content upload is only available to platform administrators.",
   "contentUpload.declaration": "I confirm: the files are our own teaching material and contain no customer documents.",
   "contentUpload.kiOptIn": "Send excerpts to Sokrates for sorting (our own AI, without solution parts)",
-  "contentUpload.kiInactive": "Sorting by the AI is not available yet. The choice is saved with the run and only applies once the AI step is switched on.",
-  "contentUpload.notSent": "Structure unknown, not sent to the AI",
+  "contentUpload.notSent": "Not sent to the AI",
   "contentUpload.band.high": "Certain",
   "contentUpload.band.medium": "Likely",
   "contentUpload.band.low": "Unclear",
@@ -2489,5 +2488,15 @@
   "contentUpload.confirm.reopen": "Review again",
   "contentUpload.notice.reopened": "The run is back in review.",
   "contentUpload.notice.reopenState": "The run cannot be reviewed again in this state.",
-  "contentUpload.code.UNREADABLE": "The browser could not read the file (for example a path that is too long). Shorten the path or choose the file on its own."
+  "contentUpload.code.UNREADABLE": "The browser could not read the file (for example a path that is too long). Shorten the path or choose the file on its own.",
+  "contentUpload.kiHint": "Only for files the rules cannot place, and only a short excerpt without solution parts and without file names. The answer is a proposal, you decide. Off by default. The placement only runs when the environment has also released the AI.",
+  "contentUpload.ki.badge": "AI proposal",
+  "contentUpload.ki.badgeHint": "Proposal from Sokrates, not from the rules. Please check it.",
+  "contentUpload.ki.detailsNote": "This proposal comes from Sokrates, the own AI. It is not a decision. The excerpt that was sent is not stored, the log only holds its length and its hash.",
+  "contentUpload.ki.state.not_sent": "Not sent to the AI",
+  "contentUpload.ki.state.failed": "AI not reachable or no answer",
+  "contentUpload.ki.state.invalid": "Answer of the AI not usable",
+  "contentUpload.ki.state.conflict": "AI contradicts the rules",
+  "contentUpload.ki.state.no_result": "AI could not place the file",
+  "contentUpload.ki.state.other": "AI: {code}"
 }
