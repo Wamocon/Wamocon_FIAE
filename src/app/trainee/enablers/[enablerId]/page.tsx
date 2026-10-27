@@ -83,8 +83,9 @@ export default function TraineeEnablerPage() {
     profile?.id && enablerId
       ? `/api/trainee/enablers/${enablerId}/quizzes?traineeId=${profile.id}`
       : null;
+  // The trainee route: it keeps trainer material and rows without a file away
   const docsUrl = enablerId
-    ? `/api/trainer/enablers/${enablerId}/documents`
+    ? `/api/trainee/enablers/${enablerId}/documents`
     : null;
 
   // Data fetching via React Query
@@ -96,7 +97,8 @@ export default function TraineeEnablerPage() {
       title: string;
       storageUrl: string;
       documentType: string;
-      organizationId?: string | null;
+      /** The document of the own organization (not the shared curriculum) */
+      isOwnOrganization?: boolean;
     }>;
   };
 
@@ -109,7 +111,14 @@ export default function TraineeEnablerPage() {
   const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
 
   const enabler = enablerData?.enabler || null;
-  const documents = docsData?.documents || [];
+  // A row without a file is no link (a scenario kept without a PDF)
+  const documents = useMemo(
+    () =>
+      (docsData?.documents || []).filter(
+        d => typeof d.storageUrl === 'string' && d.storageUrl.trim() !== ''
+      ),
+    [docsData]
+  );
   const gated = useMemo(() => {
     const list = quizzesData?.quizzes || [];
     const order: Difficulty[] = ['LOW', 'MEDIUM', 'HIGH'];
@@ -363,14 +372,13 @@ export default function TraineeEnablerPage() {
 
   // LIGHT plan: hide only Wamocon THEORY PDFs, show own org's theory + ALL scenario PDFs
   // PRO plan: show everything
-  const userOrgId = profile?.organizationId || profile?.organization?.id;
   const isLightPlan = subscriptionPlan === 'LIGHT';
 
   const theoryDocs = useMemo(() => {
     const theory = documents.filter(d => d.documentType !== 'EXERCISE');
     if (!isLightPlan) return theory;
-    return theory.filter(d => d.organizationId && d.organizationId === userOrgId);
-  }, [documents, isLightPlan, userOrgId]);
+    return theory.filter(d => d.isOwnOrganization === true);
+  }, [documents, isLightPlan]);
 
   const scenarioDocs = useMemo(() => {
     const exercises = documents.filter(d => d.documentType === 'EXERCISE');

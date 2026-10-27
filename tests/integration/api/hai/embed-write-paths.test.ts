@@ -15,6 +15,7 @@ import {
   mockSession,
 } from '../../../helpers/mockNext';
 import { createTableDb } from '../../../helpers/mockDb';
+import { proofHeader, useTestProofKey } from '../../../helpers/adminProof';
 
 // Write path 3: api/hai/embed (indexEnabler and the background reindex). Every
 // indexContent call states catalog, visibility and organization, a quiz is
@@ -115,6 +116,7 @@ async function runIndexAll(tables: Tables) {
   const res = await loaded.mod.POST(
     makeRequest('POST', 'http://localhost/api/hai/embed', {
       token: 't',
+      headers: proofHeader(STAFF.id),
       body: { action: 'index_all' },
     })
   );
@@ -135,11 +137,14 @@ async function runIndexAll(tables: Tables) {
 }
 
 describe('embed route write paths state the scope', () => {
+  let restoreProofKey: () => void = () => undefined;
   beforeEach(() => {
+    restoreProofKey = useTestProofKey();
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
   afterEach(() => {
+    restoreProofKey();
     jest.restoreAllMocks();
   });
 
@@ -148,6 +153,7 @@ describe('embed route write paths state the scope', () => {
     const res = await mod.POST(
       makeRequest('POST', 'http://localhost/api/hai/embed', {
         token: 't',
+        headers: proofHeader(STAFF.id),
         body: { action: 'index_enabler', sourceId: '3b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11' },
       })
     );
@@ -264,6 +270,7 @@ describe('embed route write paths state the scope', () => {
     await loaded.mod.POST(
       makeRequest('POST', 'http://localhost/api/hai/embed', {
         token: 't',
+        headers: proofHeader(STAFF.id),
         body: { action: 'index_all' },
       })
     );

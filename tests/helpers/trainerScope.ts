@@ -85,6 +85,7 @@ export async function loadScoped(routePath: string, options: ScopedLoad = {}) {
     verifyTrainer: async () => true,
     verifyPlatformOwner: async () => session?.isPlatformOwner === true,
     getUserOrgId: async () => session?.organizationId ?? ORG,
+    getUserOrgIdStrict: async () => session?.organizationId ?? ORG,
   }));
   mockSession(session);
   options.setup?.();
