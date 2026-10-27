@@ -111,7 +111,7 @@ export interface OriginalRefusal {
 export interface StockReport {
   /** Files per status. */
   counts: StockCounts;
-  files: Array<FileStock & { fileId: string }>;
+  files: Array<FileStock & { fileId: string; fileName: string }>;
 }
 
 /** What a dry run or an apply reports to the person. Never a text of a file. */

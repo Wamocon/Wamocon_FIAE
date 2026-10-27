@@ -68,6 +68,12 @@ export function stockKeyOf(row: ReviewRowDto): StockFilter {
   return row.stock && !row.stock.stale ? row.stock.status : 'none';
 }
 
+/** `none` only concerns files that can be compared (a failed file has no status of the supply). */
+function matchesStock(row: ReviewRowDto, stock: StockFilter): boolean {
+  if (stock === 'none' && !DECIDABLE.includes(row.status)) return false;
+  return stockKeyOf(row) === stock;
+}
+
 function matchesQuery(row: ReviewRowDto, query: string): boolean {
   const needle = query.toLowerCase();
   return (
@@ -94,7 +100,7 @@ export function filterRows(
     if (filter.component && row.effective.componentCode !== filter.component)
       return false;
     if (filter.status && !matchesStatus(row, filter.status)) return false;
-    if (filter.stock && stockKeyOf(row) !== filter.stock) return false;
+    if (filter.stock && !matchesStock(row, filter.stock)) return false;
     if (filter.duplicates && row.duplicate === null) return false;
     if (query && !matchesQuery(row, query)) return false;
     return true;

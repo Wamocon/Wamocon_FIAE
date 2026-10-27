@@ -20,10 +20,12 @@
 // to ReviewRepo.applyDecisions, which writes them in one transaction.
 
 import {
+  acceptableByMedium,
   acceptableByStock,
   analyzeRun,
   buildRows,
   effectiveOf,
+  mediumGroupKey,
   originalTypeOfKey,
   type ReviewContext,
 } from '@/lib/content-upload/review/build';
@@ -334,6 +336,29 @@ function planAcceptStock(planner: Planner, context: ReviewContext): Plan {
   return planner.plan({ eligible });
 }
 
+/**
+ * "Confirm all with the same reasons": the proposals of the band medium whose reason
+ * codes are exactly the group the person looked at. A proposal that needs a person
+ * (low, conflict, unchecked content) is never part of it, the assignment of every file
+ * is still checked against the positive list.
+ */
+function planAcceptMedium(
+  planner: Planner,
+  context: ReviewContext,
+  groupKey: string
+): Plan {
+  const byId = new Map(planner.records.map(r => [r.file.id, r]));
+  let eligible = 0;
+  for (const row of buildRows(planner.records, context)) {
+    if (!acceptableByMedium(row) || mediumGroupKey(row) !== groupKey) continue;
+    const record = byId.get(row.id);
+    if (!record) continue;
+    eligible += 1;
+    planner.accept(record, effectiveOf(record), null, null);
+  }
+  return planner.plan({ eligible });
+}
+
 function planDuplicate(
   command: Extract<DecisionRequest['command'], { command: 'duplicate' }>,
   planner: Planner,
@@ -490,6 +515,9 @@ export async function writeDecisions(
       break;
     case 'accept_stock':
       plan = planAcceptStock(planner, context);
+      break;
+    case 'accept_medium':
+      plan = planAcceptMedium(planner, context, command.group);
       break;
     case 'duplicate': {
       const planned = planDuplicate(command, planner, context);

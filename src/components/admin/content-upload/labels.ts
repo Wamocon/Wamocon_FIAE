@@ -70,6 +70,19 @@ export const BAND_SYMBOL: Record<ProposalBand, string> = {
   conflict: '!',
 };
 
+/** The status of the supply (docs 8.9) as a word. */
+export const stockLabel = (t: Translate, status: string) =>
+  codeText(t, 'contentUpload.stock', status, 'contentUpload.stock.other');
+
+/** Symbol of a status of the supply, so that the meaning never rests on colour alone. */
+export const STOCK_SYMBOL: Record<string, string> = {
+  new: '+',
+  extended: '↑',
+  differs: '≠',
+  unchanged: '=',
+  conflict: '!',
+};
+
 export const KIND_KEYS: Record<string, string> = {
   pflicht: 'contentUpload.kind.pflicht',
   wahl: 'contentUpload.kind.wahl',

@@ -19,6 +19,9 @@ import type { DecisionOutcome } from '@/lib/content-upload/review/decisions';
 import type { DecisionCommandInput } from '@/lib/content-upload/review/validate';
 import type { RunOverviewItem } from '@/lib/content-upload/review/service';
 import type { RunDto } from '@/lib/content-upload/staging/runs';
+import type { CompareReport } from '@/lib/content-upload/transfer/compare';
+import type { RollbackAnswer } from '@/lib/content-upload/transfer/rollback';
+import type { TransferReport } from '@/lib/content-upload/transfer/types';
 import { UploadApiError } from '@/lib/content-upload/staging/client';
 
 const BASE = '/api/trainer/content-upload';
@@ -44,7 +47,9 @@ export function createReviewClient(partial: Partial<ReviewClientDeps> = {}) {
     method: string,
     path: string,
     body?: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** A 409 whose body is a report of conflicts is an answer, not an error. */
+    conflictReport = false
   ): Promise<T> {
     const response = await deps.fetch(path, {
       method,
@@ -60,6 +65,14 @@ export function createReviewClient(partial: Partial<ReviewClientDeps> = {}) {
       string,
       any
     >;
+    if (
+      !response.ok &&
+      conflictReport &&
+      response.status === 409 &&
+      data.status === 'conflict'
+    ) {
+      return data as T;
+    }
     if (!response.ok) {
       const retryAfter = Number(response.headers.get('Retry-After'));
       throw new UploadApiError(
@@ -72,6 +85,11 @@ export function createReviewClient(partial: Partial<ReviewClientDeps> = {}) {
       );
     }
     return data as T;
+  }
+
+  /** A transfer call: the 409 with a report of conflicts is an answer, any other failure an error. */
+  function transfer(path: string, body: unknown): Promise<TransferReport> {
+    return api<TransferReport>('POST', path, body, undefined, true);
   }
 
   return {
@@ -115,6 +133,25 @@ export function createReviewClient(partial: Partial<ReviewClientDeps> = {}) {
         `${BASE}/runs/${runId}/reopen`,
         {}
       );
+    },
+    /** "Bestand abgleichen": compares the files with the database, writes nothing. */
+    compare(runId: string) {
+      return api<CompareReport>('POST', `${BASE}/runs/${runId}/stock`, {});
+    },
+    /**
+     * The dry run: the whole transfer in a transaction that is rolled back. A report
+     * with conflicts comes back as a report (status "conflict"), not as an error.
+     */
+    dryRun(runId: string, body: { replaceFiles: string[] }) {
+      return transfer(`${BASE}/runs/${runId}/dry-run`, body);
+    },
+    /** The apply. Needs a valid dry run for exactly this state and the typed catalog code. */
+    apply(runId: string, body: { replaceFiles: string[]; confirm: string }) {
+      return transfer(`${BASE}/runs/${runId}/apply`, body);
+    },
+    /** The SQL text that takes back the newest apply, or what stands in the way. */
+    rollbackSql(runId: string) {
+      return api<RollbackAnswer>('GET', `${BASE}/runs/${runId}/rollback-sql`);
     },
     decide(
       runId: string,

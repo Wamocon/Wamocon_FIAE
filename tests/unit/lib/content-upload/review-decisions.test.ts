@@ -115,6 +115,7 @@ describe('the list of a run', () => {
           'derived',
           'duplicate',
           'copyOfId',
+          'stock',
         ].sort()
       );
     }

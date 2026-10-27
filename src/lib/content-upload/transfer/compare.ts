@@ -238,7 +238,11 @@ export async function compareStock(
     stock: {
       counts: countStock(stock),
       files: [...stock]
-        .map(([fileId, value]) => ({ fileId, ...value }))
+        .map(([fileId, value]) => ({
+          fileId,
+          fileName: fileById.get(fileId)?.fileName ?? '',
+          ...value,
+        }))
         .sort((a, b) => (a.fileId < b.fileId ? -1 : 1)),
     },
     compared: stock.size,

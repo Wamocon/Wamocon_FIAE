@@ -190,6 +190,9 @@ export function RunUploader({
               count: LIMITS.maxFilesPerRun,
             })}
           </p>
+          <p className="text-muted text-sm" data-testid="path-hint">
+            {t('contentUpload.upload.pathHint')}
+          </p>
 
           {selected.length > 0 && (
             <div className="text-foreground text-sm" data-testid="selection">

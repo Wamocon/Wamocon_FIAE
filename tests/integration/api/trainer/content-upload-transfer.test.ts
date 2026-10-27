@@ -320,9 +320,9 @@ describe('the dry run and the apply', () => {
     const runId = await createRun(b);
     const h = await use(b, runId);
     const res = await call(b.route.dry.POST, 'POST', runId, {
-      body: { updateExisting: true },
+      body: { replaceFiles: [h.store.files[0].id] },
     });
-    expect((await json(res)).updateExisting).toBe(true);
+    expect((await json(res)).replaceFiles).toEqual([h.store.files[0].id]);
     expect(h.store.attempts[0].updateExisting).toBe(true);
   });
 
@@ -331,7 +331,8 @@ describe('the dry run and the apply', () => {
     const runId = await createRun(b);
     const h = await use(b, runId);
     for (const body of [
-      { updateExisting: 'yes' },
+      { replaceFiles: 'yes' },
+      { replaceFiles: ['nope'] },
       { publishOriginals: 'a' },
       { publishOriginals: ['nope'] },
       [],

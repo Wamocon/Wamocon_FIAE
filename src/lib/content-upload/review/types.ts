@@ -207,6 +207,21 @@ export interface ReviewCounts {
   stock: Record<StockStatus | 'none', number>;
   /** What "accept new and added" would take: new or extended, safe, no decision. */
   acceptableStock: number;
+  /**
+   * The proposals of the band medium that a click may take, grouped by the same
+   * reasons (the codes of the reasons, sorted, joined by +): what "confirm all with the
+   * same reasons" would take. Never band low or conflict, never an unchecked content.
+   */
+  mediumGroups: MediumGroupDto[];
+}
+
+/** A group of proposals in the band medium with the same reasons. */
+export interface MediumGroupDto {
+  /** The sorted reason codes joined by +, also the id of the group in the command. */
+  key: string;
+  /** The reason texts (fixed German text of the rule stage) joined by a middle dot. */
+  text: string;
+  count: number;
 }
 
 /** The status filter of the list. */

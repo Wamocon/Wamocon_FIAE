@@ -11,6 +11,7 @@ import type {
   SortKey,
 } from '@/lib/content-upload/review/types';
 import { BandBadge } from '@/components/admin/content-upload/BandBadge';
+import { StockBadge } from '@/components/admin/content-upload/StockBadge';
 import {
   KIND_KEYS,
   fileCodeLabel,
@@ -83,7 +84,7 @@ type Props = {
   onOpenDuplicate: (key: string) => void;
 };
 
-const COLUMNS = 6;
+const COLUMNS = 7;
 
 export function ReviewTable({
   rows,
@@ -161,6 +162,9 @@ export function ReviewTable({
             </th>
             <th scope="col" aria-sort={ariaSort('band')} className="px-3 py-3">
               {sortButton('band', t('contentUpload.col.confidence'))}
+            </th>
+            <th scope="col" className="px-3 py-3 font-semibold">
+              {t('contentUpload.col.stock')}
             </th>
             <th scope="col" className="px-3 py-3 font-semibold">
               {t('contentUpload.col.decision')}
@@ -346,6 +350,13 @@ function Row({
             band={row.proposal.band}
             confidence={row.proposal.confidence}
           />
+        ) : (
+          <span className="text-muted">-</span>
+        )}
+      </td>
+      <td className="px-3 py-3">
+        {DECIDABLE.includes(row.status) ? (
+          <StockBadge stock={row.stock} />
         ) : (
           <span className="text-muted">-</span>
         )}

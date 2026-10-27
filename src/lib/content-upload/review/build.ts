@@ -261,6 +261,34 @@ export function acceptableByStock(row: ReviewRowDto): boolean {
   );
 }
 
+/** The group a proposal of the band medium belongs to: its reason codes, sorted. */
+export function mediumGroupKey(row: ReviewRowDto): string | null {
+  const reasons = row.proposal?.reasons ?? [];
+  if (reasons.length === 0) return null;
+  return [...new Set(reasons.map(r => r.code))].sort().join('+');
+}
+
+/**
+ * Whether "confirm all with the same reasons" may take the row: the band is medium
+ * (never low or conflict), nothing is decided, the file is no version of another one,
+ * and no reason says the content was not checked with full certainty or that the parser
+ * found errors in it. The assignment
+ * itself is checked against the positive list when the decision is written.
+ */
+export function acceptableByMedium(row: ReviewRowDto): boolean {
+  return (
+    row.status === 'proposed_rules' &&
+    row.decision === null &&
+    row.duplicate === null &&
+    row.proposal !== null &&
+    row.proposal.band === 'medium' &&
+    row.proposal.reasons.length > 0 &&
+    !row.proposal.reasons.some(
+      r => UNCHECKED_REASONS.has(r.code) || r.code === 'PARSER_ERRORS'
+    )
+  );
+}
+
 export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
   const counts: ReviewCounts = {
     total: rows.length,
@@ -278,8 +306,19 @@ export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
     acceptableHigh: 0,
     stock: { conflict: 0, differs: 0, extended: 0, new: 0, unchanged: 0, none: 0 },
     acceptableStock: 0,
+    mediumGroups: [],
   };
+  const groups = new Map<string, { text: string; count: number }>();
   for (const row of rows) {
+    if (acceptableByMedium(row)) {
+      const key = mediumGroupKey(row) as string;
+      const group = groups.get(key) ?? {
+        text: [...new Set((row.proposal?.reasons ?? []).map(r => r.text))].join(' · '),
+        count: 0,
+      };
+      group.count += 1;
+      groups.set(key, group);
+    }
     if (DECIDABLE.includes(row.status)) {
       counts.stock[row.stock && !row.stock.stale ? row.stock.status : 'none'] += 1;
     }
@@ -304,6 +343,9 @@ export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
       }
     }
   }
+  counts.mediumGroups = [...groups]
+    .map(([key, group]) => ({ key, ...group }))
+    .sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : 1));
   return counts;
 }
 

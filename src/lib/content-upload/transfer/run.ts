@@ -428,7 +428,11 @@ export async function runTransfer(
   const stockReport = (stock: ReadonlyMap<string, FileStock>): StockReport => ({
     counts: countStock(stock),
     files: [...stock]
-      .map(([fileId, value]) => ({ fileId, ...value }))
+      .map(([fileId, value]) => ({
+        fileId,
+        fileName: fileById.get(fileId)?.fileName ?? '',
+        ...value,
+      }))
       .sort((a, b) => (a.fileId < b.fileId ? -1 : 1)),
   });
   /** Keeps the status per file for the review list (a dry run only, in the state review). */

@@ -22,7 +22,7 @@ const files = [
     .readdirSync(FOLDER)
     .filter(f => f.endsWith('.ts'))
     .map(f => path.join(FOLDER, f)),
-  ...['dry-run', 'apply', 'rollback-sql'].map(d =>
+  ...['dry-run', 'apply', 'rollback-sql', 'stock'].map(d =>
     path.join(ROUTES, d, 'route.ts')
   ),
 ].map(file => ({
@@ -65,7 +65,9 @@ describe('the sources of the transfer', () => {
       /scenarioSolutions: FIXED_ENGINE_OPTIONS\.scenarioSolutions/
     );
     expect(run).toMatch(/solutions: FIXED_ENGINE_OPTIONS\.useCaseSolutions/);
-    expect(run.match(/activate:/g)).toHaveLength(3);
+    expect(run).toMatch(/extendQuizzes: FIXED_ENGINE_OPTIONS\.extendQuizzes/);
+    // the constant and the one set of switches that both engines get
+    expect(run.match(/activate:/g)).toHaveLength(2);
     const preset = only('transfer/preset.ts')[0].code;
     expect(preset).toContain('activate: false');
   });
