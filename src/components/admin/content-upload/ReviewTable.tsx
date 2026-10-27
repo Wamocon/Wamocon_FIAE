@@ -15,12 +15,14 @@ import type {
 } from '@/lib/content-upload/review/types';
 import { BandBadge } from '@/components/admin/content-upload/BandBadge';
 import { StockBadge } from '@/components/admin/content-upload/StockBadge';
+import { KiBadge } from '@/components/admin/content-upload/KiBadge';
 import {
   KIND_KEYS,
   fileCodeLabel,
   formatBytes,
   formatDate,
   levelLabel,
+  kiStateLabel,
   sourceLabel,
   statusLabel,
   typeLabel,
@@ -57,6 +59,8 @@ export function canAcceptAsProposed(row: ReviewRowDto): boolean {
   if (row.decision?.action === 'accept') return true;
   const proposal = row.proposal;
   if (!proposal) return false;
+  // a proposal of the model needs a person who names the assignment (as the route says)
+  if (proposal.source === 'ki') return false;
   if (proposal.band !== 'high' && proposal.band !== 'medium') return false;
   return !proposal.reasons.some(r => UNCHECKED_REASONS.has(r.code));
 }
@@ -310,7 +314,7 @@ function Row({
             )}
             {row.status === 'unclear' && (
               <div className="text-muted text-xs">
-                {t('contentUpload.notSent')}
+                {row.ki ? kiStateLabel(t, row.ki) : t('contentUpload.notSent')}
               </div>
             )}
           </>
@@ -339,7 +343,15 @@ function Row({
         )}
       </td>
       <td className="px-3 py-3">
-        {row.proposal ? sourceLabel(t, row.proposal.source) : ''}
+        {row.proposal ? (
+          row.proposal.source === 'ki' ? (
+            <KiBadge />
+          ) : (
+            sourceLabel(t, row.proposal.source)
+          )
+        ) : (
+          ''
+        )}
       </td>
       <td className="px-3 py-3">
         {row.proposal ? (
@@ -455,6 +467,9 @@ function Details({
             </span>
             {fileCodeLabel(t, row.statusCode)}
           </p>
+        )}
+        {row.proposal?.source === 'ki' && (
+          <p className="text-muted">{t('contentUpload.ki.detailsNote')}</p>
         )}
         {row.copyOfId && <p>{t('contentUpload.details.copy')}</p>}
         {row.duplicate && (

@@ -57,7 +57,7 @@ export function NewRunForm({ client: injected }: Props) {
   };
   const [label, setLabel] = useState('');
   const [declared, setDeclared] = useState(false);
-  const [ki, setKi] = useState(true);
+  const [ki, setKi] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
@@ -211,7 +211,7 @@ export function NewRunForm({ client: injected }: Props) {
               <span>{t('contentUpload.kiOptIn')}</span>
             </label>
             <p id="ki-hint" className="text-muted mt-1 pl-8 text-sm">
-              {t('contentUpload.kiInactive')}
+              {t('contentUpload.kiHint')}
             </p>
           </div>
         </fieldset>

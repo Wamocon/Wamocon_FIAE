@@ -72,6 +72,7 @@ export function rowDto(
     duplicate: null,
     copyOfId: null,
     stock: null,
+    ki: null,
     ...rest,
   };
 }

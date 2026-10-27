@@ -60,6 +60,10 @@ export const skipLabel = (t: Translate, code: string) =>
 export const sourceLabel = (t: Translate, source: string) =>
   codeText(t, 'contentUpload.source', source, 'contentUpload.source.other');
 
+/** The text for how the model stage ended for a file (not_sent, failed, ...). */
+export const kiStateLabel = (t: Translate, state: string) =>
+  codeText(t, 'contentUpload.ki.state', state, 'contentUpload.ki.state.other');
+
 export const bandLabel = (t: Translate, band: ProposalBand) =>
   t(`contentUpload.band.${band}`);
 

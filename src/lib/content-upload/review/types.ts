@@ -156,6 +156,21 @@ export interface StockDto {
   stale: boolean;
 }
 
+/**
+ * How the model stage ended for a file that the rules left unclear (the marker
+ * `kiState` in the summary of the file). A proposal of the model is not listed
+ * here: it is the proposal itself, with the source `ki`.
+ */
+export const KI_STATES = [
+  'proposed',
+  'conflict',
+  'not_sent',
+  'failed',
+  'invalid',
+  'no_result',
+] as const;
+export type KiStateName = (typeof KI_STATES)[number];
+
 export interface ReviewRowDto {
   id: string;
   fileName: string;
@@ -177,6 +192,8 @@ export interface ReviewRowDto {
   copyOfId: string | null;
   /** Status of the supply from the last comparison, null before there was one. */
   stock: StockDto | null;
+  /** The end of the model stage for this file, or null when it did not take part. */
+  ki: KiStateName | null;
 }
 
 export interface ReviewCounts {

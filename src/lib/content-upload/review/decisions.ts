@@ -100,6 +100,9 @@ export function needsExplicitAssignment(record: ReviewRecord): boolean {
   if (record.decision?.action === 'accept') return false;
   const proposal = record.proposal;
   if (!proposal) return true;
+  // A proposal of the model is never taken with one click: whatever a document says
+  // to the model, a person names the assignment (the model may be steered by it)
+  if (proposal.source === 'ki') return true;
   if (proposal.band === 'low' || proposal.band === 'conflict') return true;
   return proposal.reasons.some(r => UNCHECKED_REASONS.has(r.code));
 }

@@ -116,6 +116,7 @@ describe('the list of a run', () => {
           'duplicate',
           'copyOfId',
           'stock',
+          'ki',
         ].sort()
       );
     }
@@ -912,5 +913,28 @@ describe('the counts of the bands', () => {
     expect(list.counts).toMatchObject({ total: 2, low: 0, skipped: 1, high: 1 });
     const low = await reviewList(r.ctx.reviewDeps, r.run, { band: 'low' });
     expect(low.matching).toBe(0);
+  });
+});
+
+describe('a proposal of the model', () => {
+  it('is never taken with one click: a person names the assignment', async () => {
+    const { needsExplicitAssignment } = await import(
+      '@/lib/content-upload/review/decisions'
+    );
+    const record = (source: 'ki' | 'content', band: 'high' | 'medium' | 'low') =>
+      ({
+        file: { id: 'f' },
+        decision: null,
+        proposal: { source, band, reasons: [] },
+      }) as any;
+    expect(needsExplicitAssignment(record('ki', 'medium'))).toBe(true);
+    expect(needsExplicitAssignment(record('ki', 'high'))).toBe(true);
+    // a rule proposal of the same band is still one click
+    expect(needsExplicitAssignment(record('content', 'medium'))).toBe(false);
+    expect(needsExplicitAssignment(record('content', 'high'))).toBe(false);
+    // what a person decided before stays decided
+    const accepted = record('ki', 'medium');
+    accepted.decision = { action: 'accept' };
+    expect(needsExplicitAssignment(accepted)).toBe(false);
   });
 });

@@ -39,6 +39,7 @@ import type {
   FinishOptions,
   QueueState,
   TransitionOptions,
+  UnlessMarked,
   UploadRepo,
   UrlRequestDecision,
 } from '@/lib/content-upload/staging/repo';
@@ -151,6 +152,23 @@ function list(values: readonly unknown[]): SQL {
 /** `column in (...)`, or false for an empty list. */
 function inList(column: SQL, values: readonly unknown[]): SQL {
   return values.length === 0 ? sql`false` : sql`${column} in (${list(values)})`;
+}
+
+/**
+ * "Not done with the step of its state": for each state that names a marker, a
+ * file in that state is only taken when parse_summary lacks the key. Keys are
+ * bound as parameters.
+ */
+function notMarked(
+  status: SQL,
+  summary: SQL,
+  unlessMarked: UnlessMarked | undefined
+): SQL {
+  const parts = Object.entries(unlessMarked ?? {}).map(
+    ([state, key]) =>
+      sql`not (${status} = ${state} and (${summary} ->> ${key}) is not null)`
+  );
+  return parts.length === 0 ? sql`true` : sql.join(parts, sql` and `);
 }
 
 function chunks<T>(values: readonly T[], size = MAX_IN_LIST): T[][] {
@@ -569,6 +587,7 @@ export class PgUploadRepo implements UploadRepo {
               select c.id from content_upload_files c
               where c.run_id = ${runId}::uuid
                 and ${inList(sql`c.status`, options.statuses)}
+                and ${notMarked(sql`c.status`, sql`c.parse_summary`, options.unlessMarked)}
                 and (c.locked_until is null or c.locked_until < now())
                 and c.attempts < ${options.maxAttempts}::int
                 and exists (
@@ -642,7 +661,8 @@ export class PgUploadRepo implements UploadRepo {
     runId: string,
     statuses: readonly FileStatus[],
     maxAttempts: number,
-    code: string
+    code: string,
+    unlessMarked?: UnlessMarked
   ): Promise<number> {
     const failable = statuses.filter(s => canTransitionFile(s, 'failed'));
     if (!isUuid(runId) || failable.length === 0) return 0;
@@ -651,6 +671,7 @@ export class PgUploadRepo implements UploadRepo {
         sql`update content_upload_files
             set status = 'failed', status_code = ${code}, claim_id = null, locked_until = null
             where run_id = ${runId}::uuid and ${inList(sql`status`, failable)}
+              and ${notMarked(sql`status`, sql`parse_summary`, unlessMarked)}
               and attempts >= ${maxAttempts}::int
               and (locked_until is null or locked_until < now())
             returning id`
@@ -662,10 +683,11 @@ export class PgUploadRepo implements UploadRepo {
   async queueState(
     runId: string,
     statuses: readonly FileStatus[],
-    maxAttempts: number
+    maxAttempts: number,
+    unlessMarked?: UnlessMarked
   ): Promise<QueueState> {
     if (!isUuid(runId)) return { announced: 0, claimable: 0, locked: 0 };
-    const inStatuses = inList(sql`status`, statuses);
+    const inStatuses = sql`${inList(sql`status`, statuses)} and ${notMarked(sql`status`, sql`parse_summary`, unlessMarked)}`;
     const row = rowsOf(
       await this.db.execute(
         sql`select

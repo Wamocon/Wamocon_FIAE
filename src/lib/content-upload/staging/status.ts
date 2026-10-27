@@ -81,7 +81,8 @@ export const FILE_TRANSITIONS: Record<FileStatus, readonly FileStatus[]> = {
   extracted: ['proposed_rules', 'unclear', 'skipped', 'failed'],
   proposed_rules: ['decided', 'skipped', 'superseded'],
   unclear: ['ki_pending', 'decided', 'skipped', 'superseded'],
-  ki_pending: ['proposed_ki', 'unclear'],
+  // failed: the holder of the model step died too often (the sweeper of the queue)
+  ki_pending: ['proposed_ki', 'unclear', 'failed'],
   proposed_ki: ['decided', 'skipped', 'superseded'],
   decided: ['applied', 'skipped', 'superseded'],
   applied: [],

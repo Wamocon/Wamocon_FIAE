@@ -27,14 +27,16 @@ import {
   isLeftOut,
   isProblem,
 } from '@/lib/content-upload/review/states';
-import type {
-  AssignmentDto,
-  DerivedDto,
-  DuplicateGroupDto,
-  ReviewCounts,
-  ReviewRecord,
-  ReviewRowDto,
-  StockDto,
+import {
+  KI_STATES,
+  type AssignmentDto,
+  type DerivedDto,
+  type DuplicateGroupDto,
+  type KiStateName,
+  type ReviewCounts,
+  type ReviewRecord,
+  type ReviewRowDto,
+  type StockDto,
 } from '@/lib/content-upload/review/types';
 import {
   assignmentFingerprint,
@@ -147,6 +149,15 @@ function derivedOf(
   return { kind: facts.kind, phase: facts.phase };
 }
 
+/** The state of the model stage of a file, from its summary (only known values). */
+function kiStateOf(file: ReviewRecord['file']): KiStateName | null {
+  const value = file.parseSummary?.kiState;
+  return typeof value === 'string' &&
+    (KI_STATES as readonly string[]).includes(value)
+    ? (value as KiStateName)
+    : null;
+}
+
 function isNewIn(effective: AssignmentDto, list: PositiveList): boolean {
   const component = effective.componentCode
     ? list.component(effective.componentCode)
@@ -239,6 +250,7 @@ export function buildRows(
         : null,
       copyOfId: file.duplicateOfId,
       stock: stockOf(record, effective),
+      ki: kiStateOf(file),
     };
   });
 }
