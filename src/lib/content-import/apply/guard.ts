@@ -28,6 +28,15 @@ import type { ImportPlan } from './types';
 // found in running text, a tasks uses these words often. The newer patterns use
 // [^\S\n] (white space without a line break) so a long run of white space cannot
 // make the scan quadratic.
+/**
+ * The bare heading of a solution: a line of just the word "Lösung", with an
+ * optional colon. It is the only marker an owner review can release (see
+ * leakOfEnablerText), for the text of a named enabler where the word labels a
+ * table cell.
+ */
+const BARE_SOLUTION_LINE =
+  /(?:^|\n)[^\S\n]*L(?:ö|oe)sung[^\S\n]*(?::[^\S\n]*)?(?:\n|$)/i;
+
 export const SOLUTION_MARKERS: readonly RegExp[] = Object.freeze([
   /(?:^|\n)\s*Richtige\s+Antwort\b/i,
   /Richtige\s+Antwort\s*:/i,
@@ -40,7 +49,7 @@ export const SOLUTION_MARKERS: readonly RegExp[] = Object.freeze([
   /Musterl(?:ö|oe)sung[^\S\n]*:/i,
   /(?:^|\n)[^\S\n]*Bewertungskriterien[^\S\n]*(?::[^\S\n]*)?(?:\n|$)/i,
   // The bare heading of a solution (the scenario parser reads it as one)
-  /(?:^|\n)[^\S\n]*L(?:ö|oe)sung[^\S\n]*(?::[^\S\n]*)?(?:\n|$)/i,
+  BARE_SOLUTION_LINE,
   // Variants of the label of an answer or a solution
   /(?:^|\n)[^\S\n]*(?:Korrekte[^\S\n]+Antwort|Antwortschl(?:ü|ue)ssel|L(?:ö|oe)sungsvorschlag)\b/i,
   /(?:Korrekte[^\S\n]+Antwort|Antwortschl(?:ü|ue)ssel|L(?:ö|oe)sungsvorschlag)[^\S\n]*:/i,
@@ -92,10 +101,22 @@ export function scenarioSolutionTexts(plan: ImportPlan): string[] {
  * Where a visible text shows a solution. `solutions` are the solution texts to
  * search for. Returns a description of the problem (never the text itself).
  */
-export function leakOf(text: string, solutions: string[]): string | null {
+export function leakOf(
+  text: string,
+  solutions: string[],
+  options: { allowBareSolutionLine?: boolean } = {}
+): string | null {
   const visible = normalize(text);
   if (visible.length === 0) return null;
-  if (SOLUTION_MARKERS.some(marker => marker.test(text))) {
+  // allowBareSolutionLine skips that one marker and no other (an owner review,
+  // see leakOfEnablerText). Every other marker and the solution texts stay.
+  if (
+    SOLUTION_MARKERS.some(
+      marker =>
+        !(options.allowBareSolutionLine && marker === BARE_SOLUTION_LINE) &&
+        marker.test(text)
+    )
+  ) {
     return 'contains a solution marker';
   }
   const index = needleIndex(solutions);
@@ -106,6 +127,46 @@ export function leakOf(text: string, solutions: string[]): string | null {
     }
   }
   return null;
+}
+
+/**
+ * The check of an enabler text. `reviewed` is true for an enabler whose bare line
+ * "Lösung" the owner has checked (a table cell label in the teaching text): then
+ * that one pattern is let through, every other marker and every scenario
+ * solution still counts. `reviewUsed` tells whether the review was needed, so the
+ * plan can say so. Only for the enabler text, never for titles, scenarios,
+ * quizzes or use cases.
+ */
+export function leakOfEnablerText(
+  text: string,
+  solutions: string[],
+  reviewed: boolean
+): { reason: string | null; reviewUsed: boolean } {
+  const strict = leakOf(text, solutions);
+  if (strict === null || !reviewed) return { reason: strict, reviewUsed: false };
+  const relaxed = leakOf(text, solutions, { allowBareSolutionLine: true });
+  return { reason: relaxed, reviewUsed: relaxed === null };
+}
+
+/**
+ * Enabler codes whose text the plan lets pass with a reviewed bare line. Only
+ * well-formed entries count (validatePlan reports the others), so a damaged
+ * list releases nothing.
+ */
+export function reviewedEnablerCodes(
+  plan: Pick<ImportPlan, 'reviewedMarkers'>
+): Set<string> {
+  const list: unknown = plan.reviewedMarkers;
+  const codes = new Set<string>();
+  if (!Array.isArray(list)) return codes;
+  for (const entry of list as unknown[]) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { enablerCode, pattern } = entry as Record<string, unknown>;
+    if (typeof enablerCode === 'string' && pattern === 'bare-solution-line') {
+      codes.add(enablerCode);
+    }
+  }
+  return codes;
 }
 
 /**
@@ -135,6 +196,7 @@ function needleIndex(solutions: string[]): Map<string, string[]> {
 export function findSolutionLeaks(plan: ImportPlan): string[] {
   const solutions = solutionTexts(plan);
   const strong = scenarioSolutionTexts(plan);
+  const reviewed = reviewedEnablerCodes(plan);
   const problems: string[] = [];
   const check = (
     where: string,
@@ -152,7 +214,14 @@ export function findSolutionLeaks(plan: ImportPlan): string[] {
   }
   for (const e of plan.enablers) {
     check(`enabler ${e.code} title`, e.title, strong);
-    check(`enabler ${e.code} text`, e.descriptionText, strong);
+    if (e.descriptionText) {
+      const reason = leakOfEnablerText(
+        e.descriptionText,
+        strong,
+        reviewed.has(e.code)
+      ).reason;
+      if (reason) problems.push(`enabler ${e.code} text ${reason}`);
+    }
   }
   for (const s of plan.scenarios) {
     check(`scenario ${s.enablerCode} title`, s.title);
@@ -189,12 +258,15 @@ const VISIBLE_COLUMNS: Record<string, string[]> = {
  * Problems of the rows that are about to be written. Besides the visible
  * columns it checks the places of the solutions: an explanation only on the
  * correct option, no expected answer on a question, and every document that
- * holds a solution is TRAINER_SOLUTION and TRAINER_ONLY.
+ * holds a solution is TRAINER_SOLUTION and TRAINER_ONLY. `reviewedEnablers`
+ * are the codes of the enablers whose text may carry a reviewed bare line
+ * "Lösung" (the column description_text of their rows, nothing else).
  */
 export function findRowLeaks(
   rows: Record<string, Row[]>,
   solutions: string[],
-  strong: string[] = solutions
+  strong: string[] = solutions,
+  reviewedEnablers: ReadonlySet<string> = new Set()
 ): string[] {
   const problems: string[] = [];
   const longOnly = ['training_components', 'courses', 'enablers'];
@@ -203,10 +275,15 @@ export function findRowLeaks(
       for (const column of columns) {
         const value = row[column];
         if (typeof value !== 'string') continue;
-        const reason = leakOf(
-          value,
-          longOnly.includes(table) ? strong : solutions
-        );
+        const against = longOnly.includes(table) ? strong : solutions;
+        const reason =
+          table === 'enablers' && column === 'description_text'
+            ? leakOfEnablerText(
+                value,
+                against,
+                reviewedEnablers.has(String(row.code))
+              ).reason
+            : leakOf(value, against);
         if (reason) problems.push(`${table}.${column} ${reason}`);
       }
     }

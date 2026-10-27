@@ -5,7 +5,11 @@
 // in a file so that a change needs no code change, and they are checked
 // strictly: a typo must stop the run, not change what is written.
 
-import type { ComponentKind, Decisions } from './types';
+import type {
+  ComponentKind,
+  Decisions,
+  ReviewedSolutionWord,
+} from './types';
 
 export type DecisionsResult =
   | { ok: true; decisions: Decisions }
@@ -47,6 +51,68 @@ function amountMap(
 
 const phaseOf = (value: unknown): value is 1 | 2 | null =>
   value === null || value === 1 || value === 2;
+
+/** Code of an enabler of the KfBM: K24.2-e, K6.2-d, K9-a. */
+export const ENABLER_KEY = /^K\d{1,2}(?:\.\d{1,2})?-[a-z]$/;
+const REASON_MIN = 10;
+const REASON_MAX = 400;
+const REVIEWED_NAME = 'content.reviewedSolutionWordFalsePositives';
+
+/**
+ * The enablers whose bare line "Lösung" was checked. Strict on purpose: only
+ * well-formed enabler codes (no wildcard, no component), every entry with a
+ * reason in one line, no duplicate and no other field. A mistake stops the run,
+ * it must never widen what is released.
+ */
+function reviewedSolutionWords(
+  value: unknown,
+  errors: string[]
+): ReviewedSolutionWord[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push(`${REVIEWED_NAME} must be a list of {enabler, reason}`);
+    return [];
+  }
+  const out: ReviewedSolutionWord[] = [];
+  const seen = new Set<string>();
+  value.forEach((entry, index) => {
+    const where = `${REVIEWED_NAME}[${index}]`;
+    if (!isRecord(entry)) {
+      errors.push(`${where} must be an object {enabler, reason}`);
+      return;
+    }
+    for (const field of Object.keys(entry)) {
+      if (field !== 'enabler' && field !== 'reason') {
+        errors.push(`${where} has the unknown field ${field}`);
+      }
+    }
+    const enabler = entry.enabler;
+    const reason = typeof entry.reason === 'string' ? entry.reason.trim() : '';
+    let valid = true;
+    if (typeof enabler !== 'string' || !ENABLER_KEY.test(enabler)) {
+      errors.push(`${where} needs an enabler key like K24.2-e`);
+      valid = false;
+    } else if (seen.has(enabler)) {
+      errors.push(`${where} names the enabler ${enabler} twice`);
+      valid = false;
+    } else {
+      seen.add(enabler);
+    }
+    if (
+      reason.length < REASON_MIN ||
+      reason.length > REASON_MAX ||
+      // eslint-disable-next-line no-control-regex
+      /[\u0000-\u001f\u007f\u0085\u2028\u2029]/.test(reason)
+    ) {
+      errors.push(
+        `${where} needs a reason of ${REASON_MIN} to ${REASON_MAX} characters in one line`
+      );
+      valid = false;
+    }
+    if (valid) out.push({ enabler: enabler as string, reason });
+  });
+  return out;
+}
 
 /** Checks the raw JSON of the presets and returns it typed. */
 export function parseDecisions(raw: unknown): DecisionsResult {
@@ -171,6 +237,10 @@ export function parseDecisions(raw: unknown): DecisionsResult {
   if (typeof content.enablerText !== 'boolean') {
     errors.push('content.enablerText must be true or false');
   }
+  const reviewedSolutionWordFalsePositives = reviewedSolutionWords(
+    content.reviewedSolutionWordFalsePositives,
+    errors
+  );
   const open =
     Array.isArray(raw.open) && raw.open.every(s => typeof s === 'string')
       ? (raw.open as string[])
@@ -215,6 +285,7 @@ export function parseDecisions(raw: unknown): DecisionsResult {
         activate: content.activate as boolean,
         globalQuizQuestions: content.globalQuizQuestions as number,
         enablerText: content.enablerText as boolean,
+        reviewedSolutionWordFalsePositives,
       },
       open: open as string[],
     },

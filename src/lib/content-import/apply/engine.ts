@@ -21,6 +21,8 @@ import { ImportAbort } from './db';
 import {
   findRowLeaks,
   leakOf,
+  leakOfEnablerText,
+  reviewedEnablerCodes,
   scenarioSolutionTexts,
   solutionTexts,
 } from './guard';
@@ -380,7 +382,12 @@ export async function executePlan(
   const differences: Difference[] = [];
   const conflict = (table: string, key: string, reason: string) =>
     conflicts.push({ table, key, reason });
-  const updates: Array<{ table: TableName; id: string; patch: Row }> = [];
+  const updates: Array<{
+    table: TableName;
+    key: string;
+    id: string;
+    patch: Row;
+  }> = [];
   const noteExisting = (
     table: TableName,
     key: string,
@@ -397,6 +404,7 @@ export async function executePlan(
       counts[table].update += 1;
       updates.push({
         table,
+        key,
         id: String(existing.id),
         patch: Object.fromEntries(columns.map(c => [c, desired[c] ?? null])),
       });
@@ -930,7 +938,8 @@ export async function executePlan(
     const leaks = findRowLeaks(
       preview,
       solutionTexts(plan),
-      scenarioSolutionTexts(plan)
+      scenarioSolutionTexts(plan),
+      reviewedEnablerCodes(plan)
     );
     if (leaks.length > 0) {
       throw new ImportAbort(
@@ -943,6 +952,7 @@ export async function executePlan(
   // The values of updates are visible text as well
   {
     const solutions = solutionTexts(plan);
+    const reviewed = reviewedEnablerCodes(plan);
     const visibleColumns = [
       'title',
       'description',
@@ -953,7 +963,15 @@ export async function executePlan(
     for (const update of updates) {
       for (const column of visibleColumns) {
         const value = update.patch[column];
-        if (typeof value === 'string' && leakOf(value, solutions)) {
+        // the bare line "Lösung" of a reviewed enabler text (update.key is the
+        // code of the enabler)
+        const leak =
+          typeof value === 'string' &&
+          (update.table === 'enablers' && column === 'description_text'
+            ? leakOfEnablerText(value, solutions, reviewed.has(update.key))
+                .reason
+            : leakOf(value, solutions));
+        if (leak) {
           throw new ImportAbort(
             'SOLUTION_LEAK',
             `An update would put a solution into ${update.table}.${column}. Nothing was written.`

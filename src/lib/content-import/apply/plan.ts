@@ -19,6 +19,7 @@ import { kindOfComponent } from './decisions';
 import {
   findSolutionLeaks,
   leakOf,
+  leakOfEnablerText,
   scenarioSolutionTexts,
   solutionTexts,
 } from './guard';
@@ -30,6 +31,7 @@ import type {
   PlanCounts,
   PlanEnabler,
   PlanQuestion,
+  PlanReviewedMarker,
   PlanQuiz,
   PlanScenario,
   PlanSkip,
@@ -785,11 +787,35 @@ export function buildImportPlan(
     }
     return !bad;
   });
+  // Enablers whose bare line "Lösung" the owner has checked (a table cell label
+  // in the teaching text). Only the text of such an enabler, only that pattern.
+  const reviewedByCode = new Map(
+    decisions.content.reviewedSolutionWordFalsePositives.map(r => [
+      r.enabler,
+      r.reason,
+    ])
+  );
+  const reviewedMarkers: PlanReviewedMarker[] = [];
   const guardEnablers = enablers.filter(e => {
     // The text of an enabler may repeat a sentence of a rationale (the
     // rationales come from it), only a marker or a scenario solution counts.
-    const bad =
-      leakOf(e.descriptionText ?? '', strong) ?? leakOf(e.title, strong);
+    // The title stays strict.
+    const text = leakOfEnablerText(
+      e.descriptionText ?? '',
+      strong,
+      reviewedByCode.has(e.code)
+    );
+    const bad = leakOf(e.title, strong) ?? text.reason;
+    if (!bad && text.reviewUsed) {
+      reviewedMarkers.push({
+        enablerCode: e.code,
+        pattern: 'bare-solution-line',
+        reason: reviewedByCode.get(e.code) as string,
+      });
+      warnings.push(
+        `${e.code}: REVIEWED_MARKER the bare line "Lösung" in the enabler text was checked by the owner and is let through (${reviewedByCode.get(e.code)})`
+      );
+    }
     if (bad) {
       skipped.push(
         skip(
@@ -851,6 +877,7 @@ export function buildImportPlan(
   finalScenarios.sort(
     (a, b) => enablerOrder(a.enablerCode) - enablerOrder(b.enablerCode)
   );
+  reviewedMarkers.sort((a, b) => a.enablerCode.localeCompare(b.enablerCode));
   finalQuizzes.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'lesson' ? -1 : 1;
     if (a.kind === 'global') {
@@ -897,6 +924,7 @@ export function buildImportPlan(
     scenarios: finalScenarios,
     quizzes: finalQuizzes,
     skipped,
+    ...(reviewedMarkers.length > 0 ? { reviewedMarkers } : {}),
     superseded: [
       ...selection.superseded,
       ...(options.extra?.superseded ?? []),
@@ -1099,8 +1127,57 @@ export function validatePlan(raw: unknown): string[] {
       }
     }
   }
+  errors.push(...reviewedMarkerProblems(plan, enablerCodes));
   errors.push(...findSolutionLeaks(plan));
   return errors;
+}
+
+/**
+ * The reviewed markers of a plan (the release of the bare line "Lösung" for
+ * named enabler texts). Strict: a list of known enablers, each once, with its
+ * reason and the one pattern, no other field.
+ */
+function reviewedMarkerProblems(
+  plan: ImportPlan,
+  enablerCodes: Set<string>
+): string[] {
+  const raw = (plan as { reviewedMarkers?: unknown }).reviewedMarkers;
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) return ['reviewedMarkers must be a list'];
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (!isRecord(entry)) {
+      problems.push('a reviewed marker is not an object');
+      continue;
+    }
+    for (const field of Object.keys(entry)) {
+      if (!['enablerCode', 'pattern', 'reason'].includes(field)) {
+        problems.push(`a reviewed marker has the unknown field ${field}`);
+      }
+    }
+    const code = entry.enablerCode;
+    if (typeof code !== 'string' || !enablerCodes.has(code)) {
+      problems.push('a reviewed marker names an enabler that is not in the plan');
+    } else if (seen.has(code)) {
+      problems.push(`enabler ${code} has two reviewed markers`);
+    } else {
+      seen.add(code);
+    }
+    if (entry.pattern !== 'bare-solution-line') {
+      problems.push('a reviewed marker names a pattern that cannot be reviewed');
+    }
+    if (
+      typeof entry.reason !== 'string' ||
+      entry.reason.trim().length === 0 ||
+      entry.reason.length > 400 ||
+      // eslint-disable-next-line no-control-regex
+      /[\u0000-\u001f\u007f\u0085\u2028\u2029]/.test(entry.reason)
+    ) {
+      problems.push('a reviewed marker has no valid reason');
+    }
+  }
+  return problems;
 }
 
 const mdCell = (text: string) => text.replace(/\|/g, '/').replace(/\s+/g, ' ');

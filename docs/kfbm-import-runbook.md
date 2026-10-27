@@ -117,6 +117,15 @@ Die Komponenten tragen vorläufig Wochen und Sollstunden 0 (die Spalten sind `NO
 
 **Lösungsteile der Szenarien nur lokal.** Die Richtlinie `cd_select` der Tabelle `content_documents` (`src/db/migrations/drizzle/0016_rls_policies.sql`) erlaubt allen Rollen das Lesen von Zeilen ohne Organisation, ohne Rücksicht auf die Sichtbarkeit. Wer den öffentlichen Schlüssel hat, könnte die Lösungstexte über die REST-Schnittstelle lesen. Deshalb schreibt das Skript die Zeilen `TRAINER_SOLUTION` nur mit `--scenario-solutions`, und dieser Schalter ist für die Preview gesperrt, bis die Richtlinie (Lesen nur für `authenticated` und ohne `TRAINER_ONLY` und `TRAINER_SOLUTION` für Nicht-Trainer, kein `select` für `anon`) in einer eigenen Migration eingeschränkt ist. Bis dahin enthält die Preview nur die Ausgangssituation der Szenarien.
 
+### Geprüfte Fehlalarme der Marke "Lösung"
+
+Steht in einem Lehrtext eine Zeile nur mit dem Wort "Lösung" (zum Beispiel als Beschriftung einer Tabellenzelle), schlägt die Lösungsmarke an und der Enabler fällt samt Szenario und Quizzen aus dem Plan (`SOLUTION_MARKER`, `ENABLER_MISSING`). Ist die Zeile geprüft und kein Lösungsteil, steht der Enabler in `scripts/import/kfbm-decisions.json` unter `content.reviewedSolutionWordFalsePositives` als `{ "enabler": "K24.2-e", "reason": "..." }`. Eingetragen sind K24.2-e (Fehlerprotokoll) und K25.2-d (Phasen eines Gesprächs).
+
+- Die Freigabe gilt nur für den Text dieses einen Enablers und nur für das Muster der reinen Zeile "Lösung". Alle anderen Marken (zum Beispiel "Lösungsszenario", "Musterlösung", "Richtige Antwort"), der Titel des Enablers, die Szenarien, Quizze und Use Cases und jeder Treffer eines Szenario-Lösungstextes bleiben scharf. Das Muster selbst ist unverändert.
+- Der Plan führt die Freigabe als `reviewedMarkers` und je Enabler als Hinweis `REVIEWED_MARKER`. Die Prüfung vor dem Schreiben (`validatePlan`, Zeilenprüfung, Aktualisierung) lässt die Zeile nur für Enabler dieser Liste durch. Ohne den Eintrag im Plan bricht jeder Lauf ab.
+- Streng geprüft: ein unbekannter oder ungültiger Schlüssel (Platzhalter, Komponente statt Enabler), ein doppelter Eintrag, ein fehlender oder zu kurzer Grund und jedes weitere Feld sind Fehler der Voreinstellungen und stoppen den Lauf. Ein Eintrag, der nichts freigibt, bleibt ohne Wirkung.
+- Neuer Eintrag nur nach Prüfung des Lehrtexts durch den Eigentümer. Wird der Text später geändert, gilt die Freigabe weiter, der Plan sollte dann erneut gelesen werden.
+
 ## Vor der Aktivierung der Inhalte
 
 1. Die Route `GET /api/trainee/enablers/[enablerId]/quizzes/[difficulty]` liefert `options.explanation` an Azubis schon vor der Antwort (die Seite nutzt das, um die Begründung nach der Antwort zu zeigen). Weil die Begründung nur an der richtigen Option steht, verrät das die richtige Antwort. Das ist bestehender Code und gilt auch für FIAE. Vor der Aktivierung eines Quiz die Route ändern (Begründung erst mit dem Ergebnis aus `submit`).
