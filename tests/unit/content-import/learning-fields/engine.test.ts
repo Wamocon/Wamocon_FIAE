@@ -14,7 +14,11 @@ import { sampleIndex, sampleSheet } from './fixtures';
 
 const NOW = new Date('2026-10-27T10:00:00Z');
 const plan = (titles: TitleSet | null = null): LearningFieldPlan =>
-  buildLearningFieldPlan(sampleSheet(), sampleIndex(), { now: NOW, titles });
+  buildLearningFieldPlan(sampleSheet(), sampleIndex(), {
+    now: NOW,
+    titles,
+    official: false,
+  });
 
 const ENABLERS = ['K1-a', 'K1-b', 'K6.1-a', 'K6.2-d', 'K24.1-a'];
 

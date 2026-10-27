@@ -10,9 +10,10 @@
 //  - idempotent: a learning field is identified by catalog and code, a mapping by
 //    learning field and enabler. What exists is left as it is, a second run
 //    writes nothing
-//  - nothing is deleted. With updateExisting only the title of a learning field is
-//    updated (never to a placeholder), nothing else. Mappings that the plan does
-//    not name stay
+//  - nothing is deleted. With updateExisting only the title and the hours
+//    (hours_budget) of a learning field are updated (a title never to a
+//    placeholder, the hours never to empty), nothing else. Mappings that the
+//    plan does not name stay
 //  - a structural conflict (a learning field exists with another school year, a
 //    position is taken by another code) stops a writing run before the first
 //    write, a comparison without write only reports it
@@ -149,26 +150,39 @@ export async function executeLearningFieldPlan(
     // A placeholder never replaces a title that exists.
     const titleDiffers =
       field.titleSource !== 'placeholder' && existing.title !== field.title;
+    // A plan without hours never erases hours that exist.
+    const hoursDiffers =
+      field.hoursBudget !== null &&
+      (existing.hours_budget === null ||
+        existing.hours_budget === undefined ||
+        Number(existing.hours_budget) !== field.hoursBudget);
     const orderDiffers = Number(existing.order_index) !== field.orderIndex;
-    if (titleDiffers || orderDiffers) {
+    if (titleDiffers || hoursDiffers || orderDiffers) {
       differences.push({
         table: FIELDS,
         key: field.code,
         columns: [
           ...(titleDiffers ? ['title'] : []),
+          ...(hoursDiffers ? ['hours_budget'] : []),
           ...(orderDiffers ? ['order_index'] : []),
         ],
       });
     }
-    // --update-existing replaces a title only by a title of the owner (titles
-    // file) or when the title is still the placeholder. A provisional title of
-    // the source list is reported, it never overwrites a title that was set.
+    // --update-existing replaces a title only by an official title, a title of
+    // the owner (titles file) or when the title is still the placeholder. A
+    // provisional title of the source list is reported, it never overwrites a
+    // title that was set. The hours are set from the plan. Only these two
+    // columns are ever written, the school year and the order never.
     const mayUpdate =
       field.titleSource === 'json' ||
+      field.titleSource === 'official' ||
       existing.title === `Lernfeld ${field.number}`;
-    if (titleDiffers && options.updateExisting && mayUpdate) {
+    const patch: Row = {};
+    if (titleDiffers && mayUpdate) patch.title = field.title;
+    if (hoursDiffers) patch.hours_budget = field.hoursBudget;
+    if (options.updateExisting && Object.keys(patch).length > 0) {
       counts[FIELDS].update += 1;
-      updates.push({ id: String(existing.id), patch: { title: field.title } });
+      updates.push({ id: String(existing.id), patch });
     } else {
       counts[FIELDS].unchanged += 1;
     }

@@ -13,7 +13,12 @@ const build = (
   sheet = sampleSheet(),
   index = sampleIndex(),
   titles: TitleSet | null = null
-) => buildLearningFieldPlan(sheet, index, { now: NOW, titles });
+) =>
+  buildLearningFieldPlan(sheet, index, {
+    now: NOW,
+    titles,
+    official: false,
+  });
 
 const codes = (plan: LearningFieldPlan) =>
   plan.skipped.map(s => [s.row, s.column, s.code]);

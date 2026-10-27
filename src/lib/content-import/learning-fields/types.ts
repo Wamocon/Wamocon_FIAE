@@ -67,7 +67,12 @@ export interface PlanNote {
   componentCode: string;
 }
 
-export type TitleSource = 'csv' | 'json' | 'placeholder';
+/**
+ * Where a title came from: the official framework curriculum (official.ts), the
+ * titles file of the owner (json), the source list (csv, provisional) or the
+ * placeholder "Lernfeld N".
+ */
+export type TitleSource = 'official' | 'csv' | 'json' | 'placeholder';
 
 export interface PlanLearningField {
   /** LF1 to LF13, written to training_catalog_learning_fields.code. */
@@ -75,10 +80,10 @@ export interface PlanLearningField {
   number: number;
   title: string;
   titleSource: TitleSource;
-  /** True unless the title came from the owner's titles file. */
+  /** False for the official title and for the titles file of the owner. */
   titleProvisional: boolean;
   trainingYear: SchoolYear;
-  /** No source names the hours of a learning field: null. */
+  /** Time guideline in hours (official.ts), null when no source names it. */
   hoursBudget: number | null;
   /** Position 1 to 13. */
   orderIndex: number;
