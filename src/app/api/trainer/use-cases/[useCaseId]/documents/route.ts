@@ -19,6 +19,7 @@ import {
 } from '@/lib/auth/document-scope';
 import { notFoundUnlessUuid } from '@/lib/uuid';
 import { readJsonObject } from '@/lib/input-limits';
+import { invalidDocumentInput } from '@/lib/document-input';
 import {
   documentPublicUrl,
   documentStoragePath,
@@ -156,6 +157,15 @@ export async function POST(
         { status: 403 }
       );
     }
+
+    // Title, file name, file type and document type have to be valid values
+    const invalidInput = invalidDocumentInput({
+      title,
+      fileName,
+      mimeType,
+      documentType,
+    });
+    if (invalidInput) return invalidInput;
 
     // The file has to be an own upload (own project, bucket content, folder of
     // the person). The delete removes it from the storage with the service key.

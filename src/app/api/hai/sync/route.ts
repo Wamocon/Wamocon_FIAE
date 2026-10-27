@@ -29,6 +29,9 @@ import {
 } from '@/lib/hai/traineeDataIndexer';
 import { badRequestUnlessUuid } from '@/lib/uuid';
 
+/** What a failed request answers: no error text of the database or a model. */
+const INTERNAL_ERROR = 'Ein interner Fehler ist aufgetreten.';
+
 // ============================================================================
 // POST — Trigger sync operations
 // ============================================================================
@@ -145,11 +148,9 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
+    // The cause (it can name hosts or connection details) stays in the log
     console.error('HAI.ai Sync: Error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: INTERNAL_ERROR }, { status: 500 });
   }
 }
 
@@ -196,9 +197,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('HAI.ai Sync: Error fetching status:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: INTERNAL_ERROR }, { status: 500 });
   }
 }

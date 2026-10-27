@@ -1067,3 +1067,42 @@ describe('HAI verify-pin route: the proof', () => {
     }
   });
 });
+
+describe('HAI sync route: a failure is answered neutrally', () => {
+  const SECRET_ERROR =
+    'connection to postgres://admin:hunter2@db.internal:5432/app failed';
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('answers the status request with a neutral message and logs the error', async () => {
+    const { mod, haiDb } = await load('sync', SUPER_ADMIN);
+    haiDb.execute.mockRejectedValue(new Error(SECRET_ERROR) as never);
+    const res = await mod.GET(call('GET', 'sync'));
+    expect(res.status).toBe(500);
+    const text = JSON.stringify(await res.json());
+    expect(JSON.parse(text)).toEqual({
+      error: 'Ein interner Fehler ist aufgetreten.',
+    });
+    expect(text).not.toMatch(/postgres|hunter2|internal/);
+    // the cause stays in the server log
+    const logged = (console.error as jest.Mock).mock.calls.flat();
+    expect(logged.some(arg => String(arg).includes('Sync'))).toBe(true);
+    expect(logged.some(arg => arg instanceof Error)).toBe(true);
+  });
+
+  it('answers a failed sync with a neutral message and logs the error', async () => {
+    const { mod, indexer } = await load('sync', SUPER_ADMIN);
+    indexer.indexAllContent.mockRejectedValue(new Error(SECRET_ERROR) as never);
+    const res = await mod.POST(
+      call('POST', 'sync', { action: 'sync_content' })
+    );
+    expect(res.status).toBe(500);
+    const text = JSON.stringify(await res.json());
+    expect(JSON.parse(text)).toEqual({
+      error: 'Ein interner Fehler ist aufgetreten.',
+    });
+    expect(text).not.toMatch(/postgres|hunter2|internal/);
+    const logged = (console.error as jest.Mock).mock.calls.flat();
+    expect(logged.some(arg => arg instanceof Error)).toBe(true);
+  });
+});

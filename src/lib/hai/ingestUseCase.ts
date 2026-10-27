@@ -43,12 +43,16 @@ export interface UseCaseIngestionResult {
   chunksSkipped: number;
   chunksFailed: number;
   error?: string;
+  /** The storage url of the document was refused, nothing was fetched. */
+  skipped?: boolean;
 }
 
 export interface BatchIngestionResult {
   totalUseCases: number;
   successfulUseCases: number;
   failedUseCases: number;
+  /** Documents with a storage url that is not read (counted, not failed). */
+  skippedUseCases: number;
   totalPages: number;
   totalChunks: number;
   errors: string[];
@@ -220,6 +224,7 @@ export async function ingestUseCaseDocument(
 
     if (!extraction.success || extraction.pages.length === 0) {
       result.error = extraction.error || 'No pages extracted from PDF';
+      if (extraction.rejected) result.skipped = true;
       return result;
     }
 
@@ -401,6 +406,7 @@ export async function ingestAllUseCases(
     totalUseCases: 0,
     successfulUseCases: 0,
     failedUseCases: 0,
+    skippedUseCases: 0,
     totalPages: 0,
     totalChunks: 0,
     errors: [],
@@ -455,7 +461,9 @@ export async function ingestAllUseCases(
         result.totalPages += ingestionResult.pagesProcessed;
         result.totalChunks += ingestionResult.chunksIndexed;
       } else {
-        result.failedUseCases++;
+        // A refused storage url is skipped and counted, the batch goes on
+        if (ingestionResult.skipped) result.skippedUseCases++;
+        else result.failedUseCases++;
         result.errors.push(`${doc.useCaseTitle}: ${ingestionResult.error}`);
       }
     }
