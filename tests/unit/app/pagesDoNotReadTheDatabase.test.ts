@@ -14,15 +14,12 @@ import { join } from 'path';
 //
 // The public pages read the public catalog through src/lib/catalog/public.ts,
 // which is limited to what is meant for visitors. They do not import the
-// database. One page is an open exception for now: the global quiz page of a
-// trainee reads the question and option texts of a quiz by its id. It selects
-// no solution column (checked below) and is a follow-up of its own, because the
-// quiz component behind it does not submit its answers to the server.
+// database. There is no exception: the global quiz page of a trainee is a
+// client page now, it loads its questions with authFetch from
+// GET /api/trainee/quizzes/[quizId].
 
 const APP = join(process.cwd(), 'src', 'app');
 const API = join(APP, 'api');
-const OPEN_EXCEPTIONS = [join('trainee', 'quizzes', '[quizId]', 'page.tsx')];
-const SOLUTION_COLUMN = /isCorrect|explanation|expectedAnswer|hintText/;
 const DB_IMPORT = /from\s+['"]@\/db(?:['"/])|require\(\s*['"]@\/db(?:['"/])/;
 
 function files(dir: string, out: string[] = []) {
@@ -46,19 +43,19 @@ describe('pages and layouts under src/app', () => {
     expect(DB_IMPORT.test("import { x } from '@/lib/db-retry';")).toBe(false);
   });
 
-  it('none of them imports the database, except the listed page', () => {
+  it('none of them imports the database', () => {
     const offenders = files(APP)
       .filter(file => DB_IMPORT.test(readFileSync(file, 'utf8')))
-      .map(file => file.slice(APP.length + 1))
-      .filter(file => !OPEN_EXCEPTIONS.includes(file));
+      .map(file => file.slice(APP.length + 1));
     expect(offenders).toEqual([]);
   });
 
-  it('the open exception reads no solution column', () => {
-    for (const file of OPEN_EXCEPTIONS) {
-      const source = readFileSync(join(APP, file), 'utf8');
-      expect(DB_IMPORT.test(source)).toBe(true);
-      expect(SOLUTION_COLUMN.test(source)).toBe(false);
-    }
+  it('the global quiz page of a trainee is a client page that loads through authFetch', () => {
+    const source = readFileSync(
+      join(APP, 'trainee', 'quizzes', '[quizId]', 'page.tsx'),
+      'utf8'
+    );
+    expect(source).toMatch(/^['"]use client['"]/);
+    expect(source).toContain('/api/trainee/quizzes/');
   });
 });
