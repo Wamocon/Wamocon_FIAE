@@ -125,6 +125,7 @@ describe('plainFetchViolations (the scanner itself)', () => {
       '/api/trainee/courses?traineeId=1',
       '/api/trainee/courses/c1?traineeId=1',
       '/api/trainee/dashboard?userId=1',
+      '/api/trainee/enablers/e1/documents',
       '/api/trainee/enablers/e1/quiz/submit',
       '/api/trainee/evaluations?userId=1',
       '/api/trainee/evaluations/ev1',
@@ -135,6 +136,7 @@ describe('plainFetchViolations (the scanner itself)', () => {
       '/api/trainee/lessons?userId=1',
       '/api/trainee/progress',
       '/api/trainee/quizzes?userId=1',
+      '/api/trainee/quizzes/q1',
       '/api/trainee/quizzes/q1/submit',
       '/api/trainee/use-case-hours?traineeId=1',
       '/api/trainee/use-cases/u1/submit',
@@ -205,3 +207,27 @@ describe('browser code calls the protected routes with authFetch', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('the trainee pages that read the new routes use authFetch', () => {
+  const read = (...parts: string[]) =>
+    readFileSync(join(SRC, 'app', ...parts), 'utf8');
+
+  it('the global quiz page and the quiz component call the quiz routes with a token', () => {
+    const page = read('trainee', 'quizzes', '[quizId]', 'page.tsx');
+    expect(page).toMatch(/useApiQuery[^(]*\(/);
+    expect(plainFetchViolations(page)).toEqual([]);
+    const component = readFileSync(
+      join(SRC, 'components', 'learning', 'Quiz.tsx'),
+      'utf8'
+    );
+    expect(component).toContain('authFetch(`/api/trainee/quizzes/');
+    expect(plainFetchViolations(component)).toEqual([]);
+  });
+
+  it('the enabler page of a trainee reads the documents from the trainee route, not the trainer route', () => {
+    const page = read('trainee', 'enablers', '[enablerId]', 'page.tsx');
+    expect(page).toContain('/api/trainee/enablers/${enablerId}/documents');
+    expect(page).not.toContain('/api/trainer/');
+  });
+});
+
