@@ -62,6 +62,8 @@ interface OpenParagraph {
   text: string;
   textRuns: number;
   boldRuns: number;
+  row: number | undefined;
+  cell: number | undefined;
 }
 
 /**
@@ -78,6 +80,12 @@ export function parseDocumentXml(xml: string): Paragraph[] {
   let runText = '';
   let runBold = false;
   let pos = 0;
+  // Tables: a running number for every row and cell, so a reader can put the
+  // cells of one row back together. The stacks follow nested tables.
+  let rowCount = 0;
+  let cellCount = 0;
+  const rowStack: number[] = [];
+  const cellStack: number[] = [];
 
   const skipPast = (closeTag: string) => {
     const at = xml.indexOf(closeTag, pos);
@@ -102,6 +110,8 @@ export function parseDocumentXml(xml: string): Paragraph[] {
       paragraphs.push({
         text: para.text,
         bold: para.textRuns > 0 && para.boldRuns === para.textRuns,
+        ...(para.row !== undefined ? { row: para.row } : {}),
+        ...(para.cell !== undefined ? { cell: para.cell } : {}),
       });
     }
     para = null;
@@ -130,9 +140,23 @@ export function parseDocumentXml(xml: string): Paragraph[] {
       case 'w:p':
         endParagraph();
         if (!closing) {
-          para = { text: '', textRuns: 0, boldRuns: 0 };
+          para = {
+            text: '',
+            textRuns: 0,
+            boldRuns: 0,
+            row: rowStack[rowStack.length - 1],
+            cell: cellStack[cellStack.length - 1],
+          };
           if (selfClosing) endParagraph();
         }
+        break;
+      case 'w:tr':
+        if (closing) rowStack.pop();
+        else if (!selfClosing) rowStack.push(++rowCount);
+        break;
+      case 'w:tc':
+        if (closing) cellStack.pop();
+        else if (!selfClosing) cellStack.push(++cellCount);
         break;
       case 'w:r':
         endRun();

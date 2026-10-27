@@ -114,6 +114,7 @@ test('the expected numbers are those of the plan', () => {
     globalQuizzes: 27,
     electives: 9,
     quizzes: 678,
+    useCases: 226,
   });
 });
 
@@ -152,6 +153,7 @@ test('compares the counts with the expected values', () => {
       globalQuizzes: 1,
       electives: 1,
       quizzes: 8,
+      useCases: 0,
     },
   });
   assert.ok(small.expectations.every(r => r.ok));
@@ -308,6 +310,63 @@ test('the summary has the sections, German text and no dash as punctuation', () 
   }
   assert.ok(md.includes('226'));
   assert.ok(md.includes('6.2d'));
+  assert.ok(!/[–—]/.test(md));
+});
+
+const ucTree = () => [
+  ...fullEnabler(T1, '1a', '1a_Thema eins'),
+  ...fullEnabler(T1, '1b', '1b_Thema zwei'),
+  // 1a has a use case, 1b has none, 1c is a use case without any enabler
+  entry(`${T1}/K1_Use-Cases/UC_1a_Titel.docx`, 330000),
+  entry(`${T1}/K1_Use-Cases/UC_1c_Titel.docx`, 330000),
+  // a second copy in a folder without model solution, a PDF, an enabler text
+  entry(`${T1}/K1_Use-Cases/Ohne Musterlösung/UC_1a_Titel.docx`, 320000),
+  entry(`${T1}/K1_Use-Cases/Enabler/1a_Thema eins.docx`, 5000),
+  // K18 and an archive file do not count
+  entry(`${K18}/K18_Use-Case/UC_18a_Titel.docx`),
+  entry(`${T1}/K1_Use-Cases/UC_1z_Archiv_to_delete.docx`),
+];
+
+test('counts the use cases and names the folder without model solution', () => {
+  const inv = buildInventory(ucTree());
+  assert.equal(inv.counts.useCases, 2);
+  assert.deepEqual(inv.useCaseFiles, {
+    files: 3,
+    byFormat: { docx: 3 },
+    withoutSolutionFolder: [
+      `${T1}/K1_Use-Cases/Ohne Musterlösung/UC_1a_Titel.docx`,
+    ],
+    misplacedEnablerTexts: 1,
+  });
+  const k1 = inv.components.find(c => c.key === '01');
+  assert.equal(k1.useCases, 2);
+  // the two copies of 1a are a duplicate, the recommendation is not a decision
+  const duplicate = inv.duplicates.find(d => d.key === 'use-case:1a');
+  assert.equal(duplicate.files.length, 2);
+});
+
+test('an enabler without a use case is missing one, but only when the source has use cases at all', () => {
+  const inv = buildInventory(ucTree());
+  const byId = Object.fromEntries(inv.missing.map(m => [m.enablerKey, m]));
+  assert.deepEqual(byId['1b'].missing, ['use-case']);
+  assert.deepEqual(byId['1c'].missing, [
+    'enabler',
+    'quiz:low',
+    'quiz:medium',
+    'quiz:high',
+    'scenario',
+  ]);
+  assert.equal(byId['1a'], undefined);
+  const without = buildInventory(fullEnabler(T1, '1a', '1a_Thema eins'));
+  assert.deepEqual(without.missing, []);
+});
+
+test('the summary has a section for the use cases', () => {
+  const md = renderSummary(buildInventory(ucTree()));
+  assert.ok(md.includes('## Use Cases'));
+  assert.ok(md.includes('Use Cases (je Enabler einer)'));
+  assert.ok(md.includes('Ohne Musterlösung'));
+  assert.ok(md.includes('UC_1a_Titel.docx'));
   assert.ok(!/[–—]/.test(md));
 });
 

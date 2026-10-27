@@ -7,6 +7,12 @@ export interface Paragraph {
   text: string;
   /** True when the whole paragraph is bold (every text run carries bold). */
   bold: boolean;
+  /**
+   * Set for a paragraph inside a table: running number of the table row (all
+   * paragraphs of one row share it) and of the cell. Absent outside tables.
+   */
+  row?: number;
+  cell?: number;
 }
 
 /**

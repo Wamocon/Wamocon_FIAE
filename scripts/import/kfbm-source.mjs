@@ -7,7 +7,12 @@
 
 import { spawnSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
+import { register } from 'node:module';
 import path from 'node:path';
+
+// The use case parser imports a sibling module without a file extension (as the
+// bundler and Jest expect), the hook adds the extension and names the format.
+register('./ts-resolve-hook.mjs', import.meta.url);
 
 // The parsers are TypeScript files under src/lib/content-import. Node strips
 // the types while loading them. The package has no "type" field, so Node warns
@@ -23,17 +28,21 @@ const lib = name =>
   import(
     new URL(`../../src/lib/content-import/${name}.ts`, import.meta.url).href
   );
-const [pathModule, parserModule, docxModule] = await Promise.all([
-  lib('path-info'),
-  lib('source-parsers'),
-  lib('docx-paragraphs'),
-]);
+const [pathModule, parserModule, docxModule, useCaseModule] = await Promise.all(
+  [
+    lib('path-info'),
+    lib('source-parsers'),
+    lib('docx-paragraphs'),
+    lib('use-cases/parser'),
+  ]
+);
 process.emitWarning = originalEmitWarning;
 
 export const { pathInfo, globalQuizComponentKey, enablerKeysMatch } =
   pathModule;
 export const { parseQuizText, parseScenarioText } = parserModule;
 export const { extractDocxParagraphs, extractDocxStats } = docxModule;
+export const { parseUseCaseText } = useCaseModule;
 
 /** File attributes of a OneDrive placeholder (not downloaded to this device). */
 const FILE_ATTRIBUTE_OFFLINE = 0x1000;

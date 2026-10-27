@@ -23,6 +23,7 @@ const QUIZ_FILE =
 const SCENARIO_FILE = /^Szenario_(\d{1,2})(?:[_.](\d))?([a-z])(?![a-z])/i;
 const USE_CASE_FILE = /^UC_(\d{1,2})(?:[_.](\d))?([a-z])(?![a-z])/i;
 const GLOBAL_QUIZ_FILE = /^(\d{1,2})(?:\.(\d))?_Global_Quiz/i;
+const WITHOUT_SOLUTION_DIR = /\bohne\s+musterl(?:ö|oe)sung/i;
 // Whole word markers only: a topic like "Archivierung" is not an archive.
 const ARCHIVE_NAME = /(?:^|[\s_.-])(?:archiv|to_delete)(?:$|[\s_.-])/i;
 
@@ -307,6 +308,13 @@ function classifyEnablerArea(info: PathInfo, dirs: string[], fileName: string) {
 function classifyUseCaseArea(info: PathInfo, dirs: string[], fileName: string) {
   const component = info.component!;
   const sub = dirs[3];
+  if (
+    dirs.slice(3).some(dir => ARCHIVE_NAME.test(dir)) ||
+    ARCHIVE_NAME.test(fileName)
+  ) {
+    info.type = 'archive';
+    return;
+  }
   if (sub && /^Enabler/i.test(sub)) {
     // An enabler text that lies in the use case folder.
     const match = ENABLER_ID.exec(fileName);
@@ -331,6 +339,12 @@ function classifyUseCaseArea(info: PathInfo, dirs: string[], fileName: string) {
   }
   const match = USE_CASE_FILE.exec(fileName);
   info.type = 'use-case';
+  // A subfolder like "Ohne Musterlösung" holds a variant of the use case
+  // without its model solution. The planner never picks a side between that
+  // variant and a copy with a solution.
+  if (dirs.slice(3).some(dir => WITHOUT_SOLUTION_DIR.test(dir))) {
+    addFlag(info, 'without-solution');
+  }
   if (!match) {
     addIssue(info, 'file-name-unrecognized');
   } else {
