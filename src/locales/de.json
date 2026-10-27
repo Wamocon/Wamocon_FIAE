@@ -2490,5 +2490,6 @@
   "contentUpload.confirm.reopenText": "Der Lauf geht zurück in die Prüfung. Entscheidungen lassen sich dann wieder ändern. Ein früherer Probelauf gilt nicht mehr, vor einer weiteren Übernahme ist ein neuer nötig. Bereits übernommene Dateien bleiben übernommen.",
   "contentUpload.confirm.reopen": "Erneut prüfen",
   "contentUpload.notice.reopened": "Der Lauf ist wieder in der Prüfung.",
-  "contentUpload.notice.reopenState": "Der Lauf lässt sich in diesem Zustand nicht erneut prüfen."
+  "contentUpload.notice.reopenState": "Der Lauf lässt sich in diesem Zustand nicht erneut prüfen.",
+  "contentUpload.code.UNREADABLE": "Der Browser konnte die Datei nicht lesen (zum Beispiel ein zu langer Pfad). Kürzen Sie den Pfad oder wählen Sie die Datei einzeln."
 }

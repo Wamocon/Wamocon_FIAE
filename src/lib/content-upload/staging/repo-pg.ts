@@ -6,7 +6,10 @@
 //  - Every status change is ONE conditional UPDATE ("... where status = $from").
 //  - claimFiles is one statement: `update .. from (select .. for update skip
 //    locked)`. Two callers at the same time never get the same row, and neither
-//    waits for the other.
+//    waits for the other. With maxHeld the held files of the run are counted
+//    first, in a transaction under an advisory lock of the run, so that the
+//    limit holds for callers at the same time (the count and the update are
+//    separate statements, a statement that waits would keep a stale count).
 //  - finishClaim and releaseClaim only write when claim_id is still the one the
 //    caller got, so a call that died and was replaced cannot overwrite the work
 //    of its successor.
@@ -527,8 +530,37 @@ export class PgUploadRepo implements UploadRepo {
 
   async claimFiles(runId: string, options: ClaimOptions): Promise<FileRow[]> {
     if (!isUuid(runId) || options.statuses.length === 0) return [];
+    const { maxHeld } = options;
+    if (maxHeld === undefined) return this.claimUpTo(this.db, runId, options);
+    if (!Number.isInteger(maxHeld) || maxHeld < 1) return [];
+    return this.db.transaction(async tx => {
+      await limitWaiting(tx);
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`content-upload:claim:${runId}`}, 0))`
+      );
+      const held = rowsOf(
+        await tx.execute(
+          sql`select count(*)::int as n from content_upload_files
+              where run_id = ${runId}::uuid and claim_id is not null
+                and locked_until > now()`
+        )
+      );
+      const room = maxHeld - Number(held[0]?.n ?? 0);
+      if (room <= 0) return [];
+      return this.claimUpTo(tx, runId, {
+        ...options,
+        limit: Math.min(options.limit, room),
+      });
+    });
+  }
+
+  private async claimUpTo(
+    db: SqlDb,
+    runId: string,
+    options: ClaimOptions
+  ): Promise<FileRow[]> {
     const rows = rowsOf(
-      await this.db.execute(
+      await db.execute(
         sql`update content_upload_files f
             set claim_id = gen_random_uuid(),
                 locked_until = now() + make_interval(secs => ${options.lockSeconds}::double precision),

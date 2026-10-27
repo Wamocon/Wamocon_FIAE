@@ -55,6 +55,13 @@ export interface ClaimOptions {
   lockSeconds: number;
   /** Files with this many attempts or more are not claimed any more. */
   maxAttempts: number;
+  /**
+   * At most this many files of the run are held at once, counted over all
+   * callers (claim_id set and the lock not expired). A call gets what is left
+   * of it, so any number of pumps (tabs, retries) cannot hold more files than
+   * this at the same time. Leave out for no limit.
+   */
+  maxHeld?: number;
 }
 
 export interface QueueState {
@@ -134,7 +141,9 @@ export interface UploadRepo {
   /**
    * Takes up to `limit` files of the run in the claimable states, in one atomic
    * statement: a new claim_id, locked_until in the future, attempts + 1. A file
-   * that another call holds is skipped, never waited for.
+   * that another call holds is skipped, never waited for. With `maxHeld` the
+   * count of held files of the run is checked under a lock of the run in the
+   * same transaction, so the limit holds for callers at the same time.
    */
   claimFiles(runId: string, options: ClaimOptions): Promise<FileRow[]>;
   /**

@@ -17,6 +17,15 @@ assertSchemaMatchesEnvironment(
   process.env.DB_CONNECTION_STRING
 );
 
+// Files that a function needs and the file tracing cannot see (see below).
+const PDF_READER_FILES = [
+  './node_modules/pdf-parse/package.json',
+  './node_modules/pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js',
+  './node_modules/pdf-parse/lib/pdf.js/v1.10.100/build/pdf.worker.js',
+  './node_modules/node-ensure/package.json',
+  './node_modules/node-ensure/index.js',
+];
+
 const nextConfig: NextConfig = {
   // NEXT_PUBLIC_* is inlined at build time, so each deployment needs its own build.
   env: {
@@ -30,6 +39,18 @@ const nextConfig: NextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: false,
+  },
+  // The PDF reader of the content upload loads the pdf.js build of pdf-parse
+  // by a path that is built at run time (src/lib/content-upload/pdf-worker.ts),
+  // so the file tracing cannot see it and a Vercel function would not contain
+  // it (the reader would answer ENGINE_UNAVAILABLE for every PDF). The routes
+  // that read a PDF name the files here: pump (extract step) and dry-run and
+  // apply (check of the originals). The keys are globs: [runId] would be a
+  // character class there, so the segment is matched with *.
+  outputFileTracingIncludes: {
+    '/api/trainer/content-upload/runs/*/pump': PDF_READER_FILES,
+    '/api/trainer/content-upload/runs/*/dry-run': PDF_READER_FILES,
+    '/api/trainer/content-upload/runs/*/apply': PDF_READER_FILES,
   },
   experimental: {
     // Tree-shake specific heavy packages — only bundles the imports actually used
