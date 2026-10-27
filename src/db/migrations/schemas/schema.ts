@@ -20,6 +20,8 @@ import {
   foreignKey,
   smallint,
   date,
+  numeric,
+  bigint,
 } from 'drizzle-orm/pg-core';
 
 // --- SUPABASE AUTH HELPER ---
@@ -2107,3 +2109,706 @@ export const authAttempts = pgTable(
 );
 
 export type AuthAttempt = typeof authAttempts.$inferSelect;
+
+// --- CONTENT UPLOAD (package U1 of docs/ki-upload-konzept.md) ---
+// Process data of the AI assisted content upload: runs, announced files (also
+// the queue), proposals, decisions, the log of every transmission to Sokrates and
+// the log of every dry run and apply with the rows it wrote. Server only: RLS on,
+// no policy, no grant for anon and authenticated. Created by
+// supabase/migrations/20261030000100_content_upload_tables.sql, which also
+// documents the rules the database keeps. Text columns with a CHECK list instead
+// of enums (section 3.1 of the concept): a value can be added later without an
+// enum migration. The value lists below are the single source for the checks and
+// for the types of the select results.
+
+export const CONTENT_UPLOAD_RUN_STATUSES = [
+  'draft',
+  'uploading',
+  'processing',
+  'review',
+  'applying',
+  'applied',
+  'failed',
+  'discarded',
+] as const;
+export const CONTENT_UPLOAD_FILE_STATUSES = [
+  'announced',
+  'uploaded',
+  'verified',
+  'extracted',
+  'proposed_rules',
+  'unclear',
+  'ki_pending',
+  'proposed_ki',
+  'decided',
+  'applied',
+  'failed',
+  'rejected',
+  'expired',
+  'merged',
+  'skipped',
+  'superseded',
+] as const;
+export const CONTENT_UPLOAD_EXTENSIONS = ['docx', 'pdf'] as const;
+export const CONTENT_UPLOAD_DOC_TYPES = [
+  'enabler',
+  'quiz',
+  'global_quiz',
+  'scenario',
+  'use_case',
+  'pdf_original',
+  'other',
+] as const;
+export const CONTENT_UPLOAD_QUIZ_LEVELS = ['low', 'medium', 'high'] as const;
+export const CONTENT_UPLOAD_PROPOSAL_SOURCES = [
+  'path',
+  'content',
+  'path_content',
+  'ki',
+] as const;
+export const CONTENT_UPLOAD_BANDS = [
+  'high',
+  'medium',
+  'low',
+  'conflict',
+] as const;
+export const CONTENT_UPLOAD_DECISION_ACTIONS = [
+  'accept',
+  'reject',
+  'defer',
+] as const;
+export const CONTENT_UPLOAD_DUP_CHOICES = ['keep', 'skip'] as const;
+export const CONTENT_UPLOAD_KI_STAGES = ['type_component', 'enabler'] as const;
+export const CONTENT_UPLOAD_KI_CALL_STATUSES = [
+  'ok',
+  'invalid_json',
+  'not_in_whitelist',
+  'timeout',
+  'http_error',
+  'refused_by_guard',
+  'skipped',
+] as const;
+export const CONTENT_UPLOAD_APPLY_MODES = ['dry_run', 'apply'] as const;
+export const CONTENT_UPLOAD_APPLY_STATUSES = [
+  'running',
+  'ok',
+  'conflict',
+  'failed',
+] as const;
+export const CONTENT_UPLOAD_TARGET_SCHEMAS = [
+  'public_preview',
+  'public',
+] as const;
+// The write surface of the apply step (src/lib/content-import/apply/tables.ts).
+export const CONTENT_UPLOAD_APPLIED_TABLES = [
+  'training_components',
+  'courses',
+  'enablers',
+  'quizzes',
+  'questions',
+  'options',
+  'enabler_quiz_links',
+  'content_documents',
+  'use_cases',
+  'training_catalog_learning_fields',
+  'training_catalog_content_mappings',
+] as const;
+export const CONTENT_UPLOAD_APPLIED_ACTIONS = ['insert', 'update'] as const;
+
+/** CHECK expression "<column> in ('a', 'b')" from a constant list (never user input). */
+const inList = (column: unknown, values: readonly string[]) =>
+  sql`${column} in (${sql.raw(values.map(value => `'${value}'`).join(', '))})`;
+
+export const contentUploadRuns = pgTable(
+  'content_upload_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingCatalogId: uuid('training_catalog_id').notNull(),
+    createdById: uuid('created_by_id').notNull(),
+    label: text('label').notNull(),
+    status: text('status', { enum: CONTENT_UPLOAD_RUN_STATUSES })
+      .notNull()
+      .default('draft'),
+    kiEnabled: boolean('ki_enabled').notNull().default(true),
+    declarationAcceptedAt: timestamp('declaration_accepted_at', {
+      withTimezone: true,
+    }).notNull(),
+    storagePrefix: text('storage_prefix').notNull(),
+    decisionsVersion: integer('decisions_version').notNull().default(0),
+    lastDryRunHash: text('last_dry_run_hash'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    purgeAfter: timestamp('purge_after', { withTimezone: true }),
+  },
+  table => ({
+    catalogFk: foreignKey({
+      name: 'content_upload_runs_training_catalog_id_fk',
+      columns: [table.trainingCatalogId],
+      foreignColumns: [trainingCatalogs.id],
+    }).onDelete('restrict'),
+    createdByFk: foreignKey({
+      name: 'content_upload_runs_created_by_id_fk',
+      columns: [table.createdById],
+      foreignColumns: [profiles.id],
+    }).onDelete('restrict'),
+    storagePrefixKey: unique('content_upload_runs_storage_prefix_key').on(
+      table.storagePrefix
+    ),
+    labelCheck: check(
+      'content_upload_runs_label_check',
+      sql`char_length(${table.label}) between 1 and 120`
+    ),
+    statusCheck: check(
+      'content_upload_runs_status_check',
+      inList(table.status, CONTENT_UPLOAD_RUN_STATUSES)
+    ),
+    storagePrefixCheck: check(
+      'content_upload_runs_storage_prefix_check',
+      sql`char_length(${table.storagePrefix}) between 1 and 200`
+    ),
+    decisionsVersionCheck: check(
+      'content_upload_runs_decisions_version_check',
+      sql`${table.decisionsVersion} >= 0`
+    ),
+    dryRunHashCheck: check(
+      'content_upload_runs_dry_run_hash_check',
+      sql`${table.lastDryRunHash} is null or char_length(${table.lastDryRunHash}) <= 128`
+    ),
+    statusIdx: index('content_upload_runs_status_idx').on(table.status),
+    createdByIdx: index('content_upload_runs_created_by_idx').on(
+      table.createdById,
+      table.createdAt.desc()
+    ),
+  })
+);
+
+export const contentUploadFiles = pgTable(
+  'content_upload_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id').notNull(),
+    relPath: text('rel_path').notNull(),
+    fileName: text('file_name').notNull(),
+    ext: text('ext', { enum: CONTENT_UPLOAD_EXTENSIONS }).notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    sha256: text('sha256').notNull(),
+    clientMtimeMs: bigint('client_mtime_ms', { mode: 'number' }),
+    storagePath: text('storage_path').notNull(),
+    status: text('status', { enum: CONTENT_UPLOAD_FILE_STATUSES })
+      .notNull()
+      .default('announced'),
+    statusCode: text('status_code'),
+    attempts: integer('attempts').notNull().default(0),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    claimId: uuid('claim_id'),
+    duplicateOfId: uuid('duplicate_of_id'),
+    similarGroup: text('similar_group'),
+    docType: text('doc_type', { enum: CONTENT_UPLOAD_DOC_TYPES }),
+    pageCount: integer('page_count'),
+    charCount: integer('char_count'),
+    // Numbers and finding codes only, never question texts, answers or reasons.
+    parseSummary: jsonb('parse_summary').$type<Record<string, unknown>>(),
+    dupKey: text('dup_key'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+  },
+  table => ({
+    runFk: foreignKey({
+      name: 'content_upload_files_run_id_fk',
+      columns: [table.runId],
+      foreignColumns: [contentUploadRuns.id],
+    }).onDelete('cascade'),
+    duplicateOfFk: foreignKey({
+      name: 'content_upload_files_duplicate_of_id_fk',
+      columns: [table.duplicateOfId],
+      foreignColumns: [table.id],
+    }).onDelete('set null'),
+    runPathHashKey: unique('content_upload_files_run_path_hash_key').on(
+      table.runId,
+      table.relPath,
+      table.sha256
+    ),
+    storagePathKey: unique('content_upload_files_storage_path_key').on(
+      table.storagePath
+    ),
+    relPathCheck: check(
+      'content_upload_files_rel_path_check',
+      sql`char_length(${table.relPath}) between 1 and 500`
+    ),
+    fileNameCheck: check(
+      'content_upload_files_file_name_check',
+      sql`char_length(${table.fileName}) between 1 and 200`
+    ),
+    extCheck: check(
+      'content_upload_files_ext_check',
+      inList(table.ext, CONTENT_UPLOAD_EXTENSIONS)
+    ),
+    sizeBytesCheck: check(
+      'content_upload_files_size_bytes_check',
+      sql`${table.sizeBytes} >= 0`
+    ),
+    sha256Check: check(
+      'content_upload_files_sha256_check',
+      sql`${table.sha256} ~ '^[0-9a-f]{64}$'`
+    ),
+    storagePathCheck: check(
+      'content_upload_files_storage_path_check',
+      sql`char_length(${table.storagePath}) between 1 and 300`
+    ),
+    statusCheck: check(
+      'content_upload_files_status_check',
+      inList(table.status, CONTENT_UPLOAD_FILE_STATUSES)
+    ),
+    statusCodeCheck: check(
+      'content_upload_files_status_code_check',
+      sql`${table.statusCode} is null or char_length(${table.statusCode}) <= 64`
+    ),
+    attemptsCheck: check(
+      'content_upload_files_attempts_check',
+      sql`${table.attempts} >= 0`
+    ),
+    docTypeCheck: check(
+      'content_upload_files_doc_type_check',
+      sql`${table.docType} is null or ${inList(table.docType, CONTENT_UPLOAD_DOC_TYPES)}`
+    ),
+    countsCheck: check(
+      'content_upload_files_counts_check',
+      sql`(${table.pageCount} is null or ${table.pageCount} >= 0) and (${table.charCount} is null or ${table.charCount} >= 0)`
+    ),
+    keysCheck: check(
+      'content_upload_files_keys_check',
+      sql`(${table.dupKey} is null or char_length(${table.dupKey}) <= 200) and (${table.similarGroup} is null or char_length(${table.similarGroup}) <= 200)`
+    ),
+    notSelfDuplicateCheck: check(
+      'content_upload_files_not_self_duplicate_check',
+      sql`${table.duplicateOfId} is null or ${table.duplicateOfId} <> ${table.id}`
+    ),
+    queueIdx: index('content_upload_files_queue_idx').on(
+      table.runId,
+      table.status,
+      table.lockedUntil
+    ),
+    runDupKeyIdx: index('content_upload_files_run_dup_key_idx').on(
+      table.runId,
+      table.dupKey
+    ),
+    sha256Idx: index('content_upload_files_sha256_idx').on(table.sha256),
+    duplicateOfIdx: index('content_upload_files_duplicate_of_idx').on(
+      table.duplicateOfId
+    ),
+  })
+);
+
+export const contentUploadProposals = pgTable(
+  'content_upload_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fileId: uuid('file_id').notNull(),
+    source: text('source', {
+      enum: CONTENT_UPLOAD_PROPOSAL_SOURCES,
+    }).notNull(),
+    docType: text('doc_type', { enum: CONTENT_UPLOAD_DOC_TYPES }),
+    componentCode: text('component_code'),
+    enablerCode: text('enabler_code'),
+    quizLevel: text('quiz_level', { enum: CONTENT_UPLOAD_QUIZ_LEVELS }),
+    // 0 to 1, two decimals (numeric comes back as a string)
+    confidence: numeric('confidence', { precision: 3, scale: 2 }).notNull(),
+    band: text('band', { enum: CONTENT_UPLOAD_BANDS }).notNull(),
+    // List of { code, text } with a short text (at most 200 characters)
+    reasons: jsonb('reasons')
+      .$type<{ code: string; text: string }[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    model: text('model'),
+    isCurrent: boolean('is_current').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    fileFk: foreignKey({
+      name: 'content_upload_proposals_file_id_fk',
+      columns: [table.fileId],
+      foreignColumns: [contentUploadFiles.id],
+    }).onDelete('cascade'),
+    sourceCheck: check(
+      'content_upload_proposals_source_check',
+      inList(table.source, CONTENT_UPLOAD_PROPOSAL_SOURCES)
+    ),
+    docTypeCheck: check(
+      'content_upload_proposals_doc_type_check',
+      sql`${table.docType} is null or ${inList(table.docType, CONTENT_UPLOAD_DOC_TYPES)}`
+    ),
+    quizLevelCheck: check(
+      'content_upload_proposals_quiz_level_check',
+      sql`${table.quizLevel} is null or ${inList(table.quizLevel, CONTENT_UPLOAD_QUIZ_LEVELS)}`
+    ),
+    confidenceCheck: check(
+      'content_upload_proposals_confidence_check',
+      sql`${table.confidence} between 0 and 1`
+    ),
+    bandCheck: check(
+      'content_upload_proposals_band_check',
+      inList(table.band, CONTENT_UPLOAD_BANDS)
+    ),
+    kiLimitsCheck: check(
+      'content_upload_proposals_ki_limits_check',
+      sql`${table.source} <> 'ki' or (${table.confidence} <= 0.80 and ${table.band} in ('medium', 'low'))`
+    ),
+    reasonsCheck: check(
+      'content_upload_proposals_reasons_check',
+      sql`jsonb_typeof(${table.reasons}) = 'array'`
+    ),
+    codeLengthCheck: check(
+      'content_upload_proposals_code_length_check',
+      sql`(${table.componentCode} is null or char_length(${table.componentCode}) <= 32) and (${table.enablerCode} is null or char_length(${table.enablerCode}) <= 32) and (${table.model} is null or char_length(${table.model}) <= 200)`
+    ),
+    currentUidx: uniqueIndex('content_upload_proposals_current_uidx')
+      .on(table.fileId)
+      .where(sql`${table.isCurrent}`),
+    fileIdx: index('content_upload_proposals_file_idx').on(
+      table.fileId,
+      table.createdAt.desc()
+    ),
+  })
+);
+
+export const contentUploadDecisions = pgTable(
+  'content_upload_decisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id').notNull(),
+    fileId: uuid('file_id').notNull(),
+    proposalId: uuid('proposal_id'),
+    // State of the run the reviewer has seen (a stale value is answered with 409)
+    decisionsVersion: integer('decisions_version').notNull(),
+    decidedById: uuid('decided_by_id').notNull(),
+    action: text('action', { enum: CONTENT_UPLOAD_DECISION_ACTIONS }).notNull(),
+    docType: text('doc_type', { enum: CONTENT_UPLOAD_DOC_TYPES }),
+    componentCode: text('component_code'),
+    enablerCode: text('enabler_code'),
+    quizLevel: text('quiz_level', { enum: CONTENT_UPLOAD_QUIZ_LEVELS }),
+    dupChoice: text('dup_choice', { enum: CONTENT_UPLOAD_DUP_CHOICES }),
+    note: text('note'),
+    isCurrent: boolean('is_current').notNull().default(true),
+    decidedAt: timestamp('decided_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    runFk: foreignKey({
+      name: 'content_upload_decisions_run_id_fk',
+      columns: [table.runId],
+      foreignColumns: [contentUploadRuns.id],
+    }).onDelete('cascade'),
+    fileFk: foreignKey({
+      name: 'content_upload_decisions_file_id_fk',
+      columns: [table.fileId],
+      foreignColumns: [contentUploadFiles.id],
+    }).onDelete('cascade'),
+    proposalFk: foreignKey({
+      name: 'content_upload_decisions_proposal_id_fk',
+      columns: [table.proposalId],
+      foreignColumns: [contentUploadProposals.id],
+    }).onDelete('set null'),
+    decidedByFk: foreignKey({
+      name: 'content_upload_decisions_decided_by_id_fk',
+      columns: [table.decidedById],
+      foreignColumns: [profiles.id],
+    }).onDelete('restrict'),
+    decisionsVersionCheck: check(
+      'content_upload_decisions_decisions_version_check',
+      sql`${table.decisionsVersion} >= 0`
+    ),
+    actionCheck: check(
+      'content_upload_decisions_action_check',
+      inList(table.action, CONTENT_UPLOAD_DECISION_ACTIONS)
+    ),
+    docTypeCheck: check(
+      'content_upload_decisions_doc_type_check',
+      sql`${table.docType} is null or ${inList(table.docType, CONTENT_UPLOAD_DOC_TYPES)}`
+    ),
+    quizLevelCheck: check(
+      'content_upload_decisions_quiz_level_check',
+      sql`${table.quizLevel} is null or ${inList(table.quizLevel, CONTENT_UPLOAD_QUIZ_LEVELS)}`
+    ),
+    dupChoiceCheck: check(
+      'content_upload_decisions_dup_choice_check',
+      sql`${table.dupChoice} is null or ${inList(table.dupChoice, CONTENT_UPLOAD_DUP_CHOICES)}`
+    ),
+    noteCheck: check(
+      'content_upload_decisions_note_check',
+      sql`${table.note} is null or char_length(${table.note}) <= 500`
+    ),
+    codeLengthCheck: check(
+      'content_upload_decisions_code_length_check',
+      sql`(${table.componentCode} is null or char_length(${table.componentCode}) <= 32) and (${table.enablerCode} is null or char_length(${table.enablerCode}) <= 32)`
+    ),
+    acceptValuesCheck: check(
+      'content_upload_decisions_accept_values_check',
+      sql`${table.action} <> 'accept' or ${table.docType} is not null`
+    ),
+    currentUidx: uniqueIndex('content_upload_decisions_current_uidx')
+      .on(table.fileId)
+      .where(sql`${table.isCurrent}`),
+    runIdx: index('content_upload_decisions_run_idx').on(table.runId),
+    fileIdx: index('content_upload_decisions_file_idx').on(
+      table.fileId,
+      table.decidedAt.desc()
+    ),
+    proposalIdx: index('content_upload_decisions_proposal_idx')
+      .on(table.proposalId)
+      .where(sql`${table.proposalId} is not null`),
+  })
+);
+
+export const contentUploadKiCalls = pgTable(
+  'content_upload_ki_calls',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id').notNull(),
+    fileId: uuid('file_id').notNull(),
+    requestedAt: timestamp('requested_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    stage: text('stage', { enum: CONTENT_UPLOAD_KI_STAGES }).notNull(),
+    model: text('model'),
+    // Only the host of the address (lower case, optional port), no path, no key
+    endpointHost: text('endpoint_host'),
+    // The exact text that was sent, set to NULL after 30 days
+    excerpt: text('excerpt'),
+    excerptChars: integer('excerpt_chars').notNull(),
+    excerptSha256: text('excerpt_sha256').notNull(),
+    redactions: integer('redactions').notNull().default(0),
+    status: text('status', { enum: CONTENT_UPLOAD_KI_CALL_STATUSES }).notNull(),
+    httpStatus: integer('http_status'),
+    latencyMs: integer('latency_ms'),
+    promptTokens: integer('prompt_tokens'),
+    completionTokens: integer('completion_tokens'),
+    attempt: integer('attempt').notNull().default(1),
+    // The checked answer as JSON, at most 500 characters
+    answerExcerpt: text('answer_excerpt'),
+  },
+  table => ({
+    runFk: foreignKey({
+      name: 'content_upload_ki_calls_run_id_fk',
+      columns: [table.runId],
+      foreignColumns: [contentUploadRuns.id],
+    }).onDelete('cascade'),
+    fileFk: foreignKey({
+      name: 'content_upload_ki_calls_file_id_fk',
+      columns: [table.fileId],
+      foreignColumns: [contentUploadFiles.id],
+    }).onDelete('cascade'),
+    stageCheck: check(
+      'content_upload_ki_calls_stage_check',
+      inList(table.stage, CONTENT_UPLOAD_KI_STAGES)
+    ),
+    statusCheck: check(
+      'content_upload_ki_calls_status_check',
+      inList(table.status, CONTENT_UPLOAD_KI_CALL_STATUSES)
+    ),
+    modelCheck: check(
+      'content_upload_ki_calls_model_check',
+      sql`${table.model} is null or char_length(${table.model}) <= 200`
+    ),
+    endpointHostCheck: check(
+      'content_upload_ki_calls_endpoint_host_check',
+      sql`${table.endpointHost} is null or (char_length(${table.endpointHost}) <= 260 and ${table.endpointHost} ~ '^[a-z0-9.-]+(:[0-9]{1,5})?$')`
+    ),
+    excerptCheck: check(
+      'content_upload_ki_calls_excerpt_check',
+      sql`${table.excerpt} is null or char_length(${table.excerpt}) <= 5000`
+    ),
+    excerptCharsCheck: check(
+      'content_upload_ki_calls_excerpt_chars_check',
+      sql`${table.excerptChars} >= 0`
+    ),
+    excerptSha256Check: check(
+      'content_upload_ki_calls_excerpt_sha256_check',
+      sql`${table.excerptSha256} ~ '^[0-9a-f]{64}$'`
+    ),
+    redactionsCheck: check(
+      'content_upload_ki_calls_redactions_check',
+      sql`${table.redactions} >= 0`
+    ),
+    httpStatusCheck: check(
+      'content_upload_ki_calls_http_status_check',
+      sql`${table.httpStatus} is null or ${table.httpStatus} between 100 and 599`
+    ),
+    measuresCheck: check(
+      'content_upload_ki_calls_measures_check',
+      sql`(${table.latencyMs} is null or ${table.latencyMs} >= 0) and (${table.promptTokens} is null or ${table.promptTokens} >= 0) and (${table.completionTokens} is null or ${table.completionTokens} >= 0)`
+    ),
+    attemptCheck: check(
+      'content_upload_ki_calls_attempt_check',
+      sql`${table.attempt} >= 1`
+    ),
+    answerCheck: check(
+      'content_upload_ki_calls_answer_check',
+      sql`${table.answerExcerpt} is null or char_length(${table.answerExcerpt}) <= 500`
+    ),
+    runIdx: index('content_upload_ki_calls_run_idx').on(table.runId),
+    fileIdx: index('content_upload_ki_calls_file_idx').on(table.fileId),
+  })
+);
+
+export const contentUploadApplies = pgTable(
+  'content_upload_applies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id').notNull(),
+    mode: text('mode', { enum: CONTENT_UPLOAD_APPLY_MODES }).notNull(),
+    startedById: uuid('started_by_id').notNull(),
+    decisionsVersion: integer('decisions_version').notNull(),
+    // Hash of the canonical plan (files, decisions, defaults, engine version)
+    decisionsHash: text('decisions_hash').notNull(),
+    updateExisting: boolean('update_existing').notNull().default(false),
+    status: text('status', { enum: CONTENT_UPLOAD_APPLY_STATUSES })
+      .notNull()
+      .default('running'),
+    targetSchema: text('target_schema', {
+      enum: CONTENT_UPLOAD_TARGET_SCHEMAS,
+    }).notNull(),
+    counts: jsonb('counts')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    // Table, key and reason only, never file contents
+    conflicts: jsonb('conflicts')
+      .$type<{ table: string; key: string; reason: string }[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    startedAt: timestamp('started_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  table => ({
+    // A run with applies is never deleted silently: the protocol outlives it
+    runFk: foreignKey({
+      name: 'content_upload_applies_run_id_fk',
+      columns: [table.runId],
+      foreignColumns: [contentUploadRuns.id],
+    }).onDelete('restrict'),
+    startedByFk: foreignKey({
+      name: 'content_upload_applies_started_by_id_fk',
+      columns: [table.startedById],
+      foreignColumns: [profiles.id],
+    }).onDelete('restrict'),
+    modeCheck: check(
+      'content_upload_applies_mode_check',
+      inList(table.mode, CONTENT_UPLOAD_APPLY_MODES)
+    ),
+    decisionsVersionCheck: check(
+      'content_upload_applies_decisions_version_check',
+      sql`${table.decisionsVersion} >= 0`
+    ),
+    decisionsHashCheck: check(
+      'content_upload_applies_decisions_hash_check',
+      sql`char_length(${table.decisionsHash}) between 1 and 128`
+    ),
+    statusCheck: check(
+      'content_upload_applies_status_check',
+      inList(table.status, CONTENT_UPLOAD_APPLY_STATUSES)
+    ),
+    targetSchemaCheck: check(
+      'content_upload_applies_target_schema_check',
+      // one pattern for the two names, the migration cannot list them (see there)
+      sql`${table.targetSchema} ~ '^public(_preview)?$'`
+    ),
+    countsCheck: check(
+      'content_upload_applies_counts_check',
+      sql`jsonb_typeof(${table.counts}) = 'object'`
+    ),
+    conflictsCheck: check(
+      'content_upload_applies_conflicts_check',
+      sql`jsonb_typeof(${table.conflicts}) = 'array'`
+    ),
+    runIdx: index('content_upload_applies_run_idx').on(
+      table.runId,
+      table.startedAt.desc()
+    ),
+    // At most one dry run or apply in progress per run
+    runningUidx: uniqueIndex('content_upload_applies_running_uidx')
+      .on(table.runId)
+      .where(sql`${table.status} = 'running'`),
+  })
+);
+
+export const contentUploadAppliedRows = pgTable(
+  'content_upload_applied_rows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    applyId: uuid('apply_id').notNull(),
+    tableName: text('table_name', {
+      enum: CONTENT_UPLOAD_APPLIED_TABLES,
+    }).notNull(),
+    // Id of a row in table_name, no foreign key (the table varies)
+    rowId: uuid('row_id').notNull(),
+    action: text('action', { enum: CONTENT_UPLOAD_APPLIED_ACTIONS }).notNull(),
+    // Values of the changed columns before an update (NULL for an insert)
+    before: jsonb('before').$type<Record<string, unknown>>(),
+    fileId: uuid('file_id'),
+  },
+  table => ({
+    applyFk: foreignKey({
+      name: 'content_upload_applied_rows_apply_id_fk',
+      columns: [table.applyId],
+      foreignColumns: [contentUploadApplies.id],
+    }).onDelete('cascade'),
+    fileFk: foreignKey({
+      name: 'content_upload_applied_rows_file_id_fk',
+      columns: [table.fileId],
+      foreignColumns: [contentUploadFiles.id],
+    }).onDelete('set null'),
+    rowKey: unique('content_upload_applied_rows_row_key').on(
+      table.applyId,
+      table.tableName,
+      table.rowId
+    ),
+    tableNameCheck: check(
+      'content_upload_applied_rows_table_name_check',
+      inList(table.tableName, CONTENT_UPLOAD_APPLIED_TABLES)
+    ),
+    actionCheck: check(
+      'content_upload_applied_rows_action_check',
+      inList(table.action, CONTENT_UPLOAD_APPLIED_ACTIONS)
+    ),
+    beforeCheck: check(
+      'content_upload_applied_rows_before_check',
+      sql`(${table.action} = 'insert' and ${table.before} is null) or (${table.action} = 'update' and ${table.before} is not null)`
+    ),
+    tableRowIdx: index('content_upload_applied_rows_table_row_idx').on(
+      table.tableName,
+      table.rowId
+    ),
+  })
+);
+
+export type ContentUploadRun = typeof contentUploadRuns.$inferSelect;
+export type NewContentUploadRun = typeof contentUploadRuns.$inferInsert;
+export type ContentUploadFile = typeof contentUploadFiles.$inferSelect;
+export type NewContentUploadFile = typeof contentUploadFiles.$inferInsert;
+export type ContentUploadProposal = typeof contentUploadProposals.$inferSelect;
+export type NewContentUploadProposal =
+  typeof contentUploadProposals.$inferInsert;
+export type ContentUploadDecision = typeof contentUploadDecisions.$inferSelect;
+export type NewContentUploadDecision =
+  typeof contentUploadDecisions.$inferInsert;
+export type ContentUploadKiCall = typeof contentUploadKiCalls.$inferSelect;
+export type NewContentUploadKiCall = typeof contentUploadKiCalls.$inferInsert;
+export type ContentUploadApply = typeof contentUploadApplies.$inferSelect;
+export type NewContentUploadApply = typeof contentUploadApplies.$inferInsert;
+export type ContentUploadAppliedRow =
+  typeof contentUploadAppliedRows.$inferSelect;
+export type NewContentUploadAppliedRow =
+  typeof contentUploadAppliedRows.$inferInsert;
