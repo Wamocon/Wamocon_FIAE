@@ -54,7 +54,7 @@ const rb = await call('GET', 'rollback-sql');
 copy(rb.sql); // in die Zwischenablage, dann als Datei speichern
 ```
 
-Der Probelauf nennt je Tabelle `insert`, `update`, `unchanged`, die Konflikte (`conflicts`), die Unterschiede zu bestehenden Zeilen (`differences`) und `skipped` mit Grund (zum Beispiel `ENABLER_MISSING`). `updateExisting: true` im Body schreibt auch bestehende Zeilen um, nur auf ausdrücklichen Wunsch. `publishOriginals: [<Datei-IDs>]` (höchstens 25) kopiert die Originale von Enabler-Lehrtexten in den Dokument-Bucket, nur auf ausdrückliche Nennung und nur nach der Entscheidung zu Abschnitt 8. 7. **Nach der Übernahme.** Der Lauf steht auf "Übernommen", die Dateien im Bucket bleiben 30 Tage (Rückbaufenster), dann räumt der Aufräumjob sie weg. Die Inhalte sind inaktiv. Aktivieren, Indexieren und der Release nach Production sind eigene Entscheidungen (Abschnitt 8).
+Der Probelauf nennt je Tabelle `insert`, `update`, `unchanged`, die Konflikte (`conflicts`), die Unterschiede zu bestehenden Zeilen (`differences`) und `skipped` mit Grund (zum Beispiel `ENABLER_MISSING`). `replaceFiles: [<Datei-IDs>]` im Body ersetzt abweichende Zeilen, nur für die genannten Dateien und nur auf ausdrückliche Entscheidung (Abschnitt 11.3). `publishOriginals: [<Datei-IDs>]` (höchstens 25) kopiert die Originale von Enabler-Lehrtexten in den Dokument-Bucket, nur auf ausdrückliche Nennung und nur nach der Entscheidung zu Abschnitt 8. 7. **Nach der Übernahme.** Der Lauf steht auf "Übernommen", die Dateien im Bucket bleiben 30 Tage (Rückbaufenster), dann räumt der Aufräumjob sie weg. Die Inhalte sind inaktiv. Aktivieren, Indexieren und der Release nach Production sind eigene Entscheidungen (Abschnitt 8).
 
 ## 4. Prüfliste vor der Übernahme
 
@@ -123,7 +123,7 @@ Der Upload wird in Production **nicht** eingeschaltet, bevor Folgendes erledigt 
 3. **Unbenutzte signierte Upload-URL nach Objektlöschung.** Eine nicht benutzte Upload-Adresse bleibt gültig, auch wenn das Objekt entfernt wurde. Ein Objekt kann nach Ablehnung oder Verwerfen erneut entstehen und wird dann zur Waise (Aufräumen nach Präfix löscht sie nach 7 Tagen). Nur Administratoren, Kosten statt Datenschutz. Vor Production: kürzere Gültigkeit oder Löschen der Waisen im Aufräumjob verbindlich.
 4. **Docx-Metadaten der Originale.** Veröffentlichte Originale tragen Autor, Kopf- und Fußzeilen und Dokumenteigenschaften. Vor der Veröffentlichung entfernen oder Entscheidung, dass sie bleiben.
 5. **Sichtbarkeit der Originale vor der Aktivierung (Entscheidung von Niko offen).** Eine Zeile `THEORY`/`ALL` am Enabler ist sofort lesbar, auch wenn der Enabler inaktiv ist (wo die Richtlinie `cd_select` noch gilt). Empfehlung: Originale **erst nach der Aktivierung** veröffentlichen, also `publishOriginals` im Lauf leer lassen und die Originale in einem eigenen späteren Lauf mit der Aktivierung übernehmen.
-6. **Oberfläche für Probelauf, Übernahme und Rückbau** (Abschnitt 3, Schritt 6) fehlt. Die Konsole genügt für Niko in der Preview, nicht für den Betrieb.
+6. ~~Oberfläche für Probelauf, Übernahme und Rückbau~~ gebaut in UP1 (Abschnitt 11.5), nicht an der echten Preview mit echtem Speicher erprobt.
 7. Messung der Laufzeit an der echten Preview (Abschnitt 10) und die Entscheidung, ob `maxDuration` erhöht oder die Übernahme als Schritt der Warteschlange gebaut wird.
 
 ## 9. Lokale Abnahme wiederholen
@@ -143,3 +143,58 @@ Lokal laufen Probelauf und Übernahme in 15 bis 25 Sekunden (Abschnitt "Stand U8
 3. Im Vercel-Projekt unter Logs der Funktionen `pump`, `dry-run`, `apply` die Dauer und den Speicher je Aufruf ablesen. Grenze: `maxDuration` 60 s, Planbau-Budget 40 s (ab etwa 120 ms je Datei bei 1300 Dateien `PLAN_TOO_LARGE`).
 4. Ergebnis ins Konzept eintragen. Liegt der Probelauf über 45 Sekunden, den Lauf komponentenweise schneiden oder die Übernahme als Schritt der Warteschlange bauen (Spike, Stufe 2).
 5. Nach den Messläufen den Lauf rückbauen oder verwerfen (Abschnitte 5 und 3), damit die Preview sauber bleibt.
+
+## 11. Nachschub
+
+Der Nachschub liefert **nur, was fehlt oder neu ist**, in denselben Schritten wie die Erstlieferung (Abschnitt 3). Typische Fälle: ein bisher fehlendes Szenario (zum Beispiel 23b), Quizze mit 8 statt 10 Fragen, eine korrigierte Fassung, eine neue Komponente.
+
+### 11.1 Bestandsabgleich je Datei
+
+In der Prüfliste (Status Prüfung) vergleicht **"Bestand abgleichen"** jede Datei mit der Datenbank. Es wird nichts geschrieben, keine Entscheidung ändert sich. Eine Datei ohne Entscheidung zählt mit der Zuordnung ihres Vorschlags. Das Ergebnis steht je Datei in der Spalte **Bestand** und ist filterbar:
+
+| Status | Bedeutung | Wird übernommen |
+| --- | --- | --- |
+| Neu | Der Schlüssel (Enabler, Quiz, Szenario, Use Case) fehlt in der Datenbank. | ja |
+| Ergänzt | Ein bestehendes Quiz bekommt fehlende Fragen, oder ein Teil fehlt (zum Beispiel das Szenario eines bestehenden Enablers). Die Fragen der Datei müssen die vorhandenen mit gleichem Text in gleicher Reihenfolge enthalten (Teilmengenregel wie `--extend-quizzes`). Nichts wird gelöscht oder geändert, bestehende Fragen rücken nur in der Reihenfolge weiter. | ja |
+| Unverändert | Die Datenbank hält schon genau diesen Inhalt. | nichts zu tun |
+| Abweichend | Der Schlüssel besteht mit anderem Text. | **nur auf ausdrückliche Entscheidung für genau diese Datei** (11.3) |
+| Konflikt | Der Schlüssel besteht mit anderer Bedeutung (zum Beispiel ein Quiz mit mehr Fragen in der Datenbank als in der Datei, oder andere Fragentexte). | nein, erst klären |
+
+Eine Datei, deren Zuordnung nach dem Abgleich geändert wurde, zeigt "Veraltet, bitte neu abgleichen". Der Abgleich ersetzt, was ein früherer gespeichert hat. Nach einer Übernahme sind alle Abgleiche des Laufs gelöscht, die Datenbank ist eine andere.
+
+**Neues und Ergänzungen übernehmen** nimmt in einem Klick alle Dateien an, die laut Abgleich neu oder ergänzt sind und deren Vorschlag ein Klick nehmen darf (Band Sicher oder Wahrscheinlich, kein unsicherer Inhalt, keine zweite Fassung). Abweichendes, Konflikte und Unsicheres bleiben unberührt.
+
+**Quizze und Szenarien ohne Enabler-Text.** Der Nachschub braucht den Lehrtext des Enablers nicht noch einmal. Existiert der Enabler in der Datenbank (und in derselben Komponente, die der Pfad nennt), steht er stellvertretend im Plan und wird nicht geschrieben. Fehlt er, bleibt die Datei mit `ENABLER_MISSING` übersprungen.
+
+### 11.2 Probelauf und Übernahme
+
+Der Probelauf zeigt zusätzlich die Zählung je Bestandsstatus und, wo Fragen ergänzt werden, die Zahl der Quizze, Fragen und der weiterrückenden Fragen. Die Übernahme ergänzt immer fehlende Fragen (`extendQuizzes`, fest) und ist **idempotent**: ein zweiter Lauf mit denselben Dateien schreibt nichts (alles "Unverändert").
+
+### 11.3 Abweichendes ersetzen (je Datei)
+
+Es gibt keinen Schalter für alle. Nach dem Probelauf nennt die Oberfläche die abweichenden Dateien mit je einem Kästchen "Bestehende Zeilen für <Datei> aktualisieren". Ohne Haken bleibt der Bestand. Die Auswahl gehört zum Hash: nach jeder Änderung ist ein neuer Probelauf nötig. Aktualisiert werden nur die benannten Spalten (`updatable` in `apply/tables.ts`), nie `is_active`, Autor oder Speicherspalten. Die Vorwerte stehen im Protokoll (`applied_rows.before`) und gehen in den Rückbau. API: `replaceFiles` (Liste von Datei-IDs, höchstens 100) im Body von `dry-run` und `apply`. Der frühere Schalter `updateExisting` für alle Zeilen entfällt.
+
+### 11.4 Dateiarten: was geht und was nicht
+
+| Art | Weg |
+| --- | --- |
+| Word (Enabler, Szenarien, Use Cases, Quizze, Global-Quizze) | Upload, Abgleich, Probelauf, Übernahme (dieser Abschnitt) |
+| PDF (Originale) | Anbindung an die Word-Datei wie bisher (`publishOriginals`), im Abgleich ohne Status |
+| JSON (Quizze, Schema 1.0) | **nicht im Upload.** Sicherer Weg: `node scripts/import/kfbm-apply.mjs run --quizzes-json <Datei> --target preview --created-by <Profil> --extend-quizzes` (Probelauf ist Standard, `--apply` schreibt, Ziele nur local und preview) |
+| Excel (Lernfeld-Mapping) | **nicht im Upload.** Sicherer Weg: `node scripts/import/kfbm-learning-fields.mjs plan <Mapping.xlsx> ...`, dann `run` (Probelauf Standard, bestehende Zeilen bleiben ohne `--update-existing`) |
+
+Warum nicht JSON und Excel im Upload: Die Tabelle `content_upload_files` erlaubt nur die Endungen `docx` und `pdf` (Check `content_upload_files_ext_check` der Migration `20261030000100`). Ohne Migration lässt sich kein Objekt anderer Art zeilenweise verwalten. Was dafür nötig wäre, steht im Konzept (Abschnitt 19, "Offen: JSON und Excel im Upload"). Am Bucket `content-upload` ist dann zusätzlich umzustellen: erlaubte MIME-Typen um `application/json` und `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` erweitern, Größe für JSON auf 32 MB. Das passiert **nicht** am gehosteten Supabase durch einen Agenten, sondern durch Niko.
+
+### 11.5 Probelauf, Übernahme und Rückbau in der Oberfläche
+
+Unter der Liste steht der Bereich "Übernahme":
+
+1. **Probelauf starten.** Ergebnis: Gültigkeit (für den Entscheidungsstand und die Auswahl, mit Prüfsumme), Zählung je Bestandsstatus, Zeilen je Tabelle, Konflikte, abweichende Dateien, nicht berücksichtigte Dateien. Ändert sich eine Entscheidung oder die Auswahl, gilt er nicht mehr.
+2. **In den Katalog übernehmen.** Erst aktiv nach gültigem Probelauf ohne Konflikt. Ein Dialog verlangt den Katalogcode `KFBM` getippt, dann läuft die Übernahme (bis eine Minute). Fehler 409, 503 und `COMMIT_UNCERTAIN` erscheinen mit deutschem Text (bei `COMMIT_UNCERTAIN` nicht wiederholen, zuerst das Protokoll prüfen).
+3. **Rückbau-SQL erstellen** (Status Übernommen, nur Superadmin, wie alle Routen des Uploads): Die Datei wird im Browser gespeichert, **nicht ausgeführt**. Zuerst als Probe mit `rollback`, danach mit `commit`. Steht etwas im Weg (spätere Übernahme, aktive Inhalte, Daten Lernender), nennt die Oberfläche den Grund statt einer Datei.
+
+### 11.6 Weitere Hinweise
+
+- **Lange Pfade.** Chrome unter Windows liest Dateien mit einem Pfad über 259 Zeichen nicht. Unter "Ordner wählen" steht ein Hinweis: fehlen Dateien in der Auswahl, den Ordner an einen kurzen Pfad kopieren (zum Beispiel `C:\kfbm`) und neu wählen.
+- **Wahrscheinliche Vorschläge bestätigen.** Im leeren Katalog sind alle Vorschläge "Wahrscheinlich" (neue Komponente im Plan). Die Sammelannahme "Wahrscheinliche mit gleicher Begründung" bestätigt alle Dateien einer Gruppe gleicher Begründungen in einem Schritt. Nie dabei: Unklar, Widerspruch, ein Markierungswort einer Lösung, nicht lesbarer oder abgeschnittener Inhalt, Fehler des Parsers, eine zweite Fassung. Die Zuordnung jeder Datei wird weiter gegen die Positivliste geprüft.
+- **Rate-Limit.** Abgleich, Probelauf und Übernahme teilen sich 10 Aufrufe je Minute und Person.

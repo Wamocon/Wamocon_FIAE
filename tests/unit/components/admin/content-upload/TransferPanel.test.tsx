@@ -553,7 +553,10 @@ describe('ReviewView with the supply of content', () => {
         'Abgleich fertig, 10 Dateien: 3 neu, 2 ergänzt, 1 abweichend, 4 unverändert, 0 Konflikt.'
       )
     ).toBeInTheDocument();
-    expect(client.review.mock.calls.length).toBeGreaterThan(1);
+    // the list is read again
+    await waitFor(() =>
+      expect(client.review.mock.calls.length).toBeGreaterThan(1)
+    );
   });
 
   it('asks before it takes the new and added files, and sends the command', async () => {
