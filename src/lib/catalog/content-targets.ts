@@ -147,7 +147,7 @@ export function compareToTarget(
   const status: MetricStatus =
     difference === 0 ? 'met' : difference < 0 ? 'missing' : 'exceeds';
   const percent =
-    target === 0 ? 100 : Math.min(100, Math.floor((actual / target) * 100));
+    target === 0 ? 100 : Math.min(100, Math.floor((actual * 100) / target));
   return { difference, status, percent };
 }
 

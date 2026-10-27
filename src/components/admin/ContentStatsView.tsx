@@ -205,7 +205,7 @@ function CatalogCard({
             ref={editRef}
             type="button"
             onClick={() => setEditing(true)}
-            className="text-foreground hover:bg-accent/10 border-border flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors"
+            className="text-foreground hover:bg-accent/10 border-border focus-visible:ring-accent flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             <Pencil className="h-4 w-4" aria-hidden="true" />
             {t('contentStats.edit')}
@@ -225,6 +225,7 @@ function CatalogCard({
       )}
 
       <ul
+        role="list"
         aria-label={t('contentStats.cardLabel', { name: catalog.title })}
         className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2"
       >
@@ -265,27 +266,35 @@ function CatalogCard({
 export function ContentStatsView() {
   const { t } = useLanguage();
   const [data, setData] = useState<ContentStatsResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Only the newest request may change the screen: a slow older answer must not
+  // bring back old numbers after a save, and nothing is set after unmount
+  const latest = useRef(0);
 
   const load = useCallback(async () => {
+    const mine = ++latest.current;
     setLoading(true);
+    setFailed(false);
     try {
       const res = await authFetch('/api/admin/content-stats', {
         cache: 'no-store',
       });
-      if (!res.ok) throw new Error(t('contentStats.loadFailed'));
-      setData((await res.json()) as ContentStatsResponse);
-      setError(null);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : t('contentStats.loadFailed'));
+      if (!res.ok) throw new Error('load failed');
+      const body = (await res.json()) as ContentStatsResponse;
+      if (mine === latest.current) setData(body);
+    } catch {
+      if (mine === latest.current) setFailed(true);
     } finally {
-      setLoading(false);
+      if (mine === latest.current) setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     load();
+    return () => {
+      latest.current += 1;
+    };
   }, [load]);
 
   return (
@@ -314,7 +323,7 @@ export function ContentStatsView() {
             type="button"
             onClick={load}
             disabled={loading}
-            className="text-foreground hover:bg-accent/10 border-border flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+            className="text-foreground hover:bg-accent/10 border-border focus-visible:ring-accent flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
           >
             <RefreshCw
               className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`}
@@ -330,12 +339,19 @@ export function ContentStatsView() {
         )}
       </div>
 
-      {error && (
+      {failed && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          {error}
+          {t('contentStats.loadFailed')}
         </p>
       )}
-      {!data && !error && (
+      <p role="status" className="sr-only">
+        {loading
+          ? t('contentStats.loading')
+          : data
+            ? t('contentStats.loaded')
+            : ''}
+      </p>
+      {!data && !failed && (
         <div className="flex justify-center p-8">
           <LoadingSpinner size="lg" />
         </div>

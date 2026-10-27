@@ -65,6 +65,10 @@ describe('content targets: stored form', () => {
     expect(new Set(Object.values(STORED_TARGET_KEY)).size).toBe(7);
     expect(STORED_TARGET_KEY.useCases).toBe('use_cases');
     expect(STORED_TARGET_KEY.lessonQuizzes).toBe('lesson_quizzes');
+    // every stored key is one the strict settings schema knows
+    expect(Object.values(STORED_TARGET_KEY).sort()).toEqual(
+      Object.keys(storedContentTargetsSchema.shape).sort()
+    );
   });
 
   it('writes only the targets that are set', () => {
@@ -207,6 +211,19 @@ describe('compareToTarget', () => {
       status: 'exceeds',
       percent: 100,
     });
+  });
+
+  it('rounds down without float errors (29 of 100 is 29, not 28)', () => {
+    for (const [actual, target, percent] of [
+      [29, 100, 29],
+      [57, 100, 57],
+      [58, 100, 58],
+      [58, 200, 29],
+      [29, 50, 58],
+      [225, 226, 99],
+    ]) {
+      expect(compareToTarget(actual, target).percent).toBe(percent);
+    }
   });
 
   it('starts at zero percent', () => {

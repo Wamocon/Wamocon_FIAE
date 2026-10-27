@@ -255,6 +255,9 @@ if (!url) {
     await sql`insert into organizations (id, name, slug, subscription_plan, max_trainee_seats, max_trainer_seats)
               values (${ORG_FULL}, 'ST1 Voll', 'st1-voll', 'PRO', 5, 5),
                      (${ORG_LEGACY}, 'ST1 Alt', 'st1-alt', 'PRO', 5, 5)`;
+    // A scenario document of one organization is its own, not platform content
+    await sql`insert into content_documents (id, enabler_id, organization_id, title, document_type, visibility, file_name, storage_url)
+              values (${id(411)}, ${id(304)}, ${ORG_FULL}, 'Eigene Übung der Organisation', 'EXERCISE', 'ALL', 'f.txt', '')`;
     // A trigger may have added the FIAE row of a new organization
     await sql`delete from organization_catalogs where organization_id in (${ORG_FULL}, ${ORG_LEGACY})`;
     await sql`insert into organization_catalogs (organization_id, training_catalog_id, is_enabled)
@@ -289,7 +292,8 @@ if (!url) {
         components: 2,
         enablers: 5,
         // E1 (three rows, one scenario), E2 (EXERCISE), E3 (PDF link). Not
-        // E4 (look-alikes), not E5 (blank link): 3, never 5 document rows
+        // E4 (look-alikes, a use case document, an organization document),
+        // not E5 (blank link): 3, never 5 document rows
         scenarios: 3,
         useCases: 3,
         lessonQuizzes: 4,

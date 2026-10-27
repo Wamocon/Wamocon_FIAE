@@ -2531,5 +2531,7 @@
   "contentStats.form.invalid": "{label}: bitte eine ganze Zahl von 0 bis 100000 eingeben.",
   "contentStats.form.saved": "Die Soll-Werte wurden gespeichert.",
   "contentStats.form.saveFailed": "Die Soll-Werte konnten nicht gespeichert werden.",
-  "contentStats.form.catalogNotFound": "Die Ausbildung wurde nicht gefunden."
+  "contentStats.form.catalogNotFound": "Die Ausbildung wurde nicht gefunden.",
+  "contentStats.loading": "Statistik wird geladen",
+  "contentStats.loaded": "Statistik aktualisiert"
 }

@@ -193,7 +193,10 @@ export function Sidebar({
             // the routes check the role themselves)
             ...[
               ...adminMenuItems({ role: profile?.role, isPlatformOwner }),
-              ...contentStatsMenuItems({ role: profile?.role, isPlatformOwner }),
+              ...contentStatsMenuItems({
+                role: profile?.role,
+                isPlatformOwner,
+              }),
               ...contentUploadMenuItems(
                 { role: profile?.role, isPlatformOwner },
                 {

@@ -2529,5 +2529,7 @@
   "contentStats.form.invalid": "{label}: please enter a whole number from 0 to 100000.",
   "contentStats.form.saved": "The targets were saved.",
   "contentStats.form.saveFailed": "The targets could not be saved.",
-  "contentStats.form.catalogNotFound": "The training was not found."
+  "contentStats.form.catalogNotFound": "The training was not found.",
+  "contentStats.loading": "Statistics are loading",
+  "contentStats.loaded": "Statistics updated"
 }

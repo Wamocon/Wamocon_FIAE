@@ -296,6 +296,8 @@ describe('ContentStatsView: targets form', () => {
       );
       const field = within(form).getByLabelText('Szenarien');
       expect(field).toHaveAttribute('aria-invalid', 'true');
+      // focus goes to the field that needs the correction
+      expect(field).toHaveFocus();
       expect(
         within(form).getAllByText(
           'Szenarien: bitte eine ganze Zahl von 0 bis 100000 eingeben.'

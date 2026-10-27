@@ -14,7 +14,9 @@
  *                    (situation, solution, knowledge, titles "Szenario <code>:
  *                    ..."), so counting rows would give three per enabler. An
  *                    enabler has a scenario when it has a document row at the
- *                    enabler (no use case) of the type EXERCISE (the scenario
+ *                    enabler (no use case, and no organization: a document of
+ *                    one organization is its own and no platform content) of
+ *                    the type EXERCISE (the scenario
  *                    documents of the platform, shown as scenarios to
  *                    trainees), or of the type TRAINEE_QUESTION or
  *                    TRAINER_SOLUTION whose title starts with "Szenario <enabler
@@ -130,6 +132,7 @@ export async function loadStatsRows(
               select 1 from content_documents d
               where d.enabler_id = x.id
                 and d.use_case_id is null
+                and d.organization_id is null
                 and (
                   d.document_type = 'EXERCISE'
                   or (

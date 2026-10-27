@@ -32,6 +32,9 @@ export function ContentTargetsForm({ catalog, onSaved, onClose }: Props) {
   const { t } = useLanguage();
   const formId = useId();
   const firstRef = useRef<HTMLInputElement | null>(null);
+  const inputRefs = useRef<Partial<Record<ContentMetricId, HTMLInputElement>>>(
+    {}
+  );
   const [values, setValues] = useState<Record<ContentMetricId, string>>(() => {
     const initial = {} as Record<ContentMetricId, string>;
     for (const id of CONTENT_METRICS) {
@@ -63,7 +66,11 @@ export function ContentTargetsForm({ catalog, onSaved, onClose }: Props) {
     });
     setErrors(invalid);
     setFailure(null);
-    if (invalid.length > 0) return;
+    if (invalid.length > 0) {
+      // The keyboard user lands on the first field that needs a correction
+      inputRefs.current[invalid[0]]?.focus();
+      return;
+    }
 
     const targets: Record<string, number | null> = {};
     for (const id of CONTENT_METRICS) {
@@ -118,64 +125,68 @@ export function ContentTargetsForm({ catalog, onSaved, onClose }: Props) {
         {t('contentStats.form.hint')}
       </p>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {CONTENT_METRICS.map((id, index) => {
-          const inputId = `${formId}-${id}`;
-          const hasError = errors.includes(id);
-          return (
-            <div key={id}>
-              <label
-                htmlFor={inputId}
-                className="text-foreground mb-1 block text-sm font-medium"
-              >
-                {label(id)}
-              </label>
-              <input
-                id={inputId}
-                ref={index === 0 ? firstRef : undefined}
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={values[id]}
-                onChange={e => {
-                  const next = e.target.value;
-                  setValues(v => ({ ...v, [id]: next }));
-                }}
-                aria-invalid={hasError}
-                aria-describedby={`${formId}-hint${hasError ? ` ${inputId}-error` : ''}`}
-                className="bg-background border-border text-foreground focus:ring-accent w-full rounded-xl border px-3 py-2 tabular-nums focus:ring-2 focus:outline-none aria-[invalid=true]:border-red-600"
-              />
-              {hasError && (
-                <p
-                  id={`${inputId}-error`}
-                  className="mt-1 text-sm text-red-700 dark:text-red-400"
+      <fieldset disabled={saving} className="contents">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {CONTENT_METRICS.map((id, index) => {
+            const inputId = `${formId}-${id}`;
+            const hasError = errors.includes(id);
+            return (
+              <div key={id}>
+                <label
+                  htmlFor={inputId}
+                  className="text-foreground mb-1 block text-sm font-medium"
                 >
-                  {t('contentStats.form.invalid', { label: label(id) })}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                  {label(id)}
+                </label>
+                <input
+                  id={inputId}
+                  ref={el => {
+                    if (el) inputRefs.current[id] = el;
+                    if (index === 0) firstRef.current = el;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={values[id]}
+                  onChange={e => {
+                    const next = e.target.value;
+                    setValues(v => ({ ...v, [id]: next }));
+                  }}
+                  aria-invalid={hasError}
+                  aria-describedby={`${formId}-hint${hasError ? ` ${inputId}-error` : ''}`}
+                  className="bg-background border-border text-foreground focus:ring-accent w-full rounded-xl border px-3 py-2 tabular-nums focus:ring-2 focus:outline-none aria-[invalid=true]:border-red-600"
+                />
+                {hasError && (
+                  <p
+                    id={`${inputId}-error`}
+                    className="mt-1 text-sm text-red-700 dark:text-red-400"
+                  >
+                    {t('contentStats.form.invalid', { label: label(id) })}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </fieldset>
 
       <div role="alert" className="mt-3 text-sm text-red-700 dark:text-red-400">
-        {errors.length > 0 && !failure
-          ? t('contentStats.form.invalid', { label: label(errors[0]) })
-          : failure}
+        {failure}
       </div>
 
       <div className="mt-4 flex flex-wrap justify-end gap-3">
         <button
           type="button"
           onClick={onClose}
-          className="text-muted hover:text-foreground rounded-xl px-4 py-2 transition-colors"
+          disabled={saving}
+          className="text-muted hover:text-foreground focus-visible:ring-accent min-h-[44px] rounded-xl px-4 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
         >
           {t('contentStats.form.cancel')}
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="rounded-xl bg-red-700 px-5 py-2 font-medium text-white transition-colors hover:bg-red-800 disabled:opacity-50"
+          className="min-h-[44px] rounded-xl bg-red-700 px-5 py-2 font-medium text-white transition-colors hover:bg-red-800 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none disabled:opacity-50"
         >
           {saving ? t('contentStats.form.saving') : t('contentStats.form.save')}
         </button>
