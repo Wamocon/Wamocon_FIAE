@@ -92,7 +92,9 @@ describe('renderLearningFieldRunReport', () => {
     expect(text).toContain(
       '1 Enabler des Plans fehlen in der Zieldatenbank, 2 Zuordnungen sind deshalb nicht geschrieben'
     );
-    expect(text).toContain('Mit --update-existing nur der Titel aktualisiert');
+    expect(text).toContain(
+      'Mit --update-existing nur Titel und Stunden aktualisiert'
+    );
     expect(text).toContain('- training_catalog_learning_fields LF1: title');
     expect(text).toContain('## Konflikte');
     expect(text).toContain(

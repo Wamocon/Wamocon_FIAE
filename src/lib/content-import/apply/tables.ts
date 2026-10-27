@@ -117,7 +117,9 @@ export const TABLES: Record<TableName, TableSpec> = {
       'expected_answer',
       'order_index',
     ],
-    updatable: ['question_text'],
+    // order_index is only changed by the extension of a quiz (engine.ts,
+    // extendQuizzes), --update-existing never names it.
+    updatable: ['question_text', 'order_index'],
     uuid: ['id', 'quiz_id'],
     touch: false,
   },
@@ -197,9 +199,9 @@ export const TABLES: Record<TableName, TableSpec> = {
       'hours_budget',
       'order_index',
     ],
-    // Only the title is updated. The school year and the order are part of
-    // the identity of a learning field, the hours have no source.
-    updatable: ['title'],
+    // Only the title and the hours (official time guideline) are updated. The
+    // school year and the order are part of the identity of a learning field.
+    updatable: ['title', 'hours_budget'],
     uuid: ['id', 'training_catalog_id'],
     touch: true,
   },

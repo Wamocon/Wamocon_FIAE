@@ -21,6 +21,8 @@ import { ImportAbort } from './db';
 import {
   findRowLeaks,
   leakOf,
+  leakOfEnablerText,
+  reviewedEnablerCodes,
   scenarioSolutionTexts,
   solutionTexts,
 } from './guard';
@@ -32,6 +34,7 @@ import type {
   Difference,
   EnablerOriginal,
   ImportPlan,
+  PlanQuestion,
   PlanQuiz,
   PlanScenario,
   QuizLevel,
@@ -57,6 +60,16 @@ export interface RunOptions {
    * public key read rows without an organization.
    */
   scenarioSolutions: boolean;
+  /**
+   * Add the questions that a quiz lacks (a quiz that exists with fewer
+   * questions than the plan). Only when every existing question is also in the
+   * plan with the same text and in the same order. The new questions get their
+   * place by order_index (the position of the existing ones is moved where a
+   * new question comes before them), nothing is deleted and no question, option
+   * or answer is changed. Without it a different number of questions stays a
+   * conflict.
+   */
+  extendQuizzes?: boolean;
   /**
    * Original files of enabler texts that were copied to the document bucket by
    * the caller (the upload, docs/ki-upload-konzept.md 8.5). Each one becomes a
@@ -92,7 +105,15 @@ function diffColumns(table: TableName, existing: Row, desired: Row): string[] {
 
 const baseName = (path: string) => path.split('/').pop() ?? path;
 
-/** The three document rows of a scenario: the situation and two solution parts. */
+/** Heading of the task inside the visible row of the situation. */
+export const TASK_HEADING = 'Aufgabe';
+
+/**
+ * The three document rows of a scenario: the situation and two solution parts.
+ * The task, when there is one, is part of the visible situation row under the
+ * heading "Aufgabe" (like the use cases, whose visible text holds situation,
+ * objective and steps). The title and the key of every row stay the same.
+ */
 export function scenarioDocuments(
   scenario: PlanScenario,
   enablerId: string,
@@ -117,7 +138,9 @@ export function scenarioDocuments(
   const situation = {
     ...common,
     title: `Szenario ${scenario.enablerCode}: Ausgangssituation`,
-    description: scenario.situation,
+    description: scenario.task
+      ? `${scenario.situation}\n\n${TASK_HEADING}\n\n${scenario.task}`
+      : scenario.situation,
     document_type: 'TRAINEE_QUESTION',
     visibility: 'ALL',
     order_index: 1,
@@ -188,6 +211,83 @@ interface QuizItem {
   existingOptions: Map<string, Row[]>;
   /** The questions of an existing quiz are missing and are inserted. */
   fillQuestions: boolean;
+  /** Missing questions of an existing quiz that are added (extendQuizzes). */
+  extension: QuizExtension | null;
+}
+
+interface QuizExtension {
+  /** Existing questions with the planned question they equal. */
+  matched: Array<{ row: Row; planned: PlanQuestion }>;
+  /** Planned questions that the quiz lacks. */
+  added: PlanQuestion[];
+  /** Existing questions whose position changes: row id and the new order_index. */
+  moves: Array<{ id: string; order: number }>;
+}
+
+const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+/**
+ * Matches the existing questions of a quiz to the planned ones by text, in
+ * order. Returns the extension, or the reason why the existing questions are no
+ * subset of the plan.
+ */
+function planExtension(
+  quiz: PlanQuiz,
+  existing: Row[],
+  optionsOf: (question: Row) => Row[]
+): { extension: QuizExtension } | { reason: string } {
+  // A text that the plan names twice cannot be told apart, so nothing is guessed.
+  const seen = new Set<string>();
+  for (const planned of quiz.questions) {
+    const text = squash(planned.text);
+    if (seen.has(text)) {
+      return {
+        reason:
+          'The plan has two questions with the same text, so the existing questions cannot be matched and the quiz cannot be extended.',
+      };
+    }
+    seen.add(text);
+  }
+  const matched: Array<{ row: Row; planned: PlanQuestion }> = [];
+  let next = 0;
+  for (const planned of quiz.questions) {
+    const row = existing[next];
+    if (
+      row &&
+      squash(String(row.question_text ?? '')) === squash(planned.text)
+    ) {
+      matched.push({ row, planned });
+      next += 1;
+    }
+  }
+  if (next !== existing.length) {
+    return {
+      reason:
+        'The existing questions are not all in the plan with the same text and in the same order, so the quiz cannot be extended.',
+    };
+  }
+  for (const { row, planned } of matched) {
+    const options = optionsOf(row);
+    if (
+      options.length !== planned.options.length ||
+      options.some((o, i) => Number(o.order_index) !== i + 1)
+    ) {
+      return {
+        reason:
+          'The options of an existing question have another structure than the plan, so the quiz cannot be extended.',
+      };
+    }
+  }
+  const used = new Set(matched.map(m => m.planned.number));
+  return {
+    extension: {
+      matched,
+      added: quiz.questions.filter(q => !used.has(q.number)),
+      moves: matched
+        .filter(m => Number(m.row.order_index) !== m.planned.number)
+        .map(m => ({ id: String(m.row.id), order: m.planned.number })),
+    },
+  };
 }
 
 /**
@@ -292,7 +392,12 @@ export async function executePlan(
   const differences: Difference[] = [];
   const conflict = (table: string, key: string, reason: string) =>
     conflicts.push({ table, key, reason });
-  const updates: Array<{ table: TableName; id: string; patch: Row }> = [];
+  const updates: Array<{
+    table: TableName;
+    key: string;
+    id: string;
+    patch: Row;
+  }> = [];
   const noteExisting = (
     table: TableName,
     key: string,
@@ -309,6 +414,7 @@ export async function executePlan(
       counts[table].update += 1;
       updates.push({
         table,
+        key,
         id: String(existing.id),
         patch: Object.fromEntries(columns.map(c => [c, desired[c] ?? null])),
       });
@@ -410,6 +516,7 @@ export async function executePlan(
     Number(b.order_index ?? Number.MAX_SAFE_INTEGER);
 
   const quizItems: QuizItem[] = [];
+  const extended: NonNullable<RunReport['extended']> = [];
   for (const quiz of plan.quizzes) {
     const existing = quizByCode.get(quiz.code) ?? null;
     const item: QuizItem = {
@@ -418,6 +525,7 @@ export async function executePlan(
       existingQuestions: [],
       existingOptions: new Map(),
       fillQuestions: false,
+      extension: null,
     };
     quizItems.push(item);
     const planQuestions = quiz.questions.length;
@@ -477,6 +585,50 @@ export async function executePlan(
         (n, q) => n + q.options.length,
         0
       );
+      continue;
+    }
+    if (options.extendQuizzes && questions.length < planQuestions) {
+      const result = planExtension(quiz, questions, row =>
+        [...(optionsByQuestion.get(String(row.id)) ?? [])].sort(byOrder)
+      );
+      if ('reason' in result) {
+        conflict('quizzes', quiz.code, result.reason);
+        continue;
+      }
+      item.extension = result.extension;
+      extended.push({
+        quiz: quiz.code,
+        added: result.extension.added.length,
+        moved: result.extension.moves.length,
+      });
+      counts.questions.insert += result.extension.added.length;
+      counts.options.insert += result.extension.added.reduce(
+        (n, q) => n + q.options.length,
+        0
+      );
+      // The existing questions and options are compared like those of a quiz
+      // with the planned number of questions.
+      for (const { row, planned } of result.extension.matched) {
+        noteExisting('questions', `${quiz.code}#${planned.number}`, row, {
+          question_text: planned.text,
+        });
+        const rowOptions = [
+          ...(optionsByQuestion.get(String(row.id)) ?? []),
+        ].sort(byOrder);
+        item.existingOptions.set(String(row.id), rowOptions);
+        planned.options.forEach((option, i) => {
+          noteExisting(
+            'options',
+            `${quiz.code}#${planned.number}${option.letter}`,
+            rowOptions[i],
+            {
+              option_text: option.text,
+              is_correct: option.isCorrect,
+              explanation: option.explanation,
+            }
+          );
+        });
+      }
       continue;
     }
     if (questions.length !== planQuestions) {
@@ -756,17 +908,34 @@ export async function executePlan(
       quizzes: quizItems
         .filter(i => !i.existing)
         .map(i => quizRow(i.quiz, 'component')),
-      questions: quizItems
-        .filter(i => !i.existing || i.fillQuestions)
-        .flatMap(i => questionRows2(i.quiz, 'quiz')),
-      options: quizItems
-        .filter(i => !i.existing || i.fillQuestions)
-        .flatMap(i =>
-          optionRows2(
-            i.quiz,
-            new Map(i.quiz.questions.map(q => [q.number, 'question']))
-          )
+      questions: [
+        ...quizItems
+          .filter(i => !i.existing || i.fillQuestions)
+          .flatMap(i => questionRows2(i.quiz, 'quiz')),
+        ...quizItems.flatMap(i =>
+          i.extension
+            ? questionRows2({ ...i.quiz, questions: i.extension.added }, 'quiz')
+            : []
         ),
+      ],
+      options: [
+        ...quizItems
+          .filter(i => !i.existing || i.fillQuestions)
+          .flatMap(i =>
+            optionRows2(
+              i.quiz,
+              new Map(i.quiz.questions.map(q => [q.number, 'question']))
+            )
+          ),
+        ...quizItems.flatMap(i =>
+          i.extension
+            ? optionRows2(
+                { ...i.quiz, questions: i.extension.added },
+                new Map(i.extension.added.map(q => [q.number, 'question']))
+              )
+            : []
+        ),
+      ],
       content_documents: [
         ...newDocs.flatMap(d => d.rows),
         // the enabler may be a new one: its id is only known after the insert
@@ -779,7 +948,8 @@ export async function executePlan(
     const leaks = findRowLeaks(
       preview,
       solutionTexts(plan),
-      scenarioSolutionTexts(plan)
+      scenarioSolutionTexts(plan),
+      reviewedEnablerCodes(plan)
     );
     if (leaks.length > 0) {
       throw new ImportAbort(
@@ -792,6 +962,7 @@ export async function executePlan(
   // The values of updates are visible text as well
   {
     const solutions = solutionTexts(plan);
+    const reviewed = reviewedEnablerCodes(plan);
     const visibleColumns = [
       'title',
       'description',
@@ -802,7 +973,15 @@ export async function executePlan(
     for (const update of updates) {
       for (const column of visibleColumns) {
         const value = update.patch[column];
-        if (typeof value === 'string' && leakOf(value, solutions)) {
+        // the bare line "Lösung" of a reviewed enabler text (update.key is the
+        // code of the enabler)
+        const leak =
+          typeof value === 'string' &&
+          (update.table === 'enablers' && column === 'description_text'
+            ? leakOfEnablerText(value, solutions, reviewed.has(update.key))
+                .reason
+            : leakOf(value, solutions));
+        if (leak) {
           throw new ImportAbort(
             'SOLUTION_LEAK',
             `An update would put a solution into ${update.table}.${column}. Nothing was written.`
@@ -818,6 +997,7 @@ export async function executePlan(
     conflicts,
     differences,
     wrote: false,
+    ...(extended.length > 0 ? { extended } : {}),
   };
   if (!options.write) return report;
 
@@ -885,6 +1065,47 @@ export async function executePlan(
     'options',
     needQuestions.flatMap(i =>
       optionRows2(i.quiz, questionIdOf.get(i.quiz.code) as Map<number, string>)
+    )
+  );
+
+  // Missing questions of existing quizzes (extendQuizzes): the existing ones are
+  // only moved in their position, the new ones are inserted with the planned
+  // order_index.
+  const extensions = quizItems.filter(i => i.extension);
+  for (const item of extensions) {
+    const extension = item.extension as QuizExtension;
+    for (const move of extension.moves) {
+      await db.update('questions', move.id, { order_index: move.order });
+    }
+  }
+  const addedQuestions = await db.insert(
+    'questions',
+    extensions.flatMap(item =>
+      questionRows2(
+        {
+          ...item.quiz,
+          questions: (item.extension as QuizExtension).added,
+        },
+        String(item.existing?.id)
+      )
+    )
+  );
+  const addedIds = new Map<string, Map<number, string>>();
+  for (const row of addedQuestions) {
+    const map = addedIds.get(String(row.quiz_id)) ?? new Map<number, string>();
+    map.set(Number(row.order_index), String(row.id));
+    addedIds.set(String(row.quiz_id), map);
+  }
+  await db.insert(
+    'options',
+    extensions.flatMap(item =>
+      optionRows2(
+        {
+          ...item.quiz,
+          questions: (item.extension as QuizExtension).added,
+        },
+        addedIds.get(String(item.existing?.id)) as Map<number, string>
+      )
     )
   );
 

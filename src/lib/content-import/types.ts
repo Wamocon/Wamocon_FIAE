@@ -81,12 +81,19 @@ export interface ParsedScenario {
   title: string | null;
   /** Visible for trainees. */
   situation: string;
+  /**
+   * Visible for trainees: the section "Aufgabe" next to a solution section.
+   * Empty when the file has none. A section "Aufgabe" that stands where the
+   * solution section should be is the solution (see parseScenarioText).
+   */
+  task: string;
   /** SOLUTION: trainer only. */
   solution: string;
   /** SOLUTION: trainer only. */
   knowledgeContribution: string;
   visibility: {
     situation: Audience;
+    task: Audience;
     solution: Audience;
     knowledgeContribution: Audience;
   };

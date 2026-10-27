@@ -1,5 +1,6 @@
 // Loads the TypeScript modules of the apply step (src/lib/content-import/apply)
-// for scripts/import/kfbm-apply.mjs. Node strips the types while loading them.
+// and of the quiz JSON source (src/lib/content-import/quiz-json) for
+// scripts/import/kfbm-apply.mjs. Node strips the types while loading them.
 // The modules import each other without a file extension, the hook in
 // ts-resolve-hook.mjs adds it (and names the format, so Node does not warn). Must be imported before anything else loads these modules.
 //
@@ -14,13 +15,24 @@ const load = name =>
     new URL(`../../src/lib/content-import/apply/${name}.ts`, import.meta.url)
       .href
   );
-const [decisions, plan, target, job, db] = await Promise.all([
-  load('decisions'),
-  load('plan'),
-  load('target'),
-  load('job'),
-  load('db'),
-]);
+const loadQuizJson = name =>
+  import(
+    new URL(
+      `../../src/lib/content-import/quiz-json/${name}.ts`,
+      import.meta.url
+    ).href
+  );
+const [decisions, plan, target, job, db, quizRead, quizMerge, quizReport] =
+  await Promise.all([
+    load('decisions'),
+    load('plan'),
+    load('target'),
+    load('job'),
+    load('db'),
+    loadQuizJson('read'),
+    loadQuizJson('merge'),
+    loadQuizJson('report'),
+  ]);
 
 export const { parseDecisions } = decisions;
 export const {
@@ -41,3 +53,6 @@ export const {
 } = target;
 export const { runJob } = job;
 export const { ImportAbort } = db;
+export const { readGlobalQuizzes, readLessonQuizzes } = quizRead;
+export const { mergeQuizSources } = quizMerge;
+export const { renderQuizJsonReport, summarizeQuizJson } = quizReport;

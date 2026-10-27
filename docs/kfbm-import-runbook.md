@@ -111,11 +111,20 @@ Die Komponenten tragen vorläufig Wochen und Sollstunden 0 (die Spalten sind `NO
 ## Lösungsschutz
 
 - Frage und Optionen stehen in `questions.question_text` und `options.option_text`. Die richtige Antwort steht nur in `options.is_correct`, die Kurzbegründung nur in `options.explanation` der richtigen Option, `questions.expected_answer` bleibt leer. So hält es die App heute (die Routen der Azubis lesen `is_correct` nicht, die Begründung kommt mit dem Ergebnis).
-- Szenario: Die Ausgangssituation steht als Dokumentzeile `TRAINEE_QUESTION` mit Sichtbarkeit `ALL` (Text in `description`). Das Lösungsszenario und der Abschnitt zum Fachwissen sind je eine Zeile `TRAINER_SOLUTION` mit Sichtbarkeit `TRAINER_ONLY`. Das ist die Art, wie die Plattform Use-Case-Dokumente trennt (`src/app/api/trainer/use-cases/[useCaseId]/documents/route.ts`), und die HAI-Indexierung ordnet solche Zeilen dem Trainerbereich zu (`src/lib/hai/indexScope.ts`). Die Datenbank hat keine eigene Tabelle für Szenarien.
+- Szenario: Die Ausgangssituation steht als Dokumentzeile `TRAINEE_QUESTION` mit Sichtbarkeit `ALL` (Text in `description`). Hat die Datei einen Abschnitt `Aufgabe` neben dem Lösungsszenario, steht die Aufgabe in derselben Zeile hinter der Situation unter der Zwischenüberschrift `Aufgabe` (so wie bei den Use Cases, deren sichtbarer Text Situation, Ziel und Weg enthält). Titel, Schlüssel und Zahl der Zeilen bleiben gleich, ein Szenario ohne Aufgabe schreibt dieselbe Zeile wie zuvor. Das Lösungsszenario und der Abschnitt zum Fachwissen sind je eine Zeile `TRAINER_SOLUTION` mit Sichtbarkeit `TRAINER_ONLY`. Das ist die Art, wie die Plattform Use-Case-Dokumente trennt (`src/app/api/trainer/use-cases/[useCaseId]/documents/route.ts`), und die HAI-Indexierung ordnet solche Zeilen dem Trainerbereich zu (`src/lib/hai/indexScope.ts`). Die Datenbank hat keine eigene Tabelle für Szenarien.
 - Die Dokumentzeilen haben noch keine Datei: `storage_url` ist leer (die Spalte ist `NOT NULL`), `mime_type` ist `text/plain`. Die Reindex-Skripte überspringen eine leere `storage_url`.
 - Das Skript prüft den Plan und jede Zeile vor dem Schreiben: eine Lösungsmarke ("Richtige Antwort:", "Kurzbegründung:", "Lösungsszenario", "Fachwissen zur Lösung") oder ein langer Lösungstext in einem sichtbaren Feld lässt den Lauf abbrechen, beim Planen wird die Datei übersprungen.
 
 **Lösungsteile der Szenarien nur lokal.** Die Richtlinie `cd_select` der Tabelle `content_documents` (`src/db/migrations/drizzle/0016_rls_policies.sql`) erlaubt allen Rollen das Lesen von Zeilen ohne Organisation, ohne Rücksicht auf die Sichtbarkeit. Wer den öffentlichen Schlüssel hat, könnte die Lösungstexte über die REST-Schnittstelle lesen. Deshalb schreibt das Skript die Zeilen `TRAINER_SOLUTION` nur mit `--scenario-solutions`, und dieser Schalter ist für die Preview gesperrt, bis die Richtlinie (Lesen nur für `authenticated` und ohne `TRAINER_ONLY` und `TRAINER_SOLUTION` für Nicht-Trainer, kein `select` für `anon`) in einer eigenen Migration eingeschränkt ist. Bis dahin enthält die Preview nur die Ausgangssituation der Szenarien.
+
+### Geprüfte Fehlalarme der Marke "Lösung"
+
+Steht in einem Lehrtext eine Zeile nur mit dem Wort "Lösung" (zum Beispiel als Beschriftung einer Tabellenzelle), schlägt die Lösungsmarke an und der Enabler fällt samt Szenario und Quizzen aus dem Plan (`SOLUTION_MARKER`, `ENABLER_MISSING`). Ist die Zeile geprüft und kein Lösungsteil, steht der Enabler in `scripts/import/kfbm-decisions.json` unter `content.reviewedSolutionWordFalsePositives` als `{ "enabler": "K24.2-e", "reason": "..." }`. Eingetragen sind K24.2-e (Fehlerprotokoll) und K25.2-d (Phasen eines Gesprächs).
+
+- Die Freigabe gilt nur für den Text dieses einen Enablers und nur für das Muster der reinen Zeile "Lösung". Alle anderen Marken (zum Beispiel "Lösungsszenario", "Musterlösung", "Richtige Antwort"), der Titel des Enablers, die Szenarien, Quizze und Use Cases und jeder Treffer eines Szenario-Lösungstextes bleiben scharf. Das Muster selbst ist unverändert.
+- Der Plan führt die Freigabe als `reviewedMarkers` und je Enabler als Hinweis `REVIEWED_MARKER`. Die Prüfung vor dem Schreiben (`validatePlan`, Zeilenprüfung, Aktualisierung) lässt die Zeile nur für Enabler dieser Liste durch. Ohne den Eintrag im Plan bricht jeder Lauf ab.
+- Streng geprüft: ein unbekannter oder ungültiger Schlüssel (Platzhalter, Komponente statt Enabler), ein doppelter Eintrag, ein fehlender oder zu kurzer Grund und jedes weitere Feld sind Fehler der Voreinstellungen und stoppen den Lauf. Ein Eintrag, der nichts freigibt, bleibt ohne Wirkung.
+- Neuer Eintrag nur nach Prüfung des Lehrtexts durch den Eigentümer. Wird der Text später geändert, gilt die Freigabe weiter, der Plan sollte dann erneut gelesen werden.
 
 ## Vor der Aktivierung der Inhalte
 
@@ -134,7 +143,7 @@ Die Voreinstellungen stehen in `scripts/import/kfbm-decisions.json` und sind Vor
 - Dubletten: die neueste Fassung (höchste Version, dann jüngstes Änderungsdatum). Liegen Version und Zeitpunkt weniger als 24 Stunden auseinander, werden beide Kopien übersprungen.
 - Komponentencodes wie das Inventurskript sie ableitet (K6.1, K6.2, K24.1, K24.2, K25.1, K25.2). K10 bis K17 und K19 sind Wahl, K18 ist ausgeschlossen, K20 bis K23 sind integrativ, K24 und K25 sind Pflicht mit Phase (Teil 1 gleich Phase 1, Teil 2 gleich Phase 2).
 - Ein Enabler braucht seinen Text. Fehlt oder scheitert der Text, werden Quizze und Szenario dieses Enablers mit dem Grund `ENABLER_MISSING` übersprungen.
-- Dateien mit Formatfehlern (Parser-Befund `error`), mit Widerspruch zwischen Überschrift und Pfad, und Szenarien mit der Überschrift "Aufgabe" statt "Lösungsszenario" werden übersprungen.
+- Dateien mit Formatfehlern (Parser-Befund `error`), mit Widerspruch zwischen Überschrift und Pfad und Szenarien, deren Aufgabe Text der Lösung wiederholt oder eine Lösungsmarke zeigt (`SOLUTION_MARKER`), werden übersprungen. Ein Szenario mit der Überschrift "Aufgabe" statt "Lösungsszenario" wird gelesen: Der Abschnitt gilt als Lösung (nur Trainer), der Plan führt den Hinweis `TASK_AS_SOLUTION`.
 
 Gründe im Plan: `PARSE_ERROR`, `CODE_MISMATCH`, `DIFFICULTY_MISMATCH`, `KIND_MISMATCH`, `QUESTION_COUNT`, `DUPLICATE_AMBIGUOUS`, `ENABLER_MISSING`, `PATH_ISSUE`, `READ_ERROR`, `PLACEHOLDER`, `NO_HEADING`, `NO_DECISION`, `NO_GROUP`, `KIND_GROUP_MISMATCH`, `SOLUTION_MARKER`.
 
@@ -153,7 +162,7 @@ Ohne Enabler im Katalog stoppt das Skript (`NO_ENABLERS`). Fehlen einzelne Enabl
 ### Schritte
 
 ```
-npm run import:kfbm:learning-fields -- plan "<Pfad>\Übertragung von Mapping aus Dokument in Excel.xlsx" --import-source "<Pfad zu Komponente>" --titles "<Pfad>\Enabler_Quellen.csv" --out kfbm-plan-lf.json
+npm run import:kfbm:learning-fields -- plan "<Pfad>\Übertragung von Mapping aus Dokument in Excel.xlsx" --import-source "<Pfad zu Komponente>" --out kfbm-plan-lf.json
 $env:DB_CONNECTION_STRING = "<Verbindung des Ziels>"
 npm run import:kfbm:learning-fields -- check --plan kfbm-plan-lf.json --target local
 npm run import:kfbm:learning-fields -- run --plan kfbm-plan-lf.json --target local
@@ -161,20 +170,21 @@ npm run import:kfbm:learning-fields -- run --plan kfbm-plan-lf.json --target loc
 ```
 
 - `plan` liest die Tabelle (nur lesend, 60 Sekunden Frist) und die Codes des Inhaltsimports. Die Codes kommen aus den Dateinamen des Quellordners (`--import-source`, es wird kein Dokument geöffnet, dieselbe Auswahl wie im Plan des Inhaltsimports) oder aus dessen Plan (`--import-plan kfbm-plan.json`). Neben dem JSON entsteht eine Zusammenfassung als Markdown (`kfbm-plan-lf.md`). Beide Dateien enthalten nur Codes, Zahlen und Zeilennummern, keinen Zelltext. Der Dateiname `kfbm-plan-lf.json` steht über `kfbm-plan*.json` in der `.gitignore`.
-- `check` vergleicht den Plan in einer schreibgeschützten Transaktion mit der Zieldatenbank. `run` ist ein Probelauf und rollt zurück, mit `--apply` wird übernommen. Optionen wie beim Inhaltsimport: `--confirm-host <Host>` ist Pflicht für einen echten Lauf in der Preview, `--report-out <Datei.md>` schreibt den Bericht. `--update-existing` aktualisiert nur den Titel bestehender Lernfelder, und nur durch einen Titel aus der Titeldatei des Eigentümers (`.json`) oder wenn noch der Platzhalter "Lernfeld N" steht. Vorläufige Titel aus der Quellenliste ersetzen nie einen gesetzten Titel und ein Platzhalter nie einen vorhandenen. Sonst wird nichts überschrieben. Exit-Codes: 0 fertig, 1 Fehler oder abgelehnt, 2 falsche Aufrufe, 3 Konflikte.
+- `check` vergleicht den Plan in einer schreibgeschützten Transaktion mit der Zieldatenbank. `run` ist ein Probelauf und rollt zurück, mit `--apply` wird übernommen. Optionen wie beim Inhaltsimport: `--confirm-host <Host>` ist Pflicht für einen echten Lauf in der Preview, `--report-out <Datei.md>` schreibt den Bericht. `--update-existing` aktualisiert bei bestehenden Lernfeldern nur den Titel und die Stunden (`hours_budget`). Der Titel wird nur durch den amtlichen Titel, einen Titel aus der Titeldatei des Eigentümers (`.json`) oder bei noch stehendem Platzhalter "Lernfeld N" ersetzt. Vorläufige Titel aus der Quellenliste ersetzen nie einen gesetzten Titel und ein Platzhalter nie einen vorhandenen. Die Stunden werden gesetzt, wenn sie fehlen oder vom Zeitrichtwert abweichen, und nie geleert. Schuljahr und Reihenfolge ändert der Lauf nie. Ohne `--update-existing` bleiben bestehende Zeilen unverändert, der Bericht nennt die Abweichungen. Sonst wird nichts überschrieben. Exit-Codes: 0 fertig, 1 Fehler oder abgelehnt, 2 falsche Aufrufe, 3 Konflikte.
 
 ### Was gelesen und geschrieben wird
 
-| Quelle                                                  | Ziel                                                                                                                                                 | Schlüssel für die Idempotenz |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| 13 Lernfelder (Code `LF1` bis `LF13`)                   | `training_catalog_learning_fields` (Schuljahr 1 für LF1 bis LF4, 2 für LF5 bis LF8, 3 für LF9 bis LF13, `order_index` 1 bis 13, `hours_budget` leer) | Katalog und Code             |
-| Zeile der Tabelle (Position mit Buchstabe) und Lernfeld | `training_catalog_content_mappings` (`learning_field_id`, `enabler_id`, der Katalog wird per Trigger abgeleitet)                                     | Lernfeld und Enabler         |
+| Quelle                                                  | Ziel                                                                                                                                                          | Schlüssel für die Idempotenz |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| 13 Lernfelder (Code `LF1` bis `LF13`)                   | `training_catalog_learning_fields` (Schuljahr 1 für LF1 bis LF4, 2 für LF5 bis LF8, 3 für LF9 bis LF13, `order_index` 1 bis 13, `hours_budget` Zeitrichtwert) | Katalog und Code             |
+| Zeile der Tabelle (Position mit Buchstabe) und Lernfeld | `training_catalog_content_mappings` (`learning_field_id`, `enabler_id`, der Katalog wird per Trigger abgeleitet)                                              | Lernfeld und Enabler         |
 
 - Die Tabelle: Kopfzeile mit "Schuljahr 1" bis "Schuljahr 3" (in der Fassung vom 07.08.2026 Zeile 4), Spalte A nennt die Komponente nur in der ersten Zeile ihres Blocks, Spalte B die Position ("a) ..."), die Spalten C bis E die Lernfelder je Schuljahr. Die Nummer der Importkomponente folgt aus dem Paragrafen der Verordnung: Abschnitt A (§ 4 Absatz 2) Nr. 1 bis 9 sind K1 bis K9, Abschnitt B (Absatz 3) Nr. 1 bis 10 sind K10 bis K19, Abschnitt C (Absatz 4) Nr. 1 bis 6 sind K20 bis K25. Der Titel der Komponente wird nicht ausgewertet. Bei geteilten Komponenten (K6, K24, K25) entscheidet der Buchstabe, zu welchem Teil der Enabler gehört (K6.1-a, K6.2-d). Es gilt die Fassung "Übertragung von Mapping aus Dokument in Excel.xlsx" (Stand 07.08.2026), die ältere Datei mit dem Zusatz "-WMC-NB-MB-03" wird nicht gelesen.
 - Angaben wie "LF 2", "LF2,3", "LF 2,3,4", "Lernfeld 3", "LF 5, LF 7", "LF 5 und 7" werden gelesen (Groß und Kleinschreibung, Leerzeichen, Steuerzeichen und Silbentrennung spielen keine Rolle). "alle Lernfelder" bedeutet alle Lernfelder des Schuljahrs der Spalte. "nur betrieblich" und "nur betr./beh." bedeuten, dass die Position nur im Betrieb vermittelt wird: kein Lernfeld, kein Fehler (Hinweis im Plan).
 - Nichts wird geraten. Als übersprungen mit Grund und Zeilennummer (und Spalte) führt der Plan: Komponente ohne Gegenstück im Import (`COMPONENT_NOT_IN_IMPORT`), ausgeschlossene Komponente (`COMPONENT_EXCLUDED`, K18), Buchstabe ohne Enabler im Import (`ENABLER_NOT_IN_IMPORT`), mehrfach vorkommender Buchstabe (`DUPLICATE_LETTER`, beide Zeilen), Zeile ohne Buchstaben (`NO_LETTER`), widersprüchlicher Block (`NUMBER_MISMATCH`, `SECTION_MISMATCH`, `REFERENCE_MISMATCH`, `NUMBER_OUT_OF_RANGE`, `BLOCK_UNKNOWN`), Lernfeld außerhalb 1 bis 13 (`LF_OUT_OF_RANGE`), Lernfeld, das nicht zum Schuljahr der Spalte gehört (`YEAR_MISMATCH`), nicht lesbare Zelle (`UNPARSEABLE_REFERENCE`), Lernfeldangabe ohne Zeilentext (`ORPHAN_REFERENCE`).
 - Zuordnungen gibt es nur zu Enablern. Das Modell erlaubt auch Use Cases (genau eines von beiden), die Zuordnung zu Komponenten gibt es im Modell nicht. Die Use Cases schreibt das Skript des nächsten Abschnitts, die Excel nennt für sie keine eigene Zuordnung (jeder Use Case gehört zu genau einem Enabler).
-- Titel und Stunden: Die Tabelle nennt keine. Als einzige Quelle für Titel dient die Kapitelliste in `Enabler_Quellen.csv` (Kurztitel aus den Buchkapiteln), mit `--titles <Datei>` übernommen und im Plan als vorläufig markiert. Ohne `--titles` lauten die Titel "Lernfeld 1" bis "Lernfeld 13" (vorläufig, die Spalte ist `NOT NULL`). Der Eigentümer kann offizielle Titel als JSON nachreichen (`{"LF1": "..."}`, Datei mit der Endung `.json`) und mit `--update-existing` einspielen. Stunden (`hours_budget`) bleiben leer, bis eine Quelle vorliegt.
+- Titel und Stunden: Die Tabelle nennt keine. Maßgebliche Quelle ist der Rahmenlehrplan für Kaufleute für Büromanagement (Beschluss der KMK vom 27.09.2013 in der Fassung vom 20.03.2025, Teil V Lernfelder). Bezeichnung und Zeitrichtwert der 13 Lernfelder stehen als Daten im Modul `src/lib/content-import/learning-fields/official.ts` und gehen standardmäßig in jeden Plan ein: Titel mit Quelle `official` (nicht vorläufig) und `hours_budget` je Lernfeld. Die Summe ist 880 Stunden, 320 im Schuljahr 1, 280 im Schuljahr 2 und 280 im Schuljahr 3, die Tests prüfen das. Beim Lernfeld 11 steht im PDF "40. Stunden" (Tippfehler mit Punkt), eingetragen sind 40 Stunden, weil nur das zur Jahressumme von 280 Stunden passt. Rangfolge der Titel: Titeldatei des Eigentümers (`--titles <Datei>.json`, `{"LF1": "..."}`), dann der amtliche Titel, dann die Kapitelliste `Enabler_Quellen.csv` (`--titles <Datei>.csv`, Kurztitel, vorläufig) und zuletzt der Platzhalter "Lernfeld N". Weil der amtliche Titel vor der Kapitelliste steht, ist `--titles` mit einer `.csv` nur noch für Pläne ohne die amtlichen Daten von Bedeutung. Die Stunden kommen nur aus dem Modul. Ein bestehendes Lernfeld mit anderem Titel oder anderen Stunden wird ohne `--update-existing` nur gemeldet.
+- Offener Punkt `HOURS_BUDGET` entfällt, sobald alle 13 Lernfelder Stunden haben. Die 13 Einzel-PDF der Lernfelder sind als zweite Gegenprobe nicht ausgewertet. Die Änderung braucht keine Migration (die Spalte `hours_budget` gibt es seit `20261024000100`) und hat keine Wirkung auf Production.
 - Konflikte (ein Lernfeld besteht mit anderem Schuljahr, eine Stelle der Reihenfolge ist von einem anderen Code belegt) stoppen einen echten Lauf vor dem ersten Schreiben (Exit 3). Bestehende Zuordnungen, die der Plan nicht nennt, bleiben unverändert (der Bericht zählt sie).
 
 ### Apply in die Preview, Rückbau
@@ -297,3 +307,84 @@ rollback; -- zur Kontrolle der Zahlen, dann mit commit wiederholen
 - `tests/scripts/import/kfbm-apply.test.mjs` (`npm run test:scripts`): die Befehle, Ablehnung von Production und fremden Hosts vor der ersten Verbindung, keine Geheimnisse in der Ausgabe.
 - `tests/unit/content-import/learning-fields` (Tabelle lesen, Lernfeldangaben, Plan, Engine mit Speicherdatenbank, Transaktion mit aufzeichnender Verbindung, Aufrufe) und `tests/scripts/import/kfbm-learning-fields.test.mjs` (`npm run test:scripts`: Befehle, Ablehnung von Production und fremden Hosts vor der ersten Verbindung, keine Geheimnisse in der Ausgabe, kein `.env`, kein Netzwerk).
 - Der Rauchtest gegen eine echte Datenbank steht im Bericht des Pull Requests.
+
+## Quiz-JSON als Quelle (Schema 1.0)
+
+Stand: 27.10.2026. Die Quizze liegen neben den Word-Dateien auch als JSON vor (zwei Dateien, Schema 1.0): eine mit den Enabler-Quizzen in drei Stufen (Kopf mit `schema_version`, `quiz_count`, `difficulty_levels`) und eine mit den Global-Quizzen (je Komponente 20 Fragen). Das Skript nimmt sie als zusätzliche oder alleinige Quelle für die Quizze. Der Code liegt in `src/lib/content-import/quiz-json/` (reine Funktionen, kein Dateizugriff im Kern). Dieses Paket enthält keine Migration und hat keine Wirkung auf Production.
+
+**Die JSON-Dateien werden nur gelesen.** Sie gehören nicht ins Repository und nicht in Tickets, sie enthalten wie die Word-Dateien die Lösungen. Die Tests arbeiten mit erfundenen Beispielen im selben Schema.
+
+Als Datei der Enabler-Quizze gelten `alle_quizze 1.json` und die korrigierte Fassung `alle_quizze 1.korrigiert.json` (Quiz K14-a repariert, gleiches Schema). Beide lassen sich mit `--quizzes-json` einlesen, für einen Lauf gilt die korrigierte Fassung, sobald der Eigentümer sie freigibt. Die Global-Quizze stehen in `global_quizze 1.json`.
+
+### Befehle
+
+```
+npm run import:kfbm:apply -- check-quizzes --quizzes-json "<alle_quizze.json>" --global-quizzes-json "<global_quizze.json>" --report-out quiz-json-bericht.md
+npm run import:kfbm:apply -- plan --quizzes-json "<alle_quizze.json>" --global-quizzes-json "<global_quizze.json>" --out kfbm-plan.json
+npm run import:kfbm:apply -- plan "<Pfad zu Komponente>" --quizzes-json "<alle_quizze.json>" --global-quizzes-json "<global_quizze.json>" --out kfbm-plan.json
+```
+
+- `check-quizzes` ist nur lesend und nennt Zahlen, Komponenten, Kennungen und Codes, nie einen Text der Dateien: Zählung je Komponente und Stufe, Fragen je Satz (ein Satz ist ein Quiz in einer Stufe) und alle Befunde mit der Kennung des Quizzes, der Stufe und der Fragenummer. Exit-Code 0 ohne Fehler (Hinweise sind erlaubt), 1 bei mindestens einem Fehler, 2 bei einer Datei, die nicht gelesen werden kann. Der Bericht (`--report-out`) muss auf `.md` enden, und eine Ausgabedatei darf nie eine der JSON-Eingaben sein.
+- `plan`, `check` und `run` nehmen dieselben Optionen. Ohne Quellordner genügt eine JSON-Datei. Mit Quellordner kommen die Quizze aus beiden Quellen, `--components` begrenzt auch die JSON-Quizze. `--plan` und die JSON-Optionen schließen sich aus (ein Plan enthält seinen Inhalt schon).
+- Die Dateien müssen auf `.json` enden und dürfen höchstens 32 MB groß sein. Die Meldungen nennen die Datei und eine Position, nie den Inhalt.
+- Alles Übrige gilt wie bisher: Probelauf ist der Standard, Ziele nur `local` und `preview`, `--apply` und bei der Preview `--confirm-host`, Antworten und Erklärungen nur in ihren Spalten, keine Ausgabe von Inhalten.
+
+### Wie dieselben Zeilen getroffen werden
+
+Jeder Satz (Quiz und Stufe) und jedes Global-Quiz wird für den Planer zu einer Datei im Schema des Quellbaums, abgeleitet aus `id`, `curriculum_component` und `training_section`. Die Funktion `pathInfo`, die auch die Word-Dateien einordnet, bildet daraus Schlüssel, Enabler und Komponente. Die Pläne aus Word und aus JSON benennen deshalb dieselben Zeilen, ein Lauf aus der einen Quelle nach einem Lauf aus der anderen legt nichts doppelt an (getestet mit der Speicherdatenbank der Engine und mit einer Wegwerf-Datenbank).
+
+| JSON                                        | Plan                                         |
+| ------------------------------------------- | -------------------------------------------- |
+| Quiz `10a`, Komponente `10`, Stufe `leicht`  | Quiz `K10-a-low`, Schlüssel `quiz:10a:low`   |
+| Quiz `6a`, Komponente `06.1`, Stufe `mittel` | Quiz `K6.1-a-medium`, Enabler `K6.1-a`       |
+| Quiz `24_1a`, Komponente `24.1`, Stufe `schwer` | Quiz `K24.1-a-high`                       |
+| Global-Quiz `06.2`                          | Quiz `K6.2-global`, Schlüssel `global-quiz:06.2` |
+
+Die Stufen `leicht`, `mittel`, `schwer` entsprechen `Low`, `Medium`, `High`. Die Kennung eines Quizzes ohne Teilnummer (`6a`) erhält die Teilnummer der Komponente (`06.1`), eine Kennung mit Teilnummer (`24_1a`) muss zur Komponente passen, sonst ist der Eintrag ein Fehler.
+
+### Zusammenspiel mit dem Word-Baum und der Datenbank
+
+- **Der Word-Baum gilt.** Hat ein Quiz der JSON denselben Schlüssel wie eine Word-Datei, bleibt die Word-Datei und das JSON-Quiz steht im Plan unter "Ältere Kopien". Nur mit `--prefer-json-quizzes` (braucht den Quellordner und eine JSON-Datei) ersetzt das JSON-Quiz die Word-Quiz-Dateien desselben Schlüssels, die dann unter "Ältere Kopien" stehen, und auch nur, wenn der JSON-Satz fehlerfrei ist. Eine Word-Datei, die der Planer nicht verwenden kann (Formatfehler, Platzhalter, nicht lesbar, Pfad passt nicht), hält ihren Schlüssel nicht besetzt: Das JSON-Quiz füllt die Lücke und die Word-Datei steht unter "Ältere Kopien" (die Konsole nennt die Zahl). Sonst bliebe das fehlerhafte Word-Quiz und das gültige JSON-Quiz ginge verloren.
+- **Enabler:** Das Word-Dokument eines Enablers hat immer Vorrang. Fehlt es, legt der Plan den Enabler aus der Überschrift des JSON-Titels an (`10a) Titel`), ohne Lehrtext. Passt der Titel nicht zu Kennung und Komponente, entsteht kein Enabler und die Quizze stehen mit `ENABLER_MISSING` unter den übersprungenen, der Enabler muss dann aus dem Word-Baum kommen.
+- **Komponenten:** Kennt der Word-Baum die Komponente, kommen Titel, Paragraf und Gruppe (und damit die Phase) immer von dort, die JSON ändert sie nie. Nur eine Komponente, die allein die JSON kennt, nimmt Titel, Paragraf und Gruppe aus `curriculum_component` und `training_section`. Art und Phase kommen aus `kfbm-decisions.json` wie bisher. Zwei Quizze derselben Komponente mit verschiedenem Titel oder Abschnitt sind ein Fehler (`COMPONENT_CONFLICT`).
+- **Datenbank:** Bestehende Zeilen bleiben unverändert, auch wenn die JSON andere Texte nennt (der Bericht führt die Abweichungen). Nur `--update-existing` ändert die benannten Spalten (Fragen- und Optionstexte, Erklärung, Titel). Eine andere Fragenzahl als in der Datenbank ist wie bisher ein Konflikt (Exit-Code 3). Ein Enabler, der schon mit Lehrtext besteht, verliert ihn nie, ein fehlender Wert im Plan löscht nichts.
+
+### Fehlende Fragen nachliefern (`--extend-quizzes`)
+
+Sechs Quizze (2g, 7b, 7d, 8a, 9d, 9e, je drei Stufen) haben in der Quelle 8 statt 10 Fragen und werden zunächst so importiert (nur ein Hinweis `QUESTION_COUNT`). Werden die fehlenden Fragen später nachgeliefert, meldet die Engine bei einem Quiz mit anderer Fragenzahl weiter einen Konflikt (Exit-Code 3). Mit dem Schalter `--extend-quizzes` (`check` und `run`, Standard aus) ergänzt der Lauf stattdessen die fehlenden Fragen mit ihren Optionen, wenn:
+
+- die Datenbank weniger Fragen hat als der Plan und
+- jede vorhandene Frage im Plan mit demselben Text vorkommt (Leerraum wird nicht verglichen) und in derselben Reihenfolge, und die Optionen der vorhandenen Fragen die Gestalt des Plans haben (gleiche Zahl, Reihenfolge 1 bis n).
+
+Sonst bleibt es ein Konflikt mit Begründung (andere Texte, andere Reihenfolge, andere Optionen, mehr Fragen in der Datenbank). Die Zuordnung läuft über den Fragentext und die Reihenfolge, die Nummer im Plan bestimmt die Stelle (`order_index`), auch in der Mitte.
+
+- Vorhandene Fragen, Optionen, richtige Antworten und Erklärungen werden nicht geändert und nie gelöscht, die Fragen-ids bleiben. Antworten von Azubis hängen an der Fragen-id und bleiben gültig (an einer Wegwerf-Datenbank mit einer vorhandenen Abgabe geprüft).
+- **Nur der Positionswert `order_index` vorhandener Fragen verschiebt sich**, wo eine neue Frage davor liegt (die Spalte ist eine ganze Zahl ohne Eindeutigkeit, anders ist eine Frage in der Mitte nicht an die richtige Stelle zu bringen). Das ist die einzige Änderung an vorhandenen Zeilen, der Bericht nennt sie. Der Eigentümer hat diese Verschiebung am 27.10.2026 ausdrücklich akzeptiert.
+- Der Probelauf und die Prüfung zeigen die Zählung als "n Fragen ergänzt" je Quiz (mit der Zahl der verschobenen Positionen), danach schreibt `--apply` genau das. Ein zweiter Lauf ergänzt nichts mehr.
+- Neue Fragen laufen durch denselben Lösungsschutz wie alle Zeilen. Neue Fragen sind noch nicht im HAI-Index, sie kommen erst mit einer späteren Neuindexierung hinein.
+
+### Strenge Prüfung (nichts wird geraten)
+
+Ein Fehler überspringt die Stufe (oder bei Fehlern im Kopf die ganze Datei) mit Kennung und Grund, ohne einen Text der Datei zu nennen. Ein Hinweis kommt in die Hinweise des Plans, die Stufe bleibt im Plan.
+
+| Code                                              | Art     | Bedeutung                                                                                                          |
+| ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `SCHEMA_VERSION`, `QUIZ_COUNT`, `LEVELS_HEADER`, `NOT_OBJECT`, `QUIZZES_MISSING` | Fehler, die ganze Datei wird nicht gelesen | Kopf passt nicht (andere Fassung, abgeschnittene Datei) |
+| `UNKNOWN_FIELD`, `UNKNOWN_LEVEL`                  | Fehler  | Ein Feld oder eine Stufe, die das Schema 1.0 nicht kennt (im Kopf, im Quiz, in der Stufe, in Frage und Option). Nur Feldnamen werden genannt. |
+| `TOO_MANY_QUIZZES`, `TOO_MANY_QUESTIONS`, `TEXT_TOO_LONG`, `OPTION_TOO_LONG`, `RATIONALE_TOO_LONG` | Fehler | Obergrenzen: 1000 Quizze, 100 Fragen je Satz, 50.000 Fragen je Datei, Frage 2000, Option 1000, Erklärung 4000 Zeichen |
+| `OPTION_COUNT`, `OPTION_ORDER`, `OPTION_EMPTY`, `OPTION_DUPLICATE`, `OPTION_INVALID` | Fehler | Genau vier Optionen A bis D in dieser Reihenfolge, keine leere, keine doppelte (ohne Rücksicht auf Groß und Kleinschreibung) |
+| `ANSWER_MISSING`, `ANSWER_INVALID`                | Fehler  | `correct_answer` fehlt oder ist keine der Optionen A bis D                                                         |
+| `TEXT_EMPTY`, `RATIONALE_MISSING`, `TEXT_CONTROL`, `QUESTION_DUPLICATE`, `QUESTION_NOT_OBJECT` | Fehler | Leere Frage oder Erklärung, Steuerzeichen (ein NUL bräche das Einfügen), dieselbe Frage zweimal im Satz |
+| `ID_INVALID`, `ID_DUPLICATE`, `KEY_DUPLICATE`, `NUMBER_SEQUENCE` | Fehler | Kennung ohne Form (`10a`, `24_1a`, Global `06.1`), Kennung oder Enabler doppelt (keiner der Einträge wird gelesen), Fragenummern nicht 1 bis n |
+| `COMPONENT_INVALID`, `COMPONENT_MISMATCH`, `SECTION_INVALID`, `PATH_MAPPING`, `COMPONENT_CONFLICT`, `COMPONENT_TITLE` | Fehler | Komponente, Abschnitt oder Kennung passen nicht zusammen oder ergeben keinen gültigen Schlüssel |
+| `LEVEL_MISSING`, `LABEL_MISMATCH`, `NO_QUESTIONS`, `SOURCE_TYPE`, `SOURCE_WARNINGS_INVALID`, `QUIZ_NOT_OBJECT` | Fehler | Stufe fehlt oder falsch beschriftet, keine Fragen, ein Quellfeld ist kein Text, Eintrag ist kein Objekt |
+| `QUESTION_COUNT`                                  | Hinweis bei Enabler-Quizzen (nicht 10 Fragen), Fehler bei Global-Quizzen (nicht 20) | Das Word-Verfahren kennt für Enabler-Quizze keine feste Zahl, deshalb nur ein Hinweis. Nachlieferung siehe `--extend-quizzes`. |
+| `SOURCE_WARNING`                                  | Hinweis | Die Quelle markiert die Frage (zum Beispiel redaktionell ergänzte Optionen). Laut Eigentümer sind die Fragen fachlich geprüft, der Hinweis blockiert den Import nicht und wird nur gezählt. |
+| `TITLE_REPAIRED`                                  | Hinweis | Vor dem Code im Titel stehen ein oder zwei fremde Zeichen (zum Beispiel ein Buchstabe vor `6g)`). Weil die Kennung des Quizzes den Code bestätigt, wird die Überschrift ohne die Zeichen gelesen und der Enabler angelegt. Passt der Code nicht zur Kennung, bleibt es bei `TITLE_HEADING`. |
+| `TITLE_HEADING`, `CATEGORY_MISMATCH`, `SOURCE_FILES`, `SOURCE_PATH_MISMATCH`, `SOURCE_NULL` | Hinweis | Der Titel nennt keine Überschrift des Enablers, `category` weicht ab, `source_files` fehlt oder nennt einen anderen Schlüssel, ein Quellfeld ist `null` |
+
+Der Lösungsschutz der Planung gilt unverändert: Eine Lösungsmarke in einem sichtbaren Feld (`SOLUTION_MARKER`) überspringt das Quiz, Erklärung und richtige Antwort stehen nur in `options.explanation` und `options.is_correct`.
+
+### Zählung der echten Dateien (Stand 27.10.2026)
+
+`check-quizzes` zählt in `alle_quizze 1.json` 226 Quizze mal drei Stufen (678 Sätze, 6744 Fragen, davon 18 Sätze mit 8 statt 10 Fragen) und in `global_quizze 1.json` 27 Quizze mit je 20 Fragen. Fehler gibt es keine, die Hinweise sind unter den Befunden aufgeführt. Der Plan aus beiden Dateien ohne Word-Baum ergibt 27 Komponenten, 226 Enabler (ohne Lehrtext), 675 Enabler-Quizze und 27 Global-Quizze. Übersprungen werden mit `alle_quizze 1.json` nur die drei Stufen von K14-a (Lösungsmarke im sichtbaren Text), mit `alle_quizze 1.korrigiert.json` keine. Der Titel des Enablers 6.2g trägt ein fremdes Zeichen vor dem Code und wird mit dem Hinweis `TITLE_REPAIRED` gelesen. Die Einzelheiten stehen im Bericht des Pull Requests.

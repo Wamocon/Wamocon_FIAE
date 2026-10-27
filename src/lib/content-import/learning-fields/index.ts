@@ -7,6 +7,7 @@ export * from './index-source';
 export * from './job';
 export * from './mapping-sheet';
 export * from './model';
+export * from './official';
 export * from './plan';
 export * from './refs';
 export * from './report';

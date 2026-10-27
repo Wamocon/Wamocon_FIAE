@@ -250,7 +250,7 @@ test(
 );
 
 test(
-  'plan: titles from the source list are marked provisional, titles of the owner are not',
+  'plan: the official title wins over the source list, a titles file of the owner wins over both',
   needsZip,
   async () => {
     const dir = folder();
@@ -278,8 +278,15 @@ test(
         [
           fromCsv.learningFields[0].titleSource,
           fromCsv.learningFields[0].titleProvisional,
+          fromCsv.learningFields[0].title,
+          fromCsv.learningFields[0].hoursBudget,
         ],
-        ['csv', true]
+        [
+          'official',
+          false,
+          'Die eigene Rolle im Betrieb mitgestalten und den Betrieb präsentieren',
+          40,
+        ]
       );
 
       const json = path.join(dir, 'titel.json');
@@ -311,6 +318,10 @@ test(
         fromJson.learningFields.every(
           f => f.titleSource === 'json' && !f.titleProvisional
         )
+      );
+      assert.equal(
+        fromJson.learningFields.reduce((n, f) => n + f.hoursBudget, 0),
+        880
       );
 
       const bad = path.join(dir, 'titel.txt');

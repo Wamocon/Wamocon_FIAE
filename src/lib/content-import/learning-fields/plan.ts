@@ -20,6 +20,7 @@ import {
 } from './model';
 import type { SchoolYear } from './model';
 import type { ParsedMappingSheet, SheetPosition } from './mapping-sheet';
+import { officialLearningField } from './official';
 import type { TitleSet } from './titles';
 import { MAX_TITLE_LENGTH } from './titles';
 import type {
@@ -32,6 +33,7 @@ import type {
   PlanNote,
   PlanSkip,
   SkipCode,
+  TitleSource,
   YearColumn,
 } from './types';
 
@@ -91,28 +93,54 @@ const BLOCK_REASON: Record<string, string> = {
 
 export interface BuildOptions {
   now?: Date;
-  /** Titles from the source list or from the owner. Without them: placeholders. */
+  /**
+   * Titles from the source list or from the owner. A titles file of the owner
+   * (json) wins over the official title, the source list (csv) does not.
+   */
   titles?: TitleSet | null;
+  /**
+   * Take the official titles and time guidelines of the framework curriculum
+   * (official.ts). Default true. false = titles from the titles only (or the
+   * placeholder) and no hours.
+   */
+  official?: boolean;
   /** Name of the sheet that was read (only for the record). */
   sheetName?: string;
 }
 
 const COMPONENT_CODE = /^K(\d{1,2})(?:\.(\d))?$/;
 
-function learningFieldList(titles: TitleSet | null | undefined) {
+function learningFieldList(
+  titles: TitleSet | null | undefined,
+  useOfficial: boolean
+) {
   const fields: PlanLearningField[] = [];
   const warnings: string[] = [...(titles?.warnings ?? [])];
   for (let number = 1; number <= LEARNING_FIELD_COUNT; number += 1) {
-    const title = titles?.titles[number];
-    const source = title ? titles?.source : undefined;
+    const official = useOfficial ? officialLearningField(number) : undefined;
+    const given = titles?.titles[number];
+    // Order: the titles file of the owner, the official title, the source list,
+    // the placeholder.
+    let title = `Lernfeld ${number}`;
+    let source: TitleSource = 'placeholder';
+    if (given && titles?.source === 'json') {
+      title = given;
+      source = 'json';
+    } else if (official) {
+      title = official.title;
+      source = 'official';
+    } else if (given && titles) {
+      title = given;
+      source = titles.source;
+    }
     fields.push({
       code: learningFieldCode(number),
       number,
-      title: title ?? `Lernfeld ${number}`,
-      titleSource: source ?? 'placeholder',
-      titleProvisional: source !== 'json',
+      title,
+      titleSource: source,
+      titleProvisional: source !== 'json' && source !== 'official',
       trainingYear: learningFieldYear(number) as SchoolYear,
-      hoursBudget: null,
+      hoursBudget: official ? official.hours : null,
       orderIndex: number,
     });
     const named = titles?.years[number];
@@ -149,7 +177,10 @@ export function buildLearningFieldPlan(
   index: ImportIndex,
   options: BuildOptions = {}
 ): LearningFieldPlan {
-  const { fields, warnings } = learningFieldList(options.titles);
+  const { fields, warnings } = learningFieldList(
+    options.titles,
+    options.official !== false
+  );
 
   const componentsByNumber = new Map<
     number,
@@ -450,7 +481,8 @@ export function buildLearningFieldPlan(
     },
   };
 
-  const open: OpenPoint[] = ['HOURS_BUDGET'];
+  const open: OpenPoint[] = [];
+  if (fields.some(f => f.hoursBudget === null)) open.push('HOURS_BUDGET');
   if (fields.some(f => f.titleProvisional)) open.push('TITLES_PROVISIONAL');
   if (
     sheet.positions.some(p =>
@@ -540,8 +572,25 @@ export function validateLearningFieldPlan(plan: unknown): string[] {
         `${field.code}: the title must be a text of 1 to ${MAX_TITLE_LENGTH} characters.`
       );
     }
-    if (!['csv', 'json', 'placeholder'].includes(field.titleSource)) {
+    if (
+      !['official', 'csv', 'json', 'placeholder'].includes(field.titleSource)
+    ) {
       problems.push(`${field.code}: the title source is not known.`);
+    } else if (
+      field.titleSource === 'official' &&
+      officialLearningField(number)?.title !== field.title
+    ) {
+      problems.push(
+        `${field.code}: the title is marked official but is not the official title.`
+      );
+    }
+    if (
+      field.titleSource === 'official' &&
+      field.hoursBudget !== officialLearningField(number)?.hours
+    ) {
+      problems.push(
+        `${field.code}: the hours of an official learning field must be the official time guideline.`
+      );
     }
     if (
       field.hoursBudget !== null &&
@@ -607,9 +656,9 @@ export function validateLearningFieldPlan(plan: unknown): string[] {
 
 const OPEN_TEXT: Record<OpenPoint, string> = {
   HOURS_BUDGET:
-    'Stunden je Lernfeld: Keine Quelle in den Dateien, die Spalte bleibt leer.',
+    'Stunden je Lernfeld: Für mindestens ein Lernfeld ist kein Zeitrichtwert bekannt, die Spalte bleibt dort leer.',
   TITLES_PROVISIONAL:
-    'Titel der Lernfelder sind vorläufig (Platzhalter oder Kurztitel aus der Quellenliste), die offiziellen Titel nennt der Eigentümer in einer Titeldatei.',
+    'Titel von Lernfeldern sind vorläufig (Platzhalter oder Kurztitel aus der Quellenliste), die offiziellen Titel stehen im Rahmenlehrplan oder in einer Titeldatei des Eigentümers.',
   ALL_LEARNING_FIELDS:
     '"alle Lernfelder" wird als alle Lernfelder des Schuljahrs der Spalte gelesen.',
   USE_CASES:
@@ -619,6 +668,7 @@ const OPEN_TEXT: Record<OpenPoint, string> = {
 };
 
 const TITLE_SOURCE_TEXT = {
+  official: 'Rahmenlehrplan (amtlich)',
   placeholder: 'Platzhalter (vorläufig)',
   csv: 'Quellenliste (vorläufig)',
   json: 'Titeldatei des Eigentümers',
@@ -676,6 +726,17 @@ export function renderLearningFieldSummary(
     );
   }
   out.push('');
+  const hours = [1, 2, 3].map(year =>
+    plan.learningFields
+      .filter(f => f.trainingYear === year)
+      .reduce((sum, f) => sum + (f.hoursBudget ?? 0), 0)
+  );
+  if (plan.learningFields.some(f => f.hoursBudget !== null)) {
+    out.push(
+      `Summe der Zeitrichtwerte: ${hours[0] + hours[1] + hours[2]} Stunden (Schuljahr 1: ${hours[0]}, Schuljahr 2: ${hours[1]}, Schuljahr 3: ${hours[2]}).`
+    );
+    out.push('');
+  }
   if (plan.skipped.length > 0) {
     out.push('## Übersprungene Einträge');
     out.push('');
