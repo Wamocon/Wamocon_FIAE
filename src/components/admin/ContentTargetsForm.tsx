@@ -36,7 +36,8 @@ export function ContentTargetsForm({ catalog, onSaved, onClose }: Props) {
     const initial = {} as Record<ContentMetricId, string>;
     for (const id of CONTENT_METRICS) {
       const target = catalog.metrics.find(m => m.id === id)?.target;
-      initial[id] = target === null || target === undefined ? '' : String(target);
+      initial[id] =
+        target === null || target === undefined ? '' : String(target);
     }
     return initial;
   });
@@ -142,7 +143,7 @@ export function ContentTargetsForm({ catalog, onSaved, onClose }: Props) {
                 }}
                 aria-invalid={hasError}
                 aria-describedby={`${formId}-hint${hasError ? ` ${inputId}-error` : ''}`}
-                className="bg-background border-border text-foreground focus:ring-accent aria-[invalid=true]:border-red-600 w-full rounded-xl border px-3 py-2 tabular-nums focus:outline-none focus:ring-2"
+                className="bg-background border-border text-foreground focus:ring-accent w-full rounded-xl border px-3 py-2 tabular-nums focus:ring-2 focus:outline-none aria-[invalid=true]:border-red-600"
               />
               {hasError && (
                 <p
@@ -174,7 +175,7 @@ export function ContentTargetsForm({ catalog, onSaved, onClose }: Props) {
         <button
           type="submit"
           disabled={saving}
-          className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-5 py-2 font-medium transition-colors disabled:opacity-50"
+          className="rounded-xl bg-red-700 px-5 py-2 font-medium text-white transition-colors hover:bg-red-800 disabled:opacity-50"
         >
           {saving ? t('contentStats.form.saving') : t('contentStats.form.save')}
         </button>

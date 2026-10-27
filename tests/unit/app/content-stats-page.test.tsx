@@ -39,9 +39,7 @@ describe('content statistics page', () => {
       auth.profile = { role };
       renderPage();
       expect(screen.queryByText('Statistik')).toBeNull();
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Zugriff verweigert'
-      );
+      expect(screen.getByRole('alert')).toHaveTextContent('Zugriff verweigert');
     }
   );
 

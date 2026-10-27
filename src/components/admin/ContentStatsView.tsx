@@ -181,7 +181,7 @@ function CatalogCard({
           <div className="flex flex-wrap items-center gap-2">
             <h2
               id={titleId}
-              className="text-foreground min-w-0 break-words text-xl font-bold"
+              className="text-foreground min-w-0 text-xl font-bold break-words"
             >
               {catalog.title}
             </h2>
@@ -278,9 +278,7 @@ export function ContentStatsView() {
       setData((await res.json()) as ContentStatsResponse);
       setError(null);
     } catch (e: unknown) {
-      setError(
-        e instanceof Error ? e.message : t('contentStats.loadFailed')
-      );
+      setError(e instanceof Error ? e.message : t('contentStats.loadFailed'));
     } finally {
       setLoading(false);
     }

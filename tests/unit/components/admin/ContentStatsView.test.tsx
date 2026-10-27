@@ -154,7 +154,9 @@ describe('ContentStatsView: platform admin', () => {
     expect(within(useCases).getByText('+5')).toBeInTheDocument();
 
     const components = item('Kaufleute', 'Komponenten');
-    expect(within(components).getByText('kein Soll', { selector: 'span' })).toBeInTheDocument();
+    expect(
+      within(components).getByText('kein Soll', { selector: 'span' })
+    ).toBeInTheDocument();
     expect(within(components).queryByRole('progressbar')).toBeNull();
 
     expect(within(card('Kaufleute')).getByText('4.000')).toBeInTheDocument();
@@ -196,7 +198,9 @@ describe('ContentStatsView: platform admin', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aktualisieren' }));
     await waitFor(() => expect(authFetch).toHaveBeenCalledTimes(2));
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Aktualisieren' })).toBeEnabled()
+      expect(
+        screen.getByRole('button', { name: 'Aktualisieren' })
+      ).toBeEnabled()
     );
   });
 });
