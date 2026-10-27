@@ -15,6 +15,14 @@ import { supabase } from '@/lib/supabase';
 import { prefetch } from '@/lib/prefetch';
 import { isAdminRole, isTrainerLevelRole } from '@/lib/auth/roles';
 import {
+  FALLBACK_SIGN_IN_TIMEOUT_MS,
+  POST_SIGN_IN_TIMEOUT_MS,
+  SDK_SIGN_IN_TIMEOUT_MS,
+  SESSION_READ_TIMEOUT_MS,
+  isSignInTimeout,
+  withTimeout,
+} from '@/lib/auth/sign-in-timeout';
+import {
   DB_SCHEMA,
   IS_PREVIEW_SCHEMA,
   PREVIEW_ADMIN_BLOCKED_MESSAGE,
@@ -634,49 +642,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let userEmail: string | null = null;
     let signedInUser: { app_metadata?: unknown } | null = null;
 
-    const sdkResult = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (sdkResult.error) {
+    // The client can wait forever for its auth lock, then this call neither
+    // answers nor fails. After the limit the direct request below is tried.
+    let sdkResult: Awaited<
+      ReturnType<typeof supabase.auth.signInWithPassword>
+    > | null = null;
+    try {
+      sdkResult = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        SDK_SIGN_IN_TIMEOUT_MS
+      );
+    } catch (e: unknown) {
+      if (!isSignInTimeout(e)) {
+        setLoading(false);
+        throw e;
+      }
+    }
+    if (!sdkResult || sdkResult.error) {
       try {
         const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/token?grant_type=password`;
         const apikey = getSupabasePublicKey() as string;
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', apikey },
-          body: JSON.stringify({ email, password }),
-        });
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '');
-          setLoading(false);
-          if (
-            resp.status === 400 &&
-            /email/i.test(text) &&
-            /confirm/i.test(text)
-          ) {
-            throw new Error('E-Mail ist noch nicht bestätigt.');
+        const controller = new AbortController();
+        const directSignIn = async () => {
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey },
+            body: JSON.stringify({ email, password }),
+            signal: controller.signal,
+          });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            if (
+              resp.status === 400 &&
+              /email/i.test(text) &&
+              /confirm/i.test(text)
+            ) {
+              throw new Error('E-Mail ist noch nicht bestätigt.');
+            }
+            if (resp.status === 400)
+              throw new Error('E-Mail oder Passwort ist falsch.');
+            throw new Error('Anmeldung fehlgeschlagen.');
           }
-          if (resp.status === 400)
-            throw new Error('E-Mail oder Passwort ist falsch.');
-          throw new Error('Anmeldung fehlgeschlagen.');
-        }
-        const data = await resp.json();
-        if (!data?.access_token || !data?.refresh_token) {
-          setLoading(false);
-          throw new Error('Unerwartete Antwort vom Auth-Server.');
-        }
-        const { data: setRes, error: setErr } = await supabase.auth.setSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-        });
-        if (setErr || !setRes.session?.user) {
-          setLoading(false);
-          throw new Error(setErr?.message || 'Anmeldung fehlgeschlagen.');
-        }
-        userId = setRes.session.user.id;
-        userEmail = setRes.session.user.email || email;
-        signedInUser = setRes.session.user;
+          const data = await resp.json();
+          if (!data?.access_token || !data?.refresh_token) {
+            throw new Error('Unerwartete Antwort vom Auth-Server.');
+          }
+          const { data: setRes, error: setErr } =
+            await supabase.auth.setSession({
+              access_token: data.access_token,
+              refresh_token: data.refresh_token,
+            });
+          if (setErr || !setRes.session?.user) {
+            throw new Error(setErr?.message || 'Anmeldung fehlgeschlagen.');
+          }
+          return setRes.session.user;
+        };
+        // Same limit for the request and setSession (which needs the same lock)
+        const directUser = await withTimeout(
+          directSignIn(),
+          FALLBACK_SIGN_IN_TIMEOUT_MS,
+          () => controller.abort()
+        );
+        userId = directUser.id;
+        userEmail = directUser.email || email;
+        signedInUser = directUser;
       } catch (e: unknown) {
         setLoading(false);
         throw e instanceof Error ? e : new Error('Anmeldung fehlgeschlagen.');
@@ -702,13 +731,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u);
       localStorage.setItem(CACHE_KEYS.LOGIN_AT, Date.now().toString());
 
-      const { data: sessionRes } = await supabase.auth.getSession();
-      if (sessionRes.session?.access_token) {
-        syncProfileBackground(sessionRes.session.access_token, sessionRes.session.expires_at);
+      // The calls below need the same auth lock as the sign in itself, so a
+      // hang here is bounded too: the form never spins without end.
+      try {
+        const { data: sessionRes } = await withTimeout(
+          supabase.auth.getSession(),
+          SESSION_READ_TIMEOUT_MS
+        );
+        if (sessionRes.session?.access_token) {
+          syncProfileBackground(sessionRes.session.access_token, sessionRes.session.expires_at);
+        }
+      } catch (e: unknown) {
+        // Only the background sync of the profile is skipped when it times out
+        if (!isSignInTimeout(e)) {
+          setLoading(false);
+          throw e;
+        }
       }
 
-      await waitForProfile(userId);
-      const loaded = await loadProfile(userId, userEmail || '');
+      const signedInId = userId;
+      let loaded: Profile | null;
+      try {
+        loaded = await withTimeout(
+          (async () => {
+            await waitForProfile(signedInId);
+            return loadProfile(signedInId, userEmail || '');
+          })(),
+          POST_SIGN_IN_TIMEOUT_MS
+        );
+      } catch (e: unknown) {
+        setLoading(false);
+        if (isSignInTimeout(e)) {
+          // No half signed in session behind a message that says the sign in
+          // failed (best effort and bounded: the call can hang as well)
+          void withTimeout(
+            supabase.auth.signOut({ scope: 'local' }),
+            SESSION_READ_TIMEOUT_MS
+          ).catch(() => undefined);
+          setUser(null);
+          setProfile(null);
+          clearCachedAuth();
+        }
+        throw e;
+      }
 
       // 0. No readable profile: the row is missing, or hidden by row level
       // security (a profile without an organization cannot read itself).

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { isTrainerLevelRole } from '@/lib/auth/roles';
+import { isSignInTimeout } from '@/lib/auth/sign-in-timeout';
 import { authFetch } from '@/lib/authFetch';
 import { writePreferredCatalog } from '@/lib/catalog/selection';
 import {
@@ -144,7 +145,12 @@ export default function LoginForm({ catalogCode }: { catalogCode?: string }) {
       }
     } catch (err: any) {
       holdRedirect.current = false;
-      setError(err?.message || t('auth.loginFailed'));
+      // A sign in that did not answer in time has its own, translated text
+      setError(
+        isSignInTimeout(err)
+          ? t('auth.signInTimeout')
+          : err?.message || t('auth.loginFailed')
+      );
     } finally {
       setIsLoading(false);
     }
