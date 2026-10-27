@@ -4,13 +4,13 @@
 // this module with the in-memory versions.
 
 import db from '@/db';
-import { PgUploadRepo } from '@/lib/content-upload/repo-pg';
-import type { UploadRepo } from '@/lib/content-upload/repo';
-import type { UploadDeps } from '@/lib/content-upload/result';
+import { PgUploadRepo } from '@/lib/content-upload/staging/repo-pg';
+import type { UploadRepo } from '@/lib/content-upload/staging/repo';
+import type { UploadDeps } from '@/lib/content-upload/staging/result';
 import {
   createUploadStorage,
   type UploadStorage,
-} from '@/lib/content-upload/storage';
+} from '@/lib/content-upload/staging/storage';
 
 let repo: UploadRepo | undefined;
 let storage: UploadStorage | undefined;

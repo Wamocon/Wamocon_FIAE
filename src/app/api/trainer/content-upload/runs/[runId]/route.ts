@@ -1,13 +1,13 @@
 import { NextRequest } from 'next/server';
 import { requireCurriculumEditor, isErrorResponse } from '@/lib/auth/session';
-import { contentUploadDisabledResponse } from '@/lib/content-upload/guard';
-import { uploadDeps } from '@/lib/content-upload/context';
-import { ok } from '@/lib/content-upload/result';
+import { contentUploadDisabledResponse } from '@/lib/content-upload/staging/guard';
+import { uploadDeps } from '@/lib/content-upload/staging/context';
+import { ok } from '@/lib/content-upload/staging/result';
 import {
   respond,
   uploadErrorResponse,
-} from '@/lib/content-upload/route-support';
-import { getRunWithProgress, loadRun } from '@/lib/content-upload/runs';
+} from '@/lib/content-upload/staging/route-support';
+import { getRunWithProgress, loadRun } from '@/lib/content-upload/staging/runs';
 
 /**
  * GET /api/trainer/content-upload/runs/[runId]

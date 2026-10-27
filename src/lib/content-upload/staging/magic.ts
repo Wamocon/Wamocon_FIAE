@@ -4,7 +4,7 @@
 // the local file header `PK\x03\x04`. A file that says docx and holds something
 // else is rejected and its object deleted.
 
-import type { UploadExt } from '@/lib/content-upload/paths';
+import type { UploadExt } from '@/lib/content-upload/staging/paths';
 
 /** How many bytes the check needs. */
 export const MAGIC_HEAD_BYTES = 8;

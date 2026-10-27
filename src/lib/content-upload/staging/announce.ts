@@ -13,8 +13,11 @@
 // that is sent twice is idempotent: the same relative path with the same hash
 // is the same file.
 
-import { LIMITS } from '@/lib/content-upload/config';
-import { cleanRelativePath, type UploadExt } from '@/lib/content-upload/paths';
+import { LIMITS } from '@/lib/content-upload/staging/config';
+import {
+  cleanRelativePath,
+  type UploadExt,
+} from '@/lib/content-upload/staging/paths';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 /** Year 2100: a change time beyond that is not a real one. */

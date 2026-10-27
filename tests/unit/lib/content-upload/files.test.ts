@@ -1,15 +1,15 @@
 /**
  * @jest-environment node
  */
-import { LIMITS } from '@/lib/content-upload/config';
+import { LIMITS } from '@/lib/content-upload/staging/config';
 import {
   announceFiles,
   completeFiles,
   issueUploadUrls,
   listRunFiles,
   parseFileIds,
-} from '@/lib/content-upload/files';
-import { parseUploadStoragePath } from '@/lib/content-upload/paths';
+} from '@/lib/content-upload/staging/files';
+import { parseUploadStoragePath } from '@/lib/content-upload/staging/paths';
 import { resetRateLimits } from '@/lib/rate-limit';
 import {
   OTHER_ADMIN,
@@ -325,6 +325,7 @@ describe('listRunFiles', () => {
     { limit: '0' },
     { offset: 'x' },
     { limit: '1.5' },
+    { offset: '99999999999' },
   ])('answers 400 for %j', async query => {
     const ctx = setup();
     const run = await newRun(ctx.deps);

@@ -5,18 +5,28 @@
 // another person does not exist (404, the same answer as for an unknown id).
 
 import { randomUUID } from 'crypto';
-import { LIMITS, UPLOAD_CATALOG_CODE } from '@/lib/content-upload/config';
-import { removePendingObjects, runCleanup } from '@/lib/content-upload/cleanup';
-import { runStoragePrefix } from '@/lib/content-upload/paths';
+import {
+  LIMITS,
+  UPLOAD_CATALOG_CODE,
+} from '@/lib/content-upload/staging/config';
+import {
+  removePendingObjects,
+  runCleanup,
+} from '@/lib/content-upload/staging/cleanup';
+import { runStoragePrefix } from '@/lib/content-upload/staging/paths';
 import {
   fail,
   ok,
   type Caller,
   type ServiceResult,
   type UploadDeps,
-} from '@/lib/content-upload/result';
-import type { RunStatus } from '@/lib/content-upload/status';
-import type { FileRow, RunProgress, RunRow } from '@/lib/content-upload/types';
+} from '@/lib/content-upload/staging/result';
+import type { RunStatus } from '@/lib/content-upload/staging/status';
+import type {
+  FileRow,
+  RunProgress,
+  RunRow,
+} from '@/lib/content-upload/staging/types';
 import { isUuid } from '@/lib/uuid';
 
 export const RUN_NOT_FOUND = 'Run not found';

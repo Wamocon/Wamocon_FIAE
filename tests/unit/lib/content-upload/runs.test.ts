@@ -11,9 +11,9 @@ import {
   loadRun,
   parseCreateRunBody,
   runDto,
-} from '@/lib/content-upload/runs';
-import { announceFiles } from '@/lib/content-upload/files';
-import { parseUploadStoragePath } from '@/lib/content-upload/paths';
+} from '@/lib/content-upload/staging/runs';
+import { announceFiles } from '@/lib/content-upload/staging/files';
+import { parseUploadStoragePath } from '@/lib/content-upload/staging/paths';
 import {
   OTHER_ADMIN,
   OTHER_USER,

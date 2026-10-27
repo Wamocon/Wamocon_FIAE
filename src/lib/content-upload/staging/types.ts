@@ -1,8 +1,11 @@
 // Row types of the content upload as the application sees them (the columns of
 // the tables of migration 20261030000100, camel cased, bigint as number).
 
-import type { FileStatus, RunStatus } from '@/lib/content-upload/status';
-import type { UploadExt } from '@/lib/content-upload/paths';
+import type {
+  FileStatus,
+  RunStatus,
+} from '@/lib/content-upload/staging/status';
+import type { UploadExt } from '@/lib/content-upload/staging/paths';
 
 export interface RunRow {
   id: string;

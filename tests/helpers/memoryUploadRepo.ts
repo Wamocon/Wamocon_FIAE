@@ -12,8 +12,8 @@ import {
   planAnnouncement,
   type AnnounceFacts,
   type Candidate,
-} from '@/lib/content-upload/announce';
-import { LIMITS } from '@/lib/content-upload/config';
+} from '@/lib/content-upload/staging/announce';
+import { LIMITS } from '@/lib/content-upload/staging/config';
 import type {
   AnnounceRepoResult,
   ClaimOptions,
@@ -24,20 +24,20 @@ import type {
   TransitionOptions,
   UploadRepo,
   UrlRequestDecision,
-} from '@/lib/content-upload/repo';
+} from '@/lib/content-upload/staging/repo';
 import {
   ACTIVE_RUN_STATUSES,
   canTransitionFile,
   canTransitionRun,
   type FileStatus,
   type RunStatus,
-} from '@/lib/content-upload/status';
+} from '@/lib/content-upload/staging/status';
 import {
   OBJECT_DELETED_KEY,
   type FileRow,
   type RunProgress,
   type RunRow,
-} from '@/lib/content-upload/types';
+} from '@/lib/content-upload/staging/types';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -281,6 +281,10 @@ export class MemoryUploadRepo implements UploadRepo {
         f.processedAt = null;
         f.parseSummary = null;
         wrote = true;
+      } else if (item.kind === 'existing' && item.status === 'announced') {
+        // announced again: its 24 hours start over
+        const f = this.files.get(item.fileId);
+        if (f && f.status === 'announced') f.createdAt = now;
       }
     }
     if (wrote) {
@@ -521,9 +525,14 @@ export class MemoryUploadRepo implements UploadRepo {
 
   async markObjectsDeleted(fileIds: readonly string[]) {
     await this.tick();
+    const pending = new Set(
+      (await this.filesNeedingObjectRemoval(Number.MAX_SAFE_INTEGER)).map(
+        f => f.id
+      )
+    );
     for (const id of fileIds) {
       const f = this.files.get(id);
-      if (f) {
+      if (f && pending.has(id)) {
         f.parseSummary = {
           ...(f.parseSummary ?? {}),
           [OBJECT_DELETED_KEY]: true,
@@ -563,7 +572,7 @@ export class MemoryUploadRepo implements UploadRepo {
         run.status !== 'discarded' ||
         run.purgeAfter === null ||
         run.purgeAfter.getTime() >= this.clockMs ||
-        this.applies.some(a => a.runId === run.id)
+        this.applies.some(a => a.runId === run.id && a.mode === 'apply')
       ) {
         continue;
       }
@@ -577,6 +586,8 @@ export class MemoryUploadRepo implements UploadRepo {
       for (const f of [...this.files.values()]) {
         if (f.runId === run.id) this.files.delete(f.id);
       }
+      // the log of a dry run goes with the run, an apply keeps it (skipped above)
+      this.applies = this.applies.filter(a => a.runId !== run.id);
       this.runs.delete(run.id);
       n += 1;
     }

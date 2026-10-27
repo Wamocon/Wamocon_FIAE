@@ -19,7 +19,7 @@
 // the shared bucket.
 
 import { DB_SCHEMA, withStoragePrefix, type DbSchema } from '@/lib/db-schema';
-import { LIMITS } from '@/lib/content-upload/config';
+import { LIMITS } from '@/lib/content-upload/staging/config';
 
 export type UploadExt = 'docx' | 'pdf';
 
@@ -51,6 +51,20 @@ const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 
 const DRIVE_LETTER = /^[A-Za-z]:/;
 
+function hasLoneSurrogate(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const unit = text.charCodeAt(i);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = text.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+      i += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Cleans the relative path that the browser announced: Unicode NFC, control
  * and invisible characters removed, separators unified, drive letter, empty
@@ -65,6 +79,10 @@ const DRIVE_LETTER = /^[A-Za-z]:/;
 export function cleanRelativePath(raw: unknown): CleanedPath {
   if (typeof raw !== 'string') return { ok: false, code: 'PATH_INVALID' };
   if (raw.length > MAX_RAW_CHARS) return { ok: false, code: 'PATH_TOO_LONG' };
+
+  // A lone surrogate is no text: the database would store it as U+FFFD and the
+  // path would no longer find itself again (announcing twice must be harmless)
+  if (hasLoneSurrogate(raw)) return { ok: false, code: 'PATH_INVALID' };
 
   const text = raw.normalize('NFC').replace(INVISIBLE, '').replace(/\\/g, '/');
   const segments: string[] = [];

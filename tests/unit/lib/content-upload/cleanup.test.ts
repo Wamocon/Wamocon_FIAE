@@ -6,9 +6,9 @@ import {
   listOrphans,
   removePendingObjects,
   runCleanup,
-} from '@/lib/content-upload/cleanup';
-import { announceFiles, completeFiles } from '@/lib/content-upload/files';
-import { discardRun } from '@/lib/content-upload/runs';
+} from '@/lib/content-upload/staging/cleanup';
+import { announceFiles, completeFiles } from '@/lib/content-upload/staging/files';
+import { discardRun } from '@/lib/content-upload/staging/runs';
 import {
   OTHER_ADMIN,
   SUPER,

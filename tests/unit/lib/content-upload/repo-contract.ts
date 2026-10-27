@@ -4,12 +4,15 @@
 // CONTENT_UPLOAD_TEST_DB), so the two cannot drift apart.
 
 import { randomUUID } from 'crypto';
-import type { Candidate } from '@/lib/content-upload/announce';
-import { LIMITS } from '@/lib/content-upload/config';
-import { uploadStoragePath } from '@/lib/content-upload/paths';
-import type { UploadRepo } from '@/lib/content-upload/repo';
-import type { FileStatus, RunStatus } from '@/lib/content-upload/status';
-import type { FileRow } from '@/lib/content-upload/types';
+import type { Candidate } from '@/lib/content-upload/staging/announce';
+import { LIMITS } from '@/lib/content-upload/staging/config';
+import { uploadStoragePath } from '@/lib/content-upload/staging/paths';
+import type { UploadRepo } from '@/lib/content-upload/staging/repo';
+import type {
+  FileStatus,
+  RunStatus,
+} from '@/lib/content-upload/staging/status';
+import type { FileRow } from '@/lib/content-upload/staging/types';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -1013,6 +1016,54 @@ export function runRepoContract(
         expect(await h.rawRunExists(young.id)).toBe(false);
         expect(await h.rawRunExists(withApply.id)).toBe(true);
         expect(await h.rawRunExists(open.id)).toBe(true);
+      });
+
+      it('lets a file that is announced again live another 24 hours', async () => {
+        const run = await newRun();
+        const [c] = (await announceN(run.id, 1)).cs;
+        await h.advance(23 * HOUR);
+        const again = await repo.announce(run.id, [
+          candidate(run.id, 0, { relPath: c.relPath, sha256: c.sha256 }),
+        ]);
+        expect(again.ok && again.plan.items[0].kind).toBe('existing');
+        await h.advance(2 * HOUR);
+        expect(await repo.expireStaleAnnounced(24, 100)).toBe(0);
+        await h.advance(23 * HOUR);
+        expect(await repo.expireStaleAnnounced(24, 100)).toBe(1);
+      });
+
+      it('does not mark the object of a file that came back to life as gone', async () => {
+        const run = await newRun();
+        const [c] = (await announceN(run.id, 1)).cs;
+        await h.advance(25 * HOUR);
+        expect(await repo.expireStaleAnnounced(24, 100)).toBe(1);
+        const [stale] = await repo.filesNeedingObjectRemoval(10);
+        // the file is announced again while its object is being removed
+        await repo.announce(run.id, [
+          candidate(run.id, 0, { relPath: c.relPath, sha256: c.sha256 }),
+        ]);
+        await repo.markObjectsDeleted([stale.id]);
+        const [row] = await repo.getFiles(run.id, [c.id]);
+        expect(row.status).toBe('announced');
+        expect(row.parseSummary).toBeNull();
+      });
+
+      it('deletes a discarded run whose only log is a dry run, but keeps one with an apply', async () => {
+        const dry = await newRun();
+        const applied = await newRun();
+        await repo.transitionRun(dry.id, ['draft'], 'discarded', {
+          purgeAfterDays: 7,
+        });
+        await repo.transitionRun(applied.id, ['draft'], 'discarded', {
+          purgeAfterDays: 7,
+        });
+        await h.addApply(dry.id, 'dry_run', h.userA);
+        await h.addApply(applied.id, 'dry_run', h.userA);
+        await h.addApply(applied.id, 'apply', h.userA);
+        await h.advance(8 * DAY);
+        expect(await repo.deleteRunsPastPurge(10)).toBe(1);
+        expect(await h.rawRunExists(dry.id)).toBe(false);
+        expect(await h.rawRunExists(applied.id)).toBe(true);
       });
 
       it('says which storage paths belong to a file row', async () => {

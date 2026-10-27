@@ -11,8 +11,8 @@
 // reads the source of every handler and checks this order).
 
 import { NextResponse } from 'next/server';
-import { UploadStorageError } from '@/lib/content-upload/storage';
-import type { ServiceResult } from '@/lib/content-upload/result';
+import { UploadStorageError } from '@/lib/content-upload/staging/storage';
+import type { ServiceResult } from '@/lib/content-upload/staging/result';
 
 /** The answer of a service result: its data, or the failure with its status. */
 export function respond<T>(
@@ -74,6 +74,16 @@ export function uploadErrorResponse(error: unknown): NextResponse {
         code: 'STORAGE_UNAVAILABLE',
       },
       { status: 503 }
+    );
+  }
+  // A lock or statement timeout of the database (55P03, 57014): busy, try again
+  const code =
+    (error as { code?: unknown } | null)?.code ??
+    (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+  if (code === '55P03' || code === '57014') {
+    return NextResponse.json(
+      { error: 'The service is busy, try again in a moment', code: 'BUSY' },
+      { status: 503, headers: { 'Retry-After': '5' } }
     );
   }
   return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

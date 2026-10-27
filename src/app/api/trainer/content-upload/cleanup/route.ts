@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCurriculumEditor, isErrorResponse } from '@/lib/auth/session';
-import { contentUploadDisabledResponse } from '@/lib/content-upload/guard';
+import { contentUploadDisabledResponse } from '@/lib/content-upload/staging/guard';
 import {
   deleteOrphans,
   listOrphans,
   runCleanup,
-} from '@/lib/content-upload/cleanup';
-import { uploadDeps } from '@/lib/content-upload/context';
+} from '@/lib/content-upload/staging/cleanup';
+import { uploadDeps } from '@/lib/content-upload/staging/context';
 import {
   readJsonBody,
   uploadErrorResponse,
-} from '@/lib/content-upload/route-support';
+} from '@/lib/content-upload/staging/route-support';
+
+// Orphans (objects no row knows) can belong to another environment that shares
+// the bucket. Listing and deleting them is for the platform wide SUPER_ADMIN by
+// role only, not for every curriculum editor.
+const ORPHANS_FORBIDDEN =
+  'Only a platform administrator (SUPER_ADMIN) may list or delete orphans';
 
 // A cleanup of a large bucket takes a while
 export const maxDuration = 60;
@@ -25,6 +31,9 @@ export async function GET(request: NextRequest) {
   if (isErrorResponse(session)) return session;
   const off = contentUploadDisabledResponse();
   if (off) return off;
+  if (session.role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: ORPHANS_FORBIDDEN }, { status: 403 });
+  }
   try {
     return NextResponse.json(await listOrphans(uploadDeps()));
   } catch (error) {
@@ -53,6 +62,9 @@ export async function POST(request: NextRequest) {
         : undefined;
     const deps = uploadDeps();
     if (action === 'delete_orphans') {
+      if (session.role !== 'SUPER_ADMIN') {
+        return NextResponse.json({ error: ORPHANS_FORBIDDEN }, { status: 403 });
+      }
       return NextResponse.json(await deleteOrphans(deps));
     }
     if (action === undefined || action === 'run') {

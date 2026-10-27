@@ -21,8 +21,8 @@ import { createClient } from '@supabase/supabase-js';
 import { DB_SCHEMA, type DbSchema } from '@/lib/db-schema';
 import { getSupabaseSecretKey } from '@/lib/env';
 import { readableStorageUrl } from '@/lib/document-storage';
-import { UPLOAD_BUCKET } from '@/lib/content-upload/config';
-import { parseUploadStoragePath } from '@/lib/content-upload/paths';
+import { UPLOAD_BUCKET } from '@/lib/content-upload/staging/config';
+import { parseUploadStoragePath } from '@/lib/content-upload/staging/paths';
 
 export type StorageErrorCode =
   | 'NOT_CONFIGURED'

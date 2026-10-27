@@ -9,7 +9,7 @@ import {
   canTransitionRun,
   isFileStatus,
   isRunStatus,
-} from '@/lib/content-upload/status';
+} from '@/lib/content-upload/staging/status';
 
 function checkValues(constraint: string): string[] {
   const migration = fs.readFileSync(

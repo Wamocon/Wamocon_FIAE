@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { announceFiles, completeFiles } from '@/lib/content-upload/files';
+import { announceFiles, completeFiles } from '@/lib/content-upload/staging/files';
 import {
   DEFAULT_STEPS,
   MAX_ATTEMPTS,
@@ -11,9 +11,9 @@ import {
   verifyMetadataStep,
   type QueueStep,
   type StepContext,
-} from '@/lib/content-upload/queue';
-import { UploadStorageError } from '@/lib/content-upload/storage';
-import type { FileRow } from '@/lib/content-upload/types';
+} from '@/lib/content-upload/staging/queue';
+import { UploadStorageError } from '@/lib/content-upload/staging/storage';
+import type { FileRow } from '@/lib/content-upload/staging/types';
 import {
   docxBytes,
   entryFor,

@@ -7,28 +7,28 @@ import {
   validateEntry,
   type AnnounceWarning,
   type Candidate,
-} from '@/lib/content-upload/announce';
-import { LIMITS } from '@/lib/content-upload/config';
+} from '@/lib/content-upload/staging/announce';
+import { LIMITS } from '@/lib/content-upload/staging/config';
 import {
   MAGIC_HEAD_BYTES,
   magicRejectionCode,
   matchesMagic,
-} from '@/lib/content-upload/magic';
+} from '@/lib/content-upload/staging/magic';
 import {
   isStoragePathOfRun,
   uploadStoragePath,
-} from '@/lib/content-upload/paths';
-import { mapLimit } from '@/lib/content-upload/pool';
+} from '@/lib/content-upload/staging/paths';
+import { mapLimit } from '@/lib/content-upload/staging/pool';
 import {
   fail,
   ok,
   type Caller,
   type ServiceResult,
   type UploadDeps,
-} from '@/lib/content-upload/result';
-import type { RunStatus } from '@/lib/content-upload/status';
-import type { FileRow, RunRow } from '@/lib/content-upload/types';
-import { fileDto, type FileDto } from '@/lib/content-upload/runs';
+} from '@/lib/content-upload/staging/result';
+import type { RunStatus } from '@/lib/content-upload/staging/status';
+import type { FileRow, RunRow } from '@/lib/content-upload/staging/types';
+import { fileDto, type FileDto } from '@/lib/content-upload/staging/runs';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { isUuid } from '@/lib/uuid';
 
@@ -189,6 +189,8 @@ export async function announceFiles(
 // ---------------------------------------------------------------------------
 
 const MAX_LIST_PAGE = 500;
+/** Far more than a run can hold (1500 files, copies included). */
+const MAX_LIST_OFFSET = 100_000;
 
 export async function listRunFiles(
   deps: UploadDeps,
@@ -202,7 +204,12 @@ export async function listRunFiles(
   };
   const offset = number(query.offset, 0);
   const limit = number(query.limit, 200);
-  if (Number.isNaN(offset) || Number.isNaN(limit) || limit < 1) {
+  if (
+    Number.isNaN(offset) ||
+    Number.isNaN(limit) ||
+    limit < 1 ||
+    offset > MAX_LIST_OFFSET
+  ) {
     return fail(400, 'offset and limit must be whole numbers', 'QUERY_INVALID');
   }
   const page = Math.min(limit, MAX_LIST_PAGE);

@@ -6,7 +6,7 @@ import {
   UploadStorageError,
   createUploadStorage,
   guardUploadStorage,
-} from '@/lib/content-upload/storage';
+} from '@/lib/content-upload/staging/storage';
 import { MemoryUploadStorage } from '../../../helpers/memoryUploadStorage';
 
 const RUN = '0b8f4c1e-5d7a-4b1c-9d2e-1a2b3c4d5e6f';

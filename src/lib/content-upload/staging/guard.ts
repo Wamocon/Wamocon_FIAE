@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import {
   DISABLED_MESSAGE,
   contentUploadAvailability,
-} from '@/lib/content-upload/config';
+} from '@/lib/content-upload/staging/config';
 
 /**
  * First line of every route after the session: the answer for a deployment

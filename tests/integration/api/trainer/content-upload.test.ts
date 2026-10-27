@@ -76,7 +76,7 @@ async function boot(
   const fx = await import('../../../helpers/uploadServiceFixtures');
   const ctx = fx.setup(schema);
   const uploadDeps = jest.fn(() => ctx.deps);
-  jest.doMock('@/lib/content-upload/context', () => ({
+  jest.doMock('@/lib/content-upload/staging/context', () => ({
     __esModule: true,
     uploadDeps,
     getUploadRepo: () => ctx.repo,
@@ -856,6 +856,52 @@ describe('cleanup route', () => {
     expect(b.ctx.mem.objects.size).toBe(0);
   });
 
+  it('lists and deletes orphans only for a SUPER_ADMIN by role', async () => {
+    const b = await boot(PLATFORM_ADMIN);
+    const RUN = '0b8f4c1e-5d7a-4b1c-9d2e-1a2b3c4d5e6f';
+    const FILE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const old = new Date(Date.now() - 30 * 24 * 3_600_000);
+    b.ctx.mem.put(`upload/${RUN}/${FILE}.pdf`, b.fx.pdfBytes('o'), old);
+    const list = await call(b.route.cleanup.GET, 'GET', '/api/x');
+    expect(list.status).toBe(403);
+    const del = await call(b.route.cleanup.POST, 'POST', '/api/x', {
+      body: { action: 'delete_orphans' },
+    });
+    expect(del.status).toBe(403);
+    expect(b.ctx.mem.objects.size).toBe(1);
+    // the normal cleanup stays open to every curriculum editor
+    const run = await call(b.route.cleanup.POST, 'POST', '/api/x', {
+      body: {},
+    });
+    expect(run.status).toBe(200);
+    expect(b.ctx.mem.objects.size).toBe(1);
+  });
+
+  it('answers a lock timeout of the database with 503 and Retry-After', async () => {
+    const b = await boot(SUPER);
+    jest
+      .spyOn(b.ctx.repo, 'listRuns')
+      .mockRejectedValue(
+        Object.assign(new Error('x'), { cause: { code: '55P03' } })
+      );
+    const res = await call(b.route.runs.GET, 'GET', '/api/x');
+    expect(res.status).toBe(503);
+    expect(res.headers.get('Retry-After')).toBe('5');
+    expect((await json(res)).code).toBe('BUSY');
+  });
+
+  it('limits the pump calls of one person', async () => {
+    const b = await boot(SUPER);
+    const run = await createRunVia(b);
+    b.ctx.repo.forceRunStatus(run.id, 'uploading');
+    let last: Response | undefined;
+    for (let i = 0; i < 121; i++) {
+      last = await call(b.route.pump.POST, 'POST', '/api/x', { runId: run.id });
+    }
+    expect(last!.status).toBe(429);
+    expect(Number(last!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
+  });
+
   it('answers 400 for an action it does not know and 503 without a storage', async () => {
     const b = await boot(SUPER);
     const bad = await call(b.route.cleanup.POST, 'POST', '/api/x', {
@@ -863,7 +909,8 @@ describe('cleanup route', () => {
     });
     expect(bad.status).toBe(400);
 
-    const { UploadStorageError } = await import('@/lib/content-upload/storage');
+    const { UploadStorageError } =
+      await import('@/lib/content-upload/staging/storage');
     b.ctx.deps.storage = () => {
       throw new UploadStorageError('NOT_CONFIGURED', 'not configured');
     };
@@ -955,7 +1002,10 @@ describe('every handler of the content upload checks the session, then the switc
   });
 
   it('the routes never call a model, the embeddings or the PDF reader that fetches urls', () => {
-    const roots = [base, path.join(process.cwd(), 'src/lib/content-upload')];
+    const roots = [
+      base,
+      path.join(process.cwd(), 'src/lib/content-upload/staging'),
+    ];
     const sources = roots
       .flatMap(walkAll)
       .map(f => [f, fs.readFileSync(f, 'utf8')] as const);

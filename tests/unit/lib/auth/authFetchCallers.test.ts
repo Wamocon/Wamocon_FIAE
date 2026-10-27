@@ -218,7 +218,7 @@ describe('plainFetchViolations for the content upload routes', () => {
 
   it('the browser helper of the upload calls every one of them with authFetch', () => {
     const source = readFileSync(
-      join(SRC, 'lib', 'content-upload', 'client.ts'),
+      join(SRC, 'lib', 'content-upload', 'staging', 'client.ts'),
       'utf8'
     );
     expect(source).toContain("from '@/lib/authFetch'");

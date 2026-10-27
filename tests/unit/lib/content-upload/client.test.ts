@@ -16,16 +16,16 @@ import {
   toHex,
   withRetries,
   type UploadClientDeps,
-} from '@/lib/content-upload/client';
+} from '@/lib/content-upload/staging/client';
 import {
   announceFiles,
   completeFiles,
   issueUploadUrls,
   listRunFiles,
-} from '@/lib/content-upload/files';
-import { pumpRun } from '@/lib/content-upload/queue';
+} from '@/lib/content-upload/staging/files';
+import { pumpRun } from '@/lib/content-upload/staging/queue';
 import { resetRateLimits } from '@/lib/rate-limit';
-import { getRunWithProgress, loadRun } from '@/lib/content-upload/runs';
+import { getRunWithProgress, loadRun } from '@/lib/content-upload/staging/runs';
 import { SUPER, newRun, setup, sha256 } from '../../../helpers/uploadServiceFixtures';
 
 const digest = (data: ArrayBuffer) => webcrypto.subtle.digest('SHA-256', data);

@@ -7,7 +7,7 @@ import {
   type SignedUploadOutcome,
   type StorageObject,
   type UploadStorage,
-} from '@/lib/content-upload/storage';
+} from '@/lib/content-upload/staging/storage';
 
 export class MemoryUploadStorage implements UploadStorage {
   objects = new Map<string, { bytes: Uint8Array; createdAt: Date }>();

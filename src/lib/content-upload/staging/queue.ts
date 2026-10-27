@@ -26,17 +26,17 @@
 // the next one with a fresh count.
 
 import { createHash } from 'crypto';
-import { LIMITS } from '@/lib/content-upload/config';
-import type { QueueState } from '@/lib/content-upload/repo';
-import type { UploadDeps } from '@/lib/content-upload/result';
+import { LIMITS } from '@/lib/content-upload/staging/config';
+import type { QueueState } from '@/lib/content-upload/staging/repo';
+import type { UploadDeps } from '@/lib/content-upload/staging/result';
 import {
   canTransitionFile,
   type FileStatus,
   type RunStatus,
-} from '@/lib/content-upload/status';
-import { UploadStorageError } from '@/lib/content-upload/storage';
-import type { FilePatch, FileRow } from '@/lib/content-upload/types';
-import { OBJECT_DELETED_KEY } from '@/lib/content-upload/types';
+} from '@/lib/content-upload/staging/status';
+import { UploadStorageError } from '@/lib/content-upload/staging/storage';
+import type { FilePatch, FileRow } from '@/lib/content-upload/staging/types';
+import { OBJECT_DELETED_KEY } from '@/lib/content-upload/staging/types';
 
 export const MAX_ATTEMPTS = 3;
 export const DEFAULT_BUDGET_MS = 8000;
@@ -45,7 +45,8 @@ export const MIN_BUDGET_MS = 500;
 export const DEFAULT_CONCURRENCY = 3;
 /** A claim holds longer than a call can work: budget plus the longest step. */
 export const DEFAULT_LOCK_SECONDS = 90;
-export const DEFAULT_STEP_TIMEOUT_MS = 60_000;
+// budget (at most 20 s) plus this stays inside the maxDuration of the pump route (60 s)
+export const DEFAULT_STEP_TIMEOUT_MS = 30_000;
 /** A file that failed an attempt waits this long (times the attempts) before the next one. */
 export const RETRY_DELAY_SECONDS = 5;
 

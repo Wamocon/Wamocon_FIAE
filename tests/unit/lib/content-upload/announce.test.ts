@@ -1,11 +1,11 @@
-import { LIMITS } from '@/lib/content-upload/config';
+import { LIMITS } from '@/lib/content-upload/staging/config';
 import {
   parseAnnounceBody,
   planAnnouncement,
   validateEntry,
   type AnnounceFacts,
   type Candidate,
-} from '@/lib/content-upload/announce';
+} from '@/lib/content-upload/staging/announce';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);

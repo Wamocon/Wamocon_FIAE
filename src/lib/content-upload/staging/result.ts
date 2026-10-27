@@ -3,8 +3,8 @@
 // routes turn it into a response (route-support.ts). A failure never carries
 // text of a database, a storage or a file.
 
-import type { UploadRepo } from '@/lib/content-upload/repo';
-import type { UploadStorage } from '@/lib/content-upload/storage';
+import type { UploadRepo } from '@/lib/content-upload/staging/repo';
+import type { UploadStorage } from '@/lib/content-upload/staging/storage';
 
 export interface Failure {
   ok: false;

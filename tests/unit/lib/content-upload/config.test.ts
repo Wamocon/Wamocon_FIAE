@@ -2,7 +2,7 @@ import {
   LIMITS,
   evaluateAvailability,
   contentUploadAvailability,
-} from '@/lib/content-upload/config';
+} from '@/lib/content-upload/staging/config';
 
 describe('evaluateAvailability: the content upload is off in Production', () => {
   it('is on in a Vercel preview build on the Preview schema', () => {

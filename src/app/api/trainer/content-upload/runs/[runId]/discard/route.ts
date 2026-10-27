@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCurriculumEditor, isErrorResponse } from '@/lib/auth/session';
-import { contentUploadDisabledResponse } from '@/lib/content-upload/guard';
-import { uploadDeps } from '@/lib/content-upload/context';
+import { contentUploadDisabledResponse } from '@/lib/content-upload/staging/guard';
+import { uploadDeps } from '@/lib/content-upload/staging/context';
 import {
   respond,
   uploadErrorResponse,
-} from '@/lib/content-upload/route-support';
-import { discardRun, loadRun, runDto } from '@/lib/content-upload/runs';
+} from '@/lib/content-upload/staging/route-support';
+import { discardRun, loadRun, runDto } from '@/lib/content-upload/staging/runs';
 
 /**
  * POST /api/trainer/content-upload/runs/[runId]/discard

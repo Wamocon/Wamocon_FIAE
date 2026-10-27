@@ -26,8 +26,8 @@ import {
   type AnnounceFacts,
   type Candidate,
   type PlannedItem,
-} from '@/lib/content-upload/announce';
-import { LIMITS } from '@/lib/content-upload/config';
+} from '@/lib/content-upload/staging/announce';
+import { LIMITS } from '@/lib/content-upload/staging/config';
 import type {
   AnnounceRepoResult,
   ClaimOptions,
@@ -38,15 +38,19 @@ import type {
   TransitionOptions,
   UploadRepo,
   UrlRequestDecision,
-} from '@/lib/content-upload/repo';
+} from '@/lib/content-upload/staging/repo';
 import {
   ACTIVE_RUN_STATUSES,
   canTransitionFile,
   canTransitionRun,
   type FileStatus,
   type RunStatus,
-} from '@/lib/content-upload/status';
-import type { FileRow, RunProgress, RunRow } from '@/lib/content-upload/types';
+} from '@/lib/content-upload/staging/status';
+import type {
+  FileRow,
+  RunProgress,
+  RunRow,
+} from '@/lib/content-upload/staging/types';
 import { isUuid } from '@/lib/uuid';
 
 type Row = Record<string, unknown>;
@@ -159,6 +163,19 @@ const OBJECT_KEPT = sql.raw(
   "coalesce(f.parse_summary ->> 'objectDeleted', '') <> 'true'"
 );
 
+/**
+ * First statement of a transaction that takes locks: nobody waits for a lock
+ * for ever. A transaction that stalls (a function that died after BEGIN) would
+ * otherwise hold the lock of the whole staging area and every announce of every
+ * person would queue behind it. SET LOCAL ends with the transaction, which is
+ * what a transaction mode pooler needs. A timeout surfaces as 55P03 or 57014.
+ */
+async function limitWaiting(tx: SqlDb): Promise<void> {
+  await tx.execute(sql`set local lock_timeout = '5s'`);
+  await tx.execute(sql`set local statement_timeout = '30s'`);
+  await tx.execute(sql`set local idle_in_transaction_session_timeout = '30s'`);
+}
+
 export class PgUploadRepo implements UploadRepo {
   constructor(private readonly db: SqlDb) {}
 
@@ -178,6 +195,7 @@ export class PgUploadRepo implements UploadRepo {
     maxActive: number
   ): Promise<CreateRunResult> {
     return this.db.transaction(async tx => {
+      await limitWaiting(tx);
       // One person creates one run at a time: the count below cannot be passed
       // by two requests that see the same number
       await tx.execute(
@@ -295,6 +313,7 @@ export class PgUploadRepo implements UploadRepo {
   ): Promise<AnnounceRepoResult> {
     if (!isUuid(runId)) return { ok: false, reason: 'RUN_NOT_FOUND' };
     return this.db.transaction(async tx => {
+      await limitWaiting(tx);
       // The row of the run: announces of one run go one after the other
       const runRows = rowsOf(
         await tx.execute(
@@ -338,21 +357,33 @@ export class PgUploadRepo implements UploadRepo {
               values ${values}`
         );
       }
+      const reviveIds = plan.items.flatMap(i =>
+        i.kind === 'revive' ? [i.fileId] : []
+      );
       let revived = 0;
-      for (const item of plan.items) {
-        if (item.kind !== 'revive') continue;
-        const done = rowsOf(
+      if (reviveIds.length > 0) {
+        revived = rowsOf(
           await tx.execute(
             sql`update content_upload_files
                 set status = 'announced', created_at = now(), completed_at = null,
                     status_code = null, attempts = 0, claim_id = null,
                     locked_until = null, processed_at = null, parse_summary = null
-                where id = ${item.fileId}::uuid and run_id = ${runId}::uuid
-                  and status = 'expired'
+                where run_id = ${runId}::uuid and status = 'expired'
+                  and id in (${list(reviveIds)})
                 returning id`
           )
+        ).length;
+      }
+      // A file that is announced again is alive: its 24 hours start over
+      const aliveIds = plan.items.flatMap(i =>
+        i.kind === 'existing' && i.status === 'announced' ? [i.fileId] : []
+      );
+      if (aliveIds.length > 0) {
+        await tx.execute(
+          sql`update content_upload_files set created_at = now()
+              where run_id = ${runId}::uuid and status = 'announced'
+                and id in (${list(aliveIds)})`
         );
-        revived += done.length;
       }
       if (rows.length + revived > 0) {
         await tx.execute(
@@ -444,7 +475,7 @@ export class PgUploadRepo implements UploadRepo {
     const rows = rowsOf(
       await this.db.execute(
         sql`select * from content_upload_files where run_id = ${runId}::uuid
-            order by created_at, id offset ${options.offset}::int limit ${options.limit}::int`
+            order by created_at, id offset ${options.offset}::bigint limit ${options.limit}::int`
       )
     );
     return rows.map(mapFile);
@@ -514,7 +545,7 @@ export class PgUploadRepo implements UploadRepo {
                 )
               order by c.created_at, c.id
               limit ${options.limit}::int
-              for update of c skip locked
+              for no key update of c skip locked
             ) picked
             where f.id = picked.id
             returning f.*`
@@ -673,7 +704,7 @@ export class PgUploadRepo implements UploadRepo {
                 and c.created_at < now() - make_interval(hours => ${hours}::int)
               order by c.created_at, c.id
               limit ${limit}::int
-              for update of c skip locked
+              for no key update of c skip locked
             )
             returning id`
       )
@@ -704,12 +735,23 @@ export class PgUploadRepo implements UploadRepo {
     return rows.map(mapFile);
   }
 
+  /**
+   * Writes the marker only for rows that still need their object removed (the
+   * same condition as filesNeedingObjectRemoval). A file that came back to life
+   * in the meantime (revived, announced again) is left alone.
+   */
   async markObjectsDeleted(fileIds: readonly string[]): Promise<void> {
     for (const part of chunks(fileIds.filter(isUuid))) {
       await this.db.execute(
-        sql`update content_upload_files
-            set parse_summary = coalesce(parse_summary, '{}'::jsonb) || jsonb_build_object('objectDeleted', true)
-            where id in (${list(part)})`
+        sql`update content_upload_files f
+            set parse_summary = coalesce(f.parse_summary, '{}'::jsonb) || jsonb_build_object('objectDeleted', true)
+            from content_upload_runs r
+            where r.id = f.run_id and f.id in (${list(part)}) and f.status <> 'merged'
+              and (
+                f.status in ('rejected', 'expired')
+                or r.status = 'discarded'
+                or (r.status = 'applied' and r.purge_after is not null and r.purge_after < now())
+              )`
       );
     }
   }
@@ -743,6 +785,26 @@ export class PgUploadRepo implements UploadRepo {
   }
 
   async deleteRunsPastPurge(limit: number): Promise<number> {
+    const eligible = sql`
+      select r.id from content_upload_runs r
+      where r.status = 'discarded'
+        and r.purge_after is not null and r.purge_after < now()
+        and not exists (
+          select 1 from content_upload_applies a
+          where a.run_id = r.id and a.mode = 'apply'
+        )
+        and not exists (
+          select 1 from content_upload_files f
+          where f.run_id = r.id and f.status <> 'merged' and ${OBJECT_KEPT}
+        )
+      order by r.purge_after
+      limit ${limit}::int`;
+    // The log of a dry run changes nothing in the content tables: it does not
+    // keep a discarded run alive. (An apply does, its rows are the rollback basis.)
+    await this.db.execute(
+      sql`delete from content_upload_applies
+          where mode = 'dry_run' and run_id in (${eligible})`
+    );
     const rows = rowsOf(
       await this.db.execute(
         sql`delete from content_upload_runs

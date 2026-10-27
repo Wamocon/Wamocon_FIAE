@@ -20,12 +20,12 @@
 // when they are older than 7 days. Only objects of the exact path form of the
 // schema are ever looked at.
 
-import { LIMITS } from '@/lib/content-upload/config';
+import { LIMITS } from '@/lib/content-upload/staging/config';
 import {
   isStoragePathOfRun,
   parseUploadStoragePath,
-} from '@/lib/content-upload/paths';
-import type { UploadDeps } from '@/lib/content-upload/result';
+} from '@/lib/content-upload/staging/paths';
+import type { UploadDeps } from '@/lib/content-upload/staging/result';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REMOVE_CHUNK = 100;

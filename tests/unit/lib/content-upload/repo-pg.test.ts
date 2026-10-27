@@ -4,7 +4,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
-import { PgUploadRepo } from '@/lib/content-upload/repo-pg';
+import { PgUploadRepo } from '@/lib/content-upload/staging/repo-pg';
 import { runRepoContract, type RepoHarness } from './repo-contract';
 
 // The SQL repository against a REAL, LOCAL, throwaway PostgreSQL (the schema of

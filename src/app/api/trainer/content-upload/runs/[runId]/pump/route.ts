@@ -1,15 +1,19 @@
 import { NextRequest } from 'next/server';
 import { requireCurriculumEditor, isErrorResponse } from '@/lib/auth/session';
-import { contentUploadDisabledResponse } from '@/lib/content-upload/guard';
-import { uploadDeps } from '@/lib/content-upload/context';
-import { fail, ok } from '@/lib/content-upload/result';
-import { PUMPABLE_RUN_STATUSES, pumpRun } from '@/lib/content-upload/queue';
+import { contentUploadDisabledResponse } from '@/lib/content-upload/staging/guard';
+import { uploadDeps } from '@/lib/content-upload/staging/context';
+import { fail, ok } from '@/lib/content-upload/staging/result';
+import {
+  PUMPABLE_RUN_STATUSES,
+  pumpRun,
+} from '@/lib/content-upload/staging/queue';
 import {
   respond,
   readJsonBody,
   uploadErrorResponse,
-} from '@/lib/content-upload/route-support';
-import { loadRun } from '@/lib/content-upload/runs';
+} from '@/lib/content-upload/staging/route-support';
+import { loadRun } from '@/lib/content-upload/staging/runs';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // The call works for about 8 seconds (the budget), a step may take longer.
 export const maxDuration = 60;
@@ -41,6 +45,18 @@ export async function POST(
           `Nothing is processed while the run is ${run.data.status}`,
           'RUN_STATE'
         )
+      );
+    }
+    // Each call may work for 20 seconds: a person cannot start them without limit
+    const burst = checkRateLimit(`content-upload-pump:${session.id}`, {
+      limit: 120,
+      windowMs: 60_000,
+    });
+    if (!burst.allowed) {
+      return respond(
+        fail(429, 'Too many pump calls', 'RATE_LIMITED', {
+          retryAfterSec: burst.retryAfterSec,
+        })
       );
     }
     // The body is optional: no body, or an unreadable one, means the defaults

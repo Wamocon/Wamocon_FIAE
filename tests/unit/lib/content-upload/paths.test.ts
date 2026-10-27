@@ -4,7 +4,7 @@ import {
   parseUploadStoragePath,
   runStoragePrefix,
   uploadStoragePath,
-} from '@/lib/content-upload/paths';
+} from '@/lib/content-upload/staging/paths';
 
 const RUN = '0b8f4c1e-5d7a-4b1c-9d2e-1a2b3c4d5e6f';
 const FILE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
@@ -118,6 +118,14 @@ describe('cleanRelativePath: the cleaned relative path (concept 4.4)', () => {
 
   it('rejects an absurdly long raw value before cleaning it', () => {
     expect(code('a/'.repeat(5000) + 'f.pdf')).toBe('PATH_TOO_LONG');
+  });
+
+  it('rejects a lone surrogate (it would not find itself again in the database)', () => {
+    expect(code('a/\uD800b.pdf')).toBe('PATH_INVALID');
+    expect(code('a/b\uDC00.pdf')).toBe('PATH_INVALID');
+    expect(code('a/b\uD83D.pdf')).toBe('PATH_INVALID');
+    // a real pair is fine
+    expect(ok('a/\uD83D\uDE00.pdf').relPath).toBe('a/\uD83D\uDE00.pdf');
   });
 
   it('treats markup as text and leaves it unchanged', () => {

@@ -2,10 +2,10 @@
 // repository and the in-memory storage, and small makers for files.
 
 import { createHash } from 'crypto';
-import { createRun } from '@/lib/content-upload/runs';
-import type { UploadDeps } from '@/lib/content-upload/result';
-import { guardUploadStorage } from '@/lib/content-upload/storage';
-import type { RunRow } from '@/lib/content-upload/types';
+import { createRun } from '@/lib/content-upload/staging/runs';
+import type { UploadDeps } from '@/lib/content-upload/staging/result';
+import { guardUploadStorage } from '@/lib/content-upload/staging/storage';
+import type { RunRow } from '@/lib/content-upload/staging/types';
 import { MemoryUploadRepo } from './memoryUploadRepo';
 import { MemoryUploadStorage } from './memoryUploadStorage';
 

@@ -21,19 +21,19 @@
 // itself goes to the signed url of the storage.
 
 import { authFetch } from '@/lib/authFetch';
-import { LIMITS, UPLOAD_BUCKET } from '@/lib/content-upload/config';
+import { LIMITS, UPLOAD_BUCKET } from '@/lib/content-upload/staging/config';
 import type {
   AnnounceResponse,
   AnnounceItemResult,
   CompleteItem,
   UploadUrlItem,
-} from '@/lib/content-upload/files';
+} from '@/lib/content-upload/staging/files';
 import type {
   FileDto,
   RunDto,
   RunWithProgress,
-} from '@/lib/content-upload/runs';
-import type { PumpResult } from '@/lib/content-upload/queue';
+} from '@/lib/content-upload/staging/runs';
+import type { PumpResult } from '@/lib/content-upload/staging/queue';
 
 const RUNS = '/api/trainer/content-upload/runs';
 
