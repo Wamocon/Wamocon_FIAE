@@ -98,10 +98,7 @@ const input = {
 
 const totals = report =>
   Object.entries(report.tables)
-    .map(
-      ([name, c]) =>
-        `${name}=${c.insert}/${c.update}/${c.unchanged}`
-    )
+    .map(([name, c]) => `${name}=${c.insert}/${c.update}/${c.unchanged}`)
     .join(' ');
 
 /**
@@ -205,7 +202,8 @@ for (let i = 1; i <= args.repeat; i++) {
     console.log(
       `${args.variant} ${args.mode} run ${i}: engine ${(ms / 1000).toFixed(2)} s, connect ${connectMs.toFixed(0)} ms, schema ${facts.schema}, role ${facts.role}, statements ${statements}, latency ${args.latency} ms, conflicts ${report.conflicts.length}, wrote ${report.wrote}`
     );
-    if (i === 1) console.log(`  rows (new/updated/unchanged): ${totals(report)}`);
+    if (i === 1)
+      console.log(`  rows (new/updated/unchanged): ${totals(report)}`);
   } catch (error) {
     console.log(
       `${args.variant} ${args.mode} run ${i}: FAILED ${error.code ?? ''} ${String(error.message).split('\n')[0]}`

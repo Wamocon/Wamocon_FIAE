@@ -33,7 +33,11 @@ function fakeSource(
     releaseError?: Error;
     reserveError?: Error;
   } = {}
-): { source: ConnectionSource; reserved: FakeReserved; reserveCalls: number[] } {
+): {
+  source: ConnectionSource;
+  reserved: FakeReserved;
+  reserveCalls: number[];
+} {
   const reserved: FakeReserved = {
     calls: [],
     released: [],
@@ -93,7 +97,9 @@ describe('withReservedConnection', () => {
   });
 
   it('lets the error of the work win when the release fails as well', async () => {
-    const { source } = fakeSource({ releaseError: new Error('release failed') });
+    const { source } = fakeSource({
+      releaseError: new Error('release failed'),
+    });
     const boom = new Error('work failed');
     const seen: unknown[] = [];
     await expect(
@@ -110,7 +116,9 @@ describe('withReservedConnection', () => {
   });
 
   it('returns the result when the release fails after a successful run, and reports it', async () => {
-    const { source } = fakeSource({ releaseError: new Error('release failed') });
+    const { source } = fakeSource({
+      releaseError: new Error('release failed'),
+    });
     const seen: unknown[] = [];
     await expect(
       withReservedConnection(source, async () => 42, {
@@ -140,9 +148,9 @@ describe('withReservedConnection', () => {
     const { source, reserved } = fakeSource({
       reserveError: new Error('pool closed'),
     });
-    await expect(
-      withReservedConnection(source, async () => 1)
-    ).rejects.toThrow('pool closed');
+    await expect(withReservedConnection(source, async () => 1)).rejects.toThrow(
+      'pool closed'
+    );
     expect(reserved.released).toEqual([]);
   });
 
