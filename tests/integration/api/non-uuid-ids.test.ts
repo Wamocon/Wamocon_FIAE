@@ -221,6 +221,9 @@ const OWN_CHECK: Entry[] = [
       ['POST', 'trainer/content-upload/runs/[runId]/upload-urls'],
       ['POST', 'trainer/content-upload/runs/[runId]/complete'],
       ['POST', 'trainer/content-upload/runs/[runId]/pump'],
+      ['POST', 'trainer/content-upload/runs/[runId]/dry-run'],
+      ['POST', 'trainer/content-upload/runs/[runId]/apply'],
+      ['GET', 'trainer/content-upload/runs/[runId]/rollback-sql'],
     ] as const
   ).map(([method, route]) => ({
     route,

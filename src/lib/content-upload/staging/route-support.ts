@@ -80,7 +80,15 @@ export function uploadErrorResponse(error: unknown): NextResponse {
   const code =
     (error as { code?: unknown } | null)?.code ??
     (error as { cause?: { code?: unknown } } | null)?.cause?.code;
-  if (code === '55P03' || code === '57014') {
+  // 55P03 lock timeout, 57014 statement timeout, 40001 serialization failure, 40P01 deadlock,
+  // and no free connection of the pool: nothing was done, the call can be repeated
+  if (
+    code === '55P03' ||
+    code === '57014' ||
+    code === '40001' ||
+    code === '40P01' ||
+    code === 'CONNECTION_RESERVE_TIMEOUT'
+  ) {
     return NextResponse.json(
       { error: 'The service is busy, try again in a moment', code: 'BUSY' },
       { status: 503, headers: { 'Retry-After': '5' } }
