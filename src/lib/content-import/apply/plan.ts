@@ -376,6 +376,15 @@ const letterOrdinal = (letter: string) =>
 export interface BuildOptions {
   limitedTo?: string[];
   now?: Date;
+  /**
+   * Entries that a source besides the Word tree adds (the quiz JSON, see
+   * quiz-json/merge.ts): skip entries of items that have no content key and the
+   * copies that lost against another source.
+   */
+  extra?: {
+    skipped?: PlanSkip[];
+    superseded?: ImportPlan['superseded'];
+  };
 }
 
 /**
@@ -389,7 +398,7 @@ export function buildImportPlan(
 ): ImportPlan {
   const limitedTo = [...(options.limitedTo ?? [])];
   const selection = selectFiles(files, decisions, { limitedTo });
-  const skipped = [...selection.skipped];
+  const skipped = [...selection.skipped, ...(options.extra?.skipped ?? [])];
   const warnings: string[] = [];
   const byRel = new Map(files.map(f => [f.rel, f]));
   const chosen = selection.chosen
@@ -888,7 +897,10 @@ export function buildImportPlan(
     scenarios: finalScenarios,
     quizzes: finalQuizzes,
     skipped,
-    superseded: selection.superseded,
+    superseded: [
+      ...selection.superseded,
+      ...(options.extra?.superseded ?? []),
+    ].sort((a, b) => a.file.localeCompare(b.file)),
     notPlanned: selection.notPlanned,
     open,
     warnings: [...new Set(warnings)].sort(),
