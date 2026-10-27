@@ -78,7 +78,7 @@ export function renderLearningFieldRunReport(
     out.push('');
     out.push(
       info.updateExisting
-        ? 'Mit --update-existing nur der Titel aktualisiert, und nur durch einen Titel des Eigentümers oder wenn noch der Platzhalter steht. Abweichungen der Reihenfolge bleiben unverändert.'
+        ? 'Mit --update-existing nur Titel und Stunden aktualisiert, der Titel nur durch den amtlichen Titel, einen Titel des Eigentümers oder wenn noch der Platzhalter steht. Abweichungen der Reihenfolge bleiben unverändert.'
         : 'Nicht geändert (dafür gibt es --update-existing).'
     );
     out.push('');

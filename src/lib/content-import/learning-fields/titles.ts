@@ -3,8 +3,9 @@
 // (Enabler_Quellen.csv), which names each learning field in the form
 //   (1. AJ), LF3 ""Short title"": Kap. 6 ...
 // of the textbook. These are short book headings, not necessarily the wording of
-// the framework curriculum, so the plan marks them as provisional. The owner can
-// hand over the official titles as a JSON file instead.
+// the framework curriculum, so the plan marks them as provisional. The official
+// titles are in official.ts and win over this list. The owner can also hand over
+// titles as a JSON file, which wins over the official ones.
 //
 // Pure functions: the caller reads the file and passes the text.
 
