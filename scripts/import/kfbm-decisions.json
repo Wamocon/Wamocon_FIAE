@@ -21,7 +21,17 @@
   "content": {
     "activate": false,
     "globalQuizQuestions": 20,
-    "enablerText": true
+    "enablerText": true,
+    "reviewedSolutionWordFalsePositives": [
+      {
+        "enabler": "K24.2-e",
+        "reason": "The line Lösung is a row label (Sofortmaßnahme, Ursache, Lösung, Bearbeitende Stelle) in the table of an error log in the teaching text, not a solution part. Checked by the owner."
+      },
+      {
+        "enabler": "K25.2-d",
+        "reason": "The line Lösung is the name of a phase (Eröffnung, Klärung, Lösung, Abschluss) in the table of the phases of a conversation in the teaching text, not a solution part. Checked by the owner."
+      }
+    ]
   },
   "open": [
     "Which of the two Excel mapping versions applies (learning fields and use cases are phase 4.5, not part of this run).",

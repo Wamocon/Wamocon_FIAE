@@ -6,6 +6,18 @@ export type ComponentKind = 'pflicht' | 'wahl' | 'integrativ';
 export type QuizLevel = 'low' | 'medium' | 'high';
 
 /**
+ * An enabler whose teaching text carries the bare line "Lösung" (a table cell
+ * label, no solution part) and was checked by the owner. It releases exactly the
+ * pattern of that line for the text of this one enabler, no other marker.
+ */
+export interface ReviewedSolutionWord {
+  /** Code of the enabler, for example K24.2-e. */
+  enabler: string;
+  /** Why the line is no solution part. Plain text, one line. */
+  reason: string;
+}
+
+/**
  * Presets of the import (scripts/import/kfbm-decisions.json). They are
  * proposals of the plan that the owner has not confirmed yet, so they live in a
  * file and not in the code.
@@ -49,6 +61,11 @@ export interface Decisions {
     globalQuizQuestions: number;
     /** Write the text of the enabler documents into description_text. */
     enablerText: boolean;
+    /**
+     * Enablers whose bare line "Lösung" was checked and is no solution part.
+     * Never applies to scenarios, quizzes or use cases.
+     */
+    reviewedSolutionWordFalsePositives: ReviewedSolutionWord[];
   };
   /** Open questions that stay visible in every plan. */
   open: string[];
@@ -88,6 +105,14 @@ export interface PlanEnabler {
   /** Text of the enabler document, visible for trainees. */
   descriptionText: string | null;
   source: string;
+}
+
+/** An enabler text that passed the guard with a reviewed bare line "Lösung". */
+export interface PlanReviewedMarker {
+  enablerCode: string;
+  /** The only pattern a review can release: a line of just the word. */
+  pattern: 'bare-solution-line';
+  reason: string;
 }
 
 export interface PlanScenario {
@@ -187,6 +212,12 @@ export interface ImportPlan {
   scenarios: PlanScenario[];
   quizzes: PlanQuiz[];
   skipped: PlanSkip[];
+  /**
+   * Enabler texts that carry a reviewed bare line "Lösung" (see
+   * ReviewedSolutionWord). Absent when there are none. The apply step lets the
+   * texts of exactly these enablers pass that one marker.
+   */
+  reviewedMarkers?: PlanReviewedMarker[];
   /** Older copies that lost against a newer one (policy newest). */
   superseded: Array<{ file: string; key: string; keptFile: string }>;
   /** Files that are not part of this package (use cases, PDF, archive, K18). */

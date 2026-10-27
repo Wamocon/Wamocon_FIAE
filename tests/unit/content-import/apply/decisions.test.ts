@@ -113,3 +113,101 @@ describe('parseDecisions', () => {
     expect(parseDecisions(raw2).ok).toBe(false);
   });
 });
+
+describe('content.reviewedSolutionWordFalsePositives', () => {
+  const REASON = 'Table cell label in the teaching text, checked by the owner';
+  const withList = (list: unknown) => {
+    const raw = fromFile();
+    raw.content.reviewedSolutionWordFalsePositives = list;
+    return parseDecisions(raw);
+  };
+  const errorsOf = (list: unknown) => {
+    const result = withList(list);
+    return result.ok ? [] : result.errors.join(' ');
+  };
+
+  it('names exactly the two reviewed enablers of the shipped file, each with a reason', () => {
+    const list = parsed().content.reviewedSolutionWordFalsePositives;
+    expect(list.map(e => e.enabler)).toEqual(['K24.2-e', 'K25.2-d']);
+    for (const entry of list) expect(entry.reason.length).toBeGreaterThan(20);
+  });
+
+  it('is optional and empty by default', () => {
+    const raw = fromFile();
+    delete raw.content.reviewedSolutionWordFalsePositives;
+    const result = parseDecisions(raw);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.decisions.content.reviewedSolutionWordFalsePositives).toEqual(
+        []
+      );
+    }
+  });
+
+  it('accepts well-formed entries and trims the reason', () => {
+    const result = withList([
+      { enabler: 'K6.2-d', reason: `  ${REASON}  ` },
+      { enabler: 'K9-a', reason: REASON },
+    ]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.decisions.content.reviewedSolutionWordFalsePositives).toEqual(
+        [
+          { enabler: 'K6.2-d', reason: REASON },
+          { enabler: 'K9-a', reason: REASON },
+        ]
+      );
+    }
+  });
+
+  it('rejects anything that is not a list of entries', () => {
+    for (const bad of [null, 'K24.2-e', { 'K24.2-e': REASON }, 5, ['K24.2-e']]) {
+      expect(errorsOf(bad)).toMatch(/reviewedSolutionWordFalsePositives/);
+    }
+  });
+
+  it('rejects an unknown key, also a wildcard or a component', () => {
+    for (const enabler of [
+      'K24.2',
+      'K24.2-',
+      'K24.2-E',
+      'k24.2-e',
+      '24_2e',
+      '*',
+      'K24.2-e K25.2-d',
+      'K24.2-ee',
+      'K1-a\n',
+      '',
+      7,
+      null,
+    ]) {
+      expect(errorsOf([{ enabler, reason: REASON }])).toMatch(
+        /enabler key/
+      );
+    }
+  });
+
+  it('rejects a missing, empty or too short reason', () => {
+    for (const reason of [undefined, '', '   ', 'ok', 'short one', 5, null]) {
+      expect(errorsOf([{ enabler: 'K24.2-e', reason }])).toMatch(/reason/);
+    }
+    expect(errorsOf([{ enabler: 'K24.2-e', reason: `${REASON}\nmore` }])).toMatch(
+      /reason/
+    );
+    expect(
+      errorsOf([{ enabler: 'K24.2-e', reason: 'x'.repeat(401) }])
+    ).toMatch(/reason/);
+  });
+
+  it('rejects a duplicate entry and an unknown field of an entry', () => {
+    expect(
+      errorsOf([
+        { enabler: 'K24.2-e', reason: REASON },
+        { enabler: 'K24.2-e', reason: `${REASON} again` },
+      ])
+    ).toMatch(/twice/);
+    expect(
+      errorsOf([{ enabler: 'K24.2-e', reason: REASON, pattern: 'any' }])
+    ).toMatch(/unknown field/);
+  });
+});
