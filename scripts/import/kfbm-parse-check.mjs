@@ -146,6 +146,7 @@ export function checkParsed(rel, info, content, options = {}) {
     result.stats = {
       code: parsed.value.code,
       situationCharacters: parsed.value.situation.length,
+      taskCharacters: parsed.value.task.length,
     };
     if (
       parsed.value.code &&

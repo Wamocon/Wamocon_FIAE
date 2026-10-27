@@ -649,12 +649,21 @@ export function toTraineeQuiz(
 
 const SECTION_PATTERNS = {
   situation: /^Ausgangssituation\s*:?$/i,
+  task: /^Aufgabe(?:n|nstellung)?\s*:?$/i,
   solution: /^L(?:ö|oe)sung(?:s?szenario)?\s*:?$/i,
   knowledgeContribution:
     /^Wie das Fachwissen zur L(?:ö|oe)sung beitr(?:ä|ae)gt\s*:?$/i,
 } as const;
 type SectionName = keyof typeof SECTION_PATTERNS;
+// The task is optional and may stand anywhere after the situation, so it is
+// not part of the order check and not required (see SECTION_FIXED).
 const SECTION_ORDER: SectionName[] = [
+  'situation',
+  'task',
+  'solution',
+  'knowledgeContribution',
+];
+const SECTION_FIXED: SectionName[] = [
   'situation',
   'solution',
   'knowledgeContribution',
@@ -664,14 +673,67 @@ const SECTION_ORDER: SectionName[] = [
 const SECTION_LIKE = /^(?:Ausgangssituation|L(?:ö|oe)sung|Wie das Fachwissen)/i;
 const SECTION_LABEL: Record<SectionName, string> = {
   situation: 'Ausgangssituation',
+  task: 'Aufgabe',
   solution: 'Lösungsszenario',
   knowledgeContribution: 'Wie das Fachwissen zur Lösung beiträgt',
 };
 
+// A short line without a closing punctuation that names a solution, such as
+// "Erwartete Lösung" or "Antwortschlüssel": the heading of a solution part that
+// the parser did not recognize. A task may use the word in running text.
+const SOLUTION_WORDING =
+  /L(?:ö|oe)sung|Antwortschl(?:ü|ue)ssel|Korrekte\s+Antwort/i;
+
+/** True when a line of the text looks like the heading of a solution. */
+export function hasSolutionHeadingLine(text: string): boolean {
+  return text.split(/\n+/).some(line => {
+    const trimmed = line.trim();
+    return (
+      trimmed.length > 0 &&
+      trimmed.length <= 60 &&
+      !/[.!?]$/.test(trimmed) &&
+      SOLUTION_WORDING.test(trimmed)
+    );
+  });
+}
+
+const MIN_SHARED_LENGTH = 20;
+const squash = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * True when a visible text repeats solution text: a paragraph of a solution
+ * (at least 20 characters, white space and case ignored) stands inside the
+ * visible text, or a paragraph of the visible text stands inside a solution.
+ * Used for the task, which stays beside the solution in the same file.
+ */
+export function sharesSolutionText(
+  visible: string,
+  solutions: readonly string[]
+): boolean {
+  const split = (text: string) =>
+    text
+      .split(/\n+/)
+      .map(squash)
+      .filter(part => part.length >= MIN_SHARED_LENGTH);
+  const seen = split(visible);
+  const known = solutions.flatMap(split);
+  return seen.some(a =>
+    known.some(b => (a.length >= b.length ? a.includes(b) : b.includes(a)))
+  );
+}
+
 /**
  * Parses the text of a scenario file: heading "Szenario 1b) Title" and the
- * sections Ausgangssituation (visible for trainees), Lösungsszenario and "Wie
- * das Fachwissen zur Lösung beiträgt" (solutions, trainer only).
+ * sections Ausgangssituation and the optional Aufgabe (visible for trainees),
+ * Lösungsszenario and "Wie das Fachwissen zur Lösung beiträgt" (solutions,
+ * trainer only).
+ *
+ * A section "Aufgabe" (also "Aufgabenstellung", "Aufgaben") next to a section
+ * Lösungsszenario is the task. Where there is no Lösungsszenario, the section
+ * stands in its place: in the sources a few files carry the narrative of the
+ * solution under the heading "Aufgabe". Such a section is read as the solution
+ * (trainer only) and reported with the warning TASK_AS_SOLUTION, so a task
+ * heading never makes solution text visible.
  */
 export function parseScenarioText(
   input: SourceInput
@@ -683,10 +745,12 @@ export function parseScenarioText(
     code: null,
     title: null,
     situation: '',
+    task: '',
     solution: '',
     knowledgeContribution: '',
     visibility: {
       situation: 'trainee',
+      task: 'trainee',
       solution: 'trainer',
       knowledgeContribution: 'trainer',
     },
@@ -728,6 +792,7 @@ export function parseScenarioText(
 
   const content: Record<SectionName, string[]> = {
     situation: [],
+    task: [],
     solution: [],
     knowledgeContribution: [],
   };
@@ -752,6 +817,23 @@ export function parseScenarioText(
             `The section "${SECTION_LABEL[name]}" appears more than once.`
           )
         );
+      } else if (
+        name === 'task' &&
+        (!seen.includes('situation') ||
+          seen.includes('solution') ||
+          seen.includes('knowledgeContribution'))
+      ) {
+        // A task is visible text, so it may only stand between the situation
+        // and the solution parts. Anywhere else the line is dropped and the
+        // text after it stays in the section before it (never visible).
+        issues.push(
+          issue(
+            'SECTION_ORDER',
+            'error',
+            `The section "${SECTION_LABEL.task}" must stand after the section "${SECTION_LABEL.situation}" and before the solution parts.`
+          )
+        );
+        continue;
       } else {
         seen.push(name);
       }
@@ -794,7 +876,22 @@ export function parseScenarioText(
     }
   }
 
-  for (const name of SECTION_ORDER) {
+  // A task heading where the solution heading should be: the text under it is
+  // the solution. It moves to the solution slot (and stays trainer only).
+  if (seen.includes('task') && !seen.includes('solution')) {
+    content.solution = content.task;
+    content.task = [];
+    seen.splice(seen.indexOf('task'), 1, 'solution');
+    issues.push(
+      issue(
+        'TASK_AS_SOLUTION',
+        'warning',
+        `The section "${SECTION_LABEL.task}" stands where the section "${SECTION_LABEL.solution}" should be and is read as the solution (trainer only).`
+      )
+    );
+  }
+
+  for (const name of SECTION_FIXED) {
     if (!seen.includes(name)) {
       issues.push(
         issue(
@@ -803,7 +900,10 @@ export function parseScenarioText(
           `The section "${SECTION_LABEL[name]}" is missing.`
         )
       );
-    } else if (content[name].length === 0) {
+    }
+  }
+  for (const name of SECTION_ORDER) {
+    if (seen.includes(name) && content[name].length === 0) {
       issues.push(
         issue(
           'SECTION_EMPTY',
@@ -813,20 +913,46 @@ export function parseScenarioText(
       );
     }
   }
-  const expectedOrder = SECTION_ORDER.filter(name => seen.includes(name));
-  if (seen.join('|') !== expectedOrder.join('|')) {
+  const inOrder = seen.filter(name => SECTION_FIXED.includes(name));
+  const expectedOrder = SECTION_FIXED.filter(name => inOrder.includes(name));
+  if (inOrder.join('|') !== expectedOrder.join('|')) {
     issues.push(
       issue(
         'SECTION_ORDER',
         'error',
-        `The sections appear in the order ${seen.map(s => SECTION_LABEL[s]).join(', ')}, expected ${expectedOrder.map(s => SECTION_LABEL[s]).join(', ')}.`
+        `The sections appear in the order ${inOrder.map(s => SECTION_LABEL[s]).join(', ')}, expected ${expectedOrder.map(s => SECTION_LABEL[s]).join(', ')}.`
       )
     );
   }
 
   scenario.situation = content.situation.join('\n\n');
+  scenario.task = content.task.join('\n\n');
   scenario.solution = content.solution.join('\n\n');
   scenario.knowledgeContribution = content.knowledgeContribution.join('\n\n');
+  if (
+    scenario.task &&
+    sharesSolutionText(scenario.task, [
+      scenario.solution,
+      scenario.knowledgeContribution,
+    ])
+  ) {
+    issues.push(
+      issue(
+        'TASK_SOLUTION_OVERLAP',
+        'error',
+        `The section "${SECTION_LABEL.task}" repeats text of the solution parts.`
+      )
+    );
+  }
+  if (scenario.task && hasSolutionHeadingLine(scenario.task)) {
+    issues.push(
+      issue(
+        'TASK_SOLUTION_HEADING',
+        'error',
+        `The section "${SECTION_LABEL.task}" has a line that looks like the heading of a solution.`
+      )
+    );
+  }
   return makeResult(scenario, issues);
 }
 
@@ -834,24 +960,39 @@ export interface TraineeScenario {
   code: string | null;
   title: string | null;
   situation: string;
+  /** Empty when the file has no task. */
+  task: string;
 }
 
 /**
- * The part of a scenario that trainees may see: only the starting situation.
- * Fails closed: returns null when the parse result has an error or when a
- * solution marker is found in the situation.
+ * The part of a scenario that trainees may see: the starting situation and the
+ * task. Fails closed: returns null when the parse result has an error, when a
+ * solution marker is found in a visible part or when the task repeats text of
+ * a solution part.
  */
 export function toTraineeScenario(
   result: ParseResult<ParsedScenario>
 ): TraineeScenario | null {
   if (!result.ok) return null;
   const scenario = result.value;
-  if (hasSolutionMarker([scenario.title ?? '', scenario.situation])) {
+  const task = scenario.task ?? '';
+  if (hasSolutionMarker([scenario.title ?? '', scenario.situation, task])) {
+    return null;
+  }
+  if (task && hasSolutionHeadingLine(task)) return null;
+  if (
+    task &&
+    sharesSolutionText(task, [
+      scenario.solution,
+      scenario.knowledgeContribution,
+    ])
+  ) {
     return null;
   }
   return {
     code: scenario.code,
     title: scenario.title,
     situation: scenario.situation,
+    task,
   };
 }

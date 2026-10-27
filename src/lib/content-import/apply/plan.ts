@@ -15,6 +15,7 @@ import type {
   ParseResult,
   PathInfo,
 } from '../types';
+import { hasSolutionHeadingLine } from '../source-parsers';
 import { kindOfComponent } from './decisions';
 import {
   findSolutionLeaks,
@@ -729,6 +730,9 @@ export function buildImportPlan(
         enablerCode: enabler.code,
         title: scenario.title,
         situation: scenario.situation,
+        // Only a scenario with a task carries the field, so the plan of every
+        // other scenario keeps its shape.
+        ...(scenario.task ? { task: scenario.task } : {}),
         solution: scenario.solution,
         knowledgeContribution: scenario.knowledgeContribution,
         source: file.rel,
@@ -772,18 +776,24 @@ export function buildImportPlan(
   const guardScenarios = scenarios.filter(s => {
     const bad =
       leakOf(s.situation, solutions) ?? leakOf(s.title ?? '', solutions);
-    if (bad) {
+    const badTask = s.task
+      ? (leakOf(s.task, solutions) ??
+        (hasSolutionHeadingLine(s.task)
+          ? 'contains the heading of a solution'
+          : null))
+      : null;
+    if (bad || badTask) {
       skipped.push(
         skip(
           s.source,
           `scenario:${s.enablerCode}`,
           'scenario',
           'SOLUTION_MARKER',
-          `The situation ${bad}`
+          bad ? `The situation ${bad}` : `The task ${badTask}`
         )
       );
     }
-    return !bad;
+    return !bad && !badTask;
   });
   const guardEnablers = enablers.filter(e => {
     // The text of an enabler may repeat a sentence of a rationale (the
@@ -1036,6 +1046,12 @@ export function validatePlan(raw: unknown): string[] {
     }
     if (scenarioOwners.has(s.enablerCode)) {
       errors.push(`enabler ${s.enablerCode} has two scenarios`);
+    }
+    if (
+      s.task !== undefined &&
+      (typeof s.task !== 'string' || s.task.trim() === '')
+    ) {
+      errors.push(`the task of scenario ${s.enablerCode} is not text`);
     }
     scenarioOwners.add(s.enablerCode);
   }
