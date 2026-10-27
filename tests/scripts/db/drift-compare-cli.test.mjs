@@ -75,6 +75,23 @@ test('drift: file missing in public_preview and changed checksum are errors', ()
   assert.ok(changed.errors[0].includes('changed after'));
 });
 
+test('drift: baseline files are not expected in the public_preview ledger', () => {
+  const state = { files: [file('1')], public: [], preview: [] };
+  assert.equal(driftFindings({ ...state, public: null }).errors.length, 1);
+  const r = driftFindings({ ...state, public: null, baseline: ['1'] });
+  assert.deepEqual(r, { errors: [], notes: [] });
+  // the public side still reports it (only the ledger repair fixes that)
+  const strict = driftFindings({
+    files: [file('1')],
+    public: [],
+    preview: [],
+    baseline: ['1'],
+    strict: true,
+  });
+  assert.equal(strict.errors.length, 1);
+  assert.ok(strict.errors[0].includes('not applied in public'));
+});
+
 test('drift: versions only in public_preview are open branches (note)', () => {
   const r = driftFindings({
     files: [file('1')],
