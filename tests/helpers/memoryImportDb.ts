@@ -198,6 +198,15 @@ export class MemoryImportDb implements Db {
           throw new Error('foreign key enabler_catalog_fk');
         }
       }
+      if (row.use_case_id != null) {
+        const useCase = this.tables.use_cases.find(
+          r => r.id === row.use_case_id
+        );
+        if (!useCase) throw new Error('foreign key use_case_id');
+        if (useCase.training_catalog_id !== field.training_catalog_id) {
+          throw new Error('foreign key use_case_catalog_fk');
+        }
+      }
       return { ...row, training_catalog_id: field.training_catalog_id };
     }
     return row;
@@ -296,12 +305,22 @@ export class MemoryImportDb implements Db {
         );
         break;
       case 'training_catalog_content_mappings':
-        clash(
-          'training_catalog_content_mappings_lf_enabler_unique',
-          r =>
-            r.learning_field_id === row.learning_field_id &&
-            r.enabler_id === row.enabler_id
-        );
+        if (row.enabler_id != null) {
+          clash(
+            'training_catalog_content_mappings_lf_enabler_unique',
+            r =>
+              r.learning_field_id === row.learning_field_id &&
+              r.enabler_id === row.enabler_id
+          );
+        }
+        if (row.use_case_id != null) {
+          clash(
+            'training_catalog_content_mappings_lf_use_case_unique',
+            r =>
+              r.learning_field_id === row.learning_field_id &&
+              r.use_case_id === row.use_case_id
+          );
+        }
         break;
       default:
         break;
