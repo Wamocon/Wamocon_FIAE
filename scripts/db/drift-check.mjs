@@ -22,6 +22,12 @@
 // Known legacy cases are listed with a reason in supabase/known-drift.txt (one
 // version per line, then "# reason") and are not reported.
 //
+// Baseline files (state "applied" in supabase/legacy-migrations.txt) are part of
+// the structure clone of public_preview and are never applied there, so they
+// have no ledger row in public_preview until public's ledger carries them.
+// Findings 3 and 4 skip them. Finding 2 (public) still reports them: that one
+// is only fixed by the ledger repair in docs/release-prozess.md, step 6.3.
+//
 // Two modes:
 //   default        PRODUCTION job (Supabase access token, --linked): all four findings.
 //   --preview-only PREVIEW job (--db-url-env PREVIEW_DB_URL, no Production token):
@@ -35,9 +41,11 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { query, targetFrom } from './preview-cli.mjs';
 import { LEDGER, checksum } from './preview-migrate.mjs';
+import { readLegacyEntries } from './migration-check.mjs';
 
 const FOLDER = 'supabase/migrations';
 const KNOWN_FILE = 'supabase/known-drift.txt';
+const LEGACY_FILE = 'supabase/legacy-migrations.txt';
 const NAME = /^(\d{12,14})_[a-z0-9_]+\.sql$/;
 const inCi = Boolean(process.env.GITHUB_ACTIONS);
 
@@ -55,6 +63,7 @@ export function readKnown(text) {
  *   public: string[],
  *   preview: { version: string, checksum: string | null }[] | null,
  *   known?: string[],
+ *   baseline?: string[],
  *   strict?: boolean,
  * }} state preview = null if public_preview has no history
  * @returns {{ errors: string[], notes: string[] }}
@@ -64,11 +73,13 @@ export function driftFindings({
   public: applied,
   preview,
   known = [],
+  baseline = [],
   strict = false,
 }) {
   const errors = [];
   const notes = [];
   const exempt = new Set(known);
+  const inBaseline = new Set(baseline);
   const fileVersions = new Set(files.map(f => f.version));
   const inPublic = new Set(applied ?? []);
 
@@ -95,7 +106,7 @@ export function driftFindings({
   } else {
     const inPreview = new Map(preview.map(p => [p.version, p.checksum]));
     for (const f of files) {
-      if (exempt.has(f.version)) continue;
+      if (exempt.has(f.version) || inBaseline.has(f.version)) continue;
       if (!inPreview.has(f.version)) {
         errors.push(
           `${f.file} is on master, but not applied in public_preview (catch-up did not run).`
@@ -150,6 +161,12 @@ function main() {
     const known = existsSync(KNOWN_FILE)
       ? readKnown(readFileSync(KNOWN_FILE, 'utf8'))
       : [];
+    const baseline = existsSync(LEGACY_FILE)
+      ? readLegacyEntries(readFileSync(LEGACY_FILE, 'utf8'))
+          .filter(e => e.state === 'applied')
+          .map(e => NAME.exec(e.file)?.[1])
+          .filter(Boolean)
+      : [];
     const previewOnly = args.includes('--preview-only');
     const applied = previewOnly
       ? null
@@ -173,6 +190,7 @@ function main() {
       public: applied,
       preview,
       known,
+      baseline,
       strict: args.includes('--strict'),
     });
     for (const n of notes) console.log(`Note: ${n}`);
