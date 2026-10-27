@@ -2,6 +2,7 @@ import {
   findRowLeaks,
   findSolutionLeaks,
   leakOf,
+  SOLUTION_MARKERS,
   solutionTexts,
 } from '@/lib/content-import/apply/guard';
 import { buildImportPlan } from '@/lib/content-import/apply/plan';
@@ -27,6 +28,46 @@ describe('leakOf', () => {
       'Fachwissen zur Lösung',
     ]) {
       expect(leakOf(text, [])).toBe('contains a solution marker');
+    }
+  });
+
+  it('finds the markers of a use case solution and the bare solution heading', () => {
+    for (const text of [
+      'Aufgabe\nMusterlösung',
+      'Musterloesung: folgt',
+      'Text\nMusterlösung\nMehr',
+      'Bewertungskriterien',
+      'Text\n  Bewertungskriterien:  \nMehr',
+      'Lösung',
+      'Text\nLoesung:\nMehr',
+      'Korrekte Antwort: B',
+      'Text\nAntwortschlüssel\nMehr',
+      'Lösungsvorschlag: folgt',
+    ]) {
+      expect(leakOf(text, [])).toBe('contains a solution marker');
+    }
+  });
+
+  it('does not take running text with the new words for a marker', () => {
+    for (const text of [
+      'Bewerten Sie die Angebote nach den Bewertungskriterien Preis und Qualität.',
+      'Die Lösung des Problems liegt im Netzwerk.',
+      'Eine Musterlösung hilft beim Lernen.',
+      'Musterlösungen werden später gezeigt.',
+      'Er suchte eine Lösung für das Problem.',
+    ]) {
+      expect(leakOf(text, [])).toBeNull();
+    }
+  });
+
+  it('shares one exported list of markers that stays frozen', () => {
+    expect(Object.isFrozen(SOLUTION_MARKERS)).toBe(true);
+    expect(SOLUTION_MARKERS.length).toBeGreaterThanOrEqual(12);
+    for (const marker of SOLUTION_MARKERS) {
+      expect(marker).toBeInstanceOf(RegExp);
+      // No global or sticky flag: the list is shared, so test() must not
+      // carry a position from one call to the next.
+      expect(marker.global || marker.sticky).toBe(false);
     }
   });
 
@@ -153,12 +194,62 @@ describe('findRowLeaks', () => {
     ]);
   });
 
+  it('lets a theory document of an enabler pass and checks its title, description and file name', () => {
+    const theory = {
+      document_type: 'THEORY',
+      visibility: 'ALL',
+      enabler_id: 'e1',
+      title: 'Lehrtext K1-a',
+      description: 'Ein harmloser Text.',
+      file_name: 'k1-a_lehrtext.pdf',
+    };
+    expect(findRowLeaks({ content_documents: [theory] }, solutions)).toEqual(
+      []
+    );
+    expect(
+      findRowLeaks(
+        {
+          content_documents: [
+            { ...theory, title: 'Musterlösung: K1-a' },
+            { ...theory, description: solutions[0] },
+            { ...theory, file_name: 'Richtige Antwort.pdf' },
+          ],
+        },
+        solutions
+      )
+    ).toEqual([
+      'content_documents.title contains a solution',
+      'content_documents.description contains a solution text',
+      'content_documents.file_name contains a solution marker',
+    ]);
+  });
+
+  it('refuses a theory document that names no enabler, names a use case, or is not visible for everyone', () => {
+    const base = { document_type: 'THEORY', visibility: 'ALL', title: 't' };
+    expect(
+      findRowLeaks(
+        {
+          content_documents: [
+            base,
+            { ...base, enabler_id: 'e1', use_case_id: 'u1' },
+            { ...base, enabler_id: 'e1', visibility: 'TRAINER_ONLY' },
+          ],
+        },
+        []
+      )
+    ).toEqual([
+      'content_documents THEORY row names no enabler',
+      'content_documents THEORY row belongs to a use case',
+      'content_documents row has an unexpected type or visibility',
+    ]);
+  });
+
   it('refuses a document that is neither a trainee question nor a trainer solution, and a solution in a trainee document', () => {
     const problems = findRowLeaks(
       {
         content_documents: [
           { document_type: 'TRAINER_SOLUTION', visibility: 'ALL', title: 't' },
-          { document_type: 'THEORY', visibility: 'ALL', title: 't' },
+          { document_type: 'TRAINER_ONLY', visibility: 'ALL', title: 't' },
           {
             document_type: 'TRAINEE_QUESTION',
             visibility: 'ALL',
