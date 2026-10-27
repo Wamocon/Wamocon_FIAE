@@ -18,7 +18,8 @@
 // 'curriculum' is a write handler of the curriculum content (courses, enablers,
 // use cases, quizzes, learning fields, modules, lessons): only the platform
 // wide admin (isSuperAdmin) passes, a trainer or admin of any organization,
-// including the platform organization, is answered with 403.
+// including the platform organization, is answered with 403. The handlers of the
+// content upload (trainer/content-upload, reads included) use the same guard.
 // 'trainee' is a signed-in trainee: a trainer-level caller is answered with 403
 // (creating and editing an activity report and the self rating of the skills
 // are actions of the trainee, bound to the owner of the report).
@@ -188,6 +189,72 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: [],
   },
   { route: 'trainer/content', method: 'GET', guard: 'trainer', params: [] },
+  {
+    route: 'trainer/content-upload/cleanup',
+    method: 'GET',
+    guard: 'curriculum',
+    params: [],
+  },
+  {
+    route: 'trainer/content-upload/cleanup',
+    method: 'POST',
+    guard: 'curriculum',
+    params: [],
+  },
+  {
+    route: 'trainer/content-upload/runs',
+    method: 'GET',
+    guard: 'curriculum',
+    params: [],
+  },
+  {
+    route: 'trainer/content-upload/runs',
+    method: 'POST',
+    guard: 'curriculum',
+    params: [],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/complete',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/discard',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/files',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/files',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/pump',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/upload-urls',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
   {
     route: 'trainer/courses/[courseId]/enablers',
     method: 'GET',

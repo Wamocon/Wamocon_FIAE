@@ -196,6 +196,37 @@ describe('plainFetchViolations for the trainer, admin and me routes', () => {
   });
 });
 
+describe('plainFetchViolations for the content upload routes', () => {
+  const urls = [
+    '/api/trainer/content-upload/runs',
+    '/api/trainer/content-upload/runs/r1',
+    '/api/trainer/content-upload/runs/r1/files?offset=0',
+    '/api/trainer/content-upload/runs/r1/upload-urls',
+    '/api/trainer/content-upload/runs/r1/complete',
+    '/api/trainer/content-upload/runs/r1/pump',
+    '/api/trainer/content-upload/runs/r1/discard',
+    '/api/trainer/content-upload/cleanup',
+  ];
+
+  it('flags a plain fetch to each of them and accepts authFetch', () => {
+    for (const url of urls) {
+      expect(plainFetchViolations(`fetch('${url}')`)).toHaveLength(1);
+      expect(plainFetchViolations(`fetch(\`${url}\`, {})`)).toHaveLength(1);
+      expect(plainFetchViolations(`authFetch('${url}')`)).toEqual([]);
+    }
+  });
+
+  it('the browser helper of the upload calls every one of them with authFetch', () => {
+    const source = readFileSync(
+      join(SRC, 'lib', 'content-upload', 'staging', 'client.ts'),
+      'utf8'
+    );
+    expect(source).toContain("from '@/lib/authFetch'");
+    expect(source).toContain('/api/trainer/content-upload/runs');
+    expect(plainFetchViolations(source)).toEqual([]);
+  });
+});
+
 describe('browser code calls the protected routes with authFetch', () => {
   it('finds no plain fetch() to a protected route (notifications, trainee, trainer, admin, me, activity reports, breadcrumb labels)', () => {
     const offenders: string[] = [];
@@ -230,4 +261,3 @@ describe('the trainee pages that read the new routes use authFetch', () => {
     expect(page).not.toContain('/api/trainer/');
   });
 });
-
