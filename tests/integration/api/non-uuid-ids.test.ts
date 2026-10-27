@@ -212,6 +212,22 @@ const OWN_CHECK: Entry[] = [
     params: { id: '{bad}' },
     body: { trainerGrade: 2 },
   },
+  ...(
+    [
+      ['GET', 'trainer/content-upload/runs/[runId]'],
+      ['POST', 'trainer/content-upload/runs/[runId]/discard'],
+      ['GET', 'trainer/content-upload/runs/[runId]/files'],
+      ['POST', 'trainer/content-upload/runs/[runId]/files'],
+      ['POST', 'trainer/content-upload/runs/[runId]/upload-urls'],
+      ['POST', 'trainer/content-upload/runs/[runId]/complete'],
+      ['POST', 'trainer/content-upload/runs/[runId]/pump'],
+    ] as const
+  ).map(([method, route]) => ({
+    route,
+    method,
+    params: { runId: '{bad}' },
+    body: { files: [], fileIds: [] },
+  })),
   {
     route: 'admin/organizations/[orgId]',
     method: 'GET',
@@ -299,6 +315,7 @@ describe('a path id that is no uuid: routes with their own check', () => {
       'trainer/reviews/use-cases/[submissionId]': 'Submission not found',
       'trainer/school/exams/[examId]/grade': 'Exam not found',
       'trainer/activity-reports/[id]': 'Report not found',
+      'trainer/content-upload/runs/[runId]': 'Run not found',
     };
     for (const [route, message] of Object.entries(words)) {
       const entry = OWN_CHECK.find(e => e.route === route)!;
