@@ -801,6 +801,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['enablerId'],
   },
   {
+    route: 'trainee/enablers/[enablerId]/documents',
+    method: 'GET',
+    guard: 'trainee',
+    params: ['enablerId'],
+  },
+  {
     route: 'trainee/enablers/[enablerId]/quiz',
     method: 'GET',
     guard: 'user',
@@ -907,6 +913,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     method: 'GET',
     guard: 'user',
     params: [],
+  },
+  {
+    route: 'trainee/quizzes/[quizId]',
+    method: 'GET',
+    guard: 'trainee',
+    params: ['quizId'],
   },
   {
     route: 'trainee/quizzes/[quizId]/submit',
