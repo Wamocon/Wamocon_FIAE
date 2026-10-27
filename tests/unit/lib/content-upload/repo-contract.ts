@@ -633,6 +633,54 @@ export function runRepoContract(
         expect([...seen].sort()).toEqual(cs.map(c => c.id).sort());
       });
 
+      it('holds at most maxHeld files of a run over all callers', async () => {
+        const run = await newRun();
+        await uploaded(run.id, 10);
+        const other = await newRun();
+        await uploaded(other.id, 4);
+        const first = await claim(run.id, { limit: 5, maxHeld: 4 });
+        expect(first).toHaveLength(4);
+        // nothing is left of the limit, whoever asks
+        expect(await claim(run.id, { limit: 5, maxHeld: 4 })).toHaveLength(0);
+        // the limit is per run
+        expect(await claim(other.id, { limit: 5, maxHeld: 4 })).toHaveLength(4);
+        // a file that is finished or given back makes room for exactly one
+        expect(
+          await repo.finishClaim(
+            first[0].id,
+            first[0].claimId!,
+            'uploaded',
+            'verified'
+          )
+        ).toBe(true);
+        expect(await claim(run.id, { limit: 5, maxHeld: 4 })).toHaveLength(1);
+        expect(await repo.releaseClaim(first[1].id, first[1].claimId!)).toBe(
+          true
+        );
+        expect(await claim(run.id, { limit: 5, maxHeld: 4 })).toHaveLength(1);
+        // a claim whose lock expired does not count
+        await h.advance(61_000);
+        expect(await claim(run.id, { limit: 10, maxHeld: 4 })).toHaveLength(4);
+        // four are held: with room for three, a limit of two takes two
+        expect(await claim(run.id, { limit: 2, maxHeld: 7 })).toHaveLength(2);
+        // a limit that is no positive whole number takes nothing
+        expect(await claim(run.id, { maxHeld: 0 })).toHaveLength(0);
+        expect(await claim(run.id, { maxHeld: 1.5 })).toHaveLength(0);
+      });
+
+      it('keeps maxHeld when callers ask at the same time', async () => {
+        const run = await newRun();
+        await uploaded(run.id, 30);
+        const got = await Promise.all(
+          Array.from({ length: 12 }, () =>
+            claim(run.id, { limit: 3, maxHeld: 5 })
+          )
+        );
+        const ids = got.flat().map(f => f.id);
+        expect(ids).toHaveLength(5);
+        expect(new Set(ids).size).toBe(5);
+      });
+
       it('ends a claim only with the claim id of the caller', async () => {
         const run = await newRun();
         await uploaded(run.id, 1);

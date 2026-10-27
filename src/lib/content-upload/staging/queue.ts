@@ -43,6 +43,13 @@ export const DEFAULT_BUDGET_MS = 8000;
 export const MAX_BUDGET_MS = 20_000;
 export const MIN_BUDGET_MS = 500;
 export const DEFAULT_CONCURRENCY = 3;
+/**
+ * At most this many files of one run are held at once over all callers (two
+ * full pumps). The rate limit of the route counts calls, not held files, so any
+ * number of open tabs or retries would otherwise multiply the work in flight
+ * (PDF threads, memory, storage reads).
+ */
+export const MAX_HELD_PER_RUN = DEFAULT_CONCURRENCY * 2;
 /** A claim holds longer than a call can work: budget plus the longest step. */
 export const DEFAULT_LOCK_SECONDS = 90;
 // budget (at most 20 s) plus this stays inside the maxDuration of the pump route (60 s)
@@ -176,6 +183,8 @@ export interface PumpOptions {
   /** Time one call may work, checked before every new batch. */
   budgetMs?: number;
   concurrency?: number;
+  /** Files of the run held at once over all calls (default MAX_HELD_PER_RUN). */
+  maxHeld?: number;
   maxAttempts?: number;
   lockSeconds?: number;
   stepTimeoutMs?: number;
@@ -363,6 +372,12 @@ export async function pumpRun(
   const steps = options.steps ?? DEFAULT_STEPS;
   const budgetMs = clampBudget(options.budgetMs);
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+  const maxHeld = options.maxHeld ?? MAX_HELD_PER_RUN;
+  // A limit that is no positive whole number (Infinity included) would take
+  // nothing and the pump would never work: say so instead of idling
+  if (!Number.isInteger(maxHeld) || maxHeld < 1) {
+    throw new RangeError('maxHeld must be a positive whole number');
+  }
   const maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
   const lockSeconds = options.lockSeconds ?? DEFAULT_LOCK_SECONDS;
   const stepTimeoutMs = options.stepTimeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
@@ -398,6 +413,7 @@ export async function pumpRun(
       limit: concurrency,
       lockSeconds,
       maxAttempts,
+      maxHeld,
     });
     if (claimed.length === 0) break;
     processed += claimed.length;

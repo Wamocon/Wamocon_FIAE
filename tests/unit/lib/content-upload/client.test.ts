@@ -340,6 +340,34 @@ describe('uploadFiles', () => {
     expect(progress.counts).toEqual({ uploaded: 120 });
   });
 
+  it('reports a file the browser cannot read and uploads all the others', async () => {
+    const t = await boot();
+    const client = createUploadClient(t.deps);
+    const files = manyFiles(5);
+    // the browser refuses to read this one (a path over the limit of the system)
+    Object.defineProperty(files[1], 'arrayBuffer', {
+      value: () => Promise.reject(new DOMException('not readable')),
+    });
+    const events: string[] = [];
+    const summary = await client.uploadFiles(
+      t.runId,
+      candidatesFromFiles(files),
+      { onProgress: e => events.push(`${e.phase}:${e.done}/${e.total}`) }
+    );
+    expect(summary.failed).toEqual([
+      { path: 'K1/n/f1.pdf', code: 'UNREADABLE' },
+    ]);
+    expect(summary.announced).toBe(4);
+    expect(summary.uploaded).toBe(4);
+    expect(events).toContain('hashing:5/5');
+    expect(events).toContain('announcing:4/4');
+    const announced = t.server.calls
+      .filter(c => c.path.endsWith('/files') && c.method === 'POST')
+      .flatMap(c => c.body.files.map((f: { path: string }) => f.path));
+    expect(announced).toHaveLength(4);
+    expect(announced).not.toContain('K1/n/f1.pdf');
+  });
+
   it('sends the announce with path, size, hash and change time of every file', async () => {
     const t = await boot();
     const client = createUploadClient(t.deps);
