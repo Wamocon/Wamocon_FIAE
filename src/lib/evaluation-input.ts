@@ -163,7 +163,7 @@ export async function unknownCriterion(
       (Array.isArray(softskillRatings) ? softskillRatings : [])
         .map((entry: { criterionId?: unknown }) => entry.criterionId)
         .filter(Boolean)
-        .map(String)
+        .map(id => String(id).toLowerCase())
     ),
   ] as string[];
   if (criterionIds.length === 0) return null;
@@ -175,4 +175,27 @@ export async function unknownCriterion(
   return criterionIds.some(id => !known.has(id))
     ? invalid('Unknown criterionId')
     : null;
+}
+
+/**
+ * A validated grade as the text of the enum (3 becomes '3'). Values that are
+ * not given (undefined, null, empty) stay as they are, a grade that was not
+ * validated is not touched.
+ */
+export function asGrade<T>(value: T): T | string {
+  return isGrade(value) ? String(value) : value;
+}
+
+/** The softskill entries with their grades as enum texts, anything else as sent. */
+export function normalizeSoftskillGrades(softskillRatings: unknown): unknown {
+  if (!Array.isArray(softskillRatings)) return softskillRatings;
+  return softskillRatings.map(entry =>
+    entry && typeof entry === 'object'
+      ? {
+          ...entry,
+          trainerRating: asGrade(entry.trainerRating),
+          releaseRating: asGrade(entry.releaseRating),
+        }
+      : entry
+  );
 }

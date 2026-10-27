@@ -10,6 +10,8 @@
  *  - bound to the person: the profile id of the SESSION is part of the signed
  *    text but not of the token, so a proof of one person fails for another
  *  - bound to a purpose, so a proof for one gate opens no other gate
+ *  - bound to the database schema: Preview and Production share one Supabase
+ *    project and so the key, a proof of the one is no proof of the other
  *  - valid for ten minutes, the expiry is part of the signed text
  *
  * Key: derived (HMAC with a fixed label, so the Supabase key itself is never
@@ -25,6 +27,7 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { getSupabaseSecretKey } from '@/lib/env';
 import { ADMIN_PROOF_HEADER } from '@/lib/auth/admin-proof-header';
+import { DB_SCHEMA } from '@/lib/db-schema';
 
 /** Header that carries the proof to the gated routes (also used by the browser). */
 export { ADMIN_PROOF_HEADER };
@@ -55,7 +58,7 @@ function mac(
   expiresAt: number
 ): Buffer {
   return createHmac('sha256', key)
-    .update(`v1|${purpose}|${profileId}|${expiresAt}`)
+    .update(`v1|${purpose}|${DB_SCHEMA}|${profileId}|${expiresAt}`)
     .digest();
 }
 

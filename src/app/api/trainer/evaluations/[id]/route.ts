@@ -19,7 +19,9 @@ import {
     readJsonObject,
 } from '@/lib/input-limits';
 import {
+    asGrade,
     invalidTrainerAssessmentInput,
+    normalizeSoftskillGrades,
     unknownCriterion,
 } from '@/lib/evaluation-input';
 
@@ -116,16 +118,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         const body = await readJsonObject(request);
         if (isErrorResponse(body)) return body;
         const {
-            trainerRating,
+            trainerRating: rawTrainerRating,
             trainerComment,
-            softskillRatings,
+            softskillRatings: rawSoftskillRatings,
             isReleaseEdit = false,
-            releaseRating,
+            releaseRating: rawReleaseRating,
             releaseComment,
             editReason,
         } = body as Record<string, any>;
         const invalidInput = invalidTrainerAssessmentInput(body, Boolean(isReleaseEdit));
         if (invalidInput) return invalidInput;
+        // A grade is stored as the text of the enum: 3 and '3' are the same grade
+        const trainerRating = asGrade(rawTrainerRating);
+        const releaseRating = asGrade(rawReleaseRating);
+        const softskillRatings = normalizeSoftskillGrades(rawSoftskillRatings);
 
         // Block modification of APPROVED evaluations unless it's a release grade edit
         if (evaluation.status === 'APPROVED' && !isReleaseEdit) {

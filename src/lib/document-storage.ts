@@ -93,6 +93,24 @@ export function documentStoragePath(
 }
 
 /**
+ * The public url of a validated path, as the browser gets it from the storage.
+ * Documents are stored with this url (the viewers and the text extraction
+ * fetch it), also when the request carried the bare path. Without a configured
+ * project url the path is returned unchanged.
+ */
+export function documentPublicUrl(
+  path: string,
+  options: DocumentStorageOptions = {}
+): string {
+  const origin = projectOrigin(
+    options.supabaseUrl === undefined
+      ? process.env.NEXT_PUBLIC_SUPABASE_URL
+      : options.supabaseUrl
+  );
+  return origin ? `${origin}${PUBLIC_OBJECT_PATH}${path}` : path;
+}
+
+/**
  * The path inside the bucket of the file of a stored document, but only when
  * the file lies in the folder of the person who uploaded the document. Only
  * such a file may be removed from the storage together with the document. The

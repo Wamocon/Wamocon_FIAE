@@ -85,6 +85,11 @@ export async function removeDocumentFile(doc: {
 
   const { createClient } = await import('@supabase/supabase-js');
   const supabase = createClient(supabaseUrl, supabaseKey, { db: DB_OPTION });
-  await supabase.storage.from(DOCUMENT_BUCKET).remove([path]);
+  const { error } = await supabase.storage.from(DOCUMENT_BUCKET).remove([path]);
+  if (error) {
+    // The storage answers with an error object, it does not throw
+    console.warn('Document file was not removed from the storage');
+    return 'skipped';
+  }
   return 'removed';
 }

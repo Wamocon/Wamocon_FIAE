@@ -19,7 +19,10 @@ import {
 } from '@/lib/auth/document-scope';
 import { notFoundUnlessUuid } from '@/lib/uuid';
 import { readJsonObject } from '@/lib/input-limits';
-import { documentStoragePath } from '@/lib/document-storage';
+import {
+  documentPublicUrl,
+  documentStoragePath,
+} from '@/lib/document-storage';
 import { removeDocumentFile } from '@/lib/document-file-cleanup';
 
 // GET documents for a use case
@@ -112,7 +115,7 @@ export async function POST(
       storageUrl,
       storagePath,
       triggerHaiIngestion,
-    } = body;
+    } = body as Record<string, any>;
 
     if (!title || !fileName || !storageUrl) {
       return NextResponse.json(
@@ -183,7 +186,7 @@ export async function POST(
         fileName,
         fileSize: fileSize || null,
         mimeType: mimeType || 'application/pdf',
-        storageUrl,
+        storageUrl: documentPublicUrl(storedPath),
         storagePath: storedPath,
         uploadedById: trainerId as any,
         organizationId: trainerOrgId,
@@ -303,8 +306,13 @@ export async function DELETE(
         .catch(err => console.error('Failed to import HAI module:', err));
     }
 
-    // Remove the file from the storage (best effort, a failure never stops
-    // the delete of the row). Only the file that belongs to this document alone.
+    // Delete from database
+    await db
+      .delete(contentDocuments)
+      .where(eq(contentDocuments.id, documentId as any));
+
+    // Remove the file from the storage, after the row (best effort, a failure
+    // never undoes the delete). Only the file that belongs to this document alone.
     try {
       await removeDocumentFile(doc);
     } catch (storageErr) {
@@ -313,11 +321,6 @@ export async function DELETE(
         storageErr
       );
     }
-
-    // Delete from database
-    await db
-      .delete(contentDocuments)
-      .where(eq(contentDocuments.id, documentId as any));
 
     return NextResponse.json({ ok: true });
   } catch (e) {

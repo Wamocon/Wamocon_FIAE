@@ -1,7 +1,14 @@
 /**
  * @jest-environment node
  */
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 import {
   ADMIN_PROOF_HEADER,
   ADMIN_PROOF_TTL_SEC,
@@ -146,6 +153,43 @@ describe('admin proof', () => {
       const { proof } = sign();
       expect(verifyAdminProof(proof, USER, PURPOSE, NOW)).toBe('valid');
     });
+  });
+
+  it('is bound to the database schema: a Preview proof is no Production proof', () => {
+    // Preview and Production share one Supabase project and so the key
+    const before = process.env.NEXT_PUBLIC_DB_SCHEMA;
+    const beforeServer = process.env.SUPABASE_DB_SCHEMA;
+    delete process.env.SUPABASE_DB_SCHEMA;
+    const make = (schema: string | undefined) => {
+      if (schema === undefined) delete process.env.NEXT_PUBLIC_DB_SCHEMA;
+      else process.env.NEXT_PUBLIC_DB_SCHEMA = schema;
+      let mod: typeof import('@/lib/auth/admin-proof') | undefined;
+      jest.isolateModules(() => {
+        mod = require('@/lib/auth/admin-proof');
+      });
+      return mod!;
+    };
+    try {
+      const production = make(undefined);
+      const preview = make('public_preview');
+      const { proof } = production.signAdminProof(USER, PURPOSE, NOW)!;
+      expect(production.verifyAdminProof(proof, USER, PURPOSE, NOW)).toBe(
+        'valid'
+      );
+      expect(preview.verifyAdminProof(proof, USER, PURPOSE, NOW)).toBe(
+        'invalid'
+      );
+      const previewProof = preview.signAdminProof(USER, PURPOSE, NOW)!.proof;
+      expect(
+        production.verifyAdminProof(previewProof, USER, PURPOSE, NOW)
+      ).toBe('invalid');
+    } finally {
+      if (before === undefined) delete process.env.NEXT_PUBLIC_DB_SCHEMA;
+      else process.env.NEXT_PUBLIC_DB_SCHEMA = before;
+      if (beforeServer !== undefined) {
+        process.env.SUPABASE_DB_SCHEMA = beforeServer;
+      }
+    }
   });
 
   it('uses the current time when none is given', () => {

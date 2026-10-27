@@ -241,6 +241,15 @@ describe('PUT /evaluations/[id]: trainer assessment', () => {
       nothingWritten(mock);
     });
 
+    it('accepts a criterion id in upper case, uuids are case insensitive', async () => {
+      const { res } = await put({
+        softskillRatings: [
+          { criterionId: CRIT.toUpperCase(), trainerRating: '2' },
+        ],
+      });
+      expect(res.status).toBe(200);
+    });
+
     it('looks the criteria up in one query', async () => {
       const { mock } = await put({
         softskillRatings: [
@@ -298,6 +307,16 @@ describe('PUT /evaluations/[id]: release grade edit', () => {
     const { res, mock } = await edit();
     expect(res.status).toBe(200);
     expect(mock.writes('insert', 'grade_edit_history')).toHaveLength(1);
+  });
+
+  it('writes no audit row when a numeric grade equals the stored one', async () => {
+    // the stored release rating is '3', the request says 3
+    const { res, mock } = await edit({ releaseRating: 3 });
+    expect(res.status).toBe(200);
+    expect(mock.writes('insert', 'grade_edit_history')).toEqual([]);
+    expect(mock.writes('update', 'weekly_evaluations')[0]).toMatchObject({
+      releaseRating: '3',
+    });
   });
 
   it('accepts a release rating of null to clear it, as before', async () => {

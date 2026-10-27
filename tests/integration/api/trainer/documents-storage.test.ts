@@ -197,12 +197,15 @@ describe.each(targets)('$name', target => {
       });
     });
 
-    it('accepts the bare path of an own upload', async () => {
+    it('accepts the bare path of an own upload and stores the public url of it', async () => {
       const { res, mock } = await run('POST', {
         body: body({ storageUrl: OWN_PATH }),
       });
       expect(res.status).toBe(200);
-      expect(inserts(mock)[0]).toMatchObject({ storagePath: OWN_PATH });
+      expect(inserts(mock)[0]).toMatchObject({
+        storageUrl: OWN_URL,
+        storagePath: OWN_PATH,
+      });
     });
 
     it('accepts a storagePath that matches the url', async () => {
@@ -485,6 +488,29 @@ describe.each(targets)('$name', target => {
       });
       expect(res.status).toBe(200);
       expect(removeCalls).toEqual([]);
+      expect(deletes(mock)).toHaveLength(1);
+    });
+
+    it('removes the file after the row, and keeps the row delete when the storage answers with an error', async () => {
+      const { res, mock } = await run('DELETE', {
+        query,
+        docs: docs(doc()),
+        setup: () =>
+          jest.doMock('@supabase/supabase-js', () => ({
+            __esModule: true,
+            createClient: () => ({
+              storage: {
+                from: () => ({
+                  remove: async () => ({
+                    data: null,
+                    error: { message: 'denied' },
+                  }),
+                }),
+              },
+            }),
+          })),
+      });
+      expect(res.status).toBe(200);
       expect(deletes(mock)).toHaveLength(1);
     });
 
