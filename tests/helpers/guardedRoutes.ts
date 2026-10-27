@@ -256,6 +256,36 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['runId'],
   },
   {
+    route: 'trainer/content-upload/overview',
+    method: 'GET',
+    guard: 'curriculum',
+    params: [],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/decisions',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/review',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/review/duplicates',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/review/options',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
     route: 'trainer/courses/[courseId]/enablers',
     method: 'GET',
     guard: 'trainer',

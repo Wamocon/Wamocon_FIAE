@@ -28,6 +28,7 @@ const TRAINER_LINKS = [
 const PROFILE = '/trainer/profile';
 const ORGS = '/trainer/admin/organizations';
 const USERS = '/trainer/admin/users';
+const CONTENT_UPLOAD = '/trainer/admin/content-upload';
 
 function renderFor(
   role: string,
@@ -106,14 +107,40 @@ describe('Sidebar', () => {
 
   it('SUPER_ADMIN: the platform and the users', () => {
     renderFor('SUPER_ADMIN', { isPlatformOwner: true });
-    expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+    expect(links()).toEqual([
+      ...TRAINER_LINKS,
+      ORGS,
+      USERS,
+      CONTENT_UPLOAD,
+      PROFILE,
+    ]);
     expect(screen.getByText('Organisationen und Berufe')).toBeInTheDocument();
     expect(screen.getByText('Benutzerverwaltung')).toBeInTheDocument();
+    expect(screen.getByText('Inhalts-Upload')).toBeInTheDocument();
+  });
+
+  it('SUPER_ADMIN: no entry of the content upload in Production, where the feature is off', () => {
+    const env = process.env as Record<string, string | undefined>;
+    const before = env.NODE_ENV;
+    env.NODE_ENV = 'production';
+    try {
+      renderFor('SUPER_ADMIN', { isPlatformOwner: true });
+      expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+      expect(screen.queryByText('Inhalts-Upload')).toBeNull();
+    } finally {
+      env.NODE_ENV = before;
+    }
   });
 
   it('ADMIN of the platform organization counts as the platform admin', () => {
     renderFor('admin', { isPlatformOwner: true });
-    expect(links()).toEqual([...TRAINER_LINKS, ORGS, USERS, PROFILE]);
+    expect(links()).toEqual([
+      ...TRAINER_LINKS,
+      ORGS,
+      USERS,
+      CONTENT_UPLOAD,
+      PROFILE,
+    ]);
     expect(screen.getByText('Organisationen und Berufe')).toBeInTheDocument();
   });
 

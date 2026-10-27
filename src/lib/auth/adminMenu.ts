@@ -26,7 +26,7 @@ import {
 } from '@/lib/auth/roles';
 
 export type AdminMenuItem = {
-  id: 'adminOrgs' | 'adminUsers';
+  id: 'adminOrgs' | 'adminUsers' | 'contentUpload';
   href: string;
   /** Key of the label in the locale files. */
   labelKey: string;
@@ -40,6 +40,31 @@ const USERS_ITEM: AdminMenuItem = {
   href: USERS_HREF,
   labelKey: 'nav.userManagement',
 };
+
+const CONTENT_UPLOAD_HREF = '/trainer/admin/content-upload';
+
+/**
+ * The entry of the content upload (docs/ki-upload-konzept.md 7.5): only for the
+ * people who may write curriculum content, and only where the feature runs. It is
+ * switched off in Production (the routes answer 404 there), so the entry is not
+ * shown there either: a preview build (the preview schema) and a build that is not a
+ * production build show it. Like the rest of the menu this is not the protection.
+ */
+export function contentUploadMenuItems(
+  subject: RoleSubject | null | undefined,
+  env: { previewSchema: boolean; nodeEnv?: string | null }
+): AdminMenuItem[] {
+  if (!isSuperAdmin(subject)) return [];
+  const runs = env.previewSchema || (env.nodeEnv ?? '') !== 'production';
+  if (!runs) return [];
+  return [
+    {
+      id: 'contentUpload',
+      href: CONTENT_UPLOAD_HREF,
+      labelKey: 'contentUpload.title',
+    },
+  ];
+}
 
 /** The admin entries a user sees, in the order of the sidebar. */
 export function adminMenuItems(

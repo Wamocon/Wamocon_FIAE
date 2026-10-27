@@ -1204,3 +1204,47 @@ Geprüft wurde mit `ecc:typescript-reviewer` und `ecc:security-reviewer` (nur le
 - **Die Zeit der Dateien** kommt vom Browser (`File.lastModified`) und ist beim Upload nicht die der OneDrive-Quelle. Die Prüfliste soll sie neben Größe und Hochladezeit zeigen.
 - **Konfiguration der Jest-Abdeckung**: Die neuen Module sind nicht in die Schwelle von 100 Prozent aufgenommen (`jest.config.ts`).
 - **Nicht gebaut**: Sokrates-Stufe (U5), Prüfliste (U6), Routen und Warteschlange (U2), Planbau aus Entscheidungen (U7).
+
+## 16. Stand U6 (Prüfliste, Oberfläche)
+
+Stand: 27.10.2026. Paket U6 ist umgesetzt, ohne Migration und ohne Wirkung auf Production (die Routen und die Seiten sind dort abgeschaltet, der Menüeintrag erscheint dort nicht). Es nutzt die Tabellen `content_upload_*` der Migration 20261030000100, die Upload-Routen aus U2 und die Regelstufe aus U4. Übernahme, Probelauf und Rückbau (U7) und die KI-Stufe (U5) sind nicht gebaut.
+
+### 16.1 Was gebaut ist
+
+| Teil | Inhalt |
+| ---- | ------ |
+| Seiten | `/trainer/admin/content-upload` (Läufe), `.../new` (neuer Lauf mit Upload von Ordner oder Dateien), `.../[runId]` (Prüfliste, Fortschritt, Dublettenansicht). Zugang nur mit Lehrplan-Schreibrecht, sonst Hinweis und Weiterleitung. Menüeintrag nur für diese Personen und nur, wo die Funktion läuft (Preview, lokal) |
+| Routen | `GET overview`, `GET runs/[runId]/review` (Filter nach Band, Typ, Komponente, Status, Dubletten, Suche, Sortierung, Seiten), `GET .../review/options` (Positivliste für die Auswahlfelder), `GET .../review/duplicates`, `POST .../decisions`. Alle mit `requireCurriculumEditor`, danach die Abschaltung (404 außerhalb preview und lokal) |
+| Entscheidungen | Befehle `set`, `bulk` (ablehnen, zurückstellen), `assign` (Zuordnung ändern und übernehmen), `accept_high`, `duplicate`, `accept_newest`. Geschrieben wird nur im Status `review` (sonst 409 `RUN_STATE`) und nur für die Version, die die Person sah (sonst 409 `VERSION_CONFLICT`). Jede Änderung hängt `decisions_version` um eins hoch und setzt `last_dry_run_hash` auf NULL, in einer Transaktion unter Sperre auf den Lauf. Der Hash selbst und die Übernahme gehören zu U7 |
+| Warteschlange | `src/lib/content-upload/review/steps.ts` füllt die Plätze `extract` (liest Word oder PDF, wendet die Regelstufe an, schreibt den Vorschlag) und `rules` (Zustand `proposed_rules`, `unclear` oder `skipped`). Die Pump-Route nutzt sie. Der Platz `ki` bleibt leer (U5) |
+| Anzeige | Nur Metadaten, Typ, Zuordnung, Grund (Code und deutscher Kurztext) und Konfidenz. Kein Speicherpfad, kein Claim, keine Zusammenfassung der Datei, kein Auszug, kein Dokumenttext, keine Lösungsteile (Entscheidung O13). Ein Test sucht die Kanarienwörter der Lösungen in allen Antworten und in der Seite |
+| Barrierefreiheit | echte Tabelle mit `caption`, `th scope` und `aria-sort`, beschriftete Felder, Tastaturbedienung, Dialoge mit Fokusfalle, Escape und Fokusrückgabe, Sprungmarke zur Prüfliste, Band als Wort mit Symbol, Fortschritt in `aria-live` im Takt von 5 Sekunden (Fehler sofort). Entscheidungen sind Schaltflächen mit `aria-pressed`, kein Auswahlfeld (ein geschlossenes Auswahlfeld schreibt beim ersten Pfeil, WCAG 3.2.2) |
+
+### 16.2 Abweichungen vom Konzept und Entscheidungen
+
+- **Entscheidung ohne Dropdown.** Das Konzept zeigt ein Auswahlfeld je Zeile. Gebaut sind drei Schaltflächen (Übernehmen, Ablehnen, Zurückgestellt), weil ein Auswahlfeld schon mit der Pfeiltaste schreibt.
+- **Ein Vorschlag, der eine Person braucht, wird nie per Klick übernommen.** Band `low` und `conflict`, außerdem Vorschläge mit den Gründen `SOLUTION_MARKER`, `CONTENT_UNREADABLE`, `INPUT_TRUNCATED` und `ARCHIVE_ABOVE_TREE` (der Inhalt ist nicht sicher geprüft). Das gilt für die Einzelentscheidung, für die Dublettenansicht und für "Neueste Fassung wählen". Eine Person nennt dann die ganze Zuordnung (Typ, Komponente, Enabler, Stufe). Gespeichert wird die Schreibweise der Positivliste, nicht die getippte.
+- **Dubletten.** Nur eine Fassung je Inhaltsschlüssel kann akzeptiert sein, für jeden Befehl (`DUPLICATE_UNRESOLVED`). In der Dublettenansicht wird die gewählte Fassung `accept` mit `dup_choice = keep`, die anderen `reject` mit `dup_choice = skip` (ein ablehnender Eintrag wird auch dann nicht übernommen, wenn U7 `dup_choice` nicht liest). "Alle sicheren übernehmen" nimmt keine Datei einer Dublettengruppe. Die Ähnlichkeitsgruppen (anderer Schlüssel) sind in der Liste nicht enthalten: die Texte werden nicht gespeichert, ein Fingerabdruck in `parse_summary` wäre ein eigener Schnitt.
+- **Zusätzlicher Dateizustand.** `extracted` darf nach `skipped` (Archiv, ausgeschlossene Komponente), geändert in `staging/status.ts`.
+- **Zusätzliche Route `overview`** für die Läufe mit Zahl der Dateien und Entscheidungen (die Liste aus U2 kennt keine Zähler).
+- **Nicht gebaut:** "Rückgängig" der letzten Massenaktion (Zurückstellen ist der Rückweg), Ordner hierher ziehen, "Original ansehen" (Lösungen), Anzeige der Fragenzahl. Bei einer PDF ohne Inhaltsschlüssel (Widerspruch oder Typ unbekannt) kann die Zuordnung nur abgelehnt oder zurückgestellt werden, weil der Typ des Originals nicht wählbar ist.
+- **PDF-Leser unter Next.** `pdf-worker.ts` fand im Bundle eines Next-Servers `createRequire` nicht (der Namensraum von `node:module` hat dort nur `default`), jede PDF endete als `ENGINE_UNAVAILABLE`. Behoben und mit einem Test belegt. Damit läuft pdf.js jetzt wirklich im Webprozess, siehe Freigabebedingung.
+
+### 16.3 Prüfung
+
+- Unit- und Integrationstests (Filterlogik, Entscheidungen, Gruppenregel, Eingaben, Routen, Schritte der Warteschlange, Komponenten) und ein Vertragstest für die Speicherfassung und für SQL (`CONTENT_UPLOAD_TEST_DB`, lokale Wegwerf-Datenbank).
+- Browserprüfung mit playwright-core (Chrome) gegen einen lokalen Dev-Server, die echten Routen auf einer lokalen Wegwerf-Postgres und eine Attrappe für Auth und Storage (`GET /auth/v1/user`, Signaturen, Upload, Lesen, Löschen, im Speicher). **Nicht gegen den echten Storage geprüft.** 66 Prüfungen, darunter 51 erfundene Dateien aus einem Ordner (49 gelesen, 2 andere Endungen übersprungen), Upload und Verarbeitung in etwa 3 Sekunden, Filter, Sprungmarke, Dublettenansicht, Zuordnung, Massenaktionen, Versionskonflikt, Seitenwechsel, Trainer erhält 403, fremder Lauf, Verwerfen mit Aufräumen. axe-core (WCAG 2.2 AA und Best Practice) ohne Verstoß im dunklen und im hellen Thema, auch bei 400 Pixel Breite ohne waagerechtes Scrollen der Seite.
+
+### 16.4 Gutachten
+
+Geprüft mit `ecc:security-reviewer`, `ecc:react-reviewer` und `ecc:typescript-reviewer` (nur lesend). Eingearbeitet: Vorschläge, die eine Person brauchen (siehe oben), Gruppenregel für alle Befehle, kanonische Codes, ganze Zuordnung bei `assign`, Auswahl wird beim Filterwechsel verworfen, Version aus der Antwort der letzten Entscheidung, Fokus nach Dialogen und im Editor, Fehler beim Laden der Auswahllisten sichtbar, Eingabe der Seite (`runId` nur als UUID), stabile Erkennung der abgeschalteten Funktion, Zähler und Filter lassen ausgelassene Dateien weg, Zwischenspeicher der Positivliste hält keinen Fehler fest, doppelte Dateien in einem Schreibaufruf (letzte gewinnt), Sperre der Dateizeilen beim Lesen des Zustands.
+
+### 16.5 Offen und Risiken
+
+- **Freigabebedingung PDF.** Ein Worker-Thread ist keine Sandbox (siehe 14.3). Bevor die Funktion in Production eingeschaltet wird, muss PDF in einem Kindprozess mit dem Berechtigungsmodell von Node gelesen werden.
+- **Pump je Lauf.** Die Begrenzung von 120 Aufrufen je Minute zählt Aufrufe, nicht gleichzeitige Claims. Eine Obergrenze gleichzeitig gehaltener Claims je Lauf gehört in `claimFiles` (U2).
+- **`last_dry_run_hash` und Pump.** Geht ein Lauf aus `review` zurück nach `processing` und schreibt der Pump neue Vorschläge, löscht das den Hash nicht. U7 muss beim Übernehmen den Plan aus dem aktuellen Stand neu bilden und den Hash vergleichen.
+- **Positivliste aus der Datenbank:** `training_components` hat keine Gruppenspalte, die Gruppe wird aus Art und Phase abgeleitet (Pflicht Phase 1 ist `teil1`, Phase 2 `teil2`, Wahl `wahl`, integrativ `ganze`). Eine Pflichtkomponente ohne Phase ergibt `NO_GROUP` (nur `medium`).
+- **Nur Administratoren, ein Mandant:** Läufe sieht der Ersteller, ein SUPER_ADMIN alle.
+- Die Lesestrecken laden den ganzen Lauf (bis 1500 Zeilen) und filtern im Speicher. Das trägt für den Zweck, eine Seite mit mehr Läufen oder Dateien brauchte SQL-Filter.
+- Der Hinweis in den Gründen (`reason.text`) ist fester deutscher Text der Regelstufe, auch in der englischen Oberfläche.
