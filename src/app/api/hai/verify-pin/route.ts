@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHash, timingSafeEqual } from 'crypto';
 import { isErrorResponse } from '@/lib/auth/session';
 import { requireHaiIndexManager } from '@/lib/hai/guards';
+import { isAdminProofConfigured, signAdminProof } from '@/lib/auth/admin-proof';
 import { getClientIp } from '@/lib/rate-limit';
 import {
   HAI_PIN_SCOPE,
@@ -45,10 +46,20 @@ function locked(retryAfterSec: number) {
 }
 
 export async function POST(request: Request) {
-  // Only platform staff may even try the PIN. The PIN is a gate of the admin
-  // dialog, embed and sync check the session and do not ask for it.
+  // Only platform staff may even try the PIN. A right PIN is answered with a
+  // short lived proof bound to this session (src/lib/auth/admin-proof.ts), which
+  // embed and sync ask for in the header x-admin-pin-proof.
   const manager = await requireHaiIndexManager(request);
   if (isErrorResponse(manager)) return manager;
+
+  // No key to sign the proof: the gate stays shut, nothing is counted or compared
+  if (!isAdminProofConfigured()) {
+    console.error(`${TAG} no server key to sign the PIN proof`);
+    return NextResponse.json(
+      { success: false, error: 'Temporarily unavailable' },
+      { status: 503 }
+    );
+  }
 
   const expectedPin = process.env.HAI_ADMIN_PIN;
   if (!expectedPin) {
@@ -129,5 +140,17 @@ export async function POST(request: Request) {
     // The PIN was right, old counters only expire later
     console.error(`${TAG} could not reset the attempt counter`, err);
   }
-  return NextResponse.json({ success: true });
+  const signed = signAdminProof(manager.id, 'hai-index-admin');
+  if (!signed) {
+    console.error(`${TAG} could not sign the PIN proof`);
+    return NextResponse.json(
+      { success: false, error: 'Temporarily unavailable' },
+      { status: 503 }
+    );
+  }
+  return NextResponse.json({
+    success: true,
+    proof: signed.proof,
+    expiresAt: signed.expiresAt,
+  });
 }

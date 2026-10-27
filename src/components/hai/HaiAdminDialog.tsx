@@ -15,7 +15,13 @@ interface HaiAdminDialogProps {
 export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
   const { t } = useLanguage();
   const [pin, setPin] = useState('');
-  const [authenticated, setAuthenticated] = useState(false);
+  // The proof of the admin PIN, in memory only (never localStorage): it goes
+  // to the widget, which sends it to embed and sync. It expires on the server
+  // after ten minutes, then the PIN is asked for again.
+  const [proof, setProof] = useState<{
+    value: string;
+    expiresAt: number;
+  } | null>(null);
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -29,8 +35,12 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
     if (!open) {
       setPin('');
       setError('');
-      // Keep authenticated state for the session
+      // The proof stays while it is valid, so the dialog can be reopened
+      return;
     }
+    setProof(current =>
+      current && current.expiresAt <= Date.now() ? null : current
+    );
   }, [open]);
 
   // Close on Escape key
@@ -56,7 +66,17 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
       });
 
       if (res.ok) {
-        setAuthenticated(true);
+        const data = await res.json().catch(() => null);
+        if (
+          typeof data?.proof === 'string' &&
+          data.proof &&
+          Number.isFinite(data.expiresAt)
+        ) {
+          setProof({ value: data.proof, expiresAt: Number(data.expiresAt) });
+        } else {
+          // A server that gives no proof cannot open the gated actions
+          setError(t('hai.admin.pinUnavailable'));
+        }
         setPin('');
       } else if (res.status === 429) {
         // The server locks the person after several wrong PINs
@@ -82,7 +102,15 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
     }
   }, [pin]);
 
+  // The server rejected the proof (expired, or another session): ask again
+  const handleProofRejected = useCallback(() => {
+    setProof(null);
+    setError(t('hai.admin.proofExpired'));
+  }, [t]);
+
   if (!open || !mounted) return null;
+
+  const activeProof = proof && proof.expiresAt > Date.now() ? proof : null;
 
   const dialog = (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -110,7 +138,7 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
 
         {/* Content */}
         <div className="p-6">
-          {!authenticated ? (
+          {!activeProof ? (
             /* PIN Entry Gate */
             <div className="flex flex-col items-center py-8 space-y-6">
               <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
@@ -162,7 +190,10 @@ export default function HaiAdminDialog({ open, onClose }: HaiAdminDialogProps) {
             </div>
           ) : (
             /* Authenticated — show HAI Admin Widget */
-            <HaiAdminWidget />
+            <HaiAdminWidget
+              adminProof={activeProof.value}
+              onProofRejected={handleProofRejected}
+            />
           )}
         </div>
       </div>

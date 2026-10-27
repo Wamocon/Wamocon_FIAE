@@ -18,7 +18,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import haiDb from '@/db/haiDb';
 import { sql } from 'drizzle-orm';
 import { isErrorResponse } from '@/lib/auth/session';
-import { requireHaiIndexManager } from '@/lib/hai/guards';
+import {
+  requireHaiIndexAdmin,
+  requireHaiIndexManager,
+} from '@/lib/hai/guards';
 import {
   indexAllContent,
   indexAllTrainees,
@@ -32,8 +35,9 @@ import { badRequestUnlessUuid } from '@/lib/uuid';
 
 export async function POST(request: NextRequest) {
   try {
-    // Shared index: platform staff only, the role comes from the session
-    const manager = await requireHaiIndexManager(request);
+    // Shared index: platform staff only, the role comes from the session, and
+    // the proof of the admin PIN (this route reindexes and calls the models)
+    const manager = await requireHaiIndexAdmin(request);
     if (isErrorResponse(manager)) return manager;
 
     const body = await request.json();

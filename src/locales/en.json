@@ -2190,5 +2190,6 @@
   "curriculum.superAdminOnly": "Curriculum content can only be changed by super admins.",
   "hai.admin.pinLocked": "Too many attempts. Please try again in {minutes} min.",
   "hai.admin.pinUnavailable": "The PIN check is not available right now. Please try again later.",
-  "trainerQuizPages.loadError": "The content could not be loaded. Please try again later."
+  "trainerQuizPages.loadError": "The content could not be loaded. Please try again later.",
+  "hai.admin.proofExpired": "The PIN confirmation has expired. Please enter the PIN again."
 }
