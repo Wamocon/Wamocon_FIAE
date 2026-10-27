@@ -1,6 +1,6 @@
 // Shared helpers for the database scripts: read the target from the arguments
 // and call the Supabase CLI. CLI: SUPABASE_CLI (path to supabase or to
-// dist/supabase.js), otherwise "supabase" from the PATH.
+// dist/supabase.js or a .mjs stand-in), otherwise "supabase" from the PATH.
 
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -76,7 +76,7 @@ export function sleep(seconds) {
 /** Program and leading arguments of the CLI. */
 export function cliProgram() {
   const path = process.env.SUPABASE_CLI || 'supabase';
-  return path.endsWith('.js') ? [process.execPath, [path]] : [path, []];
+  return /\.[cm]?js$/.test(path) ? [process.execPath, [path]] : [path, []];
 }
 
 function once(parameters) {

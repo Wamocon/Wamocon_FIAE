@@ -69,6 +69,19 @@ exception
 end
 $fn$;
 revoke all on function preview_support.has_preview_profile(uuid) from public;
+-- Only authenticated may call it. Converges after an older version of 01, which granted EXECUTE on
+-- every function of the schema to the roles below (a no-op otherwise).
+do $$
+declare
+  r text;
+begin
+  foreach r in array array['anon', 'service_role', 'app_preview_migrator', 'app_preview'] loop
+    if exists (select 1 from pg_roles where rolname = r) then
+      execute format('revoke all on function preview_support.has_preview_profile(uuid) from %I', r);
+    end if;
+  end loop;
+end
+$$;
 grant execute on function preview_support.has_preview_profile(uuid) to authenticated;
 
 -- 3. Storage: Preview uploads go to preview/<user id>/... in the SHARED buckets
