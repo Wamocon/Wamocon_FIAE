@@ -273,3 +273,82 @@ describe('findRowLeaks', () => {
     ]);
   });
 });
+
+describe('the task of a scenario', () => {
+  const rowOf = (description: string) => ({
+    content_documents: [
+      {
+        document_type: 'TRAINEE_QUESTION',
+        visibility: 'ALL',
+        title: 'Szenario K1-a: Ausgangssituation',
+        description,
+        file_name: 'Szenario_1a.docx',
+      },
+    ],
+  });
+
+  it('is visible text: a marker or a solution text in it is a leak', () => {
+    const p = plan();
+    expect(findSolutionLeaks(p)).toEqual([]);
+    p.scenarios[0].task = 'Eine erfundene Frage. Richtige Antwort: B';
+    expect(findSolutionLeaks(p).join(' ')).toMatch(/scenario K1-a task/);
+    const q = plan();
+    q.scenarios[0].task = `Vorweg. ${q.scenarios[0].solution} Danach.`;
+    expect(findSolutionLeaks(q).join(' ')).toMatch(/scenario K1-a task/);
+  });
+
+  it('is a leak when it repeats one paragraph of the solution or knowledge part', () => {
+    const p = plan();
+    p.scenarios[0].solution =
+      'Erster erfundener Absatz der Lösung.\n\nZweiter erfundener Absatz.';
+    p.scenarios[0].task = 'Zweiter erfundener Absatz.';
+    expect(findSolutionLeaks(p).join(' ')).toMatch(/scenario K1-a task/);
+    const q = plan();
+    q.scenarios[0].task = q.scenarios[0].knowledgeContribution.toUpperCase();
+    expect(findSolutionLeaks(q).join(' ')).toMatch(/scenario K1-a task/);
+  });
+
+  it('is a leak when a line looks like the heading of a solution', () => {
+    const p = plan();
+    p.scenarios[0].task = 'Eine erfundene Frage.\n\nErwartete Lösung';
+    expect(findSolutionLeaks(p).join(' ')).toMatch(
+      /scenario K1-a task has a line/
+    );
+  });
+
+  it('does not throw on a plan whose solution parts are missing', () => {
+    const p = JSON.parse(JSON.stringify(plan()));
+    delete p.scenarios[0].solution;
+    p.scenarios[0].task = 'Eine erfundene Aufgabe TAU.';
+    expect(() => findSolutionLeaks(p)).not.toThrow();
+  });
+
+  it('may use the word Lösung in running text', () => {
+    const p = plan();
+    p.scenarios[0].task = 'Entwickeln Sie eine Lösung für die erfundene Lage.';
+    expect(findSolutionLeaks(p)).toEqual([]);
+  });
+
+  it('is checked in the row of the situation document that is about to be written', () => {
+    const p = plan();
+    const solutions = solutionTexts(p);
+    expect(
+      findRowLeaks(
+        rowOf('Eine Lage.\n\nAufgabe\n\nEine erfundene Aufgabe.'),
+        solutions
+      )
+    ).toEqual([]);
+    expect(
+      findRowLeaks(
+        rowOf('Eine Lage.\n\nAufgabe\n\nRichtige Antwort: B'),
+        solutions
+      ).join(' ')
+    ).toMatch(/content_documents\.description/);
+    expect(
+      findRowLeaks(
+        rowOf(`Eine Lage.\n\nAufgabe\n\n${p.scenarios[0].solution}`),
+        solutions
+      ).join(' ')
+    ).toMatch(/content_documents\.description/);
+  });
+});

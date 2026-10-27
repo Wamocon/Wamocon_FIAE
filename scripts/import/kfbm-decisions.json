@@ -25,7 +25,7 @@
   },
   "open": [
     "Which of the two Excel mapping versions applies (learning fields and use cases are phase 4.5, not part of this run).",
-    "Scenario 23c lies in the folder of enabler 23b and three scenarios use the heading Aufgabe instead of Lösungsszenario: skipped until the owner decides.",
+    "The file Szenario_23c.docx in the folder of enabler 23b holds the text of scenario 23c, so enabler 23b has no scenario until the owner names the right file. The scenarios 10m, 16c and 23c carry their solution under the heading Aufgabe: read as the solution (trainer only), the owner confirms this.",
     "Global quiz copies 01, 03 and 04 exist twice with modification times a few hours apart: skipped until the owner names the valid copy.",
     "Quiz files with format errors (10b, 16e, 11c, 1a high) are skipped until the files are corrected."
   ]

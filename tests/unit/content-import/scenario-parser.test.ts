@@ -43,6 +43,7 @@ describe('parseScenarioText', () => {
     const { value } = parseScenarioText(full);
     expect(value.visibility).toEqual({
       situation: 'trainee',
+      task: 'trainee',
       solution: 'trainer',
       knowledgeContribution: 'trainer',
     });
@@ -56,6 +57,7 @@ describe('parseScenarioText', () => {
       code: '9x',
       title: 'Beispielthema erfunden',
       situation: value.situation,
+      task: '',
     });
     expect(JSON.stringify(view)).not.toContain('Leitfragen');
     expect(JSON.stringify(view)).not.toContain('Fachwissen');
@@ -244,10 +246,10 @@ describe('parseScenarioText', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('reports an unknown bold heading such as "Aufgabe" instead of reading it as situation', () => {
+  it('reports an unknown bold heading such as "Hinweise" instead of reading it as situation', () => {
     const lines = [...full];
     const index = lines.findIndex(para => para.text === 'Lösungsszenario');
-    lines[index] = { text: 'Aufgabe', bold: true };
+    lines[index] = { text: 'Hinweise', bold: true };
     const result = parseScenarioText(lines);
     const found = result.issues.map(i => i.code);
     expect(found).toContain('SECTION_UNKNOWN_HEADING');
@@ -268,5 +270,335 @@ describe('parseScenarioText', () => {
     const result = parseScenarioText(lines);
     expect(result.ok).toBe(true);
     expect(result.issues).toEqual([]);
+  });
+});
+
+// The section "Aufgabe" ----------------------------------------------------------
+
+const taskLines: Paragraph[] = [
+  p('Die erfundene Person soll drei erfundene Dinge ordnen.'),
+  p('Dabei beachtet sie die erfundenen Vorgaben.'),
+];
+const TASK_TEXT =
+  'Die erfundene Person soll drei erfundene Dinge ordnen.\n\nDabei beachtet sie die erfundenen Vorgaben.';
+
+/** The full scenario with a task section after the situation (index 5). */
+const withTask = (heading = 'Aufgabe'): Paragraph[] => [
+  ...full.slice(0, 5),
+  p(heading, true),
+  ...taskLines,
+  ...full.slice(5),
+];
+
+describe('parseScenarioText: the section Aufgabe', () => {
+  it('reads the task as its own part that trainees may see', () => {
+    const { value, issues, ok } = parseScenarioText(withTask());
+    expect(ok).toBe(true);
+    expect(issues).toEqual([]);
+    expect(value.task).toBe(TASK_TEXT);
+    expect(value.visibility.task).toBe('trainee');
+    // the other parts are not touched
+    const plain = parseScenarioText(full).value;
+    expect(value.situation).toBe(plain.situation);
+    expect(value.solution).toBe(plain.solution);
+    expect(value.knowledgeContribution).toBe(plain.knowledgeContribution);
+    expect(value.situation).not.toContain('Vorgaben');
+    expect(value.solution).not.toContain('Vorgaben');
+  });
+
+  it('leaves the task empty and the result unchanged when there is none', () => {
+    const { value, issues } = parseScenarioText(full);
+    expect(value.task).toBe('');
+    expect(issues).toEqual([]);
+  });
+
+  it.each(['Aufgabe', 'Aufgabenstellung', 'Aufgaben', 'Aufgabe:', 'AUFGABE'])(
+    'accepts the heading "%s"',
+    heading => {
+      const { value, issues, ok } = parseScenarioText(withTask(heading));
+      expect(ok).toBe(true);
+      expect(issues).toEqual([]);
+      expect(value.task).toBe(TASK_TEXT);
+    }
+  );
+
+  it('reads the task in plain text with a bold marker', () => {
+    const text = [
+      '**Szenario 24.1a) Arbeit planen**',
+      'Ausgangssituation:',
+      'Eine Lage.',
+      '**Aufgabenstellung**',
+      'Eine Aufgabe.',
+      'Loesungsszenario:',
+      'Eine Lösung.',
+      'Wie das Fachwissen zur Loesung beitraegt:',
+      'Ein Beitrag.',
+    ].join('\n');
+    const { value, ok, issues } = parseScenarioText(text);
+    expect(issues).toEqual([]);
+    expect(ok).toBe(true);
+    expect(value.task).toBe('Eine Aufgabe.');
+    expect(value.solution).toBe('Eine Lösung.');
+  });
+
+  it('accepts the task directly before the solution, with an empty line', () => {
+    const lines = [
+      ...full.slice(0, 5),
+      p('Aufgabe', true),
+      ...taskLines,
+      p(''),
+      ...full.slice(5),
+    ];
+    const { value, issues, ok } = parseScenarioText(lines);
+    expect(issues).toEqual([]);
+    expect(ok).toBe(true);
+    expect(value.task).toBe(TASK_TEXT);
+    const plain = parseScenarioText(full).value;
+    expect(value.solution).toBe(plain.solution);
+    expect(value.knowledgeContribution).toBe(plain.knowledgeContribution);
+  });
+
+  // A task is visible text. A heading "Aufgabe" inside or after the solution
+  // parts, or before the situation, must never turn solution text visible.
+  it.each([
+    [
+      'at the end, after the knowledge part',
+      () => [...full, p('Aufgabe', true), p('Weiterer erfundener Schritt.')],
+    ],
+    [
+      'between the solution and the knowledge part',
+      () => [
+        ...full.slice(0, 9),
+        p('Aufgaben', true),
+        p('Weiterer erfundener Schritt.'),
+        ...full.slice(9),
+      ],
+    ],
+    [
+      'before the situation',
+      () => [
+        full[0],
+        p('Aufgabe', true),
+        p('Weiterer erfundener Schritt.'),
+        ...full.slice(1),
+      ],
+    ],
+  ])(
+    'refuses a task heading %s and keeps its text out of the view',
+    (_where, build) => {
+      const result = parseScenarioText(build());
+      expect(result.ok).toBe(false);
+      expect(result.issues.map(i => i.code)).toContain('SECTION_ORDER');
+      expect(result.value.task).toBe('');
+      expect(result.value.situation).not.toContain('Weiterer');
+      expect(toTraineeScenario(result)).toBeNull();
+    }
+  );
+
+  it('keeps the text after a misplaced task heading in the section before it', () => {
+    const result = parseScenarioText([
+      ...full,
+      p('Aufgabe', true),
+      p('Weiterer erfundener Schritt.'),
+    ]);
+    expect(result.value.knowledgeContribution).toContain('Weiterer');
+    expect(result.value.task).toBe('');
+  });
+
+  it('refuses a task with a line that looks like the heading of a solution', () => {
+    const lines = withTask();
+    lines.splice(7, 0, p('Erwartete Lösung'));
+    const result = parseScenarioText(lines);
+    expect(result.issues.map(i => i.code)).toContain('TASK_SOLUTION_HEADING');
+    expect(result.ok).toBe(false);
+    expect(toTraineeScenario(result)).toBeNull();
+    const view = parseScenarioText(withTask());
+    view.value.task += '\n\nAntwortschlüssel';
+    expect(toTraineeScenario(view)).toBeNull();
+  });
+
+  it('does not let the task disturb the order check of the other parts', () => {
+    const swapped = [
+      p('Szenario 9x) Thema', true),
+      p('Lösungsszenario', true),
+      p('Eine Lösung.'),
+      p('Aufgabe', true),
+      p('Eine Aufgabe.'),
+      p('Ausgangssituation', true),
+      p('Eine Lage.'),
+      p('Wie das Fachwissen zur Lösung beiträgt', true),
+      p('Ein Beitrag.'),
+    ];
+    const codes = parseScenarioText(swapped).issues.map(i => i.code);
+    expect(new Set(codes)).toEqual(new Set(['SECTION_ORDER']));
+  });
+
+  it('reports a task that stands twice', () => {
+    const twice = [...withTask(), p('Aufgabe', true), p('Noch eine.')];
+    const result = parseScenarioText(twice);
+    expect(result.issues.map(i => i.code)).toContain('SECTION_DUPLICATE');
+    expect(result.ok).toBe(false);
+    expect(toTraineeScenario(result)).toBeNull();
+  });
+
+  it('reports an empty task', () => {
+    const lines = [...full.slice(0, 5), p('Aufgabe', true), ...full.slice(5)];
+    const result = parseScenarioText(lines);
+    expect(result.issues).toEqual([
+      expect.objectContaining({ code: 'SECTION_EMPTY', severity: 'error' }),
+    ]);
+    expect(result.ok).toBe(false);
+    expect(toTraineeScenario(result)).toBeNull();
+  });
+
+  it('reports a bold heading that only looks like the task', () => {
+    const result = parseScenarioText(withTask('Aufgabe (nur Trainer)'));
+    expect(result.issues.map(i => i.code)).toContain('SECTION_UNKNOWN_HEADING');
+    expect(result.ok).toBe(false);
+  });
+
+  it('does not take a running sentence that starts with the word for a heading', () => {
+    const lines = [
+      ...full.slice(0, 4),
+      p('Aufgabe der Person ist es, die erfundene Lage zu ordnen.'),
+      ...full.slice(4),
+    ];
+    const result = parseScenarioText(lines);
+    expect(result.ok).toBe(true);
+    expect(result.value.task).toBe('');
+    expect(result.value.situation).toContain('Aufgabe der Person');
+  });
+
+  describe('what trainees get', () => {
+    it('adds the task to the view and nothing of the solution', () => {
+      const result = parseScenarioText(withTask());
+      const view = toTraineeScenario(result);
+      expect(view).toEqual({
+        code: '9x',
+        title: 'Beispielthema erfunden',
+        situation: result.value.situation,
+        task: TASK_TEXT,
+      });
+      const shown = JSON.stringify(view);
+      for (const hidden of ['Leitfragen', 'Fachwissen', 'Lösung umsetzt']) {
+        expect(shown).not.toContain(hidden);
+      }
+    });
+
+    it('lets a task use the word Lösung in running text', () => {
+      const lines = withTask();
+      lines[6] = p('Entwickeln Sie eine Lösung für die erfundene Lage.');
+      const view = toTraineeScenario(parseScenarioText(lines));
+      expect(view?.task).toContain('eine Lösung für');
+    });
+
+    it.each([
+      ['a solution heading', 'Lösungsszenario'],
+      ['a rationale label', 'Kurzbegründung: Eine erfundene Begründung.'],
+      ['a label of the right answer', 'Richtige Antwort: B'],
+      ['the heading of the knowledge part', 'Fachwissen zur Lösung'],
+    ])('refuses a task that carries %s', (_what, text) => {
+      const result = parseScenarioText(withTask());
+      result.value.task += `\n\n${text}`;
+      expect(toTraineeScenario(result)).toBeNull();
+    });
+
+    it('refuses a task that repeats a paragraph of the solution', () => {
+      const lines = withTask();
+      lines[7] = p('  Zuerst klärt sie die erfundenen LEITFRAGEN. ');
+      const result = parseScenarioText(lines);
+      expect(result.issues.map(i => i.code)).toContain('TASK_SOLUTION_OVERLAP');
+      expect(result.ok).toBe(false);
+      expect(toTraineeScenario(result)).toBeNull();
+    });
+
+    it('refuses a task that repeats a paragraph of the knowledge part', () => {
+      const lines = withTask();
+      lines[7] = p('Ohne das erfundene Fachwissen wäre die Lösung ungeordnet.');
+      const result = parseScenarioText(lines);
+      expect(result.issues.map(i => i.code)).toContain('TASK_SOLUTION_OVERLAP');
+      expect(toTraineeScenario(result)).toBeNull();
+    });
+
+    it('refuses a task that is part of a longer solution paragraph', () => {
+      const lines = withTask();
+      lines[6] = p('Danach setzt sie die erfundene Lösung');
+      const result = parseScenarioText(lines);
+      expect(result.issues.map(i => i.code)).toContain('TASK_SOLUTION_OVERLAP');
+      expect(toTraineeScenario(result)).toBeNull();
+    });
+
+    it('refuses a task that is copied from the solution after parsing (fail closed)', () => {
+      const result = parseScenarioText(withTask());
+      result.value.task = result.value.solution;
+      expect(toTraineeScenario(result)).toBeNull();
+    });
+  });
+
+  describe('a task heading where the solution heading should be', () => {
+    const inPlace = (): Paragraph[] =>
+      full.map(para =>
+        para.text === 'Lösungsszenario' ? p('Aufgabe', true) : para
+      );
+
+    it('reads the section as the solution (trainer only) and says so', () => {
+      const result = parseScenarioText(inPlace());
+      expect(result.ok).toBe(true);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: 'TASK_AS_SOLUTION',
+          severity: 'warning',
+        }),
+      ]);
+      expect(result.value.solution).toBe(
+        parseScenarioText(full).value.solution
+      );
+      expect(result.value.task).toBe('');
+      expect(result.value.visibility.solution).toBe('trainer');
+    });
+
+    it('keeps that text away from trainees', () => {
+      const result = parseScenarioText(inPlace());
+      const view = toTraineeScenario(result);
+      expect(view).not.toBeNull();
+      expect(view?.task).toBe('');
+      const shown = JSON.stringify(view);
+      expect(shown).not.toContain('Leitfragen');
+      expect(shown).not.toContain('Fachwissen');
+    });
+
+    it('also works with the other heading forms and reports a missing knowledge part', () => {
+      for (const heading of ['Aufgabenstellung', 'Aufgaben', 'Aufgabe:']) {
+        const lines = full.map(para =>
+          para.text === 'Lösungsszenario' ? p(heading, true) : para
+        );
+        const result = parseScenarioText(lines);
+        expect(result.ok).toBe(true);
+        expect(result.value.solution).toContain('Leitfragen');
+      }
+      const result = parseScenarioText(inPlace().slice(0, 9));
+      expect(result.issues.map(i => i.code)).toEqual([
+        'TASK_AS_SOLUTION',
+        'SECTION_MISSING',
+      ]);
+    });
+
+    it('still checks the order of the parts', () => {
+      const lines = [
+        ...full.slice(0, 5),
+        ...full.slice(9),
+        p('Aufgabe', true),
+        p('Eine Lösung.'),
+      ];
+      const result = parseScenarioText(lines);
+      expect(result.issues.map(i => i.code)).toContain('SECTION_ORDER');
+      expect(result.ok).toBe(false);
+    });
+
+    it('does not do it when a solution heading exists, the task stays a task', () => {
+      const result = parseScenarioText(withTask());
+      expect(result.issues).toEqual([]);
+      expect(result.value.task).toBe(TASK_TEXT);
+    });
   });
 });

@@ -95,6 +95,11 @@ export interface PlanScenario {
   title: string | null;
   /** Visible for trainees. */
   situation: string;
+  /**
+   * Visible for trainees, written under the heading "Aufgabe" into the row of
+   * the situation. Left out of the plan when the file has no task.
+   */
+  task?: string;
   /** SOLUTION: trainer only. */
   solution: string;
   /** SOLUTION: trainer only. */

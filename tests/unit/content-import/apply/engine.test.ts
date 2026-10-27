@@ -11,7 +11,14 @@ import {
   MemoryImportDb,
   inTransaction,
 } from '../../../helpers/memoryImportDb';
-import { DIR, file, loadDecisions, quizContent, sampleTree } from './fixtures';
+import {
+  DIR,
+  file,
+  loadDecisions,
+  quizContent,
+  sampleTree,
+  scenarioContent,
+} from './fixtures';
 
 const NOW = new Date('2026-10-26T12:00:00Z');
 const plan = (files = sampleTree()): ImportPlan =>
@@ -425,6 +432,113 @@ describe('executePlan: solution protection', () => {
       expect(String(docs[0].description)).not.toContain(mark);
       expect(String(docs[0].title)).not.toContain(mark);
     }
+  });
+
+  describe('a scenario with a task', () => {
+    const TASK = 'Eine erfundene Aufgabe TAU.';
+    const withTask = () => {
+      const files = sampleTree().filter(
+        f => !f.rel.endsWith('Szenario_1a.docx')
+      );
+      files.push(
+        file(
+          `${DIR.k1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
+          scenarioContent('1a', { task: TASK })
+        )
+      );
+      return plan(files);
+    };
+    const docsOf = (db: MemoryImportDb, code: string) => {
+      const enabler = db.tables.enablers.find(e => e.code === code)!;
+      return db.tables.content_documents
+        .filter(d => d.enabler_id === enabler.id)
+        .sort((a, b) => Number(a.order_index) - Number(b.order_index));
+    };
+
+    it('puts the task under the heading Aufgabe into the visible situation row, the rows stay three', async () => {
+      const db = new MemoryImportDb();
+      await executePlan(db, withTask(), options());
+      const docs = docsOf(db, 'K1-a');
+      expect(docs.map(d => [d.document_type, d.visibility, d.title])).toEqual([
+        ['TRAINEE_QUESTION', 'ALL', 'Szenario K1-a: Ausgangssituation'],
+        ['TRAINER_SOLUTION', 'TRAINER_ONLY', 'Szenario K1-a: Lösung (Trainer)'],
+        [
+          'TRAINER_SOLUTION',
+          'TRAINER_ONLY',
+          'Szenario K1-a: Fachwissen (Trainer)',
+        ],
+      ]);
+      expect(docs[0].description).toBe(
+        `Eine erfundene Lage am Arbeitsplatz.\n\nAufgabe\n\n${TASK}`
+      );
+      // no solution text in the visible row, no task in the trainer rows
+      for (const mark of ['OMEGA', 'SIGMA']) {
+        expect(String(docs[0].description)).not.toContain(mark);
+      }
+      expect(String(docs[1].description)).not.toContain('TAU');
+      expect(String(docs[2].description)).not.toContain('TAU');
+    });
+
+    it('leaves the rows of the other scenarios exactly as they were', async () => {
+      const before = new MemoryImportDb();
+      await executePlan(before, plan(), options());
+      const after = new MemoryImportDb();
+      await executePlan(after, withTask(), options());
+      for (const code of ['K1-b', 'K6.1-a', 'K6.2-d', 'K10-a', 'K20-a']) {
+        const strip = (db: MemoryImportDb) =>
+          docsOf(db, code).map(d => [d.title, d.description, d.order_index]);
+        expect(strip(after)).toEqual(strip(before));
+      }
+      expect(after.count('content_documents')).toBe(
+        before.count('content_documents')
+      );
+    });
+
+    it('writes the task also when only the visible situation is written', async () => {
+      const db = new MemoryImportDb();
+      await executePlan(db, withTask(), options({ scenarioSolutions: false }));
+      const docs = docsOf(db, 'K1-a');
+      expect(docs).toHaveLength(1);
+      expect(docs[0].description).toContain(TASK);
+      expect(JSON.stringify(db.tables)).not.toContain('OMEGA');
+    });
+
+    it('is stable on a second run', async () => {
+      const db = new MemoryImportDb();
+      await executePlan(db, withTask(), options());
+      const report = await executePlan(db, withTask(), options());
+      expect(report.tables.content_documents).toEqual({
+        insert: 0,
+        update: 0,
+        unchanged: 18,
+      });
+    });
+
+    it('adds a task to an existing scenario by updating the situation text only', async () => {
+      const db = new MemoryImportDb();
+      await executePlan(db, plan(), options());
+      const report = await executePlan(
+        db,
+        withTask(),
+        options({ updateExisting: true })
+      );
+      expect(report.tables.content_documents).toEqual({
+        insert: 0,
+        update: 1,
+        unchanged: 17,
+      });
+      expect(db.count('content_documents')).toBe(18);
+      expect(docsOf(db, 'K1-a')[0].description).toContain(TASK);
+    });
+
+    it('refuses a plan whose task shows a solution marker', async () => {
+      const db = new MemoryImportDb();
+      const p = clone(withTask());
+      const s = p.scenarios.find(x => x.enablerCode === 'K1-a')!;
+      s.task = `${TASK} Richtige Antwort: B`;
+      await expectAbort(executePlan(db, p, options()), 'PLAN_INVALID');
+      expect(db.totalRows()).toBe(0);
+    });
   });
 
   it('writes only the situation of a scenario unless the solutions are asked for', async () => {
