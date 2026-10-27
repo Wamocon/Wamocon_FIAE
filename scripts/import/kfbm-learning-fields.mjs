@@ -14,7 +14,15 @@
 // Order: the content import (kfbm-apply.mjs run --apply) comes first, it writes
 // the enablers. This script then writes the learning fields and the
 // mappings. A mapping whose enabler is not in the target is skipped and
-// reported, a target without any enabler stops the run.
+// reported, a target without any enabler stops the run. The use case import
+// (kfbm-use-cases.mjs) comes after it: run this script AGAIN afterwards. In
+// check, dry run and real run it reads the use cases of the catalog from the
+// database and, for every mapping (learning field, enabler), adds the mapping
+// (learning field, use case) of the use case that hangs on the enabler
+// (use_cases.enabler_id). It also adds the learning field code to
+// use_cases.lernfelder, the column the learning field pages read. Only missing
+// things are written (a second run changes nothing), enablers without a use
+// case and use cases without an enabler are reported.
 //
 // Commands:
 //   plan <mapping table .xlsx> (--import-plan <apply plan.json> |
@@ -24,7 +32,8 @@
 //         plan. No database, no network. Next to the JSON a summary in Markdown
 //         without any cell text (same name, .md). The learning fields get the
 //         official titles and time guidelines (hours) of the framework
-//         curriculum (src/lib/content-import/learning-fields/official.ts). A
+//         curriculum (src/lib/content-import/learning-fields/official.ts), and
+//         as description the verbatim Zielformulierung of the same source. A
 //         titles file of the owner (.json, {"LF1": "..."}) wins over the
 //         official title, the source list (.csv, provisional) does not. The
 //         folder is only listed (names and sizes), no document is opened.
@@ -35,10 +44,11 @@
 //         Dry run (default): everything is written inside a transaction, the
 //         counts are printed, then the transaction is rolled back. With --apply
 //         the transaction is committed. A real run against the Preview also
-//         needs --confirm-host <host of the connection>. --update-existing
-//         updates the title and the hours (hours_budget) of learning fields
-//         that exist (a title never to a placeholder, the hours never to
-//         empty), nothing else.
+//         needs --confirm-host <host of the connection>. An empty description
+//         of a learning field is always filled. --update-existing updates the
+//         title, the description and the hours (hours_budget) of learning
+//         fields that exist (a title never to a placeholder, the hours and the
+//         description never to empty), nothing else.
 //
 // The connection comes from the environment variable DB_CONNECTION_STRING and
 // from nowhere else (no .env file is read). The script prints neither the
