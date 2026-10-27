@@ -2131,15 +2131,11 @@
   "admin.userCreate.occupationHint": "Die Organisation bietet mehrere Berufe an. Ein Azubi lernt in genau einem Beruf.",
   "admin.userCreate.error.ORGANIZATION_REQUIRED": "Eine Rolle ab Ausbilder braucht eine Organisation. Bitte weisen Sie das Konto zuerst einer Organisation zu (Aufgabe der Plattformverwaltung).",
   "admin.userCreate.error.CATALOG_REQUIRED": "Die Organisation bietet mehrere Berufe an. Bitte wählen Sie einen Beruf für den Azubi.",
-  "catalog.switcher.label": "Beruf wählen",
-  "catalog.switcher.current": "Aktueller Beruf: {title}",
-  "catalog.switcher.reloadHint": "Beim Wechsel wird die Seite neu geladen.",
   "catalog.branding.badge": "Beruf: {title}",
   "admin.users.previewNotice": "Preview: Konten, die Sie hier anlegen, sind nur für Tests. Production erkennt sie nicht an, eine Anmeldung dort wird abgewiesen. Wenn Sie ein Konto löschen, das auch in Production genutzt wird, entfernt die Preview nur das Preview-Profil.",
   "admin.users.previewMailHint": "In der Preview wird standardmäßig keine E-Mail versendet. Die Zugangsdaten erscheinen nach dem Anlegen hier.",
   "admin.users.userDeletedAccountShared": "Preview-Profil gelöscht. Das Anmeldekonto bleibt bestehen, weil es auch in Production genutzt wird.",
   "admin.users.userDeletedAccountKept": "Preview-Profil gelöscht. Das Anmeldekonto konnte nicht geprüft oder gelöscht werden und bleibt bestehen.",
-  "catalog.switcher.apply": "Wechseln",
   "catalog.tiles.title": "Beruf wählen",
   "catalog.tiles.subtitle": "Wählen Sie den Beruf, in dem Sie arbeiten möchten. Nicht freigeschaltete Berufe sind ausgegraut.",
   "catalog.tiles.signedInAs": "Angemeldet als {name}",
@@ -2491,5 +2487,7 @@
   "contentUpload.confirm.reopen": "Erneut prüfen",
   "contentUpload.notice.reopened": "Der Lauf ist wieder in der Prüfung.",
   "contentUpload.notice.reopenState": "Der Lauf lässt sich in diesem Zustand nicht erneut prüfen.",
-  "contentUpload.code.UNREADABLE": "Der Browser konnte die Datei nicht lesen (zum Beispiel ein zu langer Pfad). Kürzen Sie den Pfad oder wählen Sie die Datei einzeln."
+  "contentUpload.code.UNREADABLE": "Der Browser konnte die Datei nicht lesen (zum Beispiel ein zu langer Pfad). Kürzen Sie den Pfad oder wählen Sie die Datei einzeln.",
+"catalog.tabs.label": "Ausbildung wählen",
+  "catalog.tabs.current": "Angezeigt wird: {title}"
 }
