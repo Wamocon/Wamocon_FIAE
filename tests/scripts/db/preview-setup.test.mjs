@@ -112,7 +112,7 @@ test('the shared objects template is human-run, additive and scoped to preview/'
   const policies = [...sql.matchAll(/create policy [\s\S]*?;/gi)].map(
     m => m[0]
   );
-  assert.equal(policies.length, 6);
+  assert.equal(policies.length, 8);
   for (const p of policies) {
     assert.ok(
       /foldername\(name\)\)\[1\] = 'preview'/.test(p),

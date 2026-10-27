@@ -35,7 +35,8 @@ end
 $$;
 
 -- 2. SECURITY DEFINER functions of public_preview are not executable by PUBLIC.
---    The API roles keep EXECUTE, the policies of the clone call the helpers as them.
+--    The API roles anon and authenticated get no EXECUTE (no policy of the lockdown
+--    migration 20261029000300 calls a helper), service_role and the app role keep it.
 --    (The default privileges of the migration role already avoid the PUBLIC grant
 --    for new functions, this covers whatever came with the clone.)
 do $$
@@ -48,7 +49,7 @@ begin
      where p.pronamespace = 'public_preview'::regnamespace and p.prosecdef
   loop
     execute format('revoke execute on function %s from public', z.signature);
-    execute format('grant execute on function %s to postgres, anon, authenticated, service_role', z.signature);
+    execute format('grant execute on function %s to postgres, service_role', z.signature);
     if exists (select 1 from pg_roles where rolname = 'app_preview') then
       execute format('grant execute on function %s to app_preview', z.signature);
     end if;
