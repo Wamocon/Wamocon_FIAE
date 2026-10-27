@@ -106,7 +106,63 @@ rollback; -- zur Kontrolle der Zahlen, dann mit commit wiederholen
 | Global-Quiz         | `quizzes` (Typ `GLOBAL`, Code `K6.2-global`, `training_component_id`) mit 20 Fragen. Die Stufe der Frage (1 bis 5 leicht, 6 bis 15 mittel, 16 bis 20 schwer) ergibt sich aus der Nummer, die Tabelle hat dafür keine Spalte. | Katalog und Code             |
 | Szenario            | `content_documents` am Enabler, bis zu drei Zeilen (siehe unten)                                                                                                                                                             | Enabler, Typ und Titel       |
 
-Die Komponenten tragen vorläufig Wochen und Sollstunden 0 (die Spalten sind `NOT NULL`, der Plan nennt keine Werte). `order_index` einer Komponente ist `Nummer * 10 + Teilung` (K1 gleich 10, K6.2 gleich 62). Der Kurs bekommt `year` gleich Phase (die Plattform führt "Ausbildungsjahr" als Phase) und `chapter` gleich `order_index`.
+Die Wochen der Komponenten kommen aus dem Ausbildungsrahmenplan (Abschnitt "Wochen und Sollstunden der Komponenten"), die Sollstunden bleiben vorläufig 0 (die Spalten sind `NOT NULL`, der Plan nennt keine Stunden). `order_index` einer Komponente ist `Nummer * 10 + Teilung` (K1 gleich 10, K6.2 gleich 62). Der Kurs bekommt `year` gleich Phase (die Plattform führt "Ausbildungsjahr" als Phase) und `chapter` gleich `order_index`.
+
+## Wochen und Sollstunden der Komponenten
+
+**Quelle der Wochen:** Bundesgesetzblatt Teil I Nr. 62 vom 28.02.2025, Verordnung über die Berufsausbildung zum Kaufmann und zur Kauffrau für Büromanagement (BüroMKfAusbV) vom 25.02.2025, Anlage (Ausbildungsrahmenplan), Spalte 4 "Zeitliche Richtwerte in Wochen im 1. bis 15. Monat und im 16. bis 36. Monat". Die Seitenangaben sind die Seiten "Seite N von 17" dieser Veröffentlichung. Gegenprobe mit zwei Dokumenten des BIBB ("Ausbildung gestalten", Kaufmann/Kauffrau für Büromanagement, Bonn 2025): Kapitel 2.2.1 mit der Übersicht (Wochen insgesamt Abschnitt A: 58 und 37, zwei Wahlqualifikationen: 44) und das Muster eines betrieblichen Ausbildungsplans, das jeden Wert mit seinem Zeitraum druckt. Die Daten stehen mit Seite je Wert in `src/lib/content-import/apply/component-weeks.ts`, die Prüfung der Summen in `tests/unit/content-import/apply/component-weeks.test.ts`.
+
+| Komponente  | Position (Abschnitt) | Zeitraum         | Wochen | Seite     |
+| ----------- | -------------------- | ---------------- | ------ | --------- |
+| K1          | A1 (a bis f)         | 1. bis 15.       | 11     | 8         |
+| K2          | A2 (a bis j)         | 1. bis 15.       | 11     | 8         |
+| K3          | A3 (a bis d)         | 1. bis 15.       | 7      | 8         |
+| K4          | A4 (a bis c)         | 1. bis 15.       | 5      | 8         |
+| K5          | A5 (a bis e)         | 1. bis 15.       | 7      | 9         |
+| K6.1        | A6 (a bis c)         | 1. bis 15.       | 6      | 9         |
+| K6.2        | A6 (d bis g)         | 16. bis 36.      | 11     | 9         |
+| K7          | A7 (a bis f)         | 1. bis 15.       | 11     | 9         |
+| K8          | A8 (a bis e)         | 16. bis 36.      | 13     | 9         |
+| K9          | A9 (a bis f)         | 16. bis 36.      | 13     | 9         |
+| K10 bis K17 | B1 bis B8            | 16. bis 36.      | je 22  | 10 bis 14 |
+| K19         | B10                  | 16. bis 36.      | 22     | 15        |
+| K20 bis K23 | C1 bis C4            | ganze Ausbildung | keine  | 15 bis 16 |
+| K24.1       | C5 (a bis d)         | 1. bis 15.       | 4      | 17        |
+| K24.2       | C5 (e)               | 16. bis 36.      | 2      | 17        |
+| K25.1       | C6 (a bis c)         | 1. bis 15.       | 2      | 17        |
+| K25.2       | C6 (d bis k)         | 16. bis 36.      | 9      | 17        |
+
+**Regeln (nichts wird gerechnet, jeder Wert steht so im Plan):**
+
+- Die Nummer der Komponente ist die Position der Verordnung: K1 bis K9 sind Abschnitt A (§ 4 Abs. 2 Nr. 1 bis 9), K10 bis K19 sind die Wahlqualifikationen 1 bis 10 (§ 4 Abs. 3), K20 bis K25 sind Abschnitt C (§ 4 Abs. 4 Nr. 1 bis 6). K18 (Wahlqualifikation 9, Verwaltung) wird nicht importiert, hat im Plan aber ebenfalls 22 Wochen.
+- Eine Position, deren Wochen der Plan auf beide Zeiträume verteilt, ist in der Plattform schon zwei Komponenten: A6 (K6.1 mit 6 und K6.2 mit 11), C5 (K24.1 mit 4 und K24.2 mit 2) und C6 (K25.1 mit 2 und K25.2 mit 9). Die Ordner Teil 1 und Teil 2 der Quelle und die Phase der Komponente stimmen mit dem Zeitraum überein (1 bis 15 Monate gleich Phase 1, 16 bis 36 Monate gleich Phase 2).
+- Jede Wahlqualifikation hat 22 Wochen, alle im 16. bis 36. Monat. Ein Ausbildungsvertrag wählt zwei davon. Die Wochen aller Wahlkomponenten dürfen deshalb nie addiert werden (neun Komponenten ergeben 198 Wochen, eine Ausbildung hat 44).
+- K20 bis K23 haben keine Wochen. Der Plan nennt dort "Zeitliche Zuordnung: während der gesamten Ausbildung". Die Spalte bleibt 0 und das ist der richtige Wert, kein Platzhalter. Der Import setzt diese Komponenten nie auf einen anderen Wert.
+- Die Werte sind Bruttowochen. Berufsschule, Urlaub, Feiertage und Krankheit sind nicht abgezogen (BIBB, Kapitel 2.2.1: etwa drei Tage je Woche stehen im Betrieb zur Verfügung).
+- Summenprobe (im Test festgeschrieben): Abschnitt A 58 Wochen im 1. bis 15. Monat und 37 im 16. bis 36. Monat, Abschnitt C (Position 5 und 6) 6 und 11 Wochen, zwei Wahlqualifikationen 44 Wochen. Das ergibt 64 und 92 Wochen, zusammen 156 Wochen, also drei Jahre zu je 52 Wochen.
+
+**Wirkung im Import:** `plan` schreibt die Wochen aus dieser Tabelle in den Plan (Spalte "Wochen" der Zusammenfassung, im Plan `weeksSource`). Eine Entscheidung des Eigentümers in `kfbm-decisions.json` unter `components.totalWeeks` geht vor. Eine neue Komponente bekommt die Wochen beim Anlegen. Bei einer bestehenden Komponente setzt der echte Lauf `total_weeks` nur, wenn der Wert 0 ist (auch ohne `--update-existing`). Steht dort ein anderer Wert, meldet der Bericht die Abweichung und `--update-existing` überschreibt sie. Eine 0 im Plan (K20 bis K23, Platzhalter) überschreibt nie einen Wert. Keine andere Spalte wird angefasst, `total_hours` nie. Der Probelauf bleibt Standard. Ein zweiter Lauf schreibt nichts.
+
+**Sollstunden:** Der Ausbildungsrahmenplan hat kein Stundenmaß je Komponente, und in keinem der gelesenen Dokumente (Rahmenplan, Verordnung, Erläuterungen, Muster und Beispiel des betrieblichen Ausbildungsplans, Struktur, BIBB-Handbuch, Broschüre) steht eine amtliche Stundenangabe für die betriebliche Ausbildung. Die Stundenzahlen dort betreffen die Berufsschule (Zeitrichtwerte der Lernfelder, zusammen 880 Stunden) und die dienstbegleitende Unterweisung im öffentlichen Dienst (420 Stunden) und gehören nicht in `total_hours`. Deshalb bleibt `total_hours` bei 0, der Plan führt das als offene Frage.
+
+Vorschlag zur Entscheidung des Eigentümers (nicht gesetzt): Wochen mal 40 Stunden. Das ist die Regel der Plattform (Kommentar zu `total_hours` im Schema: "totalWeeks \* 40", ebenso die Daten für FIAE). Es sind Bruttostunden, nach der Modellrechnung des BIBB wären es netto etwa drei Fünftel davon.
+
+| Komponente       | Wochen | Stunden (Vorschlag) |
+| ---------------- | ------ | ------------------- |
+| K1, K2, K7, K6.2 | 11     | 440                 |
+| K3, K5           | 7      | 280                 |
+| K4               | 5      | 200                 |
+| K6.1             | 6      | 240                 |
+| K8, K9           | 13     | 520                 |
+| K10 bis K17, K19 | 22     | 880                 |
+| K24.1            | 4      | 160                 |
+| K24.2, K25.1     | 2      | 80                  |
+| K25.2            | 9      | 360                 |
+| K20 bis K23      | keine  | keine               |
+
+Folgt der Eigentümer dem Vorschlag, trägt er die Stunden je Code in `kfbm-decisions.json` unter `components.totalHours` ein. Das Anlegen neuer Komponenten nimmt sie dann mit. Für bestehende Komponenten braucht es eine kleine Erweiterung des Imports (`total_hours` in `fillWhenEmpty` in `src/lib/content-import/apply/tables.ts`), die bewusst noch nicht gebaut ist.
+
+**Wo die Plattform die Werte verwendet:** Die Spalten `total_weeks` und `total_hours` der Komponenten liefert `GET /api/training-components` unverändert aus. Angezeigt wird nur `total_hours`, in der Liste der Komponenten im Tätigkeitsnachweis der Azubis (`{Code} • {Stunden} Std gesamt`, `src/app/trainee/activity-reports/page.tsx`). Mit 0 steht dort "0 Std gesamt" (falsche Anzeige, kein Fehler); `total_weeks` wird nirgends angezeigt oder gerechnet. Der Reindex (`scripts/reindex-gemini.ts`) schreibt "Dauer: N Wochen / M Stunden" in den Text, den HAI zu einer Komponente findet. Mit den richtigen Wochen und 0 Stunden stünde dort "11 Wochen / 0 Stunden". Es gibt kein Go für eine Neuindexierung, der Text ändert sich erst mit ihr. Der Phasenplan (`src/lib/catalog/phase-plan.ts`) rechnet in Monaten aus den Katalogeinstellungen, die Schule und die Prüfungen lesen die Spalten nicht, und die Stundengrenze eines Tätigkeitsnachweises kommt aus den Sollstunden der Use Cases (`normalizePlannedHours`). Nirgends wird durch `total_weeks` oder `total_hours` geteilt, 0 verursacht also keinen Fehler.
 
 ## Lösungsschutz
 
@@ -130,7 +186,7 @@ Steht in einem Lehrtext eine Zeile nur mit dem Wort "Lösung" (zum Beispiel als 
 
 1. Die Route `GET /api/trainee/enablers/[enablerId]/quizzes/[difficulty]` liefert `options.explanation` an Azubis schon vor der Antwort (die Seite nutzt das, um die Begründung nach der Antwort zu zeigen). Weil die Begründung nur an der richtigen Option steht, verrät das die richtige Antwort. Das ist bestehender Code und gilt auch für FIAE. Vor der Aktivierung eines Quiz die Route ändern (Begründung erst mit dem Ergebnis aus `submit`).
 2. Die Seite der Azubis für einen Enabler ruft die Dokumentenroute des Trainers auf und listet jede Dokumentzeile als Link. Die Route liefert alle Spalten ohne Filter nach Sichtbarkeit. Sie bleibt für Azubis gesperrt, solange niemand sie öffnet. Wer sie öffnet, muss `TRAINER_ONLY` und `TRAINER_SOLUTION` ausfiltern und Zeilen mit leerer `storage_url` nicht als Link zeigen.
-3. Die Wochen und Sollstunden der Komponenten fehlen noch. Die Lernfelder und ihre Zuordnung schreibt das Skript der Phase 4.5, Titel und Stunden der Lernfelder sind dort vorläufig oder offen.
+3. Die Sollstunden der Komponenten fehlen noch (der Eigentümer entscheidet, die Wochen stehen im Plan). Die Lernfelder und ihre Zuordnung schreibt das Skript der Phase 4.5, Titel und Stunden der Lernfelder sind dort vorläufig oder offen.
 
 ## Upload der Originaldateien (eigenes Paket, nicht Teil dieses Laufs)
 
