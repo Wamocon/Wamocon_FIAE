@@ -13,7 +13,7 @@
 // that is sent twice is idempotent: the same relative path with the same hash
 // is the same file.
 
-import { LIMITS } from '@/lib/content-upload/staging/config';
+import { LIMITS, maxFileBytesFor } from '@/lib/content-upload/staging/config';
 import {
   cleanRelativePath,
   type UploadExt,
@@ -97,7 +97,7 @@ export function validateEntry(raw: unknown, index: number): EntryVerdict {
   if (size === 0) {
     return { ok: false, index, code: 'EMPTY_FILE', relPath: cleaned.relPath };
   }
-  if (size > LIMITS.maxFileBytes) {
+  if (size > maxFileBytesFor(cleaned.ext)) {
     return { ok: false, index, code: 'TOO_LARGE', relPath: cleaned.relPath };
   }
 

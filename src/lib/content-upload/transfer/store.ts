@@ -15,6 +15,7 @@
 
 import type { Queryable } from '@/lib/content-import/apply/pg-db';
 import type { TableName } from '@/lib/content-import/apply/tables';
+import type { UploadExt } from '@/lib/content-upload/staging/paths';
 import type { StoredStock } from '@/lib/content-upload/transfer/stock';
 import type {
   ComponentFact,
@@ -308,7 +309,7 @@ export class PgTransferStore implements TransferStore {
       id: String(r.id),
       relPath: String(r.rel_path),
       fileName: String(r.file_name),
-      ext: String(r.ext) as 'docx' | 'pdf',
+      ext: String(r.ext) as UploadExt,
       sizeBytes: Number(r.size_bytes),
       sha256: String(r.sha256),
       mtimeMs:

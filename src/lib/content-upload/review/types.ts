@@ -171,6 +171,17 @@ export const KI_STATES = [
 ] as const;
 export type KiStateName = (typeof KI_STATES)[number];
 
+/**
+ * What a quiz JSON or an Excel mapping file holds, as numbers only (the file itself is
+ * never shown). `kind` names the sort, `variant` the form of a quiz file (lesson,
+ * global), `numbers` the counts the page shows.
+ */
+export interface ContentsDto {
+  kind: 'quiz_json' | 'mapping_xlsx';
+  variant: string | null;
+  numbers: Record<string, number>;
+}
+
 export interface ReviewRowDto {
   id: string;
   fileName: string;
@@ -194,6 +205,8 @@ export interface ReviewRowDto {
   stock: StockDto | null;
   /** The end of the model stage for this file, or null when it did not take part. */
   ki: KiStateName | null;
+  /** What a JSON or Excel file holds (counts), null for a Word or PDF file. */
+  contents: ContentsDto | null;
 }
 
 export interface ReviewCounts {

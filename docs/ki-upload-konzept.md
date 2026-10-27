@@ -1448,4 +1448,62 @@ Umgesetzt: Bestandsabgleich je Datei, Nachschub in der Übernahme, Bedienung von
 
 **Gemessen an einem Wegwerf-Postgres** (Supabase-Image 17, Bestand als Ausgangslage, erfundene Daten): drei Quizze mit 3 statt 5 Fragen werden um 6 Fragen ergänzt (30 Einfügungen im Protokoll, keine Änderung), ein zweiter und dritter Lauf schreiben nichts, ein fehlendes Szenario fügt genau eine Zeile (nur Teil für Lernende) ein, ein Quiz ohne Enabler-Text wird ergänzt, ein Konflikt benennt seine Datei und schreibt nichts, der Abgleich ändert keine Inhaltstabelle.
 
-**Offen: JSON und Excel im Upload.** Nicht gebaut, weil es eine Migration braucht (Verbot im Auftrag). Der Check `content_upload_files_ext_check` erlaubt nur `docx` und `pdf`. Nötig wären: (1) Migration, die den Check um `json` und `xlsx` erweitert (eine Zeile, wie der `doc_type`-Check bleibt gültig), (2) Magic Bytes und Pfadregeln in `staging/magic.ts` und `staging/paths.ts` (JSON hat keine feste Signatur: erstes Zeichen `{`, gültiges UTF-8, strenges Schema 1.0, Obergrenze 32 MB, Modul `content-import/quiz-json` wiederverwenden), (3) für xlsx eine Vorprüfung (Zip-Bombe, Makros `vbaProject.bin`, Grenzen für Größe und Zeilen) und ein Leser ohne Auswerten aktiver Inhalte (`learning-fields/xlsx-sheet.ts` liest ohne Fremdbibliothek, eine Vorprüfung fehlt dort für den Upload), (4) am Bucket `content-upload` die MIME-Liste und für JSON 32 MB (Niko, nicht per Agent am gehosteten Supabase), (5) Auszug ohne Lösungsteile für JSON-Quizze und eine Regelstufe, die den Schlüssel aus dem Inhalt der JSON-Datei nimmt. Bis dahin gilt der Weg über die Skripte (Runbook 12.4).
+**Offen (erledigt in UP2, Abschnitt 20): JSON und Excel im Upload.** Nicht gebaut in UP1, weil es eine Migration braucht (Verbot im Auftrag). Der Check `content_upload_files_ext_check` erlaubt nur `docx` und `pdf`. Nötig wären: (1) Migration, die den Check um `json` und `xlsx` erweitert (eine Zeile, wie der `doc_type`-Check bleibt gültig), (2) Magic Bytes und Pfadregeln in `staging/magic.ts` und `staging/paths.ts` (JSON hat keine feste Signatur: erstes Zeichen `{`, gültiges UTF-8, strenges Schema 1.0, Obergrenze 32 MB, Modul `content-import/quiz-json` wiederverwenden), (3) für xlsx eine Vorprüfung (Zip-Bombe, Makros `vbaProject.bin`, Grenzen für Größe und Zeilen) und ein Leser ohne Auswerten aktiver Inhalte (`learning-fields/xlsx-sheet.ts` liest ohne Fremdbibliothek, eine Vorprüfung fehlt dort für den Upload), (4) am Bucket `content-upload` die MIME-Liste und für JSON 32 MB (Niko, nicht per Agent am gehosteten Supabase), (5) Auszug ohne Lösungsteile für JSON-Quizze und eine Regelstufe, die den Schlüssel aus dem Inhalt der JSON-Datei nimmt. Bis UP2 galt der Weg über die Skripte (Runbook 12.4).
+
+## 20. Stand UP2 (JSON und Excel im Upload)
+
+Umgesetzt: Quizze als JSON (Schema 1.0) und die Lernfeld-Zuordnung als Excel (.xlsx) sind Dateiarten des Uploads, mit Staging, Erkennung am Inhalt, Prüfliste, Bestandsabgleich, Probelauf, Übernahme und Rückbau. Bedienung: Runbook 12.4 und 12.7 bis 12.9.
+
+### 20.1 Was gebaut ist
+
+- **Migration** `20261030000200_content_upload_json_xlsx.sql`: weitet den Check `content_upload_files_ext_check` auf `docx`, `pdf`, `json`, `xlsx` (Vorprüfung, `drop constraint if exists`, `add constraint`, Prüfung des Ergebnisses, `lock_timeout` 5 s, `statement_timeout` 60 s). Rein additiv, idempotent, kein `NOT VALID` nötig (kleine Prozesstabelle). Rückbau-Vorlage `supabase/manual/rollback-content-upload-json-xlsx.sql` (stoppt, wenn eine Zeile `json` oder `xlsx` hat, löscht nie). In Production gesperrt durch das Rollout-Gate (Version ab `20261024000100`), in der Preview läuft sie automatisch durch die CI (`Migrate public_preview`). Die `doc_type`-Werte bleiben: JSON-Quizze sind `quiz` oder `global_quiz`, die Excel-Datei ist `other`.
+- **Staging:** `UploadExt` hat vier Werte. `maxFileBytesFor(ext)`: 25 MB (Word, PDF), 32 MB (JSON), 5 MB (Excel), unbekannt: der kleinste Wert. Magic Bytes (`staging/magic.ts`): JSON beginnt nach Byte-Order-Marke und Leerraum mit `{`, Excel ist ein Zip. Codes `NOT_A_JSON`, `NOT_AN_XLSX`. Die Prüfung liest 64 statt 8 Bytes.
+- **JSON** (`read-json.ts`, `classify/json-rule.ts`, `review/json-step.ts`): Größe, dann ein linearer Bytedurchlauf auf Verschachtelung (Tiefe höchstens 16, höchstens eine Million Objekte und Listen, sonst `TOO_COMPLEX`, gemessen: ohne den Durchlauf kostete eine 32-MB-Datei aus Klammern 2,4 s und rund 1 GB), striktes UTF-8 (nichts wird repariert), `JSON.parse`, Kopf (`schema_version` 1.0, `quizzes`), Art aus dem **Inhalt** des Kopfes, dann der strenge Leser `content-import/quiz-json` (derselbe wie im Skript). Die Prüfliste bekommt eine Zeile je Datei mit Zahlen, nie mit Text. Band Sicher ohne Fehler, Mittel mit Fehlern in einzelnen Sätzen (Grund `PARSER_ERRORS`, kein Sammelklick), Widerspruch, wenn der Dateiname die andere Art nennt.
+- **Excel** (`read-xlsx.ts`, `classify/mapping-rule.ts`, `review/xlsx-step.ts`): siehe 20.3.
+- **Übernahme** (`transfer/plan.ts`, `run.ts`, `compare.ts`): JSON-Quizze laufen als synthetische Quelldateien durch denselben Planbau wie Word (gleiche Schlüssel, Codes, Komponenten, Lösungsschutz, `extendQuizzes`). Die Excel-Tabelle wird zum Plan der Lernfeld-Übernahme, deren Engine nach den beiden anderen in derselben Transaktion läuft, nur ergänzend. Jede geschriebene Zeile steht im Protokoll mit ihrer Datei, der Rückbau-SQL kennt die Tabellen und Textlisten (`use_cases.lernfelder`).
+- **Hash:** `TRANSFER_ENGINE_VERSION` ist `upload-transfer/3`, der Plan der Tabelle ohne Zeit steht im Hash, `learningUpdateExisting: false` ist Teil der festen Einstellungen.
+- **Oberfläche:** Auswahl `.json` und `.xlsx`, Grenzen je Art, Zeilen mit Zahlen statt Zuordnung (kein Editor, ein Hinweis), Texte deutsch und englisch.
+
+### 20.2 Entscheidungen und Abweichungen
+
+- **Eine Zeile je Datei, nicht je Quiz.** Das Modell kennt eine Zeile je Datei. Die Datei bekommt nur ihre Art, die Kennungen der Quizze stehen im Inhalt (`10a`, `24_1a`) und werden vom selben Leser geprüft wie beim Skript. Der Bestandsstatus fasst alle Quizze der Datei zusammen, die Einzelheiten zeigen Probelauf und Rückbau. Je Quiz zu entscheiden bräuchte eine eigene Zeilenart und ist nicht gebaut.
+- **Zwei JSON-Dateien mit denselben Quizzen:** beide ausgelassen (`JSON_KEY_OVERLAP`), die Person nimmt eine an. Ein fehlerhafter Satz in einer Datei nimmt einen guten Satz einer anderen nicht aus dem Plan. Höchstens 10 JSON-Dateien je Übernahme (jede Lesung hält alle Fragen und Antworten bis zum Planbau).
+- **Word gewinnt gegen JSON** desselben Laufs und desselben Schlüssels (`mergeQuizSources`), ein nicht lesbares Word-Quiz hält seinen Schlüssel nicht. Dem Menschen wird das als `SUPERSEDED` genannt.
+- **Keine KI.** Eine JSON-Datei enthält die richtigen Antworten (Entscheidung O13). Es gibt nie einen Auszug, die Datei wird nie `unklar`, `ki/steps.ts` stellt jede Datei, die kein Word ist, vor dem Lesen als nicht gesendet fest (`FORMAT_NOT_SENT`). Die Lösungstexte der JSON-Dateien gehören zur Liste der bekannten Lösungen: was ein Lehrtext davon wiederholt, wird aus seinem Auszug geschnitten (gemessen im Test mit Gegenprobe ohne die JSON-Datei). Grenze je JSON-Datei 20.000 Texte.
+- **Excel nur ergänzend.** `updateExisting` ist fest `false`. Abweichende Titel und Stunden werden gemeldet, nie überschrieben, es gibt kein Ersetzen je Datei. Höchstens eine Tabelle je Übernahme.
+- **Der alte Pfadbaum kommt nur aus Word- und PDF-Dateien.** Die Positivliste und die Auswahl für die KI bilden ihren Ordnerbaum nur aus den Pfaden dieser Dateien.
+
+### 20.3 Excel: sichere Lesbarkeit auf hochgeladenen Bytes
+
+Geprüft wurde zuerst, was der vorhandene Leser `learning-fields/xlsx-sheet.ts` tut: Er nutzt **JSZip** (schon Abhängigkeit, kein SheetJS), liest per linearem Durchlauf nur Arbeitsmappe, Beziehungen, Zeichenketten und ein Blatt und wertet nie Formeln aus. Für Dateien aus dem Upload war er **nicht sicher genug**: `Zip.loadAsync` öffnet vor der Zählung der Einträge, die Grenzen sind weit (50 MB, 500.000 Zellen), und Makros, Verknüpfungen und Verbindungen werden nicht geprüft. Deshalb gibt es `read-xlsx.ts`, ohne neue Abhängigkeit, auf dem Muster des Word-Lesers:
+
+| Gefahr | Gegenmaßnahme |
+| --- | --- |
+| Zip-Bombe, viele Einträge | Verzeichnis vom Dateiende lesen **vor** JSZip: höchstens 200 Einträge, je Teil höchstens 8 MB, Summe höchstens 40 MB, Verhältnis höchstens 100:1 (Teile über 1 MB), nur Methoden 0 und 8. Danach jede Lesung mit Obergrenze auf die **tatsächlich** entpackten Bytes (ein Verzeichnis, das lügt, hilft nicht). JSZip und Verzeichnis müssen dieselben Einträge nennen |
+| Makros | `vbaProject.bin`, `vbaData.xml`, `macrosheets`, `dialogsheets`, `activeX`, Inhaltstyp `macroEnabled` oder `macrosheet`: abgelehnt |
+| Externe Verknüpfungen, Verbindungen, Vorlagen | `externalLinks`, `<externalReferences>`, `connections.xml`, `queryTables`, Beziehungen mit `TargetMode=External` außer Links: abgelehnt, nichts wird je geöffnet oder abgerufen |
+| Formeln | nur der gespeicherte Wert wird gelesen, `<f>` wird gezählt und nie ausgewertet (kein DDE, kein WEBSERVICE) |
+| Verborgener Text | `DOCTYPE`, Kommentar, CDATA im XML: abgelehnt. Versteckte Blätter werden nicht gelesen |
+| Ausmaß | höchstens 20 Blätter (5 gelesen), 100.000 Zellen, 10.000 Zeilen, Spalte bis CV, 15 Sekunden |
+| Verschlüsselt, altes Format | `ENCRYPTED`, `LEGACY_XLS`: abgelehnt |
+
+Die Tests bauen Zip-Bomben (3 MB, 12 MB, 100 MB gepackt unter 1 MB), eine Summe aus je erlaubten Teilen, ein Verzeichnis mit falschen Größen, zu viele Einträge, Makros, Verknüpfungen, Namen mit `..`, ein gesetztes Verschlüsselungsbit und Formeln mit Netzwerkaufruf (es wird nichts abgerufen). Das Ergebnis der Prüfung nennt nur Codes und Zahlen.
+
+### 20.4 Bucket (macht Niko)
+
+Der Bucket `content-upload` braucht die MIME-Typen `application/json` und `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` und 32 MB je Datei (Runbook 12.9). Kein Agent ändert ihn.
+
+### 20.5 Prüfung
+
+Wegwerf-Postgres (Supabase-Image 17, Struktur aus dem Snapshot): Migration angewendet, zweimal und dreimal ausgeführt, die vier Arten angenommen, andere (`xls`, `exe`, `JSON`, leer) abgelehnt, Rückbau-Vorlage mit und ohne Zeile `json`, danach wieder erweitert. Die Tests gegen die echte Datenbank (`transfer-db.test.ts`, 47 Tests) liefen in der Form `public` und in der Form der Preview (Schema `public_preview`, Rolle `app_preview`, Preview-Rebuild mit allen Migrationen bis `20261030000200`): JSON-Nachschub inaktiv und idempotent, Ergänzung fehlender Fragen und Rückbau, Excel mit Inhalt und Use Case in einem Lauf, Rückbau mit dem Zustand davor (Snapshot gleich), Beschreibung füllen und zurücksetzen, Liste von Kennungen als Textfeld mit Anführungszeichen im Wert wiederhergestellt.
+
+### 20.6 Gutachten
+
+Sicherheit (Pflicht), Datenbank, TypeScript und React ohne kritische oder hohe Befunde zur Sicherheit. Abgearbeitet: nicht sichere Verschachtelung von JSON (Bytedurchlauf, gemessen), Status `visible` eines Blattes (wurde als verborgen gelesen), Makroblätter, die Obergrenze der Lösungstexte je JSON-Datei, Obergrenze der JSON-Dateien je Übernahme und gleichzeitiges Lesen in der Liste der Lösungen, Zählung nur fehlerfreier Sätze bei Überschneidung, Status der Tabelle im Abgleich ohne Enabler, fehlende Elemente in Textlisten des Rückbaus, genaue Codes in den Tests, Texte für weitere Codes.
+
+### 20.7 Offen und Risiken
+
+- Bucket umstellen (20.4), erst danach lässt sich in der Preview eine JSON- oder Excel-Datei hochladen. Nicht an der echten Preview mit echtem Speicher erprobt.
+- Production: die Migration ist gesperrt (Rollout-Gate), der Upload bleibt dort aus.
+- Eine Zeile je Datei (20.2): wer einzelne Quizze einer Datei ablehnen will, trennt die Datei oder lässt Sätze mit Fehlern überspringen.
+- Das Lesen einer JSON-Datei bleibt synchron (bis 32 MB, nach dem Bytedurchlauf nur noch begrenzte Form). Eine Messung an der echten Preview mit einer Datei von 30 MB steht aus.

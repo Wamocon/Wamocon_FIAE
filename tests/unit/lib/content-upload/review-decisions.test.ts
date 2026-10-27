@@ -117,6 +117,7 @@ describe('the list of a run', () => {
           'copyOfId',
           'stock',
           'ki',
+          'contents',
         ].sort()
       );
     }

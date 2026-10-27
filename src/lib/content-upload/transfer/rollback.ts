@@ -81,6 +81,22 @@ function literal(value: unknown): string {
     // backslash is a backslash and only the quote needs doubling.
     return `'${value.replace(/'/g, "''")}'`;
   }
+  // A list of texts: use_cases.lernfelder (text[]), the one array column that an update of
+  // the learning field engine changes
+  if (Array.isArray(value)) {
+    if (
+      value.length > 200 ||
+      !value.every(
+        item =>
+          item === null || (typeof item === 'string' && item.length <= 200)
+      )
+    ) {
+      throw new RollbackSqlError('A list of this kind cannot be written.');
+    }
+    return value.length === 0
+      ? "'{}'::text[]"
+      : `array[${value.map(item => (item === null ? 'null' : literal(item))).join(', ')}]::text[]`;
+  }
   throw new RollbackSqlError('A value of this type cannot be written.');
 }
 

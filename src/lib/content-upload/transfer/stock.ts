@@ -16,6 +16,7 @@ import type {
   ImportPlan,
   ItemEvent,
   ItemStatus,
+  TableCount,
 } from '@/lib/content-import/apply/types';
 import type { UseCasePlan } from '@/lib/content-import/use-cases/types';
 
@@ -62,6 +63,8 @@ export interface PlanRefs {
   useCasePlan: UseCasePlan;
   /** Source path of a plan item to the id of its file. */
   fileOfSource: ReadonlyMap<string, string>;
+  /** The Excel file of the learning field plan, when there is one. */
+  learningFileId?: string | null;
   /** Use cases the target could not take (the enabler is missing in the database). */
   useCasesSkippedInDb?: ReadonlyArray<{ useCaseCode: string }>;
 }
@@ -95,6 +98,10 @@ export function fileOfEvent(
       return index.link.get(key) ?? index.quiz.get(key) ?? null;
     case 'use_cases':
       return index.useCase.get(key) ?? null;
+    // the rows of the learning field import all belong to the one Excel file
+    case 'training_catalog_learning_fields':
+    case 'training_catalog_content_mappings':
+      return input.learningFileId ?? null;
     case 'content_documents': {
       const colon = key.indexOf(':');
       if (colon < 1) return null;
@@ -213,6 +220,58 @@ export function stockOfFiles(input: StockInput): Map<string, FileStock> {
     result.set(fileId, { status, added: value.added, moved: value.moved });
   }
   return result;
+}
+
+/**
+ * What the learning field engine found, as an item of the comparison (the engine has no
+ * observer of its own). The whole table is one item:
+ *   new        rows are inserted and none exists yet (the codes a first run adds to the
+ *              use cases belong to it)
+ *   extended   the table brings something that is missing next to what exists (new
+ *              mappings of enablers that came later, a code for a use case, an empty
+ *              description)
+ *   unchanged  everything exists
+ * and every conflict is a conflict. The file of the Excel mapping never gets `differs`:
+ * the run only adds, it never replaces what exists.
+ */
+export function learningEvents(report: {
+  tables: Record<string, TableCount>;
+  useCaseMappings: TableCount;
+  useCaseCodes: TableCount;
+  conflicts: ReadonlyArray<{ table: string; key: string }>;
+  /**
+   * Mappings the database cannot take yet (their enabler is not there). In a comparison the
+   * enablers this transfer adds are not written, so such a table still brings something new.
+   */
+  skipped?: ReadonlyArray<unknown>;
+}): ItemEvent[] {
+  const fields = 'training_catalog_learning_fields';
+  const mappings = 'training_catalog_content_mappings';
+  const counts = [
+    report.tables[fields],
+    report.tables[mappings],
+    report.useCaseMappings,
+    report.useCaseCodes,
+  ].filter((c): c is TableCount => c !== undefined);
+  const sum = (key: keyof TableCount) => counts.reduce((n, c) => n + c[key], 0);
+  const inserted = sum('insert');
+  const updated = sum('update');
+  const unchanged = sum('unchanged');
+  const events: ItemEvent[] = [];
+  let status: ItemEvent['status'] | null = null;
+  if (inserted > 0 && unchanged === 0) status = 'new';
+  else if (inserted > 0 || updated > 0) status = 'extended';
+  else if (unchanged > 0) status = 'unchanged';
+  // nothing to count yet, but mappings wait for enablers that this transfer brings
+  if (status === null && (report.skipped?.length ?? 0) > 0) status = 'new';
+  if (status === 'unchanged' && (report.skipped?.length ?? 0) > 0) {
+    status = 'extended';
+  }
+  if (status) events.push({ table: fields, key: 'mapping', status });
+  for (const c of report.conflicts) {
+    events.push({ table: c.table, key: c.key, status: 'conflict' });
+  }
+  return events;
 }
 
 export function countStock(stock: ReadonlyMap<string, FileStock>): StockCounts {

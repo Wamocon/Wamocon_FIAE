@@ -545,6 +545,62 @@ describe('the pump route runs the steps of the review', () => {
   });
 });
 
+describe('a quiz JSON file and an Excel mapping file through the routes (UP2)', () => {
+  it('leads them through the pump and the list to a decision, and shows numbers only', async () => {
+    const b = await boot(SUPER);
+    const { rv, fx, ctx } = b;
+    const seeds = await import('../../../helpers/jsonXlsxSeeds');
+    const run = await fx.newRun(ctx.deps, { id: USER, role: 'SUPER_ADMIN' });
+    await rv.uploadFiles(ctx, run, [
+      seeds.lessonJsonSeed(),
+      await seeds.mappingSeed(),
+      seeds.rawSeed('x/kaputt.json', '{ nicht lesbar'),
+    ]);
+    let pumped: any = {};
+    for (let i = 0; i < 10 && !pumped.done; i += 1) {
+      const res = await post(b.route.pump.POST, run.id, { closeUpload: true });
+      expect(res.status).toBe(200);
+      pumped = await json(res);
+    }
+    expect(pumped).toMatchObject({ done: true, runStatus: 'review', rejected: 1 });
+
+    const listed = await json(await get(b.route.review.GET, run.id));
+    expect(listed.rows.map((r: any) => [r.ext, r.status, r.statusCode]).sort()).toEqual([
+      ['json', 'proposed_rules', null],
+      ['json', 'rejected', 'NOT_JSON'],
+      ['xlsx', 'proposed_rules', null],
+    ]);
+    const quiz = listed.rows.find((r: any) => r.proposal?.docType === 'quiz');
+    expect(quiz.contents).toMatchObject({
+      kind: 'quiz_json',
+      variant: 'lesson',
+      numbers: { quizzes: 5, sets: 15, questions: 150 },
+    });
+    const mapping = listed.rows.find((r: any) => r.proposal?.docType === 'other');
+    expect(mapping.contents).toMatchObject({ kind: 'mapping_xlsx' });
+    const text = JSON.stringify(listed);
+    expect(text).not.toMatch(/Erfundene Frage|ZETA|Position a|upload\//);
+    expect(listed.counts).toMatchObject({ total: 3, high: 2, problems: 1 });
+
+    const decided = await post(b.route.decisions.POST, run.id, {
+      expectedVersion: listed.version,
+      command: 'accept_high',
+    });
+    expect(decided.status).toBe(200);
+    expect(await json(decided)).toMatchObject({ written: 2, eligible: 2 });
+    const wrong = await post(b.route.decisions.POST, run.id, {
+      expectedVersion: listed.version + 1,
+      command: 'assign',
+      fileIds: [quiz.id],
+      assignment: { componentCode: 'K1', enablerCode: 'K1-a', quizLevel: 'low' },
+    });
+    expect(await json(wrong)).toMatchObject({
+      written: 0,
+      skipped: [{ fileId: quiz.id, code: 'ASSIGNMENT_INVALID' }],
+    });
+  });
+});
+
 describe('the new handlers keep the order of the others: session, switch, then the rest', () => {
   const base = path.join(process.cwd(), 'src/app/api/trainer/content-upload');
   const files = [

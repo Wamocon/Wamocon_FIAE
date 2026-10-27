@@ -196,7 +196,7 @@ function inspectEntries(
  * to the closing bracket that stands outside of a quoted value (a value may hold
  * a bracket), and white space of any kind may follow the element name.
  */
-function scanRelationships(xml: string) {
+export function scanRelationships(xml: string) {
   const counts = { template: 0, link: 0, other: 0 };
   const name = '<Relationship';
   let pos = 0;

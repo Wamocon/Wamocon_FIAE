@@ -298,3 +298,61 @@ describe('the list of solution texts of a run', () => {
     );
   });
 });
+
+describe('quiz JSON files in the list of solution texts (UP2)', () => {
+  beforeEach(resetCorpusCache);
+  const jsonFile = (id: string) =>
+    file(id, { ext: 'json', relPath: `q/${id}.json`, fileName: `${id}.json` });
+
+  it('takes the texts of a JSON file through its own reader, and a file of 6000 texts does not overflow the list', async () => {
+    const many = Array.from({ length: 6000 }, (_, i) => `Erfundene Lösung Nummer ${i} mit genug Text`);
+    const d = deps([jsonFile('j'), file('a')], { a: quiz }, {
+      jsonSolutions: () => many,
+    });
+    const corpus = new SolutionCorpus(d);
+    expect(await corpus.advance(1000)).toBe(true);
+    expect(corpus.isOverflowed).toBe(false);
+    expect(corpus.texts).toEqual(expect.arrayContaining([many[0], many[5999]]));
+    expect(CORPUS_LIMITS.perJsonFile).toBeGreaterThan(6000);
+    // a Word file keeps the old limit
+    const words = Array.from({ length: CORPUS_LIMITS.perFile + 1 }, (_, i) => `Text ${i}`);
+    const w = new SolutionCorpus(
+      deps([file('a')], { a: quiz }, { solutionsOf: () => words })
+    );
+    await w.advance(1000);
+    expect(w.isOverflowed).toBe(true);
+  });
+
+  it('is never complete when there is no JSON reader or it cannot read the file (fail closed)', async () => {
+    const without = new SolutionCorpus(deps([jsonFile('j')], {}));
+    expect(await without.advance(1000)).toBe(false);
+    const broken = new SolutionCorpus(
+      deps([jsonFile('j')], {}, { jsonSolutions: () => null, retryGapMs: 0 } as never),
+      { retryGapMs: 0 }
+    );
+    for (let i = 0; i < 4; i += 1) await broken.advance(1000);
+    expect(await broken.advance(1000)).toBe(false);
+  });
+
+  it('reads at most one JSON file at a time', async () => {
+    let running = 0;
+    let most = 0;
+    const d = deps(
+      ['j1', 'j2', 'j3', 'j4'].map(jsonFile),
+      {},
+      {
+        loadBytes: async () => {
+          running += 1;
+          most = Math.max(most, running);
+          await new Promise(resolve => setTimeout(resolve, 5));
+          running -= 1;
+          return new Uint8Array([1]);
+        },
+        jsonSolutions: () => ['Eine erfundene Lösung mit genug Text'],
+      }
+    );
+    const corpus = new SolutionCorpus(d, { concurrency: 4 });
+    expect(await corpus.advance(1000)).toBe(true);
+    expect(most).toBe(1);
+  });
+});

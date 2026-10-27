@@ -63,13 +63,20 @@ export const MAX_ITEMS = LIMITS.maxFilesPerRun;
  */
 export function checkAssignment(
   a: AssignmentDto,
-  file: { ext: string; dupKey: string | null },
+  file: { ext: string; dupKey: string | null; docType?: string | null },
   context: CheckContext
 ): AssignmentCheck {
   const bad = (code: AssignmentFailureCode): AssignmentCheck => ({
     ok: false,
     code,
   });
+  // A quiz JSON file and an Excel mapping file hold many items that name their own
+  // component, enabler and level inside. Their assignment is only the kind the reader
+  // found, and a person cannot change it (a file of global quizzes does not become
+  // enabler quizzes by a click) nor add a code to it.
+  if (file.ext === 'json' || file.ext === 'xlsx') {
+    return checkFileKind(a, file);
+  }
   const type = a.docType as UploadDocType | null;
   if (!type || !ASSIGNABLE_DOC_TYPES.includes(type)) {
     return bad('ASSIGNMENT_INCOMPLETE');
@@ -133,6 +140,41 @@ export function checkAssignment(
       componentCode: component.code,
       enablerCode,
       quizLevel: underlying === 'quiz' ? a.quizLevel : null,
+    },
+  };
+}
+
+/** The kinds that an assignment of a JSON or Excel file may have, by extension. */
+const FILE_KINDS: Record<string, readonly string[]> = {
+  json: ['quiz', 'global_quiz'],
+  xlsx: ['other'],
+};
+
+function checkFileKind(
+  a: AssignmentDto,
+  file: { ext: string; docType?: string | null }
+): AssignmentCheck {
+  const bad = (code: AssignmentFailureCode): AssignmentCheck => ({
+    ok: false,
+    code,
+  });
+  const allowed = FILE_KINDS[file.ext] ?? [];
+  if (!a.docType) return bad('ASSIGNMENT_INCOMPLETE');
+  if (!allowed.includes(a.docType)) return bad('TYPE_EXT_MISMATCH');
+  if (a.componentCode || a.enablerCode || a.quizLevel) {
+    return bad('ASSIGNMENT_INVALID');
+  }
+  // the kind the reader found when the file was read is the only one
+  if (!file.docType) return bad('ASSIGNMENT_INCOMPLETE');
+  if (file.docType !== a.docType) return bad('TYPE_EXT_MISMATCH');
+  return {
+    ok: true,
+    key: `${file.ext}:${a.docType}`,
+    assignment: {
+      docType: a.docType,
+      componentCode: null,
+      enablerCode: null,
+      quizLevel: null,
     },
   };
 }
