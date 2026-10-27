@@ -20,6 +20,7 @@ import type {
 } from '@/lib/content-upload/transfer/store';
 import type {
   ComponentFact,
+  EnablerFact,
   TransferFile,
 } from '@/lib/content-upload/transfer/types';
 
@@ -29,7 +30,27 @@ export interface Timeline {
   events: string[];
 }
 
+/** The enablers of a memory database as the store reads them from the real one. */
+export function enablersOf(db: MemoryImportDb): EnablerFact[] {
+  const courses = new Map(db.tables.courses.map(c => [String(c.id), c]));
+  return db.tables.enablers.flatMap(e => {
+    const course = courses.get(String(e.course_id));
+    return course && e.code
+      ? [
+          {
+            code: String(e.code),
+            title: String(e.title),
+            componentCode: String(course.code),
+            orderIndex: Number(e.order_index ?? 0),
+          },
+        ]
+      : [];
+  });
+}
+
 export class MemoryTransferStore implements TransferStore {
+  /** Where loadEnablers reads from (the harness points it at the database of the engines). */
+  enablerSource: () => EnablerFact[] = () => [];
   state: RunState;
   files: TransferFile[];
   components: ComponentFact[];
@@ -104,6 +125,10 @@ export class MemoryTransferStore implements TransferStore {
 
   async loadComponents() {
     return this.components;
+  }
+
+  async loadEnablers() {
+    return this.enablerSource();
   }
 
   async beginApplying(
@@ -285,6 +310,18 @@ export function harness(
     options.run,
     options.components
   );
+  // the enablers the store reads are those of the database the engines write to (lazy: a
+  // test may give a makeDb that throws)
+  store.enablerSource = () => {
+    try {
+      const engineDb = options.deps?.makeDb
+        ? (options.deps.makeDb({ query: async () => ({ rows: [] }) }) as MemoryImportDb)
+        : db;
+      return enablersOf(engineDb);
+    } catch {
+      return [];
+    }
+  };
   const bytes = new Map(fixtures.map(f => [f.file.id, f.bytes]));
   const connections = memoryConnections(timeline, db, options.connections);
   const bucket = new MemoryBucket(timeline);

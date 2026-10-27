@@ -102,11 +102,13 @@ export async function compareStock(
   const decisions = deps.decisions ?? transferDecisions();
   const files = await store.loadFiles(runId, { effective: true });
   const components = await store.loadComponents(state.catalogId);
+  const enablers = await store.loadEnablers(state.catalogId);
   let plan: Awaited<ReturnType<typeof buildTransferPlan>>;
   try {
     plan = await buildTransferPlan({
       files,
       components,
+      enablers,
       decisions,
       readBytes: deps.readBytes,
       now: clock(),

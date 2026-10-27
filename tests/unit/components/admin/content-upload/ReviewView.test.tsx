@@ -335,7 +335,7 @@ describe('ReviewView: the table', () => {
   it('has a header cell for each column, sortable columns say how they are sorted', async () => {
     const { user, client } = await open();
     const headers = screen.getAllByRole('columnheader');
-    expect(headers).toHaveLength(6);
+    expect(headers).toHaveLength(7);
     expect(headers[1]).toHaveAttribute('aria-sort', 'ascending');
     expect(headers[4]).toHaveAttribute('aria-sort', 'none');
     await user.click(

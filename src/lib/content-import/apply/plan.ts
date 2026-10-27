@@ -376,7 +376,25 @@ export function splitEnablerHeading(heading: string): {
 const letterOrdinal = (letter: string) =>
   letter.toLowerCase().charCodeAt(0) - 96;
 
+/** An enabler that exists in the target database (the upload, docs 8.9). */
+export interface ExistingEnabler {
+  code: string;
+  title: string;
+  componentCode: string;
+  orderIndex: number;
+}
+
+/** Prefix of the source of an enabler that comes from the database and not from a file. */
+export const DATABASE_SOURCE_PREFIX = 'database:';
+
 export interface BuildOptions {
+  /**
+   * Enablers that exist in the target database. A quiz or a scenario of such an
+   * enabler is planned without its enabler document (a supply of content brings only
+   * what is missing). The enabler enters the plan with the values of the database, so
+   * the engine finds it unchanged and writes nothing for it. Its source names no file.
+   */
+  existingEnablers?: ReadonlyMap<string, ExistingEnabler>;
   limitedTo?: string[];
   now?: Date;
   /**
@@ -534,6 +552,34 @@ export function buildImportPlan(
       descriptionText:
         decisions.content.enablerText && text.length > 0 ? text : null,
       source: file.rel,
+    });
+  }
+  // Enablers of the database for the quizzes and scenarios whose enabler document is
+  // not part of this delivery
+  for (const file of ready) {
+    const code = file.info.enablerCode;
+    const type = file.content?.type;
+    if (
+      !code ||
+      (type !== 'quiz' && type !== 'scenario') ||
+      enablers.some(e => e.code === code)
+    ) {
+      continue;
+    }
+    const existing = options.existingEnablers?.get(code);
+    // An enabler of another component than the path names is no match: the quiz stays
+    // skipped (ENABLER_MISSING) instead of breaking the plan
+    if (!existing || existing.componentCode !== file.info.component?.code) {
+      continue;
+    }
+    enablers.push({
+      code,
+      letter: code.slice(code.lastIndexOf('-') + 1),
+      componentCode: existing.componentCode,
+      title: existing.title,
+      orderIndex: existing.orderIndex,
+      descriptionText: null,
+      source: `${DATABASE_SOURCE_PREFIX}${code}`,
     });
   }
   const enablerByCode = new Map(enablers.map(e => [e.code, e]));

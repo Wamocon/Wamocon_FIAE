@@ -77,6 +77,7 @@ async function boot(session: FakeSession | null) {
     dry: (await import(`${API}/runs/[runId]/dry-run/route`)) as any,
     apply: (await import(`${API}/runs/[runId]/apply/route`)) as any,
     rollback: (await import(`${API}/runs/[runId]/rollback-sql/route`)) as any,
+    stock: (await import(`${API}/runs/[runId]/stock/route`)) as any,
   };
   return { ctx, fx, route, uploadDeps, transferDeps, poolQueryable, transfer };
 }
@@ -134,6 +135,7 @@ function allHandlers(b: Booted, runId = GOOD_ID) {
         call(b.route.apply.POST, 'POST', runId, { body: { confirm: 'KFBM' } }),
     ],
     ['GET rollback-sql', () => call(b.route.rollback.GET, 'GET', runId)],
+    ['POST stock', () => call(b.route.stock.POST, 'POST', runId)],
   ] as const;
 }
 
@@ -229,7 +231,7 @@ describe('switched off outside of the Preview and local development', () => {
 
   it('every route sets maxDuration on purpose', async () => {
     const b = await boot(SUPER);
-    for (const key of ['dry', 'apply', 'rollback'] as const) {
+    for (const key of ['dry', 'apply', 'rollback', 'stock'] as const) {
       expect(b.route[key].maxDuration).toBe(60);
     }
   });
@@ -245,6 +247,7 @@ describe('who owns the run', () => {
           call(b.route.apply.POST, 'POST', id, { body: { confirm: 'KFBM' } }),
       ],
       ['GET rollback-sql', () => call(b.route.rollback.GET, 'GET', id)],
+      ['POST stock', () => call(b.route.stock.POST, 'POST', id)],
     ] as const;
 
   it('answers 404 for a bad id and for an unknown run, and the same for the run of another person', async () => {
@@ -278,6 +281,34 @@ describe('who owns the run', () => {
     );
     await use(b, foreign.id);
     expect((await call(b.route.dry.POST, 'POST', foreign.id)).status).toBe(200);
+  });
+});
+
+describe('the comparison with the stock', () => {
+  it('compares the files, answers the counts per status and writes no content', async () => {
+    const b = await boot(SUPER);
+    const runId = await createRun(b);
+    const h = await use(b, runId);
+    const res = await call(b.route.stock.POST, 'POST', runId);
+    expect(res.status).toBe(200);
+    const answer = await json(res);
+    expect(answer).toMatchObject({ compared: 4, stored: 4 });
+    expect(answer.stock.counts).toMatchObject({ new: 4, conflict: 0 });
+    expect(h.db.totalRows()).toBe(0);
+    expect(h.store.state.status).toBe('review');
+    expect(JSON.stringify(answer)).not.toMatch(
+      /ZEBRAKANAL|QUOKKA|WOMBAT|OKAPI/
+    );
+  });
+
+  it('answers 409 for a run that is not in review', async () => {
+    const b = await boot(SUPER);
+    const runId = await createRun(b);
+    const h = await use(b, runId);
+    h.store.state = { ...h.store.state, status: 'applied' };
+    const res = await call(b.route.stock.POST, 'POST', runId);
+    expect(res.status).toBe(409);
+    expect((await json(res)).code).toBe('RUN_STATE');
   });
 });
 

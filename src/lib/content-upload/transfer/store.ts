@@ -18,6 +18,7 @@ import type { TableName } from '@/lib/content-import/apply/tables';
 import type { StoredStock } from '@/lib/content-upload/transfer/stock';
 import type {
   ComponentFact,
+  EnablerFact,
   TransferFile,
 } from '@/lib/content-upload/transfer/types';
 
@@ -102,6 +103,8 @@ export interface TransferStore {
   /** Takes the stored status of the supply off every file of the run. */
   clearStock(runId: string): Promise<void>;
   loadComponents(catalogId: string): Promise<ComponentFact[]>;
+  /** The enablers of the catalog with the code of their component (course). */
+  loadEnablers(catalogId: string): Promise<EnablerFact[]>;
   /**
    * The gate: review -> applying, only if the decisions are still at `version`
    * and, for an apply, only if the last dry run hash is `requireHash`. One
@@ -376,6 +379,22 @@ export class PgTransferStore implements TransferStore {
       reference: text(r.description),
       kind: text(r.kind),
       phase: r.phase === null || r.phase === undefined ? null : Number(r.phase),
+    }));
+  }
+
+  async loadEnablers(catalogId: string): Promise<EnablerFact[]> {
+    const result = await this.q.query(
+      `select e.code, e.title, e.order_index, c.code as component_code
+         from enablers e
+         join courses c on c.id = e.course_id
+        where e.training_catalog_id = $1 and e.code is not null and c.code is not null`,
+      [catalogId]
+    );
+    return result.rows.map(r => ({
+      code: String(r.code),
+      title: String(r.title),
+      componentCode: String(r.component_code),
+      orderIndex: Number(r.order_index ?? 0),
     }));
   }
 

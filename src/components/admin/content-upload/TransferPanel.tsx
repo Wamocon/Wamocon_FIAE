@@ -53,7 +53,9 @@ interface DryRun {
 /** The text for the error of a transfer call: by code, else by status, else a general one. */
 export function transferErrorText(t: Translate, error: unknown): string {
   if (error instanceof UploadApiError) {
-    const byCode = error.code ? `contentUpload.transfer.error.${error.code}` : '';
+    const byCode = error.code
+      ? `contentUpload.transfer.error.${error.code}`
+      : '';
     if (byCode && t(byCode) !== byCode) return t(byCode);
     const byStatus = `contentUpload.transfer.error.status${error.status}`;
     if (t(byStatus) !== byStatus) return t(byStatus);
@@ -66,7 +68,8 @@ const sum = (report: TransferReport, key: 'insert' | 'update' | 'unchanged') =>
 
 function groupByCode<T extends { code: string }>(items: readonly T[]) {
   const counts = new Map<string, number>();
-  for (const item of items) counts.set(item.code, (counts.get(item.code) ?? 0) + 1);
+  for (const item of items)
+    counts.set(item.code, (counts.get(item.code) ?? 0) + 1);
   return [...counts].sort((a, b) => (a[0] < b[0] ? -1 : 1));
 }
 
@@ -113,7 +116,10 @@ export function TransferPanel({
   const [typed, setTyped] = useState('');
   const [rollback, setRollback] = useState<RollbackAnswer | null>(null);
 
-  const replaceKey = useMemo(() => [...selection].sort().join(','), [selection]);
+  const replaceKey = useMemo(
+    () => [...selection].sort().join(','),
+    [selection]
+  );
   const reviewing = status === 'review';
   const busy = phase !== 'idle';
   const valid =
@@ -219,16 +225,16 @@ export function TransferPanel({
 
       <div aria-live="polite" role="status" className="space-y-3">
         {phase === 'dry' && (
-          <p className={`${NOTICE_INFO} flex items-center gap-3`}>
+          <div className={`${NOTICE_INFO} flex items-center gap-3`}>
             <LoadingSpinner size="sm" />
-            {t('contentUpload.transfer.dryRunning')}
-          </p>
+            <p>{t('contentUpload.transfer.dryRunning')}</p>
+          </div>
         )}
         {phase === 'apply' && (
-          <p className={`${NOTICE_WARN} flex items-center gap-3`}>
+          <div className={`${NOTICE_WARN} flex items-center gap-3`}>
             <LoadingSpinner size="sm" />
-            {t('contentUpload.transfer.applying')}
-          </p>
+            <p>{t('contentUpload.transfer.applying')}</p>
+          </div>
         )}
         {done && (
           <div className={NOTICE_INFO}>
@@ -330,9 +336,7 @@ export function TransferPanel({
           >
             {t('contentUpload.transfer.rollbackCreate')}
           </button>
-          {rollback && (
-            <RollbackResult t={t} runId={runId} answer={rollback} />
-          )}
+          {rollback && <RollbackResult t={t} runId={runId} answer={rollback} />}
         </div>
       )}
 
@@ -430,7 +434,11 @@ function DryRunResult({
   const excluded = groupByCode(report.excluded);
   const skipped = groupByCode(report.skipped);
   return (
-    <div className="space-y-4" aria-label={t('contentUpload.transfer.resultTitle')} role="group">
+    <div
+      className="space-y-4"
+      aria-label={t('contentUpload.transfer.resultTitle')}
+      role="group"
+    >
       <h3 className="text-foreground text-lg font-semibold">
         {t('contentUpload.transfer.resultTitle')}
       </h3>
@@ -648,7 +656,9 @@ function RollbackResult({
   if (answer.sql === null) {
     return (
       <div className={NOTICE_WARN}>
-        <p className="font-medium">{t('contentUpload.transfer.rollbackBlocked')}</p>
+        <p className="font-medium">
+          {t('contentUpload.transfer.rollbackBlocked')}
+        </p>
         <ul className="mt-2 list-disc space-y-1 pl-5">
           {answer.blockers.map(b => (
             <li key={b.code}>
@@ -670,7 +680,9 @@ function RollbackResult({
       <p className="text-foreground text-sm">
         {t('contentUpload.transfer.rollbackSummary', { deletes, restores })}
       </p>
-      <p className={NOTICE_WARN}>{t('contentUpload.transfer.rollbackManual')}</p>
+      <p className={NOTICE_WARN}>
+        {t('contentUpload.transfer.rollbackManual')}
+      </p>
       {answer.notes.length > 0 && (
         <ul className="text-muted list-disc space-y-1 pl-5 text-sm">
           {answer.notes.map(note => (

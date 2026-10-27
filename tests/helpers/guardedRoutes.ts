@@ -256,6 +256,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['runId'],
   },
   {
+    route: 'trainer/content-upload/runs/[runId]/stock',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
     route: 'trainer/content-upload/runs/[runId]/apply',
     method: 'POST',
     guard: 'curriculum',

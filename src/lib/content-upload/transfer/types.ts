@@ -60,6 +60,14 @@ export interface ComponentFact {
   phase: number | null;
 }
 
+/** An enabler of the target database as far as the plan builder needs it. */
+export interface EnablerFact {
+  code: string;
+  title: string;
+  componentCode: string;
+  orderIndex: number;
+}
+
 /** A file that is not part of the plan, with a stable code and a reason without content. */
 export interface ExcludedFile {
   fileId: string;

@@ -169,6 +169,33 @@ describe('the status of the supply in the report of a dry run', () => {
     expect(dry3.ok && dry3.data.stock.counts.unchanged).toBe(4);
   });
 
+  it('takes a quiz and a scenario alone: the enabler of the database stands in for its document', async () => {
+    const files = await enablerFiles({ tree: true });
+    const first = harness(
+      (await withQuizOf(files, 3)).filter(f => f.file.decision.docType !== 'scenario')
+    );
+    await applyAll(first);
+    expect(first.db.count('questions')).toBe(3);
+
+    const quiz = byType(files, 'quiz');
+    const scenario = byType(files, 'scenario');
+    const second = again([quiz, scenario], first);
+    const dry = await runTransfer(second.deps, request('dry_run'));
+    expect(dry.ok).toBe(true);
+    if (!dry.ok) return;
+    expect(dry.data.status).toBe('ok');
+    expect(
+      Object.fromEntries(dry.data.stock.files.map(f => [f.fileId, f.status]))
+    ).toEqual({ [quiz.file.id]: 'extended', [scenario.file.id]: 'new' });
+    // the enabler is no item of a file and counts as unchanged
+    expect(dry.data.tables.enablers).toEqual({ insert: 0, update: 0, unchanged: 1 });
+    const applied = await runTransfer(second.deps, request('apply'));
+    expect(applied.ok && applied.data.wrote).toBe(true);
+    expect(first.db.count('questions')).toBe(5);
+    expect(first.db.count('enablers')).toBe(1);
+    expect(second.store.appliedRows.every(r => r.action === 'insert')).toBe(true);
+  });
+
   it('adds a scenario that was missing, as a supply of one file', async () => {
     const files = await enablerFiles({ tree: true });
     const scenario = byType(files, 'scenario');
