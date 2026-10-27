@@ -2,7 +2,8 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeRole } from '@/lib/auth/roles';
-import { adminMenuItems } from '@/lib/auth/adminMenu';
+import { adminMenuItems, contentUploadMenuItems } from '@/lib/auth/adminMenu';
+import { IS_PREVIEW_SCHEMA } from '@/lib/db-schema';
 import { canManageHaiIndex } from '@/lib/hai/indexAccess';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCatalog } from '@/contexts/CatalogContext';
@@ -19,6 +20,7 @@ import {
   Building2,
   ShieldCheck,
   Briefcase,
+  Upload,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -38,6 +40,7 @@ const HaiAdminDialog = dynamic(
 const ADMIN_MENU_ICONS = {
   adminOrgs: Building2,
   adminUsers: ShieldCheck,
+  contentUpload: Upload,
 } as const;
 
 interface SidebarProps {
@@ -182,14 +185,21 @@ export function Sidebar({
             },
             // Each admin level sees what it may open (never the protection,
             // the routes check the role themselves)
-            ...adminMenuItems({ role: profile?.role, isPlatformOwner }).map(
-              item => ({
-                id: item.id,
-                label: t(item.labelKey),
-                icon: ADMIN_MENU_ICONS[item.id],
-                href: item.href,
-              })
-            ),
+            ...[
+              ...adminMenuItems({ role: profile?.role, isPlatformOwner }),
+              ...contentUploadMenuItems(
+                { role: profile?.role, isPlatformOwner },
+                {
+                  previewSchema: IS_PREVIEW_SCHEMA,
+                  nodeEnv: process.env.NODE_ENV,
+                }
+              ),
+            ].map(item => ({
+              id: item.id,
+              label: t(item.labelKey),
+              icon: ADMIN_MENU_ICONS[item.id],
+              href: item.href,
+            })),
           ]
         : [
             {

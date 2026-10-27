@@ -153,13 +153,22 @@ function fail(code, extra) {
 })();
 `;
 
-/** Where pdf.js of pdf-parse lies, or null. */
+/**
+ * Where pdf.js of pdf-parse lies, or null. In the bundle of a Next.js server the
+ * namespace of `node:module` has only its default export (found in the browser
+ * check of package U6: createRequire was missing and every PDF ended as
+ * ENGINE_UNAVAILABLE), so the function is also taken from `default`.
+ */
 async function resolvePdfjsPath(): Promise<string | null> {
   try {
-    const [{ createRequire }, path] = await Promise.all([
+    const [nodeModule, path] = await Promise.all([
       import('node:module'),
       import('node:path'),
     ]);
+    const createRequire =
+      nodeModule.createRequire ??
+      (nodeModule as unknown as { default?: typeof nodeModule }).default
+        ?.createRequire;
     return createRequire(path.join(process.cwd(), 'noop.js')).resolve(
       'pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js'
     );

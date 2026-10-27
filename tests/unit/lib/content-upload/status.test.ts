@@ -82,6 +82,7 @@ describe('file status model (concept 2.3)', () => {
 
   it('has the branches of the diagram', () => {
     expect(canTransitionFile('extracted', 'unclear')).toBe(true);
+    expect(canTransitionFile('extracted', 'skipped')).toBe(true);
     expect(canTransitionFile('unclear', 'ki_pending')).toBe(true);
     expect(canTransitionFile('ki_pending', 'proposed_ki')).toBe(true);
     expect(canTransitionFile('ki_pending', 'unclear')).toBe(true);

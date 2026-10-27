@@ -1,12 +1,10 @@
 import { NextRequest } from 'next/server';
 import { requireCurriculumEditor, isErrorResponse } from '@/lib/auth/session';
 import { contentUploadDisabledResponse } from '@/lib/content-upload/staging/guard';
-import { uploadDeps } from '@/lib/content-upload/staging/context';
+import { reviewDeps } from '@/lib/content-upload/review/context';
+import { pumpReviewRun } from '@/lib/content-upload/review/steps';
 import { fail, ok } from '@/lib/content-upload/staging/result';
-import {
-  PUMPABLE_RUN_STATUSES,
-  pumpRun,
-} from '@/lib/content-upload/staging/queue';
+import { PUMPABLE_RUN_STATUSES } from '@/lib/content-upload/staging/queue';
 import {
   respond,
   readJsonBody,
@@ -21,7 +19,8 @@ export const maxDuration = 60;
 /**
  * POST /api/trainer/content-upload/runs/[runId]/pump
  * Works the queue of the run for a limited time (budgetMs, default 8000, at most
- * 20000), one step per file. The browser calls it in a loop while the page is open
+ * 20000), one step per file: check the upload, read the file and apply the rule
+ * stage (src/lib/content-upload/review/steps.ts). The browser calls it in a loop while the page is open
  * and sends closeUpload: true once everything is announced and uploaded. The body
  * is optional. Any number of calls at the same time is safe.
  */
@@ -35,7 +34,7 @@ export async function POST(
   if (off) return off;
   try {
     const { runId } = await params;
-    const deps = uploadDeps();
+    const deps = reviewDeps();
     const run = await loadRun(deps, session, runId);
     if (!run.ok) return respond(run);
     if (!PUMPABLE_RUN_STATUSES.includes(run.data.status)) {
@@ -65,7 +64,7 @@ export async function POST(
     if (parsed.ok && parsed.body && typeof parsed.body === 'object') {
       body = parsed.body as typeof body;
     }
-    const result = await pumpRun(deps, run.data.id, {
+    const result = await pumpReviewRun(deps, run.data.id, {
       budgetMs: typeof body.budgetMs === 'number' ? body.budgetMs : undefined,
       closeUpload: body.closeUpload === true,
     });

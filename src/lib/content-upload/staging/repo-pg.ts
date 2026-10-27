@@ -99,7 +99,7 @@ function mapRun(r: Row): RunRow {
   };
 }
 
-function mapFile(r: Row): FileRow {
+export function mapFile(r: Row): FileRow {
   return {
     id: String(r.id),
     runId: String(r.run_id),

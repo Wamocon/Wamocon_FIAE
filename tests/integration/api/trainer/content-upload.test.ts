@@ -76,6 +76,13 @@ async function boot(
   const fx = await import('../../../helpers/uploadServiceFixtures');
   const ctx = fx.setup(schema);
   const uploadDeps = jest.fn(() => ctx.deps);
+  // the pump route and the routes of the review list run on the review repository too
+  const reviewDeps = jest.fn(() => ({ ...uploadDeps(), review: ctx.review }));
+  jest.doMock('@/lib/content-upload/review/context', () => ({
+    __esModule: true,
+    reviewDeps,
+    getReviewRepo: () => ctx.review,
+  }));
   jest.doMock('@/lib/content-upload/staging/context', () => ({
     __esModule: true,
     uploadDeps,
@@ -91,8 +98,14 @@ async function boot(
     complete: (await import(`${API}/runs/[runId]/complete/route`)) as any,
     pump: (await import(`${API}/runs/[runId]/pump/route`)) as any,
     cleanup: (await import(`${API}/cleanup/route`)) as any,
+    overview: (await import(`${API}/overview/route`)) as any,
+    review: (await import(`${API}/runs/[runId]/review/route`)) as any,
+    options: (await import(`${API}/runs/[runId]/review/options/route`)) as any,
+    duplicates: (await import(`${API}/runs/[runId]/review/duplicates/route`)) as any,
+    decisions: (await import(`${API}/runs/[runId]/decisions/route`)) as any,
+    reopen: (await import(`${API}/runs/[runId]/reopen/route`)) as any,
   };
-  return { ctx, fx, route, uploadDeps };
+  return { ctx, fx, route, uploadDeps, reviewDeps };
 }
 
 type Booted = Awaited<ReturnType<typeof boot>>;
@@ -176,6 +189,28 @@ function allHandlers(b: Booted, runId = GOOD_ID) {
     [
       'POST cleanup',
       () => call(b.route.cleanup.POST, 'POST', '/api/x', { body: {} }),
+    ],
+    ['GET overview', () => call(b.route.overview.GET, 'GET', '/api/x')],
+    ['GET review', () => call(b.route.review.GET, 'GET', '/api/x', { runId })],
+    [
+      'GET review options',
+      () => call(b.route.options.GET, 'GET', '/api/x', { runId }),
+    ],
+    [
+      'GET review duplicates',
+      () => call(b.route.duplicates.GET, 'GET', '/api/x', { runId }),
+    ],
+    [
+      'POST reopen',
+      () => call(b.route.reopen.POST, 'POST', '/api/x', { runId, body: {} }),
+    ],
+    [
+      'POST decisions',
+      () =>
+        call(b.route.decisions.POST, 'POST', '/api/x', {
+          runId,
+          body: { expectedVersion: 0, command: 'accept_high' },
+        }),
     ],
   ] as const;
 }
@@ -528,7 +563,7 @@ describe('who sees a run', () => {
 });
 
 describe('the whole flow: run, announce, upload, report, process', () => {
-  it('takes files from the announcement to the verified state, and leaks no path on the way', async () => {
+  it('takes files from the announcement to the end of the queue, and leaks no path on the way', async () => {
     const b = await boot(SUPER);
     const { pdfBytes, docxBytes, entryFor } = b.fx;
     const run = await createRunVia(b);
@@ -601,27 +636,35 @@ describe('the whole flow: run, announce, upload, report, process', () => {
     });
     expect(pumpRes.status).toBe(200);
     const pumped = await json(pumpRes);
+    // two steps per file: the check of the upload, then the reading. The bytes of
+    // this test are no real documents, so the reading ends them as failed or
+    // rejected (the review of a readable run is tried in content-upload-review)
     expect(pumped).toMatchObject({
-      processed: 2,
+      processed: 4,
       advanced: 2,
       done: true,
       runStatus: 'review',
     });
+    expect(pumped.failed + pumped.rejected).toBe(2);
 
     const progress = await json(
       await call(b.route.run.GET, 'GET', '/api/x', { runId: run.id })
     );
     expect(progress.run.status).toBe('review');
-    expect(progress.progress.counts).toEqual({ verified: 2, merged: 1 });
+    const counts = progress.progress.counts;
+    expect(counts.merged).toBe(1);
+    expect((counts.failed ?? 0) + (counts.rejected ?? 0)).toBe(2);
+    expect(counts.verified).toBeUndefined();
 
     const listed = await json(
       await call(b.route.files.GET, 'GET', '/api/x?limit=10', { runId: run.id })
     );
-    expect(listed.files.map((f: any) => f.status).sort()).toEqual([
-      'merged',
-      'verified',
-      'verified',
-    ]);
+    const statuses = listed.files.map((f: any) => f.status).sort();
+    expect(statuses).toHaveLength(3);
+    expect(statuses).toContain('merged');
+    expect(
+      statuses.filter((s: string) => s === 'failed' || s === 'rejected')
+    ).toHaveLength(2);
     for (const answer of [announced, complete, pumped, progress, listed]) {
       const text = JSON.stringify(answer);
       expect(text).not.toContain('upload/');
@@ -953,14 +996,14 @@ describe('every handler of the content upload checks the session, then the switc
 
   const files = walk(base);
 
-  it('finds the eleven route files with their fourteen handlers', () => {
-    expect(files).toHaveLength(11);
+  it('finds the seventeen route files with their twenty handlers', () => {
+    expect(files).toHaveLength(17);
     const handlers = files.flatMap(f => [
       ...fs
         .readFileSync(f, 'utf8')
         .matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g),
     ]);
-    expect(handlers).toHaveLength(14);
+    expect(handlers).toHaveLength(20);
   });
 
   it.each(

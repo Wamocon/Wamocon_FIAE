@@ -77,7 +77,8 @@ export const FILE_TRANSITIONS: Record<FileStatus, readonly FileStatus[]> = {
   announced: ['uploaded', 'rejected', 'expired'],
   uploaded: ['verified', 'rejected', 'failed'],
   verified: ['extracted', 'rejected', 'failed'],
-  extracted: ['proposed_rules', 'unclear', 'failed'],
+  // skipped: the rule stage leaves the file out (an archive, an excluded component)
+  extracted: ['proposed_rules', 'unclear', 'skipped', 'failed'],
   proposed_rules: ['decided', 'skipped', 'superseded'],
   unclear: ['ki_pending', 'decided', 'skipped', 'superseded'],
   ki_pending: ['proposed_ki', 'unclear'],
