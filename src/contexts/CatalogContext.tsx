@@ -19,7 +19,7 @@ import {
   resolveCatalogBranding,
   type CatalogBranding,
 } from '@/lib/catalog/branding';
-import { isTrainerLevelRole } from '@/lib/auth/roles';
+import { isSuperAdmin, isTrainerLevelRole } from '@/lib/auth/roles';
 import { normalizeCatalogCode } from '@/lib/catalog/client';
 import {
   navigateTo,
@@ -44,7 +44,7 @@ export type CatalogOption = {
   code: string;
   title: string;
   branding: CatalogBranding;
-  /** An inactive occupation (only a super admin gets one) has no tab. */
+  /** An inactive occupation (only a super admin gets one) is marked in the tab. */
   isActive: boolean;
 };
 
@@ -59,8 +59,9 @@ export interface CatalogContextValue {
   /** The user has more than one occupation. */
   isMultiple: boolean;
   /**
-   * The tabs of the pages: the usable (active) occupations of a trainer level
-   * user who has more than one of them, otherwise empty (no tabs).
+   * The tabs of the pages: the usable occupations of a trainer level user who
+   * has more than one of them (active ones, a super admin also the inactive
+   * ones), otherwise empty (no tabs).
    */
   tabs: CatalogOption[];
   /** Switch the occupation with a tab: no reload, the URL names the choice. */
@@ -133,12 +134,19 @@ function parseCatalogs(data: unknown): Loaded | null {
 }
 
 /**
- * The occupations that can be worked in: the active ones. A super admin also
- * gets inactive ones from the server, they are no view to choose (the server
- * answers 403 for them), so they are never a tab and never sent as a header.
+ * The occupations that can be worked in: the active ones. A super admin can
+ * also view an inactive one (to check the content before the activation), it
+ * comes after the active ones. Only a super admin ever gets an inactive
+ * occupation from the server, and the server checks the choice again.
  */
-function usableCatalogs(catalogs: CatalogOption[]): CatalogOption[] {
-  return catalogs.filter(c => c.isActive);
+function usableCatalogs(
+  catalogs: CatalogOption[],
+  includeInactive: boolean
+): CatalogOption[] {
+  const active = catalogs.filter(c => c.isActive);
+  return includeInactive
+    ? [...active, ...catalogs.filter(c => !c.isActive)]
+    : active;
 }
 
 /** The code of the URL, only on a page that has tabs. */
@@ -153,8 +161,14 @@ function catalogFromTabPage(): string | null {
  * stored choice, the one the server names, the first. Unchecked values count
  * only if they are one of the user's usable occupations.
  */
-function chooseActive(loaded: Loaded, fromUrl: string | null): string {
-  const codes = usableCatalogs(loaded.catalogs).map(c => c.code);
+function chooseActive(
+  loaded: Loaded,
+  fromUrl: string | null,
+  includeInactive: boolean
+): string {
+  const codes = usableCatalogs(loaded.catalogs, includeInactive).map(
+    c => c.code
+  );
   return (
     pickTabCatalog({
       codes,
@@ -189,6 +203,14 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const trainerLevel = isTrainerLevelRole(profile?.role);
   const trainerLevelRef = useRef(trainerLevel);
   trainerLevelRef.current = trainerLevel;
+  // A super admin (also an ADMIN of the platform organization) can view an
+  // inactive occupation, nobody else.
+  const superAdmin = isSuperAdmin({
+    role: profile?.role,
+    isPlatformOwner: profile?.organization?.isPlatformOwner,
+  });
+  const superAdminRef = useRef(superAdmin);
+  superAdminRef.current = superAdmin;
   // The user the header in the shared state was set for.
   const headerOwner = useRef<string | null>(null);
 
@@ -253,10 +275,12 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         // Several occupations and at least one that can be worked in. Without
         // an active one nothing is sent (the server default applies).
         const multiple =
-          data.catalogs.length > 1 && usableCatalogs(data.catalogs).length > 0;
+          data.catalogs.length > 1 &&
+          usableCatalogs(data.catalogs, superAdminRef.current).length > 0;
         const active = chooseActive(
           data,
-          trainerLevelRef.current ? catalogFromTabPage() : null
+          trainerLevelRef.current ? catalogFromTabPage() : null,
+          superAdminRef.current
         );
         const headerBefore = getCatalogHeader();
         // Only a user with several occupations has a choice to remember and
@@ -308,9 +332,9 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
 
   const catalogs = loaded?.catalogs ?? NO_CATALOGS;
   const tabs = useMemo(() => {
-    const usable = usableCatalogs(catalogs);
+    const usable = usableCatalogs(catalogs, superAdmin);
     return trainerLevel && usable.length > 1 ? usable : NO_CATALOGS;
-  }, [catalogs, trainerLevel]);
+  }, [catalogs, trainerLevel, superAdmin]);
 
   // Switch the occupation without a reload: the header and the stored choice
   // change, the page content (keyed with the epoch) loads again, the query

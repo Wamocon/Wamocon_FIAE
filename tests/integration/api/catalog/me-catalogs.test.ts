@@ -223,7 +223,7 @@ describe('GET /api/me/catalogs', () => {
     expect(body.catalogs.map((c: any) => c.code)).toEqual(['FIAE', 'KFBM']);
   });
 
-  it('marks an inactive occupation for the super admin (it gets no tab) and refuses it as a view', async () => {
+  it('marks an inactive occupation for the super admin and lets them choose it', async () => {
     const { GET } = await load(
       { trainingCatalogs: [...catalogs, inactive], organizationCatalogs: [] },
       superAdmin()
@@ -234,9 +234,11 @@ describe('GET /api/me/catalogs', () => {
       ['KFBM', true],
       ['ZZZ', false],
     ]);
-    expect(
-      (await GET(req('http://localhost/api/me/catalogs?catalog=ZZZ'))).status
-    ).toBe(403);
+    const chosen = await GET(
+      req('http://localhost/api/me/catalogs?catalog=ZZZ')
+    );
+    expect(chosen.status).toBe(200);
+    expect((await chosen.json()).activeCode).toBe('ZZZ');
   });
 
   it('gives out only code and title, never an id, and is not cached', async () => {

@@ -2529,5 +2529,8 @@
   "contentStats.form.saveFailed": "The targets could not be saved.",
   "contentStats.form.catalogNotFound": "The training was not found.",
   "contentStats.loading": "Statistics are loading",
-  "contentStats.loaded": "Statistics updated"
+  "contentStats.loaded": "Statistics updated",
+"catalog.tabs.label": "Choose training",
+  "catalog.tabs.current": "Showing: {title}",
+  "catalog.tabs.inactive": "inactive"
 }
