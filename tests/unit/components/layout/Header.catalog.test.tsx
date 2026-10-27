@@ -30,8 +30,12 @@ const KFBM = {
 };
 
 function render(catalogState: Record<string, unknown>) {
+  const { profileRole = 'trainer', ...rest } = catalogState as Record<
+    string,
+    any
+  >;
   (useAuth as jest.Mock).mockReturnValue({
-    profile: { id: 'u1', role: 'trainer' },
+    profile: { id: 'u1', role: profileRole },
     subscriptionPlan: null,
     isPlatformOwner: true,
   });
@@ -44,7 +48,7 @@ function render(catalogState: Record<string, unknown>) {
     branding: DEFAULT_BRANDING,
     brandingApplied: false,
     selectCatalog: jest.fn(),
-    ...catalogState,
+    ...rest,
   });
   return renderWithProviders(
     <Header
@@ -56,7 +60,7 @@ function render(catalogState: Record<string, unknown>) {
   );
 }
 
-describe('Header with the occupation switcher', () => {
+describe('Header and the occupation', () => {
   it('is unchanged for a user with a single occupation (FIAE regression)', () => {
     const { container } = render({});
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
@@ -67,23 +71,39 @@ describe('Header with the occupation switcher', () => {
     expect(container.firstElementChild?.tagName).toBe('HEADER');
   });
 
-  it('shows the switcher in the header and, for a phone, in a row below it', () => {
-    const { container } = render({ catalogs: [FIAE, KFBM], isMultiple: true });
+  it.each(['trainer', 'trainee', 'admin', 'super_admin'])(
+    'has no occupation switcher for %s with several occupations (the pages have tabs)',
+    role => {
+      const { container } = render({
+        catalogs: [FIAE, KFBM],
+        isMultiple: true,
+        tabs: role === 'trainee' ? [] : [FIAE, KFBM],
+        profileRole: role,
+      });
+      // not at the top right, not in a row below the header on a phone
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Wechseln' })
+      ).not.toBeInTheDocument();
+      expect(
+        container.querySelector('[data-tour^="header-catalog"]')
+      ).toBeNull();
+      expect(container.children).toHaveLength(1);
+      expect(container.firstElementChild?.tagName).toBe('HEADER');
+    }
+  );
+
+  it('keeps language, theme and the other header controls', () => {
+    render({ catalogs: [FIAE, KFBM], isMultiple: true });
     expect(
-      screen.getAllByRole('combobox', { name: 'Beruf wählen' })
-    ).toHaveLength(2);
+      screen.getByRole('button', { name: 'Toggle sidebar' })
+    ).toBeInTheDocument();
     expect(
-      container.querySelector('header [data-tour="header-catalog"]')
+      document.querySelector('[data-tour="header-settings"]')
     ).not.toBeNull();
-    const strip = container.querySelector('[data-tour="header-catalog-strip"]');
-    expect(strip).not.toBeNull();
-    // the row sits after the header, not inside it
-    expect(strip?.parentElement).toBe(container);
-    expect(strip?.previousElementSibling?.tagName).toBe('HEADER');
-    expect(screen.queryByTestId(/catalog-badge/)).not.toBeInTheDocument();
   });
 
-  it('shows the badge for a user whose only occupation is not FIAE', () => {
+  it('shows the badge for a user who works in an occupation other than FIAE (one or several)', () => {
     render({
       catalogs: [KFBM],
       activeCode: 'KFBM',

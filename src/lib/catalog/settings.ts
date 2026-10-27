@@ -4,6 +4,7 @@ import {
   isValidBrandingTitle,
   normalizeBrandingAccent,
 } from '@/lib/catalog/branding';
+import { storedContentTargetsSchema } from '@/lib/catalog/content-targets';
 import { haiSettingsSchema } from '@/lib/catalog/hai-settings';
 
 /**
@@ -24,6 +25,12 @@ import { haiSettingsSchema } from '@/lib/catalog/hai-settings';
  *  - hai                      persona of the HAI assistant (occupation name,
  *                             glossary, topics, exam, refusal text), see
  *                             src/lib/catalog/hai-settings.ts, which also
+ *                             reads it (not part of CatalogSettings)
+ *  - content_targets          content targets (Soll) per kind of content
+ *                             (components, enablers, scenarios, use_cases,
+ *                             lesson_quizzes, global_quizzes, learning_fields),
+ *                             whole numbers 0 to 100000, see
+ *                             src/lib/catalog/content-targets.ts, which also
  *                             reads it (not part of CatalogSettings)
  *
  * This module only defines the type, defaults and validation. Callers in the
@@ -60,6 +67,7 @@ export const catalogSettingsSchema = z
     phase_months: z.tuple([positiveMonths, positiveMonths]),
     branding: brandingSchema,
     hai: haiSettingsSchema,
+    content_targets: storedContentTargetsSchema,
   })
   .partial()
   .strict();

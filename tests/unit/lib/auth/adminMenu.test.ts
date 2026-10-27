@@ -1,7 +1,11 @@
 import { describe, it, expect } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
-import { adminMenuItems, type AdminMenuItem } from '@/lib/auth/adminMenu';
+import {
+  adminMenuItems,
+  contentStatsMenuItems,
+  type AdminMenuItem,
+} from '@/lib/auth/adminMenu';
 import { GUARDED_ROUTES } from '../../../helpers/guardedRoutes';
 
 // The admin part of the sidebar differs per level:
@@ -114,6 +118,50 @@ describe('adminMenuItems', () => {
         expect(fs.existsSync(page)).toBe(true);
       }
     }
+  });
+});
+
+describe('contentStatsMenuItems', () => {
+  it.each([
+    ['SUPER_ADMIN', superAdmin],
+    ['ADMIN of the platform organization', platformAdmin],
+    ['ADMIN of a customer organization', admin],
+    ['TEMP_ADMIN of a customer organization', tempAdmin],
+    ['TEMP_ADMIN of the platform organization', platformTempAdmin],
+  ])('%s sees the content statistics', (_name, subject) => {
+    expect(contentStatsMenuItems(subject)).toEqual([
+      {
+        id: 'contentStats',
+        href: '/trainer/admin/content-stats',
+        labelKey: 'contentStats.menu',
+      },
+    ]);
+  });
+
+  it('trainers, trainees and unknown roles see nothing', () => {
+    for (const subject of [
+      { role: 'TRAINER', isPlatformOwner: true },
+      { role: 'TRAINEE', isPlatformOwner: true },
+      { role: 'ROOT' },
+      { role: null },
+      null,
+      undefined,
+    ]) {
+      expect(contentStatsMenuItems(subject)).toEqual([]);
+    }
+  });
+
+  it('opens a page that exists', () => {
+    const [item] = contentStatsMenuItems(admin);
+    const page = path.join(process.cwd(), 'src/app', item.href, 'page.tsx');
+    expect(fs.existsSync(page)).toBe(true);
+  });
+
+  it('the route behind it is guarded for admins and the target change for the platform admin', () => {
+    expect(guardOf('admin/content-stats', 'GET')).toBe('admin');
+    expect(
+      guardOf('admin/catalogs/[catalogId]/content-targets', 'PUT')
+    ).toBe('curriculum');
   });
 });
 

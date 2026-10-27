@@ -12,10 +12,13 @@
  *  - SUPER_ADMIN: all catalogs, including inactive ones.
  *
  * The active catalog can be chosen with the header `x-catalog` or the query
- * parameter `catalog` (catalog code, for example KFBM). It is validated
- * against the allowed catalogs, an unknown or foreign value is rejected with
- * 403, a missing value selects the default. Fail closed: if the scope cannot
- * be determined, the caller gets no access (never all catalogs).
+ * parameter `catalog` (catalog code, for example KFBM), this is what the tabs
+ * of the pages send. It is validated against the allowed catalogs, an unknown
+ * or foreign value is rejected with 403 (never widened), a missing value
+ * selects the default. A super admin can only choose an active catalog (an
+ * inactive one is allowed for records, but is not a view to choose). Fail
+ * closed: if the scope cannot be determined, the caller gets no access (never
+ * all catalogs).
  *
  * Usage in a route handler:
  *
@@ -229,7 +232,9 @@ export async function getCatalogScope(
   let selected = false;
   if (requestedCode) {
     const match = allowed.find(
-      c => c.code.toLowerCase() === requestedCode.toLowerCase()
+      c =>
+        c.code.toLowerCase() === requestedCode.toLowerCase() &&
+        (!superAdmin || c.isActive)
     );
     if (!match) {
       throw new CatalogScopeError(403, 'Training catalog not allowed');

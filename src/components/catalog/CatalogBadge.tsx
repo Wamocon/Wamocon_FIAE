@@ -4,21 +4,21 @@ import { useCatalog } from '@/contexts/CatalogContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 /**
- * Names the occupation of a user whose only occupation is not FIAE (the
- * switcher does that for a user with several). Shows nothing for FIAE, so
- * today's look stays as it is. Like the switcher it exists as `bar` inside the
- * header (small breakpoint and up) and as `strip` below the header on a phone.
+ * Names the occupation the user works in when it is not FIAE (the branding is
+ * applied). Shows nothing for FIAE, so today's look stays as it is. The
+ * occupation is chosen with the tabs of the pages (CatalogTabs), not here. It
+ * exists as `bar` inside the header (small breakpoint and up) and as `strip`
+ * below the header on a phone.
  */
 export function CatalogBadge({
   placement = 'bar',
 }: {
   placement?: 'bar' | 'strip';
 }) {
-  const { catalogs, activeCode, isMultiple, brandingApplied, branding } =
-    useCatalog();
+  const { catalogs, activeCode, brandingApplied, branding } = useCatalog();
   const { t } = useLanguage();
 
-  if (isMultiple || !brandingApplied || !activeCode) return null;
+  if (!brandingApplied || !activeCode) return null;
 
   const active = catalogs.find(c => c.code === activeCode);
   const label = branding.shortName ?? activeCode;

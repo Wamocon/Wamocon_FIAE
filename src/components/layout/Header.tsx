@@ -7,7 +7,6 @@ import { Menu, ChevronLeft, Crown, Sparkles } from 'lucide-react';
 import NotificationsBell from '@/components/ui/NotificationsBell';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
-import { CatalogSwitcher } from '@/components/catalog/CatalogSwitcher';
 import { CatalogBadge } from '@/components/catalog/CatalogBadge';
 
 interface HeaderProps {
@@ -85,7 +84,6 @@ export function Header({
             {subscriptionPlan === 'PRO' ? 'Pro' : 'Light'}
           </div>
         )}
-        <CatalogSwitcher />
         <CatalogBadge />
         <LanguageToggle variant="icon" />
         <ThemeToggle variant="icon" />
@@ -95,7 +93,6 @@ export function Header({
       </div>
     </header>
     {/* On a phone the header is full: the occupation gets its own row */}
-    <CatalogSwitcher placement="strip" />
     <CatalogBadge placement="strip" />
     </>
   );

@@ -2,8 +2,11 @@
 
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
+import { CatalogTabs } from '@/components/catalog/CatalogTabs';
+import { useCatalog } from '@/contexts/CatalogContext';
+import { isCatalogTabPath } from '@/lib/catalog/tabs';
 
 // Use the same User interface as AuthContext
 interface User {
@@ -50,6 +53,13 @@ export function MainLayout({
   // Determine current view from URL path - optimized with useMemo
   const currentView = useMemo(() => 'dashboard', []);
   const pathname = usePathname();
+  // Tabs per training on the content and list pages (trainer level users with
+  // more than one occupation). The page content is keyed with the epoch, so a
+  // switch loads every page again for the chosen occupation. The tabs sit
+  // outside of the key and keep the focus.
+  const { tabs, epoch } = useCatalog();
+  const showTabs =
+    userRole === 'trainer' && tabs.length > 1 && isCatalogTabPath(pathname);
   const hideBackButton = useMemo(() => {
     if (!pathname) return false;
     // Hide back button on dashboard and quiz pages (no meaningful back navigation)
@@ -103,7 +113,8 @@ export function MainLayout({
 
           {/* Page Content */}
           <div className="from-background/80 flex-1 overflow-y-auto bg-gradient-to-br via-red-900/15 to-red-800/25">
-            {children}
+            {showTabs && <CatalogTabs />}
+            <Fragment key={epoch}>{children}</Fragment>
           </div>
         </main>
       </div>
@@ -116,6 +127,8 @@ export function MainLayout({
       onGoBack,
       children,
       hideBackButton,
+      showTabs,
+      epoch,
     ]
   );
 
