@@ -99,7 +99,7 @@ select schemaname, tablename from pg_publication_tables
  order by schemaname, tablename;
 
 -- 11. Storage policies for the preview/ prefix (after 03-shared-objects.sql).
---     EXPECTED: six policies ending in _preview (avatar and content: insert, update, delete)
+--     EXPECTED: eight policies ending in _preview (avatar and content: select, insert, update, delete)
 select policyname, cmd from pg_policies
  where schemaname = 'storage' and tablename = 'objects' and policyname like '%\_preview'
  order by policyname;
