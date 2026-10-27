@@ -29,7 +29,10 @@ import {
   trainingCatalogContentMappings,
 } from '@/db/migrations/schemas/schema';
 import { isErrorResponse } from '@/lib/auth/session';
-import { requireHaiIndexManager } from '@/lib/hai/guards';
+import {
+  requireHaiIndexAdmin,
+  requireHaiIndexManager,
+} from '@/lib/hai/guards';
 import {
   indexContent,
   removeChunkPart,
@@ -592,8 +595,9 @@ async function runBackgroundReindex(
  */
 export async function POST(req: NextRequest) {
   try {
-    // Shared index: platform staff only, the role comes from the session
-    const manager = await requireHaiIndexManager(req);
+    // Shared index: platform staff only, the role comes from the session, and
+    // the proof of the admin PIN (this route reindexes and calls the models)
+    const manager = await requireHaiIndexAdmin(req);
     if (isErrorResponse(manager)) return manager;
 
     const body: IndexRequestBody = await req.json();
@@ -762,7 +766,7 @@ export async function GET(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
-    const manager = await requireHaiIndexManager(req);
+    const manager = await requireHaiIndexAdmin(req);
     if (isErrorResponse(manager)) return manager;
     const { searchParams } = new URL(req.url);
     const sourceType = searchParams.get('sourceType') as SourceType;

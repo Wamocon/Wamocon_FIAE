@@ -36,6 +36,14 @@ describe('invalidText', () => {
     expect(invalidText('comment', value, 50)).toBeNull();
   });
 
+  it.each(['a\u0000b', '\u0000'])(
+    'answers 400 for a text with a NUL character (%j), which a text column cannot hold',
+    async value => {
+      const res = invalidText('comment', value, 50);
+      expect(res!.status).toBe(400);
+    }
+  );
+
   it('answers 400 for a text over the limit and names field and limit', async () => {
     const res = invalidText('comment', 'x'.repeat(11), 10);
     expect(res).not.toBeNull();

@@ -13,6 +13,17 @@ import {
 import { eq, and } from 'drizzle-orm';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { notFoundUnlessUuid } from '@/lib/uuid';
+import {
+    MAX_REASON_LENGTH,
+    invalidText,
+    readJsonObject,
+} from '@/lib/input-limits';
+import {
+    asGrade,
+    invalidTrainerAssessmentInput,
+    normalizeSoftskillGrades,
+    unknownCriterion,
+} from '@/lib/evaluation-input';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -102,16 +113,25 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         const access = await requireTraineeAccess(session, String(evaluation.traineeId), request, 'Evaluation not found');
         if (isErrorResponse(access)) return access;
 
-        const body = await request.json();
+        // A body that is no JSON object, a grade outside 1 to 6, an unknown
+        // criterion and texts over the limit are a 400, checked before a write
+        const body = await readJsonObject(request);
+        if (isErrorResponse(body)) return body;
         const {
-            trainerRating,
+            trainerRating: rawTrainerRating,
             trainerComment,
-            softskillRatings,
+            softskillRatings: rawSoftskillRatings,
             isReleaseEdit = false,
-            releaseRating,
+            releaseRating: rawReleaseRating,
             releaseComment,
             editReason,
-        } = body;
+        } = body as Record<string, any>;
+        const invalidInput = invalidTrainerAssessmentInput(body, Boolean(isReleaseEdit));
+        if (invalidInput) return invalidInput;
+        // A grade is stored as the text of the enum: 3 and '3' are the same grade
+        const trainerRating = asGrade(rawTrainerRating);
+        const releaseRating = asGrade(rawReleaseRating);
+        const softskillRatings = normalizeSoftskillGrades(rawSoftskillRatings);
 
         // Block modification of APPROVED evaluations unless it's a release grade edit
         if (evaluation.status === 'APPROVED' && !isReleaseEdit) {
@@ -121,6 +141,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         if (!isReleaseEdit && !trainerRating) {
             return NextResponse.json({ error: 'Trainer rating is required' }, { status: 400 });
         }
+
+        // Every criterion has to exist, before anything is written
+        const unknown = await unknownCriterion(softskillRatings);
+        if (unknown) return unknown;
 
         // The status this decision was made on. The write carries it, so an
         // evaluation that was approved (or rejected) in the meantime is not
@@ -313,14 +337,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         const access = await requireTraineeAccess(session, String(evaluation.traineeId), request, 'Evaluation not found');
         if (isErrorResponse(access)) return access;
 
-        const body = await request.json();
-        const { action, rejectionReason } = body;
+        const body = await readJsonObject(request);
+        if (isErrorResponse(body)) return body;
+        const { action, rejectionReason } = body as Record<string, any>;
         // The acting trainer is the authenticated user, never a client value
         const trainerId = session.id;
 
         if (!['approve', 'reject'].includes(action)) {
             return NextResponse.json({ error: 'Invalid action. Use "approve" or "reject"' }, { status: 400 });
         }
+
+        const reasonTooLong = invalidText('rejectionReason', rejectionReason, MAX_REASON_LENGTH);
+        if (reasonTooLong) return reasonTooLong;
 
         // For approval, ensure trainer has provided ratings
         if (action === 'approve' && !evaluation.trainerRating) {
