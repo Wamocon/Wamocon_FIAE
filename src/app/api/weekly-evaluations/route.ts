@@ -6,7 +6,7 @@ import {
   mesSoftskillCriteria,
   gradeEditHistory,
 } from '@/db/migrations/schemas/schema';
-import { eq, and, asc, inArray } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 import {
   isErrorResponse,
   requireTrainer,
@@ -18,79 +18,11 @@ import {
   ratingAccessCondition,
   traineeAccessCondition,
 } from '@/lib/auth/activity-report-access';
+import { readJsonObject } from '@/lib/input-limits';
 import {
-  MAX_COMMENT_LENGTH,
-  MAX_REASON_LENGTH,
-  invalidText,
-  readJsonObject,
-} from '@/lib/input-limits';
-import { badRequestUnlessUuid } from '@/lib/uuid';
-
-const GRADES = ['1', '2', '3', '4', '5', '6'];
-const isGrade = (value: unknown) => GRADES.includes(String(value));
-/** A week has about ten criteria, the limit only stops a runaway request. */
-const MAX_SOFTSKILL_RATINGS = 100;
-
-/**
- * 400 for an input that would end in a 500 (a grade outside the enum, a
- * criterion that is no uuid, an entry that is no object) or that is too long.
- * Checked before anything is read or written.
- */
-function invalidEvaluationInput(
-  body: Record<string, any>
-): NextResponse | null {
-  const invalid = (message: string) =>
-    NextResponse.json({ error: message }, { status: 400 });
-
-  const text =
-    invalidText('trainerComment', body.trainerComment, MAX_COMMENT_LENGTH) ??
-    invalidText('releaseComment', body.releaseComment, MAX_COMMENT_LENGTH) ??
-    invalidText('editReason', body.editReason, MAX_REASON_LENGTH);
-  if (text) return text;
-
-  if (body.trainerRating && !isGrade(body.trainerRating)) {
-    return invalid('Invalid trainerRating');
-  }
-  if (body.releaseRating && !isGrade(body.releaseRating)) {
-    return invalid('Invalid releaseRating');
-  }
-
-  // Not a list: ignored, as before
-  if (!Array.isArray(body.softskillRatings)) return null;
-  if (body.softskillRatings.length > MAX_SOFTSKILL_RATINGS) {
-    return invalid('Too many softskillRatings');
-  }
-  for (const rating of body.softskillRatings) {
-    if (!rating || typeof rating !== 'object' || Array.isArray(rating)) {
-      return invalid('Invalid softskillRatings');
-    }
-    const { criterionId } = rating;
-    // An entry without a criterion is skipped, as before
-    if (
-      criterionId !== undefined &&
-      criterionId !== null &&
-      criterionId !== ''
-    ) {
-      const badId = badRequestUnlessUuid('criterionId', criterionId);
-      if (badId) return badId;
-    }
-    const entryText =
-      invalidText(
-        'trainerComment',
-        rating.trainerComment,
-        MAX_COMMENT_LENGTH
-      ) ??
-      invalidText('releaseComment', rating.releaseComment, MAX_COMMENT_LENGTH);
-    if (entryText) return entryText;
-    if (rating.trainerRating && !isGrade(rating.trainerRating)) {
-      return invalid('Invalid trainerRating');
-    }
-    if (rating.releaseRating && !isGrade(rating.releaseRating)) {
-      return invalid('Invalid releaseRating');
-    }
-  }
-  return null;
-}
+  invalidEvaluationInput,
+  unknownCriterion,
+} from '@/lib/evaluation-input';
 
 // GET: Get evaluation for a specific activity report
 // A trainee reads the evaluation of their own report, trainer level the one of
@@ -214,27 +146,8 @@ export async function POST(request: NextRequest) {
 
     // Every criterion has to exist: an unknown one would end in a foreign key
     // error after the evaluation was already written
-    const criterionIds = [
-      ...new Set(
-        (Array.isArray(softskillRatings) ? softskillRatings : [])
-          .map((entry: { criterionId?: unknown }) => entry.criterionId)
-          .filter(Boolean)
-          .map(String)
-      ),
-    ] as string[];
-    if (criterionIds.length > 0) {
-      const found = await db
-        .select({ id: mesSoftskillCriteria.id })
-        .from(mesSoftskillCriteria)
-        .where(inArray(mesSoftskillCriteria.id, criterionIds as any));
-      const known = new Set(found.map(row => String(row.id)));
-      if (criterionIds.some(id => !known.has(id))) {
-        return NextResponse.json(
-          { error: 'Unknown criterionId' },
-          { status: 400 }
-        );
-      }
-    }
+    const unknown = await unknownCriterion(softskillRatings);
+    if (unknown) return unknown;
 
     // Check if evaluation already exists for this activity report
     const existingEvaluations = await db

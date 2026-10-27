@@ -16,6 +16,7 @@ const EVAL_ID = 'aaaaaaa2-0000-4000-8000-000000000002';
 const SUB_ID = 'aaaaaaa5-0000-4000-8000-000000000005';
 const ENABLER = 'aaaaaaa6-0000-4000-8000-000000000006';
 const USE_CASE = 'aaaaaaa7-0000-4000-8000-000000000007';
+const CRIT = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const FIAE = '00000000-0000-4000-8000-000000000001';
 
 const trainee = {
@@ -56,6 +57,7 @@ async function evalRoute(call: EvalCall, lost: boolean) {
       profiles: [trainee],
       weeklyEvaluations: [evaluation(call.status)],
       weeklySoftskillRatings: call.ratings ?? [],
+      mesSoftskillCriteria: [{ id: CRIT }],
     },
     // a write that matches no row returns nothing
     returns: lost ? { weeklyEvaluations: [] } : undefined,
@@ -77,7 +79,7 @@ describe('PUT /evaluations/[id]: trainer assessment', () => {
     body: {
       trainerRating: '1',
       trainerComment: 'gut',
-      softskillRatings: [{ criterionId: 'c1', trainerRating: '2' }],
+      softskillRatings: [{ criterionId: CRIT, trainerRating: '2' }],
     },
   };
 
