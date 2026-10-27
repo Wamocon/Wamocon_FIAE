@@ -11,6 +11,7 @@
 // The check fails closed: a marker word of a solution in a visible text, or a
 // longer solution text inside a visible text, is a leak.
 
+import { hasSolutionHeadingLine, sharesSolutionText } from '../source-parsers';
 import type { ImportPlan } from './types';
 
 /**
@@ -226,6 +227,23 @@ export function findSolutionLeaks(plan: ImportPlan): string[] {
   for (const s of plan.scenarios) {
     check(`scenario ${s.enablerCode} title`, s.title);
     check(`scenario ${s.enablerCode} situation`, s.situation);
+    // The task is visible text beside the solution parts of its scenario.
+    if (typeof s.task === 'string') {
+      check(`scenario ${s.enablerCode} task`, s.task);
+      const parts = [s.solution, s.knowledgeContribution].filter(
+        (part): part is string => typeof part === 'string'
+      );
+      if (sharesSolutionText(s.task, parts)) {
+        problems.push(
+          `scenario ${s.enablerCode} task repeats text of a solution part`
+        );
+      }
+      if (hasSolutionHeadingLine(s.task)) {
+        problems.push(
+          `scenario ${s.enablerCode} task has a line that looks like the heading of a solution`
+        );
+      }
+    }
   }
   for (const quiz of plan.quizzes) {
     check(`quiz ${quiz.code} title`, quiz.title);

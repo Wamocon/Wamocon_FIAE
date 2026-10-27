@@ -168,6 +168,33 @@ test('checks a scenario and its code', () => {
   assert.deepEqual(codes(bad), ['CODE_MISMATCH']);
 });
 
+test('checks a scenario with the section Aufgabe', () => {
+  const rel = `${T1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`;
+  // next to the solution section: a task, nothing to report
+  const [head, situation, lage, ...rest] = scenarioParagraphs();
+  const withTask = checkParsed(rel, pathInfo(rel), {
+    paragraphs: [
+      head,
+      situation,
+      lage,
+      p('Aufgabe', true),
+      p('Eine erfundene Aufgabe.'),
+      ...rest,
+    ],
+  });
+  assert.equal(withTask.status, 'ok');
+  assert.equal(withTask.stats.taskCharacters, 'Eine erfundene Aufgabe.'.length);
+  // instead of the solution section: read as the solution, with a warning
+  const inPlace = checkParsed(rel, pathInfo(rel), {
+    paragraphs: scenarioParagraphs().map(para =>
+      para.text === 'Lösungsszenario' ? p('Aufgabe', true) : para
+    ),
+  });
+  assert.equal(inPlace.status, 'warning');
+  assert.deepEqual(codes(inPlace), ['TASK_AS_SOLUTION']);
+  assert.equal(inPlace.stats.taskCharacters, 0);
+});
+
 const useCaseParagraphs = (code = '1a', { solution = true } = {}) => [
   p(`${code}) Erfundener Titel`),
   p('Behandelte Themen', true),

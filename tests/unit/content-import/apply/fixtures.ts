@@ -126,13 +126,14 @@ export const globalQuizContent = (
 
 export const scenarioContent = (
   code: string,
-  options: { solutionHeading?: string } = {}
+  options: { solutionHeading?: string; task?: string } = {}
 ): SourceFile['content'] => ({
   type: 'scenario',
   result: parseScenarioText([
     `Szenario ${code}) Erfundenes Szenario`,
     'Ausgangssituation',
     'Eine erfundene Lage am Arbeitsplatz.',
+    ...(options.task === undefined ? [] : ['Aufgabe', options.task]),
     options.solutionHeading ?? 'Lösungsszenario',
     'Eine erfundene Lösung OMEGA.',
     'Wie das Fachwissen zur Lösung beiträgt',

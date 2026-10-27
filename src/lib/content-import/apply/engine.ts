@@ -105,7 +105,15 @@ function diffColumns(table: TableName, existing: Row, desired: Row): string[] {
 
 const baseName = (path: string) => path.split('/').pop() ?? path;
 
-/** The three document rows of a scenario: the situation and two solution parts. */
+/** Heading of the task inside the visible row of the situation. */
+export const TASK_HEADING = 'Aufgabe';
+
+/**
+ * The three document rows of a scenario: the situation and two solution parts.
+ * The task, when there is one, is part of the visible situation row under the
+ * heading "Aufgabe" (like the use cases, whose visible text holds situation,
+ * objective and steps). The title and the key of every row stay the same.
+ */
 export function scenarioDocuments(
   scenario: PlanScenario,
   enablerId: string,
@@ -130,7 +138,9 @@ export function scenarioDocuments(
   const situation = {
     ...common,
     title: `Szenario ${scenario.enablerCode}: Ausgangssituation`,
-    description: scenario.situation,
+    description: scenario.task
+      ? `${scenario.situation}\n\n${TASK_HEADING}\n\n${scenario.task}`
+      : scenario.situation,
     document_type: 'TRAINEE_QUESTION',
     visibility: 'ALL',
     order_index: 1,

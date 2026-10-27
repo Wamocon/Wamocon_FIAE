@@ -149,6 +149,69 @@ describe('buildImportPlan: structure', () => {
     expect(s.knowledgeContribution).toBe('Ein erfundener Beitrag SIGMA.');
   });
 
+  it('keeps a task of a scenario in its own field and adds nothing to the others', () => {
+    const files = sampleTree().filter(f => !f.rel.endsWith('Szenario_1a.docx'));
+    files.push(
+      file(
+        `${DIR.k1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
+        scenarioContent('1a', { task: 'Eine erfundene Aufgabe TAU.' })
+      )
+    );
+    const p = build(files);
+    const s = p.scenarios.find(x => x.enablerCode === 'K1-a')!;
+    expect(s.task).toBe('Eine erfundene Aufgabe TAU.');
+    expect(s.situation).toBe('Eine erfundene Lage am Arbeitsplatz.');
+    expect(s.solution).not.toContain('TAU');
+    expect(s.knowledgeContribution).not.toContain('TAU');
+    // the other scenarios keep exactly the shape they had before
+    const others = p.scenarios.filter(x => x.enablerCode !== 'K1-a');
+    expect(others).toHaveLength(5);
+    for (const other of others) expect('task' in other).toBe(false);
+    expect(p.skipped).toEqual([]);
+    expect(validatePlan(p)).toEqual([]);
+  });
+
+  it('reads a scenario whose solution heading says Aufgabe as the solution, with a note', () => {
+    const files = sampleTree().filter(f => !f.rel.endsWith('Szenario_1a.docx'));
+    files.push(
+      file(
+        `${DIR.k1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
+        scenarioContent('1a', { solutionHeading: 'Aufgabe' })
+      )
+    );
+    const p = build(files);
+    const s = p.scenarios.find(x => x.enablerCode === 'K1-a')!;
+    expect(s.solution).toBe('Eine erfundene Lösung OMEGA.');
+    expect('task' in s).toBe(false);
+    expect(p.skipped).toEqual([]);
+    expect(p.warnings.join(' ')).toMatch(/1a: TASK_AS_SOLUTION/);
+    expect(validatePlan(p)).toEqual([]);
+  });
+
+  it('skips a scenario whose task shows a solution marker or repeats a solution paragraph', () => {
+    const files = sampleTree().filter(
+      f => !/Szenario_1[ab]\.docx$/.test(f.rel)
+    );
+    files.push(
+      file(
+        `${DIR.k1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
+        scenarioContent('1a', {
+          task: 'Eine erfundene Frage. Richtige Antwort: B',
+        })
+      ),
+      file(
+        `${DIR.k1}/Enablers/1b_Thema/Szenario/Szenario_1b.docx`,
+        scenarioContent('1b', { task: 'Eine erfundene Lösung OMEGA.' })
+      )
+    );
+    const p = build(files);
+    const codes = Object.fromEntries(p.skipped.map(s => [s.key, s.code]));
+    expect(codes['scenario:K1-a']).toBe('SOLUTION_MARKER');
+    expect(codes['scenario:1b']).toBe('PARSE_ERROR');
+    expect(p.scenarios.map(s => s.enablerCode)).not.toContain('K1-a');
+    expect(p.scenarios.map(s => s.enablerCode)).not.toContain('K1-b');
+  });
+
   it('counts everything and skips nothing for a clean tree', () => {
     expect(planCounts(plan)).toEqual({
       components: 5,
@@ -532,6 +595,30 @@ describe('validatePlan', () => {
     const b = clone();
     b.scenarios[0].situation = `${b.scenarios[0].solution} ${b.scenarios[0].situation}`;
     expect(validatePlan(b).join(' ')).toMatch(/solution/i);
+  });
+
+  it('rejects a task that shows or repeats a solution, and a task that is no text', () => {
+    const a = clone();
+    a.scenarios[0].task = 'Eine erfundene Frage. Richtige Antwort: B';
+    expect(validatePlan(a).join(' ')).toMatch(/task.*solution/i);
+    const b = clone();
+    b.scenarios[0].task = b.scenarios[0].solution;
+    expect(validatePlan(b).join(' ')).toMatch(/task.*solution/i);
+    const c = clone();
+    c.scenarios[0].task = '  eine erfundene lösung omega.  ';
+    expect(validatePlan(c).join(' ')).toMatch(/task.*solution/i);
+    const d = clone();
+    d.scenarios[0].task = 42 as unknown as string;
+    expect(validatePlan(d).join(' ')).toMatch(/task/);
+    const e = clone();
+    e.scenarios[0].task = 'Eine erfundene Aufgabe TAU.';
+    expect(validatePlan(e)).toEqual([]);
+    const f = clone();
+    f.scenarios[0].task = 'Eine erfundene Frage.\n\nErwartete Lösung';
+    expect(validatePlan(f).join(' ')).toMatch(/task/i);
+    const g = clone();
+    g.scenarios[0].task = '   ';
+    expect(validatePlan(g).join(' ')).toMatch(/task/);
   });
 });
 
