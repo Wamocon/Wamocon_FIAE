@@ -578,7 +578,7 @@ describe('the whole flow: run, announce, upload, report, process', () => {
           entryFor('K1/Enabler/a.pdf', good),
           entryFor('K1/Quiz/b.docx', doc),
           entryFor('Kopie/a.pdf', same),
-          entryFor('K1/Tabelle.xlsx', good),
+          entryFor('K1/Tabelle.csv', good),
         ],
       },
     });

@@ -171,7 +171,8 @@ describe('the sources of the transfer', () => {
     expect(compare).toContain("mode: 'read-only'");
     expect(compare).toContain("finish: 'rollback'");
     expect(compare).not.toMatch(/write:\s*true/);
-    expect(compare.match(/write: false/g)).toHaveLength(2);
+    // the content engine, the use case engine and the learning field engine
+    expect(compare.match(/write: false/g)).toHaveLength(3);
     expect(compare).not.toMatch(/store\.protocol|beginApplying|recordAttempt/);
     expect(compare).not.toMatch(/updateExisting:\s*true/);
     // the target is checked first, inside the transaction

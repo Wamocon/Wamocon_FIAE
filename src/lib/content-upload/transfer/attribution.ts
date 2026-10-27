@@ -19,6 +19,8 @@ export interface AttributionInput {
   fileOfSource: ReadonlyMap<string, string>;
   /** Title of the document row of an original to the id of its file. */
   fileOfOriginalTitle?: ReadonlyMap<string, string>;
+  /** The Excel file of the learning field plan: its rows (and the codes it adds to use cases) belong to it. */
+  learningFileId?: string | null;
   /**
    * Quizzes and questions that exist already (read before the engines run): the
    * questions an extension adds, and the positions it moves, belong to the file of
@@ -99,12 +101,19 @@ export function planAttribution(input: AttributionInput): Attribution {
         const code = scenarioCodeOfTitle(row.title);
         return code ? (scenarioByCode.get(code) ?? null) : null;
       }
+      case 'training_catalog_learning_fields':
+      case 'training_catalog_content_mappings':
+        return input.learningFileId ?? null;
       default:
         return null;
     }
   };
   return {
     inserted: (table, row) => of(table, row),
-    updated: (table, row) => of(table, row),
+    // A use case that exists and is no item of the plan is only ever updated by the
+    // learning field engine (it adds the codes of the learning fields to lernfelder)
+    updated: (table, row) =>
+      of(table, row) ??
+      (table === 'use_cases' ? (input.learningFileId ?? null) : null),
   };
 }

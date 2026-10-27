@@ -407,7 +407,7 @@ describe('uploadFiles', () => {
     const files = [
       file('a.pdf', PDF('same'), 'one/a.pdf'),
       file('copy.pdf', PDF('same'), 'two/copy.pdf'),
-      file('sheet.xlsx', 'xlsx', 'one/sheet.xlsx'),
+      file('sheet.csv', 'csv', 'one/sheet.csv'),
       file('b.docx', DOCX('b'), 'one/b.docx'),
     ];
     const summary = await client.uploadFiles(
@@ -421,7 +421,7 @@ describe('uploadFiles', () => {
       failed: [],
     });
     expect(summary.rejected).toEqual([
-      { path: 'one/sheet.xlsx', code: 'UNSUPPORTED_EXTENSION' },
+      { path: 'one/sheet.csv', code: 'UNSUPPORTED_EXTENSION' },
     ]);
     expect(t.uploads).toHaveLength(2);
   });

@@ -299,6 +299,12 @@ describe('getRunWithProgress', () => {
     expect(result.limits).toEqual({
       maxFilesPerRequest: 50,
       maxFileBytes: 25 * 1024 * 1024,
+      maxFileBytesByExt: {
+        docx: 25 * 1024 * 1024,
+        pdf: 25 * 1024 * 1024,
+        json: 32 * 1024 * 1024,
+        xlsx: 5 * 1024 * 1024,
+      },
       maxFilesPerRun: 1500,
       maxRunBytes: 1024 ** 3,
     });

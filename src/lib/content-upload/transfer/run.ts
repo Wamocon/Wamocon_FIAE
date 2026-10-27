@@ -13,6 +13,12 @@
 //      happens, the run leaves "applying" again: back to review (dry run, failure) or
 //      to applied (committed apply)
 //
+// A third engine runs when an Excel mapping file is part of the transfer (package UP2): the
+// learning field engine, after the two others on the same connection (it needs the
+// enablers and use cases they have just written). It only adds (updateExisting false):
+// learning fields and mappings that are missing, an empty description, the codes in the
+// column lernfelder of use cases.
+//
 // Fixed on purpose and by test: nothing is activated (activate false), the solution
 // parts of scenarios and use cases are never written (the switches stay false). The
 // engines never delete.
@@ -45,6 +51,10 @@ import { scenarioSolutionTexts } from '@/lib/content-import/apply/guard';
 import { solutionTextsOfUseCases } from '@/lib/content-import/use-cases/guard';
 import { executeUseCasePlan } from '@/lib/content-import/use-cases/engine';
 import {
+  executeLearningFieldPlan,
+  type LearningFieldReport,
+} from '@/lib/content-import/learning-fields/engine';
+import {
   withReservedConnection,
   type ConnectionSource,
 } from '@/lib/content-upload/connection';
@@ -61,6 +71,7 @@ import { planAttribution } from '@/lib/content-upload/transfer/attribution';
 import { decisionsHash } from '@/lib/content-upload/transfer/canonical';
 import {
   assignmentFingerprint,
+  learningEvents,
   stockOfFiles,
   toStockReport,
   toStockWrites,
@@ -75,6 +86,7 @@ import {
 } from '@/lib/content-upload/transfer/originals';
 import {
   buildTransferPlan,
+  MAX_LEARNING_SKIPS,
   TransferPlanError,
 } from '@/lib/content-upload/transfer/plan';
 import { transferDecisions } from '@/lib/content-upload/transfer/preset';
@@ -292,7 +304,8 @@ export async function runTransfer(
     plan.counts.enablers +
     plan.counts.scenarios +
     plan.counts.quizzes +
-    plan.useCaseCounts.useCases;
+    plan.useCaseCounts.useCases +
+    (plan.learningPlan ? 1 : 0);
   if (itemCount === 0 && request.publishOriginals.length === 0) {
     return fail(
       409,
@@ -348,6 +361,7 @@ export async function runTransfer(
     decisions,
     importPlan: plan.importPlan,
     useCasePlan: plan.useCasePlan,
+    learningPlan: plan.learningPlan,
     options: { replaceFiles },
     files: plan.plannedFiles,
     originals: originals.plans.map(p => ({
@@ -412,6 +426,7 @@ export async function runTransfer(
     importPlan: plan.importPlan,
     useCasePlan: plan.useCasePlan,
     fileOfSource: plan.fileOfSource,
+    learningFileId: plan.learningFileId,
   };
   const fileFilter = updateFilterFor(planRefs, replaceSet);
   const engineSwitches = {
@@ -510,6 +525,7 @@ export async function runTransfer(
                 importPlan: plan.importPlan,
                 useCasePlan: plan.useCasePlan,
                 fileOfSource: plan.fileOfSource,
+                learningFileId: plan.learningFileId,
                 fileOfOriginalTitle: new Map(
                   forEngine.map(({ plan: o, original }) => [
                     original.title,
@@ -537,6 +553,14 @@ export async function runTransfer(
                     solutions: FIXED_ENGINE_OPTIONS.useCaseSolutions,
                   })
                 : null;
+            // The learning field engine needs the enablers and use cases of the two engines
+            // above (it sees them on this connection) and only ever adds.
+            const learningReport = plan.learningPlan
+              ? await executeLearningFieldPlan(db, plan.learningPlan, {
+                  updateExisting: false,
+                  write: true,
+                })
+              : null;
             const tables: Record<string, TableCount> = {
               ...importReport.tables,
             };
@@ -546,6 +570,10 @@ export async function runTransfer(
                 tables.content_documents,
                 useCaseReport.tables.content_documents
               );
+            }
+            if (learningReport) {
+              Object.assign(tables, learningTables(learningReport, tables));
+              events.push(...learningEvents(learningReport));
             }
             let applyId: string | null = null;
             if (apply) {
@@ -599,6 +627,7 @@ export async function runTransfer(
             return {
               importReport,
               useCaseReport,
+              learningReport,
               tables,
               applyId,
               storedPaths: db.storedPaths,
@@ -631,8 +660,9 @@ export async function runTransfer(
       differences: [
         ...done.importReport.differences,
         ...(done.useCaseReport?.differences ?? []),
+        ...(done.learningReport?.differences ?? []),
       ],
-      skipped: plan.skipped,
+      skipped: [...plan.skipped, ...learningSkips(plan, done.learningReport)],
       excluded: plan.excluded,
       useCasesSkippedInDb: done.useCaseReport?.skipped ?? [],
       originals: {
@@ -715,7 +745,19 @@ export async function runTransfer(
       );
     }
     if (abort?.code === 'CONFLICTS') {
-      // The engines compared everything before they stopped: the files say which one conflicts
+      // The engines of the content compared everything before they stopped: the files say which
+      // one conflicts. The learning field engine runs after them and only speaks when they passed.
+      // (the learning field engine has no observer: its conflicts name the tables of its rows)
+      events.push(
+        ...learningEvents({
+          tables: {},
+          useCaseMappings: { insert: 0, update: 0, unchanged: 0 },
+          useCaseCodes: { insert: 0, update: 0, unchanged: 0 },
+          conflicts: conflicts.filter(c =>
+            c.table.startsWith('training_catalog_')
+          ),
+        })
+      );
       const stock = stockOf();
       await rememberStock(stock);
       return ok({
@@ -747,6 +789,40 @@ export async function runTransfer(
     }
     throw error;
   }
+}
+
+/**
+ * The counters of the learning field engine in the shape of the report: learning fields,
+ * the mappings of enablers and use cases (one table), and the use cases that got codes in
+ * lernfelder (added to the counter of use_cases).
+ */
+export function learningTables(
+  report: LearningFieldReport,
+  current: Record<string, TableCount>
+): Record<string, TableCount> {
+  const fields = 'training_catalog_learning_fields';
+  const mappings = 'training_catalog_content_mappings';
+  return {
+    [fields]: report.tables[fields],
+    [mappings]: addCounts(report.tables[mappings], report.useCaseMappings),
+    use_cases: addCounts(
+      current.use_cases ?? { insert: 0, update: 0, unchanged: 0 },
+      { insert: 0, update: report.useCaseCodes.update, unchanged: 0 }
+    ),
+  };
+}
+
+/** The mappings that the learning engine skipped (the enabler is missing), named for the report. */
+function learningSkips(
+  plan: { learningFileId: string | null },
+  report: LearningFieldReport | null
+) {
+  if (!report || !plan.learningFileId) return [];
+  return report.skipped.slice(0, MAX_LEARNING_SKIPS).map(s => ({
+    fileId: plan.learningFileId,
+    code: s.code,
+    reason: s.reason,
+  }));
 }
 
 /** Runs a clean up step that must not hide the error that is being handled. */

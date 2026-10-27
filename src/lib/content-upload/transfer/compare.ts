@@ -21,6 +21,7 @@ import {
   type ApplyTarget,
 } from '@/lib/content-import/apply/target';
 import type { ItemEvent } from '@/lib/content-import/apply/types';
+import { executeLearningFieldPlan } from '@/lib/content-import/learning-fields/engine';
 import { executeUseCasePlan } from '@/lib/content-import/use-cases/engine';
 import { withReservedConnection } from '@/lib/content-upload/connection';
 import { UPLOAD_CATALOG_CODE } from '@/lib/content-upload/staging/config';
@@ -42,6 +43,7 @@ import {
 } from '@/lib/content-upload/transfer/run';
 import {
   assignmentFingerprint,
+  learningEvents,
   stockOfFiles,
   toStockReport,
   toStockWrites,
@@ -133,7 +135,8 @@ export async function compareStock(
     plan.importPlan.enablers.length +
       plan.importPlan.scenarios.length +
       plan.importPlan.quizzes.length +
-      plan.useCasePlan.useCases.length >
+      plan.useCasePlan.useCases.length +
+      (plan.learningPlan ? 1 : 0) >
     0;
   if (hasItems) {
     try {
@@ -194,6 +197,34 @@ export async function compareStock(
                   }
                 }
               }
+              // The Excel mapping: compared against what the database holds (the enablers
+              // that only this transfer would add are not there yet and count as skipped)
+              if (plan.learningPlan) {
+                try {
+                  const report = await executeLearningFieldPlan(
+                    db,
+                    plan.learningPlan,
+                    { updateExisting: false, write: false }
+                  );
+                  events.push(...learningEvents(report));
+                } catch (error) {
+                  // A catalog without any enabler: the mapping waits for the content, and is
+                  // new for as long as this transfer brings the enablers
+                  if (
+                    !(
+                      error instanceof ImportAbort &&
+                      error.code === 'NO_ENABLERS'
+                    )
+                  ) {
+                    throw error;
+                  }
+                  events.push({
+                    table: 'training_catalog_learning_fields',
+                    key: 'mapping',
+                    status: 'new',
+                  });
+                }
+              }
             }
           ),
         { reserveTimeoutMs: deps.reserveTimeoutMs ?? RESERVE_TIMEOUT_MS }
@@ -217,6 +248,7 @@ export async function compareStock(
     importPlan: plan.importPlan,
     useCasePlan: plan.useCasePlan,
     fileOfSource: plan.fileOfSource,
+    learningFileId: plan.learningFileId,
     useCasesSkippedInDb: useCasesSkipped,
   });
   const fileById = new Map<string, TransferFile>(files.map(f => [f.id, f]));

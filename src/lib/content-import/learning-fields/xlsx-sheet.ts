@@ -311,8 +311,60 @@ function readCapped(
 }
 
 /** Path of a relationship target inside the package ("worksheets/sheet1.xml" is relative to xl/). */
-const partPath = (target: string) =>
+export const partPath = (target: string) =>
   target.startsWith('/') ? target.slice(1) : `xl/${target}`;
+
+/**
+ * Opens a zip with JSZip (loaded on first use, so the scripts that do not read a workbook
+ * start without the dependency installed). The caller has read the directory of the zip
+ * (readZipDirectory) and checked it BEFORE this call: JSZip builds an object for every
+ * entry when it opens a file.
+ */
+export async function openZip(data: XlsxData): Promise<JSZip> {
+  const { default: Zip } = await import('jszip');
+  return Zip.loadAsync(data);
+}
+
+export interface WorkbookSheet {
+  name: string;
+  /** The relationship id (r:id) that names the part of the sheet. */
+  id: string | null;
+  /** `hidden` or `veryHidden` for a sheet that Excel does not show, otherwise null. */
+  state: string | null;
+}
+
+/** The sheets of xl/workbook.xml in order. */
+export function parseWorkbookSheets(xml: string): WorkbookSheet[] {
+  const sheets: WorkbookSheet[] = [];
+  walk(xml, tag => {
+    if (tag.name === 'sheet' && !tag.closing) {
+      // Excel writes state only for a hidden sheet, other writers write state="visible"
+      const state = attribute(tag.raw, 'state');
+      sheets.push({
+        name: decodeText(attribute(tag.raw, 'name') ?? ''),
+        id: attribute(tag.raw, 'r:id'),
+        state: state === 'hidden' || state === 'veryHidden' ? state : null,
+      });
+    }
+  });
+  return sheets;
+}
+
+/** Id to target of the relationships of a .rels part. */
+export function parseRelationshipTargets(
+  xml: string
+): Array<{ id: string | null; target: string | null }> {
+  const relationships: Array<{ id: string | null; target: string | null }> = [];
+  walk(xml, tag => {
+    if (tag.name === 'Relationship' && !tag.closing) {
+      relationships.push({
+        id: attribute(tag.raw, 'Id'),
+        target: attribute(tag.raw, 'Target'),
+      });
+    }
+  });
+  return relationships;
+}
 
 /**
  * The rows of one sheet of an .xlsx file. The first sheet of the workbook is
@@ -353,15 +405,7 @@ export async function readXlsxRows(
     'xl/workbook.xml',
     limits.maxXmlBytes
   );
-  const sheets: Array<{ name: string; id: string | null }> = [];
-  walk(workbook, tag => {
-    if (tag.name === 'sheet' && !tag.closing) {
-      sheets.push({
-        name: decodeText(attribute(tag.raw, 'name') ?? ''),
-        id: attribute(tag.raw, 'r:id'),
-      });
-    }
-  });
+  const sheets = parseWorkbookSheets(workbook);
   if (sheets.length === 0) throw new Error('The workbook has no sheet.');
   const sheet = options.sheet
     ? sheets.find(s => s.name === options.sheet)
@@ -371,15 +415,7 @@ export async function readXlsxRows(
   }
 
   const rels = (await readPart('xl/_rels/workbook.xml.rels', false)) ?? '';
-  const relationships: Array<{ id: string | null; target: string | null }> = [];
-  walk(rels, tag => {
-    if (tag.name === 'Relationship' && !tag.closing) {
-      relationships.push({
-        id: attribute(tag.raw, 'Id'),
-        target: attribute(tag.raw, 'Target'),
-      });
-    }
-  });
+  const relationships = parseRelationshipTargets(rels);
   const target =
     sheet.id === null
       ? null

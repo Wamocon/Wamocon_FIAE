@@ -57,7 +57,7 @@ describe('RunUploader: the choice of the files', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Erlaubt: .docx und .pdf, bis 25 MB je Datei, bis 1500 Dateien je Lauf/
+        /Erlaubt: .docx und .pdf bis 25 MB, .json bis 32 MB, .xlsx bis 5 MB je Datei, bis 1500 Dateien je Lauf/
       )
     ).toBeInTheDocument();
     expect(
@@ -77,11 +77,11 @@ describe('RunUploader: the choice of the files', () => {
     );
     expect(screen.getByTestId('files-input')).toHaveAttribute(
       'accept',
-      '.docx,.pdf'
+      '.docx,.pdf,.json,.xlsx'
     );
   });
 
-  it('takes only Word and PDF files and says how many others it left out', async () => {
+  it('takes Word, PDF, JSON and Excel files and says how many others it left out', async () => {
     const user = userEvent.setup();
     renderWithProviders(
       <RunUploader runId="r1" onFinished={jest.fn()} client={fakeClient()} />
@@ -92,15 +92,18 @@ describe('RunUploader: the choice of the files', () => {
         file('a.docx'),
         file('b.PDF'),
         file('c.xlsx'),
+        file('q.JSON'),
         file('d.txt'),
+        file('e.csv'),
         file('Thumbs.db'),
+        file('f.json.exe'),
       ],
       'folder'
     );
     const selection = screen.getByTestId('selection');
-    expect(selection).toHaveTextContent('2 Dateien gewählt');
+    expect(selection).toHaveTextContent('4 Dateien gewählt');
     expect(selection).toHaveTextContent(
-      '3 Dateien mit anderer Endung werden nicht hochgeladen.'
+      '4 Dateien mit anderer Endung werden nicht hochgeladen.'
     );
     expect(
       screen.getByRole('button', { name: 'Hochladen und verarbeiten' })
@@ -112,9 +115,9 @@ describe('RunUploader: the choice of the files', () => {
     renderWithProviders(
       <RunUploader runId="r1" onFinished={jest.fn()} client={fakeClient()} />
     );
-    await choose(user, [file('a.xlsx')], 'folder');
+    await choose(user, [file('a.csv'), file('b.xlsm')], 'folder');
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'keine Word- oder PDF-Dateien'
+      'keine Word-, PDF-, JSON- oder Excel-Dateien'
     );
     expect(
       screen.getByRole('button', { name: 'Hochladen und verarbeiten' })

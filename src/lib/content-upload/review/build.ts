@@ -30,6 +30,7 @@ import {
 import {
   KI_STATES,
   type AssignmentDto,
+  type ContentsDto,
   type DerivedDto,
   type DuplicateGroupDto,
   type KiStateName,
@@ -132,6 +133,49 @@ export function stockOf(
     added: stored.added,
     at: stored.at,
     stale: stored.assign !== assignmentFingerprint(effective),
+  };
+}
+
+/** The counts of the summary that the page may show, by kind of file. */
+const CONTENT_NUMBERS: Record<ContentsDto['kind'], readonly string[]> = {
+  quiz_json: [
+    'quizzes',
+    'sets',
+    'questions',
+    'setsWithErrors',
+    'errors',
+    'warnings',
+    'unmapped',
+  ],
+  mapping_xlsx: ['positions', 'blocks', 'blocksWithIssues', 'orphanRows'],
+};
+
+/**
+ * What a JSON or Excel file holds, from the summary the extract step stored: whole
+ * numbers only, of a fixed list. Anything else in the summary (it is a free JSON column)
+ * is ignored, so no text can reach the list through it.
+ */
+export function contentsOf(file: ReviewRecord['file']): ContentsDto | null {
+  if (file.ext !== 'json' && file.ext !== 'xlsx') return null;
+  const summary = file.parseSummary;
+  const kind = summary?.contents;
+  if (kind !== 'quiz_json' && kind !== 'mapping_xlsx') return null;
+  const numbers: Record<string, number> = {};
+  for (const key of CONTENT_NUMBERS[kind]) {
+    const value = summary?.[key];
+    if (
+      typeof value === 'number' &&
+      Number.isSafeInteger(value) &&
+      value >= 0
+    ) {
+      numbers[key] = value;
+    }
+  }
+  const variant = summary?.jsonKind;
+  return {
+    kind,
+    variant: variant === 'lesson' || variant === 'global' ? variant : null,
+    numbers,
   };
 }
 
@@ -251,6 +295,7 @@ export function buildRows(
       copyOfId: file.duplicateOfId,
       stock: stockOf(record, effective),
       ki: kiStateOf(file),
+      contents: contentsOf(file),
     };
   });
 }

@@ -38,7 +38,7 @@ export interface FixtureOptions {
   /** Path as the browser reported it. Without a tree: only the file name. */
   rel?: string;
   name?: string;
-  ext?: 'docx' | 'pdf';
+  ext?: 'docx' | 'pdf' | 'json' | 'xlsx';
   action?: 'accept' | 'reject' | 'defer';
   docType: string | null;
   componentCode?: string | null;
@@ -88,6 +88,34 @@ export function fixtureFile(
 
 export async function docx(blocks: Block[]): Promise<Uint8Array> {
   return new Uint8Array(await docxFromBlocks(blocks));
+}
+
+/** A quiz JSON file (schema 1.0) as an accepted file of a run. */
+export function jsonQuizFile(
+  content: unknown,
+  options: Partial<FixtureOptions> & { kind?: 'lesson' | 'global' } = {}
+): FixtureFile {
+  const { kind = 'lesson', ...rest } = options;
+  const text = typeof content === 'string' ? content : JSON.stringify(content);
+  return fixtureFile(new TextEncoder().encode(text), {
+    ext: 'json',
+    docType: kind === 'lesson' ? 'quiz' : 'global_quiz',
+    name: kind === 'lesson' ? 'quizze.json' : 'global.json',
+    ...rest,
+  });
+}
+
+/** An Excel mapping file as an accepted file of a run (docType other). */
+export function xlsxMappingFile(
+  bytes: Uint8Array,
+  options: Partial<FixtureOptions> = {}
+): FixtureFile {
+  return fixtureFile(bytes, {
+    ext: 'xlsx',
+    docType: 'other',
+    name: 'zuordnung.xlsx',
+    ...options,
+  });
 }
 
 /**

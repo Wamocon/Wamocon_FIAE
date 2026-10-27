@@ -141,7 +141,7 @@ describe('announceFiles', () => {
     const ctx = setup();
     const run = await newRun(ctx.deps);
     const result = await announceFiles(ctx.deps, run, {
-      files: [entryFor('a/x.xlsx', pdfBytes())],
+      files: [entryFor('a/x.csv', pdfBytes())],
     });
     expect(result.ok && result.data.counts.rejected).toBe(1);
     expect((await ctx.repo.getRun(run.id))?.status).toBe('draft');

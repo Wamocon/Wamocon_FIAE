@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import {
   LIMITS,
   UPLOAD_CATALOG_CODE,
+  maxFileBytesFor,
 } from '@/lib/content-upload/staging/config';
 import {
   removePendingObjects,
@@ -234,6 +235,8 @@ export interface RunWithProgress {
   limits: {
     maxFilesPerRequest: number;
     maxFileBytes: number;
+    /** Largest file by kind (docx, pdf, json, xlsx), for the page. */
+    maxFileBytesByExt: Record<string, number>;
     maxFilesPerRun: number;
     maxRunBytes: number;
   };
@@ -250,6 +253,12 @@ export async function getRunWithProgress(
     limits: {
       maxFilesPerRequest: LIMITS.maxFilesPerRequest,
       maxFileBytes: LIMITS.maxFileBytes,
+      maxFileBytesByExt: {
+        docx: maxFileBytesFor('docx'),
+        pdf: maxFileBytesFor('pdf'),
+        json: maxFileBytesFor('json'),
+        xlsx: maxFileBytesFor('xlsx'),
+      },
       maxFilesPerRun: LIMITS.maxFilesPerRun,
       maxRunBytes: LIMITS.maxRunBytes,
     },

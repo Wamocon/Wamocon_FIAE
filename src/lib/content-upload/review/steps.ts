@@ -1,7 +1,7 @@
 // The steps of the queue that lead a verified file to its proposal (package U6 binds
 // what U3 and U4 built into the slots `extract` and `rules` of staging/queue.ts):
 //
-//   extract  verified  -> extracted        reads the file (Word or PDF), applies the rule
+//   extract  verified  -> extracted        reads the file (Word, PDF, quiz JSON or Excel), applies the rule
 //                                          stage and writes the proposal; a file that must
 //                                          not be processed is rejected, one that cannot be
 //                                          read fails (code), never an exception
@@ -29,6 +29,8 @@ import {
   buildPositiveList,
   positiveListFromPaths,
 } from '@/lib/content-upload/classify/positive-list';
+import { extractQuizJson } from '@/lib/content-upload/review/json-step';
+import { extractMappingXlsx } from '@/lib/content-upload/review/xlsx-step';
 import { OBJECT_DELETED_KEY } from '@/lib/content-upload/staging/types';
 import { contentUploadAvailability } from '@/lib/content-upload/staging/config';
 import { createKiStepEnv, type KiEnvOptions } from '@/lib/content-upload/ki/env';
@@ -91,21 +93,36 @@ export function createExtractStep(env: ReviewStepEnv): QueueStep {
     from: 'verified',
     async run(context): Promise<StepResult> {
       const { file } = context;
-      const reject = async (code: string): Promise<StepResult> => {
+      const reject = async (
+        code: string,
+        extra?: Record<string, unknown>
+      ): Promise<StepResult> => {
         const removed = await context.removeObject();
+        const summary = {
+          ...(extra ?? {}),
+          ...(removed ? { [OBJECT_DELETED_KEY]: true } : {}),
+        };
         return {
           kind: 'advance',
           to: 'rejected',
           code,
-          patch: removed
-            ? { parseSummary: { [OBJECT_DELETED_KEY]: true } }
-            : {},
+          patch:
+            Object.keys(summary).length > 0 ? { parseSummary: summary } : {},
         };
       };
 
       const bytes = await context.loadBytes();
       if (bytes === null) {
         return { kind: 'advance', to: 'failed', code: 'OBJECT_MISSING' };
+      }
+
+      // A quiz JSON file and an Excel file have their own reading and rule stage (and
+      // never an excerpt)
+      if (file.ext === 'json') {
+        return extractQuizJson(file, bytes, env, reject);
+      }
+      if (file.ext === 'xlsx') {
+        return extractMappingXlsx(file, bytes, env, reject);
       }
 
       let paragraphs: Paragraph[] | null = null;
@@ -262,7 +279,12 @@ export function reviewStepEnv(
         const paths: string[] = [];
         for (let offset = 0; ; offset += 500) {
           const page = await deps.repo.listFiles(runId, { offset, limit: 500 });
-          paths.push(...page.map(f => f.relPath));
+          // only the paths of Word and PDF files describe the folder tree
+          paths.push(
+            ...page
+              .filter(f => f.ext === 'docx' || f.ext === 'pdf')
+              .map(f => f.relPath)
+          );
           if (page.length < 500) break;
         }
         const components = await deps.review.catalogComponents(

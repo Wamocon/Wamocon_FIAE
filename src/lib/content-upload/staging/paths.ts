@@ -11,8 +11,8 @@
 //    src/lib/document-storage.ts: strict alphabet, no decoding, no dot
 //    segments, no queries, no nesting).
 //
-//      Production / local:  upload/<run uuid>/<file uuid>.<docx|pdf>
-//      Preview:             preview/upload/<run uuid>/<file uuid>.<docx|pdf>
+//      Production / local:  upload/<run uuid>/<file uuid>.<docx|pdf|json|xlsx>
+//      Preview:             preview/upload/<run uuid>/<file uuid>.<docx|pdf|json|xlsx>
 //
 // There is no pattern with an optional prefix: a Preview that accepted the
 // Production form (or the reverse) could touch the objects of the other one in
@@ -21,9 +21,16 @@
 import { DB_SCHEMA, withStoragePrefix, type DbSchema } from '@/lib/db-schema';
 import { LIMITS } from '@/lib/content-upload/staging/config';
 
-export type UploadExt = 'docx' | 'pdf';
+export type UploadExt = 'docx' | 'pdf' | 'json' | 'xlsx';
 
-const EXTENSIONS: readonly UploadExt[] = ['docx', 'pdf'];
+/** The kinds of file the upload takes (content_upload_files_ext_check, migration 20261030000200). */
+export const UPLOAD_EXTENSIONS: readonly UploadExt[] = [
+  'docx',
+  'pdf',
+  'json',
+  'xlsx',
+];
+const EXTENSIONS = UPLOAD_EXTENSIONS;
 
 // ---------------------------------------------------------------------------
 // Relative path of an announced file
@@ -70,7 +77,7 @@ function hasLoneSurrogate(text: string): boolean {
  * and invisible characters removed, separators unified, drive letter, empty
  * segments and `.` and `..` segments removed (dropped, never resolved), at most
  * 12 segments and 500 characters. The file name is the last segment, at most
- * 200 characters, with the extension docx or pdf. Anything else is a rejection
+ * 200 characters, with the extension docx, pdf, json or xlsx. Anything else is a rejection
  * with a stable code, which the caller reports for that one file.
  *
  * Nothing is decoded: `%2e%2e` stays text and is harmless because the value is
@@ -132,7 +139,7 @@ function escapeRegex(text: string): string {
 /** The one pattern of a schema, built from withStoragePrefix (see the header). */
 function storagePattern(schema: DbSchema): RegExp {
   const root = escapeRegex(withStoragePrefix('upload/', schema));
-  return new RegExp(`^${root}(${UUID})/(${UUID})\\.(docx|pdf)$`);
+  return new RegExp(`^${root}(${UUID})/(${UUID})\\.(docx|pdf|json|xlsx)$`);
 }
 
 /** `[preview/]upload/<run uuid>/`, the folder of one run. */
@@ -160,7 +167,7 @@ export function uploadStoragePath(
     throw new Error('The file id is not a lower case uuid');
   }
   if (!(EXTENSIONS as readonly string[]).includes(ext)) {
-    throw new Error('The extension is not docx or pdf');
+    throw new Error('The extension is not docx, pdf, json or xlsx');
   }
   return `${runStoragePrefix(runId, schema)}${fileId}.${ext}`;
 }
