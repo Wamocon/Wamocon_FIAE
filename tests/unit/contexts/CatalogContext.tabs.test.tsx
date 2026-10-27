@@ -99,6 +99,61 @@ describe('CatalogProvider tabs', () => {
       expect(result.current.epoch).toBe(0);
     });
 
+    it('a super admin gets a tab for an inactive occupation too, after the active ones', async () => {
+      signedInAs('super_admin');
+      respond({ catalogs: [FIAE, OFF, KFBM], activeCode: 'FIAE' });
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.tabs.map(c => [c.code, c.isActive])).toEqual([
+        ['FIAE', true],
+        ['KFBM', true],
+        ['OFF', false],
+      ]);
+      expect(result.current.activeCode).toBe('FIAE');
+    });
+
+    it('an ADMIN of the platform organization counts as super admin', async () => {
+      (useAuth as jest.Mock).mockReturnValue({
+        profile: {
+          id: 'user-1',
+          role: 'admin',
+          organization: { isPlatformOwner: true },
+        },
+        loading: false,
+      });
+      respond({ catalogs: [FIAE, OFF], activeCode: 'FIAE' });
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.tabs.map(c => c.code)).toEqual(['FIAE', 'OFF']);
+    });
+
+    it.each([
+      [
+        'an org admin',
+        {
+          id: 'user-1',
+          role: 'admin',
+          organization: { isPlatformOwner: false },
+        },
+      ],
+      [
+        'a trainer of the platform organization',
+        {
+          id: 'user-1',
+          role: 'trainer',
+          organization: { isPlatformOwner: true },
+        },
+      ],
+    ])('%s gets no tab for an inactive occupation', async (_label, profile) => {
+      (useAuth as jest.Mock).mockReturnValue({ profile, loading: false });
+      // the server never lists an inactive occupation for them, and if it did
+      // the client would not offer it
+      respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' });
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.tabs.map(c => c.code)).toEqual(['FIAE', 'KFBM']);
+    });
+
     it('no tab for an inactive occupation, and no tabs if only one is active', async () => {
       respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' });
       const { result } = setup();
@@ -152,6 +207,16 @@ describe('CatalogProvider tabs', () => {
         expect(result.current.activeCode).toBe('FIAE');
       }
     );
+
+    it('a super admin takes an inactive occupation from the URL', async () => {
+      signedInAs('super_admin');
+      respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' });
+      setUrl('?catalog=OFF');
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.activeCode).toBe('OFF');
+      expect(getCatalogHeader()).toBe('OFF');
+    });
 
     it('does not take an occupation from the URL for an inactive one', async () => {
       respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' });
@@ -208,6 +273,17 @@ describe('CatalogProvider tabs', () => {
         expect(pushCatalogUrl).not.toHaveBeenCalled();
       }
     );
+
+    it('a super admin can switch to an inactive occupation', async () => {
+      signedInAs('super_admin');
+      respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' });
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      act(() => result.current.selectTab('OFF'));
+      expect(result.current.activeCode).toBe('OFF');
+      expect(getCatalogHeader()).toBe('OFF');
+      expect(pushCatalogUrl).toHaveBeenCalledWith('FIAE', 'OFF');
+    });
 
     it('refuses an inactive occupation', async () => {
       respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' });
@@ -322,6 +398,21 @@ describe('CatalogProvider tabs', () => {
       await waitFor(() => expect(result.current.status).toBe('ready'));
       expect(result.current.tabs).toEqual([]);
       expect(getCatalogHeader()).toBeNull();
+    });
+
+    it('a super admin with only inactive occupations gets tabs and a header for the first', async () => {
+      signedInAs('super_admin');
+      respond({
+        catalogs: [
+          { ...OFF, code: 'OFA' },
+          { ...OFF, code: 'OFB' },
+        ],
+        activeCode: null,
+      });
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.tabs.map(c => c.code)).toEqual(['OFA', 'OFB']);
+      expect(getCatalogHeader()).toBe('OFA');
     });
 
     it('a stored inactive choice is not used', async () => {

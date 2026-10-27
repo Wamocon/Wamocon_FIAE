@@ -72,6 +72,9 @@ export function CatalogTabs() {
         {t('catalog.tabs.current', {
           title: tabs[activeIndex]?.title ?? activeCode,
         })}
+        {tabs[activeIndex] && !tabs[activeIndex].isActive
+          ? ` (${t('catalog.tabs.inactive')})`
+          : ''}
       </p>
       <div
         role="tablist"
@@ -91,7 +94,11 @@ export function CatalogTabs() {
               role="tab"
               aria-selected={selected}
               tabIndex={index === activeIndex ? 0 : -1}
-              title={tab.title}
+              title={
+                tab.isActive
+                  ? tab.title
+                  : `${tab.title} (${t('catalog.tabs.inactive')})`
+              }
               onClick={() => selectTab(tab.code)}
               onKeyDown={event => onKeyDown(event, index)}
               className={`min-h-11 shrink-0 cursor-pointer px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))] ${
@@ -101,6 +108,11 @@ export function CatalogTabs() {
               }`}
             >
               {tab.branding.shortName ?? tab.code}
+              {!tab.isActive && (
+                <span className="text-muted-foreground ml-2 rounded border px-1.5 py-0.5 text-xs font-medium">
+                  {t('catalog.tabs.inactive')}
+                </span>
+              )}
             </button>
           );
         })}
