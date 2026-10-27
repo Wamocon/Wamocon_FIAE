@@ -138,7 +138,7 @@ describe('occupation tabs: role matrix on a list route', () => {
       }
     );
 
-    it('refuses an inactive catalog as a view', async () => {
+    it('can view an inactive catalog, exactly that one', async () => {
       const { mock, mod } = await load(
         'trainer/courses',
         { courses: [] },
@@ -146,19 +146,37 @@ describe('occupation tabs: role matrix on a list route', () => {
         kfbmInactive
       );
       const res = await mod.GET(req(`${COURSES}?catalog=KFBM`));
-      expect(res.status).toBe(403);
-      expect(mock.filters('select', 'courses').sql).toBe('');
-      // the active one still works
-      const ok = await load(
+      expect(res.status).toBe(200);
+      expect(mock.filters('select', 'courses').params).toEqual([KFBM]);
+      // without a parameter nothing changes for the list
+      const all = await load(
         'trainer/courses',
         { courses: [] },
         superAdmin(),
         kfbmInactive
       );
-      expect((await ok.mod.GET(req(`${COURSES}?catalog=FIAE`))).status).toBe(
-        200
+      await all.mod.GET(req(COURSES));
+      expect(all.mock.filters('select', 'courses').params).toEqual(
+        expect.arrayContaining([FIAE, KFBM])
       );
     });
+
+    it.each(['NOPE', "KFBM'--", 'KFBM,FIAE'])(
+      'refuses the unknown code %p although inactive catalogs are viewable',
+      async code => {
+        const { mock, mod } = await load(
+          'trainer/courses',
+          { courses: [] },
+          superAdmin(),
+          kfbmInactive
+        );
+        const res = await mod.GET(
+          req(`${COURSES}?catalog=${encodeURIComponent(code)}`)
+        );
+        expect(res.status).toBe(403);
+        expect(mock.filters('select', 'courses').sql).toBe('');
+      }
+    );
   });
 
   describe.each([

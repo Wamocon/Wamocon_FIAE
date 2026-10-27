@@ -15,10 +15,11 @@
  * parameter `catalog` (catalog code, for example KFBM), this is what the tabs
  * of the pages send. It is validated against the allowed catalogs, an unknown
  * or foreign value is rejected with 403 (never widened), a missing value
- * selects the default. A super admin can only choose an active catalog (an
- * inactive one is allowed for records, but is not a view to choose). Fail
- * closed: if the scope cannot be determined, the caller gets no access (never
- * all catalogs).
+ * selects the default. Only a super admin has inactive catalogs among the
+ * allowed ones, so only they can view one (to check content before the
+ * activation). Every other role never gets an inactive catalog. Fail closed:
+ * if the scope cannot be determined, the caller gets no access (never all
+ * catalogs).
  *
  * Usage in a route handler:
  *
@@ -232,9 +233,7 @@ export async function getCatalogScope(
   let selected = false;
   if (requestedCode) {
     const match = allowed.find(
-      c =>
-        c.code.toLowerCase() === requestedCode.toLowerCase() &&
-        (!superAdmin || c.isActive)
+      c => c.code.toLowerCase() === requestedCode.toLowerCase()
     );
     if (!match) {
       throw new CatalogScopeError(403, 'Training catalog not allowed');
