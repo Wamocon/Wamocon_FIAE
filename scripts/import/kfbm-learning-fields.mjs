@@ -22,10 +22,12 @@
 //         [--decisions <file>]
 //         Reads the table (read only) and the codes of the import and writes the
 //         plan. No database, no network. Next to the JSON a summary in Markdown
-//         without any cell text (same name, .md). The titles file is a .json
-//         ({"LF1": "..."}) or the source list (.csv), without it the learning
-//         fields get provisional placeholder titles. The folder is only listed
-//         (names and sizes), no document is opened.
+//         without any cell text (same name, .md). The learning fields get the
+//         official titles and time guidelines (hours) of the framework
+//         curriculum (src/lib/content-import/learning-fields/official.ts). A
+//         titles file of the owner (.json, {"LF1": "..."}) wins over the
+//         official title, the source list (.csv, provisional) does not. The
+//         folder is only listed (names and sizes), no document is opened.
 //   check --plan <plan.json> --target local|preview [--report-out <file.md>]
 //         Compares the plan with the target database in a read-only transaction.
 //   run   --plan <plan.json> --target local|preview [--apply]
@@ -34,8 +36,9 @@
 //         counts are printed, then the transaction is rolled back. With --apply
 //         the transaction is committed. A real run against the Preview also
 //         needs --confirm-host <host of the connection>. --update-existing
-//         updates the title of learning fields that exist (never to a
-//         placeholder), nothing else.
+//         updates the title and the hours (hours_budget) of learning fields
+//         that exist (a title never to a placeholder, the hours never to
+//         empty), nothing else.
 //
 // The connection comes from the environment variable DB_CONNECTION_STRING and
 // from nowhere else (no .env file is read). The script prints neither the

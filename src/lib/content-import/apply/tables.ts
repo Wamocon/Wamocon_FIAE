@@ -197,9 +197,9 @@ export const TABLES: Record<TableName, TableSpec> = {
       'hours_budget',
       'order_index',
     ],
-    // Only the title is updated. The school year and the order are part of
-    // the identity of a learning field, the hours have no source.
-    updatable: ['title'],
+    // Only the title and the hours (official time guideline) are updated. The
+    // school year and the order are part of the identity of a learning field.
+    updatable: ['title', 'hours_budget'],
     uuid: ['id', 'training_catalog_id'],
     touch: true,
   },
