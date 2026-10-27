@@ -141,6 +141,7 @@ function learningFieldList(
       titleProvisional: source !== 'json' && source !== 'official',
       trainingYear: learningFieldYear(number) as SchoolYear,
       hoursBudget: official ? official.hours : null,
+      description: official ? official.description : null,
       orderIndex: number,
     });
     const named = titles?.years[number];
@@ -592,6 +593,17 @@ export function validateLearningFieldPlan(plan: unknown): string[] {
         `${field.code}: the hours of an official learning field must be the official time guideline.`
       );
     }
+    // The description can only be the verbatim text of the framework
+    // curriculum: a plan file that carries another text is not accepted.
+    if (
+      field.description !== undefined &&
+      field.description !== null &&
+      field.description !== officialLearningField(number)?.description
+    ) {
+      problems.push(
+        `${field.code}: the description must be the official description or empty.`
+      );
+    }
     if (
       field.hoursBudget !== null &&
       !(Number.isInteger(field.hoursBudget) && field.hoursBudget >= 0)
@@ -662,7 +674,7 @@ const OPEN_TEXT: Record<OpenPoint, string> = {
   ALL_LEARNING_FIELDS:
     '"alle Lernfelder" wird als alle Lernfelder des Schuljahrs der Spalte gelesen.',
   USE_CASES:
-    'Zuordnungen gibt es nur zu Enablern. Das Modell erlaubt auch Use Cases, die folgen mit deren Import.',
+    'Der Plan nennt nur Enabler. Die Zuordnungen zu Use Cases entstehen im Lauf gegen die Datenbank: je Enabler-Zuordnung eine zum Use Case des Enablers (use_cases.enabler_id). Sie fehlen, solange der Use-Case-Import nicht gelaufen ist, dann den Lauf wiederholen.',
   COMPANY_ONLY:
     'Positionen mit "nur betrieblich" oder "nur betr./beh." haben bewusst kein Lernfeld.',
 };
