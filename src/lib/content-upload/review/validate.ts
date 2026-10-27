@@ -163,6 +163,8 @@ export interface SetItemInput {
 export type DecisionCommandInput =
   | { command: 'set'; items: SetItemInput[] }
   | { command: 'accept_high' }
+  | { command: 'accept_stock' }
+  | { command: 'accept_medium'; group: string }
   | {
       command: 'bulk';
       action: Exclude<DecisionAction, 'accept'>;
@@ -267,6 +269,17 @@ export function parseDecisionRequest(
       return done({ command: 'accept_high' });
     case 'accept_newest':
       return done({ command: 'accept_newest' });
+    case 'accept_stock':
+      return done({ command: 'accept_stock' });
+    case 'accept_medium':
+      if (
+        typeof body.group !== 'string' ||
+        !/^[A-Z0-9_]+(\+[A-Z0-9_]+)*$/.test(body.group) ||
+        body.group.length > 200
+      ) {
+        return invalid('group must be the reason codes of a group');
+      }
+      return done({ command: 'accept_medium', group: body.group });
     case 'set': {
       const raw = body.items;
       if (!Array.isArray(raw) || raw.length < 1 || raw.length > MAX_ITEMS) {

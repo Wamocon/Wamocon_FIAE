@@ -22,6 +22,7 @@ import { transferDecisions } from '@/lib/content-upload/transfer/preset';
 import { RecordingDb } from '@/lib/content-upload/transfer/record';
 import {
   MAX_PUBLISH_ORIGINALS,
+  MAX_REPLACE_FILES,
   parseTransferBody,
 } from '@/lib/content-upload/transfer/request';
 import {
@@ -57,7 +58,7 @@ async function planOf(
 
 async function inputOf(
   fixtures: FixtureFile[],
-  options: { decisions?: Decisions; now?: Date; updateExisting?: boolean } = {}
+  options: { decisions?: Decisions; now?: Date; replaceFiles?: string[] } = {}
 ): Promise<CanonicalInput> {
   const decisions = options.decisions ?? transferDecisions();
   const plan = await planOf(fixtures, options);
@@ -65,7 +66,7 @@ async function inputOf(
     decisions,
     importPlan: plan.importPlan,
     useCasePlan: plan.useCasePlan,
-    options: { updateExisting: options.updateExisting === true },
+    options: { replaceFiles: options.replaceFiles ?? [] },
     files: plan.plannedFiles,
     originals: [],
   };
@@ -172,7 +173,7 @@ describe('the canonical plan and its hash', () => {
     expect(decisionsHash(await inputOf(changedBytes))).not.toBe(base);
 
     expect(
-      decisionsHash(await inputOf(files, { updateExisting: true }))
+      decisionsHash(await inputOf(files, { replaceFiles: [UUID(1)] }))
     ).not.toBe(base);
   });
 
@@ -207,7 +208,7 @@ describe('the canonical plan and its hash', () => {
     );
     expect(text).toContain(TRANSFER_ENGINE_VERSION);
     expect(text).toContain(
-      '"fixed":{"activate":false,"scenarioSolutions":false,"useCaseSolutions":false}'
+      '"fixed":{"activate":false,"extendQuizzes":true,"scenarioSolutions":false,"useCaseSolutions":false}'
     );
     expect(text).not.toContain('2026-10-27T08:00:00');
     expect(sha256Hex('abc')).toBe(
@@ -393,16 +394,16 @@ describe('parseTransferBody', () => {
   it('takes no body, an empty object and the known fields', () => {
     expect(parseTransferBody(undefined)).toEqual({
       ok: true,
-      data: { updateExisting: false, publishOriginals: [] },
+      data: { replaceFiles: [], publishOriginals: [] },
     });
     expect(parseTransferBody(null)).toMatchObject({ ok: true });
     expect(parseTransferBody({})).toEqual({
       ok: true,
-      data: { updateExisting: false, publishOriginals: [] },
+      data: { replaceFiles: [], publishOriginals: [] },
     });
     expect(
       parseTransferBody({
-        updateExisting: true,
+        replaceFiles: [UUID(3).toUpperCase(), UUID(3), UUID(2)],
         confirm: 'KFBM',
         publishOriginals: [UUID(1).toUpperCase(), UUID(1), UUID(2)],
         ignored: { a: 1 },
@@ -410,7 +411,7 @@ describe('parseTransferBody', () => {
     ).toEqual({
       ok: true,
       data: {
-        updateExisting: true,
+        replaceFiles: [UUID(2), UUID(3)],
         confirm: 'KFBM',
         publishOriginals: [UUID(1), UUID(2)],
       },
@@ -420,7 +421,16 @@ describe('parseTransferBody', () => {
   it.each([
     ['an array', []],
     ['a text', 'x'],
-    ['updateExisting as text', { updateExisting: 'yes' }],
+    ['replaceFiles as text', { replaceFiles: 'yes' }],
+    ['a replace id that is none', { replaceFiles: ['nope'] }],
+    [
+      'too many files to replace',
+      {
+        replaceFiles: Array.from({ length: MAX_REPLACE_FILES + 1 }, (_, i) =>
+          UUID(i + 1)
+        ),
+      },
+    ],
     ['publishOriginals as text', { publishOriginals: 'a' }],
     ['a file id that is none', { publishOriginals: ['nope'] }],
     ['a mixed list', { publishOriginals: [UUID(1), 5] }],

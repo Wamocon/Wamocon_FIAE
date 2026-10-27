@@ -71,6 +71,7 @@ export function rowDto(
     derived: band ? { kind: 'pflicht', phase: 1 } : null,
     duplicate: null,
     copyOfId: null,
+    stock: null,
     ki: null,
     ...rest,
   };
@@ -90,6 +91,9 @@ export const COUNTS: ReviewCounts = {
   deferred: 0,
   open: 0,
   acceptableHigh: 0,
+  stock: { conflict: 0, differs: 0, extended: 0, new: 0, unchanged: 0, none: 0 },
+  acceptableStock: 0,
+  mediumGroups: [],
 };
 
 export function listResponse(
@@ -225,6 +229,18 @@ export function fakeClient(
     duplicates: jest.fn(async () => ({ groups: [], version: 0 })),
     decide: jest.fn(async () => ({ version: 1, written: 1, skipped: [] })),
     reopen: jest.fn(async () => ({ version: 1 })),
+    compare: jest.fn(async () => ({
+      stock: {
+        counts: { conflict: 0, differs: 0, extended: 0, new: 0, unchanged: 0 },
+        files: [],
+      },
+      compared: 0,
+      excluded: [],
+      stored: 0,
+    })),
+    dryRun: jest.fn(),
+    apply: jest.fn(),
+    rollbackSql: jest.fn(),
     ...overrides,
   } as jest.Mocked<ReviewClient>;
 }

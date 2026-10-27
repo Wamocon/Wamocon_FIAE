@@ -3,6 +3,7 @@
 // back to a general one, so a new code of the server never shows an empty cell.
 
 import type { ProposalBand } from '@/lib/content-upload/classify/types';
+import type { StockStatus } from '@/lib/content-upload/transfer/stock';
 
 type Translate = (
   key: string,
@@ -71,6 +72,19 @@ export const BAND_SYMBOL: Record<ProposalBand, string> = {
   high: '✓',
   medium: '~',
   low: '?',
+  conflict: '!',
+};
+
+/** The status of the supply (docs 8.9) as a word. */
+export const stockLabel = (t: Translate, status: string) =>
+  codeText(t, 'contentUpload.stock', status, 'contentUpload.stock.other');
+
+/** Symbol of a status of the supply, so that the meaning never rests on colour alone. */
+export const STOCK_SYMBOL: Record<StockStatus, string> = {
+  new: '+',
+  extended: '↑',
+  differs: '≠',
+  unchanged: '=',
   conflict: '!',
 };
 

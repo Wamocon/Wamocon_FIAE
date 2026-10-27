@@ -15,6 +15,7 @@ import type {
   UploadDocType,
 } from '@/lib/content-upload/classify/types';
 import type { FileStatus } from '@/lib/content-upload/staging/status';
+import type { StockStatus } from '@/lib/content-upload/transfer/stock';
 import type { FileRow } from '@/lib/content-upload/staging/types';
 
 export type DecisionAction = 'accept' | 'reject' | 'defer';
@@ -142,6 +143,20 @@ export interface RowDuplicateDto {
 }
 
 /**
+ * The status of the supply of a file: what the comparison with the database found
+ * (docs/ki-upload-konzept.md 8.9). Codes and numbers only.
+ */
+export interface StockDto {
+  status: StockStatus;
+  /** Questions an existing quiz would get. */
+  added: number;
+  /** ISO time of the comparison. */
+  at: string;
+  /** The assignment changed after the comparison: the status may not hold any more. */
+  stale: boolean;
+}
+
+/**
  * How the model stage ended for a file that the rules left unclear (the marker
  * `kiState` in the summary of the file). A proposal of the model is not listed
  * here: it is the proposal itself, with the source `ki`.
@@ -175,6 +190,8 @@ export interface ReviewRowDto {
   duplicate: RowDuplicateDto | null;
   /** Exact copy of another file of the run (the copy has no object of its own). */
   copyOfId: string | null;
+  /** Status of the supply from the last comparison, null before there was one. */
+  stock: StockDto | null;
   /** The end of the model stage for this file, or null when it did not take part. */
   ki: KiStateName | null;
 }
@@ -200,6 +217,28 @@ export interface ReviewCounts {
   open: number;
   /** What "accept all safe ones" would take: band high, no decision, no other version. */
   acceptableHigh: number;
+  /**
+   * Files by the status of the supply. `none` counts the files without a comparison
+   * or with a stale one.
+   */
+  stock: Record<StockStatus | 'none', number>;
+  /** What "accept new and added" would take: new or extended, safe, no decision. */
+  acceptableStock: number;
+  /**
+   * The proposals of the band medium that a click may take, grouped by the same
+   * reasons (the codes of the reasons, sorted, joined by +): what "confirm all with the
+   * same reasons" would take. Never band low or conflict, never an unchecked content.
+   */
+  mediumGroups: MediumGroupDto[];
+}
+
+/** A group of proposals in the band medium with the same reasons. */
+export interface MediumGroupDto {
+  /** The sorted reason codes joined by +, also the id of the group in the command. */
+  key: string;
+  /** The reason texts (fixed German text of the rule stage) joined by a middle dot. */
+  text: string;
+  count: number;
 }
 
 /** The status filter of the list. */
@@ -214,6 +253,17 @@ export const STATUS_FILTERS = [
 ] as const;
 export type StatusFilter = (typeof STATUS_FILTERS)[number];
 
+/** The filter by the status of the supply. `none`: not compared yet or stale. */
+export const STOCK_FILTERS = [
+  'new',
+  'extended',
+  'differs',
+  'unchanged',
+  'conflict',
+  'none',
+] as const;
+export type StockFilter = (typeof STOCK_FILTERS)[number];
+
 export const BAND_FILTERS = ['high', 'medium', 'low', 'conflict'] as const;
 
 export const SORTS = ['path', 'name', 'band', 'status'] as const;
@@ -224,6 +274,7 @@ export interface ReviewFilter {
   docType?: string;
   component?: string;
   status?: StatusFilter;
+  stock?: StockFilter;
   duplicates?: boolean;
   /** Free text in the file name and the relative path. */
   query?: string;

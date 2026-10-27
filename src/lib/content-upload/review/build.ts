@@ -23,6 +23,7 @@ import type {
 import {
   DECIDABLE,
   GROUPABLE,
+  UNCHECKED_REASONS,
   isLeftOut,
   isProblem,
 } from '@/lib/content-upload/review/states';
@@ -35,7 +36,13 @@ import {
   type ReviewCounts,
   type ReviewRecord,
   type ReviewRowDto,
+  type StockDto,
 } from '@/lib/content-upload/review/types';
+import {
+  assignmentFingerprint,
+  emptyStockCounts,
+  readStoredStock,
+} from '@/lib/content-upload/transfer/stock';
 
 export interface ReviewContext {
   list: PositiveList;
@@ -110,6 +117,22 @@ export function analyzeRun(
     now: context.now,
     ambiguousWithinHours: context.decisions.duplicates.ambiguousWithinHours,
   });
+}
+
+/** The status of the supply of a file from its parse summary, stale when the assignment moved on. */
+export function stockOf(
+  record: ReviewRecord,
+  effective: AssignmentDto
+): StockDto | null {
+  if (!DECIDABLE.includes(record.file.status)) return null;
+  const stored = readStoredStock(record.file.parseSummary);
+  if (!stored) return null;
+  return {
+    status: stored.status,
+    added: stored.added,
+    at: stored.at,
+    stale: stored.assign !== assignmentFingerprint(effective),
+  };
 }
 
 function derivedOf(
@@ -226,9 +249,59 @@ export function buildRows(
           }
         : null,
       copyOfId: file.duplicateOfId,
+      stock: stockOf(record, effective),
       ki: kiStateOf(file),
     };
   });
+}
+
+/**
+ * Whether "accept new and added" takes the row: the status of the supply is new or
+ * extended and current, nothing is decided, the file is no version of another one, and
+ * the proposal is one a click may take (not unclear, not contradicting, not unchecked).
+ */
+export function acceptableByStock(row: ReviewRowDto): boolean {
+  return (
+    row.status === 'proposed_rules' &&
+    row.decision === null &&
+    row.duplicate === null &&
+    row.stock !== null &&
+    !row.stock.stale &&
+    (row.stock.status === 'new' || row.stock.status === 'extended') &&
+    row.proposal !== null &&
+    (row.proposal.band === 'high' || row.proposal.band === 'medium') &&
+    !row.proposal.reasons.some(
+      r => UNCHECKED_REASONS.has(r.code) || r.code === 'PARSER_ERRORS'
+    )
+  );
+}
+
+/** The group a proposal of the band medium belongs to: its reason codes, sorted. */
+export function mediumGroupKey(row: ReviewRowDto): string | null {
+  const reasons = row.proposal?.reasons ?? [];
+  if (reasons.length === 0) return null;
+  return [...new Set(reasons.map(r => r.code))].sort().join('+');
+}
+
+/**
+ * Whether "confirm all with the same reasons" may take the row: the band is medium
+ * (never low or conflict), nothing is decided, the file is no version of another one,
+ * and no reason says the content was not checked with full certainty or that the parser
+ * found errors in it. The assignment
+ * itself is checked against the positive list when the decision is written.
+ */
+export function acceptableByMedium(row: ReviewRowDto): boolean {
+  return (
+    row.status === 'proposed_rules' &&
+    row.decision === null &&
+    row.duplicate === null &&
+    row.proposal !== null &&
+    row.proposal.band === 'medium' &&
+    row.proposal.reasons.length > 0 &&
+    !row.proposal.reasons.some(
+      r => UNCHECKED_REASONS.has(r.code) || r.code === 'PARSER_ERRORS'
+    )
+  );
 }
 
 export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
@@ -246,8 +319,29 @@ export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
     deferred: 0,
     open: 0,
     acceptableHigh: 0,
+    stock: { ...emptyStockCounts(), none: 0 },
+    acceptableStock: 0,
+    mediumGroups: [],
   };
+  const groups = new Map<string, { text: string; count: number }>();
   for (const row of rows) {
+    const mediumKey = acceptableByMedium(row) ? mediumGroupKey(row) : null;
+    if (mediumKey !== null) {
+      const key = mediumKey;
+      const group = groups.get(key) ?? {
+        text: [...new Set((row.proposal?.reasons ?? []).map(r => r.text))].join(
+          ' · '
+        ),
+        count: 0,
+      };
+      group.count += 1;
+      groups.set(key, group);
+    }
+    if (DECIDABLE.includes(row.status)) {
+      counts.stock[row.stock && !row.stock.stale ? row.stock.status : 'none'] +=
+        1;
+    }
+    if (acceptableByStock(row)) counts.acceptableStock += 1;
     // a file that is left out (a copy, an archive) is no work for the band filter
     if (row.proposal && !isLeftOut(row.status)) counts[row.proposal.band] += 1;
     if (row.duplicate) counts.duplicates += 1;
@@ -268,6 +362,9 @@ export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
       }
     }
   }
+  counts.mediumGroups = [...groups]
+    .map(([key, group]) => ({ key, ...group }))
+    .sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : 1));
   return counts;
 }
 

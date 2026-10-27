@@ -50,6 +50,7 @@ import { readDocx } from '@/lib/content-upload/read-docx';
 import { mapLimit } from '@/lib/content-upload/staging/pool';
 import type {
   ComponentFact,
+  EnablerFact,
   ExcludedFile,
   SkippedItem,
   TransferFile,
@@ -71,6 +72,11 @@ export interface BuildTransferInput {
   files: readonly TransferFile[];
   /** The components of the catalog in the target database. */
   components: readonly ComponentFact[];
+  /**
+   * The enablers of the catalog in the target database: a quiz or a scenario of one of
+   * them needs no enabler document in the delivery (a supply of content).
+   */
+  enablers?: readonly EnablerFact[];
   decisions: Decisions;
   /** The bytes of a staging object, or null when it is gone. */
   readBytes: (file: TransferFile) => Promise<Uint8Array | null>;
@@ -389,7 +395,10 @@ export async function buildTransferPlan(
 
   // 5: the plans --------------------------------------------------------------------------
   const now = input.now ?? new Date();
-  const importPlan = buildImportPlan(importFiles, decisions, { now });
+  const importPlan = buildImportPlan(importFiles, decisions, {
+    now,
+    existingEnablers: new Map((input.enablers ?? []).map(e => [e.code, e])),
+  });
   const useCasePlan = buildUseCasePlan(useCaseFiles, decisions, { now });
 
   const skipped: SkippedItem[] = [

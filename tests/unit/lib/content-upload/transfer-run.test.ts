@@ -36,7 +36,7 @@ const request = (
   runId: 'cccccccc-0000-4000-8000-000000000001',
   callerId: CREATOR_ID,
   mode,
-  updateExisting: false,
+  replaceFiles: [],
   publishOriginals: [],
   ...(mode === 'apply' ? { confirm: 'KFBM' } : {}),
   ...extra,
@@ -60,6 +60,7 @@ describe('runTransfer: the fixed settings', () => {
       activate: false,
       scenarioSolutions: false,
       useCaseSolutions: false,
+      extendQuizzes: true,
     });
     expect(Object.isFrozen(FIXED_ENGINE_OPTIONS)).toBe(true);
     expect(STALE_APPLYING_MINUTES).toBe(15);
@@ -237,7 +238,7 @@ describe('runTransfer: an apply', () => {
       code: 'DRY_RUN_REQUIRED',
     });
     expect(h.connections.reserved).toBe(0);
-    await runTransfer(h.deps, request('dry_run', { updateExisting: true }));
+    await runTransfer(h.deps, request('dry_run', { replaceFiles: [h.store.files[0].id] }));
     expect(await runTransfer(h.deps, request('apply'))).toMatchObject({
       code: 'DRY_RUN_REQUIRED',
     });

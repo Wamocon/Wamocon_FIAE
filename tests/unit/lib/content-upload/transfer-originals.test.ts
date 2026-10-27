@@ -654,7 +654,7 @@ describe('runTransfer with originals', () => {
     runId: 'cccccccc-0000-4000-8000-000000000001',
     callerId: CREATOR_ID,
     mode,
-    updateExisting: false,
+    replaceFiles: [],
     publishOriginals: [],
     ...(mode === 'apply' ? { confirm: 'KFBM' } : {}),
     ...extra,

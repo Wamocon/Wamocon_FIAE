@@ -15,10 +15,12 @@ import type {
   ApplyRecord,
   ProtocolWriter,
   RunState,
+  StockWrite,
   TransferStore,
 } from '@/lib/content-upload/transfer/store';
 import type {
   ComponentFact,
+  EnablerFact,
   TransferFile,
 } from '@/lib/content-upload/transfer/types';
 
@@ -28,13 +30,38 @@ export interface Timeline {
   events: string[];
 }
 
+/** The enablers of a memory database as the store reads them from the real one. */
+export function enablersOf(db: MemoryImportDb): EnablerFact[] {
+  const courses = new Map(db.tables.courses.map(c => [String(c.id), c]));
+  return db.tables.enablers.flatMap(e => {
+    const course = courses.get(String(e.course_id));
+    return course && e.code
+      ? [
+          {
+            code: String(e.code),
+            title: String(e.title),
+            componentCode: String(course.code),
+            orderIndex: Number(e.order_index ?? 0),
+          },
+        ]
+      : [];
+  });
+}
+
 export class MemoryTransferStore implements TransferStore {
+  /** Where loadEnablers reads from (the harness points it at the database of the engines). */
+  enablerSource: () => EnablerFact[] = () => [];
   state: RunState;
   files: TransferFile[];
   components: ComponentFact[];
   attempts: ApplyRecord[] = [];
   appliedRows: AppliedRowInput[] = [];
   markedFiles: string[] = [];
+  /** What saveStock was asked to write, in order, and how often the stock was cleared. */
+  stockWrites: StockWrite[] = [];
+  stockCleared = 0;
+  /** The options loadFiles was called with. */
+  loadOptions: Array<{ effective?: boolean } | undefined> = [];
   gateCalls: Array<{ version: number; requireHash: string | null }> = [];
   /** Called before the gate answers: lets a test change the run behind its back. */
   beforeGate?: (state: RunState) => void;
@@ -79,12 +106,35 @@ export class MemoryTransferStore implements TransferStore {
     return false;
   }
 
-  async loadFiles() {
+  async loadFiles(_runId?: string, options?: { effective?: boolean }) {
+    this.loadOptions.push(options);
     return this.files;
+  }
+
+  async saveStock(_runId: string, entries: readonly StockWrite[]) {
+    this.timeline.events.push('store.saveStock');
+    if (this.state.status !== 'review') return 0;
+    this.stockWrites.push(...entries);
+    return entries.length;
+  }
+
+  /** How often a comparison replaced the stored status of the run. */
+  stockReplaced = 0;
+
+  async replaceStock(_runId: string, entries: readonly StockWrite[]) {
+    this.timeline.events.push('store.replaceStock');
+    if (this.state.status !== 'review') return 0;
+    this.stockReplaced += 1;
+    this.stockWrites.push(...entries);
+    return entries.length;
   }
 
   async loadComponents() {
     return this.components;
+  }
+
+  async loadEnablers() {
+    return this.enablerSource();
   }
 
   async beginApplying(
@@ -141,6 +191,10 @@ export class MemoryTransferStore implements TransferStore {
         note('markFilesApplied');
         this.markedFiles.push(...ids);
         return ids.length;
+      },
+      clearStock: async () => {
+        note('clearStock');
+        this.stockCleared += 1;
       },
       finishRunApplied: async () => {
         note('finishRunApplied');
@@ -262,6 +316,18 @@ export function harness(
     options.run,
     options.components
   );
+  // the enablers the store reads are those of the database the engines write to (lazy: a
+  // test may give a makeDb that throws)
+  store.enablerSource = () => {
+    try {
+      const engineDb = options.deps?.makeDb
+        ? (options.deps.makeDb({ query: async () => ({ rows: [] }) }) as MemoryImportDb)
+        : db;
+      return enablersOf(engineDb);
+    } catch {
+      return [];
+    }
+  };
   const bytes = new Map(fixtures.map(f => [f.file.id, f.bytes]));
   const connections = memoryConnections(timeline, db, options.connections);
   const bucket = new MemoryBucket(timeline);
