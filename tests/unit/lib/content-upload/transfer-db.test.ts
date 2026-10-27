@@ -115,7 +115,7 @@ if (!url) {
       releaseStale: (id, m) => base.releaseStale(id, m),
       loadFiles: (id, o) => base.loadFiles(id, o),
       saveStock: (id, e) => base.saveStock(id, e),
-      clearStock: id => base.clearStock(id),
+      replaceStock: (id, e) => base.replaceStock(id, e),
       loadComponents: id => base.loadComponents(id),
       loadEnablers: id => base.loadEnablers(id),
       beginApplying: (id, o) => base.beginApplying(id, o),
@@ -1114,6 +1114,18 @@ if (!url) {
                    join content_upload_applies a on a.id = r.apply_id
                   where a.run_id = ${second.seeded.runId} group by action`;
       expect(written.map(w => [w.action, w.n])).toEqual([['insert', 30]]);
+      // the added questions and options belong to the file of their quiz in the protocol
+      const quizFileIds = new Set(
+        full
+          .filter(f => f.file.decision.docType === 'quiz')
+          .map(f => f.file.id)
+      );
+      const owners =
+        await sql`select r.file_id from content_upload_applied_rows r
+                   join content_upload_applies a on a.id = r.apply_id
+                  where a.run_id = ${second.seeded.runId}`;
+      expect(owners).toHaveLength(30);
+      expect(owners.every(o => quizFileIds.has(String(o.file_id)))).toBe(true);
       expect(before).not.toEqual(await snapshot(sql));
 
       // a third run, the same files: nothing to add, everything unchanged
@@ -1239,6 +1251,43 @@ if (!url) {
       const decisions =
         await sql`select count(*)::int as n from content_upload_decisions where run_id = ${seeded.runId}`;
       expect(decisions[0].n).toBe(0);
+    });
+
+    it('a comparison replaces what an earlier one stored, in one statement and only in review', async () => {
+      const files = await enablerFiles({ tree: true });
+      const seeded = await seedRun(sql, files);
+      const store = new PgTransferStore(queryableOfPool(app as any));
+      const entry = (i: number) => ({
+        fileId: files[i].file.id,
+        stock: {
+          status: 'new' as const,
+          added: 0,
+          moved: 0,
+          assign: 'x',
+          at: new Date().toISOString(),
+        },
+      });
+      const has = async () =>
+        (
+          await sql`select id from content_upload_files
+                     where run_id = ${seeded.runId} and parse_summary -> 'stock' is not null order by id`
+        ).map(r => String(r.id));
+      expect(await store.replaceStock(seeded.runId, [entry(0), entry(1)])).toBe(2);
+      expect(await has()).toEqual([files[0].file.id, files[1].file.id].sort());
+      // the next comparison names other files: the older status of the rest goes
+      expect(await store.replaceStock(seeded.runId, [entry(2)])).toBe(1);
+      expect(await has()).toEqual([files[2].file.id]);
+      // an object marker of a file stays
+      await sql`update content_upload_files set parse_summary = parse_summary || '{"objectDeleted": true}'::jsonb where id = ${files[2].file.id}`;
+      expect(await store.replaceStock(seeded.runId, [])).toBe(0);
+      expect(await has()).toEqual([]);
+      const marker =
+        await sql`select parse_summary ->> 'objectDeleted' as m from content_upload_files where id = ${files[2].file.id}`;
+      expect(marker[0].m).toBe('true');
+      // outside the state review nothing is written
+      await sql`update content_upload_runs set status = 'applied' where id = ${seeded.runId}`;
+      expect(await store.replaceStock(seeded.runId, [entry(0)])).toBe(0);
+      expect(await has()).toEqual([]);
     });
 
     it('takes the stored status off after an apply, and stores none outside the state review', async () => {

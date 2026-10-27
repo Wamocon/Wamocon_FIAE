@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { UploadApiError } from '@/lib/content-upload/staging/client';
 import { UPLOAD_CATALOG_CODE } from '@/lib/content-upload/staging/config';
@@ -115,6 +115,7 @@ export function TransferPanel({
   const [dialog, setDialog] = useState(false);
   const [typed, setTyped] = useState('');
   const [rollback, setRollback] = useState<RollbackAnswer | null>(null);
+  const [announce, setAnnounce] = useState('');
 
   const replaceKey = useMemo(
     () => [...selection].sort().join(','),
@@ -139,7 +140,27 @@ export function TransferPanel({
       const answer = await client.dryRun(runId, {
         replaceFiles: [...selection],
       });
-      setDry({ report: answer, version, replaceKey });
+      // The dry run is valid for what the SERVER computed it for (another tab may have
+      // changed the decisions since this page was read)
+      setDry({
+        report: answer,
+        version: answer.decisionsVersion,
+        replaceKey: [...answer.replaceFiles].sort().join(','),
+      });
+      // a file that no longer differs cannot be replaced: it leaves the choice
+      const differs = new Set(
+        answer.stock.files
+          .filter(f => f.status === 'differs')
+          .map(f => f.fileId)
+      );
+      setSelection(prev => new Set([...prev].filter(id => differs.has(id))));
+      setAnnounce(
+        answer.status === 'conflict'
+          ? t('contentUpload.transfer.conflicts', {
+              count: answer.conflicts.length,
+            })
+          : t('contentUpload.transfer.noConflict')
+      );
     } catch (e) {
       setDry(null);
       setError(transferErrorText(t, e));
@@ -159,7 +180,11 @@ export function TransferPanel({
         confirm: typed,
       });
       if (answer.status === 'conflict') {
-        setDry({ report: answer, version, replaceKey });
+        setDry({
+          report: answer,
+          version: answer.decisionsVersion,
+          replaceKey: [...answer.replaceFiles].sort().join(','),
+        });
         setError(t('contentUpload.transfer.error.conflictAtApply'));
       } else {
         setDone(answer);
@@ -167,14 +192,15 @@ export function TransferPanel({
         setSelection(new Set());
       }
     } catch (e) {
-      if (
+      // Only a refusal that changed nothing and can be tried again keeps the dry run. Any
+      // other failure (an uncertain commit, a lost connection) makes it void: nothing may
+      // invite a second apply before the state is read again.
+      const retryable =
         e instanceof UploadApiError &&
-        ['DRY_RUN_REQUIRED', 'STALE_DECISIONS', 'RUN_STATE'].includes(
+        ['CONFIRM_REQUIRED', 'IMPORT_LOCKED', 'BUSY', 'RATE_LIMITED'].includes(
           e.code ?? ''
-        )
-      ) {
-        setDry(null);
-      }
+        );
+      if (!retryable) setDry(null);
       setError(transferErrorText(t, e));
     } finally {
       setTyped('');
@@ -187,7 +213,19 @@ export function TransferPanel({
     setPhase('rollback');
     setError(null);
     try {
-      setRollback(await client.rollbackSql(runId));
+      const answer = await client.rollbackSql(runId);
+      setRollback(answer);
+      setAnnounce(
+        answer.sql === null
+          ? t('contentUpload.transfer.rollbackBlocked')
+          : t('contentUpload.transfer.rollbackSummary', {
+              deletes: Object.values(answer.deletes).reduce((n, c) => n + c, 0),
+              restores: Object.values(answer.restores).reduce(
+                (n, c) => n + c,
+                0
+              ),
+            })
+      );
     } catch (e) {
       setRollback(null);
       setError(transferErrorText(t, e));
@@ -195,6 +233,11 @@ export function TransferPanel({
       setPhase('idle');
     }
   };
+
+  // the dialog never outlives the dry run it was opened for
+  useEffect(() => {
+    if (dialog && !clean) setDialog(false);
+  }, [dialog, clean]);
 
   const toggle = (id: string, on: boolean) =>
     setSelection(prev => {
@@ -224,6 +267,12 @@ export function TransferPanel({
       </div>
 
       <div aria-live="polite" role="status" className="space-y-3">
+        <p className="sr-only">{announce}</p>
+        {phase === 'rollback' && (
+          <p className="text-muted text-sm">
+            {t('contentUpload.transfer.rollbackWorking')}
+          </p>
+        )}
         {phase === 'dry' && (
           <div className={`${NOTICE_INFO} flex items-center gap-3`}>
             <LoadingSpinner size="sm" />
@@ -393,7 +442,7 @@ export function TransferPanel({
             <button
               type="button"
               onClick={() => void runApply()}
-              disabled={typed !== UPLOAD_CATALOG_CODE || busy}
+              disabled={typed !== UPLOAD_CATALOG_CODE || busy || !clean}
               className={BTN_PRIMARY}
             >
               {t('contentUpload.transfer.confirm')}

@@ -1220,14 +1220,18 @@ function reviewedMarkerProblems(
     }
     const code = entry.enablerCode;
     if (typeof code !== 'string' || !enablerCodes.has(code)) {
-      problems.push('a reviewed marker names an enabler that is not in the plan');
+      problems.push(
+        'a reviewed marker names an enabler that is not in the plan'
+      );
     } else if (seen.has(code)) {
       problems.push(`enabler ${code} has two reviewed markers`);
     } else {
       seen.add(code);
     }
     if (entry.pattern !== 'bare-solution-line') {
-      problems.push('a reviewed marker names a pattern that cannot be reviewed');
+      problems.push(
+        'a reviewed marker names a pattern that cannot be reviewed'
+      );
     }
     if (
       typeof entry.reason !== 'string' ||

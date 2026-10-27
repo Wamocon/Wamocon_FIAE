@@ -151,6 +151,17 @@ describe('observe', () => {
     expect(result.report.conflicts).toHaveLength(1);
   });
 
+  it('adds the link of a quiz that exists without one, and says so', async () => {
+    const db = new MemoryImportDb();
+    await run(db, k1a());
+    db.tables.enabler_quiz_links = [];
+    const second = await run(db, k1a());
+    expect(status(second.events, 'enabler_quiz_links', 'K1-a/LOW')).toEqual([
+      'new',
+    ]);
+    expect(db.tables.enabler_quiz_links).toHaveLength(3);
+  });
+
   it('adds a scenario that is missing for an existing enabler', async () => {
     const db = new MemoryImportDb();
     const withoutScenario = k1a().filter(f => !f.rel.includes('Szenario'));

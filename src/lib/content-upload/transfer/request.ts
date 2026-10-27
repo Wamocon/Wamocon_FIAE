@@ -8,6 +8,7 @@
 // Strict: a field of another type is an error, an unknown field is ignored (the
 // body is never merged into anything).
 
+import { LIMITS } from '@/lib/content-upload/staging/config';
 import {
   fail,
   ok,
@@ -18,8 +19,8 @@ import { isUuid } from '@/lib/uuid';
 /** Most originals one request can name. */
 export const MAX_PUBLISH_ORIGINALS = 25;
 
-/** Most files whose differing rows one request can replace. */
-export const MAX_REPLACE_FILES = 100;
+/** Most files whose differing rows one request can replace: every file of a run. */
+export const MAX_REPLACE_FILES = LIMITS.maxFilesPerRun;
 
 export interface TransferBody {
   replaceFiles: string[];

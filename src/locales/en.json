@@ -2605,5 +2605,6 @@
   "contentUpload.transfer.error.status503": "The service is not reachable or busy. Nothing was written, please try again later.",
   "contentUpload.transfer.error.status404": "The content upload is not available here or the run does not exist.",
   "contentUpload.transfer.error.status403": "You do not have the right for this.",
-  "contentUpload.transfer.error.other": "The action failed. Please try again."
+  "contentUpload.transfer.error.other": "The action failed. Please try again.",
+  "contentUpload.transfer.rollbackWorking": "The rollback is being created."
 }

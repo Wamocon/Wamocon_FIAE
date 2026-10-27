@@ -258,6 +258,18 @@ describe('a file that differs from the database', () => {
     ).toHaveLength(0);
   });
 
+  it('keeps a file that differs and was not replaced as decided, not applied', async () => {
+    const { first, next, changed } = await differing();
+    const second = again(next, first);
+    await applyAll(second);
+    expect(second.store.markedFiles).not.toContain(changed.file.id);
+    // the files that were checked and need nothing are done
+    expect(second.store.markedFiles).toHaveLength(3);
+    const third = again(next, first);
+    await applyAll(third, { replaceFiles: [changed.file.id] });
+    expect(third.store.markedFiles).toContain(changed.file.id);
+  });
+
   it('is replaced only for the file a person named, with the old value in the protocol', async () => {
     const { first, next, changed } = await differing();
     const before = first.db.tables.enablers[0].description_text;
@@ -362,7 +374,7 @@ describe('the comparison before a decision', () => {
     expect(h.store.gateCalls).toEqual([]);
     expect(h.store.attempts).toEqual([]);
     expect(h.store.state.status).toBe('review');
-    expect(h.store.stockCleared).toBe(1);
+    expect(h.store.stockReplaced).toBe(1);
     expect(h.store.stockWrites).toHaveLength(4);
   });
 

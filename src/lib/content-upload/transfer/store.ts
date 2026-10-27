@@ -100,8 +100,13 @@ export interface TransferStore {
    * how many files were written.
    */
   saveStock(runId: string, entries: readonly StockWrite[]): Promise<number>;
-  /** Takes the stored status of the supply off every file of the run. */
-  clearStock(runId: string): Promise<void>;
+  /**
+   * Makes `entries` the stored status of the run in ONE statement: the files named get
+   * their status, every other file of the run loses an older one. Only while the run is
+   * in review (the row of the run is locked for the statement). Returns how many of the
+   * entries were stored.
+   */
+  replaceStock(runId: string, entries: readonly StockWrite[]): Promise<number>;
   loadComponents(catalogId: string): Promise<ComponentFact[]>;
   /** The enablers of the catalog with the code of their component (course). */
   loadEnablers(catalogId: string): Promise<EnablerFact[]>;
@@ -387,7 +392,8 @@ export class PgTransferStore implements TransferStore {
       `select e.code, e.title, e.order_index, c.code as component_code
          from enablers e
          join courses c on c.id = e.course_id
-        where e.training_catalog_id = $1 and e.code is not null and c.code is not null`,
+        where e.training_catalog_id = $1 and e.code is not null and c.code is not null
+        order by e.id`,
       [catalogId]
     );
     return result.rows.map(r => ({
@@ -428,8 +434,35 @@ export class PgTransferStore implements TransferStore {
     return result.rows.length === 1;
   }
 
-  clearStock(runId: string): Promise<void> {
-    return new PgProtocolWriter(this.q).clearStock(runId);
+  async replaceStock(
+    runId: string,
+    entries: readonly StockWrite[]
+  ): Promise<number> {
+    const result = await this.q.query(
+      `with run as (
+         select id from content_upload_runs where id = $1 and status = 'review' for share
+       ),
+       v as (select unnest($2::uuid[]) as id, unnest($3::text[]) as stock)
+       update content_upload_files f
+          set parse_summary = case
+                when exists (select 1 from v where v.id = f.id)
+                then coalesce(f.parse_summary, '{}'::jsonb)
+                     || jsonb_build_object('stock', (select v.stock from v where v.id = f.id)::text::jsonb)
+                else f.parse_summary - 'stock'
+              end
+        where f.run_id = $1
+          and f.status in ('proposed_rules', 'unclear', 'proposed_ki', 'decided')
+          and exists (select 1 from run)
+          and (exists (select 1 from v where v.id = f.id)
+               or (f.parse_summary -> 'stock') is not null)
+        returning exists (select 1 from v where v.id = f.id) as stored`,
+      [
+        runId,
+        entries.map(e => e.fileId),
+        entries.map(e => JSON.stringify(e.stock)),
+      ]
+    );
+    return result.rows.filter(r => r.stored === true).length;
   }
 
   recordAttempt(record: ApplyRecord): Promise<string> {

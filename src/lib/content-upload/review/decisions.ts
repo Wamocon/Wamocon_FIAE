@@ -180,7 +180,9 @@ class Planner {
       this.skipped.push({ fileId: record.file.id, code: check.code });
       return false;
     }
-    this.items.push(itemOf(record, 'accept', check.assignment, dupChoice, note));
+    this.items.push(
+      itemOf(record, 'accept', check.assignment, dupChoice, note)
+    );
     return true;
   }
 

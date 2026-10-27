@@ -42,8 +42,9 @@ import {
 } from '@/lib/content-upload/transfer/run';
 import {
   assignmentFingerprint,
-  countStock,
   stockOfFiles,
+  toStockReport,
+  toStockWrites,
 } from '@/lib/content-upload/transfer/stock';
 import type {
   ExcludedFile,
@@ -219,34 +220,21 @@ export async function compareStock(
     useCasesSkippedInDb: useCasesSkipped,
   });
   const fileById = new Map<string, TransferFile>(files.map(f => [f.id, f]));
-  const at = clock().toISOString();
-  // The comparison replaces what an earlier one stored: a file that is left out now
-  // (a duplicate that is open again) must not keep an old status
-  await store.clearStock(runId);
-  const stored = await store.saveStock(
+  // The comparison replaces what an earlier one stored, in one statement: a file that
+  // is left out now (a duplicate that is open again) must not keep an old status
+  const stored = await store.replaceStock(
     runId,
-    [...stock].map(([fileId, value]) => ({
-      fileId,
-      stock: {
-        ...value,
-        assign: assignmentFingerprint(
-          (fileById.get(fileId) as TransferFile).decision
-        ),
-        at,
+    toStockWrites(
+      stock,
+      id => {
+        const file = fileById.get(id);
+        return file ? assignmentFingerprint(file.decision) : undefined;
       },
-    }))
+      clock().toISOString()
+    )
   );
   return ok({
-    stock: {
-      counts: countStock(stock),
-      files: [...stock]
-        .map(([fileId, value]) => ({
-          fileId,
-          fileName: fileById.get(fileId)?.fileName ?? '',
-          ...value,
-        }))
-        .sort((a, b) => (a.fileId < b.fileId ? -1 : 1)),
-    },
+    stock: toStockReport(stock, id => fileById.get(id)?.fileName),
     compared: stock.size,
     excluded: plan.excluded,
     stored,

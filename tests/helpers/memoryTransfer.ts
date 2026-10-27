@@ -118,9 +118,15 @@ export class MemoryTransferStore implements TransferStore {
     return entries.length;
   }
 
-  async clearStock() {
-    this.timeline.events.push('store.clearStock');
-    this.stockCleared += 1;
+  /** How often a comparison replaced the stored status of the run. */
+  stockReplaced = 0;
+
+  async replaceStock(_runId: string, entries: readonly StockWrite[]) {
+    this.timeline.events.push('store.replaceStock');
+    if (this.state.status !== 'review') return 0;
+    this.stockReplaced += 1;
+    this.stockWrites.push(...entries);
+    return entries.length;
   }
 
   async loadComponents() {

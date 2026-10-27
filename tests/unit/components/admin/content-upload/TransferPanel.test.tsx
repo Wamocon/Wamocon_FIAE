@@ -40,7 +40,7 @@ function report(patch: Partial<TransferReport> = {}): TransferReport {
     status: 'ok',
     applyId: 'attempt-1',
     decisionsHash: 'abcdef0123456789'.repeat(4),
-    decisionsVersion: 0,
+    decisionsVersion: 3,
     replaceFiles: [],
     stock: stock({ new: 2, extended: 1 }),
     extended: [{ quiz: 'K1-a-low', added: 2, moved: 1 }],
@@ -105,9 +105,10 @@ describe('TransferPanel: the dry run', () => {
       await screen.findByText(/Gültig für den Entscheidungsstand 3/)
     ).toBeInTheDocument();
     expect(screen.getByText(/Prüfsumme abcdef012345/)).toBeInTheDocument();
+    // shown on the page and said in the live region
     expect(
-      screen.getByText('Keine Konflikte. Die Übernahme ist möglich.')
-    ).toBeInTheDocument();
+      screen.getAllByText('Keine Konflikte. Die Übernahme ist möglich.')
+    ).toHaveLength(2);
     // the counts per status of the files and per table
     const statuses = screen.getByText('Dateien nach Bestand').parentElement!;
     expect(within(statuses).getByText('Neu').parentElement).toHaveTextContent(
@@ -152,8 +153,8 @@ describe('TransferPanel: the dry run', () => {
     const { user } = mount({}, client);
     await user.click(dryRunButton());
     expect(
-      await screen.findByText(/1 Konflikte zwischen den Dateien/)
-    ).toBeInTheDocument();
+      (await screen.findAllByText(/1 Konflikte zwischen den Dateien/)).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/quizzes K1-a-low/)).toBeInTheDocument();
     expect(applyButton()).toBeDisabled();
   });
@@ -320,11 +321,90 @@ describe('TransferPanel: the apply', () => {
         within(dialog).getByRole('button', { name: 'Jetzt übernehmen' })
       );
       expect(await screen.findByRole('alert')).toHaveTextContent(text);
-      if (['DRY_RUN_REQUIRED', 'RUN_STATE'].includes(code)) {
-        expect(applyButton()).toBeDisabled();
-      }
+      // every failure but a refusal that can simply be tried again voids the dry run
+      if (code === 'BUSY') expect(applyButton()).toBeEnabled();
+      else expect(applyButton()).toBeDisabled();
     }
   );
+
+  it('voids the dry run after a lost connection too: no second apply is offered', async () => {
+    const client = fakeClient();
+    client.apply.mockRejectedValue(new TypeError('Failed to fetch'));
+    const { user } = await readyToApply(client);
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/Katalogcode/), 'KFBM');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Jetzt übernehmen' })
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /fehlgeschlagen/
+    );
+    expect(applyButton()).toBeDisabled();
+  });
+
+  it('closes the dialog when the dry run stops being valid', async () => {
+    const client = fakeClient();
+    client.dryRun.mockResolvedValue(report());
+    const { user, view } = mount({}, client);
+    await user.click(dryRunButton());
+    await screen.findByText(/Gültig für/);
+    await user.click(applyButton());
+    await screen.findByRole('dialog');
+    view.rerender(
+      <TransferPanel
+        runId={RUN}
+        status="review"
+        version={4}
+        accepted={4}
+        client={client}
+        onChanged={jest.fn()}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    );
+  });
+
+  it('stamps the dry run with the state the server computed it for', async () => {
+    const client = fakeClient();
+    // the page still shows version 3, the server already worked on version 5
+    client.dryRun.mockResolvedValue(report({ decisionsVersion: 5 }));
+    const { user } = mount({}, client);
+    await user.click(dryRunButton());
+    expect(await screen.findByText(/Nicht mehr gültig/)).toBeInTheDocument();
+    expect(applyButton()).toBeDisabled();
+  });
+
+  it('drops a file from the choice when it no longer differs', async () => {
+    const client = fakeClient();
+    const both = [differing(uuid(11), 'A.docx'), differing(uuid(12), 'B.docx')];
+    client.dryRun.mockResolvedValueOnce(
+      report({ stock: { ...stock({ differs: 2 }), files: both } })
+    );
+    const { user } = mount({}, client);
+    await user.click(dryRunButton());
+    await user.click(
+      await screen.findByRole('checkbox', {
+        name: 'Bestehende Zeilen für B.docx aktualisieren',
+      })
+    );
+    client.dryRun.mockResolvedValueOnce(
+      report({
+        replaceFiles: [uuid(12)],
+        stock: { ...stock({ differs: 1 }), files: [both[0]] },
+      })
+    );
+    await user.click(dryRunButton());
+    await waitFor(() =>
+      expect(client.dryRun).toHaveBeenLastCalledWith(RUN, {
+        replaceFiles: [uuid(12)],
+      })
+    );
+    // B no longer differs and left the choice: the dry run is void for the new choice
+    expect(
+      await screen.findByText(/Die Auswahl der zu ersetzenden Dateien/)
+    ).toBeInTheDocument();
+  });
 
   it('shows the conflicts of an apply that found some', async () => {
     const client = fakeClient();
@@ -388,8 +468,8 @@ describe('TransferPanel: the rollback', () => {
       screen.getByRole('button', { name: 'Rückbau-SQL erstellen' })
     );
     expect(
-      await screen.findByText(/löscht 3 Zeilen und stellt 1 Zeilen/)
-    ).toBeInTheDocument();
+      (await screen.findAllByText(/löscht 3 Zeilen und stellt 1 Zeilen/)).length
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(/nicht automatisch ausgeführt/)
     ).toBeInTheDocument();

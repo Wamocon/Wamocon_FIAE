@@ -2,7 +2,10 @@
 
 import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { DECIDABLE } from '@/lib/content-upload/review/states';
+import {
+  DECIDABLE,
+  UNCHECKED_REASONS,
+} from '@/lib/content-upload/review/states';
 import type {
   AssignmentDto,
   DecisionAction,
@@ -48,12 +51,6 @@ export function describeAssignment(t: Translate, a: AssignmentDto): string {
  * Reasons that say the content was not checked with full certainty: such a
  * proposal is not taken as it stands either (the same list as the route has).
  */
-const UNCHECKED_REASONS: ReadonlySet<string> = new Set([
-  'SOLUTION_MARKER',
-  'CONTENT_UNREADABLE',
-  'INPUT_TRUNCATED',
-  'ARCHIVE_ABOVE_TREE',
-]);
 
 /** The proposal is taken as it stands only in the band high or medium without such a reason (as the route does). */
 export function canAcceptAsProposed(row: ReviewRowDto): boolean {

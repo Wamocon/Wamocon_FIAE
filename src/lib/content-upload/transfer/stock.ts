@@ -252,6 +252,43 @@ export function assignmentFingerprint(a: {
     .join('|');
 }
 
+/**
+ * What is stored for the files of a comparison. A file the caller does not know (no
+ * assignment) is left out instead of being stored with a guessed one.
+ */
+export function toStockWrites(
+  stock: ReadonlyMap<string, FileStock>,
+  assignmentOf: (fileId: string) => string | undefined,
+  at: string
+): Array<{ fileId: string; stock: StoredStock }> {
+  return [...stock].flatMap(([fileId, value]) => {
+    const assign = assignmentOf(fileId);
+    return assign === undefined
+      ? []
+      : [{ fileId, stock: { ...value, assign, at } }];
+  });
+}
+
+/** The status per file for a report, by file id, with the name of the file. */
+export function toStockReport(
+  stock: ReadonlyMap<string, FileStock>,
+  nameOf: (fileId: string) => string | undefined
+): {
+  counts: StockCounts;
+  files: Array<FileStock & { fileId: string; fileName: string }>;
+} {
+  return {
+    counts: countStock(stock),
+    files: [...stock]
+      .map(([fileId, value]) => ({
+        fileId,
+        fileName: nameOf(fileId) ?? '',
+        ...value,
+      }))
+      .sort((a, b) => (a.fileId < b.fileId ? -1 : 1)),
+  };
+}
+
 /** The record in parse_summary: codes and counts only. */
 export interface StoredStock extends FileStock {
   /** assignmentFingerprint of the assignment the comparison used. */

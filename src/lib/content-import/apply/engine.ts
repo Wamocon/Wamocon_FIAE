@@ -766,6 +766,11 @@ export async function executePlan(
         level: quiz.level,
       });
       counts.enabler_quiz_links.insert += 1;
+      observe({
+        table: 'enabler_quiz_links',
+        key: `${quiz.enablerCode}/${difficulty}`,
+        status: 'new',
+      });
     }
   }
 

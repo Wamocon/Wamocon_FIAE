@@ -61,8 +61,9 @@ import { planAttribution } from '@/lib/content-upload/transfer/attribution';
 import { decisionsHash } from '@/lib/content-upload/transfer/canonical';
 import {
   assignmentFingerprint,
-  countStock,
   stockOfFiles,
+  toStockReport,
+  toStockWrites,
   updateFilterFor,
   type FileStock,
 } from '@/lib/content-upload/transfer/stock';
@@ -427,34 +428,27 @@ export async function runTransfer(
     skipped?: ReadonlyArray<{ useCaseCode: string }>
   ): Map<string, FileStock> =>
     stockOfFiles({ ...planRefs, events, useCasesSkippedInDb: skipped });
-  const stockReport = (stock: ReadonlyMap<string, FileStock>): StockReport => ({
-    counts: countStock(stock),
-    files: [...stock]
-      .map(([fileId, value]) => ({
-        fileId,
-        fileName: fileById.get(fileId)?.fileName ?? '',
-        ...value,
-      }))
-      .sort((a, b) => (a.fileId < b.fileId ? -1 : 1)),
-  });
+  const stockReport = (stock: ReadonlyMap<string, FileStock>): StockReport =>
+    toStockReport(stock, id => fileById.get(id)?.fileName);
   /** Keeps the status per file for the review list (a dry run only, in the state review). */
   const rememberStock = async (stock: ReadonlyMap<string, FileStock>) => {
-    const at = clock().toISOString();
-    await safely(() =>
-      store.saveStock(
-        runId,
-        [...stock].map(([fileId, value]) => ({
-          fileId,
-          stock: {
-            ...value,
-            assign: assignmentFingerprint(
-              (fileById.get(fileId) as TransferFile).decision
-            ),
-            at,
-          },
-        }))
-      )
+    const writes = toStockWrites(
+      stock,
+      id => {
+        const file = fileById.get(id);
+        return file ? assignmentFingerprint(file.decision) : undefined;
+      },
+      clock().toISOString()
     );
+    await safely(async () => {
+      const written = await store.saveStock(runId, writes);
+      if (written < writes.length) {
+        console.error('[content-upload] stock not stored for some files', {
+          wanted: writes.length,
+          written,
+        });
+      }
+    });
   };
 
   let copied: string[] = [];
@@ -492,8 +486,26 @@ export async function runTransfer(
                 { deadline: Date.now() + COPY_BUDGET_MS }
               );
             }
+            const engineDb = (deps.makeDb ?? (c => new PgDb(c)))(connection);
+            // The quizzes that exist already: what an extension adds to them belongs to
+            // the file of the quiz (only for the protocol of an apply)
+            const existingQuizzes = apply
+              ? (
+                  await engineDb.select('quizzes', {
+                    code: plan.importPlan.quizzes.map(q => q.code),
+                  })
+                ).map(r => ({ id: String(r.id), code: String(r.code) }))
+              : [];
+            const existingQuestions =
+              existingQuizzes.length > 0
+                ? (
+                    await engineDb.select('questions', {
+                      quiz_id: existingQuizzes.map(q => q.id),
+                    })
+                  ).map(r => ({ id: String(r.id), quizId: String(r.quiz_id) }))
+                : [];
             const db = new RecordingDb(
-              (deps.makeDb ?? (c => new PgDb(c)))(connection),
+              engineDb,
               planAttribution({
                 importPlan: plan.importPlan,
                 useCasePlan: plan.useCasePlan,
@@ -504,6 +516,10 @@ export async function runTransfer(
                     o.fileId,
                   ])
                 ),
+                existing: {
+                  quizzes: existingQuizzes,
+                  questions: existingQuestions,
+                },
               })
             );
             const importReport = await executePlan(db, plan.importPlan, {
@@ -556,9 +572,18 @@ export async function runTransfer(
                   fileId: w.fileId,
                 }))
               );
+              // A file that differs and was not chosen for replacing wrote nothing: it
+              // stays a decided file, not an applied one
+              const written = stockOf(useCaseReport?.skipped);
               await writer.markFilesApplied(
                 runId,
-                plan.plannedFiles.map(f => f.id)
+                plan.plannedFiles
+                  .map(f => f.id)
+                  .filter(
+                    id =>
+                      written.get(id)?.status !== 'differs' ||
+                      replaceSet.has(id)
+                  )
               );
               // The database is another one now, the comparisons made before are stale
               await writer.clearStock(runId);
@@ -645,6 +670,7 @@ export async function runTransfer(
         code === 'CONNECTION_RESERVE_TIMEOUT' ||
         code === '55P03' ||
         code === '57014' ||
+        code === '40P01' ||
         code === '40001')
     ) {
       keepHash = hash;

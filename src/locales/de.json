@@ -2607,5 +2607,6 @@
   "contentUpload.transfer.error.status503": "Der Dienst ist nicht erreichbar oder ausgelastet. Es wurde nichts geschrieben, bitte versuchen Sie es später erneut.",
   "contentUpload.transfer.error.status404": "Der Inhalts-Upload ist hier nicht verfügbar oder der Lauf existiert nicht.",
   "contentUpload.transfer.error.status403": "Dafür fehlt die Berechtigung.",
-  "contentUpload.transfer.error.other": "Die Aktion ist fehlgeschlagen. Bitte versuchen Sie es erneut."
+  "contentUpload.transfer.error.other": "Die Aktion ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+  "contentUpload.transfer.rollbackWorking": "Der Rückbau wird erstellt."
 }

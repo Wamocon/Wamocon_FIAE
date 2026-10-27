@@ -38,6 +38,7 @@ import type {
 } from '@/lib/content-upload/review/types';
 import {
   assignmentFingerprint,
+  emptyStockCounts,
   readStoredStock,
 } from '@/lib/content-upload/transfer/stock';
 
@@ -257,7 +258,9 @@ export function acceptableByStock(row: ReviewRowDto): boolean {
     (row.stock.status === 'new' || row.stock.status === 'extended') &&
     row.proposal !== null &&
     (row.proposal.band === 'high' || row.proposal.band === 'medium') &&
-    !row.proposal.reasons.some(r => UNCHECKED_REASONS.has(r.code))
+    !row.proposal.reasons.some(
+      r => UNCHECKED_REASONS.has(r.code) || r.code === 'PARSER_ERRORS'
+    )
   );
 }
 
@@ -304,23 +307,27 @@ export function countRows(rows: readonly ReviewRowDto[]): ReviewCounts {
     deferred: 0,
     open: 0,
     acceptableHigh: 0,
-    stock: { conflict: 0, differs: 0, extended: 0, new: 0, unchanged: 0, none: 0 },
+    stock: { ...emptyStockCounts(), none: 0 },
     acceptableStock: 0,
     mediumGroups: [],
   };
   const groups = new Map<string, { text: string; count: number }>();
   for (const row of rows) {
-    if (acceptableByMedium(row)) {
-      const key = mediumGroupKey(row) as string;
+    const mediumKey = acceptableByMedium(row) ? mediumGroupKey(row) : null;
+    if (mediumKey !== null) {
+      const key = mediumKey;
       const group = groups.get(key) ?? {
-        text: [...new Set((row.proposal?.reasons ?? []).map(r => r.text))].join(' · '),
+        text: [...new Set((row.proposal?.reasons ?? []).map(r => r.text))].join(
+          ' · '
+        ),
         count: 0,
       };
       group.count += 1;
       groups.set(key, group);
     }
     if (DECIDABLE.includes(row.status)) {
-      counts.stock[row.stock && !row.stock.stale ? row.stock.status : 'none'] += 1;
+      counts.stock[row.stock && !row.stock.stale ? row.stock.status : 'none'] +=
+        1;
     }
     if (acceptableByStock(row)) counts.acceptableStock += 1;
     // a file that is left out (a copy, an archive) is no work for the band filter

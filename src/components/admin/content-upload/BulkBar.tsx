@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { MediumGroupDto } from '@/lib/content-upload/review/types';
 import {
@@ -55,13 +55,8 @@ export function BulkBar({
   const none = selectedCount === 0;
   const mediumId = useId();
   const [groupKey, setGroupKey] = useState('');
-  // the chosen group stays valid only while it exists (a click removes its files)
-  useEffect(() => {
-    if (!mediumGroups.some(g => g.key === groupKey)) {
-      setGroupKey(mediumGroups[0]?.key ?? '');
-    }
-  }, [mediumGroups, groupKey]);
-  const group = mediumGroups.find(g => g.key === groupKey);
+  // the chosen group counts only while it exists (a click removes its files), else the first
+  const group = mediumGroups.find(g => g.key === groupKey) ?? mediumGroups[0];
   return (
     <section
       aria-label={t('contentUpload.bulk.title')}
@@ -91,7 +86,7 @@ export function BulkBar({
             </label>
             <select
               id={mediumId}
-              value={groupKey}
+              value={group?.key ?? ''}
               onChange={e => setGroupKey(e.target.value)}
               className={`${SELECT_SMALL} max-w-xs`}
             >
