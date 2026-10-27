@@ -12,6 +12,7 @@ import {
   type HaiTrainingScope,
 } from './trainingScope';
 import { FIAE_PERSONA, type HaiPersona } from './persona';
+import { sanitizePromptData } from '../prompt-sanitize';
 
 // ============================================================================
 // TYPES
@@ -71,26 +72,6 @@ function renderTopics(persona: HaiPersona): string {
     );
   }
   return lines.join('\n\n');
-}
-
-/** Characters without a visible form: control, bidi, zero width, joiners. */
-const INVISIBLE =
-  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u00AD\u061C\u180E\u200B-\u200F\u2060-\u2064\u202A-\u202E\u2066-\u2069\uFEFF]/g;
-
-/**
- * Text that comes from a person or from stored chats is data, never an
- * instruction: invisible characters are removed, every kind of line break
- * becomes a plain one and heading markers at the start of a line are dropped,
- * so the text cannot open a new section of the system prompt.
- */
-function sanitizePromptData(text: string, maxLength = Infinity): string {
-  return text
-    .replace(INVISIBLE, '')
-    .replace(/\r\n?|[\u2028\u2029\u0085]/g, '\n')
-    .split('\n')
-    .map(line => line.replace(/^(\s*)#+\s*/, '$1'))
-    .join('\n')
-    .slice(0, maxLength);
 }
 
 /** One line of data (a topic): no line break, no markup characters. */
