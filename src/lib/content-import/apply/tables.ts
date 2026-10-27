@@ -154,6 +154,7 @@ export const TABLES: Record<TableName, TableSpec> = {
       'mime_type',
       'storage_url',
       'storage_path',
+      'page_count',
       'order_index',
       'uploaded_by_id',
     ],

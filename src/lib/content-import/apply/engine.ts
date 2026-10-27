@@ -30,6 +30,7 @@ import type { TableName } from './tables';
 import type {
   Conflict,
   Difference,
+  EnablerOriginal,
   ImportPlan,
   PlanQuiz,
   PlanScenario,
@@ -56,6 +57,12 @@ export interface RunOptions {
    * public key read rows without an organization.
    */
   scenarioSolutions: boolean;
+  /**
+   * Original files of enabler texts that were copied to the document bucket by
+   * the caller (the upload, docs/ki-upload-konzept.md 8.5). Each one becomes a
+   * new document row THEORY/ALL at its enabler. Left out, nothing changes.
+   */
+  enablerOriginals?: readonly EnablerOriginal[];
 }
 
 const DIFFICULTY: Record<QuizLevel, string> = {
@@ -135,6 +142,36 @@ export function scenarioDocuments(
       order_index: 3,
     },
   ];
+}
+
+/**
+ * The document row of the original file of an enabler text: a theory document
+ * for everyone at the enabler, with the data of the stored file. The text
+ * fields stay empty, the solution guard checks title and file name.
+ */
+export function enablerOriginalRow(
+  original: EnablerOriginal,
+  enablerId: string,
+  createdBy: string
+): Row {
+  return {
+    enabler_id: enablerId,
+    use_case_id: null,
+    course_id: null,
+    organization_id: null,
+    title: original.title,
+    description: null,
+    document_type: 'THEORY',
+    visibility: 'ALL',
+    file_name: original.fileName,
+    file_size: original.fileSize,
+    mime_type: original.mimeType,
+    storage_url: original.storageUrl,
+    storage_path: original.storagePath,
+    page_count: original.pageCount,
+    order_index: 0,
+    uploaded_by_id: createdBy,
+  };
 }
 
 const emptyCounts = (): Record<string, TableCount> =>
@@ -591,6 +628,45 @@ export async function executePlan(
     if (missing.length > 0) newDocs.push({ scenario, rows: missing });
   }
 
+  // Original files of enabler texts ------------------------------------------------
+  const newOriginals: Array<{ original: EnablerOriginal; row: Row }> = [];
+  for (const original of options.enablerOriginals ?? []) {
+    const key = `${original.enablerCode}:${original.title}`;
+    const enabler = enablerByCode.get(original.enablerCode);
+    const planned = plan.enablers.some(e => e.code === original.enablerCode);
+    if (!enabler && !planned) {
+      conflict(
+        'content_documents',
+        key,
+        'The enabler of the original is neither in the plan nor in the target database'
+      );
+      continue;
+    }
+    const row = enablerOriginalRow(
+      original,
+      String(enabler?.id ?? ''),
+      options.createdBy
+    );
+    const found = enabler
+      ? (docsByEnabler.get(String(enabler.id)) ?? []).find(
+          d => d.document_type === 'THEORY' && d.title === row.title
+        )
+      : undefined;
+    if (found && found.visibility !== row.visibility) {
+      conflict(
+        'content_documents',
+        key,
+        'The document exists with another visibility than the plan'
+      );
+    } else if (found) {
+      // The stored file of an existing row is never replaced by this run.
+      counts.content_documents.unchanged += 1;
+    } else {
+      counts.content_documents.insert += 1;
+      newOriginals.push({ original, row });
+    }
+  }
+
   if (conflicts.length > 0 && options.write) {
     throw new ImportAbort(
       'CONFLICTS',
@@ -691,7 +767,14 @@ export async function executePlan(
             new Map(i.quiz.questions.map(q => [q.number, 'question']))
           )
         ),
-      content_documents: newDocs.flatMap(d => d.rows),
+      content_documents: [
+        ...newDocs.flatMap(d => d.rows),
+        // the enabler may be a new one: its id is only known after the insert
+        ...newOriginals.map(o => ({
+          ...o.row,
+          enabler_id: o.row.enabler_id || 'enabler',
+        })),
+      ],
     };
     const leaks = findRowLeaks(
       preview,
@@ -822,6 +905,16 @@ export async function executePlan(
         enabler_id: enablerId.get(scenario.enablerCode) as string,
       }))
     )
+  );
+
+  // The rows of the original files have their own columns (page_count), so they
+  // are inserted in a statement of their own.
+  await db.insert(
+    'content_documents',
+    newOriginals.map(({ original, row }) => ({
+      ...row,
+      enabler_id: enablerId.get(original.enablerCode) as string,
+    }))
   );
 
   for (const update of updates) {

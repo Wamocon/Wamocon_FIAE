@@ -1204,3 +1204,70 @@ Geprüft wurde mit `ecc:typescript-reviewer` und `ecc:security-reviewer` (nur le
 - **Die Zeit der Dateien** kommt vom Browser (`File.lastModified`) und ist beim Upload nicht die der OneDrive-Quelle. Die Prüfliste soll sie neben Größe und Hochladezeit zeigen.
 - **Konfiguration der Jest-Abdeckung**: Die neuen Module sind nicht in die Schwelle von 100 Prozent aufgenommen (`jest.config.ts`).
 - **Nicht gebaut**: Sokrates-Stufe (U5), Prüfliste (U6), Routen und Warteschlange (U2), Planbau aus Entscheidungen (U7).
+
+## 16. Stand U7 (Übernahme)
+
+Stand: 27.10.2026. Paket U7 ist umgesetzt, ohne Migration und ohne Wirkung auf Production. Der Code liegt unter `src/lib/content-upload/transfer/` (Datenbankzugriff wie in `staging/`, deshalb im Unterordner) und in drei Routen unter `src/app/api/trainer/content-upload/runs/[runId]/`: `dry-run` (POST), `apply` (POST) und `rollback-sql` (GET). Alle drei prüfen zuerst die Sitzung (`requireCurriculumEditor`), danach die Abschaltung (404 außerhalb von Preview und lokal), setzen `maxDuration = 60` ausdrücklich und sind in `tests/helpers/guardedRoutes.ts` eingetragen.
+
+### 16.1 Was gebaut ist
+
+| Teil | Inhalt |
+| ---- | ------ |
+| `pathInfoFromAssignment` (`apply/path-from-assignment.ts`) | Aus der Entscheidung (Typ, Komponente, Enabler, Stufe) entsteht dasselbe `PathInfo` wie aus dem Pfad. Test gegen `pathInfo` für 15 Pfade aller Typen und Gruppen. Fehlende Angaben landen in `issues`, der Planbau überspringt die Datei, nichts wird geraten |
+| Planbau (`transfer/plan.ts`) | Datei je bestätigter Entscheidung, Dubletten nur nach Wahl des Menschen (`selectFiles` wählt nie selbst), Server liest jede Datei erneut aus dem Staging, Parser auf dem vollen Inhalt, dann `buildImportPlan` und `buildUseCasePlan`. Läuft vor der reservierten Verbindung, mit Zeitbudget von 40 Sekunden (`PLAN_TOO_LARGE`, nie ein Teilplan) |
+| Voreinstellungen (`transfer/preset.ts`) | `scripts/import/kfbm-decisions.json` wird direkt importiert, keine Kopie: Skript und Upload können nicht auseinanderlaufen, der Bundler bettet die Datei ein. `content.activate` wird dort noch einmal auf `false` erzwungen |
+| Kanonischer Plan (`transfer/canonical.ts`) | Hash über Engine-Version, Voreinstellungen, beide Pläne mit Inhalt (ohne Zeitstempel), Schalter der Übernahme, Hashes der Dateien und der Originale. Stabil bei anderer Reihenfolge und anderer Zeit |
+| Ablauf (`transfer/run.ts`) | Tor, Plan, eine reservierte Verbindung, eine Transaktion (Zielprüfung mit den Fakten der eigenen Verbindung, Inhalts-Engine, Use-Case-Engine, Protokoll), Commit nur bei `apply`, Probelauf rollt zurück |
+| Tor (`transfer/store.ts`) | Ein bedingtes Update: `review` nach `applying`, nur bei gleicher `decisions_version` und für `apply` nur bei `last_dry_run_hash = Hash dieses Plans`. Ein hängender Lauf wird nach 15 Minuten freigegeben |
+| Protokoll (`transfer/record.ts`, `attribution.ts`) | Ein Decorator um die `Db`-Schnittstelle der Engine liefert Zeilen-IDs und Vorwerte, die Engines blieben unverändert. Eine Zeile je Tabelle und ID, `file_id` aus dem Plan. Alles in derselben Transaktion wie der Inhalt |
+| Festgelegt (`FIXED_ENGINE_OPTIONS`) | `activate` und beide Lösungsschalter sind `false`. Ein Test liest die Quelltexte (`transfer-policy.test.ts`), ein weiterer prüft mit Voreinstellungen `activate: true`, dass trotzdem alles inaktiv bleibt |
+| Tippbestätigung | `confirm` muss genau `KFBM` sein, sonst 400 ohne jede Wirkung |
+| Schalter "Bestehende Zeilen aktualisieren" | je Übernahme (`update_existing` im Protokoll), Teil des Hashes: ein Probelauf mit Schalter öffnet das Tor nicht für eine Übernahme ohne |
+| `purge_after` | Beim Übernehmen jetzt plus 30 Tage (Entscheidung O3), im selben Update, das den Lauf auf `applied` setzt |
+| Rückbau (`transfer/rollback.ts`) | SQL-Text aus `applied_rows`, ausgeführt vom Eigentümer, erst als Probe. Siehe 16.3 |
+| Originale (`transfer/originals.ts`, `content-bucket.ts`, Engine) | Neue Operation der Engine (`enablerOriginals`): eine Zeile `THEORY`/`ALL` am Enabler mit Dateiangaben, nur für Enabler-Lehrtexte. Siehe 16.4 |
+
+### 16.2 Abweichungen vom Konzept und Entscheidungen
+
+- **Kein Zwischenspeicher des Plans.** Der Spike (Abschnitt 6) empfahl, den Planbau in die Warteschlange zu legen. Gebaut ist der einfache Weg: Plan in der Route, vor der Verbindung, mit festem Zeitbudget. Reicht das auf der echten Preview nicht, ist der Rückfall der Schritt der Warteschlange (Spike, Stufe 2) oder das Skript.
+- **Protokoll ohne Änderung der Engine.** Statt die Berichte der Engines zu erweitern (11.1) zeichnet ein Decorator die Schreibvorgänge auf. Die Skripte sind damit unberührt.
+- **Reihenfolge der Läufe.** Die Reihenfolge der Läufe richtet sich nach `finished_at`, das innerhalb der Sperre mit `clock_timestamp()` gesetzt wird (nicht nach `started_at`, das die Zeit der Anfrage vor dem Planbau ist).
+- **Markierung statt neuer Statuswert.** Die Datenbank kennt für `applies.status` keinen Wert "zurückgebaut". Der SQL-Text setzt deshalb `counts.rolledBack = true` (das Feld ist freies JSON). Ein Rückbau eines früheren Laufs ist erst danach möglich, derselbe Lauf lässt sich nicht zweimal zurückbauen.
+- **Zielprüfung.** Ziel ist `local`, wenn der Host der Verbindungszeichenfolge Loopback ist, sonst `preview`. `checkTargetFacts` läuft mit den Fakten der reservierten Verbindung innerhalb der Transaktion, vor dem ersten Schreiben. Ein gehosteter Host auf dem Schema `public` (die Form von Production) wird abgelehnt, die Antwort nennt den Host nicht. Das Rollout-Gate `KFBM_ROLLOUT_APPROVED` bleibt für Production maßgeblich: der Code liest es nicht und umgeht es nicht, die Tabellen fehlen dort bis zum Rollout, die Routen sind aus.
+- **Originale nur auf ausdrückliche Nennung.** Die Liste `publishOriginals` (höchstens 25 Datei-IDs) steht in der Anfrage von Probelauf und Übernahme und im Hash. Die Datei wird nach der Zielprüfung, innerhalb der Transaktion, in den Bucket `content` kopiert (Hash verglichen, nie ersetzt) und bei jedem Fehler wieder entfernt. Eine Kopie, deren Zeile schon bestand, wird nach dem Commit entfernt. Ist der Ausgang eines Commits unklar (Verbindung weg), bleiben die Kopien und die Antwort ist `COMMIT_UNCERTAIN`.
+- **Prüfung der Originale** (die Lücke aus 14.2): Wort ohne Kommentare, Notizen, Änderungen, Textfelder, versteckten Text und eingebettete Teile, PDF ohne Skript, Aktion oder Anhang, kein Markenwort einer Lösung, kein langer Lösungstext von Szenarien oder Use Cases desselben Plans. Ein Word-Original geht nur, wenn die Datei Teil des Plans ist.
+- **Fehlerabbildung.** Serialisierungsfehler (40001), Deadlock (40P01) und kein freier Platz im Pool ergeben wie Sperrfristen 503 "beschäftigt" (`route-support.ts`).
+
+### 16.3 Rückbau-SQL
+
+Der Text nimmt zuerst die Advisory-Sperre des Imports, löscht die eingefügten Zeilen in der Reihenfolge Kinder vor Eltern, stellt Vorwerte wieder her und markiert den Lauf. Jeder Block prüft seine Zeilenzahl und löst bei Abweichung einen Fehler aus (das beendet die Transaktion). **Die Wächter laufen zur Zeit der Ausführung**, nicht nur beim Erzeugen: vor dem Löschen der Eltern prüft der Text, dass keine fremde Zeile mehr an ihnen hängt (Kaskade und `set null`, auch zwischen den Tabellen des Imports, zum Beispiel ein später ergänztes Dokument) und dass keine Zeile aktiv ist. Beim Erzeugen kommen Gründe statt des Texts, wenn ein späterer Lauf dieselben Zeilen berührt hat, Inhalte aktiv sind oder Daten von Lernenden hängen (Abgaben, Abschlüsse, Mitgliedschaften). Ein Test gleicht die Liste `DEPENDENTS` mit allen Fremdschlüsseln der Datenbank ab. Nicht erledigt vom Text und in den Hinweisen genannt: `hai_embeddings` zu gelöschten Quellen und Dateien im Bucket `content`.
+
+### 16.4 Messung und Tests
+
+Alles lokal gegen Wegwerf-Postgres (Supabase-Image 17, Struktur von Production, Migrationen bis 20261030000100). Die DB-Tests (`transfer-db.test.ts`, 29 Prüfungen) laufen nur mit `CONTENT_UPLOAD_TEST_DB`, einmal im Schema `public` und einmal in der Form der Preview (Rolle `app_preview`, Schema `public_preview`, echter `preview-migrate rebuild`, Host als gehostet gemeldet). Sie belegen: Probelauf schreibt nichts, Übernahme in einer Transaktion mit Protokoll, alles inaktiv, Idempotenz, Tor-Wettlauf (acht gleichzeitige Aufrufer, einer passiert; zwei volle Übernahmen, eine passiert), Konflikt der Use-Case-Engine nimmt den Inhalt zurück, Ausfall beim Protokoll nimmt alles zurück, abgelehntes Ziel, Sperre eines anderen Imports, hängender Lauf, Rückbau-SQL ausführen und Zustand vergleichen, Wächter bei der Ausführung.
+
+Laufzeit lokal, Lauf in der Größe der Quelle (9 Komponenten, 216 Enabler, 1296 Word-Dateien, 8,2 MB, 6480 Fragen, 25 920 Optionen, 34 578 Protokollzeilen):
+
+| Messung | Probelauf | Übernahme |
+| ------- | --------- | --------- |
+| ohne Wartezeit, leere Datenbank | 3,7 s | 5,2 s |
+| ohne Wartezeit, gefüllte Datenbank | 4,1 s | 2,6 s |
+| 20 ms je Anweisung und 60 ms je Datei aus dem Speicher (vier gleichzeitig), leere Datenbank | 29,6 s | 30,6 s |
+| dasselbe, gefüllte Datenbank | 24,0 s | 25,0 s |
+
+**Nicht gemessen:** die echte Preview (Supavisor, gehosteter Speicher, reales Zeitlimit der Funktion). Die Lesezeit je Datei aus dem Bucket ist der Hauptposten. Das Zeitbudget des Planbaus (40 Sekunden) trägt bis etwa 120 ms je Datei bei 1300 Dateien, darüber meldet der Aufruf `PLAN_TOO_LARGE` und der Lauf muss kleiner geschnitten werden. `maxDuration = 60` ist erst nach der Messung zu erhöhen.
+
+### 16.5 Gutachten
+
+Geprüft mit `ecc:security-reviewer`, `ecc:database-reviewer` und `ecc:typescript-reviewer` (nur lesend). Eingearbeitet: Wächter im Rückbau-Text zur Zeit der Ausführung und vollständige Fremdschlüsselliste (alle drei, hoch), Reihenfolge der Läufe nach `finished_at` statt `started_at`, Zuordnung 40001 und Pool-Zeitlimit zu 503, Aufräumen des Fehlerpfads (jeder Schritt einzeln, der echte Fehler bleibt sichtbar, der Lauf wird immer freigegeben), unklarer Commit (`COMMIT_UNCERTAIN`, Kopien bleiben, kein falscher Eintrag `failed`), Kopien erst nach der Zielprüfung und mit Zeitbudget, höchstens 25 Originale, Entfernen nicht benötigter Kopien, Original nur aus Dateien des Plans, strengere Prüfung der Originale (Notizen), eine Protokollzeile je Zeile, Hash bleibt bei vorübergehenden Fehlern erhalten.
+
+### 16.6 Offen und bekannte Grenzen
+
+- **Preview-Messung** (16.4) und das Zeitlimit der Funktion, siehe oben.
+- **Fehlender Enabler im Lauf.** Der Planbau der Importskripte überspringt ein Quiz, dessen Enabler-Text nicht im selben Lauf liegt (`ENABLER_MISSING`). Ein nachgelieferter Quiz zu einem Enabler, der schon in der Datenbank steht, wird deshalb übersprungen, bis der Lehrtext mit hochgeladen wird. Das Verhalten stammt aus `apply/plan.ts` und ist hier nicht geändert.
+- **Übernahme nach `applied`.** Eine weitere Runde setzt den Lauf zuerst auf `review` (Aufgabe der Prüfliste, U6). Dieses Paket nimmt Läufe nur aus `review`.
+- **Voraussetzung für U6.** Entscheidungen werden nur im Status `review` angenommen und setzen `last_dry_run_hash` auf NULL und erhöhen `decisions_version`. Das Tor verlässt sich darauf.
+- **Originale sind sofort lesbar**, sobald die Zeile `THEORY`/`ALL` besteht, auch wenn der Enabler inaktiv ist. Wo die Richtlinie `cd_select` noch gilt (Production vor dem Lockdown), liest der öffentliche Schlüssel Zeilen ohne Organisation. Die Entscheidung des Eigentümers, ob Originale vor der Aktivierung sichtbar sein dürfen, steht aus. Docx-Metadaten (Autor, Kopf- und Fußzeilen) werden nicht entfernt.
+- **Schnappschuss und Sperre.** Der erste Schnappschuss der Transaktion entsteht mit der Abfrage der Sperre. Ein Import, der in diesem Mikrofenster festschreibt, kann einen Fehler 23505 oder 40001 auslösen (sicher, nichts wird geschrieben).
+- **Einzelabfrage je Update.** Der Decorator liest vor jedem Update die Zeile. Bei sehr vielen Updates mit aktivem Schalter kostet das Umläufe.
+- **Nicht geprüft:** gehosteter Storage (`upload` in den Bucket `content`, Bereichsabruf), Supavisor, Browser (keine Oberfläche in diesem Paket).

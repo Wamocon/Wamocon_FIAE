@@ -953,14 +953,14 @@ describe('every handler of the content upload checks the session, then the switc
 
   const files = walk(base);
 
-  it('finds the eight route files with their eleven handlers', () => {
-    expect(files).toHaveLength(8);
+  it('finds the eleven route files with their fourteen handlers', () => {
+    expect(files).toHaveLength(11);
     const handlers = files.flatMap(f => [
       ...fs
         .readFileSync(f, 'utf8')
         .matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g),
     ]);
-    expect(handlers).toHaveLength(11);
+    expect(handlers).toHaveLength(14);
   });
 
   it.each(
