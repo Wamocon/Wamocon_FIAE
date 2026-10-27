@@ -1,8 +1,8 @@
 // Dry run of the KfBM parsers over the source folder (phase 4.3, read only).
 //
 // Reads the available .docx files one after the other (never several at once),
-// runs the quiz and scenario parsers (and a metadata check for the long enabler
-// texts) and reports per file success or the list of deviations from the
+// runs the quiz, scenario and use case parsers (and a metadata check for the
+// long enabler texts) and reports per file success or the list of deviations from the
 // expected format, plus a summary: it shows whether the sources really are
 // uniform. OneDrive placeholders (files that are not downloaded yet) are
 // skipped and counted, run the check again later.
@@ -15,7 +15,7 @@
 //
 // Usage:
 //   node scripts/import/kfbm-parse-check.mjs <source folder> [--out <file.json>]
-//        [--only quiz,scenario,global-quiz,enabler] [--limit <n>]
+//        [--only quiz,scenario,use-case,global-quiz,enabler] [--limit <n>]
 //        [--expected-questions <n>] [--include-k18] [--no-attributes]
 //        [--hydrate] [--timeout <seconds>]
 // --hydrate also reads the OneDrive placeholders (each file is downloaded on its
@@ -35,13 +35,14 @@ import {
   pathInfo,
   parseQuizText,
   parseScenarioText,
+  parseUseCaseText,
   readAttributes,
   walkSource,
 } from './kfbm-source.mjs';
 
 /** Questions of a global quiz (1 to 5 easy, 6 to 15 medium, 16 to 20 hard). */
 export const GLOBAL_QUIZ_QUESTIONS = 20;
-const PARSED_TYPES = ['quiz', 'scenario', 'global-quiz', 'enabler'];
+const PARSED_TYPES = ['quiz', 'scenario', 'use-case', 'global-quiz', 'enabler'];
 
 const issue = (code, message, severity = 'error') => ({
   code,
@@ -51,7 +52,7 @@ const issue = (code, message, severity = 'error') => ({
 
 /**
  * Checks one document against the format. `content` is {paragraphs} for quiz,
- * scenario and global quiz, {stats, size} for an enabler text.
+ * scenario, use case and global quiz, {stats, size} for an enabler text.
  * @param {string} rel
  * @param {ReturnType<typeof pathInfo>} info
  * @param {{ paragraphs?: any[], stats?: any, size?: number }} content
@@ -155,6 +156,35 @@ export function checkParsed(rel, info, content, options = {}) {
         issue(
           'CODE_MISMATCH',
           `The heading names scenario ${parsed.value.code}, the path enabler ${info.enablerKey}.`
+        )
+      );
+    }
+  } else if (info.type === 'use-case') {
+    const parsed = parseUseCaseText(content.paragraphs);
+    result.issues.push(...parsed.issues);
+    result.stats = {
+      code: parsed.value.code,
+      situationCharacters: parsed.value.situation.length,
+      solutionCharacters: parsed.value.solution.length,
+    };
+    if (
+      parsed.value.code &&
+      info.enablerKey &&
+      !enablerKeysMatch(parsed.value.code, info.enablerKey)
+    ) {
+      result.issues.push(
+        issue(
+          'CODE_MISMATCH',
+          `The heading names use case ${parsed.value.code}, the path enabler ${info.enablerKey}.`
+        )
+      );
+    }
+    if (info.flags.includes('without-solution')) {
+      result.issues.push(
+        issue(
+          'FOLDER_WITHOUT_SOLUTION',
+          'The file lies in a folder "Ohne Musterlösung".',
+          'warning'
         )
       );
     }
@@ -463,7 +493,7 @@ async function main() {
   const root = positional(argv);
   if (!root) {
     console.error(
-      'Usage: node scripts/import/kfbm-parse-check.mjs <source folder> [--out <file.json>] [--only quiz,scenario,global-quiz,enabler] [--limit <n>] [--expected-questions <n>] [--include-k18] [--no-attributes] [--hydrate] [--timeout <seconds>]'
+      'Usage: node scripts/import/kfbm-parse-check.mjs <source folder> [--out <file.json>] [--only quiz,scenario,use-case,global-quiz,enabler] [--limit <n>] [--expected-questions <n>] [--include-k18] [--no-attributes] [--hydrate] [--timeout <seconds>]'
     );
     process.exit(2);
   }

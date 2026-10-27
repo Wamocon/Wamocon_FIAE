@@ -2,10 +2,11 @@
 // list is the whole write surface: a table or column that is not listed here
 // cannot be read or written through PgDb. There is no delete anywhere.
 //
-// The content import (TABLE_ORDER) writes the first eight tables. The learning
-// field import (phase 4.5, src/lib/content-import/learning-fields) writes the
-// last two, training_catalog_learning_fields and
-// training_catalog_content_mappings.
+// The content import (TABLE_ORDER) writes the first eight tables. The use case
+// import (phase 4.6, src/lib/content-import/use-cases) writes use_cases and
+// more rows of content_documents. The learning field import (phase 4.5,
+// src/lib/content-import/learning-fields) writes training_catalog_learning_fields
+// and training_catalog_content_mappings.
 
 export type TableName =
   | 'training_components'
@@ -16,6 +17,7 @@ export type TableName =
   | 'options'
   | 'enabler_quiz_links'
   | 'content_documents'
+  | 'use_cases'
   | 'training_catalog_learning_fields'
   | 'training_catalog_content_mappings';
 
@@ -164,6 +166,24 @@ export const TABLES: Record<TableName, TableSpec> = {
       'organization_id',
       'uploaded_by_id',
     ],
+    touch: true,
+  },
+  use_cases: {
+    columns: [
+      'course_id',
+      'training_catalog_id',
+      'enabler_id',
+      'code',
+      'title',
+      'description_text',
+      'order_index',
+      'is_active',
+    ],
+    // The course, the enabler link, the code and the activation are part of
+    // the identity of a use case, only the visible texts and the position are
+    // updated. The solution texts are not here: they live in content_documents.
+    updatable: ['title', 'description_text', 'order_index'],
+    uuid: ['id', 'course_id', 'training_catalog_id', 'enabler_id'],
     touch: true,
   },
   training_catalog_learning_fields: {

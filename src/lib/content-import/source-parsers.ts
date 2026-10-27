@@ -35,7 +35,10 @@ export const QUIZ_SOLUTION_FIELDS = Object.freeze([
 const clean = (text: string) =>
   text
     .normalize('NFC')
-    .replace(/[\u200b\u200c\u200d\u2060\u00ad\ufeff]/g, '')
+    .replace(
+      /[\u200b\u200c\u200d\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\u00ad\ufeff]/g,
+      ''
+    )
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -59,12 +62,20 @@ export function toParagraphs(input: SourceInput): Paragraph[] {
     const isText = typeof item === 'string';
     const raw = isText ? item : String((item as { text?: unknown }).text ?? '');
     const bold = isText ? false : Boolean((item as { bold?: unknown }).bold);
+    // The table position of a paragraph (see Paragraph) is kept for the use
+    // case parser, the quiz and scenario parsers ignore it.
+    const rowOf = isText ? undefined : (item as { row?: unknown }).row;
+    const cellOf = isText ? undefined : (item as { cell?: unknown }).cell;
+    const place = {
+      ...(typeof rowOf === 'number' ? { row: rowOf } : {}),
+      ...(typeof cellOf === 'number' ? { cell: cellOf } : {}),
+    };
     for (const piece of raw.split(/\r\n|\r|\n/)) {
       const wrapped = isText ? /^\s*\*\*(.*)\*\*\s*$/.exec(piece) : null;
       out.push(
         wrapped
           ? { text: clean(wrapped[1]), bold: true }
-          : { text: clean(piece), bold }
+          : { text: clean(piece), bold, ...place }
       );
     }
   }

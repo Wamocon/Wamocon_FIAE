@@ -4,7 +4,10 @@
 // and file attributes), derives component, group, enabler letter and type of
 // every file from its path (src/lib/content-import/path-info.ts) and reports:
 //   - the numbers per component and type, against the expected values,
-//   - missing blocks (enabler without a quiz of a level or without a scenario),
+//   - missing blocks (enabler without a quiz of a level, without a scenario or,
+//     when the source has use cases at all, without a use case),
+//   - the use cases (files per format, folders "Ohne Musterlösung", per
+//     component in the table),
 //   - duplicates (same derived key, several files: size, date, recommendation),
 //   - files that fit no scheme (implausible names),
 //   - OneDrive placeholders (files that are not downloaded yet),
@@ -39,6 +42,8 @@ export const EXPECTED = {
   globalQuizzes: 27,
   electives: 9,
   quizzes: 678,
+  // One use case per enabler.
+  useCases: 226,
 };
 
 /** Folders next to the source that are only listed by name and size. */
@@ -108,6 +113,12 @@ export function buildInventory(
   const groups = new Map(); // key -> records (not archive, not excluded)
   const components = new Map();
   const enablerIds = new Map(); // key -> {component, has: Set}
+  const useCaseFiles = {
+    files: 0,
+    byFormat: {},
+    withoutSolutionFolder: [],
+    misplacedEnablerTexts: 0,
+  };
 
   for (const record of records) {
     const { info } = record;
@@ -167,13 +178,24 @@ export function buildInventory(
       archive.push(record.rel);
       continue;
     }
+    if (info.type === 'use-case') {
+      useCaseFiles.files += 1;
+      useCaseFiles.byFormat[info.format || '(none)'] =
+        (useCaseFiles.byFormat[info.format || '(none)'] ?? 0) + 1;
+      if (info.flags.includes('without-solution')) {
+        useCaseFiles.withoutSolutionFolder.push(record.rel);
+      }
+    } else if (info.type === 'enabler' && info.flags.includes('misplaced')) {
+      // An enabler text that lies in a use case folder.
+      useCaseFiles.misplacedEnablerTexts += 1;
+    }
     if (info.key && info.key !== 'overview') {
       if (!groups.has(info.key)) groups.set(info.key, []);
       groups.get(info.key).push(record);
     }
     if (
       info.enablerKey &&
-      ['enabler', 'quiz', 'scenario'].includes(info.type)
+      ['enabler', 'quiz', 'scenario', 'use-case'].includes(info.type)
     ) {
       // A file whose name is not recognized has no key and does not count as the
       // block, the enabler still exists and then shows the block as missing.
@@ -213,6 +235,7 @@ export function buildInventory(
     ok: counts[name] === value,
   }));
 
+  const hasUseCases = useCaseFiles.files > 0;
   const missing = [];
   for (const [enablerKey, id] of enablerIds) {
     const absent = [];
@@ -221,6 +244,7 @@ export function buildInventory(
       if (!id.has.has(`quiz:${level}`)) absent.push(`quiz:${level}`);
     }
     if (!id.has.has('scenario')) absent.push('scenario');
+    if (hasUseCases && !id.has.has('use-case')) absent.push('use-case');
     if (absent.length > 0) {
       missing.push({ enablerKey, component: id.component, missing: absent });
     }
@@ -326,6 +350,7 @@ export function buildInventory(
     counts,
     expectations,
     components: componentRows,
+    useCaseFiles,
     missing,
     duplicates,
     misfits,
@@ -362,6 +387,7 @@ export function renderSummary(inv, { root = null, generatedAt = null } = {}) {
     globalQuizzes: 'Global-Quizze',
     electives: 'Wahlkomponenten',
     quizzes: 'Quizze (Stufe leicht, mittel, schwer)',
+    useCases: 'Use Cases (je Enabler einer)',
   };
   for (const row of inv.expectations) {
     out.push(
@@ -373,6 +399,27 @@ export function renderSummary(inv, { root = null, generatedAt = null } = {}) {
     `Enabler-Kennungen gesamt (Text, Quiz oder Szenario): ${inv.counts.enablerIds}. Use Cases: ${inv.counts.useCases}. PDF der Global-Quizze: ${inv.counts.globalQuizPdfs}. K18 ausgeschlossen: ${inv.excluded.files} Dateien.`
   );
   out.push('');
+
+  const uc = inv.useCaseFiles;
+  if (uc) {
+    out.push('## Use Cases');
+    out.push('');
+    out.push(
+      `${uc.files} Dateien (ohne K18 und Archiv), davon ${inv.counts.useCases} verschiedene Schlüssel (ein Use Case je Enabler). Dateitypen: ${
+        Object.entries(uc.byFormat)
+          .map(([k, v]) => `${k} ${v}`)
+          .join(', ') || 'keine'
+      }. Lehrtexte im Use-Case-Ordner (nicht Teil des Use-Case-Imports): ${uc.misplacedEnablerTexts}.`
+    );
+    if (uc.withoutSolutionFolder.length > 0) {
+      out.push('');
+      out.push(
+        'Ordner "Ohne Musterlösung" (die Fassung mit und die ohne Musterlösung nebeneinander gelten als Konflikt, der Import überspringt beide):'
+      );
+      for (const rel of uc.withoutSolutionFolder) out.push(`- \`${rel}\``);
+    }
+    out.push('');
+  }
 
   out.push('## Je Komponente');
   out.push('');
@@ -391,7 +438,7 @@ export function renderSummary(inv, { root = null, generatedAt = null } = {}) {
   out.push('');
   if (inv.missing.length === 0) {
     out.push(
-      'Keine. Jeder Enabler hat Text, drei Quiz-Stufen und ein Szenario.'
+      'Keine. Jeder Enabler hat Text, drei Quiz-Stufen, ein Szenario und (wenn die Quelle Use Cases hat) einen Use Case.'
     );
   } else {
     out.push(`${inv.missing.length} Enabler mit Lücken:`);

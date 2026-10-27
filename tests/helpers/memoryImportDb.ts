@@ -26,6 +26,7 @@ const emptyTables = (): Tables => ({
   options: [],
   enabler_quiz_links: [],
   content_documents: [],
+  use_cases: [],
   training_catalog_learning_fields: [],
   training_catalog_content_mappings: [],
 });
@@ -149,6 +150,39 @@ export class MemoryImportDb implements Db {
         throw new Error('check violation hours_budget');
       }
     }
+    if (table === 'use_cases') {
+      // The composite foreign keys of the real table: the course carries the
+      // catalog, the enabler belongs to the same course.
+      const course = this.tables.courses.find(r => r.id === row.course_id);
+      if (!course) throw new Error('foreign key use_cases_course_id');
+      if (course.training_catalog_id !== row.training_catalog_id) {
+        throw new Error('foreign key use_cases_course_catalog_fk');
+      }
+      if (row.enabler_id != null) {
+        const enabler = this.tables.enablers.find(r => r.id === row.enabler_id);
+        if (!enabler || enabler.course_id !== row.course_id) {
+          throw new Error('foreign key use_cases_enabler_course_fk');
+        }
+      }
+      if (
+        !row.title ||
+        row.description_text == null ||
+        row.order_index == null
+      ) {
+        throw new Error('not null violation use_cases');
+      }
+      if (
+        row.code &&
+        !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(String(row.code))
+      ) {
+        throw new Error('check violation use_cases_code_format_check');
+      }
+    }
+    if (table === 'content_documents' && row.use_case_id != null) {
+      if (!this.tables.use_cases.some(r => r.id === row.use_case_id)) {
+        throw new Error('foreign key content_documents_use_case_id');
+      }
+    }
     if (table === 'training_catalog_content_mappings') {
       const field = this.tables.training_catalog_learning_fields.find(
         r => r.id === row.learning_field_id
@@ -232,6 +266,20 @@ export class MemoryImportDb implements Db {
             r.enabler_id === row.enabler_id && r.difficulty === row.difficulty
         );
         clash('enabler_quiz_links_quiz', r => r.quiz_id === row.quiz_id);
+        break;
+      case 'use_cases':
+        if (row.code) {
+          clash(
+            'use_cases_course_code_unique',
+            r => r.course_id === row.course_id && r.code === row.code
+          );
+        }
+        if (row.enabler_id) {
+          clash(
+            'use_cases_enabler_id_unique',
+            r => r.enabler_id === row.enabler_id
+          );
+        }
         break;
       case 'training_catalog_learning_fields':
         clash(

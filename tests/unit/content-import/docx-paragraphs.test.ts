@@ -62,6 +62,64 @@ describe('extractDocxParagraphs', () => {
     ]);
   });
 
+  it('marks the paragraphs of table cells with a row and a cell number', async () => {
+    const cell = (...paragraphs: string[]) =>
+      `<w:tc><w:tcPr><w:tcW w:w="1"/></w:tcPr>${paragraphs.join('')}</w:tc>`;
+    const row = (...cells: string[]) => `<w:tr>${cells.join('')}</w:tr>`;
+    const table = (...rows: string[]) =>
+      `<w:tbl><w:tblPr></w:tblPr>${rows.join('')}</w:tbl>`;
+    const buffer = await docx(
+      [
+        para(run('vor der Tabelle')),
+        table(
+          row(
+            cell(para(run('A1', true))),
+            cell(para(run('B1')), para(run('B1 zweite Zeile')))
+          ),
+          row(cell(para(run('A2'))), cell(para(run('B2'))))
+        ),
+        para(run('nach der Tabelle')),
+        table(row(cell(para(run('C1'))))),
+      ].join('')
+    );
+    const paragraphs = await extractDocxParagraphs(buffer);
+    expect(paragraphs.map(p => [p.text, p.row, p.cell])).toEqual([
+      ['vor der Tabelle', undefined, undefined],
+      ['A1', 1, 1],
+      ['B1', 1, 2],
+      ['B1 zweite Zeile', 1, 2],
+      ['A2', 2, 3],
+      ['B2', 2, 4],
+      ['nach der Tabelle', undefined, undefined],
+      ['C1', 3, 5],
+    ]);
+    // A paragraph outside a table has no row key at all.
+    expect('row' in paragraphs[0]).toBe(false);
+  });
+
+  it('gives a nested table its own rows and returns to the outer row', async () => {
+    const inner =
+      '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>innen</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const buffer = await docx(
+      `<w:tbl><w:tr><w:tc><w:p><w:r><w:t>außen eins</w:t></w:r></w:p>${inner}<w:p><w:r><w:t>außen zwei</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
+    );
+    const paragraphs = await extractDocxParagraphs(buffer);
+    expect(paragraphs.map(p => [p.text, p.row, p.cell])).toEqual([
+      ['außen eins', 1, 1],
+      ['innen', 2, 2],
+      ['außen zwei', 1, 1],
+    ]);
+  });
+
+  it('ignores a damaged table (cell or row closed twice)', async () => {
+    const buffer = await docx(
+      '</w:tc></w:tr><w:p><w:r><w:t>text</w:t></w:r></w:p>'
+    );
+    expect(await extractDocxParagraphs(buffer)).toEqual([
+      { text: 'text', bold: false },
+    ]);
+  });
+
   it('does not take paragraph properties for text', async () => {
     const buffer = await docx(
       '<w:p><w:pPr><w:rPr><w:b/></w:rPr></w:pPr><w:r><w:t>nur Text</w:t></w:r></w:p>'
