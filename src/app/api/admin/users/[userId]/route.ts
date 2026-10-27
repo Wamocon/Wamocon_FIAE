@@ -14,6 +14,7 @@ import db from '@/db';
 import { eq } from 'drizzle-orm';
 import { profiles } from '@/db/migrations/schemas/schema';
 import { notFoundUnlessUuid } from '@/lib/uuid';
+import { PG_FOREIGN_KEY_VIOLATION, pgErrorCode } from '@/lib/pg-error';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
@@ -195,7 +196,25 @@ export async function DELETE(
       );
     }
 
-    await db.delete(profiles).where(eq(profiles.id, userId as any));
+    try {
+      await db.delete(profiles).where(eq(profiles.id, userId as any));
+    } catch (deleteErr) {
+      // A profile that others still point at cannot go: the runs of the content
+      // upload (and their log) name the profiles that created, decided or applied
+      // something (on delete restrict). Nothing was deleted, so the auth account
+      // below stays as well.
+      if (pgErrorCode(deleteErr) === PG_FOREIGN_KEY_VIOLATION) {
+        return NextResponse.json(
+          {
+            error:
+              'This account cannot be deleted because other records still refer to it, for example upload runs of the content upload. Deactivate the account instead, or remove those records first.',
+            code: 'USER_IN_USE',
+          },
+          { status: 409 }
+        );
+      }
+      throw deleteErr;
+    }
 
     // Preview shares the auth of Production: the profile above lives in the
     // Preview schema and may always go, but the auth account only goes when it
