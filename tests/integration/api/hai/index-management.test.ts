@@ -15,6 +15,7 @@ import {
   mockSession,
   type FakeSession,
 } from '../../../helpers/mockNext';
+import { proofHeader, useTestProofKey } from '../../../helpers/adminProof';
 
 // Embed, sync and verify-pin manage the shared HAI index, which has no
 // organization column: one reindex or delete touches every organization. Only
@@ -24,12 +25,15 @@ import {
 const URL_BASE = 'http://localhost/api/hai';
 
 // The routes log progress and configuration errors, keep the test output clean
+let restoreProofKey: () => void = () => undefined;
 beforeEach(() => {
+  restoreProofKey = useTestProofKey();
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => {
+  restoreProofKey();
   jest.restoreAllMocks();
 });
 
@@ -66,8 +70,13 @@ const DENIED: [string, FakeSession][] = [
   ['a trainee, even of the platform organization', TRAINEE],
 ];
 
+// The session of the last load(): call() sends its valid admin PIN proof
+// (embed and sync ask for it, the other routes ignore the header)
+let proofOwner: FakeSession | null = null;
+
 async function load(route: 'embed' | 'sync' | 'verify-pin', who: FakeSession) {
   jest.resetModules();
+  proofOwner = who;
   mockSession(who);
   const haiDb = { execute: jest.fn(async () => []), select: jest.fn() };
   jest.doMock('@/db/haiDb', () => ({ __esModule: true, default: haiDb }));
@@ -144,8 +153,19 @@ async function load(route: 'embed' | 'sync' | 'verify-pin', who: FakeSession) {
   return { mod: mod as any, haiDb, hai, jobs, indexer, limiter };
 }
 
-function call(method: string, path: string, body?: unknown) {
-  return makeRequest(method, `${URL_BASE}/${path}`, { token: 't', body });
+function call(
+  method: string,
+  path: string,
+  body?: unknown,
+  headers: Record<string, string> | null = proofOwner
+    ? proofHeader(proofOwner.id)
+    : {}
+) {
+  return makeRequest(method, `${URL_BASE}/${path}`, {
+    token: 't',
+    body,
+    headers: headers ?? {},
+  });
 }
 
 describe('HAI embed route: platform staff only', () => {
@@ -405,7 +425,7 @@ describe('HAI verify-pin route: session first, then the PIN', () => {
     const { mod } = await load('verify-pin', who);
     const res = await mod.POST(call('POST', 'verify-pin', { pin: '4711' }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ success: true });
+    expect(await res.json()).toMatchObject({ success: true });
   });
 
   it('rejects a wrong PIN', async () => {
@@ -562,13 +582,11 @@ describe('HAI verify-pin route: lock after wrong PINs', () => {
 
   it('answers 429 while the address is locked, even for the right PIN', async () => {
     const { mod, limiter } = await load('verify-pin', PLATFORM_TRAINER);
-    limiter.reserveAttempt
-      .mockResolvedValueOnce(allow)
-      .mockResolvedValueOnce({
-        allowed: false,
-        retryAfterSec: 300,
-        failures: 15,
-      });
+    limiter.reserveAttempt.mockResolvedValueOnce(allow).mockResolvedValueOnce({
+      allowed: false,
+      retryAfterSec: 300,
+      failures: 15,
+    });
     const res = await mod.POST(pinRequest('4711'));
     expect(res.status).toBe(429);
     expect(res.headers.get('Retry-After')).toBe('300');
@@ -781,4 +799,271 @@ describe('HAI embed route: ids that are no uuid', () => {
       expect(jobs.getJobStatus).not.toHaveBeenCalled();
     }
   );
+});
+
+// The PIN used to be a gate of the dialog only. embed (POST, DELETE) and sync
+// (POST) start expensive or dangerous work for the whole platform, so they ask
+// for the proof that verify-pin hands out (src/lib/auth/admin-proof.ts): in the
+// header x-admin-pin-proof, in addition to the role. Role first, then proof.
+// The status reads (GET) stay behind the role, the widget polls them.
+describe('HAI admin PIN proof on embed and sync', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const NO_PROOF = {};
+  const MINUTE = 60_000;
+
+  type Gated = {
+    name: string;
+    route: 'embed' | 'sync';
+    run: (mod: any, headers: Record<string, string>) => Promise<Response>;
+    ran: (loaded: any) => unknown;
+  };
+  const VALID_ID = '3b1d1c52-6f3e-4b5a-9d63-2f6a1c0a9e11';
+  const gated: Gated[] = [
+    {
+      name: 'embed POST (index_all)',
+      route: 'embed',
+      run: (mod, headers) =>
+        mod.POST(call('POST', 'embed', { action: 'index_all' }, headers)),
+      ran: l => l.jobs.createReindexJob,
+    },
+    {
+      name: 'embed POST (cancel_job)',
+      route: 'embed',
+      run: (mod, headers) =>
+        mod.POST(call('POST', 'embed', { action: 'cancel_job' }, headers)),
+      ran: l => l.jobs.requestCancellation,
+    },
+    {
+      name: 'embed DELETE',
+      route: 'embed',
+      run: (mod, headers) =>
+        mod.DELETE(
+          call(
+            'DELETE',
+            `embed?sourceType=enabler&sourceId=${VALID_ID}`,
+            undefined,
+            headers
+          )
+        ),
+      ran: l => l.hai.removeEmbeddings,
+    },
+    {
+      name: 'sync POST',
+      route: 'sync',
+      run: (mod, headers) =>
+        mod.POST(call('POST', 'sync', { action: 'sync_content' }, headers)),
+      ran: l => l.indexer.indexAllContent,
+    },
+  ];
+
+  describe.each(gated)('$name', g => {
+    const asksForProof = async (headers: Record<string, string>) => {
+      const loaded = await load(g.route, PLATFORM_TRAINER);
+      const res = await g.run(loaded.mod, headers);
+      return { res, loaded };
+    };
+
+    it('runs with a valid proof of the person', async () => {
+      const { res, loaded } = await asksForProof(
+        proofHeader(PLATFORM_TRAINER.id)
+      );
+      expect(res.status).toBe(200);
+      expect(g.ran(loaded)).toHaveBeenCalled();
+    });
+
+    it('answers 403 without a proof and runs nothing', async () => {
+      const { res, loaded } = await asksForProof(NO_PROOF);
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: 'Admin PIN required' });
+      expect(g.ran(loaded)).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an empty proof', { 'x-admin-pin-proof': '' }],
+      [
+        'a made up proof',
+        { 'x-admin-pin-proof': `v1.${Date.now() + MINUTE}.${'a'.repeat(64)}` },
+      ],
+      ['the PIN itself', { 'x-admin-pin-proof': '4711' }],
+    ])('answers 403 for %s', async (_name, headers) => {
+      const { res, loaded } = await asksForProof(headers);
+      expect(res.status).toBe(403);
+      expect(g.ran(loaded)).not.toHaveBeenCalled();
+    });
+
+    it('answers 403 for the proof of another person (a replay)', async () => {
+      const { res, loaded } = await asksForProof(proofHeader(SUPER_ADMIN.id));
+      expect(res.status).toBe(403);
+      expect(g.ran(loaded)).not.toHaveBeenCalled();
+    });
+
+    it('answers 403 for an expired proof', async () => {
+      const { res, loaded } = await asksForProof(
+        proofHeader(PLATFORM_TRAINER.id, Date.now() - 11 * MINUTE)
+      );
+      expect(res.status).toBe(403);
+      expect(g.ran(loaded)).not.toHaveBeenCalled();
+    });
+
+    it('answers 403 for a proof with a changed expiry', async () => {
+      const [v, , mac] = proofHeader(PLATFORM_TRAINER.id)[
+        'x-admin-pin-proof'
+      ].split('.');
+      const { res, loaded } = await asksForProof({
+        'x-admin-pin-proof': `${v}.${Date.now() + 5 * MINUTE}.${mac}`,
+      });
+      expect(res.status).toBe(403);
+      expect(g.ran(loaded)).not.toHaveBeenCalled();
+    });
+
+    it('fails closed with 503 when the server has no key to check a proof', async () => {
+      const headers = proofHeader(PLATFORM_TRAINER.id);
+      delete process.env.SUPABASE_SECRET_KEY;
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const { res, loaded } = await asksForProof(headers);
+      expect(res.status).toBe(503);
+      expect(g.ran(loaded)).not.toHaveBeenCalled();
+    });
+
+    it.each(DENIED)(
+      '%s gets 403 for the role, also with a valid proof or without a key',
+      async (_name, who) => {
+        for (const withKey of [true, false]) {
+          if (!withKey) {
+            delete process.env.SUPABASE_SECRET_KEY;
+            delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+          }
+          const loaded = await load(g.route, who);
+          const res = await g.run(
+            loaded.mod,
+            withKey ? proofHeader(who.id) : NO_PROOF
+          );
+          // the role is checked first: never 503 and never "PIN required"
+          expect(res.status).toBe(403);
+          expect(await res.json()).toEqual({ error: 'Forbidden' });
+          expect(g.ran(loaded)).not.toHaveBeenCalled();
+        }
+      }
+    );
+
+    it('does not write the proof to a log', async () => {
+      const headers = proofHeader(
+        PLATFORM_TRAINER.id,
+        Date.now() - 11 * MINUTE
+      );
+      const proof = headers['x-admin-pin-proof'];
+      await asksForProof(headers);
+      await asksForProof(proofHeader(PLATFORM_TRAINER.id));
+      for (const spy of [console.log, console.warn, console.error]) {
+        for (const args of (spy as jest.Mock).mock.calls) {
+          expect(args.map(String).join(' ')).not.toContain(proof);
+        }
+      }
+    });
+  });
+
+  it('keeps the status reads behind the role only', async () => {
+    const embed = await load('embed', PLATFORM_TRAINER);
+    expect(
+      (await embed.mod.GET(call('GET', 'embed', undefined, NO_PROOF))).status
+    ).toBe(200);
+    const sync = await load('sync', PLATFORM_TRAINER);
+    expect(
+      (await sync.mod.GET(call('GET', 'sync', undefined, NO_PROOF))).status
+    ).toBe(200);
+  });
+});
+
+describe('HAI verify-pin route: the proof', () => {
+  const PIN_BEFORE = process.env.HAI_ADMIN_PIN;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.HAI_ADMIN_PIN = '4711';
+  });
+  afterEach(() => {
+    if (PIN_BEFORE === undefined) delete process.env.HAI_ADMIN_PIN;
+    else process.env.HAI_ADMIN_PIN = PIN_BEFORE;
+  });
+
+  it('hands out a proof of the session for ten minutes after the right PIN', async () => {
+    const { mod } = await load('verify-pin', PLATFORM_TRAINER);
+    const before = Date.now();
+    const res = await mod.POST(call('POST', 'verify-pin', { pin: '4711' }));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.expiresAt).toBeGreaterThanOrEqual(before + 600_000);
+    expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + 600_000);
+    const { verifyAdminProof } = await import('@/lib/auth/admin-proof');
+    expect(
+      verifyAdminProof(body.proof, PLATFORM_TRAINER.id, 'hai-index-admin')
+    ).toBe('valid');
+    // bound to the session, not usable by somebody else
+    expect(
+      verifyAdminProof(body.proof, SUPER_ADMIN.id, 'hai-index-admin')
+    ).toBe('invalid');
+  });
+
+  it('is the person of the session, a userId in the request changes nothing', async () => {
+    const { mod } = await load('verify-pin', PLATFORM_TRAINER);
+    const res = await mod.POST(
+      call('POST', `verify-pin?userId=${SUPER_ADMIN.id}`, {
+        pin: '4711',
+        userId: SUPER_ADMIN.id,
+      })
+    );
+    const { proof } = await res.json();
+    const { verifyAdminProof } = await import('@/lib/auth/admin-proof');
+    expect(
+      verifyAdminProof(proof, PLATFORM_TRAINER.id, 'hai-index-admin')
+    ).toBe('valid');
+    expect(verifyAdminProof(proof, SUPER_ADMIN.id, 'hai-index-admin')).toBe(
+      'invalid'
+    );
+  });
+
+  it('gives no proof for a wrong PIN or a lock', async () => {
+    const { mod, limiter } = await load('verify-pin', PLATFORM_TRAINER);
+    const wrong = await mod.POST(call('POST', 'verify-pin', { pin: '0000' }));
+    expect(await wrong.json()).toEqual({ success: false });
+    limiter.reserveAttempt.mockResolvedValueOnce({
+      allowed: false,
+      retryAfterSec: 60,
+      failures: 5,
+    });
+    const locked = await mod.POST(call('POST', 'verify-pin', { pin: '4711' }));
+    expect(JSON.stringify(await locked.json())).not.toContain('proof');
+  });
+
+  it('fails closed with 503 without a key, before it counts or compares the PIN', async () => {
+    delete process.env.SUPABASE_SECRET_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const { mod, limiter } = await load('verify-pin', PLATFORM_TRAINER);
+    const res = await mod.POST(call('POST', 'verify-pin', { pin: '4711' }, {}));
+    expect(res.status).toBe(503);
+    expect(JSON.stringify(await res.json())).not.toContain('proof');
+    expect(limiter.reserveAttempt).not.toHaveBeenCalled();
+  });
+
+  it('still checks the role first without a key', async () => {
+    delete process.env.SUPABASE_SECRET_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const { mod } = await load('verify-pin', CUSTOMER_TRAINER);
+    const res = await mod.POST(call('POST', 'verify-pin', { pin: '4711' }, {}));
+    expect(res.status).toBe(403);
+  });
+
+  it('does not write the proof or the PIN to a log', async () => {
+    const { mod } = await load('verify-pin', PLATFORM_TRAINER);
+    const res = await mod.POST(call('POST', 'verify-pin', { pin: '4711' }));
+    const { proof } = await res.json();
+    for (const spy of [console.log, console.warn, console.error]) {
+      for (const args of (spy as jest.Mock).mock.calls) {
+        const line = args.map(String).join(' ');
+        expect(line).not.toContain(proof);
+        expect(line).not.toContain('4711');
+      }
+    }
+  });
 });

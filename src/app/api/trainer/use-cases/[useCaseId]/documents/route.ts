@@ -5,13 +5,11 @@ import {
   isErrorResponse,
   CURRICULUM_WRITE_FORBIDDEN,
 } from '@/lib/auth/session';
-import { getSupabasePublicKey, getSupabaseSecretKey } from '@/lib/env';
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
-import { DB_OPTION } from '@/lib/db-schema';
 import { and, eq } from 'drizzle-orm';
 import { contentDocuments, useCases } from '@/db/migrations/schemas/schema';
-import { getUserOrgId } from '@/lib/auth-helpers';
+import { getUserOrgIdStrict } from '@/lib/auth-helpers';
 import { requireContentScope } from '@/lib/catalog/scope';
 import {
   canCreateDocument,
@@ -20,6 +18,12 @@ import {
   loadPlatformOrgIds,
 } from '@/lib/auth/document-scope';
 import { notFoundUnlessUuid } from '@/lib/uuid';
+import { readJsonObject } from '@/lib/input-limits';
+import {
+  documentPublicUrl,
+  documentStoragePath,
+} from '@/lib/document-storage';
+import { removeDocumentFile } from '@/lib/document-file-cleanup';
 
 // GET documents for a use case
 export async function GET(
@@ -99,7 +103,8 @@ export async function POST(
 
     // Shared curriculum: any valid trainer can upload documents
 
-    const body = await req.json();
+    const body = await readJsonObject(req);
+    if (body instanceof NextResponse) return body;
     const {
       title,
       description,
@@ -110,7 +115,7 @@ export async function POST(
       storageUrl,
       storagePath,
       triggerHaiIngestion,
-    } = body;
+    } = body as Record<string, any>;
 
     if (!title || !fileName || !storageUrl) {
       return NextResponse.json(
@@ -129,7 +134,18 @@ export async function POST(
       visibility = 'ALL'; // Trainee questions visible to both
     }
 
-    const trainerOrgId = await getUserOrgId(trainerId);
+    // A write never falls back to the platform organization: an account
+    // without an organization stops here.
+    let trainerOrgId: string;
+    try {
+      trainerOrgId = await getUserOrgIdStrict(trainerId);
+    } catch {
+      console.warn('Document create refused: the account has no organization');
+      return NextResponse.json(
+        { error: 'No organization for this account' },
+        { status: 403 }
+      );
+    }
 
     // A document of the platform organization is curriculum: only the super
     // admin adds it. A person of a customer organization adds documents of
@@ -138,6 +154,24 @@ export async function POST(
       return NextResponse.json(
         { error: CURRICULUM_WRITE_FORBIDDEN },
         { status: 403 }
+      );
+    }
+
+    // The file has to be an own upload (own project, bucket content, folder of
+    // the person). The delete removes it from the storage with the service key.
+    const storedPath = documentStoragePath(storageUrl, trainerId);
+    if (!storedPath) {
+      return NextResponse.json({ error: 'Invalid storageUrl' }, { status: 400 });
+    }
+    if (
+      storagePath !== undefined &&
+      storagePath !== null &&
+      storagePath !== '' &&
+      storagePath !== storedPath
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid storagePath' },
+        { status: 400 }
       );
     }
 
@@ -152,8 +186,8 @@ export async function POST(
         fileName,
         fileSize: fileSize || null,
         mimeType: mimeType || 'application/pdf',
-        storageUrl,
-        storagePath: storagePath || null,
+        storageUrl: documentPublicUrl(storedPath),
+        storagePath: storedPath,
         uploadedById: trainerId as any,
         organizationId: trainerOrgId,
       })
@@ -272,38 +306,21 @@ export async function DELETE(
         .catch(err => console.error('Failed to import HAI module:', err));
     }
 
-    // Delete from Supabase Storage (best effort - don't fail if storage delete fails)
-    try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl =
-        process.env.SUPABASE_URL_INTERNAL ||
-        process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = getSupabaseSecretKey() || getSupabasePublicKey();
+    // Delete from database
+    await db
+      .delete(contentDocuments)
+      .where(eq(contentDocuments.id, documentId as any));
 
-      if (supabaseUrl && supabaseKey && doc.storageUrl) {
-        const supabase = createClient(supabaseUrl, supabaseKey, {
-          db: DB_OPTION,
-        });
-        // Extract path from URL: https://xxx.supabase.co/storage/v1/object/public/content/userId/file.pdf
-        const urlParts = doc.storageUrl.split(
-          '/storage/v1/object/public/content/'
-        );
-        if (urlParts.length === 2) {
-          const filePath = urlParts[1];
-          await supabase.storage.from('content').remove([filePath]);
-        }
-      }
+    // Remove the file from the storage, after the row (best effort, a failure
+    // never undoes the delete). Only the file that belongs to this document alone.
+    try {
+      await removeDocumentFile(doc);
     } catch (storageErr) {
       console.warn(
         'Failed to delete file from storage (proceeding with DB delete):',
         storageErr
       );
     }
-
-    // Delete from database
-    await db
-      .delete(contentDocuments)
-      .where(eq(contentDocuments.id, documentId as any));
 
     return NextResponse.json({ ok: true });
   } catch (e) {

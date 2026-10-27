@@ -31,7 +31,14 @@ export function invalidText(
   max: number
 ): NextResponse | null {
   if (value === undefined || value === null || value === '') return null;
-  if (typeof value === 'string' && value.length <= max) return null;
+  // A NUL character cannot be stored in a text column (the database refuses it)
+  if (
+    typeof value === 'string' &&
+    value.length <= max &&
+    !value.includes('\u0000')
+  ) {
+    return null;
+  }
   return NextResponse.json(
     { error: `${field} must be text of at most ${max} characters` },
     { status: 400 }

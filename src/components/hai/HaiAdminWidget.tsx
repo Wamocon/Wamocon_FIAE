@@ -5,6 +5,7 @@ import { Database, RefreshCw, CheckCircle, AlertCircle, XCircle, Loader2 } from 
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { authFetch } from '@/lib/authFetch';
+import { ADMIN_PROOF_HEADER } from '@/lib/auth/admin-proof-header';
 
 // ============================================================================
 // TYPES
@@ -34,7 +35,14 @@ interface ReindexJob {
 // COMPONENT
 // ============================================================================
 
-export default function HaiAdminWidget() {
+interface HaiAdminWidgetProps {
+    /** Proof of the admin PIN (from verify-pin), kept in memory by the dialog. */
+    adminProof: string;
+    /** The server refused the proof (expired or not valid): ask for the PIN again. */
+    onProofRejected: () => void;
+}
+
+export default function HaiAdminWidget({ adminProof, onProofRejected }: HaiAdminWidgetProps) {
     const { user } = useAuth();
     const { t } = useLanguage();
     const [isStarting, setIsStarting] = useState(false);
@@ -128,10 +136,17 @@ export default function HaiAdminWidget() {
         try {
             const response = await authFetch('/api/hai/embed', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    [ADMIN_PROOF_HEADER]: adminProof,
+                },
                 body: JSON.stringify({ action: 'index_all', forceReindex }),
             });
 
+            if (response.status === 403) {
+                onProofRejected();
+                return;
+            }
             const data = await response.json();
 
             if (response.ok && data.jobId) {
@@ -172,11 +187,15 @@ export default function HaiAdminWidget() {
         setIsCancelling(true);
 
         try {
-            await authFetch('/api/hai/embed', {
+            const response = await authFetch('/api/hai/embed', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    [ADMIN_PROOF_HEADER]: adminProof,
+                },
                 body: JSON.stringify({ action: 'cancel_job' }),
             });
+            if (response.status === 403) onProofRejected();
         } catch {
             // Ignore — cancellation is best-effort
         } finally {
