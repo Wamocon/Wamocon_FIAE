@@ -33,9 +33,10 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { after, before, describe, test } from 'node:test';
-import pg from 'pg';
 
 const ADMIN_URL = process.env.PREVIEW_REBUILD_TEST_URL;
+// The db-checks job installs no packages: the driver is only loaded when the test runs
+const pg = ADMIN_URL ? (await import('pg')).default : null;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
 const ROOT = resolve('.');
