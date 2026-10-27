@@ -166,7 +166,9 @@ $$;
 
 -- The wrappers (section 1b) for everybody who needs them
 grant usage on schema preview_support to postgres, anon, authenticated, service_role, app_preview_migrator, app_preview;
-grant execute on all functions in schema preview_support to postgres, anon, authenticated, service_role, app_preview_migrator, app_preview;
+-- Named on purpose, not "on all functions": 03 adds has_preview_profile with a narrower grant (only
+-- authenticated), and running this file again must not widen it.
+grant execute on function preview_support.auth_uid(), preview_support.auth_role(), preview_support.auth_jwt(), preview_support.auth_email() to postgres, anon, authenticated, service_role, app_preview_migrator, app_preview;
 
 -- 4. Rights of the objects the migration role creates in public_preview.
 --    The migration role owns them; the app role gets access through default

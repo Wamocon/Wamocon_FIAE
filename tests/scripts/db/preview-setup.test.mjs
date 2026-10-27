@@ -192,8 +192,40 @@ test('the migration role never gets USAGE on auth, the four auth helpers come as
     )
   );
   assert.ok(
-    /grant execute on all functions in schema preview_support to [^;]*app_preview_migrator/i.test(
+    /grant execute on function preview_support\.auth_uid\(\), preview_support\.auth_role\(\), preview_support\.auth_jwt\(\), preview_support\.auth_email\(\) to [^;]*app_preview_migrator/i.test(
       sql
+    )
+  );
+});
+
+test('a repeat run of 01 must not widen functions that 03 added with a narrower grant', () => {
+  // "grant execute on all functions in schema preview_support" gave anon, the
+  // service role and both Preview roles EXECUTE on has_preview_profile (03 allows
+  // only authenticated) when 01 ran again after 03
+  const one = noComments(read('01-preview-role.sql'));
+  assert.ok(
+    !/grant\s+execute\s+on\s+all\s+functions\s+in\s+schema\s+preview_support/i.test(
+      one
+    )
+  );
+  const three = noComments(read('03-shared-objects.sql'));
+  assert.ok(
+    /grant execute on function preview_support\.has_preview_profile\(uuid\) to authenticated;/i.test(
+      three
+    )
+  );
+  // 03 also takes back what an older 01 handed out, so a repeat run converges
+  for (const role of [
+    'anon',
+    'service_role',
+    'app_preview_migrator',
+    'app_preview',
+  ]) {
+    assert.ok(three.includes(`'${role}'`), `03 revokes from ${role}`);
+  }
+  assert.ok(
+    /revoke all on function preview_support\.has_preview_profile\(uuid\) from %I/i.test(
+      three
     )
   );
 });
