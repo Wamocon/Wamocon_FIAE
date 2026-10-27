@@ -87,7 +87,21 @@ export interface RunStat {
   createdByName: string | null;
 }
 
+export type ReopenRunResult =
+  | { ok: true; version: number }
+  | { ok: false; reason: 'RUN_NOT_FOUND' }
+  | { ok: false; reason: 'RUN_STATE'; status: RunStatus };
+
+/** States a run can be taken back to review from (a further apply starts there). */
+export const REOPENABLE: readonly RunStatus[] = ['applied', 'failed'];
+
 export interface ReviewRepo {
+  /**
+   * Takes a run in the state applied or failed back to review, in one step: the
+   * version of the decisions goes up and the hash of the last dry run is cleared,
+   * like at every change of a decision, so a dry run made before cannot be used.
+   */
+  reopenRun(runId: string): Promise<ReopenRunResult>;
   /** Counts per run for the list of runs. */
   runStats(runIds: readonly string[]): Promise<RunStat[]>;
   /** Every file of the run with its current proposal and decision, by path. */

@@ -562,6 +562,58 @@ export function runReviewContract(
       });
     });
 
+    describe('reopenRun', () => {
+      it.each(['applied', 'failed'] as const)(
+        'takes a run in the state %s back to review, raises the version and clears the hash',
+        async status => {
+          const { runId } = await runWithFiles(1, { status });
+          await h.setDryRunHash(runId, 'hash-of-a-dry-run');
+          const result = await h.review.reopenRun(runId);
+          expect(result).toEqual({ ok: true, version: 1 });
+          const run = (await h.upload.getRun(runId))!;
+          expect(run.status).toBe('review');
+          expect(run.decisionsVersion).toBe(1);
+          expect(await h.dryRunHash(runId)).toBeNull();
+        }
+      );
+
+      it.each(['draft', 'uploading', 'processing', 'review', 'applying', 'discarded'] as const)(
+        'refuses a run in the state %s and changes nothing',
+        async status => {
+          const { runId } = await runWithFiles(1, { status });
+          await h.setDryRunHash(runId, 'keep');
+          expect(await h.review.reopenRun(runId)).toEqual({
+            ok: false,
+            reason: 'RUN_STATE',
+            status,
+          });
+          expect((await h.upload.getRun(runId))!.decisionsVersion).toBe(0);
+          expect(await h.dryRunHash(runId)).toBe('keep');
+        }
+      );
+
+      it('does not know an unknown run, and a decision made on the old version is refused afterwards', async () => {
+        expect(await h.review.reopenRun(randomUUID())).toEqual({ ok: false, reason: 'RUN_NOT_FOUND' });
+        expect(await h.review.reopenRun('nope')).toEqual({ ok: false, reason: 'RUN_NOT_FOUND' });
+        const { runId, proposals } = await runWithFiles(1, { status: 'applied' });
+        await h.review.reopenRun(runId);
+        const stale = await h.review.applyDecisions({
+          runId,
+          expectedVersion: 0,
+          decidedById: h.userA,
+          items: [item(proposals[0].fileId, proposals[0].proposalId)],
+        });
+        expect(stale).toEqual({ ok: false, reason: 'VERSION_CONFLICT', current: 1 });
+      });
+
+      it('lets only one of two calls at the same time pass', async () => {
+        const { runId } = await runWithFiles(1, { status: 'applied' });
+        const results = await Promise.all([h.review.reopenRun(runId), h.review.reopenRun(runId)]);
+        expect(results.filter(r => r.ok)).toHaveLength(1);
+        expect((await h.upload.getRun(runId))!.decisionsVersion).toBe(1);
+      });
+    });
+
     describe('runStats', () => {
       it('counts files and current decisions per run and names the creator', async () => {
         const a = await runWithFiles(3);

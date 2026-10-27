@@ -108,6 +108,14 @@ export function createReviewClient(partial: Partial<ReviewClientDeps> = {}) {
         signal
       );
     },
+    /** "Erneut prüfen": a run that was applied (or failed) goes back to review. */
+    reopen(runId: string) {
+      return api<{ version: number }>(
+        'POST',
+        `${BASE}/runs/${runId}/reopen`,
+        {}
+      );
+    },
     decide(
       runId: string,
       expectedVersion: number,

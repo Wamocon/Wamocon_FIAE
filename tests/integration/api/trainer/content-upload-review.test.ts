@@ -79,6 +79,7 @@ async function boot(session: FakeSession | null) {
     )) as any,
     decisions: (await import(`${API}/runs/[runId]/decisions/route`)) as any,
     pump: (await import(`${API}/runs/[runId]/pump/route`)) as any,
+    reopen: (await import(`${API}/runs/[runId]/reopen/route`)) as any,
   };
   return { ctx, fx, rv, route, uploadDeps, reviewDeps };
 }
@@ -436,6 +437,55 @@ describe('POST decisions', () => {
   });
 });
 
+describe('POST reopen ("Erneut prüfen")', () => {
+  it.each(['applied', 'failed'] as const)(
+    'takes a run in the state %s back to review, raises the version and clears the hash of the dry run',
+    async status => {
+      const b = await boot(SUPER);
+      const run = await seed(b);
+      b.ctx.repo.forceRunStatus(run.id, status);
+      b.ctx.review.dryRunHash.set(run.id, 'hash-of-a-dry-run');
+      const res = await post(b.route.reopen.POST, run.id, {});
+      expect(res.status).toBe(200);
+      expect(await json(res)).toEqual({ version: 1 });
+      expect((await b.ctx.repo.getRun(run.id))!.status).toBe('review');
+      expect(b.ctx.review.dryRunHash.get(run.id)).toBeNull();
+      // a decision made for the old version is refused afterwards
+      const stale = await post(b.route.decisions.POST, run.id, {
+        expectedVersion: 0,
+        command: 'accept_high',
+      });
+      expect(stale.status).toBe(409);
+      expect((await json(stale)).code).toBe('VERSION_CONFLICT');
+    }
+  );
+
+  it.each(['draft', 'uploading', 'processing', 'review', 'applying', 'discarded'] as const)(
+    'answers 409 RUN_STATE for a run in the state %s and changes nothing',
+    async status => {
+      const b = await boot(SUPER);
+      const run = await seed(b);
+      b.ctx.repo.forceRunStatus(run.id, status);
+      b.ctx.review.dryRunHash.set(run.id, 'keep');
+      const res = await post(b.route.reopen.POST, run.id, {});
+      expect(res.status).toBe(409);
+      expect((await json(res)).code).toBe('RUN_STATE');
+      expect((await b.ctx.repo.getRun(run.id))!.decisionsVersion).toBe(0);
+      expect(b.ctx.review.dryRunHash.get(run.id)).toBe('keep');
+    }
+  );
+
+  it('answers 404 for the run of somebody else and for a bad id', async () => {
+    const b = await boot(PLATFORM_ADMIN);
+    const run = await seed(b, USER);
+    b.ctx.repo.forceRunStatus(run.id, 'applied');
+    for (const id of [run.id, MISSING, 'nope']) {
+      expect((await post(b.route.reopen.POST, id, {})).status).toBe(404);
+    }
+    expect((await b.ctx.repo.getRun(run.id))!.status).toBe('applied');
+  });
+});
+
 describe('GET overview', () => {
   it('lists the own runs with the counts of files and decisions', async () => {
     const b = await boot(SUPER);
@@ -503,6 +553,7 @@ describe('the new handlers keep the order of the others: session, switch, then t
     'runs/[runId]/review/options/route.ts',
     'runs/[runId]/review/duplicates/route.ts',
     'runs/[runId]/decisions/route.ts',
+    'runs/[runId]/reopen/route.ts',
   ];
 
   it.each(files)('%s', file => {

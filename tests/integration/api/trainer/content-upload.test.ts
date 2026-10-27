@@ -103,6 +103,7 @@ async function boot(
     options: (await import(`${API}/runs/[runId]/review/options/route`)) as any,
     duplicates: (await import(`${API}/runs/[runId]/review/duplicates/route`)) as any,
     decisions: (await import(`${API}/runs/[runId]/decisions/route`)) as any,
+    reopen: (await import(`${API}/runs/[runId]/reopen/route`)) as any,
   };
   return { ctx, fx, route, uploadDeps, reviewDeps };
 }
@@ -198,6 +199,10 @@ function allHandlers(b: Booted, runId = GOOD_ID) {
     [
       'GET review duplicates',
       () => call(b.route.duplicates.GET, 'GET', '/api/x', { runId }),
+    ],
+    [
+      'POST reopen',
+      () => call(b.route.reopen.POST, 'POST', '/api/x', { runId, body: {} }),
     ],
     [
       'POST decisions',
@@ -991,14 +996,14 @@ describe('every handler of the content upload checks the session, then the switc
 
   const files = walk(base);
 
-  it('finds the thirteen route files with their sixteen handlers', () => {
-    expect(files).toHaveLength(13);
+  it('finds the seventeen route files with their twenty handlers', () => {
+    expect(files).toHaveLength(17);
     const handlers = files.flatMap(f => [
       ...fs
         .readFileSync(f, 'utf8')
         .matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g),
     ]);
-    expect(handlers).toHaveLength(16);
+    expect(handlers).toHaveLength(20);
   });
 
   it.each(

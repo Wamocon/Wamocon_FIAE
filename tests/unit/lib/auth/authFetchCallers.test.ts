@@ -211,6 +211,7 @@ describe('plainFetchViolations for the content upload routes', () => {
     '/api/trainer/content-upload/runs/r1/review/options',
     '/api/trainer/content-upload/runs/r1/review/duplicates',
     '/api/trainer/content-upload/runs/r1/decisions',
+    '/api/trainer/content-upload/runs/r1/reopen',
   ];
 
   it('flags a plain fetch to each of them and accepts authFetch', () => {

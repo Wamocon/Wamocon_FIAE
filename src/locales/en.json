@@ -2482,5 +2482,11 @@
   "contentUpload.upload.summary": "{uploaded} files uploaded, {merged} copies merged.",
   "contentUpload.upload.problems": "{count} files with errors",
   "contentUpload.paging.prev": "Previous page",
-  "contentUpload.options.failed": "The choice lists could not be loaded. Without them the assignment cannot be changed."
+  "contentUpload.options.failed": "The choice lists could not be loaded. Without them the assignment cannot be changed.",
+  "contentUpload.review.reopen": "Review again",
+  "contentUpload.confirm.reopenTitle": "Review the run again",
+  "contentUpload.confirm.reopenText": "The run goes back to review. Decisions can be changed again. An earlier dry run is no longer valid, a new one is needed before another apply. Files that were already applied stay applied.",
+  "contentUpload.confirm.reopen": "Review again",
+  "contentUpload.notice.reopened": "The run is back in review.",
+  "contentUpload.notice.reopenState": "The run cannot be reviewed again in this state."
 }

@@ -2484,5 +2484,11 @@
   "contentUpload.upload.summary": "{uploaded} Dateien hochgeladen, {merged} Kopien zusammengefasst.",
   "contentUpload.upload.problems": "{count} Dateien mit Fehler",
   "contentUpload.paging.prev": "Vorherige Seite",
-  "contentUpload.options.failed": "Die Auswahllisten konnten nicht geladen werden. Ohne sie lässt sich die Zuordnung nicht ändern."
+  "contentUpload.options.failed": "Die Auswahllisten konnten nicht geladen werden. Ohne sie lässt sich die Zuordnung nicht ändern.",
+  "contentUpload.review.reopen": "Erneut prüfen",
+  "contentUpload.confirm.reopenTitle": "Lauf erneut prüfen",
+  "contentUpload.confirm.reopenText": "Der Lauf geht zurück in die Prüfung. Entscheidungen lassen sich dann wieder ändern. Ein früherer Probelauf gilt nicht mehr, vor einer weiteren Übernahme ist ein neuer nötig. Bereits übernommene Dateien bleiben übernommen.",
+  "contentUpload.confirm.reopen": "Erneut prüfen",
+  "contentUpload.notice.reopened": "Der Lauf ist wieder in der Prüfung.",
+  "contentUpload.notice.reopenState": "Der Lauf lässt sich in diesem Zustand nicht erneut prüfen."
 }

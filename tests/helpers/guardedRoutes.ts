@@ -250,6 +250,24 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['runId'],
   },
   {
+    route: 'trainer/content-upload/runs/[runId]/dry-run',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/apply',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/rollback-sql',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
     route: 'trainer/content-upload/runs/[runId]/upload-urls',
     method: 'POST',
     guard: 'curriculum',
@@ -263,6 +281,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
   },
   {
     route: 'trainer/content-upload/runs/[runId]/decisions',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
+    route: 'trainer/content-upload/runs/[runId]/reopen',
     method: 'POST',
     guard: 'curriculum',
     params: ['runId'],

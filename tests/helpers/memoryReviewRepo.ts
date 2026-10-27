@@ -7,11 +7,12 @@ import { randomUUID } from 'crypto';
 import type {
   ApplyDecisionsInput,
   ApplyDecisionsResult,
+  ReopenRunResult,
   ReviewRepo,
   RunStat,
   SkippedItem,
 } from '@/lib/content-upload/review/repo';
-import { lastPerFile } from '@/lib/content-upload/review/repo';
+import { REOPENABLE, lastPerFile } from '@/lib/content-upload/review/repo';
 import { DECIDABLE } from '@/lib/content-upload/review/states';
 import type {
   CatalogComponentRow,
@@ -124,6 +125,20 @@ export class MemoryReviewRepo implements ReviewRepo {
     await this.tick();
     if (catalogId !== this.catalogId) return [];
     return this.components.map(c => ({ ...c, enablers: [...c.enablers] }));
+  }
+
+  async reopenRun(runId: string): Promise<ReopenRunResult> {
+    await this.tick();
+    const run = this.upload.runs.get(runId);
+    if (!run) return { ok: false, reason: 'RUN_NOT_FOUND' };
+    if (!(REOPENABLE as readonly string[]).includes(run.status)) {
+      return { ok: false, reason: 'RUN_STATE', status: run.status };
+    }
+    run.status = 'review';
+    run.decisionsVersion += 1;
+    run.updatedAt = this.upload.now();
+    this.dryRunHash.set(run.id, null);
+    return { ok: true, version: run.decisionsVersion };
   }
 
   async applyDecisions(

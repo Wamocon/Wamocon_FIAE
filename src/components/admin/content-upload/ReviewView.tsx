@@ -48,6 +48,7 @@ import {
   skipLabel,
 } from '@/components/admin/content-upload/labels';
 import {
+  BTN_PRIMARY,
   BTN_SECONDARY,
   BTN_SMALL,
   CARD,
@@ -77,7 +78,8 @@ type Dialog =
   | { kind: 'assign' }
   | { kind: 'newest'; groups: number }
   | { kind: 'duplicate'; key: string }
-  | { kind: 'discard' };
+  | { kind: 'discard' }
+  | { kind: 'reopen' };
 
 const STATE_TEXT_STATUSES = ['applying', 'applied', 'failed', 'discarded'];
 
@@ -318,6 +320,27 @@ export function ReviewView({
     }
   };
 
+  const reopen = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await client.reopen(runId);
+      setNotice({ kind: 'info', text: t('contentUpload.notice.reopened') });
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text:
+          error instanceof UploadApiError && error.code === 'RUN_STATE'
+            ? t('contentUpload.notice.reopenState')
+            : t('contentUpload.notice.error'),
+      });
+    } finally {
+      setBusy(false);
+      setDialog(null);
+      reload();
+    }
+  };
+
   const discard = async () => {
     setBusy(true);
     try {
@@ -435,15 +458,26 @@ export function ReviewView({
               {t('contentUpload.review.protected')}
             </p>
           </div>
-          {status !== 'discarded' && status !== 'applying' && (
-            <button
-              type="button"
-              className={BTN_SECONDARY}
-              onClick={() => setDialog({ kind: 'discard' })}
-            >
-              {t('contentUpload.review.discard')}
-            </button>
-          )}
+          <div className="flex flex-wrap gap-3">
+            {(status === 'applied' || status === 'failed') && (
+              <button
+                type="button"
+                className={BTN_PRIMARY}
+                onClick={() => setDialog({ kind: 'reopen' })}
+              >
+                {t('contentUpload.review.reopen')}
+              </button>
+            )}
+            {status !== 'discarded' && status !== 'applying' && (
+              <button
+                type="button"
+                className={BTN_SECONDARY}
+                onClick={() => setDialog({ kind: 'discard' })}
+              >
+                {t('contentUpload.review.discard')}
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -724,6 +758,17 @@ export function ReviewView({
             void send({ command: 'duplicate', key, keepFileId })
           }
         />
+      )}
+      {dialog?.kind === 'reopen' && (
+        <ConfirmDialog
+          title={t('contentUpload.confirm.reopenTitle')}
+          confirmLabel={t('contentUpload.confirm.reopen')}
+          busy={busy}
+          onCancel={() => setDialog(null)}
+          onConfirm={() => void reopen()}
+        >
+          <p>{t('contentUpload.confirm.reopenText')}</p>
+        </ConfirmDialog>
       )}
       {dialog?.kind === 'discard' && (
         <ConfirmDialog

@@ -9,11 +9,12 @@ import { sql, type SQL } from 'drizzle-orm';
 import type {
   ApplyDecisionsInput,
   ApplyDecisionsResult,
+  ReopenRunResult,
   ReviewRepo,
   RunStat,
   SkippedItem,
 } from '@/lib/content-upload/review/repo';
-import { lastPerFile } from '@/lib/content-upload/review/repo';
+import { REOPENABLE, lastPerFile } from '@/lib/content-upload/review/repo';
 import { DECIDABLE } from '@/lib/content-upload/review/states';
 import type {
   CatalogComponentRow,
@@ -234,6 +235,36 @@ export class PgReviewRepo implements ReviewRepo {
       phase: c.phase === null || c.phase === undefined ? null : Number(c.phase),
       enablers: byComponent.get(String(c.code)) ?? [],
     }));
+  }
+
+  async reopenRun(runId: string): Promise<ReopenRunResult> {
+    if (!isUuid(runId)) return { ok: false, reason: 'RUN_NOT_FOUND' };
+    return this.db.transaction(async tx => {
+      await limitWaiting(tx);
+      const rows = rowsOf(
+        await tx.execute(
+          sql`select status from content_upload_runs
+              where id = ${runId}::uuid for update`
+        )
+      );
+      if (rows.length === 0) return { ok: false, reason: 'RUN_NOT_FOUND' };
+      const status = String(rows[0].status) as RunStatus;
+      if (!(REOPENABLE as readonly string[]).includes(status)) {
+        return { ok: false, reason: 'RUN_STATE', status };
+      }
+      const updated = rowsOf(
+        await tx.execute(
+          sql`update content_upload_runs
+              set status = 'review',
+                  decisions_version = decisions_version + 1,
+                  last_dry_run_hash = null,
+                  updated_at = now()
+              where id = ${runId}::uuid
+              returning decisions_version`
+        )
+      );
+      return { ok: true, version: Number(updated[0].decisions_version) };
+    });
   }
 
   async applyDecisions(

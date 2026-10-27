@@ -102,6 +102,27 @@ export interface PlanScenario {
   source: string;
 }
 
+/**
+ * The original file of an enabler text (upload, docs/ki-upload-konzept.md 8.5),
+ * written as a new document row THEORY/ALL at the enabler. It is not part of the
+ * plan file (a plan holds text, this holds a stored file). The caller has copied
+ * the file already and checked that it is safe for trainees: the engine only
+ * writes the row, and the solution guard still checks its text fields.
+ */
+export interface EnablerOriginal {
+  /** K6.2-d */
+  enablerCode: string;
+  /** Title of the row, the engine adds nothing to it. */
+  title: string;
+  /** Name of the stored file (ASCII, no path). */
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  storageUrl: string;
+  storagePath: string;
+  pageCount: number | null;
+}
+
 export interface PlanOption {
   letter: string;
   text: string;

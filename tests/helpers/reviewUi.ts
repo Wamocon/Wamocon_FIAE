@@ -223,6 +223,7 @@ export function fakeClient(
     options: jest.fn(async () => OPTIONS),
     duplicates: jest.fn(async () => ({ groups: [], version: 0 })),
     decide: jest.fn(async () => ({ version: 1, written: 1, skipped: [] })),
+    reopen: jest.fn(async () => ({ version: 1 })),
     ...overrides,
   } as jest.Mocked<ReviewClient>;
 }

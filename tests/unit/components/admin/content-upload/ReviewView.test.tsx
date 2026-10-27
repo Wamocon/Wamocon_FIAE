@@ -1098,6 +1098,37 @@ describe('ReviewView: discarding a run', () => {
   });
 });
 
+describe('ReviewView: review again', () => {
+  it.each(['applied', 'failed'])('offers "Erneut prüfen" for a run in the state %s and asks first', async status => {
+    const client = fakeClient();
+    const { user } = await open(client, fakeUpload(), standardRows(), { status });
+    await user.click(screen.getByRole('button', { name: 'Erneut prüfen' }));
+    const dialog = screen.getByRole('dialog', { name: 'Lauf erneut prüfen' });
+    expect(within(dialog).getByText(/Ein früherer Probelauf gilt nicht mehr/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Abbrechen' })).toHaveFocus();
+    expect(client.reopen).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Erneut prüfen' }));
+    await waitFor(() => expect(client.reopen).toHaveBeenCalledWith(RUN));
+    expect(await screen.findByText('Der Lauf ist wieder in der Prüfung.')).toBeInTheDocument();
+    // the list is read again
+    await waitFor(() => expect(client.review.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it.each(['review', 'processing', 'draft', 'applying', 'discarded'])('has no such button for a run in the state %s', async status => {
+    await open(fakeClient(), fakeUpload(), standardRows(), { status });
+    expect(screen.queryByRole('button', { name: 'Erneut prüfen' })).not.toBeInTheDocument();
+  });
+
+  it('says so when the run is no longer in a state that can be reviewed again', async () => {
+    const client = fakeClient();
+    client.reopen.mockRejectedValue(new UploadApiError(409, 'x', 'RUN_STATE'));
+    const { user } = await open(client, fakeUpload(), standardRows(), { status: 'applied' });
+    await user.click(screen.getByRole('button', { name: 'Erneut prüfen' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Erneut prüfen' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('nicht erneut prüfen');
+  });
+});
+
 describe('ReviewView: the skip link', () => {
   it('has a link to the list that is the first thing a keyboard reaches', async () => {
     const { user } = await open();
