@@ -22,6 +22,7 @@ import type {
   FinishOptions,
   QueueState,
   TransitionOptions,
+  UnlessMarked,
   UploadRepo,
   UrlRequestDecision,
 } from '@/lib/content-upload/staging/repo';
@@ -38,6 +39,12 @@ import {
   type RunProgress,
   type RunRow,
 } from '@/lib/content-upload/staging/types';
+
+/** The file carries the marker that its state names (see UnlessMarked). */
+function isMarked(file: FileRow, unlessMarked: UnlessMarked | undefined) {
+  const key = unlessMarked?.[file.status];
+  return key !== undefined && file.parseSummary?.[key] != null;
+}
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -370,6 +377,7 @@ export class MemoryUploadRepo implements UploadRepo {
         f =>
           f.runId === runId &&
           options.statuses.includes(f.status) &&
+          !isMarked(f, options.unlessMarked) &&
           (f.lockedUntil === null || f.lockedUntil.getTime() < now) &&
           f.attempts < options.maxAttempts
       )
@@ -432,7 +440,8 @@ export class MemoryUploadRepo implements UploadRepo {
     runId: string,
     statuses: readonly FileStatus[],
     maxAttempts: number,
-    code: string
+    code: string,
+    unlessMarked?: UnlessMarked
   ) {
     await this.tick();
     let n = 0;
@@ -440,6 +449,7 @@ export class MemoryUploadRepo implements UploadRepo {
       if (
         f.runId === runId &&
         statuses.includes(f.status) &&
+        !isMarked(f, unlessMarked) &&
         f.attempts >= maxAttempts &&
         (f.lockedUntil === null || f.lockedUntil.getTime() < this.clockMs)
       ) {
@@ -457,7 +467,8 @@ export class MemoryUploadRepo implements UploadRepo {
   async queueState(
     runId: string,
     statuses: readonly FileStatus[],
-    maxAttempts: number
+    maxAttempts: number,
+    unlessMarked?: UnlessMarked
   ): Promise<QueueState> {
     await this.tick();
     const state: QueueState = { announced: 0, claimable: 0, locked: 0 };
@@ -465,6 +476,7 @@ export class MemoryUploadRepo implements UploadRepo {
       if (f.runId !== runId) continue;
       if (f.status === 'announced') state.announced += 1;
       if (!statuses.includes(f.status)) continue;
+      if (isMarked(f, unlessMarked)) continue;
       const locked =
         f.lockedUntil !== null && f.lockedUntil.getTime() >= this.clockMs;
       if (locked) state.locked += 1;

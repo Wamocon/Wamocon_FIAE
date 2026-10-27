@@ -42,7 +42,7 @@ export class MemoryReviewRepo implements ReviewRepo {
     await Promise.resolve();
   }
 
-  currentProposal(fileId: string): ProposalRecord | null {
+  currentProposalOf(fileId: string): ProposalRecord | null {
     return this.proposals.find(p => p.fileId === fileId && p.isCurrent) ?? null;
   }
 
@@ -82,7 +82,7 @@ export class MemoryReviewRepo implements ReviewRepo {
           ...file,
           parseSummary: file.parseSummary ? { ...file.parseSummary } : null,
         },
-        proposal: this.currentProposal(file.id),
+        proposal: this.currentProposalOf(file.id),
         decision: this.currentDecision(file.id),
       }));
   }
@@ -119,6 +119,27 @@ export class MemoryReviewRepo implements ReviewRepo {
     if (!file || file.claimId !== claimId) return false;
     this.addProposal(fileId, write);
     return true;
+  }
+
+  async currentProposal(fileId: string): Promise<ProposalRecord | null> {
+    await this.tick();
+    return this.currentProposalOf(fileId);
+  }
+
+  async latestRuleProposal(fileId: string): Promise<ProposalRecord | null> {
+    await this.tick();
+    const rules = this.proposals.filter(
+      p => p.fileId === fileId && p.source !== 'ki'
+    );
+    return rules.length > 0 ? rules[rules.length - 1] : null;
+  }
+
+  /** Test helper: solution texts that "already stand in the database". */
+  existingSolutions: string[] = [];
+
+  async existingSolutionTexts(limit: number): Promise<string[]> {
+    await this.tick();
+    return this.existingSolutions.slice(0, Math.max(0, limit));
   }
 
   async catalogComponents(catalogId: string): Promise<CatalogComponentRow[]> {
@@ -168,7 +189,7 @@ export class MemoryReviewRepo implements ReviewRepo {
         skipped.push({ fileId: item.fileId, code: 'FILE_STATE' });
         return false;
       }
-      if ((this.currentProposal(file.id)?.id ?? null) !== item.proposalId) {
+      if ((this.currentProposalOf(file.id)?.id ?? null) !== item.proposalId) {
         skipped.push({ fileId: item.fileId, code: 'PROPOSAL_CHANGED' });
         return false;
       }

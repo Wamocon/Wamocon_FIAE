@@ -71,6 +71,7 @@ export function rowDto(
     derived: band ? { kind: 'pflicht', phase: 1 } : null,
     duplicate: null,
     copyOfId: null,
+    ki: null,
     ...rest,
   };
 }

@@ -1380,3 +1380,56 @@ Geprüft mit `ecc:security-reviewer` und `ecc:typescript-reviewer` (nur lesend).
 - **Freigabebedingungen vor Production** (Runbook, Abschnitt 8): PDF-Leser ohne Sandbox, Obergrenze gleichzeitiger Claims (erledigt in U8), unbenutzte signierte Upload-URL nach Löschen des Objekts, Docx-Metadaten der Originale, Sichtbarkeit der Originale vor der Aktivierung (Entscheidung von Niko offen, Empfehlung: erst nach der Aktivierung).
 - **Oberfläche für Probelauf, Übernahme und Rückbau**, Sammelannahme für das Band Mittel.
 - **Abdeckung:** die Module von U2 bis U7 und das Golden-Set-Werkzeug stehen nicht in der Schwelle von 100 Prozent (`jest.config.ts`).
+
+## 18. Stand U5 (Sokrates-Stufe)
+
+Stand: 28.10.2026. Paket U5 ist umgesetzt, ohne Migration und ohne Wirkung auf Production. **Es wurde kein echter Modellaufruf gemacht**, auch keine Verbindung zu Sokrates oder einem anderen Netzwerkziel. Alle Tests laufen gegen eine Attrappe auf localhost (Browserprüfung: https mit eigenem Zertifikat, der Name wird nur im Dev-Prozess auf 127.0.0.1 gelenkt, die Prüfungen der Anwendung bleiben unverändert). Der Code liegt unter `src/lib/content-upload/ki/`.
+
+### 18.1 Was gebaut ist
+
+| Teil | Inhalt |
+| ---- | ------ |
+| Konfiguration (`ki/config.ts`) | Aus der Umgebung, fail closed. Aus, solange `CONTENT_UPLOAD_KI_ENABLED` nicht genau `true` ist. Schlüssel nur aus `OPENAI_COMPATIBLE_API_KEY`, Adresse aus `OPENAI_COMPATIBLE_BASE_URL` (dieselbe Standardadresse wie der Chat, ein Test vergleicht sie mit `loadProviderConfig`). Nur https, Standardport, keine Zugangsdaten, kein Query, Host in der Positivliste (Standard nur der Host von Sokrates, ersetzbar durch `CONTENT_UPLOAD_KI_ALLOWED_HOSTS`) |
+| Client (`ki/client.ts`) | Nur Sokrates, kein Fallback. Prüft das Ziel vor jedem Aufruf noch einmal, `redirect: 'error'`, Zeitlimit auch über das Lesen der Antwort, Antwort höchstens 32 KB (Header und Strom), Anfrage höchstens 16000 Zeichen, Schlüssel nur im Header, keine Ausgabe an die Konsole. Temperatur 0, höchstens 300 Token, kein Streaming |
+| Prompt (`ki/prompt.ts`) | Systemtext, Positivliste (Titel nur aus der Datenbank, nie aus einem Ordnernamen des Uploads), Auszug zwischen Markierungen mit zufälliger Kennung. Kein Dateiname, kein Pfad. Zweite Stufe nur mit den Enablern einer Komponente |
+| Prüfung der Antwort (`ki/answer.ts`) | JSON (erstes `{` bis letztes `}`), Zod-Schema, feste Typen, Komponente und Enabler aus der Liste (sonst fällt die ganze Antwort durch), unbekannte Felder verworfen, Sicherheit höchstens 0,80, Begründung bereinigt und auf 200 Zeichen gekürzt |
+| Vorschlag (`ki/proposal.ts`) | Quelle `ki`, Band Wahrscheinlich nur bei vollständiger Zuordnung und Sicherheit ab 0,6, sonst Unklar, nie Sicher. Ein Widerspruch zu den Regeln ergibt einen Widerspruch mit den Werten und der Quelle der Regeln. Die Gründe der Regeln bleiben erhalten |
+| Letzte Prüfung (`ki/guard.ts`) | Auf der Nutzernachricht, wie sie hinausgeht: genaue Form, Länge, Lösungsmarken, Lösungstexte (auch über zwei Zeilen), Anweisungstext, übrig gebliebene personenbezogene Muster |
+| Lösungsliste (`ki/corpus.ts`, `excerpt.ts` `solutionTextsOf`) | Lösungstexte aller Word-Dateien des Laufs plus der Datenbank, Aufbau in Schritten mit Zeitbudget, kurz zwischengespeichert je Lauf. Eine nicht lesbare Datei oder eine Überschreitung der Grenzen macht die Liste unvollständig, dann wird nichts gesendet |
+| Bremsen (`ki/budget.ts`, `ki/repo*.ts`) | Aufrufe je Lauf, je Tag (alle Läufe, 24 Stunden), je Datei, Schutzschalter nach 5 Fehlern in Folge, Zahlen aus der Datenbank |
+| Schritte (`ki/steps.ts`) | Die Plätze `ki` (`unclear` nach `ki_pending`) und `kiCall` (`ki_pending` nach `proposed_ki` oder `unclear`). Bereit erst, wenn die Umgebung, der Lauf (Opt-in), alle gelesenen Dateien, die Bremsen und die Lösungsliste es erlauben |
+| Warteschlange (`staging/queue.ts`) | Neue Fähigkeiten der Schritte: `ready` (der Schritt nimmt nichts, solange die Bedingung nicht gilt, und seine Dateien zählen nicht als offene Arbeit), `unlessMarked` (eine Datei mit dem Vermerk `kiState` wird nicht wieder genommen), eigene Wartezeit bei einer Wiederholung. Der Lauf wird vor dem letzten Blick auf die Warteschlange geschlossen, damit die Stufe im selben Aufruf startet. Eine Bedingung, die einen Fehler wirft, gilt als nicht bereit |
+| Prüfliste | Quelle "KI-Vorschlag" mit Hinweistext, Zustand je Datei (nicht gesendet, nicht erreichbar, nicht verwertbar, Widerspruch, nicht eingeordnet), Hinweis in den Details. Ein Vorschlag der KI wird nie mit einem Klick übernommen. Das Opt-in-Feld ist jetzt wirksam und standardmäßig aus (Server und Formular) |
+
+### 18.2 Abweichungen vom Konzept und Entscheidungen
+
+- **Kein Auszug im Protokoll.** Das Konzept (3.2) speichert den gesendeten Auszug 30 Tage. Auftrag dieses Pakets: keine Inhalte. Die Spalte `excerpt` bleibt leer, Länge und Hash stehen im Protokoll. Das nimmt die Gegenmaßnahme "Auszug in der Prüfliste sichtbar" aus 6.4 weg. Ein Hash-Vergleich mit der Anfrage bei Open WebUI ist möglich (Runbook 11.4).
+- **Nur Band Unklar geht an die KI**, nicht Wahrscheinlich (Entscheidung U4, 15.2, bestätigt: ein Vorschlag der KI würde dort die Gründe der Regeln ersetzen, die eine Person verlangen).
+- **Dateien ohne erkennbare Struktur** werden nie gesendet, der Opt-in je Datei fehlt (nicht gebaut). Deshalb erreicht die Stufe vor allem Dateien mit erkannter Struktur und mehrdeutigem oder unbekanntem Code.
+- **Ein Vorschlag der KI wird nie mit einem Klick übernommen** (Gutachten). Der Editor beginnt ohne Vorgabe.
+- **Zwei Wiederholungsstufen:** die Stufe versucht eine Datei höchstens zweimal (neuer Schritt der Warteschlange, Wartezeit 10 Sekunden). Insgesamt sind höchstens 3 Aufrufe je Datei möglich (zwei Versuche der ersten Stufe, ein Aufruf der zweiten). Das Zeitlimit je Aufruf ist 15 statt 20 Sekunden, damit zwei Aufrufe in das Zeitlimit des Schritts passen.
+- **Ein abgelehnter Schlüssel (401, 403, 404) markiert keine Datei**, er zählt zum Schutzschalter. Die Datei wartet.
+- **Schutzschalter über die Umgebung ist ein Einschalter** (Standard aus), nicht ein Ausschalter. So sendet ein Deployment ohne die Variable nichts.
+- **Zustand `ki_pending`** darf von der Aufräumroutine der Warteschlange nach `failed` gesetzt werden (hängender Halter), Änderung in `staging/status.ts`.
+- `ki_enabled` hat in der Datenbank weiter den Standard `true` (Migration nicht erlaubt), die Anwendung schreibt den Wert immer ausdrücklich, und der Standard der Anwendung ist jetzt `false`.
+
+### 18.3 Prüfung
+
+- Einheitentests (`tests/unit/content-upload/ki`): Konfiguration (Schalter, Schlüssel, Adresse, Positivliste, falscher Host, http, Weiterleitung), Client gegen die Attrappe (Erfolg, Zeitüberschreitung auch bei halber Antwort, kaputte und zu große Antwort nach Header und Strom, Weiterleitung ohne Zugriff auf das zweite Ziel, fremder Host ohne einen Aufruf von `fetch`, Schlüssel nur im Header, keine Konsolenausgabe), Antwortprüfung (Injection, erfundene Codes, Zusatzfelder, Grenzen), Vorschlag (Widerspruch, Band, Gründe), Bremsen, Letzte Prüfung, Lösungsliste (Überlauf, Wiederholung, Zwischenspeicher), Bereitschaft (jede Bedingung einzeln) und die Schritte der Warteschlange ende zu Ende gegen die Attrappe (Kanarienstrings erscheinen in keiner Anfrage, kein Dateiname, kein Pfad, kein Schlüssel, Injection-Datei wird nicht gesendet, Schalter, Opt-in, Production, Tagesgrenze, Schutzschalter mit Wiederholung nach der Abkühlzeit, Protokoll ohne Text). Ein Test über die Quelltexte sichert: kein anderer Anbieter, `fetch` nur im Client, keine Umgebung und keine Konsole in den Entscheidungsmodulen.
+- Vertragstests: die Warteschlange mit Vermerken (Speicher und SQL), das Protokoll der KI (Speicher und SQL), `latestRuleProposal` und `existingSolutionTexts`.
+- Wegwerf-Postgres (Supabase-Image 17, Migrationen bis `20261030000100`): Vertragstests und ein Durchlauf der echten Schritte auf SQL mit der Attrappe (gleichzeitige Pumpen rufen eine Datei nur einmal auf, Zähler über alle Läufe, Vermerk und Protokoll).
+- Browserprüfung (playwright-core, Chrome, Dev-Server, Wegwerf-Postgres, Attrappe für Supabase und für Sokrates über https mit dem echten Konfigurationspfad der Anwendung): 40 Prüfungen, darunter Opt-in standardmäßig aus, Kennzeichnung, Zustände, Widerspruch, Protokoll ohne Text, nichts gesendet ohne Opt-in, die Anfragen bei der Attrappe (Bearer, Temperatur, kein Dateiname, keine Lösungsmarke, Positivliste mit Titeln), axe-core (WCAG 2.2 AA) hell und dunkel ohne Verstoß, 400 Pixel ohne waagerechtes Scrollen. Nicht gegen den echten Storage und nicht gegen Sokrates geprüft.
+
+### 18.4 Gutachten
+
+Geprüft mit `ecc:security-reviewer` (Pflicht: Daten an Dritte, SSRF) und `ecc:typescript-reviewer` (nur lesend). Kein kritischer Befund. Eingearbeitet: eine Bedingung der Schritte, die einen Fehler wirft, stoppt nicht mehr die ganze Pumpe (hoch), die Lösungsliste ist bei einer Überschreitung ihrer Grenzen unvollständig statt still gekappt, Datenbankabfrage mit einem Eintrag mehr als die Grenze, kleinere Grenzen (hoch und mittel), Vergleich mit dem Vorschlag der Regeln statt mit einem früheren Vorschlag der KI (mittel), ein Zeitbudget für die Lösungsliste je Aufruf der Pumpe und höchstens ein Versuch je Datei in einem Zeitfenster (mittel), Dateien ohne Objekt zählen nicht (mittel), ein abgelehnter Schlüssel markiert keine Datei und die Codes nennen die Art des Fehlers (mittel), ein Protokollfehler nach dem Aufruf verliert die Antwort nicht und ein Ziel, das der Client ablehnt, ist ein Zustand der Datei (mittel), Enabler-Codes, die mehreren Komponenten gehören (mittel), Vorschläge der KI nie mit einem Klick (mittel, Entscheidung), erneute Prüfung der Bremsen vor dem zweiten Aufruf, nur Codes bekannter Form im Prompt, Gründe der Regeln werden nicht gekappt, kein `aria-describedby` am Hinweis.
+
+### 18.5 Offen und Risiken
+
+- **Erster echter Aufruf** braucht das Go von Niko und die Antwort auf O13 (Open WebUI). Anleitung: Runbook 11.4.
+- **Namensprüfung statt Adressprüfung:** Die Positivliste prüft den Hostnamen, nicht die aufgelöste Adresse. Ein vom Betreiber gesetzter Name, der auf eine interne Adresse zeigt, wäre erlaubt. Das setzt Zugriff auf die Umgebung voraus.
+- **Aufbau der Lösungsliste** an einem Lauf mit allen Dateien ist nicht gemessen (die Liste liegt bis zu 10 Minuten im Arbeitsspeicher der Instanz, bis zu 40000 Texte).
+- **Opt-in je Datei** für unbekannte Struktur, **"KI erneut versuchen"** und die Anzeige des gesendeten Auszugs (Konzept 6.4) fehlen.
+- **Zähler der Obergrenzen** werden vor dem Aufruf geprüft, bei gleichzeitigen Aufrufen sind wenige mehr möglich. Ein Absturz zwischen Senden und Protokoll lässt eine Zeile fehlen.
+- **Standard `ki_enabled` in der Datenbank** ist weiter `true` (Migration nicht erlaubt). Heute schreibt jeder Pfad den Wert ausdrücklich.
+- Zusammenführen mit UP1 (Prüfliste und Planbau) und ST1: die Änderungen an `ReviewTable.tsx`, `review/build.ts` und `review/types.ts` sind klein und am Rand.

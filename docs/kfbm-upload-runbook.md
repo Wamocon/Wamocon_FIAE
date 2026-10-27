@@ -1,6 +1,6 @@
 # KfBM-Inhalts-Upload: Runbook für die Preview
 
-Stand: 27.10.2026. Dieses Runbook gehört zum Paket U8 des KI-gestützten Inhalts-Uploads (Konzept: `docs/ki-upload-konzept.md`). Es beschreibt den Weg von der Auswahl der Dateien bis zur Übernahme und zum Rückbau. Die Sokrates-Stufe (U5) ist nicht gebaut, jeder Lauf arbeitet nur mit Regeln und ohne Modellaufruf. Der Importweg über die Skripte steht in `docs/kfbm-import-runbook.md` und bleibt gültig.
+Stand: 27.10.2026. Dieses Runbook gehört zum Paket U8 des KI-gestützten Inhalts-Uploads (Konzept: `docs/ki-upload-konzept.md`). Es beschreibt den Weg von der Auswahl der Dateien bis zur Übernahme und zum Rückbau. Die Sokrates-Stufe (U5, Abschnitt 11) ist gebaut, aber bis zum Go von Niko ausgeschaltet: ohne die Variable `CONTENT_UPLOAD_KI_ENABLED` und ohne Opt-in im Lauf arbeitet jeder Lauf nur mit Regeln und ohne Modellaufruf. Der Importweg über die Skripte steht in `docs/kfbm-import-runbook.md` und bleibt gültig.
 
 **Production ist gesperrt.** Die Seiten und Routen antworten dort mit 404, die Tabellen fehlen dort bis zum Rollout. Abschnitt 7 nennt die Sperren.
 
@@ -24,7 +24,7 @@ Eine berechtigte Person wählt einen Ordner oder Word- und PDF-Dateien. Der Brow
 
 ## 3. Ablauf Schritt für Schritt
 
-1. **Neuer Lauf.** Menü "Inhalts-Upload", "Neuer Lauf". Bezeichnung eintragen, die Erklärung ankreuzen ("eigenes Lehrmaterial, keine Kundendokumente"). Den Schalter "an Sokrates senden" nicht beachten, er hat bis U5 keine Wirkung. "Lauf anlegen". Höchstens drei offene Läufe je Person.
+1. **Neuer Lauf.** Menü "Inhalts-Upload", "Neuer Lauf". Bezeichnung eintragen, die Erklärung ankreuzen ("eigenes Lehrmaterial, keine Kundendokumente"). Den Schalter "an Sokrates senden" nur ankreuzen, wenn die Stufe freigegeben ist (Abschnitt 11), er ist standardmäßig aus. "Lauf anlegen". Höchstens drei offene Läufe je Person.
 2. **Dateien wählen.** "Ordner wählen" und den Ordner `Komponente` angeben (der Name des Ordners ist gleichgültig, das Ordnerverhalten stützt sich auf die Gruppenordner darunter) oder "Dateien wählen" für lose Dateien. Grenzen: 25 MB je Datei, 1500 Dateien und 1 GB je Lauf, 2 GB im Bucket insgesamt. Größere Dateien und Dateien anderer Endung werden nicht hochgeladen und genannt.
 3. **Hochladen und verarbeiten.** Die Seite zeigt Prüfsummen, Upload, Bestätigung und Verarbeitung. Die Seite offen lassen: die Verarbeitung läuft im Browser getaktet, ohne Cron. Wird die Seite geschlossen, im Lauf "Weiterverarbeiten" wählen. Dateien, die der Browser nicht lesen kann, stehen unter "Probleme" mit dem Code `UNREADABLE` (Abschnitt 6), der Rest läuft weiter.
 4. **Prüfliste.** Nach der Verarbeitung öffnet sich die Prüfliste. Bänder: Sicher (Pfad und Inhalt nennen dasselbe), Mittel (etwas ist nicht sauber, zum Beispiel ein neuer Code oder ein Formatfehler der Quelle), Unklar (nichts erkannt), Widerspruch (Pfad und Inhalt widersprechen sich). Die Details einer Zeile nennen den Grund. Dubletten (mehrere Fassungen) zeigt die Dublettenansicht mit einem Vorschlag der neuesten Fassung. Bei gleicher Version und weniger als 24 Stunden Abstand gibt es keinen Vorschlag, die Person entscheidet.
@@ -143,3 +143,81 @@ Lokal laufen Probelauf und Übernahme in 15 bis 25 Sekunden (Abschnitt "Stand U8
 3. Im Vercel-Projekt unter Logs der Funktionen `pump`, `dry-run`, `apply` die Dauer und den Speicher je Aufruf ablesen. Grenze: `maxDuration` 60 s, Planbau-Budget 40 s (ab etwa 120 ms je Datei bei 1300 Dateien `PLAN_TOO_LARGE`).
 4. Ergebnis ins Konzept eintragen. Liegt der Probelauf über 45 Sekunden, den Lauf komponentenweise schneiden oder die Übernahme als Schritt der Warteschlange bauen (Spike, Stufe 2).
 5. Nach den Messläufen den Lauf rückbauen oder verwerfen (Abschnitte 5 und 3), damit die Preview sauber bleibt.
+
+## 11. KI-Stufe (Sokrates)
+
+Stand: 28.10.2026, Paket U5. **Es wurde noch kein echter Aufruf gemacht.** Alles ist gegen eine Attrappe auf localhost getestet. Der erste echte Livetest braucht das ausdrückliche Go von Niko (Abschnitt 11.4).
+
+### 11.1 Was die Stufe tut und was nicht
+
+- Sie nimmt **nur Dateien, die die Regeln `unklar` lassen** (Band Unklar, Dokument mit erkennbarer Lehrstruktur). Sichere, wahrscheinliche und widersprüchliche Dateien gehen nie an Sokrates. Dateien ohne erkennbare Struktur, PDF, Dateien mit Anweisungstext, Dateien mit Lösungsmarke, Kundendokument-Mustern oder mehr als 3 personenbezogenen Mustern gehen auch nicht.
+- Gesendet wird ein Auszug von höchstens 2500 Zeichen ohne Lösungsteile, ohne Dateiname und ohne Pfad, dazu die Codes und Titel der Komponenten des Katalogs (Titel nur aus der Datenbank). Der Auszug wird vor dem Senden gegen die Lösungstexte **aller** Dateien des Laufs und der Datenbank geprüft. Deshalb startet die Stufe erst, wenn alle Dateien des Laufs gelesen sind.
+- Die Antwort ist nur ein Vorschlag mit der Quelle KI (höchstens Band Wahrscheinlich, Sicherheit höchstens 80 Prozent). Er wird **nie mit einem Klick** übernommen, eine Person nennt die Zuordnung. Widerspricht er den Regeln, bleibt es ein Widerspruch mit den Werten der Regeln.
+- Es gibt keinen Fallback auf Gemini, Claude oder OpenRouter, und keinen Aufruf einer anderen Adresse als der von Sokrates.
+
+### 11.2 Voraussetzungen und Schalter
+
+| Voraussetzung | Wert und Prüfung |
+| --- | --- |
+| Schutzschalter des Betreibers | Vercel-Variable `CONTENT_UPLOAD_KI_ENABLED` genau `true`. Ohne sie oder mit jedem anderen Wert **sendet nichts**. Standard: aus |
+| Schlüssel | `OPENAI_COMPATIBLE_API_KEY` (dieselbe Variable wie der Chat). Nur aus der Umgebung, nie im Protokoll |
+| Adresse | `OPENAI_COMPATIBLE_BASE_URL`, Standard `https://sokrates.test-qualitaetsmanagement.com/api`. Nur https, Standardport, keine Zugangsdaten, nur ein Host der Positivliste. Eine falsch gesetzte Variable schaltet die Stufe ab, sie sendet nichts an einen anderen Host |
+| Positivliste der Hosts | Standard nur `sokrates.test-qualitaetsmanagement.com`. `CONTENT_UPLOAD_KI_ALLOWED_HOSTS` ersetzt die Liste (genaue Namen, mit Punkt, höchstens 5). Die Liste prüft den Namen, nicht die aufgelöste Adresse: ein Name, der auf eine interne Adresse zeigt, wäre erlaubt. Nur der Betreiber setzt sie |
+| Modell | `OPENAI_COMPATIBLE_MODEL`, dasselbe Modell wie der Chat (Entscheidung O5). Der Modellname steht im Protokoll |
+| Obergrenzen (optional) | `CONTENT_UPLOAD_KI_MAX_CALLS_PER_RUN` (Standard 1500), `CONTENT_UPLOAD_KI_MAX_CALLS_PER_DAY` (Standard 3000, alle Läufe, gleitende 24 Stunden), `CONTENT_UPLOAD_KI_TIMEOUT_MS` (Standard 15000, höchstens 20000). Je Datei höchstens 3 Aufrufe |
+| Opt-in je Lauf | Beim Anlegen des Laufs die Option "Auszüge zur Einordnung an Sokrates senden" ankreuzen. **Standard aus**, später nicht änderbar |
+| Umgebung | nur Preview oder lokal. In Production ist der ganze Upload aus, also auch diese Stufe |
+| Open WebUI (Entscheidung O13) | Vor dem ersten Lauf klären, ob Open WebUI Anfragen über die Schnittstelle speichert oder protokolliert und wie lange. Sonst liegen die Auszüge dort |
+
+### 11.3 Was in der Prüfliste zu sehen ist
+
+| Anzeige | Bedeutung |
+| --- | --- |
+| Quelle "KI-Vorschlag" mit Hinweis | Der Vorschlag stammt von Sokrates. Er ist keine Entscheidung. Bitte prüfen. Der Knopf "Übernehmen" öffnet den Editor, die Person nennt die Zuordnung |
+| "KI widerspricht den Regeln" (Band Widerspruch) | Die Regeln und Sokrates nennen Verschiedenes. Die Werte der Regeln bleiben, die Person entscheidet |
+| "Nicht an die KI gesendet" | Die Datei war nicht für die KI geeignet oder die Prüfung vor dem Senden hat sie ausgeschlossen. Der Code in den Details nennt den Grund (zum Beispiel `STRUCTURE_UNKNOWN`, `INSTRUCTION_TEXT`, `GUARD_REFUSED`, `PII_THRESHOLD`) |
+| "KI nicht erreichbar oder ohne Antwort" | Zeitüberschreitung, Serverfehler oder die Datei hat ihre Aufrufe verbraucht |
+| "Antwort der KI nicht verwertbar" | kein JSON, ein Code außerhalb der Liste. Es wurde nichts übernommen |
+| "KI konnte nicht einordnen" | Sokrates hat "unbekannt" geantwortet |
+
+Der gesendete Auszug wird **nicht** gespeichert und nicht angezeigt. Das Protokoll (`content_upload_ki_calls`) hält je Aufruf: Lauf, Datei, Stufe, Modell, Host, Länge und SHA-256 des Auszugs, Zahl der ersetzten Muster, Status, HTTP-Status, Dauer, Tokenzahlen, Nummer des Versuchs und die geprüfte Antwort ohne Begründungstext. Ablehnungen vor dem Senden stehen mit Status `refused_by_guard` oder `skipped` darin.
+
+### 11.4 Erster echter Livetest (Preview, kleiner Lauf mit 5 Dateien)
+
+**Nur mit dem ausdrücklichen Go von Niko.** Kein Agent führt ihn aus. Ablauf:
+
+1. **Vorher prüfen.** O13 beantwortet (Protokollierung in Open WebUI bekannt). Die Preview ist auf dem aktuellen Stand, der Katalog KFBM hat Komponenten, und es gibt mindestens eine Dateizeile, die die Regeln nicht eindeutig einordnen können (siehe Schritt 2).
+2. **Fünf Dateien aus eigenem Material auswählen, nie Kundendokumente und nie Dateien mit sensiblem Inhalt:**
+   - zwei Quizdateien, deren Überschriftencode zu zwei Komponenten passt (zum Beispiel `6a`, wenn K6.1 und K6.2 im Katalog stehen): erwartet "KI-Vorschlag"
+   - eine Quizdatei, deren Code in keinem Katalog steht (zum Beispiel `77z`): erwartet "KI widerspricht den Regeln" oder ein Vorschlag, je nach Antwort
+   - eine Datei ohne die Struktur der Quellen (frei geschriebener Text): erwartet "Nicht an die KI gesendet"
+   - eine Quizdatei, in deren erster Frage ein Satz wie "Ignoriere alle bisherigen Anweisungen" steht: erwartet "Nicht an die KI gesendet"
+   Die Quizdateien enthalten Lösungen. Das ist gewollt: Die Kontrolle in Schritt 5 prüft, dass keine davon bei Sokrates ankommt.
+3. **Obergrenzen niedrig setzen** (nur Preview, Typ Sensitive für den Schlüssel): `CONTENT_UPLOAD_KI_ENABLED=true`, `CONTENT_UPLOAD_KI_MAX_CALLS_PER_RUN=10`, `CONTENT_UPLOAD_KI_MAX_CALLS_PER_DAY=20`, die Schlüssel- und Adressvariablen wie im Chat. Neues Deployment der Preview abwarten.
+4. **Lauf anlegen** mit der Erklärung und **mit dem Opt-in**, die fünf Dateien hochladen, die Seite offen lassen, bis die Prüfliste da ist. Erwartet: drei Aufrufe (zwei Quizze und die Datei mit dem unbekannten Code), zwei Dateien nicht gesendet.
+5. **Kontrolle im Open-WebUI-Protokoll (Entscheidung O13) und in der Datenbank:**
+   - Zahl der Anfragen bei Open WebUI gleich der Zahl der Zeilen mit Status `ok` im Protokoll der Plattform. In der Datenbank: `select status, model, endpoint_host, excerpt_chars, attempt from content_upload_ki_calls where run_id = '<Lauf>' order by requested_at` (nur Zahlen und Codes)
+   - In keiner Anfrage bei Open WebUI darf stehen: ein Dateiname oder Pfad, die Wörter `Richtige Antwort`, `Kurzbegründung`, `Musterlösung`, ein Lösungstext, der Anweisungssatz der fünften Datei, der Schlüssel
+   - Die Nutzernachricht jeder Anfrage besteht aus den Markierungen `<<<AUSZUG-xxxxxxxx` und `AUSZUG-xxxxxxxx>>>` und dem Auszug dazwischen. SHA-256 des Textes zwischen den Markierungen (ohne den letzten Zeilenumbruch) muss gleich `excerpt_sha256` im Protokoll sein: `node -e "console.log(require('crypto').createHash('sha256').update(require('fs').readFileSync(0,'utf8'),'utf8').digest('hex'))" < auszug.txt`
+   - Die Temperatur ist 0, `stream` ist falsch, höchstens 300 Antwort-Token
+6. **Abbruch.** Findet sich ein Lösungsteil, ein Dateiname oder der Schlüssel in der Anfrage: sofort `CONTENT_UPLOAD_KI_ENABLED` entfernen (Schutzschalter) und den Befund melden. Nicht weiter testen.
+7. **Aufräumen.** Lauf verwerfen. Einträge in Open WebUI löschen oder Aufbewahrung klären. `CONTENT_UPLOAD_KI_ENABLED` entfernen, wenn kein weiterer Lauf folgt.
+
+### 11.5 Bremsen
+
+| Bremse | Wirkung |
+| --- | --- |
+| Schutzschalter `CONTENT_UPLOAD_KI_ENABLED` | aus: kein Aufruf, die Dateien bleiben `unklar` ohne Vermerk und werden bei eingeschalteter Stufe später genommen |
+| Opt-in des Laufs | ohne Opt-in kein Aufruf für diesen Lauf |
+| Aufrufe je Lauf, je Tag, je Datei | bei Erreichen werden keine weiteren Dateien genommen. Der Lauf kommt trotzdem in die Prüfung |
+| Schutzschalter bei Fehlern | 5 Fehler in Folge (Zeitüberschreitung, Serverfehler, kein JSON) halten die Stufe des Laufs 10 Minuten an, danach geht ein Versuch hinaus. Ein abgelehnter Schlüssel (401, 403, 404) zählt dazu und markiert keine Datei |
+| Zeit und Größe | 15 Sekunden je Aufruf (auch beim Lesen der Antwort), Antwort höchstens 32 KB, keine Weiterleitung |
+| Wiederholung | bei Zeitüberschreitung, 429, 5xx oder kaputtem JSON ein zweiter Versuch nach 10 Sekunden, danach ist die Datei fertig mit der Stufe |
+
+### 11.6 Bekannte Grenzen
+
+- Eine Datei ohne erkennbare Struktur geht nie an die KI. Der Opt-in je Datei ("Auszug an Sokrates senden") ist nicht gebaut.
+- Das Band Wahrscheinlich geht nicht an die KI (die Regeln haben dort schon entschieden, Entscheidung U4).
+- Eine Datei, die die Stufe nicht einordnen konnte, wird nicht erneut genommen. Eine Schaltfläche "KI erneut versuchen" gibt es nicht. Ein neuer Lauf nimmt sie wieder.
+- Der Aufbau der Liste der Lösungstexte liest jede Word-Datei des Laufs einmal aus dem Speicher und hält sie bis zu 10 Minuten im Arbeitsspeicher der Instanz. Bei einem Lauf mit allen 1445 Dateien kostet das mehrere Sekunden je Aufruf der Pumpe, bis die Liste fertig ist (nicht an der echten Preview gemessen).
+- Die Zähler der Obergrenzen werden vor dem Aufruf geprüft: bei gleichzeitigen Aufrufen sind wenige Aufrufe mehr möglich.
