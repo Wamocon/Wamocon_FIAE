@@ -169,8 +169,7 @@ describe('withReservedConnection', () => {
       await outcome;
       // the pool hands the connection over after the caller gave up: it goes back
       grant(reserved);
-      await Promise.resolve();
-      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(0);
       expect(reserved.released).toEqual([false]);
     });
 
@@ -322,6 +321,41 @@ describe('fromPostgresJs', () => {
     const result = await connection.query('commit');
     expect(reservedCalls).toEqual([{ text: 'commit', values: [] }]);
     expect(result.rowCount).toBeNull();
+  });
+
+  it('sends a final rollback before the release after a failed run and still releases when it fails', async () => {
+    const { sql, reservedCalls, released } = fakeSql(true);
+    await expect(
+      withReservedConnection(fromPostgresJs(sql), async () => {
+        throw new Error('failed');
+      })
+    ).rejects.toThrow('failed');
+    expect(reservedCalls).toEqual([{ text: 'rollback', values: [] }]);
+    expect(released).toEqual([1]);
+
+    const releasedBroken: number[] = [];
+    const brokenSql = {
+      async reserve() {
+        return {
+          unsafe: () => Promise.reject(new Error('connection gone')),
+          release: () => {
+            releasedBroken.push(1);
+          },
+        };
+      },
+    };
+    await expect(
+      withReservedConnection(fromPostgresJs(brokenSql), async () => {
+        throw new Error('failed again');
+      })
+    ).rejects.toThrow('failed again');
+    expect(releasedBroken).toEqual([1]);
+  });
+
+  it('does not send a rollback after a successful run', async () => {
+    const { sql, reservedCalls } = fakeSql(true);
+    await withReservedConnection(fromPostgresJs(sql), async () => 1);
+    expect(reservedCalls).toEqual([]);
   });
 
   it('works through withReservedConnection and releases exactly once', async () => {

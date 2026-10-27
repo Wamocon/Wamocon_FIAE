@@ -16,6 +16,10 @@
 -- switch below on purpose: remove the two dashes in front of the line "set local
 -- content_upload.rollback_allow_data". Without it only empty tables are dropped.
 --
+-- Dropping the tables briefly takes an exclusive lock on profiles and training_catalogs
+-- (their foreign key triggers go away). The lock timeout below bounds the wait, still run
+-- it outside peak time.
+--
 -- Run it in the Supabase SQL editor as the project owner (role postgres), in one go.
 -- First as a try: replace the last statement "commit;" by "rollback;", run it, read
 -- the notices, then run it again with "commit;". It can be run twice (drop table if

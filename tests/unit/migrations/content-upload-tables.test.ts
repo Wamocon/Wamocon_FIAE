@@ -6,6 +6,10 @@ import * as path from 'path';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import {
+  CONTENT_UPLOAD_APPLIED_TABLES,
+  CONTENT_UPLOAD_DOC_TYPES,
+  CONTENT_UPLOAD_FILE_STATUSES,
+  CONTENT_UPLOAD_RUN_STATUSES,
   contentUploadApplies,
   contentUploadAppliedRows,
   contentUploadDecisions,
@@ -853,6 +857,30 @@ describe('content upload migration: indexes', () => {
       false,
       null,
     ],
+    content_upload_runs_catalog_idx: [
+      'content_upload_runs',
+      'training_catalog_id',
+      false,
+      null,
+    ],
+    content_upload_decisions_decided_by_idx: [
+      'content_upload_decisions',
+      'decided_by_id',
+      false,
+      null,
+    ],
+    content_upload_applies_started_by_idx: [
+      'content_upload_applies',
+      'started_by_id',
+      false,
+      null,
+    ],
+    content_upload_applied_rows_file_idx: [
+      'content_upload_applied_rows',
+      'file_id',
+      false,
+      null,
+    ],
     content_upload_files_queue_idx: [
       'content_upload_files',
       'run_id, status, locked_until',
@@ -959,6 +987,25 @@ describe('content upload migration: indexes', () => {
     expect(statements).not.toMatch(
       /create\s+(unique\s+)?index\s+(?!if not exists)/i
     );
+  });
+
+  it('covers every foreign key column with an index that starts with it (deletes and cascades do not scan)', () => {
+    const uncovered: string[] = [];
+    for (const table of tableNames) {
+      for (const [, fk] of Object.entries(EXPECTED_FOREIGN_KEYS[table] ?? {})) {
+        const column = fk[0];
+        const viaIndex = Object.values(indexes).some(
+          i => i.table === table && i.columns.split(',')[0].trim() === column
+        );
+        const viaUnique = Object.values(parsed[table].constraints).some(
+          c =>
+            c.kind === 'unique' &&
+            new RegExp(`^unique \\(${column}\\b`).test(c.text)
+        );
+        if (!viaIndex && !viaUnique) uncovered.push(`${table}.${column}`);
+      }
+    }
+    expect(uncovered).toEqual([]);
   });
 
   it('allows one current proposal and one current decision per file and one running apply per run', () => {
@@ -1175,6 +1222,15 @@ describe('Drizzle schema of the content upload tables', () => {
       }
     }
   );
+
+  it('keeps the value lists of the Drizzle schema equal to the apply step and to the migration', () => {
+    expect([...CONTENT_UPLOAD_APPLIED_TABLES].sort()).toEqual(
+      Object.keys(TABLES).sort()
+    );
+    expect([...CONTENT_UPLOAD_RUN_STATUSES]).toEqual(RUN_STATUSES);
+    expect([...CONTENT_UPLOAD_FILE_STATUSES]).toEqual(FILE_STATUSES);
+    expect([...CONTENT_UPLOAD_DOC_TYPES]).toEqual(DOC_TYPES);
+  });
 
   it('keeps the primary key of every table on the id column', () => {
     for (const table of tableNames) {

@@ -18,7 +18,9 @@
 //
 // Rules the adapter keeps:
 //   - one reservation per run, released in every case (success, error, timeout),
-//   - the connection is destroyed instead of reused after an error (pg: release(true)),
+//   - after an error the connection is destroyed (pg: release(true)) or, where the
+//     driver cannot do that (postgres-js), closed with a final rollback before it
+//     goes back to the pool,
 //   - a query after the release is refused: a released connection already belongs
 //     to someone else (with a pooler it may be a different backend altogether),
 //   - waiting for a free connection is bounded (reserveTimeoutMs), a connection that
@@ -172,7 +174,17 @@ export function fromPostgresJs(sql: PostgresJsLike): ConnectionSource {
           const result = await reserved.unsafe(text, values ?? []);
           return { rows: Array.from(result), rowCount: result.count ?? null };
         },
-        async release() {
+        async release(failed) {
+          // postgres-js cannot destroy a reserved connection: release() only hands
+          // it back to the pool. After a failed run make sure it does not go back
+          // inside an open transaction (the rollback of the engine may have failed).
+          if (failed === true) {
+            try {
+              await reserved.unsafe('rollback', []);
+            } catch {
+              // the connection may be gone, the server rolls back on its own
+            }
+          }
           await reserved.release();
         },
       };

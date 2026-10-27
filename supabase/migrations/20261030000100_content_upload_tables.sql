@@ -45,6 +45,10 @@
 -- the migration role, so nothing is granted here. The browser never talks to these
 -- tables, not even through realtime.
 --
+-- Not enforced by the database: that a decision, a call or a file named by a child row
+-- belongs to the same run as that row (the application checks it), the 30 day wipe of
+-- ki_calls.excerpt and the cleanup of expired files (the cleanup job of package U2).
+--
 -- Process data, not content: the tables are not part of supabase/content-tables.json
 -- and are never copied between public_preview and public by the release.
 --
@@ -111,6 +115,8 @@ create index if not exists content_upload_runs_status_idx
   on public.content_upload_runs (status);
 create index if not exists content_upload_runs_created_by_idx
   on public.content_upload_runs (created_by_id, created_at desc);
+create index if not exists content_upload_runs_catalog_idx
+  on public.content_upload_runs (training_catalog_id);
 
 -- 2. Files (and the queue) ---------------------------------------------------------
 
@@ -298,6 +304,8 @@ create index if not exists content_upload_decisions_file_idx
 create index if not exists content_upload_decisions_proposal_idx
   on public.content_upload_decisions (proposal_id)
   where proposal_id is not null;
+create index if not exists content_upload_decisions_decided_by_idx
+  on public.content_upload_decisions (decided_by_id);
 
 -- 5. Log of the transmissions to Sokrates ------------------------------------------
 -- The excerpt is the exact text that was sent (at most 2500 characters by the rules
@@ -413,6 +421,8 @@ create index if not exists content_upload_applies_run_idx
 create unique index if not exists content_upload_applies_running_uidx
   on public.content_upload_applies (run_id)
   where status = 'running';
+create index if not exists content_upload_applies_started_by_idx
+  on public.content_upload_applies (started_by_id);
 
 -- 7. Rows written by an apply (basis of the rollback SQL) --------------------------
 -- row_id has no foreign key: it points at a row of one of the content tables. The
@@ -451,6 +461,9 @@ create table if not exists public.content_upload_applied_rows (
 -- Which later apply touched the same row (the rollback may only run in reverse order)
 create index if not exists content_upload_applied_rows_table_row_idx
   on public.content_upload_applied_rows (table_name, row_id);
+-- every file deleted with its run does an "on delete set null" lookup here
+create index if not exists content_upload_applied_rows_file_idx
+  on public.content_upload_applied_rows (file_id);
 
 -- 8. Closed for the API roles --------------------------------------------------------
 
@@ -535,7 +548,7 @@ comment on table public.content_upload_proposals is
 comment on table public.content_upload_decisions is
   'Decisions of the reviewers per file. History, one current row per file. Server only.';
 comment on table public.content_upload_ki_calls is
-  'Log of each transmission of an excerpt to Sokrates. No key, no header, no file name, no file content. Server only.';
+  'Log of each transmission of an excerpt to Sokrates. No column for a key, a header or a file name; the excerpt holds document text (personal data possible) and is wiped after 30 days by the application. Server only.';
 comment on table public.content_upload_applies is
   'Log of each dry run and apply of a run. Server only.';
 comment on table public.content_upload_applied_rows is

@@ -2284,6 +2284,9 @@ export const contentUploadRuns = pgTable(
       table.createdById,
       table.createdAt.desc()
     ),
+    catalogIdx: index('content_upload_runs_catalog_idx').on(
+      table.trainingCatalogId
+    ),
   })
 );
 
@@ -2567,6 +2570,9 @@ export const contentUploadDecisions = pgTable(
     proposalIdx: index('content_upload_decisions_proposal_idx')
       .on(table.proposalId)
       .where(sql`${table.proposalId} is not null`),
+    decidedByIdx: index('content_upload_decisions_decided_by_idx').on(
+      table.decidedById
+    ),
   })
 );
 
@@ -2741,6 +2747,9 @@ export const contentUploadApplies = pgTable(
     runningUidx: uniqueIndex('content_upload_applies_running_uidx')
       .on(table.runId)
       .where(sql`${table.status} = 'running'`),
+    startedByIdx: index('content_upload_applies_started_by_idx').on(
+      table.startedById
+    ),
   })
 );
 
@@ -2791,6 +2800,7 @@ export const contentUploadAppliedRows = pgTable(
       table.tableName,
       table.rowId
     ),
+    fileIdx: index('content_upload_applied_rows_file_idx').on(table.fileId),
   })
 );
 
