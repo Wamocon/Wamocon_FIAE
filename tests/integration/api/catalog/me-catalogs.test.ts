@@ -118,6 +118,7 @@ describe('GET /api/me/catalogs', () => {
           code: 'FIAE',
           title: 'Fachinformatiker/in Anwendungsentwicklung',
           branding: DEFAULT_BRANDING,
+          isActive: true,
           phaseMonths: FIAE_PHASE_MONTHS,
         },
       ],
@@ -222,6 +223,24 @@ describe('GET /api/me/catalogs', () => {
     expect(body.catalogs.map((c: any) => c.code)).toEqual(['FIAE', 'KFBM']);
   });
 
+  it('marks an inactive occupation for the super admin and lets them choose it', async () => {
+    const { GET } = await load(
+      { trainingCatalogs: [...catalogs, inactive], organizationCatalogs: [] },
+      superAdmin()
+    );
+    const body = await (await GET(req())).json();
+    expect(body.catalogs.map((c: any) => [c.code, c.isActive])).toEqual([
+      ['FIAE', true],
+      ['KFBM', true],
+      ['ZZZ', false],
+    ]);
+    const chosen = await GET(
+      req('http://localhost/api/me/catalogs?catalog=ZZZ')
+    );
+    expect(chosen.status).toBe(200);
+    expect((await chosen.json()).activeCode).toBe('ZZZ');
+  });
+
   it('gives out only code and title, never an id, and is not cached', async () => {
     const { GET } = await load({ organizationCatalogs: both }, trainer());
     const res = await GET(req());
@@ -240,6 +259,7 @@ describe('GET /api/me/catalogs', () => {
           code: 'FIAE',
           title: 'Fachinformatiker/in Anwendungsentwicklung',
           branding: DEFAULT_BRANDING,
+          isActive: true,
           phaseMonths: FIAE_PHASE_MONTHS,
         },
         {
@@ -250,6 +270,7 @@ describe('GET /api/me/catalogs', () => {
             shortName: 'KfBM',
             accent: '#0f766e',
           },
+          isActive: true,
           phaseMonths: KFBM_PHASE_MONTHS,
         },
       ]);

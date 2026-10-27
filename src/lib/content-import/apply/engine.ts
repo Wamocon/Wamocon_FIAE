@@ -9,7 +9,9 @@
 //    code, course + enabler code, catalog + quiz code, ...). A row that exists
 //    is left as it is, a second run writes nothing
 //  - nothing is deleted, nothing is overwritten. With updateExisting the named
-//    columns of tables.ts are updated, nothing else
+//    columns of tables.ts are updated, nothing else. One exception: total_weeks
+//    of an existing component that still holds 0 is set without the switch
+//    (tables.ts fillWhenEmpty), never total_hours and never to 0
 //  - a structural conflict (a key exists with another meaning, a quiz exists
 //    with another number of questions) stops a writing run before the first
 //    write (a comparison without write only reports it)
@@ -99,9 +101,28 @@ const DIFFICULTY: Record<QuizLevel, string> = {
 
 const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
 
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+/** A number column that is still empty: null, a missing value or 0. */
+const isEmptyNumber = (value: unknown) =>
+  value === null || value === undefined || Number(value) === 0;
+
 /** Updatable columns of the table in which the existing row differs from the desired one. */
 function diffColumns(table: TableName, existing: Row, desired: Row): string[] {
+  const fillable = TABLES[table].fillWhenEmpty ?? [];
   return TABLES[table].updatable.filter(column => {
+    if (fillable.includes(column)) {
+      // A number the plan does not know (0 or none) is no value: it never
+      // replaces a number, so a placeholder cannot erase a real value.
+      const wanted = desired[column];
+      return (
+        column in desired &&
+        isNumber(wanted) &&
+        wanted > 0 &&
+        Number(existing[column]) !== wanted
+      );
+    }
     if (!(column in desired) || same(existing[column], desired[column])) {
       return false;
     }
@@ -426,18 +447,31 @@ export async function executePlan(
       observe({ table, key, status: 'unchanged' });
       return;
     }
-    differences.push({ table, key, columns });
+    // Columns that are written without --update-existing: the ones that are
+    // still empty in the existing row (total_weeks of a component that holds 0).
+    const filled = columns.filter(
+      c =>
+        (TABLES[table].fillWhenEmpty ?? []).includes(c) &&
+        isEmptyNumber(existing[c])
+    );
+    differences.push({
+      table,
+      key,
+      columns,
+      ...(filled.length > 0 ? { filled } : {}),
+    });
     observe({ table, key, status: 'differs' });
-    if (
-      options.updateExisting &&
-      (options.updateFilter?.(table, key) ?? true)
-    ) {
+    // A person may allow the update for some rows only (the upload: per file)
+    const allowed =
+      options.updateExisting && (options.updateFilter?.(table, key) ?? true);
+    const written = allowed ? columns : filled;
+    if (written.length > 0) {
       counts[table].update += 1;
       updates.push({
         table,
         key,
         id: String(existing.id),
-        patch: Object.fromEntries(columns.map(c => [c, desired[c] ?? null])),
+        patch: Object.fromEntries(written.map(c => [c, desired[c] ?? null])),
       });
     } else {
       counts[table].unchanged += 1;
@@ -456,6 +490,7 @@ export async function executePlan(
     noteExisting('training_components', c.code, existing, {
       title: c.title,
       description: c.reference,
+      total_weeks: c.totalWeeks,
       phase: c.phase,
       kind: c.kind,
       order_index: c.orderIndex,

@@ -391,11 +391,14 @@ export function renderRunReport(report, info) {
     out.push(
       info.updateExisting
         ? 'Mit --update-existing aktualisiert (nur die genannten Spalten).'
-        : 'Nicht geändert (dafür gibt es --update-existing).'
+        : 'Nicht geändert (dafür gibt es --update-existing), außer einer Spalte, die noch leer ist (total_weeks einer Komponente mit Wert 0, die der echte Lauf auch ohne --update-existing setzt).'
     );
     out.push('');
     for (const d of report.differences.slice(0, 200)) {
-      out.push(`- ${d.table} ${d.key}: ${d.columns.join(', ')}`);
+      const filled = d.filled?.length
+        ? ` (leer, wird gesetzt: ${d.filled.join(', ')})`
+        : '';
+      out.push(`- ${d.table} ${d.key}: ${d.columns.join(', ')}${filled}`);
     }
     if (report.differences.length > 200) {
       out.push(`- und ${report.differences.length - 200} weitere`);

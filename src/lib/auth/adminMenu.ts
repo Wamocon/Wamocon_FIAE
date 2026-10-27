@@ -20,13 +20,14 @@
 
 import {
   ROLE,
+  isAdmin,
   isSuperAdmin,
   normalizeRole,
   type RoleSubject,
 } from '@/lib/auth/roles';
 
 export type AdminMenuItem = {
-  id: 'adminOrgs' | 'adminUsers' | 'contentUpload';
+  id: 'adminOrgs' | 'adminUsers' | 'contentUpload' | 'contentStats';
   href: string;
   /** Key of the label in the locale files. */
   labelKey: string;
@@ -62,6 +63,27 @@ export function contentUploadMenuItems(
       id: 'contentUpload',
       href: CONTENT_UPLOAD_HREF,
       labelKey: 'contentUpload.title',
+    },
+  ];
+}
+
+const CONTENT_STATS_HREF = '/trainer/admin/content-stats';
+
+/**
+ * The entry of the content statistics: every admin level (SUPER_ADMIN, ADMIN,
+ * TEMP_ADMIN). The route sends the platform admin every catalog with targets
+ * and an organization admin only the actual numbers of the catalogs of the own
+ * organization. Like the rest of the menu this is not the protection.
+ */
+export function contentStatsMenuItems(
+  subject: RoleSubject | null | undefined
+): AdminMenuItem[] {
+  if (!isAdmin(subject)) return [];
+  return [
+    {
+      id: 'contentStats',
+      href: CONTENT_STATS_HREF,
+      labelKey: 'contentStats.menu',
     },
   ];
 }
