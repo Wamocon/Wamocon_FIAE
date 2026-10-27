@@ -2190,5 +2190,19 @@
   "curriculum.superAdminOnly": "Curriculum content can only be changed by super admins.",
   "hai.admin.pinLocked": "Too many attempts. Please try again in {minutes} min.",
   "hai.admin.pinUnavailable": "The PIN check is not available right now. Please try again later.",
-  "trainerQuizPages.loadError": "The content could not be loaded. Please try again later."
+  "trainerQuizPages.loadError": "The content could not be loaded. Please try again later.",
+  "traineeQuiz.loading": "Loading quiz...",
+  "traineeQuiz.notFound": "This quiz is not available.",
+  "traineeQuiz.loadError": "The quiz could not be loaded. Please try again later.",
+  "traineeQuiz.noQuestions": "This quiz has no questions yet.",
+  "traineeQuiz.textPlaceholder": "Your answer",
+  "traineeQuiz.submitting": "Submitting...",
+  "traineeQuiz.submitError": "The submission failed. Please try again.",
+  "traineeQuiz.resultSummary": "{correct} of {total} questions correct",
+  "traineeQuiz.correct": "Correct",
+  "traineeQuiz.incorrect": "Incorrect",
+  "traineeQuiz.yourAnswer": "Your answer",
+  "traineeQuiz.correctAnswer": "Correct answer",
+  "traineeQuiz.explanation": "Explanation",
+  "traineeQuiz.tryAgain": "Try again"
 }

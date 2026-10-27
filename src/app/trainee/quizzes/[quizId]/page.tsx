@@ -1,52 +1,42 @@
-import Quiz from '@/components/learning/Quiz';
-import db from '@/db';
-import { eq, inArray } from 'drizzle-orm';
-import { options, questions, quizzes } from '@/db/migrations/schemas/schema';
+'use client';
 
-export default async function QuizPage({ params }: { params: Promise<{ quizId: string }> }) {
-  const { quizId } = await params;
+import { useParams } from 'next/navigation';
+import Quiz, { type QuizView } from '@/components/learning/Quiz';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useApiQuery } from '@/lib/hooks/useApiQuery';
 
-  // Load quiz with questions/options from new schema
-  const [qz] = await db.select().from(quizzes).where(eq(quizzes.id, quizId as any)).limit(1);
-  if (!qz) {
-    return (
-      <div className="bg-background flex min-h-full items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground">Quiz nicht gefunden...</p>
-        </div>
-      </div>
+// The global quiz of a trainee. The page reads no database: the questions come
+// from GET /api/trainee/quizzes/[quizId], which checks the session, the
+// assignment and the occupation of the trainee and sends texts only. The
+// quiz component hands the answers to POST .../submit and shows the result of
+// that route.
+export default function QuizPage() {
+  const { t } = useLanguage();
+  const params = useParams();
+  const quizId = params?.quizId as string | undefined;
+
+  const { data, isLoading, error } = useApiQuery<{ quiz?: QuizView | null }>(
+    quizId ? `/api/trainee/quizzes/${encodeURIComponent(quizId)}` : null
+  );
+
+  const note = (text: string) => (
+    <div className="bg-background flex min-h-full items-center justify-center p-6">
+      <p className="text-muted-foreground text-center">{text}</p>
+    </div>
+  );
+
+  if (isLoading) return note(t('traineeQuiz.loading'));
+  if (error) {
+    // The route answers 404 for a quiz that is not assigned, not active or
+    // of another occupation: the same text for all of them
+    return note(
+      /^API 404/.test(error.message)
+        ? t('traineeQuiz.notFound')
+        : t('traineeQuiz.loadError')
     );
   }
+  if (!data?.quiz) return note(t('traineeQuiz.notFound'));
 
-  const qRows = await db.select().from(questions).where(eq(questions.quizId, quizId as any));
-  const qIds = qRows.map((q) => q.id);
-  const optRows = qIds.length
-    ? await db.select().from(options).where(inArray(options.questionId, qIds as any))
-    : [];
-
-  const outQuestions = qRows
-    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
-    .map((qr) => {
-      const opts = optRows
-        .filter((o) => String(o.questionId) === String(qr.id))
-        .filter((o) => String(o.questionId) === String(qr.id));
-      return {
-        id: qr.id,
-        question: qr.questionText,
-        options: opts.map((o) => o.optionText),
-        order_index: qr.orderIndex ?? 0,
-        correctIndex: -1, // Scoring handled server-side; not exposed to client
-      };
-    });
-
-  const quiz = {
-    id: qz.id,
-    title: qz.title,
-    description: qz.quizType === 'GLOBAL' ? 'Global Quiz' : 'Enabler Quiz',
-    totalQuestions: outQuestions.length,
-    timeLimitMinutes: 30,
-    questions: outQuestions,
-  };
-
-  return <Quiz quiz={quiz} />;
+  // A new key per quiz, so a quiz never starts with the answers of another
+  return <Quiz key={data.quiz.id} quiz={data.quiz} />;
 }
