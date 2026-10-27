@@ -6,6 +6,7 @@ import {
   FIAE,
   ORG,
   OTHER_ORG,
+  TRAINER,
   loadScoped,
   scopeReq,
   superAdminSession,
@@ -138,7 +139,7 @@ describe.each(targets)('$name', target => {
     const body = {
       title: 'Skript',
       fileName: 'skript.pdf',
-      storageUrl: 'https://example.test/skript.pdf',
+      storageUrl: `${TRAINER}/1700000000000_skript.pdf`,
     };
     const inserts = (mock: any) => mock.writes('insert', 'content_documents');
     const platformAdmin = () => ({
