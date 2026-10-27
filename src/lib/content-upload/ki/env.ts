@@ -7,6 +7,7 @@
 // holds no network code: the client is made from the checked configuration.
 
 import { readDocx } from '../read-docx';
+import { quizJsonSolutionTexts, readQuizJson } from '../read-json';
 import { solutionTextsOf } from '../excerpt';
 import { positiveListFromPaths } from '@/lib/content-upload/classify/positive-list';
 import { createKiClient } from '@/lib/content-upload/ki/client';
@@ -26,7 +27,7 @@ import {
   optionsOf,
   type ReviewDeps,
 } from '@/lib/content-upload/review/service';
-import { LIMITS } from '@/lib/content-upload/staging/config';
+import { maxFileBytesFor } from '@/lib/content-upload/staging/config';
 import type { FileRow } from '@/lib/content-upload/staging/types';
 
 const COMPONENT_CODE = /^K\d{1,2}(?:\.\d)?$/;
@@ -104,7 +105,12 @@ export function createKiStepEnv(options: KiEnvOptions): KiStepEnv {
         );
         const merged = optionsOf(
           database,
-          positiveListFromPaths(files.map(f => f.relPath))
+          // only the paths of Word and PDF files describe the folder tree
+          positiveListFromPaths(
+            files
+              .filter(f => f.ext === 'docx' || f.ext === 'pdf')
+              .map(f => f.relPath)
+          )
         );
         // A title only for what the database knows: a title of the plan comes from
         // a folder name of the upload, which must never reach the model
@@ -133,12 +139,16 @@ export function createKiStepEnv(options: KiEnvOptions): KiStepEnv {
       corpus ??= corpusFor(runId, {
         listFiles: () => allFiles(deps, runId),
         loadBytes: file =>
-          deps.storage().download(file.storagePath, LIMITS.maxFileBytes),
+          deps.storage().download(file.storagePath, maxFileBytesFor(file.ext)),
         readParagraphs: async bytes => {
           const read = await readDocx(bytes);
           return read.status === 'ok' ? read.paragraphs : null;
         },
         solutionsOf: solutionTextsOf,
+        jsonSolutions: bytes => {
+          const read = readQuizJson(bytes);
+          return read.status === 'ok' ? quizJsonSolutionTexts(read.read) : null;
+        },
         existing: limit => deps.review.existingSolutionTexts(limit),
         clock,
       }).catch(error => {

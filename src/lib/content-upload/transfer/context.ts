@@ -10,7 +10,7 @@ import {
   fromPostgresJs,
   type PostgresJsLike,
 } from '@/lib/content-upload/connection';
-import { LIMITS } from '@/lib/content-upload/staging/config';
+import { maxFileBytesFor } from '@/lib/content-upload/staging/config';
 import { getUploadStorage } from '@/lib/content-upload/staging/context';
 import { createContentBucket } from '@/lib/content-upload/transfer/content-bucket';
 import type { TransferDeps } from '@/lib/content-upload/transfer/run';
@@ -38,7 +38,7 @@ export function transferDeps(): TransferDeps {
     store: new PgTransferStore(queryableOfPool(client)),
     connections: fromPostgresJs(client),
     readBytes: file =>
-      getUploadStorage().download(file.storagePath, LIMITS.maxFileBytes),
+      getUploadStorage().download(file.storagePath, maxFileBytesFor(file.ext)),
     host: connectionHost(process.env.DB_CONNECTION_STRING ?? ''),
     contentBucket: () => createContentBucket(),
   };

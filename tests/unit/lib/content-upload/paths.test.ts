@@ -96,7 +96,11 @@ describe('cleanRelativePath: the cleaned relative path (concept 4.4)', () => {
   it('rejects everything but docx and pdf, with the reason', () => {
     expect(code('a.doc')).toBe('UNSUPPORTED_EXTENSION');
     expect(code('a.docm')).toBe('UNSUPPORTED_EXTENSION');
-    expect(code('a.xlsx')).toBe('UNSUPPORTED_EXTENSION');
+    expect(code('a.xls')).toBe('UNSUPPORTED_EXTENSION');
+    expect(code('a.csv')).toBe('UNSUPPORTED_EXTENSION');
+    expect(code('a.xlsm')).toBe('UNSUPPORTED_EXTENSION');
+    expect(code('a.jsonl')).toBe('UNSUPPORTED_EXTENSION');
+    expect(code('a.json.exe')).toBe('UNSUPPORTED_EXTENSION');
     expect(code('a.docx.exe')).toBe('UNSUPPORTED_EXTENSION');
     expect(code('docx')).toBe('UNSUPPORTED_EXTENSION');
     expect(code('a.pdf.')).toBe('UNSUPPORTED_EXTENSION');

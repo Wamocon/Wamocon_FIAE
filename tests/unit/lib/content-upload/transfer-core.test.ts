@@ -208,7 +208,7 @@ describe('the canonical plan and its hash', () => {
     );
     expect(text).toContain(TRANSFER_ENGINE_VERSION);
     expect(text).toContain(
-      '"fixed":{"activate":false,"extendQuizzes":true,"scenarioSolutions":false,"useCaseSolutions":false}'
+      '"fixed":{"activate":false,"extendQuizzes":true,"learningUpdateExisting":false,"scenarioSolutions":false,"useCaseSolutions":false}'
     );
     expect(text).not.toContain('2026-10-27T08:00:00');
     expect(sha256Hex('abc')).toBe(

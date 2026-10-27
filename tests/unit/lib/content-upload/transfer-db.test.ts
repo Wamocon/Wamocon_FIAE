@@ -34,15 +34,21 @@ import {
 } from '../../../helpers/transferDb';
 import { MemoryBucket } from '../../../helpers/memoryTransfer';
 import {
+  K4_DIR,
   docx,
   enablerFiles,
   fixtureFile,
+  jsonQuizFile,
+  xlsxMappingFile,
   type FixtureFile,
 } from '../../../helpers/transferFixtures';
+import { jsonQuiz, lessonFile } from '../../content-import/quiz-json/fixtures';
+import { HEADER, block, row } from '../../content-import/learning-fields/fixtures';
+import { makeXlsx } from '../../../helpers/xlsxFixture';
 import { pdfBytes, quizBlocks } from '../../../helpers/uploadFixtures';
 
 // The transfer against a REAL, LOCAL, throwaway PostgreSQL (the schema of the
-// migrations up to 20261030000100). Only runs when CONTENT_UPLOAD_TEST_DB names
+// migrations up to 20261030000200). Only runs when CONTENT_UPLOAD_TEST_DB names
 // such a database, for example
 //
 //   CONTENT_UPLOAD_TEST_DB=postgresql://postgres:pw@127.0.0.1:54347/u7_t
@@ -1346,6 +1352,278 @@ if (!url) {
       expect(dry.data.status).toBe('conflict');
       expect(dry.data.stock.counts.conflict).toBe(1);
       expect(await snapshot(sql)).toEqual(before);
+    });
+  });
+
+  describe('a supply as a JSON file and as an Excel mapping file (UP2)', () => {
+    const k4 = (id: string, count = 10, tag?: string) =>
+      jsonQuiz({ id, componentId: '04', dir: K4_DIR, count, tag });
+
+    async function mapping() {
+      const rows = [
+        HEADER,
+        row(5, block(4, 'Erfundenes Viertes', 2, 4), 'a) Position a', 'LF 2, 3'),
+        row(6, null, 'b) Position b', 'LF 3'),
+      ];
+      return xlsxMappingFile(
+        new Uint8Array(
+          await makeXlsx([
+            {
+              name: 'Zuordnung',
+              rows: rows.map(r => ({ row: r.row, cells: r.cells })),
+            },
+          ])
+        )
+      );
+    }
+
+    const apply = async (seeded: SeededRun, deps: TransferDeps) => {
+      const dry = await runTransfer(deps, request(seeded.runId, 'dry_run'));
+      expect(dry.ok).toBe(true);
+      const done = await runTransfer(deps, request(seeded.runId, 'apply'));
+      expect(done.ok && done.data.wrote).toBe(true);
+      return { dry: dry.ok ? dry.data : null, done: done.ok ? done.data : null };
+    };
+
+    async function nextRun(files: FixtureFile[]) {
+      const seeded = await seedRun(sql, files);
+      return { seeded, deps: transferDeps(app, seeded) };
+    }
+
+    const learning = async () => ({
+      fields: (await sql`select count(*)::int as n from training_catalog_learning_fields`)[0].n,
+      mappings: (await sql`select count(*)::int as n from training_catalog_content_mappings`)[0].n,
+    });
+
+    it('writes the quizzes of a JSON file inactive, in one transaction, with the protocol, and a second run adds nothing', async () => {
+      const file = jsonQuizFile(lessonFile([k4('4a'), k4('4b')]));
+      const first = await nextRun([file]);
+      const { dry, done } = await apply(first.seeded, first.deps);
+      expect(dry?.stock.counts).toMatchObject({ new: 1 });
+      expect(done?.tables.quizzes).toEqual({ insert: 6, update: 0, unchanged: 0 });
+      const c = await counts(sql);
+      expect(c.quizzes).toBe(6);
+      expect(c.questions).toBe(60);
+      expect(c.options).toBe(240);
+      expect(c.enablers).toBe(2);
+      const active =
+        await sql`select count(*)::int as n from quizzes where is_active`;
+      expect(active[0].n).toBe(0);
+      const owners = await sql`select distinct file_id from content_upload_applied_rows where table_name in ('quizzes','questions','options')`;
+      expect(owners.map(r => r.file_id)).toEqual([file.file.id]);
+      const stateOfFile =
+        await sql`select status from content_upload_files where id = ${file.file.id}`;
+      expect(stateOfFile[0].status).toBe('applied');
+
+      const before = await snapshot(sql);
+      const second = await nextRun([jsonQuizFile(lessonFile([k4('4a'), k4('4b')]))]);
+      const again = await apply(second.seeded, second.deps);
+      expect(again.dry?.stock.counts).toMatchObject({ unchanged: 1 });
+      expect(await snapshot(sql)).toEqual(before);
+    });
+
+    it('adds the missing questions of existing quizzes, and the rollback text takes exactly them out again', async () => {
+      const first = await nextRun([jsonQuizFile(lessonFile([k4('4a', 3)]))]);
+      await apply(first.seeded, first.deps);
+      expect((await counts(sql)).questions).toBe(9);
+      const afterFirst = await snapshot(sql);
+
+      const second = await nextRun([jsonQuizFile(lessonFile([k4('4a', 10)]))]);
+      const { dry } = await apply(second.seeded, second.deps);
+      expect(dry?.stock.files[0]).toMatchObject({ status: 'extended', added: 21 });
+      expect((await counts(sql)).questions).toBe(30);
+
+      const answer = await rollbackAnswer(queryableOfPool(app as any), {
+        runId: second.seeded.runId,
+      });
+      expect(answer?.blockers).toEqual([]);
+      expect(answer?.deletes.questions).toBe(21);
+      expect((await execSql(asCommit(answer?.sql as string))).ok).toBe(true);
+      expect(await snapshot(sql)).toEqual(afterFirst);
+    });
+
+    it('refuses a JSON file that is not what it says, before the database is touched', async () => {
+      const bad = jsonQuizFile('{"schema_version":"1.0","quizzes":[]}');
+      const seeded = await seedRun(sql, [bad]);
+      const deps = transferDeps(app, seeded);
+      const before = await snapshot(sql);
+      const dry = await runTransfer(deps, request(seeded.runId, 'dry_run'));
+      expect(dry.ok).toBe(false);
+      expect(await snapshot(sql)).toEqual(before);
+    });
+
+    it('takes the check on ext of the database for the four kinds and for nothing else', async () => {
+      const seeded = await seedRun(sql, [jsonQuizFile(lessonFile([k4('4a')]))]);
+      let n = 0;
+      const insert = (ext: string) =>
+        sql`insert into content_upload_files
+          (run_id, rel_path, file_name, ext, size_bytes, sha256, storage_path)
+          values (${seeded.runId}, ${`x.${ext}`}, ${`x.${ext}`}, ${ext}, 1, ${(n++).toString(16).padStart(64, '0')}, ${`upload/${seeded.runId}/${ext}-x.${ext}`})`;
+      for (const ext of ['docx', 'pdf', 'json', 'xlsx']) {
+        await expect(insert(ext)).resolves.toBeDefined();
+      }
+      for (const ext of ['xls', 'xlsm', 'exe', 'JSON', '']) {
+        await expect(insert(ext)).rejects.toThrow(/content_upload_files_ext_check/);
+      }
+    });
+
+    it('content, use case and Excel file in ONE run: the third engine sees the rows of the first two, and the rollback gives back exactly the state before', async () => {
+      const empty = await snapshot(sql);
+      const mappingFile = await mapping();
+      const run = await nextRun([
+        ...(await enablerFiles({ tree: true })),
+        jsonQuizFile(lessonFile([k4('4b')])),
+        mappingFile,
+      ]);
+      const { dry, done } = await apply(run.seeded, run.deps);
+      expect(dry?.stock.files.find(f => f.fileId === mappingFile.file.id)?.status).toBe('new');
+      expect(done?.tables.training_catalog_learning_fields.insert).toBe(13);
+      // K4-a (LF2, LF3, also for its use case) and K4-b (LF3) exist in this run: 5 mappings
+      expect((await learning()).mappings).toBe(5);
+      expect(await snapshot(sql)).not.toEqual(empty);
+      const answer = await rollbackAnswer(queryableOfPool(app as any), {
+        runId: run.seeded.runId,
+      });
+      expect(answer?.blockers).toEqual([]);
+      expect((await execSql(asCommit(answer?.sql as string))).ok).toBe(true);
+      expect(await snapshot(sql)).toEqual(empty);
+    });
+
+    it('fills an empty description of a learning field that exists, writes it as an update, and the rollback puts the empty value back', async () => {
+      const content = await nextRun(await enablerFiles({ tree: true }));
+      await apply(content.seeded, content.deps);
+      const [catalog] = await sql`select id from training_catalogs where code = 'KFBM'`;
+      await sql`insert into training_catalog_learning_fields
+        (training_catalog_id, code, title, training_year, order_index, description)
+        values (${catalog.id}, 'LF1', 'Lernfeld 1', 1, 1, null)`;
+      const before = await snapshot(sql);
+      const run = await nextRun([await mapping()]);
+      const { done } = await apply(run.seeded, run.deps);
+      expect(done?.tables.training_catalog_learning_fields).toMatchObject({
+        insert: 12,
+        update: 1,
+        unchanged: 0,
+      });
+      const filled = await sql`select description from training_catalog_learning_fields where code = 'LF1'`;
+      expect(String(filled[0].description ?? '').length).toBeGreaterThan(20);
+      const written = await sql`select action, before from content_upload_applied_rows where table_name = 'training_catalog_learning_fields' and action = 'update'`;
+      expect(written).toHaveLength(1);
+      expect(written[0].before).toEqual({ description: null });
+      const answer = await rollbackAnswer(queryableOfPool(app as any), {
+        runId: run.seeded.runId,
+      });
+      expect(answer?.blockers).toEqual([]);
+      expect(answer?.restores.training_catalog_learning_fields).toBe(1);
+      expect((await execSql(asCommit(answer?.sql as string))).ok).toBe(true);
+      expect(await snapshot(sql)).toEqual(before);
+    });
+
+    it('writes the learning fields and mappings of an Excel file, the codes of the use cases, and takes them all back', async () => {
+      const mappingFile = await mapping();
+      const content = await nextRun(await enablerFiles({ tree: true }));
+      await apply(content.seeded, content.deps);
+      const afterContent = await snapshot(sql);
+
+      const run = await nextRun([mappingFile]);
+      const { dry, done } = await apply(run.seeded, run.deps);
+      expect(dry?.stock.files[0]).toMatchObject({ status: 'new' });
+      expect(done?.tables.training_catalog_learning_fields).toEqual({
+        insert: 13,
+        update: 0,
+        unchanged: 0,
+      });
+      expect(await learning()).toEqual({ fields: 13, mappings: 4 });
+      const useCase = await sql`select lernfelder from use_cases where code = 'K4-a'`;
+      expect(useCase[0].lernfelder).toEqual(['LF2', 'LF3']);
+      // nothing but additions: no row of the protocol is an update of a learning field
+      const written = await sql`select table_name, action from content_upload_applied_rows where apply_id = (select id from content_upload_applies where run_id = ${run.seeded.runId} and mode = 'apply')`;
+      const kinds = new Set(written.map(r => `${r.table_name}:${r.action}`));
+      expect(kinds).toEqual(
+        new Set([
+          'training_catalog_learning_fields:insert',
+          'training_catalog_content_mappings:insert',
+          'use_cases:update',
+        ])
+      );
+
+      // the same table again writes nothing
+      const again = await nextRun([await mapping()]);
+      const second = await apply(again.seeded, again.deps);
+      expect(second.dry?.stock.files[0]).toMatchObject({ status: 'unchanged' });
+      expect(await learning()).toEqual({ fields: 13, mappings: 4 });
+
+      // the rollback text restores the codes of the use case and removes what was inserted
+      const answer = await rollbackAnswer(queryableOfPool(app as any), {
+        runId: run.seeded.runId,
+      });
+      expect(answer?.blockers).toEqual([]);
+      expect(answer?.restores.use_cases).toBe(1);
+      // the use case had no list before (NULL)
+      expect(answer?.sql).toContain('lernfelder = null');
+      expect((await execSql(asCommit(answer?.sql as string))).ok).toBe(true);
+      expect(await learning()).toEqual({ fields: 0, mappings: 0 });
+      const restored = await sql`select lernfelder from use_cases where code = 'K4-a'`;
+      expect(restored[0].lernfelder ?? []).toEqual([]);
+      expect(await snapshot(sql)).toEqual(afterContent);
+    });
+
+    it('restores a list of codes that a use case had before, as a text array', async () => {
+      const content = await nextRun(await enablerFiles({ tree: true }));
+      await apply(content.seeded, content.deps);
+      await sql`update use_cases set lernfelder = array['LF9', 'LF1''x'] where code = 'K4-a'`;
+      const run = await nextRun([await mapping()]);
+      await apply(run.seeded, run.deps);
+      const added = await sql`select lernfelder from use_cases where code = 'K4-a'`;
+      expect(added[0].lernfelder).toEqual(['LF9', "LF1'x", 'LF2', 'LF3']);
+      const answer = await rollbackAnswer(queryableOfPool(app as any), {
+        runId: run.seeded.runId,
+      });
+      expect(answer?.blockers).toEqual([]);
+      expect(answer?.sql).toContain("array['LF9', 'LF1''x']::text[]");
+      expect((await execSql(asCommit(answer?.sql as string))).ok).toBe(true);
+      const restored = await sql`select lernfelder from use_cases where code = 'K4-a'`;
+      expect(restored[0].lernfelder).toEqual(['LF9', "LF1'x"]);
+    });
+
+    it('does not replace what exists: a learning field the owner changed stays, a second apply is quiet', async () => {
+      const content = await nextRun(await enablerFiles({ tree: true }));
+      await apply(content.seeded, content.deps);
+      const run = await nextRun([await mapping()]);
+      await apply(run.seeded, run.deps);
+      await sql`update training_catalog_learning_fields set title = 'Von Hand', hours_budget = 1 where code = 'LF1'`;
+      const next = await nextRun([await mapping()]);
+      const { dry } = await apply(next.seeded, next.deps);
+      expect(dry?.differences.length).toBeGreaterThan(0);
+      const lf1 = await sql`select title, hours_budget from training_catalog_learning_fields where code = 'LF1'`;
+      expect(lf1[0]).toMatchObject({ title: 'Von Hand', hours_budget: 1 });
+    });
+
+    it('refuses the table while the catalog has no enabler, and writes nothing', async () => {
+      const run = await nextRun([await mapping()]);
+      const before = await learning();
+      const dry = await runTransfer(run.deps, request(run.seeded.runId, 'dry_run'));
+      expect(dry.ok).toBe(false);
+      if (!dry.ok) expect(dry.code).toBe('NO_ENABLERS');
+      expect(await learning()).toEqual(before);
+      expect((await runRow(run.seeded.runId)).status).toBe('review');
+    });
+
+    it('compares the table before a decision: only reads, names the file', async () => {
+      const content = await nextRun(await enablerFiles({ tree: true }));
+      await apply(content.seeded, content.deps);
+      const mappingFile = await mapping();
+      const run = await nextRun([mappingFile]);
+      const result = await compareStock(run.deps, {
+        runId: run.seeded.runId,
+        callerId: USER,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.stock.files[0]).toMatchObject({
+        fileId: mappingFile.file.id,
+        status: 'new',
+      });
+      expect(await learning()).toEqual({ fields: 0, mappings: 0 });
     });
   });
 

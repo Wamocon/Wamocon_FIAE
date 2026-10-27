@@ -24,6 +24,8 @@ import {
 export const CORPUS_LIMITS = Object.freeze({
   /** Texts of one file. */
   perFile: 2000,
+  /** Texts of one quiz JSON file (a file of enabler quizzes holds some 6000 explanations and answers). */
+  perJsonFile: 20_000,
   /** Texts of the whole list. */
   total: 40_000,
   /** Characters of one text (a longer one is cut: the first characters are what is searched for). */
@@ -43,6 +45,11 @@ export interface CorpusDeps {
   readParagraphs(bytes: Uint8Array): Promise<Paragraph[] | null>;
   /** The solution texts a document names (excerpt.ts solutionTextsOf). */
   solutionsOf(paragraphs: readonly Paragraph[]): string[];
+  /**
+   * The solution texts of a quiz JSON file, or null when it cannot be read. Without it a
+   * JSON file of the run counts as unreadable and the list is never complete (fail closed).
+   */
+  jsonSolutions?(bytes: Uint8Array): string[] | null;
   /** Solutions that already stand in the database. */
   existing(limit: number): Promise<string[]>;
   clock(): number;
@@ -73,8 +80,10 @@ function relevant(file: FileRow): boolean {
   return (
     // Every Word file, whatever type the rules gave it: a quiz that stands in an
     // enabler folder still holds solutions. (A PDF is only an original of a Word
-    // file, and its solutions stand in that file too.)
-    file.ext === 'docx' &&
+    // file, and its solutions stand in that file too.) A quiz JSON file holds
+    // solutions as well, so what a teaching text repeats from it is cut out too. An
+    // Excel file is a mapping table and holds none.
+    (file.ext === 'docx' || file.ext === 'json') &&
     // a file whose object is gone cannot be read, and is not an error of the run
     file.parseSummary?.[OBJECT_DELETED_KEY] !== true &&
     // a file that never got read or was left out carries nothing to search for
@@ -154,7 +163,17 @@ export class SolutionCorpus {
         const last = this.lastTry.get(f.id);
         if (last !== undefined && this.deps.clock() - last < gap) tried.add(f.id);
       }
-      const batch = open.filter(f => !tried.has(f.id)).slice(0, concurrency);
+      // at most one JSON file at a time: reading one parses up to 32 MB
+      let jsonTaken = false;
+      const batch = open
+        .filter(f => !tried.has(f.id))
+        .filter(f => {
+          if (f.ext !== 'json') return true;
+          if (jsonTaken) return false;
+          jsonTaken = true;
+          return true;
+        })
+        .slice(0, concurrency);
       // nothing left that this call may try, or no time: the list is not complete
       if (batch.length === 0 || this.deps.clock() - started >= budgetMs) {
         return false;
@@ -166,15 +185,24 @@ export class SolutionCorpus {
           let texts: string[] | null = null;
           try {
             const bytes = await this.deps.loadBytes(file);
-            const paragraphs = bytes
-              ? await this.deps.readParagraphs(bytes)
-              : null;
-            if (paragraphs) texts = this.deps.solutionsOf(paragraphs);
+            if (bytes && file.ext === 'json') {
+              texts = this.deps.jsonSolutions?.(bytes) ?? null;
+            } else {
+              const paragraphs = bytes
+                ? await this.deps.readParagraphs(bytes)
+                : null;
+              if (paragraphs) texts = this.deps.solutionsOf(paragraphs);
+            }
           } catch {
             texts = null;
           }
           if (texts) {
-            this.add(texts, CORPUS_LIMITS.perFile);
+            this.add(
+              texts,
+              file.ext === 'json'
+                ? CORPUS_LIMITS.perJsonFile
+                : CORPUS_LIMITS.perFile
+            );
             this.done.add(file.id);
             return;
           }

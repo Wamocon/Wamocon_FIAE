@@ -65,9 +65,20 @@ describe('transferDeps', () => {
     const deps = mod.transferDeps();
     const bytes = await deps.readBytes({
       storagePath: 'upload/r/f.docx',
+      ext: 'docx',
     } as any);
     expect(bytes).toEqual(new Uint8Array([1]));
     expect(download).toHaveBeenCalledWith('upload/r/f.docx', 25 * 1024 * 1024);
+    await deps.readBytes({
+      storagePath: 'upload/r/f.json',
+      ext: 'json',
+    } as any);
+    expect(download).toHaveBeenCalledWith('upload/r/f.json', 32 * 1024 * 1024);
+    await deps.readBytes({
+      storagePath: 'upload/r/f.xlsx',
+      ext: 'xlsx',
+    } as any);
+    expect(download).toHaveBeenCalledWith('upload/r/f.xlsx', 5 * 1024 * 1024);
   });
 
   it('takes the host from the connection string of the app, and none when it is not there', async () => {

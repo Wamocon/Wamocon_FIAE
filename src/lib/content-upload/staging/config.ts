@@ -11,7 +11,11 @@
 
 import { IS_PREVIEW_SCHEMA } from '@/lib/db-schema';
 
-/** The private staging bucket (created by the owner, no policy, 25 MB, PDF and docx). */
+/**
+ * The private staging bucket (created by the owner, no policy). Limits and types of the
+ * bucket: PDF and docx up to 25 MB; for JSON and Excel (package UP2) the owner adds the
+ * MIME types application/json and the xlsx type and raises the size limit to 32 MB.
+ */
 export const UPLOAD_BUCKET = 'content-upload';
 
 /** The only catalog of version 1 (concept K9, O9). */
@@ -22,8 +26,12 @@ export const GIGABYTE = 1024 * MEGABYTE;
 
 /** Limits of section 4.5 and 4.6 of the concept. */
 export const LIMITS = {
-  /** Size of one file. */
+  /** Size of one Word or PDF file (see maxFileBytesFor for the other kinds). */
   maxFileBytes: 25 * MEGABYTE,
+  /** Size of one quiz JSON file (schema 1.0, like MAX_QUIZ_JSON_BYTES of the import script). */
+  maxJsonBytes: 32 * MEGABYTE,
+  /** Size of one Excel mapping file (a mapping table has a few hundred rows). */
+  maxXlsxBytes: 5 * MEGABYTE,
   /** Files of one run (rows that are not expired). */
   maxFilesPerRun: 1500,
   /** Bytes of one run (copies that are merged have no object and do not count). */
@@ -55,6 +63,24 @@ export const LIMITS = {
   maxFileNameChars: 200,
   maxLabelChars: 120,
 } as const;
+
+/**
+ * Largest size of a file of this kind in bytes. An unknown kind gets the smallest limit,
+ * so a kind that was added without a limit here can never be larger than it should be.
+ */
+export function maxFileBytesFor(ext: string): number {
+  switch (ext) {
+    case 'json':
+      return LIMITS.maxJsonBytes;
+    case 'xlsx':
+      return LIMITS.maxXlsxBytes;
+    case 'docx':
+    case 'pdf':
+      return LIMITS.maxFileBytes;
+    default:
+      return Math.min(LIMITS.maxFileBytes, LIMITS.maxXlsxBytes);
+  }
+}
 
 export type UploadAvailability =
   | { enabled: true }

@@ -27,7 +27,7 @@
 // the next one with a fresh count.
 
 import { createHash } from 'crypto';
-import { LIMITS } from '@/lib/content-upload/staging/config';
+import { maxFileBytesFor } from '@/lib/content-upload/staging/config';
 import type {
   QueueState,
   UnlessMarked,
@@ -134,7 +134,7 @@ function sha256Hex(bytes: Uint8Array): string {
 }
 
 /**
- * Reads the whole object once (at most 25 MB) and compares size and SHA-256 with
+ * Reads the whole object once (at most the limit of its kind) and compares size and SHA-256 with
  * what the browser announced. The storage knows no SHA-256, so this is where it
  * is checked (the complete route can only look at the size and the first bytes).
  * A mismatch rejects the file and deletes the object.
@@ -156,7 +156,7 @@ export const verifyMetadataStep: QueueStep = {
 
     let bytes: Uint8Array | null;
     try {
-      bytes = await context.loadBytes(LIMITS.maxFileBytes);
+      bytes = await context.loadBytes(maxFileBytesFor(file.ext));
     } catch (error) {
       if (error instanceof UploadStorageError && error.code === 'TOO_LARGE') {
         return reject('TOO_LARGE');
@@ -335,7 +335,7 @@ async function processClaim(
   let bytes: Promise<Uint8Array | null> | null = null;
   const context: StepContext = {
     file,
-    loadBytes(maxBytes = LIMITS.maxFileBytes) {
+    loadBytes(maxBytes = maxFileBytesFor(file.ext)) {
       bytes ??= deps.storage().download(file.storagePath, maxBytes);
       return bytes;
     },

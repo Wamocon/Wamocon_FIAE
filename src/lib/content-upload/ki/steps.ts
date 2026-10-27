@@ -268,10 +268,15 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
         }
       };
 
-      // Not a file for the model: a PDF is only ever an original of a Word file
+      // Not a file for the model: a PDF is only ever an original of a Word file, a JSON
+      // file holds the correct answers of its quizzes and an Excel file is a mapping
+      // table (neither is ever read for an excerpt, whatever the rules made of it)
       if (file.ext !== 'docx') {
         await log('skipped', 'type_component');
-        return settle('not_sent', 'PDF_NOT_SENT');
+        return settle(
+          'not_sent',
+          file.ext === 'pdf' ? 'PDF_NOT_SENT' : 'FORMAT_NOT_SENT'
+        );
       }
       if (file.attempts > limits.maxAttempts) {
         return settle('failed', 'KI_ATTEMPTS');

@@ -50,6 +50,34 @@ export function describeAssignment(t: Translate, a: AssignmentDto): string {
 }
 
 /**
+ * What a row stands for: "Enabler-Quizze (JSON), 12 Quizze, 36 Sätze, 360 Fragen" for a
+ * quiz file, "Lernfeld-Zuordnung (Excel), 71 Positionen" for the mapping table. A Word or
+ * PDF row has no contents and is described by its assignment.
+ */
+export function describeContents(
+  t: Translate,
+  contents: NonNullable<ReviewRowDto['contents']>
+): string {
+  const n = contents.numbers;
+  if (contents.kind === 'mapping_xlsx') {
+    return `${t('contentUpload.contents.mapping_xlsx')}, ${t(
+      'contentUpload.contents.mapping_xlsx.counts',
+      { positions: n.positions ?? 0, blocks: n.blocks ?? 0 }
+    )}`;
+  }
+  const head = t(
+    contents.variant === 'global'
+      ? 'contentUpload.contents.quiz_json.global'
+      : 'contentUpload.contents.quiz_json.lesson'
+  );
+  return `${head}, ${t('contentUpload.contents.quiz_json.counts', {
+    quizzes: n.quizzes ?? 0,
+    sets: n.sets ?? 0,
+    questions: n.questions ?? 0,
+  })}`;
+}
+
+/**
  * Reasons that say the content was not checked with full certainty: such a
  * proposal is not taken as it stands either (the same list as the route has).
  */
@@ -252,7 +280,11 @@ function Row({
   ]
     .filter(Boolean)
     .join(', ');
-  const proposalText = row.proposal ? describeAssignment(t, row.effective) : '';
+  const proposalText = row.proposal
+    ? row.contents
+      ? describeContents(t, row.contents)
+      : describeAssignment(t, row.effective)
+    : '';
   const decisionValue = row.decision?.action ?? '';
 
   return (
@@ -440,8 +472,13 @@ function Details({
 }) {
   const { t, language } = useLanguage();
   const reasons = row.proposal?.reasons ?? [];
+  // A quiz JSON file and the Excel mapping hold many items that name their own
+  // component, enabler and level: there is no assignment to edit, only to accept or not
   const canEdit =
-    decidable && DECIDABLE.includes(row.status) && options !== null;
+    decidable &&
+    DECIDABLE.includes(row.status) &&
+    options !== null &&
+    !row.contents;
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <div className="space-y-3">
@@ -470,6 +507,18 @@ function Details({
         )}
         {row.proposal?.source === 'ki' && (
           <p className="text-muted">{t('contentUpload.ki.detailsNote')}</p>
+        )}
+        {row.contents && (
+          <p className="text-muted" data-testid="fixed-kind-note">
+            {t(`contentUpload.contents.${row.contents.kind}.note`)}
+          </p>
+        )}
+        {row.contents && (row.contents.numbers.setsWithErrors ?? 0) > 0 && (
+          <p>
+            {t('contentUpload.contents.setsWithErrors', {
+              count: row.contents.numbers.setsWithErrors,
+            })}
+          </p>
         )}
         {row.copyOfId && <p>{t('contentUpload.details.copy')}</p>}
         {row.duplicate && (

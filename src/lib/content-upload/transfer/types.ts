@@ -9,10 +9,12 @@ import type {
   PlanCounts,
   TableCount,
 } from '@/lib/content-import/apply/types';
+import type { LearningFieldPlan } from '@/lib/content-import/learning-fields/types';
 import type {
   UseCasePlan,
   UseCasePlanCounts,
 } from '@/lib/content-import/use-cases/types';
+import type { UploadExt } from '@/lib/content-upload/staging/paths';
 import type {
   FileStock,
   StockCounts,
@@ -35,7 +37,7 @@ export interface TransferFile {
   id: string;
   relPath: string;
   fileName: string;
-  ext: 'docx' | 'pdf';
+  ext: UploadExt;
   sizeBytes: number;
   /** Hash of the object, checked against the bucket by the queue. */
   sha256: string;
@@ -93,6 +95,13 @@ export interface TransferPlan {
   plannedFiles: Array<{ id: string; sha256: string }>;
   /** Source path of a plan item to the id of its file. */
   fileOfSource: ReadonlyMap<string, string>;
+  /**
+   * The plan of the learning field import when an Excel mapping file is part of the
+   * transfer (the engine runs after the content and the use case engine, additive only).
+   */
+  learningPlan: LearningFieldPlan | null;
+  /** The file the learning plan comes from. */
+  learningFileId: string | null;
   counts: PlanCounts;
   useCaseCounts: UseCasePlanCounts;
 }
