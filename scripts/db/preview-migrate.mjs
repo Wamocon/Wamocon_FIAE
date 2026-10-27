@@ -267,13 +267,27 @@ end $pv_grants$;`;
  * them). If an object outside public_preview still depends on public_preview,
  * everything aborts instead of silently dropping it by cascade. Touches nothing
  * outside of public_preview and preview_meta.
+ *
+ * Repeatable on a filled schema. The lists of objects are read once, but a
+ * CASCADE removes later entries on its way (dropping a table takes the views
+ * over it along, and since the catalog migration lernfelder, lernfeld_mappings
+ * and v_use_case_enabler_backfill_report are views where they used to be
+ * tables). Therefore:
+ *   - dependents first: views and materialized views, then foreign tables, then
+ *     tables, then sequences, functions and types
+ *   - the kind of drop comes from pg_class.relkind, never from a name
+ *   - every entry is looked up again by oid and relkind right before its drop
+ *   - every drop says IF EXISTS
+ *   - afterwards nothing may be left, otherwise the whole run is rolled back
  */
 export function purgeSql() {
   const s = PREVIEW_SCHEMA;
   return `do $pv_purge$
 declare
   z record;
+  routine record;
   foreign_objects text;
+  leftovers text;
 begin
   select string_agg(distinct o.type || ' ' || o.identity, ', ') into foreign_objects
   from pg_depend d
@@ -285,33 +299,85 @@ begin
     raise exception 'Rebuild aborted: these objects outside ${s} depend on it: %', foreign_objects;
   end if;
   for z in
-    select c.relname, c.relkind from pg_class c
-    where c.relnamespace = ${q(s)}::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f') and not c.relispartition
+    select c.oid, c.relname, c.relkind from pg_class c
+    where c.relnamespace = ${q(s)}::regnamespace and c.relkind in ('v', 'm')
+    order by c.oid desc
   loop
-    execute format('drop %s %I.%I cascade',
-      case z.relkind when 'v' then 'view' when 'm' then 'materialized view' when 'f' then 'foreign table' else 'table' end,
-      ${q(s)}, z.relname);
+    if exists (select 1 from pg_class c where c.oid = z.oid and c.relkind = z.relkind) then
+      execute format('drop %s if exists %I.%I cascade',
+        case z.relkind when 'm' then 'materialized view' else 'view' end, ${q(s)}, z.relname);
+    end if;
   end loop;
   for z in
-    select c.relname from pg_class c
+    select c.oid, c.relname, c.relkind from pg_class c
+    where c.relnamespace = ${q(s)}::regnamespace and c.relkind in ('f')
+  loop
+    if exists (select 1 from pg_class c where c.oid = z.oid and c.relkind = z.relkind) then
+      execute format('drop foreign table if exists %I.%I cascade', ${q(s)}, z.relname);
+    end if;
+  end loop;
+  for z in
+    select c.oid, c.relname, c.relkind from pg_class c
+    where c.relnamespace = ${q(s)}::regnamespace and c.relkind in ('r', 'p') and not c.relispartition
+  loop
+    if exists (select 1 from pg_class c where c.oid = z.oid and c.relkind = z.relkind) then
+      execute format('drop table if exists %I.%I cascade', ${q(s)}, z.relname);
+    end if;
+  end loop;
+  for z in
+    select c.oid, c.relname, c.relkind from pg_class c
     where c.relnamespace = ${q(s)}::regnamespace and c.relkind = 'S'
   loop
-    execute format('drop sequence if exists %I.%I cascade', ${q(s)}, z.relname);
+    if exists (select 1 from pg_class c where c.oid = z.oid and c.relkind = z.relkind) then
+      execute format('drop sequence if exists %I.%I cascade', ${q(s)}, z.relname);
+    end if;
   end loop;
+  -- Routines: only the oid is listed. The name is built when it is removed, and qualified (regprocedure would
+  -- leave out the schema, and public is on the search path), and members of a type or an extension
+  -- (constructor functions of a range type) go away with their owner.
   for z in
-    select p.oid::regprocedure::text as signature, p.prokind from pg_proc p
+    select p.oid from pg_proc p
     where p.pronamespace = ${q(s)}::regnamespace
+      and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype in ('i', 'e'))
   loop
-    execute format('drop %s if exists %s cascade',
-      case z.prokind when 'p' then 'procedure' when 'a' then 'aggregate' else 'function' end, z.signature);
+    select p.prokind,
+      format('%I.%I(%s)', n.nspname, p.proname,
+        case when p.prokind = 'a' and pg_get_function_identity_arguments(p.oid) = '' then '*'
+             else pg_get_function_identity_arguments(p.oid) end) as signature
+    into routine
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where p.oid = z.oid;
+    if found then
+      execute format('drop %s if exists %s cascade',
+        case routine.prokind when 'p' then 'procedure' when 'a' then 'aggregate' else 'function' end, routine.signature);
+    end if;
   end loop;
+  -- enum, domain, range and standalone composite types (a composite type has its own pg_class row of
+  -- kind c, the row type of a table has not); multirange types go away with their range type
   for z in
-    select t.typname, t.typtype from pg_type t
-    where t.typnamespace = ${q(s)}::regnamespace and t.typtype in ('e', 'd', 'r', 'm', 'c')
-      and t.typcategory <> 'A' and not exists (select 1 from pg_class c where c.reltype = t.oid)
+    select t.oid, t.typname, t.typtype from pg_type t
+    where t.typnamespace = ${q(s)}::regnamespace and t.typtype in ('e', 'd', 'r', 'c')
+      and t.typcategory <> 'A' and not exists (select 1 from pg_class c where c.reltype = t.oid and c.relkind <> 'c')
   loop
-    execute format('drop %s if exists %I.%I cascade', case z.typtype when 'd' then 'domain' else 'type' end, ${q(s)}, z.typname);
+    if exists (select 1 from pg_type t where t.oid = z.oid) then
+      execute format('drop %s if exists %I.%I cascade', case z.typtype when 'd' then 'domain' else 'type' end, ${q(s)}, z.typname);
+    end if;
   end loop;
+  select string_agg(x.kind || ' ' || x.name, ', ') into leftovers from (
+    select 'relation' as kind, c.relname::text as name from pg_class c
+    where c.relnamespace = ${q(s)}::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S', 'c')
+    union all
+    select 'routine', p.oid::regprocedure::text from pg_proc p
+    where p.pronamespace = ${q(s)}::regnamespace
+      and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype in ('i', 'e'))
+    union all
+    select 'type', t.typname::text from pg_type t
+    where t.typnamespace = ${q(s)}::regnamespace and t.typtype in ('e', 'd', 'r', 'c')
+      and t.typcategory <> 'A' and not exists (select 1 from pg_class c where c.reltype = t.oid and c.relkind <> 'c')
+  ) x;
+  if leftovers is not null then
+    raise exception 'Rebuild aborted: objects remain in ${s} after the purge: %', leftovers;
+  end if;
   execute 'drop table if exists ${LEDGER}';
 end $pv_purge$;`;
 }
