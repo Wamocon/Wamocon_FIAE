@@ -12,8 +12,8 @@ const PRIVATE = { 'Cache-Control': 'private, no-store' };
 // The occupations of the signed in user, as far as the catalog scope allows
 // them (trainee: the enrolled occupation, trainer and admin: the enabled and
 // active ones, super admin: all). `?catalog=CODE` (or the header x-catalog)
-// checks one occupation: unknown, inactive and foreign codes are refused with
-// 403 by the scope. Only code, title and the validated branding leave the
+// checks one occupation: unknown and foreign codes (for everybody but the
+// super admin also inactive ones) are refused with 403 by the scope. Only code, title and the validated branding leave the
 // server (title, short name and accent for the presentation, see
 // src/lib/catalog/branding.ts) and the phase months for both durations (for
 // the phase labels, see src/lib/catalog/phase-plan.ts), no ids and no other
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
         code: trainingCatalogs.code,
         title: trainingCatalogs.title,
         settings: trainingCatalogs.settings,
+        isActive: trainingCatalogs.isActive,
       })
       .from(trainingCatalogs)
       .where(inArray(trainingCatalogs.id, scope.allowedCatalogIds))) as {
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
       code: string;
       title: string;
       settings: unknown;
+      isActive: boolean | null;
     }[];
 
     const allowed = new Set(scope.allowedCatalogIds);
@@ -54,9 +56,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
-        catalogs: catalogs.map(({ code, title, settings }) => ({
+        catalogs: catalogs.map(({ code, title, settings, isActive }) => ({
           code,
           title,
+          // a super admin also gets inactive catalogs (a tab marked inactive)
+          isActive: isActive !== false,
           branding: resolveCatalogBranding(
             (settings as { branding?: unknown } | null)?.branding
           ),
