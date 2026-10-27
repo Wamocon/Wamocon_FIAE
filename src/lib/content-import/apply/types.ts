@@ -229,4 +229,9 @@ export interface RunReport {
   differences: Difference[];
   /** True when rows were written (inside the transaction). */
   wrote: boolean;
+  /**
+   * Existing quizzes that get their missing questions (--extend-quizzes): the
+   * number of added questions and of existing questions whose position moved.
+   */
+  extended?: Array<{ quiz: string; added: number; moved: number }>;
 }

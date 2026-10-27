@@ -304,6 +304,8 @@ Stand: 27.10.2026. Die Quizze liegen neben den Word-Dateien auch als JSON vor (z
 
 **Die JSON-Dateien werden nur gelesen.** Sie gehören nicht ins Repository und nicht in Tickets, sie enthalten wie die Word-Dateien die Lösungen. Die Tests arbeiten mit erfundenen Beispielen im selben Schema.
 
+Als Datei der Enabler-Quizze gelten `alle_quizze 1.json` und die korrigierte Fassung `alle_quizze 1.korrigiert.json` (Quiz K14-a repariert, gleiches Schema). Beide lassen sich mit `--quizzes-json` einlesen, für einen Lauf gilt die korrigierte Fassung, sobald der Eigentümer sie freigibt. Die Global-Quizze stehen in `global_quizze 1.json`.
+
 ### Befehle
 
 ```
@@ -337,6 +339,20 @@ Die Stufen `leicht`, `mittel`, `schwer` entsprechen `Low`, `Medium`, `High`. Die
 - **Komponenten:** Kennt der Word-Baum die Komponente, kommen Titel, Paragraf und Gruppe (und damit die Phase) immer von dort, die JSON ändert sie nie. Nur eine Komponente, die allein die JSON kennt, nimmt Titel, Paragraf und Gruppe aus `curriculum_component` und `training_section`. Art und Phase kommen aus `kfbm-decisions.json` wie bisher. Zwei Quizze derselben Komponente mit verschiedenem Titel oder Abschnitt sind ein Fehler (`COMPONENT_CONFLICT`).
 - **Datenbank:** Bestehende Zeilen bleiben unverändert, auch wenn die JSON andere Texte nennt (der Bericht führt die Abweichungen). Nur `--update-existing` ändert die benannten Spalten (Fragen- und Optionstexte, Erklärung, Titel). Eine andere Fragenzahl als in der Datenbank ist wie bisher ein Konflikt (Exit-Code 3). Ein Enabler, der schon mit Lehrtext besteht, verliert ihn nie, ein fehlender Wert im Plan löscht nichts.
 
+### Fehlende Fragen nachliefern (`--extend-quizzes`)
+
+Sechs Quizze (2g, 7b, 7d, 8a, 9d, 9e, je drei Stufen) haben in der Quelle 8 statt 10 Fragen und werden zunächst so importiert (nur ein Hinweis `QUESTION_COUNT`). Werden die fehlenden Fragen später nachgeliefert, meldet die Engine bei einem Quiz mit anderer Fragenzahl weiter einen Konflikt (Exit-Code 3). Mit dem Schalter `--extend-quizzes` (`check` und `run`, Standard aus) ergänzt der Lauf stattdessen die fehlenden Fragen mit ihren Optionen, wenn:
+
+- die Datenbank weniger Fragen hat als der Plan und
+- jede vorhandene Frage im Plan mit demselben Text vorkommt (Leerraum wird nicht verglichen) und in derselben Reihenfolge, und die Optionen der vorhandenen Fragen die Gestalt des Plans haben (gleiche Zahl, Reihenfolge 1 bis n).
+
+Sonst bleibt es ein Konflikt mit Begründung (andere Texte, andere Reihenfolge, andere Optionen, mehr Fragen in der Datenbank). Die Zuordnung läuft über den Fragentext und die Reihenfolge, die Nummer im Plan bestimmt die Stelle (`order_index`), auch in der Mitte.
+
+- Vorhandene Fragen, Optionen, richtige Antworten und Erklärungen werden nicht geändert und nie gelöscht, die Fragen-ids bleiben. Antworten von Azubis hängen an der Fragen-id und bleiben gültig (an einer Wegwerf-Datenbank mit einer vorhandenen Abgabe geprüft).
+- **Nur der Positionswert `order_index` vorhandener Fragen verschiebt sich**, wo eine neue Frage davor liegt (die Spalte ist eine ganze Zahl ohne Eindeutigkeit, anders ist eine Frage in der Mitte nicht an die richtige Stelle zu bringen). Das ist die einzige Änderung an vorhandenen Zeilen, der Bericht nennt sie.
+- Der Probelauf und die Prüfung zeigen die Zählung als "n Fragen ergänzt" je Quiz (mit der Zahl der verschobenen Positionen), danach schreibt `--apply` genau das. Ein zweiter Lauf ergänzt nichts mehr.
+- Neue Fragen laufen durch denselben Lösungsschutz wie alle Zeilen. Neue Fragen sind noch nicht im HAI-Index, sie kommen erst mit einer späteren Neuindexierung hinein.
+
 ### Strenge Prüfung (nichts wird geraten)
 
 Ein Fehler überspringt die Stufe (oder bei Fehlern im Kopf die ganze Datei) mit Kennung und Grund, ohne einen Text der Datei zu nennen. Ein Hinweis kommt in die Hinweise des Plans, die Stufe bleibt im Plan.
@@ -352,8 +368,8 @@ Ein Fehler überspringt die Stufe (oder bei Fehlern im Kopf die ganze Datei) mit
 | `ID_INVALID`, `ID_DUPLICATE`, `KEY_DUPLICATE`, `NUMBER_SEQUENCE` | Fehler | Kennung ohne Form (`10a`, `24_1a`, Global `06.1`), Kennung oder Enabler doppelt (keiner der Einträge wird gelesen), Fragenummern nicht 1 bis n |
 | `COMPONENT_INVALID`, `COMPONENT_MISMATCH`, `SECTION_INVALID`, `PATH_MAPPING`, `COMPONENT_CONFLICT`, `COMPONENT_TITLE` | Fehler | Komponente, Abschnitt oder Kennung passen nicht zusammen oder ergeben keinen gültigen Schlüssel |
 | `LEVEL_MISSING`, `LABEL_MISMATCH`, `NO_QUESTIONS`, `SOURCE_TYPE`, `SOURCE_WARNINGS_INVALID`, `QUIZ_NOT_OBJECT` | Fehler | Stufe fehlt oder falsch beschriftet, keine Fragen, ein Quellfeld ist kein Text, Eintrag ist kein Objekt |
-| `QUESTION_COUNT`                                  | Hinweis bei Enabler-Quizzen (nicht 10 Fragen), Fehler bei Global-Quizzen (nicht 20) | Das Word-Verfahren kennt für Enabler-Quizze keine feste Zahl, deshalb nur ein Hinweis |
-| `SOURCE_WARNING`                                  | Hinweis | Die Quelle markiert die Frage (zum Beispiel redaktionell ergänzte Optionen). Der Eigentümer prüft sie vor der Aktivierung. |
+| `QUESTION_COUNT`                                  | Hinweis bei Enabler-Quizzen (nicht 10 Fragen), Fehler bei Global-Quizzen (nicht 20) | Das Word-Verfahren kennt für Enabler-Quizze keine feste Zahl, deshalb nur ein Hinweis. Nachlieferung siehe `--extend-quizzes`. |
+| `SOURCE_WARNING`                                  | Hinweis | Die Quelle markiert die Frage (zum Beispiel redaktionell ergänzte Optionen). Laut Eigentümer sind die Fragen fachlich geprüft, der Hinweis blockiert den Import nicht und wird nur gezählt. |
 | `TITLE_HEADING`, `CATEGORY_MISMATCH`, `SOURCE_FILES`, `SOURCE_PATH_MISMATCH`, `SOURCE_NULL` | Hinweis | Der Titel nennt keine Überschrift des Enablers, `category` weicht ab, `source_files` fehlt oder nennt einen anderen Schlüssel, ein Quellfeld ist `null` |
 
 Der Lösungsschutz der Planung gilt unverändert: Eine Lösungsmarke in einem sichtbaren Feld (`SOLUTION_MARKER`) überspringt das Quiz, Erklärung und richtige Antwort stehen nur in `options.explanation` und `options.is_correct`.

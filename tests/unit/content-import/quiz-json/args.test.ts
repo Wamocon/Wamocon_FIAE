@@ -170,3 +170,37 @@ describe('the other import scripts do not get the options', () => {
     });
   });
 });
+
+describe('--extend-quizzes', () => {
+  const tail = ['--target', 'local', '--created-by', PROFILE];
+  it('is a switch of check and run, off by default', () => {
+    for (const command of ['check', 'run']) {
+      expect(ok([command, '--plan', 'p.json', ...tail]).extendQuizzes).toBe(
+        false
+      );
+      expect(
+        ok([command, '--plan', 'p.json', '--extend-quizzes', ...tail])
+          .extendQuizzes
+      ).toBe(true);
+    }
+    expect(errors(['plan', 'x', '--extend-quizzes'])).toContain(
+      '--extend-quizzes belongs to check and run'
+    );
+    expect(
+      errors(['check-quizzes', '--quizzes-json', 'a.json', '--extend-quizzes'])
+    ).toContain('--extend-quizzes belongs to check and run');
+  });
+
+  it('does not exist in the other import scripts', () => {
+    const plain = parseApplyArgs([
+      'run',
+      '--plan',
+      'p.json',
+      '--extend-quizzes',
+      ...tail,
+    ]);
+    expect(plain.ok ? [] : plain.errors).toContain(
+      'Unknown argument: --extend-quizzes'
+    );
+  });
+});

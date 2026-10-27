@@ -22,8 +22,11 @@
 //         Compares the plan with the target database in a read-only
 //         transaction: what is new, what exists, what differs, what conflicts.
 //         The quiz JSON options of plan work here as well (instead of --plan).
+//         With --extend-quizzes the comparison counts the questions that a
+//         quiz lacks ("n Fragen ergänzt") instead of reporting a conflict.
 //   run   (<source folder> | --plan <plan.json>) --target local|preview
 //         --created-by <profile uuid> [--apply] [--update-existing]
+//         [--extend-quizzes]
 //         [--confirm-host <host>] [--report-out <file.md>]
 //         Dry run (default): everything is written inside a transaction, the
 //         counts per table are printed, then the transaction is rolled back.
@@ -31,6 +34,12 @@
 //         Preview also needs --confirm-host <host of the connection>.
 //         Rows that exist stay as they are, also when the quiz JSON names
 //         other texts (only --update-existing changes the named columns).
+//         --extend-quizzes adds the questions that an existing quiz lacks (and
+//         their options), but only when every existing question is in the plan
+//         with the same text and in the same order. Nothing is deleted, no
+//         question, option or answer is changed, the order_index of existing
+//         questions moves where a new question comes before them. Off by
+//         default (then another number of questions is a conflict).
 //   check-quizzes [--quizzes-json <file>] [--global-quizzes-json <file>]
 //         [--report-out <file.md>]
 //         Reads the quiz JSON files and reports numbers and ids only: counts
@@ -393,6 +402,19 @@ export function renderRunReport(report, info) {
     }
     out.push('');
   }
+  if (report.extended?.length) {
+    const added = report.extended.reduce((n, e) => n + e.added, 0);
+    out.push('## Ergänzte Quizze');
+    out.push('');
+    out.push(
+      `${added} Fragen ergänzt in ${report.extended.length} Quizzen (Positionen bestehender Fragen verschoben: ${report.extended.reduce((n, e) => n + e.moved, 0)}). Bestehende Fragen, Optionen und Antworten bleiben unverändert.`
+    );
+    out.push('');
+    for (const e of report.extended) {
+      out.push(`- ${e.quiz}: ${e.added} ergänzt, ${e.moved} verschoben`);
+    }
+    out.push('');
+  }
   if (report.conflicts.length > 0) {
     out.push('## Konflikte');
     out.push('');
@@ -669,6 +691,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         updateExisting: args.updateExisting,
         activate: decisions.content.activate,
         scenarioSolutions: args.scenarioSolutions,
+        extendQuizzes: args.extendQuizzes,
       });
       printReport(report, info);
       if (args.reportOut) {

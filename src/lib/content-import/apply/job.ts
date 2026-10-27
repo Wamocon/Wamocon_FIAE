@@ -23,6 +23,8 @@ export interface JobInput {
   /** is_active of new rows, from the decisions file. */
   activate: boolean;
   scenarioSolutions: boolean;
+  /** Add the missing questions of quizzes that exist with fewer questions. */
+  extendQuizzes?: boolean;
 }
 
 export async function runJob(
@@ -42,6 +44,7 @@ export async function runJob(
           write: false,
           activate: input.activate,
           scenarioSolutions: input.scenarioSolutions,
+          extendQuizzes: input.extendQuizzes,
         })
     );
   }
@@ -58,6 +61,7 @@ export async function runJob(
         write: true,
         activate: input.activate,
         scenarioSolutions: input.scenarioSolutions,
+        extendQuizzes: input.extendQuizzes,
       })
   );
 }

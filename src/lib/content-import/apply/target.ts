@@ -32,6 +32,11 @@ export interface ApplyArgs {
   globalQuizzesJson: string | null;
   /** A quiz of the JSON replaces the Word quiz of the same content key. */
   preferJsonQuizzes: boolean;
+  /**
+   * Add the missing questions of quizzes that exist with fewer questions (the
+   * existing ones must be a subset of the plan). Only check and run.
+   */
+  extendQuizzes: boolean;
   /** Plan file written by `plan`. */
   plan: string | null;
   /** plan: file for the plan JSON. */
@@ -90,7 +95,7 @@ const FLAGS = new Set([
   '--hydrate',
   '--no-attributes',
 ]);
-const QUIZ_JSON_FLAGS = new Set(['--prefer-json-quizzes']);
+const QUIZ_JSON_FLAGS = new Set(['--prefer-json-quizzes', '--extend-quizzes']);
 const QUIZ_JSON_VALUES = new Set(['--quizzes-json', '--global-quizzes-json']);
 const VALUE_OPTIONS = new Set([
   '--out',
@@ -188,6 +193,10 @@ export function parseApplyArgs(
   const globalQuizzesJson = values.get('--global-quizzes-json') ?? null;
   const hasJson = quizzesJson !== null || globalQuizzesJson !== null;
   const preferJsonQuizzes = flags.has('--prefer-json-quizzes');
+  const extendQuizzes = flags.has('--extend-quizzes');
+  if (extendQuizzes && !database) {
+    errors.push('--extend-quizzes belongs to check and run');
+  }
   for (const [name, value] of [
     ['--quizzes-json', quizzesJson],
     ['--global-quizzes-json', globalQuizzesJson],
@@ -367,6 +376,7 @@ export function parseApplyArgs(
       quizzesJson,
       globalQuizzesJson,
       preferJsonQuizzes,
+      extendQuizzes,
       plan,
       out: values.get('--out') ?? null,
       reportOut: values.get('--report-out') ?? null,

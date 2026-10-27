@@ -518,3 +518,34 @@ test('an output file must not be an input file, a report must be a .md file', ()
     assert.equal(notMd.status, 2);
     assert.match(notMd.err, /must be a \.md file/);
   }));
+
+test('the run report names the added questions', async () => {
+  const { renderRunReport } =
+    await import('../../../scripts/import/kfbm-apply.mjs');
+  const text = renderRunReport(
+    {
+      catalog: 'KFBM',
+      tables: { questions: { insert: 4, update: 0, unchanged: 16 } },
+      differences: [],
+      conflicts: [],
+      wrote: true,
+      extended: [
+        { quiz: 'K2-g-low', added: 2, moved: 5 },
+        { quiz: 'K2-g-high', added: 2, moved: 3 },
+      ],
+    },
+    {
+      mode: 'dry-run',
+      target: 'local',
+      host: '127.0.0.1',
+      schema: 'public',
+      role: 'postgres',
+      at: '2026-10-27T12:00:00.000Z',
+      updateExisting: false,
+    }
+  );
+  assert.match(text, /4 Fragen ergänzt in 2 Quizzen/);
+  assert.match(text, /verschoben: 8/);
+  assert.match(text, /- K2-g-low: 2 ergänzt, 5 verschoben/);
+  assert.ok(!/[–—]/.test(text));
+});
