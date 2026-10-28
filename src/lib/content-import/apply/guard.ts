@@ -14,9 +14,8 @@
 // solution texts here. Only the structure of a scenario text is still checked.
 //
 // The check fails closed: a marker word of a solution in a visible text, or a
-// longer solution text inside a visible text, is a leak.
+// rationale of a quiz inside a visible text, is a leak.
 
-import { hasSolutionHeadingLine, sharesSolutionText } from '../source-parsers';
 import type { ImportPlan } from './types';
 
 /**
@@ -245,22 +244,11 @@ export function findSolutionLeaks(plan: ImportPlan): string[] {
   for (const s of plan.scenarios) {
     check(`scenario ${s.enablerCode} title`, s.title);
     check(`scenario ${s.enablerCode} situation`, s.situation);
-    // The task is visible text beside the solution parts of its scenario.
+    // The task is visible text. A marker word or a rationale of a quiz in it is a leak. That it
+    // repeats a solution part of its own scenario is no leak: the whole scenario is public (the
+    // parser reports it as the warning TASK_SOLUTION_OVERLAP or TASK_SOLUTION_HEADING).
     if (typeof s.task === 'string') {
       check(`scenario ${s.enablerCode} task`, s.task);
-      const parts = [s.solution, s.knowledgeContribution].filter(
-        (part): part is string => typeof part === 'string'
-      );
-      if (sharesSolutionText(s.task, parts)) {
-        problems.push(
-          `scenario ${s.enablerCode} task repeats text of a solution part`
-        );
-      }
-      if (hasSolutionHeadingLine(s.task)) {
-        problems.push(
-          `scenario ${s.enablerCode} task has a line that looks like the heading of a solution`
-        );
-      }
     }
   }
   for (const quiz of plan.quizzes) {

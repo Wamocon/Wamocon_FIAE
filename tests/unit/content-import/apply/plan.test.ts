@@ -247,29 +247,52 @@ describe('buildImportPlan: structure', () => {
     expect(validatePlan(p)).toEqual([]);
   });
 
-  it('skips a scenario whose task shows a solution marker or repeats a solution paragraph', () => {
-    const files = sampleTree().filter(
-      f => !/Szenario_1[ab]\.docx$/.test(f.rel)
-    );
+  it('skips a scenario whose task shows a solution marker', () => {
+    const files = sampleTree().filter(f => !/Szenario_1a\.docx$/.test(f.rel));
     files.push(
       file(
         `${DIR.k1}/Enablers/1a_Thema/Szenario/Szenario_1a.docx`,
         scenarioContent('1a', {
           task: 'Eine erfundene Frage. Richtige Antwort: B',
         })
-      ),
-      file(
-        `${DIR.k1}/Enablers/1b_Thema/Szenario/Szenario_1b.docx`,
-        scenarioContent('1b', { task: 'Eine erfundene Lösung OMEGA.' })
       )
     );
     const p = build(files);
     const codes = Object.fromEntries(p.skipped.map(s => [s.key, s.code]));
     expect(codes['scenario:K1-a']).toBe('SOLUTION_MARKER');
-    expect(codes['scenario:1b']).toBe('PARSE_ERROR');
     expect(p.scenarios.map(s => s.enablerCode)).not.toContain('K1-a');
-    expect(p.scenarios.map(s => s.enablerCode)).not.toContain('K1-b');
   });
+
+  it.each([
+    [
+      'repeats a solution paragraph',
+      'Eine erfundene Lösung OMEGA.',
+      'TASK_SOLUTION_OVERLAP',
+    ],
+    [
+      'has a line like a solution heading',
+      'Erwartete Lösung',
+      'TASK_SOLUTION_HEADING',
+    ],
+  ])(
+    'keeps a scenario whose task %s in the plan and warns about it',
+    (_what, task, code) => {
+      const files = sampleTree().filter(f => !/Szenario_1b\.docx$/.test(f.rel));
+      files.push(
+        file(
+          `${DIR.k1}/Enablers/1b_Thema/Szenario/Szenario_1b.docx`,
+          scenarioContent('1b', { task })
+        )
+      );
+      const p = build(files);
+      expect(p.skipped).toEqual([]);
+      const s = p.scenarios.find(x => x.enablerCode === 'K1-b')!;
+      expect(s.task).toBe(task);
+      expect(s.solution).toBe('Eine erfundene Lösung OMEGA.');
+      expect(p.warnings.join(' ')).toMatch(new RegExp(`1b: ${code}`));
+      expect(validatePlan(p)).toEqual([]);
+    }
+  );
 
   it('counts everything and skips nothing for a clean tree', () => {
     expect(planCounts(plan)).toEqual({
@@ -660,16 +683,17 @@ describe('validatePlan', () => {
     expect(validatePlan(c).join(' ')).toMatch(/solution/i);
   });
 
-  it('rejects a task that shows or repeats a solution, and a task that is no text', () => {
+  it('rejects a task that shows a marker, and a task that is no text', () => {
     const a = clone();
     a.scenarios[0].task = 'Eine erfundene Frage. Richtige Antwort: B';
     expect(validatePlan(a).join(' ')).toMatch(/task.*solution/i);
+    // a task that repeats the solution of its own scenario is no error (warning of the parser)
     const b = clone();
     b.scenarios[0].task = b.scenarios[0].solution;
-    expect(validatePlan(b).join(' ')).toMatch(/task.*solution/i);
+    expect(validatePlan(b)).toEqual([]);
     const c = clone();
     c.scenarios[0].task = '  eine erfundene lösung omega.  ';
-    expect(validatePlan(c).join(' ')).toMatch(/task.*solution/i);
+    expect(validatePlan(c)).toEqual([]);
     const d = clone();
     d.scenarios[0].task = 42 as unknown as string;
     expect(validatePlan(d).join(' ')).toMatch(/task/);
@@ -678,7 +702,7 @@ describe('validatePlan', () => {
     expect(validatePlan(e)).toEqual([]);
     const f = clone();
     f.scenarios[0].task = 'Eine erfundene Frage.\n\nErwartete Lösung';
-    expect(validatePlan(f).join(' ')).toMatch(/task/i);
+    expect(validatePlan(f)).toEqual([]);
     const g = clone();
     g.scenarios[0].task = '   ';
     expect(validatePlan(g).join(' ')).toMatch(/task/);

@@ -405,16 +405,22 @@ describe('parseScenarioText: the section Aufgabe', () => {
     expect(result.value.task).toBe('');
   });
 
-  it('refuses a task with a line that looks like the heading of a solution', () => {
+  it('warns about a task with a line that looks like the heading of a solution, the file stays usable', () => {
     const lines = withTask();
     lines.splice(7, 0, p('Erwartete Lösung'));
     const result = parseScenarioText(lines);
-    expect(result.issues.map(i => i.code)).toContain('TASK_SOLUTION_HEADING');
-    expect(result.ok).toBe(false);
-    expect(toTraineeScenario(result)).toBeNull();
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        code: 'TASK_SOLUTION_HEADING',
+        severity: 'warning',
+      }),
+    ]);
+    expect(result.ok).toBe(true);
+    // the whole scenario is public, so the view is not refused for it
+    expect(toTraineeScenario(result)).not.toBeNull();
     const view = parseScenarioText(withTask());
     view.value.task += '\n\nAntwortschlüssel';
-    expect(toTraineeScenario(view)).toBeNull();
+    expect(toTraineeScenario(view)).not.toBeNull();
   });
 
   it('does not let the task disturb the order check of the other parts', () => {
@@ -503,34 +509,45 @@ describe('parseScenarioText: the section Aufgabe', () => {
       expect(toTraineeScenario(result)).toBeNull();
     });
 
-    it('refuses a task that repeats a paragraph of the solution', () => {
-      const lines = withTask();
-      lines[7] = p('  Zuerst klärt sie die erfundenen LEITFRAGEN. ');
-      const result = parseScenarioText(lines);
-      expect(result.issues.map(i => i.code)).toContain('TASK_SOLUTION_OVERLAP');
-      expect(result.ok).toBe(false);
-      expect(toTraineeScenario(result)).toBeNull();
-    });
+    it.each([
+      [
+        'a paragraph of the solution',
+        (lines: Paragraph[]) => {
+          lines[7] = p('  Zuerst klärt sie die erfundenen LEITFRAGEN. ');
+        },
+      ],
+      [
+        'a paragraph of the knowledge part',
+        (lines: Paragraph[]) => {
+          lines[7] = p(
+            'Ohne das erfundene Fachwissen wäre die Lösung ungeordnet.'
+          );
+        },
+      ],
+      [
+        'a part of a longer solution paragraph',
+        (lines: Paragraph[]) => {
+          lines[6] = p('Danach setzt sie die erfundene Lösung');
+        },
+      ],
+    ])(
+      'warns about a task that repeats %s and keeps the file',
+      (_what, edit) => {
+        const lines = withTask();
+        edit(lines);
+        const result = parseScenarioText(lines);
+        expect(result.issues.map(i => `${i.severity}:${i.code}`)).toContain(
+          'warning:TASK_SOLUTION_OVERLAP'
+        );
+        expect(result.issues.every(i => i.severity === 'warning')).toBe(true);
+        expect(result.ok).toBe(true);
+        expect(toTraineeScenario(result)).not.toBeNull();
+      }
+    );
 
-    it('refuses a task that repeats a paragraph of the knowledge part', () => {
-      const lines = withTask();
-      lines[7] = p('Ohne das erfundene Fachwissen wäre die Lösung ungeordnet.');
-      const result = parseScenarioText(lines);
-      expect(result.issues.map(i => i.code)).toContain('TASK_SOLUTION_OVERLAP');
-      expect(toTraineeScenario(result)).toBeNull();
-    });
-
-    it('refuses a task that is part of a longer solution paragraph', () => {
-      const lines = withTask();
-      lines[6] = p('Danach setzt sie die erfundene Lösung');
-      const result = parseScenarioText(lines);
-      expect(result.issues.map(i => i.code)).toContain('TASK_SOLUTION_OVERLAP');
-      expect(toTraineeScenario(result)).toBeNull();
-    });
-
-    it('refuses a task that is copied from the solution after parsing (fail closed)', () => {
+    it('still refuses a task that carries a marker word after parsing (fail closed)', () => {
       const result = parseScenarioText(withTask());
-      result.value.task = result.value.solution;
+      result.value.task = `${result.value.task}\n\nRichtige Antwort: B`;
       expect(toTraineeScenario(result)).toBeNull();
     });
   });
