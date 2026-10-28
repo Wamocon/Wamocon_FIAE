@@ -204,6 +204,14 @@ export async function syncCatalogTraineeContent(
      * organization never matches it (fail closed).
      */
     organizationId?: string;
+    /**
+     * Also give every trainee all ACTIVE global quizzes of the catalog that are
+     * linked to no component (FIAE: its global quizzes have no component, a
+     * trainer assigns them by hand to everybody who should take them). Only the
+     * explicit tool sets it, the automatic runs at enrollment do not, so a new
+     * FIAE trainee gets nothing unasked.
+     */
+    includeUnlinkedGlobalQuizzes?: boolean;
     now?: Date;
   }
 ): Promise<CatalogContentSync | null> {
@@ -280,6 +288,7 @@ export async function syncCatalogTraineeContent(
       .select({
         id: quizzes.id,
         trainingComponentId: quizzes.trainingComponentId,
+        isActive: quizzes.isActive,
       })
       .from(quizzes)
       .where(
@@ -291,6 +300,16 @@ export async function syncCatalogTraineeContent(
   ]);
   const linkedCourses = courseRows.filter(c => c.trainingComponentId);
   const linkedQuizzes = quizRows.filter(z => z.trainingComponentId);
+  // Active global quizzes without a component (the FIAE pattern)
+  const unlinkedQuizIds = input.includeUnlinkedGlobalQuizzes
+    ? quizRows
+        .filter(z => !z.trainingComponentId && z.isActive === true)
+        .map(z => String(z.id))
+    : [];
+  const assignable = [
+    ...linkedQuizzes.map(z => String(z.id)),
+    ...unlinkedQuizIds,
+  ];
 
   const traineeIds = enrolled.map(e => String(e.traineeId));
   const enrollmentIds = enrolled.map(e => String(e.enrollmentId));
@@ -327,7 +346,7 @@ export async function syncCatalogTraineeContent(
           )
         )
     : [];
-  const existingAssignments = linkedQuizzes.length
+  const existingAssignments = assignable.length
     ? await q
         .select({
           quizId: quizAssignments.quizId,
@@ -337,10 +356,7 @@ export async function syncCatalogTraineeContent(
         .where(
           and(
             inArray(quizAssignments.traineeId, traineeIds),
-            inArray(
-              quizAssignments.quizId,
-              linkedQuizzes.map(z => String(z.id))
-            )
+            inArray(quizAssignments.quizId, assignable)
           )
         )
     : [];
@@ -393,7 +409,7 @@ export async function syncCatalogTraineeContent(
     const missingCourses = wanted.courseIds.filter(
       id => !hasMember.has(`${traineeId}|${id}`)
     );
-    const missingQuizzes = wanted.globalQuizIds.filter(
+    const missingQuizzes = [...wanted.globalQuizIds, ...unlinkedQuizIds].filter(
       id => !hasAssignment.has(`${traineeId}|${id}`)
     );
     if (missingCourses.length === 0 && missingQuizzes.length === 0) continue;
@@ -483,6 +499,7 @@ export async function runCatalogContentSync(input: {
   actorId: string;
   execute: boolean;
   organizationId?: string;
+  includeUnlinkedGlobalQuizzes?: boolean;
 }): Promise<CatalogContentSync | null> {
   return db.transaction(async tx => {
     await tx.execute(
