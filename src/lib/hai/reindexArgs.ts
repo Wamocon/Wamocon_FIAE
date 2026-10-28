@@ -264,14 +264,39 @@ export function checkTargetAgainstConnection(
 // Dry run count
 // ============================================================================
 
+/** What a row counts: chunks of text, or whole files that are not read. */
+export type PlanUnit = 'chunks' | 'files';
+
 export interface PlanRow {
   sourceType: string;
   catalog: string;
   visibility: string;
+  unit: PlanUnit;
+  /** Chunks, or files for the unit 'files'. */
   chunks: number;
+  /** Characters of the counted chunks (0 where nothing was measured). */
+  chars: number;
+  /** Pages of the counted files (0 where unknown). */
+  pages: number;
 }
 
-/** Counts chunks per source type, catalog and visibility. */
+export interface PlanMeasure {
+  unit?: PlanUnit;
+  chars?: number;
+  pages?: number;
+}
+
+function measured(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : 0;
+}
+
+/**
+ * Counts chunks per source type, catalog and visibility, with the characters
+ * of the chunks and the pages of the files where a dry run knows them (the
+ * input of the cost estimate, see embeddingCost.ts).
+ */
 export class ChunkPlan {
   private readonly counts = new Map<string, PlanRow>();
 
@@ -279,18 +304,25 @@ export class ChunkPlan {
     sourceType: string,
     catalog: string | null,
     visibility: string,
-    chunks: number
+    chunks: number,
+    measure: PlanMeasure = {}
   ): void {
     if (chunks <= 0) return;
     const label = catalog ?? '(no catalog)';
-    const key = `${sourceType}\u0000${label}\u0000${visibility}`;
+    const unit = measure.unit ?? 'chunks';
+    const key = `${sourceType}\u0000${label}\u0000${visibility}\u0000${unit}`;
     const row = this.counts.get(key) ?? {
       sourceType,
       catalog: label,
       visibility,
+      unit,
       chunks: 0,
+      chars: 0,
+      pages: 0,
     };
     row.chunks += chunks;
+    row.chars += measured(measure.chars);
+    row.pages += measured(measure.pages);
     this.counts.set(key, row);
   }
 
@@ -299,11 +331,22 @@ export class ChunkPlan {
       (a, b) =>
         a.sourceType.localeCompare(b.sourceType) ||
         a.catalog.localeCompare(b.catalog) ||
-        a.visibility.localeCompare(b.visibility)
+        a.visibility.localeCompare(b.visibility) ||
+        a.unit.localeCompare(b.unit)
     );
   }
 
+  /** Chunks of text (files that are not read are not chunks). */
   total(): number {
-    return this.rows().reduce((sum, row) => sum + row.chunks, 0);
+    return this.rows()
+      .filter(row => row.unit === 'chunks')
+      .reduce((sum, row) => sum + row.chunks, 0);
+  }
+
+  /** Files that were counted but not read. */
+  totalFiles(): number {
+    return this.rows()
+      .filter(row => row.unit === 'files')
+      .reduce((sum, row) => sum + row.chunks, 0);
   }
 }

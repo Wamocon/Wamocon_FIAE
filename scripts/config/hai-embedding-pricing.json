@@ -1,0 +1,26 @@
+{
+  "defaultModel": "gemini-embedding-001",
+  "eurPerUsd": null,
+  "models": {
+    "gemini-embedding-001": {
+      "inputPerMillionUsd": 0.15,
+      "batchInputPerMillionUsd": 0.075,
+      "status": "last-known",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "asOf": "2026-10-28"
+    },
+    "gemini-embedding-2": {
+      "inputPerMillionUsd": 0.2,
+      "batchInputPerMillionUsd": 0.1,
+      "status": "listed",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "asOf": "2026-10-28"
+    }
+  },
+  "assumptions": {
+    "charsPerToken": { "optimistic": 4, "base": 3.5, "pessimistic": 3 },
+    "chunkChars": 400,
+    "charsPerPdfPage": 2500,
+    "pagesPerPdf": 6
+  }
+}
