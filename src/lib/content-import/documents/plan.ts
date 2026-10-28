@@ -33,6 +33,7 @@ const STATUSES: readonly PdfStatus[] = [
   'heading-missing',
   'unreadable',
   'duplicate',
+  'solution-in-pdf',
 ];
 
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -68,6 +69,16 @@ export function buildDocumentPlan(files: readonly ScannedPdf[]): DocumentPlan {
     if (problem) {
       item.status = 'unreadable';
       item.reason = problem;
+      continue;
+    }
+    // A scenario file holds the starting situation and, often, the solution too. The PDF is public,
+    // so only one whose text was checked on all pages and shows no solution is taken.
+    if (path.kind === 'scenario' && file.solutionMarker !== false) {
+      item.status = 'solution-in-pdf';
+      item.reason =
+        file.solutionMarker === true
+          ? 'The text of the scenario PDF shows a solution part, trainees must not get it.'
+          : 'The text of the scenario PDF was not checked for a solution part.';
       continue;
     }
     const heading = headingId(file.headText);
