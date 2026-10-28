@@ -2,6 +2,8 @@ import {
   findRowLeaks,
   findSolutionLeaks,
   leakOf,
+  longSolutionTexts,
+  scenarioSolutionTexts,
   SOLUTION_MARKERS,
   solutionTexts,
 } from '@/lib/content-import/apply/guard';
@@ -113,17 +115,41 @@ describe('findSolutionLeaks', () => {
     );
   });
 
-  it('does not protect the solution parts of a scenario: a scenario is whole and public', () => {
+  it('keeps the solution parts of a scenario public in the scenario itself', () => {
     const p = plan();
     expect(p.scenarios[0].solution).toBe('Eine erfundene Lösung OMEGA.');
+    // not a rationale: the whole scenario shows them, a scenario may repeat them
     const texts = solutionTexts(p);
     expect(texts).not.toContain('Eine erfundene Lösung OMEGA.');
     expect(texts).not.toContain('Ein erfundener Beitrag SIGMA.');
-    // a teaching text, a component and a scenario situation may repeat them
+    p.scenarios[0].situation = 'Eine erfundene Lösung OMEGA.';
+    p.scenarios[0].task = 'Ein erfundener Beitrag SIGMA.';
+    expect(findSolutionLeaks(p)).toEqual([]);
+  });
+
+  it('refuses a teaching text, a component and a course that repeat a scenario solution', () => {
+    const p = plan();
+    expect(scenarioSolutionTexts(p)).toContain('Eine erfundene Lösung OMEGA.');
+    expect(scenarioSolutionTexts(p)).toContain('Ein erfundener Beitrag SIGMA.');
     p.enablers[0].descriptionText = 'Dazu gehört: Eine erfundene Lösung OMEGA.';
     p.components[0].reference = 'Ein erfundener Beitrag SIGMA.';
-    p.scenarios[0].situation = 'Eine erfundene Lösung OMEGA.';
+    const problems = findSolutionLeaks(p).join(' ');
+    expect(problems).toMatch(/enabler K1-a text contains a solution text/);
+    expect(problems).toMatch(/component K1 reference contains a solution text/);
+    expect(problems).not.toContain('OMEGA');
+  });
+
+  it('refuses a teaching text that repeats the model solution of a use case, only when the caller names it', () => {
+    const p = plan();
+    const solution =
+      'Die erfundene Musterantwort KAPPA nennt zwölf Schrauben und drei Muttern.';
+    p.enablers[0].descriptionText = `Vorweg. ${solution} Danach.`;
     expect(findSolutionLeaks(p)).toEqual([]);
+    expect(findSolutionLeaks(p, [solution]).join(' ')).toMatch(
+      /enabler K1-a text contains a solution text/
+    );
+    expect(longSolutionTexts(p, [solution])).toContain(solution);
+    expect(longSolutionTexts(p)).toEqual(scenarioSolutionTexts(p));
   });
 
   it('still protects the rationales of a quiz and the markers of a solution', () => {

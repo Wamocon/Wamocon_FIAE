@@ -239,7 +239,11 @@ describe('evaluateOriginals with scenarios', () => {
   const run = async (
     fixtures: FixtureFile[],
     requested: string[],
-    options: { solutions?: string[]; planned?: string[] } = {}
+    options: {
+      solutions?: string[];
+      scenarioSolutions?: string[];
+      planned?: string[];
+    } = {}
   ) => {
     const bytes = new Map(fixtures.map(f => [f.file.id, f.bytes]));
     return evaluateOriginals({
@@ -247,6 +251,9 @@ describe('evaluateOriginals with scenarios', () => {
       files: fixtures.map(f => f.file),
       readBytes: async (f: TransferFile) => bytes.get(f.id) ?? null,
       solutions: options.solutions ?? [],
+      ...(options.scenarioSolutions
+        ? { scenarioSolutions: options.scenarioSolutions }
+        : {}),
       plannedFileIds: new Set(options.planned ?? fixtures.map(f => f.file.id)),
     });
   };
@@ -323,6 +330,48 @@ describe('evaluateOriginals with scenarios', () => {
         fileId: scenario.file.id,
         code: 'SOLUTION_TEXT',
       }),
+    ]);
+  });
+
+  it('refuses a teaching text that repeats a scenario solution, and still takes the whole scenario with it', async () => {
+    const solution =
+      'Die Auszubildende prueft zuerst den Router und danach beide Switches.';
+    const text = fixtureFile(
+      new Uint8Array(
+        await docxBytes(
+          blocksToBody([...enablerBlocks({ code: '4a' }), t(solution)])
+        )
+      ),
+      {
+        name: '4a.docx',
+        docType: 'enabler',
+        componentCode: 'K4',
+        enablerCode: 'K4-a',
+      }
+    );
+    const scenario = fixtureFile(
+      new Uint8Array(
+        await docxBytes(
+          blocksToBody([...scenarioBlocks({ code: '4a' }), t(solution)])
+        )
+      ),
+      {
+        name: 'Szenario_4a.docx',
+        docType: 'scenario',
+        componentCode: 'K4',
+        enablerCode: 'K4-a',
+      }
+    );
+    const result = await run(
+      [text, scenario],
+      [text.file.id, scenario.file.id],
+      { scenarioSolutions: [solution] }
+    );
+    expect(result.plans.map(p => [p.kind ?? 'enabler', p.fileId])).toEqual([
+      ['scenario', scenario.file.id],
+    ]);
+    expect(result.refused).toEqual([
+      expect.objectContaining({ fileId: text.file.id, code: 'SOLUTION_TEXT' }),
     ]);
   });
 

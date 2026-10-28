@@ -203,7 +203,7 @@ export async function scanWordSource(root, args, deps) {
   const files = [];
   const paths = new Map();
   const strongSolutions = [];
-  /** Scenario files are read and prepared once (their solutions are needed first). */
+  /** Scenario and use case files are read and prepared once (their solutions are needed first). */
   const prepared = new Map();
   let timeoutsInARow = 0;
   let done = 0;
@@ -243,8 +243,11 @@ export async function scanWordSource(root, args, deps) {
     reviewedBareSolutionLine: reviewed.has(info.enablerCode),
   });
 
-  // The scenario solutions come first: the enabler texts are checked against them
-  for (const item of chosen.filter(i => i.source === 'scenario')) {
+  // The solutions of the scenarios and of the use cases come first: the enabler texts are
+  // checked against them (a teaching text must not repeat them)
+  for (const item of chosen.filter(
+    i => i.source === 'scenario' || i.source === 'usecase'
+  )) {
     const bytes = await readOne(item);
     if (!bytes) {
       prepared.set(item.rel, null);
@@ -252,7 +255,7 @@ export async function scanWordSource(root, args, deps) {
     }
     const info = byRel.get(item.rel).info;
     const result = await prepareWordDocument(
-      'scenario',
+      item.source,
       bytes,
       contextOf(info)
     );

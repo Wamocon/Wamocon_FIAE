@@ -10,8 +10,11 @@
 //
 // A scenario is no secret since the decision of the owner of 29.10.2026: it is one
 // file, whole, and trainees read all of it (solution approach and knowledge text
-// included, like the scenario documents of FIAE). Its solution parts are no
-// solution texts here. Only the structure of a scenario text is still checked.
+// included, like the scenario documents of FIAE). Only that file may show its
+// solution. The decision of the owner holds for the other texts as well: a teaching
+// text of an enabler, a component or a course must not repeat a solution part of a
+// scenario word for word (see longSolutionTexts), and never the model solution of a
+// use case (the caller names those texts, see findSolutionLeaks).
 //
 // The check fails closed: a marker word of a solution in a visible text, or a
 // rationale of a quiz inside a visible text, is a leak.
@@ -87,7 +90,8 @@ const normalize = (text: string) =>
 
 /**
  * Every solution text of the plan: the rationales of the quizzes. The solution
- * parts of a scenario are not among them (the whole scenario is public).
+ * parts of a scenario are not among them: the scenario itself, its title, its
+ * situation and its task may show them (the whole scenario is public).
  */
 export function solutionTexts(plan: ImportPlan): string[] {
   const out: string[] = [];
@@ -102,13 +106,39 @@ export function solutionTexts(plan: ImportPlan): string[] {
 }
 
 /**
- * The long solution texts that are searched in the descriptions of components,
- * courses and enablers. A Lehrtext may repeat a sentence of a rationale, because
- * the rationales are taken from it, so the rationales do not count here. These
- * were the solution parts of the scenarios, which are public now: nothing is
- * left, only the marker words of a solution still hold in these fields.
+ * The solution parts of the scenarios of the plan (solution approach and the text
+ * about how the knowledge helps). Only the scenario file itself may show them.
  */
-export const LONG_SOLUTION_TEXTS: readonly string[] = Object.freeze([]);
+export function scenarioSolutionTexts(plan: ImportPlan): string[] {
+  const out: string[] = [];
+  for (const scenario of plan.scenarios) {
+    // a plan read back from a file may hold anything: only text counts
+    if (typeof scenario.solution === 'string' && scenario.solution) {
+      out.push(scenario.solution);
+    }
+    if (
+      typeof scenario.knowledgeContribution === 'string' &&
+      scenario.knowledgeContribution
+    ) {
+      out.push(scenario.knowledgeContribution);
+    }
+  }
+  return out;
+}
+
+/**
+ * The long solution texts that are searched in the descriptions of components,
+ * courses and enablers: the solution parts of the scenarios of the plan and the
+ * texts the caller names (the model solutions of the use cases, which a plan of
+ * this import does not know). A Lehrtext may repeat a sentence of a rationale,
+ * because the rationales are taken from it, so the rationales do not count here.
+ */
+export function longSolutionTexts(
+  plan: ImportPlan,
+  protectedTexts: readonly string[] = []
+): string[] {
+  return [...scenarioSolutionTexts(plan), ...protectedTexts];
+}
 
 /**
  * Where a visible text shows a solution. `solutions` are the solution texts to
@@ -211,9 +241,12 @@ function needleIndex(solutions: readonly string[]): Map<string, string[]> {
 }
 
 /** Problems of the plan: a solution in a field that trainees can see. */
-export function findSolutionLeaks(plan: ImportPlan): string[] {
+export function findSolutionLeaks(
+  plan: ImportPlan,
+  protectedTexts: readonly string[] = []
+): string[] {
   const solutions = solutionTexts(plan);
-  const strong = LONG_SOLUTION_TEXTS;
+  const strong = longSolutionTexts(plan, protectedTexts);
   const reviewed = reviewedEnablerCodes(plan);
   const problems: string[] = [];
   const check = (

@@ -294,6 +294,54 @@ describe('buildImportPlan: structure', () => {
     }
   );
 
+  describe('a teaching text that repeats a solution', () => {
+    const withEnablerText = (body: string[]) => {
+      const files = sampleTree().filter(
+        f => !f.rel.endsWith('/Enablers/1a_Thema/1a.docx')
+      );
+      files.push(
+        file(
+          `${DIR.k1}/Enablers/1a_Thema/1a.docx`,
+          enablerContent('1a) Erfundenes Enabler-Thema', body)
+        )
+      );
+      return files;
+    };
+
+    it('is refused when it repeats the solution of a scenario, the scenario files stay whole', () => {
+      const p = build(
+        withEnablerText([
+          'Erfundener Lehrtext.',
+          'Dazu gehört: Eine erfundene Lösung OMEGA.',
+        ])
+      );
+      const codes = Object.fromEntries(p.skipped.map(s => [s.key, s.code]));
+      expect(codes['enabler:K1-a']).toBe('SOLUTION_MARKER');
+      expect(p.enablers.map(e => e.code)).not.toContain('K1-a');
+      // the other enablers and the whole scenarios of them are kept, with their solution
+      expect(p.enablers.map(e => e.code)).toContain('K1-b');
+      const kept = p.scenarios.find(s => s.enablerCode === 'K1-b')!;
+      expect(kept.solution).toBe('Eine erfundene Lösung OMEGA.');
+      expect(kept.knowledgeContribution).toBe('Ein erfundener Beitrag SIGMA.');
+      expect(JSON.stringify(p.skipped)).not.toContain('OMEGA');
+    });
+
+    it('is refused when it repeats the model solution of a use case that the caller names', () => {
+      const solution =
+        'Die erfundene Musterantwort KAPPA nennt zwölf Schrauben und drei Muttern.';
+      const files = withEnablerText(['Erfundener Lehrtext.', solution]);
+      expect(build(files).enablers.map(e => e.code)).toContain('K1-a');
+      const p = buildImportPlan(files, decisions, {
+        now: NOW,
+        protectedTexts: [solution],
+      });
+      const codes = Object.fromEntries(p.skipped.map(s => [s.key, s.code]));
+      expect(codes['enabler:K1-a']).toBe('SOLUTION_MARKER');
+      expect(p.enablers.map(e => e.code)).not.toContain('K1-a');
+      expect(JSON.stringify(p.skipped)).not.toContain('KAPPA');
+    });
+  });
+
   it('counts everything and skips nothing for a clean tree', () => {
     expect(planCounts(plan)).toEqual({
       components: 5,

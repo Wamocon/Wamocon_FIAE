@@ -23,6 +23,7 @@ import {
 import type { ItemEvent } from '@/lib/content-import/apply/types';
 import { executeLearningFieldPlan } from '@/lib/content-import/learning-fields/engine';
 import { executeUseCasePlan } from '@/lib/content-import/use-cases/engine';
+import { solutionTextsOfUseCases } from '@/lib/content-import/use-cases/guard';
 import { withReservedConnection } from '@/lib/content-upload/connection';
 import { UPLOAD_CATALOG_CODE } from '@/lib/content-upload/staging/config';
 import {
@@ -166,6 +167,9 @@ export async function compareStock(
                 activate: FIXED_ENGINE_OPTIONS.activate,
                 scenarioSolutions: FIXED_ENGINE_OPTIONS.scenarioSolutions,
                 extendQuizzes: FIXED_ENGINE_OPTIONS.extendQuizzes,
+                protectedTexts: solutionTextsOfUseCases(
+                  plan.useCasePlan.useCases
+                ),
                 observe,
               });
               if (plan.useCasePlan.useCases.length > 0) {
