@@ -19,7 +19,7 @@ import {
   resolveCatalogBranding,
   type CatalogBranding,
 } from '@/lib/catalog/branding';
-import { isSuperAdmin, isTrainerLevelRole } from '@/lib/auth/roles';
+import { isSuperAdmin } from '@/lib/auth/roles';
 import { NO_CATALOG_CODE, normalizeCatalogCode } from '@/lib/catalog/client';
 import {
   navigateTo,
@@ -59,9 +59,10 @@ export interface CatalogContextValue {
   /** The user has more than one occupation. */
   isMultiple: boolean;
   /**
-   * The tabs of the pages: the usable occupations of a trainer level user who
-   * has more than one of them (active ones, a super admin also the inactive
-   * ones), otherwise empty (no tabs).
+   * The tabs of the pages: the usable occupations of a user who has more than
+   * one of them (active ones, a super admin also the inactive ones), otherwise
+   * empty (no tabs). A trainee gets them for the trainings they are enrolled
+   * in, only those: the server lists nothing else.
    */
   tabs: CatalogOption[];
   /** Switch the occupation with a tab: no reload, the URL names the choice. */
@@ -205,11 +206,6 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [epoch, setEpoch] = useState(0);
   const [noCatalog, setNoCatalog] = useState(false);
   const previousUserId = useRef<string | null>(null);
-  // Tabs and the URL choice are for trainer level users only (a trainee has
-  // the occupation of the enrollment).
-  const trainerLevel = isTrainerLevelRole(profile?.role);
-  const trainerLevelRef = useRef(trainerLevel);
-  trainerLevelRef.current = trainerLevel;
   // A super admin (also an ADMIN of the platform organization) can view an
   // inactive occupation, nobody else.
   const superAdmin = isSuperAdmin({
@@ -296,7 +292,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           usableCatalogs(data.catalogs, superAdminRef.current).length > 0;
         const active = chooseActive(
           data,
-          trainerLevelRef.current ? catalogFromTabPage() : null,
+          catalogFromTabPage(),
           superAdminRef.current
         );
         const headerBefore = getCatalogHeader();
@@ -311,7 +307,6 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           multiple &&
           !gated &&
           headerBefore === null &&
-          trainerLevelRef.current &&
           isCatalogTabPath(window.location.pathname)
         ) {
           setEpoch(value => value + 1);
@@ -351,8 +346,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const catalogs = loaded?.catalogs ?? NO_CATALOGS;
   const tabs = useMemo(() => {
     const usable = usableCatalogs(catalogs, superAdmin);
-    return trainerLevel && usable.length > 1 ? usable : NO_CATALOGS;
-  }, [catalogs, trainerLevel, superAdmin]);
+    return usable.length > 1 ? usable : NO_CATALOGS;
+  }, [catalogs, superAdmin]);
 
   // Switch the occupation without a reload: the header and the stored choice
   // change, the page content (keyed with the epoch) loads again, the query

@@ -168,7 +168,157 @@ describe('catalog scope', () => {
       });
     });
 
-    it('takes the latest enrollment as default and allows only enrolled catalogs', async () => {
+    describe('with two enrollments', () => {
+      const bothEnabled = [
+        { trainingCatalogId: FIAE, isEnabled: true },
+        { trainingCatalogId: KFBM, isEnabled: true },
+      ];
+      // KfBM was enrolled in first, FIAE later (whatever the start dates say)
+      const two = [
+        {
+          trainingCatalogId: FIAE,
+          startDate: '2026-08-01',
+          createdAt: new Date('2026-10-02T08:00:00Z'),
+        },
+        {
+          trainingCatalogId: KFBM,
+          startDate: '2024-08-01',
+          createdAt: new Date('2026-09-01T08:00:00Z'),
+        },
+      ];
+      const fixture = () => ({
+        trainingCatalogs: catalogRows,
+        organizationCatalogs: bothEnabled,
+        traineeEnrollments: two,
+      });
+
+      it('takes the training enrolled in first as default and allows both', async () => {
+        const { getCatalogScope } = await load(fixture());
+        const scope = await getCatalogScope(trainee, req());
+        expect(scope.activeCatalogId).toBe(KFBM);
+        expect(scope.allowedCatalogIds).toEqual([KFBM, FIAE]);
+      });
+
+      it('without a choice a trainee works in ONE occupation, never in a mix of both', async () => {
+        const { getCatalogScope, readCatalogIds, catalogCacheKey } =
+          await load(fixture());
+        const scope = await getCatalogScope(trainee, req());
+        expect(scope.selected).toBe(true);
+        expect(readCatalogIds(scope)).toEqual([KFBM]);
+        expect(catalogCacheKey(scope)).toBe(KFBM);
+      });
+
+      it.each([
+        ['x-catalog', 'FIAE'],
+        ['query', 'fiae'],
+      ])(
+        'a valid choice by %s selects the other enrollment',
+        async (how, code) => {
+          const { getCatalogScope, readCatalogIds } = await load(fixture());
+          const scope = await getCatalogScope(
+            trainee,
+            how === 'query' ? req({ query: code }) : req({ header: code })
+          );
+          expect(scope.activeCatalogId).toBe(FIAE);
+          expect(readCatalogIds(scope)).toEqual([FIAE]);
+          // both stay allowed: a single record of the own enrollments can be opened
+          expect(scope.allowedCatalogIds).toEqual([KFBM, FIAE]);
+        }
+      );
+
+      it('a header wins over the query', async () => {
+        const { getCatalogScope } = await load(fixture());
+        const scope = await getCatalogScope(
+          trainee,
+          req({ header: 'FIAE', query: 'KFBM' })
+        );
+        expect(scope.activeCatalogId).toBe(FIAE);
+      });
+
+      it.each(['NOPE', 'KFBM,FIAE', "FIAE'--", '%'])(
+        'an invalid code %p is 403, never widened',
+        async code => {
+          const { getCatalogScope } = await load(fixture());
+          await expect(
+            getCatalogScope(trainee, req({ header: code }))
+          ).rejects.toMatchObject({ status: 403 });
+        }
+      );
+
+      it('a catalog that exists but is not an enrollment of this trainee is 403', async () => {
+        const OTHER = '00000000-0000-4000-8000-000000000003';
+        const { getCatalogScope } = await load({
+          trainingCatalogs: [
+            ...catalogRows,
+            { id: OTHER, code: 'ITSE', isActive: true },
+          ],
+          organizationCatalogs: [
+            ...bothEnabled,
+            { trainingCatalogId: OTHER, isEnabled: true },
+          ],
+          traineeEnrollments: two,
+        });
+        await expect(
+          getCatalogScope(trainee, req({ header: 'ITSE' }))
+        ).rejects.toMatchObject({ status: 403 });
+      });
+
+      it('an enrollment in a disabled catalog does not count, one training is left', async () => {
+        const { getCatalogScope, readCatalogIds } = await load({
+          ...fixture(),
+          organizationCatalogs: [
+            { trainingCatalogId: FIAE, isEnabled: true },
+            { trainingCatalogId: KFBM, isEnabled: false },
+          ],
+        });
+        const scope = await getCatalogScope(trainee, req());
+        expect(scope.allowedCatalogIds).toEqual([FIAE]);
+        // one occupation: nothing is narrowed, the selection flag stays as before
+        expect(scope.selected).toBe(false);
+        expect(readCatalogIds(scope)).toEqual([FIAE]);
+        await expect(
+          getCatalogScope(trainee, req({ header: 'KFBM' }))
+        ).rejects.toMatchObject({ status: 403 });
+      });
+
+      it('server internal readers get both, unless the request names a choice', async () => {
+        const { getCatalogScopeForUserId, readCatalogIds } = await load({
+          ...fixture(),
+          profiles: [{ id: 't1', role: 'TRAINEE', organizationId: ORG }],
+        });
+        const internal = await getCatalogScopeForUserId('t1');
+        expect(internal?.selected).toBe(false);
+        expect(readCatalogIds(internal!)).toEqual([KFBM, FIAE]);
+        const withRequest = await getCatalogScopeForUserId(
+          't1',
+          req({ header: 'FIAE' })
+        );
+        expect(readCatalogIds(withRequest!)).toEqual([FIAE]);
+        // a refused choice is no scope at all
+        expect(
+          await getCatalogScopeForUserId('t1', req({ header: 'NOPE' }))
+        ).toBeNull();
+      });
+
+      it('requireCatalogScopeForUser narrows a trainee with two enrollments too', async () => {
+        const { requireCatalogScopeForUser, readCatalogIds } = await load({
+          ...fixture(),
+          profiles: [{ id: 't1', role: 'TRAINEE', organizationId: ORG }],
+        });
+        const scope = await requireCatalogScopeForUser('t1', req());
+        expect(readCatalogIds(scope as any)).toEqual([KFBM]);
+      });
+
+      it('trainer level roles are not narrowed by this rule', async () => {
+        const { getCatalogScope } = await load({
+          trainingCatalogs: catalogRows,
+          organizationCatalogs: bothEnabled,
+        });
+        expect((await getCatalogScope(trainer, req())).selected).toBe(false);
+      });
+    });
+
+    it('falls back to the start date, then the catalog, when nothing says who came first', async () => {
       const { getCatalogScope } = await load({
         trainingCatalogs: catalogRows,
         organizationCatalogs: [
@@ -176,13 +326,13 @@ describe('catalog scope', () => {
           { trainingCatalogId: KFBM, isEnabled: true },
         ],
         traineeEnrollments: [
-          { trainingCatalogId: FIAE, startDate: '2024-08-01' },
           { trainingCatalogId: KFBM, startDate: '2026-08-01' },
+          { trainingCatalogId: FIAE, startDate: '2024-08-01' },
         ],
       });
       const scope = await getCatalogScope(trainee, req());
-      expect(scope.activeCatalogId).toBe(KFBM);
-      expect(scope.allowedCatalogIds).toEqual([KFBM, FIAE]);
+      expect(scope.activeCatalogId).toBe(FIAE);
+      expect(scope.allowedCatalogIds).toEqual([FIAE, KFBM]);
     });
 
     it('cannot select a catalog without an enrollment (403)', async () => {
@@ -239,7 +389,9 @@ describe('catalog scope', () => {
         req({ header: 'KFBM' })
       )) as Response;
       expect(res.status).toBe(403);
-      expect(await res.json()).toEqual({ error: 'Training catalog not allowed' });
+      expect(await res.json()).toEqual({
+        error: 'Training catalog not allowed',
+      });
     });
   });
 

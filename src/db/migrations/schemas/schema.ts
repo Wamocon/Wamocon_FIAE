@@ -1571,11 +1571,12 @@ export const organizationCatalogs = pgTable(
 );
 
 // === TRAINEE ENROLLMENTS ===
-// A trainee has exactly one occupation: one enrollment row per trainee (unique
-// index trainee_enrollments_trainee_unique, 20261026000100). Changing the
-// occupation replaces the row. profiles.start_of_training_date /
-// ausbildung_duration_years stay the source of truth for the running app until
-// the app switches over.
+// A trainee can be enrolled in several occupations, also at the same time: one
+// enrollment row per trainee and catalog (unique on trainee_id plus
+// training_catalog_id). Until 20261030000300 a unique index on trainee_id alone
+// allowed one. profiles.start_of_training_date / ausbildung_duration_years
+// describe the first enrollment of the trainee for the running app, every
+// further enrollment carries its own start date and duration.
 export const traineeEnrollments = pgTable(
   'trainee_enrollments',
   {
@@ -1603,11 +1604,8 @@ export const traineeEnrollments = pgTable(
     traineeCatalogUnique: unique(
       'trainee_enrollments_trainee_catalog_unique'
     ).on(table.traineeId, table.trainingCatalogId),
-    // At most one enrollment per trainee (the database enforces what
-    // setTraineeEnrollment does inside its transaction)
-    traineeUnique: uniqueIndex('trainee_enrollments_trainee_unique').on(
-      table.traineeId
-    ),
+    // A trainee can have several enrollments, one per catalog (the unique
+    // index on trainee_id alone was dropped by 20261030000300)
     // Target of composite foreign keys (elective choices)
     idCatalogUnique: unique('trainee_enrollments_id_catalog_unique').on(
       table.id,

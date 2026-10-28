@@ -53,13 +53,12 @@ export function MainLayout({
   // Determine current view from URL path - optimized with useMemo
   const currentView = useMemo(() => 'dashboard', []);
   const pathname = usePathname();
-  // Tabs per training on the content and list pages (trainer level users with
-  // more than one occupation). The page content is keyed with the epoch, so a
-  // switch loads every page again for the chosen occupation. The tabs sit
-  // outside of the key and keep the focus.
+  // Tabs per training on the content and list pages (trainer level users and
+  // trainees with more than one occupation). The page content is keyed with
+  // the epoch, so a switch loads every page again for the chosen occupation.
+  // The tabs sit outside of the key and keep the focus.
   const { tabs, epoch } = useCatalog();
-  const showTabs =
-    userRole === 'trainer' && tabs.length > 1 && isCatalogTabPath(pathname);
+  const showTabs = tabs.length > 1 && isCatalogTabPath(pathname);
   const hideBackButton = useMemo(() => {
     if (!pathname) return false;
     // Hide back button on dashboard and quiz pages (no meaningful back navigation)

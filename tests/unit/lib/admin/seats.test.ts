@@ -151,3 +151,61 @@ describe('tallySeatsByOrganization', () => {
     });
   });
 });
+
+describe('seats and enrollments (a trainee can be in several trainings)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('counts the accounts, never the enrollments: two trainings are one seat', async () => {
+    // The trainee table of the mock has one row for a trainee that is enrolled
+    // twice. The count reads profiles only, trainee_enrollments is not part of
+    // the question at all, so a second enrollment cannot take a second seat.
+    const { mod, mock } = await load({
+      organizations: [orgRow],
+      profiles: [{ role: 'TRAINEE', count: 1 }],
+      traineeEnrollments: [
+        { traineeId: 't1', trainingCatalogId: 'a' },
+        { traineeId: 't1', trainingCatalogId: 'b' },
+      ],
+    });
+    expect(await mod.loadSeatUsage(mock.db, ORG)).toMatchObject({
+      trainees: 1,
+    });
+    const tables = mock.calls
+      .filter(call => call.op === 'select')
+      .map(call => call.table);
+    expect(tables.sort()).toEqual(['organizations', 'profiles']);
+  });
+
+  it('adding an enrollment asks for no seat and takes no lock of the seats', async () => {
+    jest.resetModules();
+    const mock = createTableDb({
+      profiles: [{ id: 't1', role: 'TRAINEE', organizationId: ORG }],
+      trainingCatalogs: [
+        { id: 'a', code: 'FIAE', title: 'FIAE', isActive: true },
+        { id: 'b', code: 'KFBM', title: 'KfBM', isActive: true },
+      ],
+      organizationCatalogs: [
+        { trainingCatalogId: 'a', isEnabled: true },
+        { trainingCatalogId: 'b', isEnabled: true },
+      ],
+      traineeEnrollments: [{ id: 'e1', trainingCatalogId: 'a' }],
+    });
+    jest.doMock('@/db', () => ({ __esModule: true, default: mock.db }));
+    const admin = await import('@/lib/catalog/admin');
+    const result = await admin.addTraineeEnrollment('t1', 'b');
+    expect(result.ok).toBe(true);
+    // the only statement of a lock is the catalog administration lock
+    const locks = mock.db.execute.mock.calls.map((call: unknown[]) =>
+      renderCondition(call[0] as never).sql
+    );
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toContain('hashtext($1)');
+    expect(locks[0]).not.toContain('hashtext($2)');
+    // and no organization or profile row is counted or changed
+    expect(mock.writes('update', 'profiles')).toHaveLength(0);
+    expect(mock.writes('insert', 'profiles')).toHaveLength(0);
+    expect(
+      mock.calls.filter(call => call.op === 'select' && call.table === 'organizations')
+    ).toHaveLength(0);
+  });
+});

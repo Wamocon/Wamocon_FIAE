@@ -58,6 +58,10 @@ function setUrl(search: string) {
   window.history.replaceState(null, '', `/trainer/trainees${search}`);
 }
 
+function setTraineeUrl(search: string, path = '/trainee/dashboard') {
+  window.history.replaceState(null, '', `${path}${search}`);
+}
+
 describe('CatalogProvider tabs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -79,15 +83,47 @@ describe('CatalogProvider tabs', () => {
       }
     );
 
-    it('no tabs for a trainee, also with several occupations (Altdaten)', async () => {
+    it('a trainee with several enrollments gets tabs for exactly those, the server default is active', async () => {
       signedInAs('trainee');
       respond({ catalogs: [FIAE, KFBM], activeCode: 'KFBM' });
       const { result } = setup();
       await waitFor(() => expect(result.current.status).toBe('ready'));
-      expect(result.current.tabs).toEqual([]);
-      // the enrollment decides, the active one is shown, nothing to switch
+      expect(result.current.tabs.map(c => c.code)).toEqual(['FIAE', 'KFBM']);
+      // nothing chosen yet: the first enrolled occupation of the server
       expect(result.current.activeCode).toBe('KFBM');
       expect(getCatalogHeader()).toBe('KFBM');
+    });
+
+    it('the last choice of a trainee wins over the server default', async () => {
+      signedInAs('trainee');
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'KFBM' });
+      writePreferredCatalog('FIAE');
+      resetCatalogSelection();
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.activeCode).toBe('FIAE');
+      expect(getCatalogHeader()).toBe('FIAE');
+    });
+
+    it('a stored choice that is no enrollment of the trainee is not used', async () => {
+      signedInAs('trainee');
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'KFBM' });
+      writePreferredCatalog('ELEK');
+      resetCatalogSelection();
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.activeCode).toBe('KFBM');
+    });
+
+    it('no tabs for a trainee with ONE enrollment, and no header (as before)', async () => {
+      signedInAs('trainee');
+      respond({ catalogs: [KFBM], activeCode: 'KFBM' });
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.tabs).toEqual([]);
+      expect(result.current.activeCode).toBe('KFBM');
+      expect(getCatalogHeader()).toBeNull();
+      expect(result.current.epoch).toBe(0);
     });
 
     it('no tabs for a single occupation (FIAE regression)', async () => {
@@ -226,10 +262,32 @@ describe('CatalogProvider tabs', () => {
       expect(result.current.activeCode).toBe('FIAE');
     });
 
-    it('a trainee ignores the URL', async () => {
+    it('a trainee takes the occupation of the URL on a trainee page with tabs', async () => {
       signedInAs('trainee');
       respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
-      setUrl('?catalog=KFBM');
+      setTraineeUrl('?catalog=KFBM');
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.activeCode).toBe('KFBM');
+      expect(getCatalogHeader()).toBe('KFBM');
+    });
+
+    it.each(['?catalog=ZZZ', '?catalog=ELEK', '?catalog=KFBM&catalog=FIAE'])(
+      'a trainee falls back to the default for the URL %p (an occupation of somebody else is never taken)',
+      async search => {
+        signedInAs('trainee');
+        respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
+        setTraineeUrl(search);
+        const { result } = setup();
+        await waitFor(() => expect(result.current.status).toBe('ready'));
+        expect(result.current.activeCode).toBe('FIAE');
+      }
+    );
+
+    it('a trainee ignores the URL on a page without tabs', async () => {
+      signedInAs('trainee');
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
+      setTraineeUrl('?catalog=KFBM', '/trainee/profile');
       const { result } = setup();
       await waitFor(() => expect(result.current.status).toBe('ready'));
       expect(result.current.activeCode).toBe('FIAE');
@@ -295,14 +353,20 @@ describe('CatalogProvider tabs', () => {
       expect(pushCatalogUrl).not.toHaveBeenCalled();
     });
 
-    it('does nothing for a trainee (no tabs)', async () => {
+    it('a trainee switches between the own enrollments, nothing else', async () => {
       signedInAs('trainee');
       respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
       const { result } = setup();
       await waitFor(() => expect(result.current.status).toBe('ready'));
       act(() => result.current.selectTab('KFBM'));
-      expect(result.current.activeCode).toBe('FIAE');
-      expect(pushCatalogUrl).not.toHaveBeenCalled();
+      expect(result.current.activeCode).toBe('KFBM');
+      expect(getCatalogHeader()).toBe('KFBM');
+      expect(readPreferredCatalog()).toBe('KFBM');
+      expect(pushCatalogUrl).toHaveBeenCalledWith('FIAE', 'KFBM');
+      // an occupation the trainee is not enrolled in is refused
+      act(() => result.current.selectTab('ELEK'));
+      expect(result.current.activeCode).toBe('KFBM');
+      expect(pushCatalogUrl).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -378,11 +442,22 @@ describe('CatalogProvider tabs', () => {
       expect(result.current.epoch).toBe(0);
     });
 
-    it('does not load the page of a trainee again either', async () => {
+    it('loads the page of a trainee with two enrollments again for the first header', async () => {
       signedInAs('trainee');
       respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
+      setTraineeUrl('');
       const { result } = setup();
       await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.epoch).toBe(1);
+    });
+
+    it('does not load a trainee page without tabs again', async () => {
+      signedInAs('trainee');
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
+      setTraineeUrl('', '/trainee/profile');
+      const { result } = setup();
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(getCatalogHeader()).toBe('FIAE');
       expect(result.current.epoch).toBe(0);
     });
 
@@ -442,14 +517,24 @@ describe('CatalogProvider tabs', () => {
       expect(getCatalogHeader()).toBe('FIAE');
     });
 
-    it('is not registered for a trainee and not on a page without tabs', async () => {
+    it('is registered for a trainee with tabs, not for one occupation and not on a page without tabs', async () => {
       const add = jest.spyOn(window, 'addEventListener');
       signedInAs('trainee');
+      respond({ catalogs: [FIAE, KFBM], activeCode: 'FIAE' });
       const trainee = setup();
       await waitFor(() => expect(trainee.result.current.status).toBe('ready'));
-      expect(add.mock.calls.filter(c => c[0] === 'popstate')).toHaveLength(0);
+      expect(add.mock.calls.filter(c => c[0] === 'popstate')).toHaveLength(1);
       trainee.unmount();
 
+      add.mockClear();
+      resetCatalogSelection();
+      respond({ catalogs: [KFBM], activeCode: 'KFBM' });
+      const single = setup();
+      await waitFor(() => expect(single.result.current.status).toBe('ready'));
+      expect(add.mock.calls.filter(c => c[0] === 'popstate')).toHaveLength(0);
+      single.unmount();
+
+      respond({ catalogs: [FIAE, KFBM, OFF], activeCode: 'FIAE' });
       signedInAs('trainer');
       resetCatalogSelection();
       window.history.replaceState(null, '', '/trainer/profile');

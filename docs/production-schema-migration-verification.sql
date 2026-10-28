@@ -438,12 +438,26 @@ from public.trainee_enrollments
 group by trainee_id
 having count(*) > 1;
 
--- C11b. After 20261026000100 only: the unique index exists and is a plain unique
--- index on trainee_id (expect one row with is_unique = true, is_valid = true).
+-- C11b. After 20261026000100 and BEFORE 20261030000300 only: the unique index exists and
+-- is a plain unique index on trainee_id (expect one row with is_unique = true,
+-- is_valid = true). In the Production release both files run in one go, so this check
+-- is meant for the Preview and for a stop between the two files; use C11c after the release.
 select i.indexrelid::regclass as index_name, i.indisunique as is_unique, i.indisvalid as is_valid,
        pg_get_indexdef(i.indexrelid) as definition
 from pg_index i
 where i.indexrelid = to_regclass('public.trainee_enrollments_trainee_unique');
+
+-- C11c. After 20261030000300 (a trainee can have several enrollments): the index on
+-- trainee_id alone is gone and the unique constraint per trainee and catalog is still
+-- there. Expect one row with index_present = false and catalog_unique = true.
+select to_regclass('public.trainee_enrollments_trainee_unique') is not null as index_present,
+       exists (
+         select 1 from pg_constraint c
+         where c.conrelid = 'public.trainee_enrollments'::regclass
+           and c.conname = 'trainee_enrollments_trainee_catalog_unique'
+           and c.contype = 'u'
+           and pg_get_constraintdef(c.oid) = 'UNIQUE (trainee_id, training_catalog_id)'
+       ) as catalog_unique;
 
 -- C12. Before 20261027000100 (HAI index scope): chunks per source_type. The file
 -- derives catalog, organization and visibility for every row in pure SQL (no model

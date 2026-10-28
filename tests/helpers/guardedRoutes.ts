@@ -740,6 +740,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['userId'],
   },
   {
+    route: 'admin/users/[userId]/enrollment',
+    method: 'DELETE',
+    guard: 'superAdmin',
+    params: ['userId'],
+  },
+  {
     route: 'admin/users/[userId]',
     method: 'PATCH',
     guard: 'admin',

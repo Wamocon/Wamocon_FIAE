@@ -55,7 +55,7 @@ describe('mergeProfileReferences', () => {
     expect(await runMerge(from, to)).toEqual([]);
   });
 
-  it('hands the enrollment of the pre-created profile to the new profile', async () => {
+  it('hands the enrollments of the pre-created profile to the new profile', async () => {
     const statements = await runMerge();
     const update = statements.find(isEnrollmentUpdate);
 
@@ -66,7 +66,7 @@ describe('mergeProfileReferences', () => {
     expect(update!.params.slice(0, 2)).toEqual([NEW_ID, OLD_ID]);
   });
 
-  it('moves the row itself, so the elective choices stay attached to it', async () => {
+  it('moves the rows themselves, so the elective choices stay attached to them', async () => {
     const statements = await runMerge();
     const update = statements.find(isEnrollmentUpdate)!;
 
@@ -75,49 +75,69 @@ describe('mergeProfileReferences', () => {
     // no row of trainee_elective_choices is written or deleted here.
     expect(update.sql).not.toMatch(/SET "(?!trainee_id")/);
     expect(update.sql).not.toContain('"id"');
-    expect(update.sql).not.toContain('"training_catalog_id" =');
+    // the SET list holds the trainee only, not the catalog
+    expect(update.sql).toMatch(
+      /^UPDATE "trainee_enrollments" SET "trainee_id" = \$1 WHERE/
+    );
     expect(
       statements.filter(s => s.sql.includes('trainee_elective_choices'))
     ).toEqual([]);
   });
 
-  it('does not move the enrollment while the new profile keeps its own', async () => {
+  it('moves every enrollment the new profile has no row in the same catalog for', async () => {
     const statements = await runMerge();
     const update = statements.find(isEnrollmentUpdate)!;
 
-    // The unique index allows one row per trainee. The move only runs when the
-    // new profile has no enrollment (left) after the delete below.
+    // A trainee can have several enrollments (one per catalog), so the move
+    // is per catalog: it skips a row only when the new profile holds one in the
+    // same catalog (the delete before removes the ones that lose).
     expect(update.sql).toMatch(
-      /AND NOT EXISTS \( SELECT 1 FROM "trainee_enrollments" keep_row WHERE keep_row\."trainee_id" = \$3 \)$/
+      /AND NOT EXISTS \( SELECT 1 FROM "trainee_enrollments" keep_row WHERE keep_row\."trainee_id" = \$\d+ AND keep_row\."training_catalog_id" = "trainee_enrollments"\."training_catalog_id" \)$/
     );
-    expect(update.params[2]).toBe(NEW_ID);
+    // not "while the new profile has any row": that was the rule of one enrollment
+    expect(update.sql).not.toMatch(/keep_row\."trainee_id" = \$\d+ \)$/);
+    expect(update.params).toContain(NEW_ID);
   });
 
-  it('lets the enrollment of the pre-created profile replace the one of the new profile', async () => {
+  it('lets the enrollment of the pre-created profile replace the one of the new profile in the same catalog', async () => {
     const statements = await runMerge();
     const remove = statements.find(isEnrollmentDelete);
 
     expect(remove).toBeDefined();
-    // Rows of the NEW profile are deleted, if the OLD profile has one
+    // Rows of the NEW profile are deleted, if the OLD profile has one in the
+    // same catalog
     expect(remove!.sql).toContain('new_row."trainee_id" = $1');
-    expect(remove!.sql).toContain('old_row."trainee_id" = $2');
-    expect(remove!.params.slice(0, 2)).toEqual([NEW_ID, OLD_ID]);
+    expect(remove!.sql).toContain('old_row."trainee_id" = $');
+    expect(remove!.sql).toContain(
+      'old_row."training_catalog_id" = new_row."training_catalog_id"'
+    );
+    expect(remove!.params[0]).toBe(NEW_ID);
+    expect(remove!.params).toContain(OLD_ID);
   });
 
-  it('spares a deliberate occupation of the new profile against the default FIAE', async () => {
+  it('keeps the default FIAE weaker than a deliberate occupation, in both directions', async () => {
     const statements = await runMerge();
     const remove = statements.find(isEnrollmentDelete)!;
+    const update = statements.find(isEnrollmentUpdate)!;
 
-    // The old enrollment wins when it is not FIAE (an administrator moved the
-    // trainee away from the default), or when the row of the new profile is
-    // FIAE itself (the default is the weaker statement, same catalog or not).
-    // An old FIAE row never replaces a new row of another catalog.
+    // Hands over when the old profile has an enrollment in another catalog, or
+    // when the new profile has none in another catalog. Old FIAE alone never
+    // joins a deliberate occupation of the new profile.
+    for (const statement of [remove, update]) {
+      expect(statement.sql).toMatch(
+        /old_other\."training_catalog_id" <> \$\d+/
+      );
+      expect(statement.sql).toMatch(
+        /OR NOT EXISTS \( SELECT 1 FROM "trainee_enrollments" new_other WHERE new_other\."trainee_id" = \$\d+ AND new_other\."training_catalog_id" <> \$\d+ \)/
+      );
+      expect(statement.params).toContain(FIAE);
+    }
+    // A default FIAE row of the new profile gives way to another occupation of
+    // the old profile
     expect(remove.sql).toMatch(
-      /AND \( old_row\."training_catalog_id" <> \$3 OR new_row\."training_catalog_id" = \$4 \)/
+      /new_row\."training_catalog_id" = \$\d+ AND EXISTS \( SELECT 1 FROM "trainee_enrollments" old_other/
     );
-    expect(remove.params).toEqual([NEW_ID, OLD_ID, FIAE, FIAE]);
   });
-
   it('decides about the enrollment before it moves anything', async () => {
     const statements = await runMerge();
     const enrollmentStatements = statements.filter(

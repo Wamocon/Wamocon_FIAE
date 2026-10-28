@@ -14,6 +14,7 @@ import {
   profiles,
 } from '@/db/migrations/schemas/schema';
 import { loadPhasePlansForUsers } from '@/lib/catalog/phase-plan-db';
+import { requestedCatalogCode, requireCatalogScope } from '@/lib/catalog/scope';
 import { requireTraineeScopeCondition } from '@/lib/auth/trainee-scope-conditions';
 
 // GET /api/trainer/activity-reports?trainerId=...&status=...
@@ -111,13 +112,24 @@ export async function GET(req: NextRequest) {
     const reportTraineeIds = [
       ...new Set(reports.map(r => String(r.traineeId))),
     ];
+    // A trainee in two trainings is labelled with the plan of the occupation
+    // the list was opened in (the trainer tab), only asked when one was chosen
+    let preferredCatalogId: string | null = null;
+    if (reportTraineeIds.length > 0 && requestedCatalogCode(req)) {
+      const catalogScope = await requireCatalogScope(session, req);
+      if (!(catalogScope instanceof Response)) {
+        preferredCatalogId = catalogScope.activeCatalogId;
+      }
+    }
     const phasePlans =
       reportTraineeIds.length > 0
         ? await loadPhasePlansForUsers(
             reportTraineeIds.map(id => ({
               id,
               durationYears: traineeMap.get(id)?.ausbildungDurationYears,
-            }))
+            })),
+            undefined,
+            preferredCatalogId
           )
         : new Map<string, { phaseMonths: [number, number] }>();
 

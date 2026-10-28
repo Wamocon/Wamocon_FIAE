@@ -180,47 +180,75 @@ async function deleteConflictingRows(
 }
 
 /**
- * Hands the enrollment (the occupation) of the trainee to the new profile.
+ * Hands the enrollments (the occupations) of the trainee to the new profile.
  *
  * The elective choices hang on the enrollment row (trainee_elective_choices
  * points at the enrollment id), so moving the row moves them too. Only
  * trainee_id changes, the id and the catalog stay.
  *
- * A trainee has one enrollment (unique index
- * trainee_enrollments_trainee_unique), so a row cannot simply be moved when
- * the new profile has one already:
- *  - The enrollment of the pre-created profile wins. An administrator set it
- *    for this person, like the role, the organization, the start date and the
- *    duration that the merge takes over from the pre-created profile as well.
- *  - Exception: FIAE is the default (a trainee without a row works in FIAE),
- *    so an old FIAE row never replaces a row of another catalog on the new
- *    profile. Such a row is a deliberate choice, it is kept and the old FIAE
- *    row goes with the old profile.
+ * A trainee can be enrolled in several trainings, one enrollment per catalog
+ * (unique on trainee_id plus training_catalog_id). The old profile (the
+ * pre-created one) hands over all its enrollments; where the new profile has
+ * one in the same catalog already, the row of the old profile wins and replaces
+ * it as a whole, with its start date, duration and elective choices (an
+ * administrator set it for this person, like the role, the organization, the
+ * start date and the duration that the merge takes over from the pre-created
+ * profile as well).
+ *
+ * FIAE is the default (a trainee without a row works in FIAE), so it is the
+ * weaker statement:
+ *  - A default FIAE row of the new profile gives way as soon as the old profile
+ *    has an enrollment in another catalog.
+ *  - An old profile that has nothing but FIAE hands it over only if the new
+ *    profile has no enrollment in another catalog. Such a row of the new
+ *    profile is a deliberate choice, it is kept and the old FIAE row goes with
+ *    the old profile.
  * The rows that lose are deleted (their elective choices follow by cascade).
- * That includes a row of the new profile in the same catalog as the old row:
- * the old row, with its start date, duration and choices, replaces it as a
- * whole. A kept new row can differ in start date and duration from the profile
- * values the merge takes over, the enrollment row stays what an administrator
- * set for it.
  *
  * Never part of the generic column lists below: a plain UPDATE would collide
- * with the unique index as soon as both profiles have a row.
+ * with the unique constraint as soon as both profiles have a row in the same
+ * catalog.
  */
 async function moveEnrollment(
   executor: SqlExecutor,
   fromProfileId: string,
   toProfileId: string
 ) {
+  // Does the old profile hand its enrollments over at all? Always, unless it
+  // has nothing but the default FIAE and the new profile has a deliberate
+  // other occupation. Without a decision for the whole trainee a FIAE row
+  // alone could be moved next to another occupation it was never meant to join.
+  const handsOver = sql`(
+        EXISTS (
+          SELECT 1 FROM "trainee_enrollments" old_other
+          WHERE old_other."trainee_id" = ${fromProfileId}
+            AND old_other."training_catalog_id" <> ${TRAINING_CATALOG_IDS.FIAE}
+        )
+        OR NOT EXISTS (
+          SELECT 1 FROM "trainee_enrollments" new_other
+          WHERE new_other."trainee_id" = ${toProfileId}
+            AND new_other."training_catalog_id" <> ${TRAINING_CATALOG_IDS.FIAE}
+        )
+      )`;
+
   await executor.execute(sql`
     DELETE FROM "trainee_enrollments" new_row
     WHERE new_row."trainee_id" = ${toProfileId}
-      AND EXISTS (
-        SELECT 1 FROM "trainee_enrollments" old_row
-        WHERE old_row."trainee_id" = ${fromProfileId}
-          AND (
-            old_row."training_catalog_id" <> ${TRAINING_CATALOG_IDS.FIAE}
-            OR new_row."training_catalog_id" = ${TRAINING_CATALOG_IDS.FIAE}
+      AND ${handsOver}
+      AND (
+        EXISTS (
+          SELECT 1 FROM "trainee_enrollments" old_row
+          WHERE old_row."trainee_id" = ${fromProfileId}
+            AND old_row."training_catalog_id" = new_row."training_catalog_id"
+        )
+        OR (
+          new_row."training_catalog_id" = ${TRAINING_CATALOG_IDS.FIAE}
+          AND EXISTS (
+            SELECT 1 FROM "trainee_enrollments" old_other
+            WHERE old_other."trainee_id" = ${fromProfileId}
+              AND old_other."training_catalog_id" <> ${TRAINING_CATALOG_IDS.FIAE}
           )
+        )
       )
   `);
 
@@ -228,9 +256,11 @@ async function moveEnrollment(
     UPDATE "trainee_enrollments"
     SET "trainee_id" = ${toProfileId}
     WHERE "trainee_id" = ${fromProfileId}
+      AND ${handsOver}
       AND NOT EXISTS (
         SELECT 1 FROM "trainee_enrollments" keep_row
         WHERE keep_row."trainee_id" = ${toProfileId}
+          AND keep_row."training_catalog_id" = "trainee_enrollments"."training_catalog_id"
       )
   `);
 }
