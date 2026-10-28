@@ -147,14 +147,20 @@ export interface PlanScenario {
 
 /**
  * The original file of an enabler text (upload, docs/ki-upload-konzept.md 8.5),
- * written as a new document row THEORY/ALL at the enabler. It is not part of the
- * plan file (a plan holds text, this holds a stored file). The caller has copied
- * the file already and checked that it is safe for trainees: the engine only
- * writes the row, and the solution guard still checks its text fields.
+ * written as a new document row THEORY/ALL at the enabler, or the whole file of
+ * a scenario, written as the row EXERCISE/ALL at its enabler (the form of FIAE and
+ * of the PDF import). It is not part of the plan file (a plan holds text, this
+ * holds a stored file). The caller has copied the file already and checked that it
+ * is safe for trainees: the engine only writes the row, and the solution guard
+ * still checks its text fields.
  */
 export interface EnablerOriginal {
   /** K6.2-d */
   enablerCode: string;
+  /** THEORY (the default) for an enabler text, EXERCISE for a whole scenario. */
+  documentType?: 'THEORY' | 'EXERCISE';
+  /** Position at the enabler (default 0, a scenario stands behind the texts). */
+  orderIndex?: number;
   /** Title of the row, the engine adds nothing to it. */
   title: string;
   /** Name of the stored file (ASCII, no path). */

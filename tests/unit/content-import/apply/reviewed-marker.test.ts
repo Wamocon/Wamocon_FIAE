@@ -202,8 +202,14 @@ describe('buildImportPlan with a reviewed enabler', () => {
     }
   });
 
-  it('still blocks the solution text of the scenario inside a reviewed enabler', () => {
+  it('does not block the solution text of a scenario inside a reviewed enabler: a scenario is public', () => {
     const p = build(withBody([...TABLE, 'Eine erfundene Lösung OMEGA.']));
+    expect(p.enablers.map(e => e.code)).toContain('K1-b');
+    expect(skippedCode(p, 'enabler:K1-b')).toBeUndefined();
+  });
+
+  it('still blocks another marker word inside a reviewed enabler', () => {
+    const p = build(withBody([...TABLE, 'Kurzbegründung: folgt.']));
     expect(skippedCode(p, 'enabler:K1-b')).toBe('SOLUTION_MARKER');
   });
 

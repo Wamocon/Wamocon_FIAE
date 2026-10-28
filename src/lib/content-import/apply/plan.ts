@@ -30,9 +30,9 @@ import {
 import { kindOfComponent } from './decisions';
 import {
   findSolutionLeaks,
+  LONG_SOLUTION_TEXTS,
   leakOf,
   leakOfEnablerText,
-  scenarioSolutionTexts,
   solutionTexts,
 } from './guard';
 import type {
@@ -870,9 +870,9 @@ export function buildImportPlan(
     quizzes,
     scenarios,
   } as unknown as ImportPlan);
-  const strong = scenarioSolutionTexts({
-    scenarios,
-  } as unknown as ImportPlan);
+  // The solution parts of a scenario are no protected texts any more (the whole scenario is
+  // public), so a teaching text may repeat them. Only the marker words are still searched.
+  const strong = LONG_SOLUTION_TEXTS;
   const guardQuizzes = quizzes.filter(q => {
     let reason: string | null = null;
     const bad = q.questions.find(question => {
@@ -930,8 +930,7 @@ export function buildImportPlan(
   const reviewedMarkers: PlanReviewedMarker[] = [];
   const guardEnablers = enablers.filter(e => {
     // The text of an enabler may repeat a sentence of a rationale (the
-    // rationales come from it), only a marker or a scenario solution counts.
-    // The title stays strict.
+    // rationales come from it), only a marker counts. The title stays strict.
     const text = leakOfEnablerText(
       fullTextByCode.get(e.code) ?? e.descriptionText ?? '',
       strong,

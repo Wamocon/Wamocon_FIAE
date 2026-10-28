@@ -47,7 +47,6 @@ import type {
   ItemEvent,
   TableCount,
 } from '@/lib/content-import/apply/types';
-import { scenarioSolutionTexts } from '@/lib/content-import/apply/guard';
 import { solutionTextsOfUseCases } from '@/lib/content-import/use-cases/guard';
 import { executeUseCasePlan } from '@/lib/content-import/use-cases/engine';
 import {
@@ -120,8 +119,10 @@ const RESERVE_TIMEOUT_MS = 10_000;
 
 /**
  * What every run passes to the engines, whatever the request says or the presets
- * file holds: nothing is activated and no solution part of a scenario or a use case
- * is written (concept 8.1 point 4, 8.4). A test fails when one of them changes.
+ * file holds: nothing is activated, no solution part of a use case is written and no
+ * trainer-only text row of a scenario (concept 8.1 point 4, 8.4). A whole scenario
+ * reaches the trainees as its original file (enablerOriginals), not as text rows.
+ * A test fails when one of them changes.
  */
 export const FIXED_ENGINE_OPTIONS = Object.freeze({
   activate: false,
@@ -329,10 +330,8 @@ export async function runTransfer(
           requested: request.publishOriginals,
           files,
           readBytes: deps.readBytes,
-          solutions: [
-            ...scenarioSolutionTexts(plan.importPlan),
-            ...solutionTextsOfUseCases(plan.useCasePlan.useCases),
-          ],
+          // the model solutions of the use cases only: a scenario is public, whole
+          solutions: solutionTextsOfUseCases(plan.useCasePlan.useCases),
           plannedFileIds: new Set(plan.plannedFiles.map(f => f.id)),
         })
       : { plans: [], refused: [] as OriginalRefusal[] };
