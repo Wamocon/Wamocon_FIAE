@@ -45,6 +45,23 @@
 // deletes a row, never replaces a file unless --overwrite-files is given and does not trigger an
 // index run.
 //
+// PDFs from Word (--from-word): the source folder is then the Word tree (the folder Komponente of the
+// content import) and the PDFs are made from the Word files by a LibreOffice on this machine, so the
+// PDFs of the enablers, scenarios and use cases come out of the same files as the content import
+// reads. The rest is the same code as for delivered PDFs (rows, buckets, rules, idempotency).
+//   plan  <Word folder> --from-word [--components ...] [--hydrate] [--timeout <seconds>] [--out <plan.json>]
+//         Counts what would be converted and names the Word files that give no PDF. Converts nothing.
+//   check | run  <Word folder> --from-word [--soffice <path to soffice.exe>] [--convert-timeout <seconds>] ...
+//         Converts one file after the other (own LibreOffice profile in the temp folder, macros off,
+//         time limit per file, the process tree is ended at the limit), checks the text of every PDF,
+//         cleans its metadata (author, title) and then goes on as above. Check and the dry run convert
+//         too (the plan needs size, hash and pages), nothing of it is kept: the temp folder is removed at
+//         the end. Only the targets local and preview exist, a real run needs the same confirmations.
+//   Solution protection: the PDF for the trainees of a scenario stops before the heading of the solution
+//   (the Word file holds the situation, the task and the solution), the task PDF of a use case stops
+//   before "Musterlösung", the solution PDF (whole document) goes to the private bucket. A file that
+//   cannot be cut gives no PDF. Details: src/lib/content-import/documents/word.ts.
+//
 // Exit codes: 0 done, 1 failed or refused, 2 wrong usage, 3 conflicts.
 
 // Must come first: registers the TypeScript module resolution.
@@ -60,6 +77,7 @@ import {
   renderDocumentRunReport,
   renderPlanSummary,
   runDocumentJob,
+  traineePdfProblem,
   validateDocumentPlan,
   MAX_PDF_BYTES,
 } from './kfbm-documents-modules.mjs';
@@ -75,6 +93,13 @@ import {
   redact,
 } from './kfbm-session.mjs';
 import { readAttributes, walkSource } from './kfbm-source.mjs';
+import { loadDecisions } from './kfbm-use-cases.mjs';
+import { renderWordSummary, scanWordSource } from './kfbm-documents-word.mjs';
+import {
+  createLibreOfficeConverter,
+  createWorkspace,
+  findSoffice,
+} from './kfbm-word-pdf.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -104,18 +129,35 @@ function withTimeout(promise, ms) {
   });
 }
 
-/** Number of pages and the text of the first page, or nulls when the PDF cannot be read. */
-async function firstPage(bytes) {
+/**
+ * Number of pages and the text of the first page, or nulls when the PDF cannot be read. With `full`
+ * (the PDF of a scenario) all pages are read and `solutionMarker` tells whether the text shows a
+ * solution part: the delivered scenario PDFs hold the whole Word file, solution included.
+ */
+async function firstPage(bytes, full = false) {
   try {
     // the file of the library itself: its index.js runs a test file when it is the main module
     const pdfParse = require('pdf-parse/lib/pdf-parse.js');
-    const result = await pdfParse(Buffer.from(bytes), { max: 1 });
+    const result = await pdfParse(Buffer.from(bytes), full ? {} : { max: 1 });
+    const text = typeof result.text === 'string' ? result.text : null;
     return {
       pageCount: Number.isInteger(result.numpages) ? result.numpages : null,
-      headText: typeof result.text === 'string' ? result.text : null,
+      headText: text,
+      ...(full
+        ? {
+            solutionMarker:
+              text === null
+                ? true
+                : traineePdfProblem('scenario', text, []) !== null,
+          }
+        : {}),
     };
   } catch {
-    return { pageCount: null, headText: null };
+    return {
+      pageCount: null,
+      headText: null,
+      ...(full ? { solutionMarker: true } : {}),
+    };
   }
 }
 
@@ -179,7 +221,7 @@ export async function scanSource(root, args, options = {}) {
       const magicOk =
         Buffer.from(bytes.subarray(0, 5)).toString('latin1') === '%PDF-';
       const page = magicOk
-        ? await parse(bytes)
+        ? await parse(bytes, c.kind === 'scenario')
         : { pageCount: null, headText: null };
       out.push({
         ...file,
@@ -229,7 +271,72 @@ const noStorage = {
   },
 };
 
+/**
+ * Makes the PDFs from the Word tree (--from-word). With `convert` false nothing is converted, the Word
+ * files are only counted. The temp folder of a conversion is removed by `cleanups`.
+ */
+async function scanFromWord(args, convert, cleanups) {
+  const decisions = loadDecisions();
+  let workspace = null;
+  let converter = null;
+  if (convert) {
+    const found = findSoffice(args.soffice);
+    if (found.error) throw new Error(found.error);
+    workspace = createWorkspace();
+    converter = createLibreOfficeConverter({
+      soffice: found.path,
+      workspace,
+      timeoutMs: (args.convertTimeoutSeconds ?? 120) * 1000,
+    });
+    // a conversion that is still running is ended first, so it does not hold the temp folder
+    cleanups.push(() => {
+      converter.abort();
+      workspace.cleanup();
+    });
+  }
+  return scanWordSource(args.source, args, {
+    decisions,
+    workspace,
+    converter,
+    onProgress: (done, total) => {
+      if (done % 10 === 0) console.error(`${done} of ${total} Word files done`);
+    },
+  });
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env) {
+  const cleanups = [];
+  const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+  const onSignal = () => {
+    for (const cleanup of cleanups) {
+      try {
+        cleanup();
+      } catch (error) {
+        console.error(
+          `Warning: the temp folder could not be removed (${error.message}).`
+        );
+      }
+    }
+    process.exit(130);
+  };
+  for (const signal of signals) process.once(signal, onSignal);
+  try {
+    return await run(argv, env, cleanups);
+  } finally {
+    for (const signal of signals) process.removeListener(signal, onSignal);
+    for (const cleanup of cleanups) {
+      try {
+        cleanup();
+      } catch (error) {
+        console.error(
+          `Warning: the temp folder could not be removed (${error.message}).`
+        );
+      }
+    }
+  }
+}
+
+async function run(argv, env, cleanups) {
   const parsed = parseDocumentsArgs(argv);
   if (!parsed.ok) {
     for (const error of parsed.errors) console.error(`Error: ${error}`);
@@ -263,6 +370,26 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   }
 
   // plan -----------------------------------------------------------------------
+  if (args.command === 'plan' && args.fromWord) {
+    let scan;
+    try {
+      scan = await scanFromWord(args, false, cleanups);
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      return 1;
+    }
+    const summary = renderWordSummary(scan);
+    if (args.out) {
+      writeText(
+        args.out,
+        JSON.stringify({ counts: scan.counts, skips: scan.skips }, null, 2)
+      );
+      writeText(args.out.replace(/\.json$/i, '') + '.md', summary);
+      console.log(`Counts written: ${args.out} (summary next to it, .md)`);
+    }
+    console.log(JSON.stringify({ ...scan.counts, skipped: scan.skips.length }));
+    return 0;
+  }
   if (args.command === 'plan') {
     const plan = await planFromSource(args.source, args);
     const problems = validateDocumentPlan(plan);
@@ -304,7 +431,19 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   }
   const { connectionString, host } = prepared;
 
-  const plan = await planFromSource(args.source, args);
+  let scan = null;
+  let plan;
+  if (args.fromWord) {
+    try {
+      scan = await scanFromWord(args, true, cleanups);
+    } catch (error) {
+      console.error(`Error: ${redact(error.message, connectionString)}`);
+      return 1;
+    }
+    plan = buildDocumentPlan(scan.files);
+  } else {
+    plan = await planFromSource(args.source, args);
+  }
   const planProblems = validateDocumentPlan(plan);
   if (planProblems.length > 0) {
     for (const problem of planProblems)
@@ -350,9 +489,15 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         overwriteFiles: args.overwriteFiles,
         supabaseUrl,
         bytesOf: item =>
-          readFile(path.join(args.source, ...item.rel.split('/'))),
+          readFile(
+            scan
+              ? scan.paths.get(item.rel)
+              : path.join(args.source, ...item.rel.split('/'))
+          ),
       });
-      const text = renderDocumentRunReport(report, info);
+      const text =
+        renderDocumentRunReport(report, info) +
+        (scan ? `\n${renderWordSummary(scan)}` : '');
       console.log(text);
       if (args.reportOut) {
         try {

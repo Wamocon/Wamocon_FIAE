@@ -67,11 +67,20 @@ const args = (over = {}) => ({
   timeoutSeconds: null,
   ...over,
 });
-const standIn = async bytes => {
-  const text = bytes.toString('utf8').split('\n')[1] ?? '';
-  const name = text.split('/').pop();
-  return { pageCount: 3, headText: [...HEAD, PAGES[name] ?? ''].join('\n') };
-};
+// The second argument is true for a scenario: the real reader then also tells whether the text of
+// all pages shows a solution. The stand-in says no, except for the file names in `withSolution`.
+const standInWith =
+  (withSolution = []) =>
+  async (bytes, full = false) => {
+    const text = bytes.toString('utf8').split('\n')[1] ?? '';
+    const name = text.split('/').pop();
+    return {
+      pageCount: 3,
+      headText: [...HEAD, PAGES[name] ?? ''].join('\n'),
+      ...(full ? { solutionMarker: withSolution.includes(name) } : {}),
+    };
+  };
+const standIn = standInWith();
 
 function run(args, env = {}) {
   const result = spawnSync(process.execPath, [SCRIPT, ...args], {
@@ -117,6 +126,44 @@ test('scan and plan: matches name and heading, reports the rest, reads only what
     // the plan holds names, codes and hashes: never a text of a file
     assert.ok(!JSON.stringify(plan).includes('EINS'));
     assert.ok(!JSON.stringify(plan).includes('Erfundener Hinweis'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('scan and plan: a scenario PDF that shows a solution is not taken, the other kinds are', async () => {
+  const root = tree();
+  const asked = [];
+  try {
+    const files = await scanSource(root, args(), {
+      parse: async (bytes, full) => {
+        asked.push(full);
+        return standInWith(['Szenario_4a_Titel.pdf'])(bytes, full);
+      },
+    });
+    const plan = buildDocumentPlan(files);
+    const status = name => plan.items.find(i => i.rel.endsWith(name))?.status;
+    assert.equal(status('/Szenarien/Szenario_4a_Titel.pdf'), 'solution-in-pdf');
+    assert.equal(status('/Enabler/4a_Titel.pdf'), 'ok');
+    assert.equal(status('/Use-Cases/UC_4a_Titel.pdf'), 'ok');
+    assert.equal(status('Musterlösung.pdf'), 'ok');
+    // only the scenario is read on all pages
+    assert.equal(asked.filter(Boolean).length, 1);
+    // a reader that cannot tell (no value) leaves the scenario out as well
+    const unchecked = buildDocumentPlan(
+      await scanSource(root, args(), {
+        parse: async bytes => {
+          const { solutionMarker, ...page } = await standIn(bytes, true);
+          return page;
+        },
+      })
+    );
+    assert.equal(
+      unchecked.items.find(i =>
+        i.rel.endsWith('/Szenarien/Szenario_4a_Titel.pdf')
+      ).status,
+      'solution-in-pdf'
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

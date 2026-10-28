@@ -95,6 +95,7 @@ if (!url) {
         sha256: sha(bytes),
         pageCount: pages,
         headText: heading,
+        solutionMarker: false,
       },
     };
   };

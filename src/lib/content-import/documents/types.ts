@@ -38,7 +38,9 @@ export type SkipStatus =
   /** Not a PDF (magic bytes), empty, too large, or not read (placeholder). */
   | 'unreadable'
   /** Two files claim the same slot. */
-  | 'duplicate';
+  | 'duplicate'
+  /** The text of a scenario PDF shows a solution (marker word, heading of a solution part). */
+  | 'solution-in-pdf';
 
 export type PdfStatus = 'ok' | SkipStatus;
 
@@ -70,6 +72,12 @@ export interface ScannedPdf {
   pageCount?: number | null;
   /** Text of the first lines of the first page, only used to find the heading id. */
   headText?: string | null;
+  /**
+   * Result of the check of word.ts on the text of ALL pages of a scenario PDF: true when it shows
+   * a solution, false when it does not. Only read for scenarios (a PDF for the trainees must not
+   * carry the solution part), a scenario without the value is not taken.
+   */
+  solutionMarker?: boolean;
 }
 
 export interface PlanItem {
