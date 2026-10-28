@@ -338,7 +338,11 @@ async function fetchDashboardData(userId: string, scope: CatalogScope) {
       const sub = recentQuizWithTitle[0];
       achievements.push({
         kind: 'quiz',
-        text: `${Math.round(sub.score ?? 0)}% im Quiz "${sub.quizTitle || 'Quiz'}"`,
+        // A quiz without a score was not graded automatically
+        text:
+          sub.score === null || sub.score === undefined
+            ? `Quiz "${sub.quizTitle || 'Quiz'}" abgegeben`
+            : `${Math.round(sub.score)}% im Quiz "${sub.quizTitle || 'Quiz'}"`,
         at: sub.submittedAt?.toISOString?.() || null,
       });
     }

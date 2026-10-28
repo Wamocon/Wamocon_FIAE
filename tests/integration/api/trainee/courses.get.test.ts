@@ -56,6 +56,7 @@ describe('API: Trainee Courses', () => {
         { enablerId: 'e1', quizId: 'q1', difficulty: 'LOW' },
       ],
       quizzes: [{ id: 'q1', isActive: true }],
+      questions: [{ id: 'qq1', quizId: 'q1', questionType: 'MCQ' }],
       quizSubmissions: [{ quizId: 'q1', score: 80 }],
     });
 
@@ -97,10 +98,48 @@ describe('API: Trainee Courses', () => {
         { id: 'q1', isActive: true },
         { id: 'q2', isActive: true },
       ],
+      questions: [
+        { id: 'qq1', quizId: 'q1', questionType: 'MCQ' },
+        { id: 'qq2', quizId: 'q2', questionType: 'MCQ' },
+      ],
       quizSubmissions: [
         { quizId: 'q1', score: 50 },
         { quizId: 'q2', score: 49 },
       ],
+    });
+    const GET = await importListHandlerWithDb(db);
+    const res = await GET(makeGet('http://localhost/api/trainee/courses'));
+    const body = await (res as any).json();
+    expect(body.courses[0]).toMatchObject({
+      enablerCount: 2,
+      completedCount: 1,
+      progress: 50,
+    });
+  });
+
+  it('GET /api/trainee/courses: a quiz of free text questions without an expected answer is no prerequisite', async () => {
+    const { db } = createTableDb({
+      courseMembers: [{ userId: 't1', courseId: 'c1' }],
+      courses: [{ id: 'c1', title: 'Course 1', year: 2024, chapter: 'A' }],
+      enablers: [
+        { id: 'e1', courseId: 'c1', orderIndex: 1, isActive: true },
+        { id: 'e2', courseId: 'c1', orderIndex: 2, isActive: true },
+      ],
+      enablerQuizLinks: [
+        { enablerId: 'e1', quizId: 'q1', difficulty: 'LOW' },
+        { enablerId: 'e2', quizId: 'q2', difficulty: 'LOW' },
+      ],
+      quizzes: [
+        { id: 'q1', isActive: true },
+        { id: 'q2', isActive: true },
+      ],
+      questions: [
+        // q1 has nothing to grade: no attempt needed for e1
+        { id: 'qq1', quizId: 'q1', questionType: 'TEXT', expectedAnswer: null },
+        // q2 has a choice question that was failed: e2 stays open
+        { id: 'qq2', quizId: 'q2', questionType: 'MCQ' },
+      ],
+      quizSubmissions: [{ quizId: 'q2', score: 49 }],
     });
     const GET = await importListHandlerWithDb(db);
     const res = await GET(makeGet('http://localhost/api/trainee/courses'));

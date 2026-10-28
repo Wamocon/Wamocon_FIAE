@@ -9,13 +9,14 @@
  */
 
 import { NextResponse } from 'next/server';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import db from '@/db';
 import {
   courses,
   enablerQuizLinks,
   enablers,
   profiles,
+  questions,
   quizSubmissions,
   quizzes,
   traineeEnablerOverrides,
@@ -35,6 +36,10 @@ import {
   type QuizChainEntry,
   type QuizDifficulty,
 } from '@/lib/catalog/progression';
+import {
+  NON_BLANK_SQL_PATTERN,
+  quizIdsWithGradableQuestion,
+} from '@/lib/catalog/quiz-grading';
 
 /** A course of one trainee with the data its progression was computed from. */
 export interface LoadedCourseProgression {
@@ -51,6 +56,32 @@ function asDifficulty(value: unknown): QuizDifficulty | null {
   return value === 'LOW' || value === 'MEDIUM' || value === 'HIGH'
     ? value
     : null;
+}
+
+/**
+ * The ids of the quizzes (of the given ones) that have at least one gradable
+ * question. A quiz that is not in the set cannot be passed automatically (only
+ * free text questions without an expected answer, or no question at all), so
+ * it is no prerequisite of its enabler. The distinction is the one of the
+ * grading of a submission (quiz-grading.ts). Only ids leave this function and
+ * no expected answer is even loaded.
+ */
+export async function loadGradableQuizIds(
+  quizIds: string[]
+): Promise<Set<string>> {
+  const ids = unique(quizIds.map(String));
+  if (ids.length === 0) return new Set();
+  // Asks for the FACT that an expected answer exists, not for the text: the
+  // solution stays in the database layer
+  const rows = await db
+    .select({
+      quizId: questions.quizId,
+      questionType: questions.questionType,
+      hasExpectedAnswer: sql<boolean>`coalesce(${questions.expectedAnswer} ~ ${NON_BLANK_SQL_PATTERN}, false)`,
+    })
+    .from(questions)
+    .where(inArray(questions.quizId, ids));
+  return quizIdsWithGradableQuestion(rows);
 }
 
 /**
@@ -129,42 +160,44 @@ export async function loadCourseProgressions(
         .where(inArray(enablerQuizLinks.enablerId, enablerIds))
     : [];
   const quizIds = unique(linkRows.map(l => String(l.quizId)));
-  const [quizRows, attemptRows, overrideRows] = await Promise.all([
-    quizIds.length
-      ? db
-          .select({ id: quizzes.id, isActive: quizzes.isActive })
-          .from(quizzes)
-          .where(inArray(quizzes.id, quizIds))
-      : Promise.resolve([]),
-    quizIds.length
-      ? db
-          .select({
-            quizId: quizSubmissions.quizId,
-            score: quizSubmissions.score,
-          })
-          .from(quizSubmissions)
-          .where(
-            and(
-              eq(quizSubmissions.traineeId, traineeId),
-              inArray(quizSubmissions.quizId, quizIds)
+  const [quizRows, gradableQuizIds, attemptRows, overrideRows] =
+    await Promise.all([
+      quizIds.length
+        ? db
+            .select({ id: quizzes.id, isActive: quizzes.isActive })
+            .from(quizzes)
+            .where(inArray(quizzes.id, quizIds))
+        : Promise.resolve([]),
+      loadGradableQuizIds(quizIds),
+      quizIds.length
+        ? db
+            .select({
+              quizId: quizSubmissions.quizId,
+              score: quizSubmissions.score,
+            })
+            .from(quizSubmissions)
+            .where(
+              and(
+                eq(quizSubmissions.traineeId, traineeId),
+                inArray(quizSubmissions.quizId, quizIds)
+              )
             )
-          )
-      : Promise.resolve([]),
-    enablerIds.length
-      ? db
-          .select({
-            enablerId: traineeEnablerOverrides.enablerId,
-            isActive: traineeEnablerOverrides.isActive,
-          })
-          .from(traineeEnablerOverrides)
-          .where(
-            and(
-              eq(traineeEnablerOverrides.traineeId, traineeId),
-              inArray(traineeEnablerOverrides.enablerId, enablerIds)
+        : Promise.resolve([]),
+      enablerIds.length
+        ? db
+            .select({
+              enablerId: traineeEnablerOverrides.enablerId,
+              isActive: traineeEnablerOverrides.isActive,
+            })
+            .from(traineeEnablerOverrides)
+            .where(
+              and(
+                eq(traineeEnablerOverrides.traineeId, traineeId),
+                inArray(traineeEnablerOverrides.enablerId, enablerIds)
+              )
             )
-          )
-      : Promise.resolve([]),
-  ]);
+        : Promise.resolve([]),
+    ]);
 
   const quizActive = new Map(quizRows.map(q => [String(q.id), !!q.isActive]));
   const bestScores = bestScoresOf(attemptRows);
@@ -217,6 +250,7 @@ export async function loadCourseProgressions(
         quizId: String(l.quizId),
         difficulty: asDifficulty(l.difficulty),
         quizIsActive: quizActive.get(String(l.quizId)) ?? false,
+        gradable: gradableQuizIds.has(String(l.quizId)),
       }));
 
     result.set(courseId, {

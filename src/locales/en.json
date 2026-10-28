@@ -2859,5 +2859,13 @@
   "sequenceRule.removed": "Switched off.",
   "sequenceRule.failed": "The change could not be saved.",
   "sequenceRule.invalid": "Please enter a valid date.",
+  "quizGrading.notGradedBadge": "Not graded",
+  "quizGrading.questionNote": "This question has no stored solution. It is not graded automatically and counts neither as right nor as wrong. Your answer is saved.",
+  "quizGrading.resultNoteOne": "One question was not graded. It does not count for the percentage or for passing.",
+  "quizGrading.resultNoteMany": "{count} questions were not graded. They do not count for the percentage or for passing.",
+  "quizGrading.onlyUngradedTitle": "This quiz is not graded automatically",
+  "quizGrading.onlyUngradedText": "The questions of this quiz have no stored solution. Your answers are saved and visible to your trainer. There is no percentage, and the quiz does not hold you back: it does not count for completing the enabler.",
+  "quizGrading.listBadge": "Not graded automatically",
+  "quizGrading.trainerNotGraded": "Not graded",
   "hai.error.chatUnavailable": "HAI is not reachable right now. Please try again in a few minutes or contact your trainer."
 }
