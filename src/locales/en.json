@@ -2858,5 +2858,6 @@
   "sequenceRule.saved": "Saved.",
   "sequenceRule.removed": "Switched off.",
   "sequenceRule.failed": "The change could not be saved.",
-  "sequenceRule.invalid": "Please enter a valid date."
+  "sequenceRule.invalid": "Please enter a valid date.",
+  "hai.error.chatUnavailable": "HAI is not reachable right now. Please try again in a few minutes or contact your trainer."
 }
