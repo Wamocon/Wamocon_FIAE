@@ -110,9 +110,22 @@ export type ChatProviderType =
   | 'openai-compatible';
 export type EmbeddingProviderType = 'gemini' | 'ollama';
 
+/**
+ * What happens when the primary chat provider fails (HAI_CHAT_FALLBACK):
+ *   - 'sokrates' (default) → only the own AI Sokrates (OpenAI compatible
+ *     provider), and only if OPENAI_COMPATIBLE_API_KEY is set
+ *   - 'none' → no fallback, the user gets a clear error
+ * There is no value that opens the other providers (Gemini, Claude,
+ * OpenRouter, Ollama): chat content never goes to a third party by fallback.
+ */
+export type ChatFallbackMode = 'sokrates' | 'none';
+
 export interface ProviderConfig {
   /** Which provider to use for chat — set via HAI_CHAT_PROVIDER env var */
   chatProvider: ChatProviderType;
+
+  /** Fallback of the chat — set via HAI_CHAT_FALLBACK env var */
+  chatFallback: ChatFallbackMode;
 
   /** Which provider to use for embeddings ('ollama' or 'gemini') */
   embeddingProvider: EmbeddingProviderType;
@@ -152,6 +165,18 @@ export interface ProviderConfig {
   };
 }
 
+export function parseChatFallback(raw: string | undefined): ChatFallbackMode {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (value === 'none') return 'none';
+  if (value !== '' && value !== 'sokrates') {
+    // the value is not echoed: it is dropped to the default
+    console.warn(
+      'HAI.ai: Unknown HAI_CHAT_FALLBACK value. Using "sokrates" (allowed: sokrates, none).'
+    );
+  }
+  return 'sokrates';
+}
+
 /**
  * Load provider configuration from environment variables.
  *
@@ -159,6 +184,11 @@ export interface ProviderConfig {
  *   - 'gemini' (default) → Google Gemini Flash, fast & affordable (production)
  *   - 'openrouter' → Free models, for QA/testing
  *   - 'claude' → Anthropic Claude, premium quality
+ *
+ * HAI_CHAT_FALLBACK controls what happens when that provider fails:
+ *   - 'sokrates' (default) → only Sokrates (OPENAI_COMPATIBLE_*), if its key is set
+ *   - 'none' → no fallback
+ *   Any other value is dropped to 'sokrates'. No value opens other providers.
  *
  * HAI_EMBEDDING_PROVIDER controls which embedding backend is used:
  *   - 'gemini' (default) → Google Gemini API (production standard)
@@ -219,6 +249,7 @@ export function loadProviderConfig(): ProviderConfig {
 
   return {
     chatProvider,
+    chatFallback: parseChatFallback(process.env.HAI_CHAT_FALLBACK),
     embeddingProvider: embeddingProvider === 'ollama' ? 'ollama' : 'gemini',
 
     gemini: {

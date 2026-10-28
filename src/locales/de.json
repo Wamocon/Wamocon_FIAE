@@ -2868,5 +2868,6 @@
   "quizGrading.onlyUngradedTitle": "Dieses Quiz wird nicht automatisch bewertet",
   "quizGrading.onlyUngradedText": "Zu den Fragen dieses Quiz gibt es keine hinterlegte Lösung. Deine Antworten sind gespeichert und für deinen Ausbilder sichtbar. Es gibt keine Prozentzahl, und das Quiz hält dich nicht auf: Es zählt nicht für den Abschluss des Enablers.",
   "quizGrading.listBadge": "Nicht automatisch bewertet",
-  "quizGrading.trainerNotGraded": "Nicht bewertet"
+  "quizGrading.trainerNotGraded": "Nicht bewertet",
+  "hai.error.chatUnavailable": "HAI ist gerade nicht erreichbar. Bitte versuche es in ein paar Minuten noch einmal oder wende dich an deinen Trainer."
 }

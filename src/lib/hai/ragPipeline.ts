@@ -27,6 +27,10 @@ import type {
   ChatMessage as ProviderChatMessage,
   ChatGenerateOptions,
 } from './providers';
+import {
+  CHAT_UNAVAILABLE_I18N_KEY,
+  isChatUnavailableError,
+} from './providers/errors';
 import { searchWithContext, SearchResult } from './vectorSearch';
 import { fetchPageIndexContext } from './pageIndexService';
 import { resolveRetrievalAccess } from './retrievalAccess';
@@ -115,6 +119,27 @@ export interface PipelineResult {
   /** A proposed write for the confirmation card, never executed here */
   pendingAction?: PendingAction;
   error?: string;
+  /**
+   * i18n key of a message for the user, set when no chat provider could answer
+   * (hai.error.chatUnavailable). Then `response` is empty: the caller shows the
+   * message and does not store it as an answer of the assistant.
+   */
+  errorKey?: string;
+}
+
+/**
+ * No chat provider could answer: the primary failed and there is no Sokrates
+ * fallback (or it failed too). The user gets a clear message, never a text that
+ * looks like an answer, and nothing was sent to any other provider.
+ */
+function chatUnavailableResult(): PipelineResult {
+  return {
+    response: '',
+    intent: 'question',
+    citations: [],
+    error: 'chat_unavailable',
+    errorKey: CHAT_UNAVAILABLE_I18N_KEY,
+  };
 }
 
 export interface Citation {
@@ -571,7 +596,8 @@ export async function processMessage(
     if (!chatProvider.isInitialized()) {
       throw new Error('Chat provider not initialized');
     }
-  } catch {
+  } catch (gateError) {
+    if (isChatUnavailableError(gateError)) return chatUnavailableResult();
     return {
       response:
         'HAI.ai ist momentan nicht verfügbar. Bitte kontaktiere deinen Trainer.',
@@ -767,6 +793,7 @@ export async function processMessage(
       quizState: newQuizState,
     };
   } catch (error) {
+    if (isChatUnavailableError(error)) return chatUnavailableResult();
     console.error('HAI.ai Pipeline Error:', error);
     return {
       response:
@@ -798,7 +825,8 @@ export async function processMessageStream(
     getChatProvider(); // Throws if not initialized
   } catch {
     const result = await processMessage(userMessage, context);
-    onChunk(result.response);
+    // a result with an errorKey has no text: the caller shows the message
+    if (result.response) onChunk(result.response);
     return result;
   }
 
@@ -958,6 +986,7 @@ export async function processMessageStream(
       citations,
     };
   } catch (error) {
+    if (isChatUnavailableError(error)) return chatUnavailableResult();
     console.error('HAI.ai Stream Error:', error);
     const errorMsg =
       'Ups, da ist etwas schiefgelaufen! 🦈💫 Bitte versuche es noch einmal.';
