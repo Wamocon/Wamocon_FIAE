@@ -19,8 +19,20 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import JSZip from 'jszip';
-import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
+// JSZip and pdf-lib build the invented documents. The workflow db-checks runs these tests without
+// installed dependencies, then the tests that need them are skipped.
+const JSZip = await import('jszip').then(
+  module => module.default,
+  () => null
+);
+const PDFLib = await import('pdf-lib').then(
+  module => module,
+  () => null
+);
+const { PDFDocument, PDFName, StandardFonts } = PDFLib ?? {};
+const needs = {
+  skip: JSZip && PDFLib ? false : 'jszip or pdf-lib is not installed',
+};
 
 import { buildDocumentPlan } from '../../../scripts/import/kfbm-documents-modules.mjs';
 import {
@@ -499,298 +511,348 @@ test('killTree asks taskkill for the whole tree on Windows and never throws', as
 
 // the scan of the Word tree -----------------------------------------------------------------
 
-test('plan without a converter only counts the Word files and converts nothing', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    const result = await scan(root, null);
-    assert.deepEqual(result.counts.chosen, {
-      enabler: 1,
-      scenario: 1,
-      usecase: 1,
-    });
-    assert.deepEqual(result.counts.variants, {
-      enabler: 1,
-      scenario: 1,
-      usecase_task: 1,
-      usecase_solution: 1,
-    });
-    assert.equal(result.files.length, 0);
-    assert.equal(result.converted, false);
-    assert.deepEqual(result.skips, []);
-    assert.match(renderWordSummary(result), /not converted in this mode/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test('converts the four PDFs of a sample tree: names, plan, no solution in the files for the trainees, temp files gone', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    const converter = standInConverter();
-    const result = await scan(root, converter);
-    assert.deepEqual(result.skips, []);
-    assert.equal(converter.calls.length, 4);
-    const names = result.files.map(f => f.rel.split('/').pop()).sort();
-    assert.deepEqual(
-      names,
-      [
-        '1a.pdf',
-        'Szenario_1a.pdf',
-        'UC_1a.pdf',
-        'UC_1a_Musterlösung.pdf',
-      ].sort()
-    );
-
-    const plan = buildDocumentPlan(result.files);
-    assert.deepEqual(
-      plan.items.map(i => `${i.kind}:${i.status}:${i.enablerCode}`).sort(),
-      [
-        'enabler:ok:K1-a',
-        'scenario:ok:K1-a',
-        'usecase_solution:ok:K1-a',
-        'usecase_task:ok:K1-a',
-      ]
-    );
-
-    const textOf = async rel => (await textInfo(result.bytes.get(rel))).text;
-    const rels = Object.fromEntries(
-      result.files.map(f => [f.rel.split('/').pop(), f.rel])
-    );
-    const scenarioText = await textOf(rels['Szenario_1a.pdf']);
-    assert.match(scenarioText, /erfundene Lage/);
-    assert.doesNotMatch(
-      scenarioText,
-      new RegExp(`${SOLUTION_WORD}|${KNOWLEDGE_WORD}|sungsszenario|Fachwissen`)
-    );
-    const taskText = await textOf(rels['UC_1a.pdf']);
-    assert.match(taskText, /Weg zum Ziel/);
-    assert.doesNotMatch(taskText, new RegExp(`${USE_CASE_WORD}|Musterl`));
-    assert.match(
-      await textOf(rels['UC_1a_Musterlösung.pdf']),
-      new RegExp(USE_CASE_WORD)
-    );
-
-    // the metadata is cleaned: no author, the title of the document
-    for (const bytes of result.bytes.values()) {
-      assert.doesNotMatch(Buffer.from(bytes).toString('latin1'), /Mustermann/);
+test(
+  'plan without a converter only counts the Word files and converts nothing',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      const result = await scan(root, null);
+      assert.deepEqual(result.counts.chosen, {
+        enabler: 1,
+        scenario: 1,
+        usecase: 1,
+      });
+      assert.deepEqual(result.counts.variants, {
+        enabler: 1,
+        scenario: 1,
+        usecase_task: 1,
+        usecase_solution: 1,
+      });
+      assert.equal(result.files.length, 0);
+      assert.equal(result.converted, false);
+      assert.deepEqual(result.skips, []);
+      assert.match(renderWordSummary(result), /not converted in this mode/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
-    // the copies of the Word files are deleted at once, the temp folder at the end
-    assert.deepEqual(result.inLeft, []);
-    assert.equal(result.finalLeft.length, 4);
-    assert.equal(existsSync(result.workspace.root), false);
-    // the source is untouched
-    assert.ok(
-      existsSync(path.join(root, ...`${ENABLER_1A}/1a.docx`.split('/')))
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
   }
-});
+);
 
-test('a second scan gives the same names and the same plan (idempotent input of the import)', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    const first = await scan(root, standInConverter());
-    const second = await scan(root, standInConverter());
-    const shape = r =>
-      buildDocumentPlan(r.files).items.map(i => [
-        i.rel,
-        i.kind,
-        i.enablerCode,
-        i.status,
-        i.pageCount,
+test(
+  'converts the four PDFs of a sample tree: names, plan, no solution in the files for the trainees, temp files gone',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      const converter = standInConverter();
+      const result = await scan(root, converter);
+      assert.deepEqual(result.skips, []);
+      assert.equal(converter.calls.length, 4);
+      const names = result.files.map(f => f.rel.split('/').pop()).sort();
+      assert.deepEqual(
+        names,
+        [
+          '1a.pdf',
+          'Szenario_1a.pdf',
+          'UC_1a.pdf',
+          'UC_1a_Musterlösung.pdf',
+        ].sort()
+      );
+
+      const plan = buildDocumentPlan(result.files);
+      assert.deepEqual(
+        plan.items.map(i => `${i.kind}:${i.status}:${i.enablerCode}`).sort(),
+        [
+          'enabler:ok:K1-a',
+          'scenario:ok:K1-a',
+          'usecase_solution:ok:K1-a',
+          'usecase_task:ok:K1-a',
+        ]
+      );
+
+      const textOf = async rel => (await textInfo(result.bytes.get(rel))).text;
+      const rels = Object.fromEntries(
+        result.files.map(f => [f.rel.split('/').pop(), f.rel])
+      );
+      const scenarioText = await textOf(rels['Szenario_1a.pdf']);
+      assert.match(scenarioText, /erfundene Lage/);
+      assert.doesNotMatch(
+        scenarioText,
+        new RegExp(
+          `${SOLUTION_WORD}|${KNOWLEDGE_WORD}|sungsszenario|Fachwissen`
+        )
+      );
+      const taskText = await textOf(rels['UC_1a.pdf']);
+      assert.match(taskText, /Weg zum Ziel/);
+      assert.doesNotMatch(taskText, new RegExp(`${USE_CASE_WORD}|Musterl`));
+      assert.match(
+        await textOf(rels['UC_1a_Musterlösung.pdf']),
+        new RegExp(USE_CASE_WORD)
+      );
+
+      // the metadata is cleaned: no author, the title of the document
+      for (const bytes of result.bytes.values()) {
+        assert.doesNotMatch(
+          Buffer.from(bytes).toString('latin1'),
+          /Mustermann/
+        );
+      }
+      // the copies of the Word files are deleted at once, the temp folder at the end
+      assert.deepEqual(result.inLeft, []);
+      assert.equal(result.finalLeft.length, 4);
+      assert.equal(existsSync(result.workspace.root), false);
+      // the source is untouched
+      assert.ok(
+        existsSync(path.join(root, ...`${ENABLER_1A}/1a.docx`.split('/')))
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  'a second scan gives the same names and the same plan (idempotent input of the import)',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      const first = await scan(root, standInConverter());
+      const second = await scan(root, standInConverter());
+      const shape = r =>
+        buildDocumentPlan(r.files).items.map(i => [
+          i.rel,
+          i.kind,
+          i.enablerCode,
+          i.status,
+          i.pageCount,
+        ]);
+      assert.deepEqual(shape(second), shape(first));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  'a PDF whose text shows the solution is dropped although the docx was cut',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      const result = await scan(
+        root,
+        standInConverter({ extra: 'Lösungsszenario' })
+      );
+      // the enabler PDF carries the line too and is dropped; the solution PDF is not for the trainees
+      const dropped = result.skips
+        .filter(s => s.code === 'PDF_SOLUTION')
+        .map(s => s.kind)
+        .sort();
+      assert.deepEqual(dropped, ['enabler', 'scenario', 'usecase_task']);
+      assert.ok(result.files.every(f => !/Szenario_1a/.test(f.rel)));
+      assert.ok(result.files.some(f => /Musterl/.test(f.rel)));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  'failed conversions and unreadable PDFs are reported with a code and give no file',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      const failed = await scan(root, standInConverter({ fail: 'TIMEOUT' }));
+      assert.equal(failed.files.length, 0);
+      assert.deepEqual(summarizeSkips(failed.skips), { CONVERSION_FAILED: 4 });
+      assert.ok(failed.skips.every(s => s.detail === 'TIMEOUT'));
+      const unreadable = await scan(root, standInConverter({ notPdf: true }));
+      assert.deepEqual(summarizeSkips(unreadable.skips), { PDF_UNREADABLE: 4 });
+      const summary = renderWordSummary(failed);
+      assert.match(summary, /CONVERSION_FAILED 4/);
+      assert.doesNotMatch(
+        summary,
+        new RegExp(`${SOLUTION_WORD}|erfundene Lage`)
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  'a Word file that cannot be cut or read gives no PDF and the others still do',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      // the scenario of 1b has no solution part: it cannot be a scenario for the trainees
+      await put(
+        root,
+        `${T1}/Enablers/1b_Zweites/Szenario/Szenario_1b.docx`,
+        scenario('1b', { omitSolution: true })
+      );
+      await put(root, `${T1}/Enablers/1b_Zweites/1b.docx`, enabler('1b'));
+      // a heading of another enabler
+      await put(root, `${T1}/Enablers/1c_Drittes/1c.docx`, enabler('1d'));
+      // a file that is no docx
+      mkdirSync(path.join(root, ...`${T1}/Enablers/1e_Fuenftes`.split('/')), {
+        recursive: true,
+      });
+      writeFileSync(
+        path.join(root, ...`${T1}/Enablers/1e_Fuenftes/1e.docx`.split('/')),
+        'no zip'
+      );
+      const result = await scan(root, standInConverter());
+      const byFile = Object.fromEntries(
+        result.skips.map(s => [path.basename(s.rel), s.code])
+      );
+      assert.equal(byFile['Szenario_1b.docx'], 'PARSE_ERROR');
+      assert.equal(byFile['1c.docx'], 'CODE_MISMATCH');
+      assert.equal(byFile['1e.docx'], 'NOT_A_DOCX');
+      const names = result.files.map(f => f.rel.split('/').pop());
+      assert.ok(names.includes('Szenario_1a.pdf'));
+      assert.ok(names.includes('1b.pdf'));
+      assert.ok(!names.includes('Szenario_1b.pdf'));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  'an enabler text that repeats the solution of a scenario is not turned into a PDF',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      await put(root, `${T1}/Enablers/1b_Zweites/1b.docx`, [
+        p('1b) Zweites Thema', true),
+        p(`Erfundener Lehrtext. Eine erfundene Lösung ${SOLUTION_WORD}.`),
       ]);
-    assert.deepEqual(shape(second), shape(first));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
+      // the text of 1b repeats the whole solution of scenario 1a (the guard compares whole solution texts)
+      await put(
+        root,
+        `${T1}/Enablers/1b_Zweites/Szenario/Szenario_1b.docx`,
+        scenario('1b')
+      );
+      const withRepeat = await docx([
+        p('1c) Drittes Thema', true),
+        p(`Eine erfundene Lösung ${SOLUTION_WORD}.`),
+      ]);
+      mkdirSync(path.join(root, ...`${T1}/Enablers/1c_Drittes`.split('/')), {
+        recursive: true,
+      });
+      writeFileSync(
+        path.join(root, ...`${T1}/Enablers/1c_Drittes/1c.docx`.split('/')),
+        withRepeat
+      );
+      const result = await scan(root, standInConverter());
+      const byFile = Object.fromEntries(
+        result.skips.map(s => [path.basename(s.rel), s.code])
+      );
+      assert.equal(byFile['1c.docx'], 'SOLUTION_MARKER');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
-});
+);
 
-test('a PDF whose text shows the solution is dropped although the docx was cut', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    const result = await scan(
-      root,
-      standInConverter({ extra: 'Lösungsszenario' })
-    );
-    // the enabler PDF carries the line too and is dropped; the solution PDF is not for the trainees
-    const dropped = result.skips
-      .filter(s => s.code === 'PDF_SOLUTION')
-      .map(s => s.kind)
-      .sort();
-    assert.deepEqual(dropped, ['enabler', 'scenario', 'usecase_task']);
-    assert.ok(result.files.every(f => !/Szenario_1a/.test(f.rel)));
-    assert.ok(result.files.some(f => /Musterl/.test(f.rel)));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
+test(
+  'a placeholder is not read without --hydrate and is read with it (a stand-in marks it)',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      const marked = new Map([
+        [attributeKey(`${ENABLER_1A}/1a.docx`), 0x400000],
+      ]);
+      let reads = 0;
+      const read = file => {
+        reads += 1;
+        return readFile(file);
+      };
+      const without = await scan(root, null, {}, { attributes: marked, read });
+      assert.deepEqual(
+        without.skips.map(s => s.code),
+        ['PLACEHOLDER']
+      );
+      assert.equal(without.counts.variants.enabler, 0);
+      const before = reads;
+      const hydrated = await scan(
+        root,
+        null,
+        { hydrate: true },
+        { attributes: marked, read }
+      );
+      assert.deepEqual(hydrated.skips, []);
+      assert.equal(hydrated.counts.variants.enabler, 1);
+      assert.ok(reads > before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
-});
+);
 
-test('failed conversions and unreadable PDFs are reported with a code and give no file', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    const failed = await scan(root, standInConverter({ fail: 'TIMEOUT' }));
-    assert.equal(failed.files.length, 0);
-    assert.deepEqual(summarizeSkips(failed.skips), { CONVERSION_FAILED: 4 });
-    assert.ok(failed.skips.every(s => s.detail === 'TIMEOUT'));
-    const unreadable = await scan(root, standInConverter({ notPdf: true }));
-    assert.deepEqual(summarizeSkips(unreadable.skips), { PDF_UNREADABLE: 4 });
-    const summary = renderWordSummary(failed);
-    assert.match(summary, /CONVERSION_FAILED 4/);
-    assert.doesNotMatch(summary, new RegExp(`${SOLUTION_WORD}|erfundene Lage`));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
+test(
+  'a read that hangs is stopped by the limit and three in a row stop the run',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      await sampleTree(root);
+      await put(root, `${T1}/Enablers/1b_Zweites/1b.docx`, enabler('1b'));
+      const read = () => new Promise(() => {});
+      const result = await scan(root, null, { timeoutSeconds: 0.03 }, { read });
+      assert.ok(result.skips.length >= 4);
+      assert.ok(result.skips.every(s => s.code === 'READ_ERROR'));
+      assert.ok(result.skips.some(s => /three timeouts/.test(s.detail ?? '')));
+      assert.equal(result.counts.variants.enabler, 0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
-});
+);
 
-test('a Word file that cannot be cut or read gives no PDF and the others still do', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    // the scenario of 1b has no solution part: it cannot be a scenario for the trainees
-    await put(
-      root,
-      `${T1}/Enablers/1b_Zweites/Szenario/Szenario_1b.docx`,
-      scenario('1b', { omitSolution: true })
-    );
-    await put(root, `${T1}/Enablers/1b_Zweites/1b.docx`, enabler('1b'));
-    // a heading of another enabler
-    await put(root, `${T1}/Enablers/1c_Drittes/1c.docx`, enabler('1d'));
-    // a file that is no docx
-    mkdirSync(path.join(root, ...`${T1}/Enablers/1e_Fuenftes`.split('/')), {
-      recursive: true,
-    });
-    writeFileSync(
-      path.join(root, ...`${T1}/Enablers/1e_Fuenftes/1e.docx`.split('/')),
-      'no zip'
-    );
-    const result = await scan(root, standInConverter());
-    const byFile = Object.fromEntries(
-      result.skips.map(s => [path.basename(s.rel), s.code])
-    );
-    assert.equal(byFile['Szenario_1b.docx'], 'PARSE_ERROR');
-    assert.equal(byFile['1c.docx'], 'CODE_MISMATCH');
-    assert.equal(byFile['1e.docx'], 'NOT_A_DOCX');
-    const names = result.files.map(f => f.rel.split('/').pop());
-    assert.ok(names.includes('Szenario_1a.pdf'));
-    assert.ok(names.includes('1b.pdf'));
-    assert.ok(!names.includes('Szenario_1b.pdf'));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
+test(
+  'a path longer than 259 characters is read and converted through a short copy',
+  needs,
+  async () => {
+    const root = tmp();
+    try {
+      const long = 'x'.repeat(110);
+      const component = `Komponente Teil 1 (1-15 Monate)/01 - Erfundenes Thema ${long} (§ 4 Abs. 2 Nr. 1)`;
+      const rel = `${component}/Enablers/1a_${long}/1a.docx`;
+      await put(root, rel, enabler('1a'));
+      assert.ok(path.join(root, ...rel.split('/')).length > 259);
+      const converter = standInConverter();
+      const result = await scan(root, converter);
+      assert.deepEqual(result.skips, []);
+      assert.equal(result.files.length, 1);
+      // the program only ever saw the short copy
+      assert.ok(converter.calls.every(file => file.length < 120));
+      assert.match(
+        result.files[0].rel,
+        /^01 - Erfundenes Thema x+\/Enabler\/1a\.pdf$/
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
-});
+);
 
-test('an enabler text that repeats the solution of a scenario is not turned into a PDF', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    await put(root, `${T1}/Enablers/1b_Zweites/1b.docx`, [
-      p('1b) Zweites Thema', true),
-      p(`Erfundener Lehrtext. Eine erfundene Lösung ${SOLUTION_WORD}.`),
-    ]);
-    // the text of 1b repeats the whole solution of scenario 1a (the guard compares whole solution texts)
-    await put(
-      root,
-      `${T1}/Enablers/1b_Zweites/Szenario/Szenario_1b.docx`,
-      scenario('1b')
-    );
-    const withRepeat = await docx([
-      p('1c) Drittes Thema', true),
-      p(`Eine erfundene Lösung ${SOLUTION_WORD}.`),
-    ]);
-    mkdirSync(path.join(root, ...`${T1}/Enablers/1c_Drittes`.split('/')), {
-      recursive: true,
-    });
-    writeFileSync(
-      path.join(root, ...`${T1}/Enablers/1c_Drittes/1c.docx`.split('/')),
-      withRepeat
-    );
-    const result = await scan(root, standInConverter());
-    const byFile = Object.fromEntries(
-      result.skips.map(s => [path.basename(s.rel), s.code])
-    );
-    assert.equal(byFile['1c.docx'], 'SOLUTION_MARKER');
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test('a placeholder is not read without --hydrate and is read with it (a stand-in marks it)', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    const marked = new Map([[attributeKey(`${ENABLER_1A}/1a.docx`), 0x400000]]);
-    let reads = 0;
-    const read = file => {
-      reads += 1;
-      return readFile(file);
-    };
-    const without = await scan(root, null, {}, { attributes: marked, read });
-    assert.deepEqual(
-      without.skips.map(s => s.code),
-      ['PLACEHOLDER']
-    );
-    assert.equal(without.counts.variants.enabler, 0);
-    const before = reads;
-    const hydrated = await scan(
-      root,
-      null,
-      { hydrate: true },
-      { attributes: marked, read }
-    );
-    assert.deepEqual(hydrated.skips, []);
-    assert.equal(hydrated.counts.variants.enabler, 1);
-    assert.ok(reads > before);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test('a read that hangs is stopped by the limit and three in a row stop the run', async () => {
-  const root = tmp();
-  try {
-    await sampleTree(root);
-    await put(root, `${T1}/Enablers/1b_Zweites/1b.docx`, enabler('1b'));
-    const read = () => new Promise(() => {});
-    const result = await scan(root, null, { timeoutSeconds: 0.03 }, { read });
-    assert.ok(result.skips.length >= 4);
-    assert.ok(result.skips.every(s => s.code === 'READ_ERROR'));
-    assert.ok(result.skips.some(s => /three timeouts/.test(s.detail ?? '')));
-    assert.equal(result.counts.variants.enabler, 0);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test('a path longer than 259 characters is read and converted through a short copy', async () => {
-  const root = tmp();
-  try {
-    const long = 'x'.repeat(110);
-    const component = `Komponente Teil 1 (1-15 Monate)/01 - Erfundenes Thema ${long} (§ 4 Abs. 2 Nr. 1)`;
-    const rel = `${component}/Enablers/1a_${long}/1a.docx`;
-    await put(root, rel, enabler('1a'));
-    assert.ok(path.join(root, ...rel.split('/')).length > 259);
-    const converter = standInConverter();
-    const result = await scan(root, converter);
-    assert.deepEqual(result.skips, []);
-    assert.equal(result.files.length, 1);
-    // the program only ever saw the short copy
-    assert.ok(converter.calls.every(file => file.length < 120));
-    assert.match(
-      result.files[0].rel,
-      /^01 - Erfundenes Thema x+\/Enabler\/1a\.pdf$/
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test('--components limits the Word files', async () => {
+test('--components limits the Word files', needs, async () => {
   const root = tmp();
   try {
     await sampleTree(root);
@@ -811,7 +873,7 @@ test('--components limits the Word files', async () => {
 
 const soffice = findSoffice(null);
 const needsOffice = {
-  skip: soffice.path ? false : 'LibreOffice is not installed',
+  skip: soffice.path ? needs.skip || false : 'LibreOffice is not installed',
 };
 
 test(
