@@ -114,8 +114,14 @@ if (!url) {
     };
     await comp(1, 'A-K1');
     await comp(2, 'A-K2');
+    // Components are counted as COURSES of the catalog (courses.training_catalog_id),
+    // never as training_components rows: A has 2 component rows (the second one
+    // without a course) but 3 courses, two of them without a component link
+    // (like FIAE, which has courses and no training_components at all)
     await sql`insert into courses (id, training_catalog_id, code, title, created_by_id, training_component_id)
-              values (${id(200)}, ${CAT_A}, 'A-K1', 'Kurs A', ${USER}, ${id(101)})`;
+              values (${id(200)}, ${CAT_A}, 'A-K1', 'Kurs A', ${USER}, ${id(101)}),
+                     (${id(201)}, ${CAT_A}, 'A-K3', 'Kurs A3', ${USER}, null),
+                     (${id(202)}, ${CAT_A}, 'A-K4', 'Kurs A4', ${USER}, null)`;
     const enabler = async (
       n: number,
       active: boolean | null,
@@ -289,7 +295,7 @@ if (!url) {
       const a = buildCatalogStats(rows.find(r => r.id === CAT_A)!, false);
       const actual = Object.fromEntries(a.metrics.map(m => [m.id, m.actual]));
       expect(actual).toEqual({
-        components: 2,
+        components: 3,
         enablers: 5,
         // E1 (three rows, one scenario), E2 (EXERCISE), E3 (PDF link). Not
         // E4 (look-alikes, a use case document, an organization document),
@@ -418,7 +424,7 @@ if (!url) {
       const saved = await saveContentTargets(
         CAT_A,
         {
-          components: 2,
+          components: 3,
           enablers: 6,
           scenarios: 3,
           useCases: 3,
@@ -427,7 +433,7 @@ if (!url) {
         db
       );
       expect(saved).toEqual({
-        components: 2,
+        components: 3,
         enablers: 6,
         scenarios: 3,
         useCases: 3,
@@ -436,7 +442,7 @@ if (!url) {
         phase_months: [15, 21],
         hai: { occupation_name: 'Test' },
         content_targets: {
-          components: 2,
+          components: 3,
           enablers: 6,
           scenarios: 3,
           use_cases: 3,
@@ -449,7 +455,7 @@ if (!url) {
       );
       const a = r.catalogs.find(c => c.code === 'ST1A')!;
       expect(metric(a, 'components')).toMatchObject({
-        target: 2,
+        target: 3,
         difference: 0,
         status: 'met',
         percent: 100,
