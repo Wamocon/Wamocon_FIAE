@@ -20,14 +20,21 @@
 // The result is data, never an exception for an expected failure: the caller
 // records the kind of failure and decides what to do (retry, give up).
 
-import type { KiPolicy, KiTarget } from '@/lib/content-upload/ki/config';
+import {
+  DEFAULT_REASONING_EFFORT,
+  type KiPolicy,
+  type KiTarget,
+  type ReasoningEffort,
+} from '@/lib/content-upload/ki/config';
 
 export type KiFailureKind =
   | 'timeout'
   | 'http_error'
   | 'network'
   | 'too_large'
-  | 'bad_response';
+  | 'bad_response'
+  /** The content of the answer is empty (a thinking model that ran out of tokens). */
+  | 'empty';
 
 export type KiCallResult =
   | {
@@ -63,6 +70,8 @@ export interface KiClientOptions {
   timeoutMs: number;
   maxResponseBytes: number;
   maxTokens: number;
+  /** Sent as `reasoning_effort`. Default none: the answer is not preceded by thinking. */
+  reasoningEffort?: ReasoningEffort;
   /** Replaced in the tests. */
   fetchImpl?: typeof fetch;
   /** Replaced in the tests. */
@@ -163,12 +172,24 @@ const count = (value: unknown): number | null =>
     ? value
     : null;
 
-/** The text and the token counts out of an OpenAI-shaped answer, or null. */
-export function readAnswer(body: string): {
+export interface KiAnswerText {
   text: string;
   promptTokens: number | null;
   completionTokens: number | null;
-} | null {
+}
+
+/**
+ * The text and the token counts out of an OpenAI-shaped answer, `{ empty: true }`
+ * when the content is missing, null or blank (whatever else the message holds), or
+ * null when the body is not an answer at all.
+ *
+ * Only `message.content` is ever read. A thinking model may add `reasoning` or
+ * `reasoning_content` (or `finish_reason: length` with nothing else): none of it is
+ * parsed, passed on, logged or shown, and it is never a substitute for the content.
+ */
+export function readAnswer(
+  body: string
+): KiAnswerText | { empty: true } | null {
   let data: unknown;
   try {
     data = JSON.parse(body);
@@ -181,11 +202,11 @@ export function readAnswer(body: string): {
   const first = choices[0];
   if (typeof first !== 'object' || first === null) return null;
   const message = (first as Record<string, unknown>).message;
-  const content =
-    typeof message === 'object' && message !== null
-      ? (message as Record<string, unknown>).content
-      : undefined;
+  if (typeof message !== 'object' || message === null) return null;
+  const content = (message as Record<string, unknown>).content;
+  if (content === undefined || content === null) return { empty: true };
   if (typeof content !== 'string') return null;
+  if (content.trim().length === 0) return { empty: true };
   const usage =
     typeof record.usage === 'object' && record.usage !== null
       ? (record.usage as Record<string, unknown>)
@@ -242,6 +263,7 @@ export function createKiClient(options: KiClientOptions): KiClient {
           { role: 'user', content: input.user },
         ],
         max_tokens: options.maxTokens,
+        reasoning_effort: options.reasoningEffort ?? DEFAULT_REASONING_EFFORT,
         temperature: 0,
         top_p: 1,
         stream: false,
@@ -291,6 +313,8 @@ export function createKiClient(options: KiClientOptions): KiClient {
         if (text === null) return failure('too_large', response.status);
         const answer = readAnswer(text);
         if (!answer) return failure('bad_response', response.status);
+        // An empty content is an error, not an answer: a later try may get one
+        if ('empty' in answer) return failure('empty', response.status, true);
         return {
           ok: true,
           ...answer,

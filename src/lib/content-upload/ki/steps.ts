@@ -72,8 +72,21 @@ export type KiState =
   | 'invalid'
   | 'no_result';
 
-/** Time for the two calls of one step: the step timeout of the queue is 30 s. */
-export const STEP_BUDGET_MS = 26_000;
+/**
+ * What the queue gives this step: two calls of up to 30 s (a configured limit may be
+ * 45 s) and a little work around them. The route allows 60 s in all.
+ */
+export const KI_STEP_TIMEOUT_MS = 50_000;
+/**
+ * Time for the calls of one step, at most. The real budget is the limit the queue
+ * gives this run of the step (context.stepTimeoutMs, smaller when the pump has used
+ * up its own time before the batch started, see queue.ts MAX_PUMP_MS) minus a margin
+ * for the work around the calls. A call gets no more than what is left of it.
+ */
+export const STEP_BUDGET_MS = 40_000;
+const STEP_MARGIN_MS = 2000;
+/** The shortest limit given to a call. */
+const MIN_CALL_MS = 1000;
 /** A second call needs at least this much of the step budget. */
 const MIN_SECOND_CALL_MS = 3000;
 /** Time one call of the pump spends on building the list of solution texts. */
@@ -173,7 +186,11 @@ interface CallOutcome {
 
 function statusOf(result: KiCallResult): KiCallStatus {
   if (result.ok) return 'ok';
-  return result.kind === 'timeout' ? 'timeout' : 'http_error';
+  if (result.kind === 'timeout') return 'timeout';
+  // An empty answer is logged like an unusable one (no new status without a
+  // migration): it reached the server, it cost a call, and it counts for the breaker
+  if (result.kind === 'empty') return 'invalid_json';
+  return 'http_error';
 }
 
 /** The code a file is settled with for a failed call, by what went wrong. */
@@ -183,6 +200,7 @@ const FAILURE_CODES = {
   network: 'KI_NETWORK',
   too_large: 'KI_TOO_LARGE',
   bad_response: 'KI_BAD_RESPONSE',
+  empty: 'KI_EMPTY',
 } as const;
 
 /** The key or the address is wrong (401, 403, 404): every file would meet the same answer. */
@@ -202,6 +220,7 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
   return {
     name: 'ki_call',
     from: 'ki_pending',
+    timeoutMs: KI_STEP_TIMEOUT_MS,
     async run(context: StepContext): Promise<StepResult> {
       const { file } = context;
       const started = env.clock();
@@ -420,7 +439,20 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
       };
 
       // Stage one: type and component (and the enabler, if the model names it)
-      const first = await askOnce('type_component', limits.timeoutMs);
+      // The calls are planned inside the limit this run of the step really has (the
+      // queue caps it by the time left in the call of the pump), so a call never
+      // outlives the step: an orphaned call would be paid, unlogged and repeated
+      const budgetMs = Math.min(
+        STEP_BUDGET_MS,
+        (context.stepTimeoutMs ?? KI_STEP_TIMEOUT_MS) - STEP_MARGIN_MS
+      );
+      const first = await askOnce(
+        'type_component',
+        Math.max(
+          MIN_CALL_MS,
+          Math.min(limits.timeoutMs, budgetMs - (env.clock() - started))
+        )
+      );
       if (!first.answer) {
         // A refused key or a wrong address is the same for every file: the file is not
         // settled, it waits (the breaker stops the stage of the run after a few calls)
@@ -438,7 +470,7 @@ export function createKiCallStep(env: KiStepEnv): QueueStep {
 
       // Stage two: the enabler, only when it is missing and its component is known
       let answer = first.answer;
-      const left = STEP_BUDGET_MS - (env.clock() - started);
+      const left = budgetMs - (env.clock() - started);
       const component = catalog.components.find(
         c => c.code === answer.componentCode
       );

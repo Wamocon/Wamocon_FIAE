@@ -10,7 +10,10 @@ import {
   createKiClient,
   readAnswer,
 } from '@/lib/content-upload/ki/client';
-import { DEFAULT_ALLOWED_HOSTS } from '@/lib/content-upload/ki/config';
+import {
+  DEFAULT_ALLOWED_HOSTS,
+  DEFAULT_LIMITS,
+} from '@/lib/content-upload/ki/config';
 import {
   answers,
   completion,
@@ -43,6 +46,7 @@ function clientFor(
       timeoutMs: config.limits.timeoutMs,
       maxResponseBytes: config.limits.maxResponseBytes,
       maxTokens: config.limits.maxTokens,
+      reasoningEffort: config.reasoningEffort,
     }),
   };
 }
@@ -71,11 +75,18 @@ describe('a successful call', () => {
         { role: 'system', content: 'SYSTEM TEXT' },
         { role: 'user', content: 'USER TEXT' },
       ],
-      max_tokens: 300,
+      max_tokens: 400,
+      reasoning_effort: 'none',
       temperature: 0,
       top_p: 1,
       stream: false,
     });
+  });
+
+  it('sends the reasoning effort of the configuration, none by default', async () => {
+    const { client } = clientFor({}, { reasoningEffort: 'low' });
+    await client.call(INPUT);
+    expect(fake.requests[0].body?.reasoning_effort).toBe('low');
   });
 
   it('puts the key into the Authorization header and nowhere else', async () => {
@@ -156,6 +167,105 @@ describe('an answer that cannot be used', () => {
     }
   );
 
+  it.each([
+    ['an empty content', '', 'stop'],
+    ['a content of blanks only', ' \n\t ', 'stop'],
+    ['an empty content cut by the token limit', '', 'length'],
+    ['a content that is null', null, 'length'],
+  ])(
+    'reports %s as empty and retryable, never as a proposal',
+    async (_name, content, finish) => {
+      fake.setHandler((_s, res) =>
+        reply(
+          res,
+          200,
+          JSON.stringify({
+            choices: [
+              {
+                index: 0,
+                finish_reason: finish,
+                message: { role: 'assistant', content },
+              },
+            ],
+            usage: { prompt_tokens: 12, completion_tokens: 400 },
+          })
+        )
+      );
+      const { client } = clientFor();
+      expect(await client.call(INPUT)).toMatchObject({
+        ok: false,
+        kind: 'empty',
+        retryable: true,
+      });
+    }
+  );
+
+  it('never reads, hands on or logs the reasoning of the model', async () => {
+    const THOUGHT = 'GEDANKE-NICHT-WEITERGEBEN-4711';
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map(
+      level => jest.spyOn(console, level).mockImplementation(() => undefined)
+    );
+    try {
+      const { client } = clientFor();
+      // reasoning next to a usable content: only the content is handed on
+      fake.setHandler((_s, res) =>
+        reply(
+          res,
+          200,
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: '{"typ":"quiz"}',
+                  reasoning: THOUGHT,
+                  reasoning_content: THOUGHT,
+                },
+              },
+            ],
+          })
+        )
+      );
+      const withContent = await client.call(INPUT);
+      expect(withContent).toMatchObject({ ok: true, text: '{"typ":"quiz"}' });
+      expect(JSON.stringify(withContent)).not.toContain(THOUGHT);
+
+      // reasoning and nothing else: an empty answer, the reasoning is no substitute
+      fake.setHandler((_s, res) =>
+        reply(
+          res,
+          200,
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: 'length',
+                message: {
+                  role: 'assistant',
+                  content: '',
+                  reasoning: `{"typ":"quiz","komponente":"K1"} ${THOUGHT}`,
+                  reasoning_content: THOUGHT,
+                },
+              },
+            ],
+          })
+        )
+      );
+      const onlyReasoning = await client.call(INPUT);
+      expect(onlyReasoning).toMatchObject({ ok: false, kind: 'empty' });
+      expect(JSON.stringify(onlyReasoning)).not.toContain(THOUGHT);
+      for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    expect(
+      readAnswer(
+        JSON.stringify({
+          choices: [{ message: { content: 'x', reasoning: THOUGHT } }],
+        })
+      )
+    ).toEqual({ text: 'x', promptTokens: null, completionTokens: null });
+  });
+
   it('stops reading an answer that is too large, by header and by stream', async () => {
     const big = 'x'.repeat(64 * 1024);
     fake.setHandler((_s, res) => reply(res, 200, completion(big)));
@@ -217,6 +327,43 @@ describe('a server that is slow or gone', () => {
       ok: false,
       kind: 'timeout',
     });
+  });
+
+  it('uses a time limit of 30 seconds by default, to the millisecond', async () => {
+    expect(DEFAULT_LIMITS.timeoutMs).toBe(30_000);
+    jest.useFakeTimers();
+    try {
+      let seenSignal: AbortSignal | undefined;
+      const hang = ((_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          seenSignal = init.signal as AbortSignal;
+          seenSignal.addEventListener('abort', () => reject(new Error('x')));
+        })) as unknown as typeof fetch;
+      const config = localConfig(fake, { timeoutMs: DEFAULT_LIMITS.timeoutMs });
+      const client = createKiClient({
+        target: config.target,
+        policy: config.policy,
+        apiKey: config.apiKey,
+        model: config.model,
+        timeoutMs: config.limits.timeoutMs,
+        maxResponseBytes: config.limits.maxResponseBytes,
+        maxTokens: config.limits.maxTokens,
+        reasoningEffort: config.reasoningEffort,
+        fetchImpl: hang,
+      });
+      const pending = client.call(INPUT);
+      await jest.advanceTimersByTimeAsync(29_999);
+      expect(seenSignal?.aborted).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(seenSignal?.aborted).toBe(true);
+      expect(await pending).toMatchObject({
+        ok: false,
+        kind: 'timeout',
+        retryable: true,
+      });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('reports a refused connection as network, retryable', async () => {
@@ -329,6 +476,9 @@ describe('readAnswer', () => {
         '{"choices":[{"message":{"content":"hi"}},{"message":{"content":"no"}}],"usage":{"prompt_tokens":-1,"completion_tokens":2.5}}'
       )
     ).toEqual({ text: 'hi', promptTokens: null, completionTokens: null });
+    expect(readAnswer('{"choices":[{"message":{"content":""}}]}')).toEqual({
+      empty: true,
+    });
     expect(readAnswer('null')).toBeNull();
     expect(readAnswer('[]')).toBeNull();
   });

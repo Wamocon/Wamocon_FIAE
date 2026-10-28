@@ -5,7 +5,9 @@ import {
   DEFAULT_ALLOWED_HOSTS,
   DEFAULT_LIMITS,
   DEFAULT_MODEL,
+  DEFAULT_REASONING_EFFORT,
   KI_ENV,
+  REASONING_EFFORTS,
   SOKRATES_DEFAULT_BASE_URL,
   allowedHostsOf,
   loadKiConfig,
@@ -191,13 +193,79 @@ describe('the configuration of the Sokrates stage', () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.config.limits.timeoutMs).toBe(20_000);
+    expect(result.config.limits.timeoutMs).toBe(45_000);
     expect(result.config.limits.maxCallsPerRun).toBe(25);
     expect(result.config.limits.maxCallsPerDay).toBe(
       DEFAULT_LIMITS.maxCallsPerDay
     );
     const low = loadKiConfig({ ...ON, [KI_ENV.timeoutMs]: '5' });
     expect(low.ok && low.config.limits.timeoutMs).toBe(1000);
+  });
+
+  it('waits 30 seconds for an answer by default and never more than 45 seconds', () => {
+    expect(DEFAULT_LIMITS.timeoutMs).toBe(30_000);
+    expect(DEFAULT_LIMITS.maxTokens).toBe(400);
+    const timeoutOf = (raw: string | undefined) => {
+      const result = loadKiConfig({ ...ON, [KI_ENV.timeoutMs]: raw });
+      return result.ok ? result.config.limits.timeoutMs : null;
+    };
+    expect(timeoutOf(undefined)).toBe(30_000);
+    expect(timeoutOf('')).toBe(30_000);
+    expect(timeoutOf('abc')).toBe(30_000);
+    expect(timeoutOf('12.5')).toBe(30_000);
+    expect(timeoutOf('20000')).toBe(20_000);
+    expect(timeoutOf('45000')).toBe(45_000);
+    expect(timeoutOf('45001')).toBe(45_000);
+    expect(timeoutOf('600000')).toBe(45_000);
+    expect(timeoutOf('999')).toBe(1000);
+  });
+
+  describe('the reasoning effort', () => {
+    const effortOf = (raw: string | undefined) => {
+      const result = loadKiConfig({ ...ON, [KI_ENV.reasoningEffort]: raw });
+      return result.ok ? result.config.reasoningEffort : null;
+    };
+
+    it('is none by default and takes the five values that the endpoint knows', () => {
+      expect(KI_ENV.reasoningEffort).toBe('CONTENT_UPLOAD_KI_REASONING_EFFORT');
+      expect(DEFAULT_REASONING_EFFORT).toBe('none');
+      expect(effortOf(undefined)).toBe('none');
+      for (const value of REASONING_EFFORTS) {
+        expect(effortOf(value)).toBe(value);
+      }
+      expect([...REASONING_EFFORTS]).toEqual([
+        'none',
+        'minimal',
+        'low',
+        'medium',
+        'high',
+      ]);
+      expect(effortOf(' Low ')).toBe('low');
+    });
+
+    it('drops every other value and keeps the default, without a refusal and without naming the value', () => {
+      for (const value of [
+        '',
+        '   ',
+        'extreme',
+        'xhigh',
+        'off',
+        'true',
+        '0',
+        'none,high',
+        'low"; drop table x',
+        'high\nx-evil: 1',
+        '__proto__',
+      ]) {
+        const result = loadKiConfig({ ...ON, [KI_ENV.reasoningEffort]: value });
+        expect(result.ok).toBe(true);
+        expect(effortOf(value)).toBe('none');
+        // the rejected value appears nowhere in what the module hands on
+        if (result.ok && value.trim().length > 5) {
+          expect(JSON.stringify(result)).not.toContain(value.trim());
+        }
+      }
+    });
   });
 
   it('never carries the key in anything but apiKey', () => {

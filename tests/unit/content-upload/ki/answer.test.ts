@@ -81,7 +81,6 @@ describe('the check of the answer of the model', () => {
     ['a confidence that is not a number', ok({ konfidenz: 'hoch' })],
     ['a confidence that is null', ok({ konfidenz: null })],
     ['a code that is not text', ok({ komponente: 5 })],
-    ['a code that is far too long', ok({ komponente: 'K'.repeat(100) })],
     ['a level outside the list', ok({ stufe: 'extreme' })],
     [
       'an answer longer than the limit',
@@ -111,6 +110,47 @@ describe('the check of the answer of the model', () => {
         status: 'not_in_whitelist',
       });
     }
+  });
+
+  it('takes only the exact code and never cleans up a field that holds more than the code', () => {
+    // what a model that adds words to the code might write: none of it is normalised
+    const additions = [
+      'K1 (Erfundenes Thema Eins)',
+      'K1 Erfundenes Thema Eins',
+      'K1 = Erfundenes Thema Eins',
+      'Komponente K1',
+      'Die Komponente ist K1.',
+      'K1.',
+      'K1,',
+      ' K1',
+      'K1 ',
+      'K1\n',
+      '"K1"',
+      'K1 oder K6.1',
+      'K6.1 (' + 'x'.repeat(100) + ')',
+      'K'.repeat(100),
+      '',
+    ];
+    for (const addition of additions) {
+      expect(
+        checkAnswer(ok({ komponente: addition, enabler: null }), { catalog })
+      ).toEqual({ ok: false, status: 'not_in_whitelist' });
+      expect(
+        checkAnswer(ok({ komponente: 'K1', enabler: addition }), { catalog })
+      ).toEqual({ ok: false, status: 'not_in_whitelist' });
+    }
+    // the exact codes pass
+    const exact = checkAnswer(ok({ komponente: 'K6.1', enabler: 'K6.1-a' }), {
+      catalog,
+    });
+    expect(exact.ok && exact.answer.componentCode).toBe('K6.1');
+    // an addition in the second stage fails the expected component as well
+    expect(
+      checkAnswer(ok({ komponente: 'K1 (Erfundenes Thema Eins)' }), {
+        catalog,
+        expectedComponent: 'K1',
+      })
+    ).toEqual({ ok: false, status: 'not_in_whitelist' });
   });
 
   it('does not guess the component of an enabler code that two components share', () => {

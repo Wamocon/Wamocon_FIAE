@@ -58,6 +58,17 @@ export const MAX_HELD_PER_RUN = DEFAULT_CONCURRENCY * 2;
 export const DEFAULT_LOCK_SECONDS = 90;
 // budget (at most 20 s) plus this stays inside the maxDuration of the pump route (60 s)
 export const DEFAULT_STEP_TIMEOUT_MS = 30_000;
+/**
+ * A step may ask for a longer limit (`timeoutMs`, the model step waits for a model).
+ * Whatever it asks, no step runs past this point of one call of the pump: the route
+ * is cut at 60 s, and a claim that is lost that way only comes back after the lock.
+ */
+export const MAX_PUMP_MS = 57_000;
+
+/** The limit of a step that starts `elapsedMs` into a call of the pump. */
+export function stepTimeoutFor(stepMs: number, elapsedMs: number): number {
+  return Math.max(1000, Math.min(stepMs, MAX_PUMP_MS - elapsedMs));
+}
 /** A file that failed an attempt waits this long (times the attempts) before the next one. */
 export const RETRY_DELAY_SECONDS = 5;
 
@@ -71,6 +82,13 @@ export interface StepContext {
   loadBytes(maxBytes?: number): Promise<Uint8Array | null>;
   /** Removes the object of the file from the bucket (for a rejection). */
   removeObject(): Promise<boolean>;
+  /**
+   * The limit this run of the step really has (after the cap by the call of the
+   * pump), counted from the start of the step. A step that waits for something
+   * outside plans its waits inside it, because the queue cannot stop work that is
+   * already under way.
+   */
+  stepTimeoutMs?: number;
 }
 
 export type StepResult =
@@ -112,6 +130,12 @@ export interface QueueStep {
    * them). Not asked for a step without it.
    */
   ready?(context: StepReadyContext): Promise<boolean>;
+  /**
+   * How long one run of the step may take. Default: DEFAULT_STEP_TIMEOUT_MS. An
+   * explicit `stepTimeoutMs` of the call wins, and the time left in the call of the
+   * pump (MAX_PUMP_MS) caps it.
+   */
+  timeoutMs?: number;
   run(context: StepContext): Promise<StepResult>;
 }
 
@@ -335,6 +359,7 @@ async function processClaim(
   let bytes: Promise<Uint8Array | null> | null = null;
   const context: StepContext = {
     file,
+    stepTimeoutMs: options.stepTimeoutMs,
     loadBytes(maxBytes = maxFileBytesFor(file.ext)) {
       bytes ??= deps.storage().download(file.storagePath, maxBytes);
       return bytes;
@@ -421,7 +446,6 @@ export async function pumpRun(
   }
   const maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
   const lockSeconds = options.lockSeconds ?? DEFAULT_LOCK_SECONDS;
-  const stepTimeoutMs = options.stepTimeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
   const retryDelaySeconds = options.retryDelaySeconds ?? RETRY_DELAY_SECONDS;
   const stepByState = new Map(steps.map(s => [s.from, s]));
   const started = clock();
@@ -483,16 +507,23 @@ export async function pumpRun(
     });
     if (claimed.length === 0) break;
     processed += claimed.length;
+    const elapsedMs = clock() - started;
     await Promise.all(
-      claimed.map(file =>
-        processClaim(
+      claimed.map(file => {
+        const step = stepByState.get(file.status);
+        // An explicit limit of the call is taken as it is. The limit of a step is
+        // capped by what is left of the call (the route is cut at 60 s)
+        const stepTimeoutMs =
+          options.stepTimeoutMs ??
+          stepTimeoutFor(step?.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS, elapsedMs);
+        return processClaim(
           deps,
           file,
-          stepByState.get(file.status),
+          step,
           { maxAttempts, stepTimeoutMs, retryDelaySeconds },
           tally
-        )
-      )
+        );
+      })
     );
   }
 
