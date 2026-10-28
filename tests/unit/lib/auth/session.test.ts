@@ -147,6 +147,55 @@ describe('auth/session', () => {
       ).toBe(403);
     });
 
+    describe('a trainee who is not released yet (trainer_activated false)', () => {
+      it('403 with a code for every helper, before any data is read', async () => {
+        const { requireUser, requireTrainer, requireAdmin, isErrorResponse } =
+          await load({
+            profile: { role: 'TRAINEE', trainerActivated: false },
+          });
+        for (const guard of [requireUser, requireTrainer, requireAdmin]) {
+          const res = await guard(authed());
+          expect(isErrorResponse(res)).toBe(true);
+          expect((res as Response).status).toBe(403);
+          expect(await (res as Response).json()).toEqual({
+            error: 'Forbidden',
+            code: 'AWAITING_ACTIVATION',
+          });
+        }
+      });
+
+      it('getSessionUser gives no session either', async () => {
+        const { getSessionUser } = await load({
+          profile: { role: 'TRAINEE', trainerActivated: false },
+        });
+        expect(await getSessionUser(authed())).toBeNull();
+      });
+
+      it('passes as soon as the release is given', async () => {
+        const { requireUser, isErrorResponse } = await load({
+          profile: { role: 'TRAINEE', trainerActivated: true },
+        });
+        expect(isErrorResponse(await requireUser(authed()))).toBe(false);
+      });
+
+      it('a row without the flag (older data, mocks) is not blocked', async () => {
+        const { requireUser, isErrorResponse } = await load({
+          profile: { role: 'TRAINEE', trainerActivated: null },
+        });
+        expect(isErrorResponse(await requireUser(authed()))).toBe(false);
+      });
+
+      it.each(['TRAINER', 'TEMP_ADMIN', 'ADMIN'])(
+        'only a trainee is held back: %s with the flag false still has its session',
+        async role => {
+          const { requireUser, isErrorResponse } = await load({
+            profile: { role, trainerActivated: false },
+          });
+          expect(isErrorResponse(await requireUser(authed()))).toBe(false);
+        }
+      );
+    });
+
     it('403 for an unknown role value', async () => {
       const { requireUser } = await load({ profile: { role: 'ROOT' } });
       expect(((await requireUser(authed())) as Response).status).toBe(403);

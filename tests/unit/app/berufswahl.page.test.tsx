@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../helpers/renderWithProviders';
 import BerufswahlPage from '@/app/berufswahl/page';
@@ -55,7 +55,7 @@ describe('/berufswahl', () => {
   it('sends a visitor who is not signed in to the login', () => {
     authState({ user: null, profile: null });
     renderWithProviders(<BerufswahlPage />);
-    expect(replace).toHaveBeenCalledWith('/login');
+    expect(replace).toHaveBeenCalledWith('/login?reason=signin-required');
     expect(screen.queryByTestId('tiles')).toBeNull();
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
   });
@@ -74,6 +74,67 @@ describe('/berufswahl', () => {
     expect(replace).not.toHaveBeenCalled();
     expect(screen.queryByTestId('tiles')).toBeNull();
     expect(screen.getByText('Lädt...')).toBeInTheDocument();
+  });
+
+  describe('an account that is stopped sees a notice, not the occupations', () => {
+    it('a trainee who waits for the release', () => {
+      authState({
+        profile: {
+          id: 'u1',
+          role: 'trainee',
+          full_name: 'Neue Azubi',
+          trainerActivated: false,
+        },
+      });
+      renderWithProviders(<BerufswahlPage />);
+      expect(
+        screen.getByRole('heading', {
+          level: 1,
+          name: 'Ihr Konto wartet auf die Freigabe',
+        })
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('tiles')).toBeNull();
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it('a deactivated account', () => {
+      authState({
+        profile: { id: 'u1', role: 'trainee', full_name: 'X', isActive: false },
+      });
+      renderWithProviders(<BerufswahlPage />);
+      expect(
+        screen.getByRole('heading', { name: 'Ihr Konto ist deaktiviert' })
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('tiles')).toBeNull();
+    });
+
+    it('a trainer level account is not stopped by the area (it is no area page)', () => {
+      authState({
+        profile: { id: 'u1', role: 'admin', full_name: 'Anna Admin' },
+      });
+      renderWithProviders(<BerufswahlPage />);
+      expect(screen.getByTestId('tiles')).toBeInTheDocument();
+    });
+
+    describe('a profile that does not arrive', () => {
+      beforeEach(() => jest.useFakeTimers());
+      afterEach(() => jest.useRealTimers());
+
+      it('shows the loading state, then its own notice', () => {
+        authState({ profile: null });
+        renderWithProviders(<BerufswahlPage />);
+        expect(screen.getByText('Lädt...')).toBeInTheDocument();
+        act(() => {
+          jest.advanceTimersByTime(3100);
+        });
+        expect(
+          screen.getByRole('heading', {
+            name: 'Ihr Profil konnte nicht geladen werden',
+          })
+        ).toBeInTheDocument();
+        expect(replace).not.toHaveBeenCalled();
+      });
+    });
   });
 
   it('falls back to the e-mail address when the profile has no name', () => {

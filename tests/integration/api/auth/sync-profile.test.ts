@@ -555,3 +555,160 @@ describe('API: Auth Sync Profile, accounts created in Preview', () => {
     expect(writes('insert', 'profiles')).toHaveLength(1);
   });
 });
+
+describe('API: Auth Sync Profile, the release of pre-created profiles', () => {
+  // A user created by an administrator has a profile before the first sign in
+  // (released at once, see createUserRecords). The first sign in must keep that
+  // state: it neither releases an unreleased profile nor blocks a released one.
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    process.env.SUPABASE_URL = 'http://test';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'key';
+    delete process.env.DEFAULT_TRAINER_ID;
+    delete process.env.DEFAULT_TRAINER_EMAIL;
+  });
+
+  const call = (db: any, user: any) =>
+    importHandlerWithDb(db, supabaseReturning(user)).then(POST =>
+      POST(makePost('http://localhost/api/auth/sync-profile', authed))
+    );
+
+  it('the profile an administrator created for the auth account (same id) stays released and is not touched by the sync', async () => {
+    const { db, writes } = createTableDb({
+      profiles: [
+        {
+          id: 'u1',
+          role: 'TRAINEE',
+          organizationId: 'org1',
+          trainerActivated: true,
+          isActive: true,
+          assignedTrainerId: null,
+        },
+      ],
+    });
+    const res = await call(db, {
+      id: 'u1',
+      email: 'created@example.com',
+      user_metadata: {},
+    });
+    expect(res.status).toBe(200);
+    expect(db.transaction).not.toHaveBeenCalled();
+    const [inserted] = writes('insert', 'profiles') as any[];
+    expect(inserted).toEqual(
+      expect.objectContaining({
+        id: 'u1',
+        role: 'TRAINEE',
+        organizationId: 'org1',
+        trainerActivated: true,
+      })
+    );
+    // the conflict branch (the row exists) updates name and e-mail, never the release
+    expect(
+      (writes('update', 'profiles') as any[]).some(
+        values => 'trainerActivated' in values
+      )
+    ).toBe(false);
+  });
+
+  it('a released profile with another id is merged and stays released (the user can sign in at once)', async () => {
+    const { db, writes } = createTableDb({
+      profiles: [
+        {
+          id: 'old-id',
+          role: 'TRAINEE',
+          organizationId: 'org1',
+          trainerActivated: true,
+          isActive: true,
+        },
+      ],
+    });
+    const res = await call(db, {
+      id: 'u2',
+      email: 'created@example.com',
+      email_confirmed_at: '2026-01-01T00:00:00Z',
+      user_metadata: {},
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, merged: true });
+    const [temporary] = writes('insert', 'profiles') as any[];
+    expect(temporary).toEqual(
+      expect.objectContaining({ id: 'u2', trainerActivated: true })
+    );
+    const final = (writes('update', 'profiles') as any[]).find(
+      values => values.email === 'created@example.com'
+    );
+    expect(final).toEqual(
+      expect.objectContaining({ role: 'TRAINEE', trainerActivated: true })
+    );
+  });
+
+  it('a profile that waits for the release is merged and keeps waiting (the sync releases nobody)', async () => {
+    const { db, writes } = createTableDb({
+      profiles: [
+        {
+          id: 'old-id',
+          role: 'TRAINEE',
+          organizationId: 'org1',
+          trainerActivated: false,
+          isActive: true,
+        },
+      ],
+    });
+    const res = await call(db, {
+      id: 'u3',
+      email: 'waiting@example.com',
+      email_confirmed_at: '2026-01-01T00:00:00Z',
+      user_metadata: {},
+    });
+    expect(res.status).toBe(200);
+    const final = (writes('update', 'profiles') as any[]).find(
+      values => values.email === 'waiting@example.com'
+    );
+    expect(final).toEqual(expect.objectContaining({ trainerActivated: false }));
+  });
+
+  it('the orphan merge after a duplicate e-mail keeps the release of the old profile (released stays released, waiting keeps waiting)', async () => {
+    for (const released of [true, false]) {
+      const orphanRow = {
+        id: 'orphan-id',
+        role: 'TRAINEE',
+        organizationId: 'org-9',
+        startOfTrainingDate: null,
+        ausbildungDurationYears: 3,
+        birthDate: null,
+        avatarUrl: null,
+        trainerActivated: released,
+        assignedTrainerId: null,
+      };
+      const mock = createTableDb({
+        profiles: { sequence: [[], [{ id: 'tr1' }], [orphanRow]] },
+      });
+      const uniqueViolation = Object.assign(new Error('duplicate key'), {
+        cause: { code: '23505' },
+      });
+      const realInsert = mock.db.insert;
+      mock.db.insert = jest
+        .fn()
+        .mockImplementationOnce(() => ({
+          values: () => ({
+            onConflictDoUpdate: () => Promise.reject(uniqueViolation),
+          }),
+        }))
+        .mockImplementation(realInsert) as any;
+      const res = await call(mock.db, {
+        id: 'u4',
+        email: 'orphan@example.com',
+        email_confirmed_at: '2026-01-01T00:00:00Z',
+        user_metadata: {},
+      });
+      expect(res.status).toBe(200);
+      const final = (mock.writes('update', 'profiles') as any[]).find(
+        values => values.email === 'orphan@example.com'
+      );
+      expect(final).toEqual(
+        expect.objectContaining({ trainerActivated: released })
+      );
+    }
+  });
+});

@@ -159,7 +159,13 @@ export async function createUserRecords(
         role: input.role,
         organizationId: input.organizationId,
         isActive: true,
-        trainerActivated: input.role !== ROLE.TRAINEE,
+        // The account is created by an administrator (the only caller, see
+        // POST /api/admin/users), who is the one who releases it: it is
+        // released at once for every role. The release that a new trainee waits
+        // for is only for the self registration (src/app/api/register and
+        // src/app/api/auth/sync-profile). A profile created here is also the
+        // one sync-profile finds at the first sign in and keeps as it is.
+        trainerActivated: true,
       })
       .onConflictDoNothing();
     if (check.catalog) {
