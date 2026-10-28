@@ -38,6 +38,9 @@ export async function GET(req: NextRequest) {
             and(
               eq(quizAssignments.traineeId, userId as any),
               eq(quizzes.quizType, 'GLOBAL' as any),
+              // The detail route answers 404 for an inactive quiz, so the
+              // list must not offer one
+              eq(quizzes.isActive, true),
               catalogCondition(quizzes.trainingCatalogId, scope)
             )
           )

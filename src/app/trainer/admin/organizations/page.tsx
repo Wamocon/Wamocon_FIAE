@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { CatalogActivationPanel } from '@/components/admin/CatalogActivationPanel';
 import { OrganizationCatalogsEditor } from '@/components/admin/OrganizationCatalogsEditor';
+import { TraineeContentAssign } from '@/components/admin/TraineeContentAssign';
 import { SeatCounter } from '@/components/admin/SeatCounter';
 import { useIsSuperAdmin } from '@/lib/hooks/useIsSuperAdmin';
 import toast from 'react-hot-toast';
@@ -449,6 +450,14 @@ export default function AdminOrganizationsPage() {
                 refreshKey={catalogVersion}
               />
             )}
+
+            {/* Assign the trainees of the organization to the courses of the
+                occupation (every admin level, the API limits it to the own
+                organization) */}
+            <TraineeContentAssign
+              organizationId={org.id}
+              refreshKey={catalogVersion}
+            />
 
             {/* Contact */}
             {(org.contactPerson || org.contactEmail) && (

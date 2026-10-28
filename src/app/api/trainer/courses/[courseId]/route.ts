@@ -132,6 +132,11 @@ export async function PATCH(
     if (typeof body?.examPart !== 'undefined')
       updates.examPart = body.examPart === null ? null : Number(body.examPart);
     if (Array.isArray(body?.lernfelder)) updates.lernfelder = body.lernfelder;
+    // Visibility columns of the course (platform admin only, like every
+    // curriculum write). Nothing else in the app could set them before.
+    if (typeof body?.isActive === 'boolean') updates.isActive = body.isActive;
+    if (typeof body?.isPublished === 'boolean')
+      updates.isPublished = body.isPublished;
     const skillsArr: string[] | undefined = Array.isArray(body?.skills)
       ? body.skills
       : undefined;

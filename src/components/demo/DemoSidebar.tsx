@@ -9,7 +9,6 @@ import {
   Settings,
   LogOut,
   GraduationCap,
-  HelpCircle,
   School,
   ClipboardList,
 } from 'lucide-react';
@@ -45,22 +44,10 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
               href: '/demo/trainer/activity-reports',
             },
             {
-              id: 'school',
-              label: t('nav.school'),
-              icon: School,
-              href: '/demo/trainer/school',
-            },
-            {
               id: 'contentManagement',
               label: t('nav.contentManagement'),
               icon: BookOpen,
               href: '/demo/trainer/content-management',
-            },
-            {
-              id: 'quizManagement',
-              label: t('nav.quizzes'),
-              icon: HelpCircle,
-              href: '/demo/trainer/quiz-management',
             },
             {
               id: 'trainees',
@@ -87,18 +74,6 @@ export function DemoSidebar({ isOpen, onToggle: _onToggle }: DemoSidebarProps) {
               label: t('nav.courses'),
               icon: BookOpen,
               href: '/demo/trainee/courses',
-            },
-            {
-              id: 'lessons',
-              label: t('nav.trainerFeedback'),
-              icon: GraduationCap,
-              href: '/demo/trainee/trainer-feedback',
-            },
-            {
-              id: 'quizzes',
-              label: t('nav.quizzes'),
-              icon: HelpCircle,
-              href: '/demo/trainee/quizzes',
             },
           ]),
       {
