@@ -510,6 +510,29 @@ describe('use case: task PDF stops before the model solution, the solution PDF i
     expect(result.variants[1].check('Musterlösung\nText')).toBeNull();
   });
 
+  it('hands the solutions of a use case on, so an enabler text that repeats one is refused', async () => {
+    const useCase = await prepareWordDocument(
+      'usecase',
+      await docxFromBlocks(useCaseBlocks({ code: '1b' })),
+      context()
+    );
+    if (!useCase.ok) throw new Error('expected variants');
+    expect(useCase.solutions.join(' ')).toContain(CANARY.useCaseSolution);
+    const repeated = [
+      ...enablerBlocks({ code: '1b' }),
+      t(CANARY.useCaseSolution),
+    ];
+    expect(
+      await prepareWordDocument(
+        'enabler',
+        await docxFromBlocks(repeated),
+        context({ strongSolutions: useCase.solutions })
+      )
+    ).toEqual({ ok: false, code: 'SOLUTION_MARKER' });
+    // the PDF of the model solution itself still carries it (trainer only, check passes)
+    expect(useCase.variants[1].check(CANARY.useCaseSolution)).toBeNull();
+  });
+
   it('refuses a missing solution, another code, a marker in a visible section and a section in a table', async () => {
     const withoutSolution = useCaseBlocks({ code: '1b' }).slice(0, -2);
     expect(

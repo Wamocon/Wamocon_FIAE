@@ -23,9 +23,9 @@ import type { Db, Row } from './db';
 import { ImportAbort } from './db';
 import {
   findRowLeaks,
-  LONG_SOLUTION_TEXTS,
   leakOf,
   leakOfEnablerText,
+  longSolutionTexts,
   reviewedEnablerCodes,
   solutionTexts,
 } from './guard';
@@ -49,6 +49,12 @@ import type {
 export interface RunOptions {
   /** Profile entered as author of courses, quizzes and documents. */
   createdBy: string;
+  /**
+   * Long texts that no teaching text, component or course may repeat besides the solution
+   * parts of the scenarios of the plan: the model solutions of the use cases (the plan does
+   * not know them). Handed over by the caller, never read from the plan file.
+   */
+  protectedTexts?: readonly string[];
   /** Update the named columns of rows that exist and differ. */
   updateExisting: boolean;
   /** false = only compare, nothing is written. */
@@ -339,7 +345,9 @@ export async function executePlan(
   plan: ImportPlan,
   options: RunOptions
 ): Promise<RunReport> {
-  const problems = validatePlan(plan);
+  const problems = validatePlan(plan, {
+    protectedTexts: options.protectedTexts,
+  });
   if (problems.length > 0) {
     throw new ImportAbort(
       'PLAN_INVALID',
@@ -1044,7 +1052,7 @@ export async function executePlan(
     const leaks = findRowLeaks(
       preview,
       solutionTexts(plan),
-      LONG_SOLUTION_TEXTS,
+      longSolutionTexts(plan, options.protectedTexts),
       reviewedEnablerCodes(plan)
     );
     if (leaks.length > 0) {
@@ -1058,6 +1066,8 @@ export async function executePlan(
   // The values of updates are visible text as well
   {
     const solutions = solutionTexts(plan);
+    const long = longSolutionTexts(plan, options.protectedTexts);
+    const longTables = ['training_components', 'courses', 'enablers'];
     const reviewed = reviewedEnablerCodes(plan);
     const visibleColumns = [
       'title',
@@ -1073,10 +1083,18 @@ export async function executePlan(
         // code of the enabler)
         const leak =
           typeof value === 'string' &&
-          (update.table === 'enablers' && column === 'description_text'
+          ((update.table === 'enablers' && column === 'description_text'
             ? leakOfEnablerText(value, solutions, reviewed.has(update.key))
                 .reason
-            : leakOf(value, solutions));
+            : leakOf(value, solutions)) ??
+            // the solution parts of the scenarios and the model solutions of the use
+            // cases in a description, as for a new row
+            (longTables.includes(update.table)
+              ? update.table === 'enablers' && column === 'description_text'
+                ? leakOfEnablerText(value, long, reviewed.has(update.key))
+                    .reason
+                : leakOf(value, long)
+              : null));
         if (leak) {
           throw new ImportAbort(
             'SOLUTION_LEAK',

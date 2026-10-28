@@ -16,7 +16,13 @@ import {
   fixtureFile,
   type FixtureFile,
 } from '../../../helpers/transferFixtures';
-import { globalQuizBlocks } from '../../../helpers/uploadFixtures';
+import {
+  CANARY,
+  enablerBlocks,
+  globalQuizBlocks,
+  t as textBlock,
+  useCaseBlocks,
+} from '../../../helpers/uploadFixtures';
 
 const K4: ComponentFact = {
   code: 'K4',
@@ -305,6 +311,84 @@ describe('buildTransferPlan', () => {
     );
     expect(result.importPlan.quizzes.map(q => q.code)).toEqual(['K6.1-global']);
     expect(result.importPlan.quizzes[0].questions).toHaveLength(20);
+  });
+
+  it.each([
+    ['a scenario', CANARY.scenarioSolution, 'WOMBAT'],
+    ['a use case', CANARY.useCaseSolution, 'OKAPI'],
+  ])(
+    'leaves out a teaching text that repeats the solution of %s, and never stores the use case solution in the import plan',
+    async (_what, solution, word) => {
+      const fixtures = await enablerFiles({ tree: true });
+      const index = fixtures.findIndex(
+        f => f.file.decision.docType === 'enabler'
+      );
+      fixtures[index] = fixtureFile(
+        await docx([...enablerBlocks({ code: '4a' }), textBlock(solution)]),
+        {
+          rel: fixtures[index].file.relPath,
+          name: '4a.docx',
+          docType: 'enabler',
+          componentCode: 'K4',
+          enablerCode: 'K4-a',
+        }
+      );
+      const result = await plan(fixtures, []);
+      expect(result.importPlan.enablers.map(e => e.code)).not.toContain('K4-a');
+      expect(
+        result.importPlan.skipped.map(s => [s.key, s.code])
+      ).toContainEqual(['enabler:K4-a', 'SOLUTION_MARKER']);
+      // the whole scenario and the use case are not touched by it
+      expect(result.useCasePlan.useCases.map(u => u.code)).toEqual(['K4-a']);
+      const stored = JSON.stringify(result.importPlan.enablers);
+      expect(stored).not.toContain(word);
+      expect(JSON.stringify(result.importPlan.skipped)).not.toContain(word);
+    }
+  );
+
+  it('also protects the solution of a use case that was left out of the plan', async () => {
+    const fixtures = await enablerFiles({ tree: true });
+    const textIndex = fixtures.findIndex(
+      f => f.file.decision.docType === 'enabler'
+    );
+    const ucIndex = fixtures.findIndex(
+      f => f.file.decision.docType === 'use_case'
+    );
+    // the assignment names the model solution: the planner leaves this use case out
+    fixtures[ucIndex] = fixtureFile(
+      await docx([
+        // before the heading of the solution, so it stays in the visible assignment
+        ...useCaseBlocks({ code: '4a' }).slice(0, -2),
+        textBlock('Vergleichen Sie mit der Musterlösung.'),
+        ...useCaseBlocks({ code: '4a' }).slice(-2),
+      ]),
+      {
+        rel: fixtures[ucIndex].file.relPath,
+        name: 'UC_4a.docx',
+        docType: 'use_case',
+        componentCode: 'K4',
+        enablerCode: 'K4-a',
+      }
+    );
+    fixtures[textIndex] = fixtureFile(
+      await docx([
+        ...enablerBlocks({ code: '4a' }),
+        textBlock(CANARY.useCaseSolution),
+      ]),
+      {
+        rel: fixtures[textIndex].file.relPath,
+        name: '4a.docx',
+        docType: 'enabler',
+        componentCode: 'K4',
+        enablerCode: 'K4-a',
+      }
+    );
+    const result = await plan(fixtures, []);
+    expect(result.useCasePlan.useCases).toEqual([]);
+    expect(result.importPlan.skipped.map(s => [s.key, s.code])).toContainEqual([
+      'enabler:K4-a',
+      'SOLUTION_MARKER',
+    ]);
   });
 
   it('holds the full content including the solution parts, and nowhere else', async () => {

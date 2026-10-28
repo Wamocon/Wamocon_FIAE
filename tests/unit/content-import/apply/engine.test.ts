@@ -575,6 +575,33 @@ describe('executePlan: solution protection', () => {
     await expectAbort(executePlan(db, p, options()), 'PLAN_INVALID');
     expect(db.totalRows()).toBe(0);
   });
+
+  it('refuses a plan whose teaching text repeats the solution of a scenario', async () => {
+    const db = new MemoryImportDb();
+    const p = clone(plan());
+    p.enablers[0].descriptionText = `Lehrtext. ${p.scenarios[0].solution}`;
+    await expectAbort(executePlan(db, p, options()), 'PLAN_INVALID');
+    expect(db.totalRows()).toBe(0);
+    // the whole scenario with its solution is no leak, the plan of the tree is written
+    await executePlan(db, plan(), options());
+    expect(db.count('enablers')).toBe(6);
+  });
+
+  it('refuses a teaching text with a model solution of a use case that the caller names', async () => {
+    const solution =
+      'Die erfundene Musterantwort KAPPA nennt zwölf Schrauben und drei Muttern.';
+    const p = clone(plan());
+    p.enablers[0].descriptionText = `Lehrtext. ${solution}`;
+    const db = new MemoryImportDb();
+    await expectAbort(
+      executePlan(db, p, options({ protectedTexts: [solution] })),
+      'PLAN_INVALID'
+    );
+    expect(db.totalRows()).toBe(0);
+    // without the list of the caller the plan alone cannot know the text
+    await executePlan(db, p, options());
+    expect(db.count('enablers')).toBe(6);
+  });
 });
 
 describe('executePlan: conflicts stop the run before the first write', () => {
