@@ -276,7 +276,8 @@ export function createLibreOfficeConverter({
             // the grace period below ends the wait
           }
           // the process did not report its end after the kill: give up on it
-          setTimeout(() => done({ timedOut: true }), killGraceMs).unref?.();
+          // (no unref: the caller waits for this timer, an idle event loop must not end the run)
+          setTimeout(() => done({ timedOut: true }), killGraceMs);
         }, timeoutMs);
         try {
           child = spawnImpl(
