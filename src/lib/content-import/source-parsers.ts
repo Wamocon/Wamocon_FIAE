@@ -685,7 +685,7 @@ const SOLUTION_WORDING =
   /L(?:ö|oe)sung|Antwortschl(?:ü|ue)ssel|Korrekte\s+Antwort/i;
 
 /** True when a line of the text looks like the heading of a solution. */
-export function hasSolutionHeadingLine(text: string): boolean {
+function hasSolutionHeadingLine(text: string): boolean {
   return text.split(/\n+/).some(line => {
     const trimmed = line.trim();
     return (
@@ -706,7 +706,7 @@ const squash = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
  * visible text, or a paragraph of the visible text stands inside a solution.
  * Used for the task, which stays beside the solution in the same file.
  */
-export function sharesSolutionText(
+function sharesSolutionText(
   visible: string,
   solutions: readonly string[]
 ): boolean {
@@ -724,9 +724,9 @@ export function sharesSolutionText(
 
 /**
  * Parses the text of a scenario file: heading "Szenario 1b) Title" and the
- * sections Ausgangssituation and the optional Aufgabe (visible for trainees),
- * Lösungsszenario and "Wie das Fachwissen zur Lösung beiträgt" (solutions,
- * trainer only).
+ * sections Ausgangssituation, the optional Aufgabe, Lösungsszenario and "Wie das
+ * Fachwissen zur Lösung beiträgt". The whole scenario is public (decision of the
+ * owner of 29.10.2026), the visibility flags only describe the old split.
  *
  * A section "Aufgabe" (also "Aufgabenstellung", "Aufgaben") next to a section
  * Lösungsszenario is the task. Where there is no Lösungsszenario, the section
@@ -939,7 +939,7 @@ export function parseScenarioText(
     issues.push(
       issue(
         'TASK_SOLUTION_OVERLAP',
-        'error',
+        'warning',
         `The section "${SECTION_LABEL.task}" repeats text of the solution parts.`
       )
     );
@@ -948,7 +948,7 @@ export function parseScenarioText(
     issues.push(
       issue(
         'TASK_SOLUTION_HEADING',
-        'error',
+        'warning',
         `The section "${SECTION_LABEL.task}" has a line that looks like the heading of a solution.`
       )
     );
@@ -965,10 +965,10 @@ export interface TraineeScenario {
 }
 
 /**
- * The part of a scenario that trainees may see: the starting situation and the
- * task. Fails closed: returns null when the parse result has an error, when a
- * solution marker is found in a visible part or when the task repeats text of
- * a solution part.
+ * The part of a scenario that is sent as an excerpt: the starting situation and the
+ * task. Fails closed: returns null when the parse result has an error or when a
+ * solution marker is found in a visible part. A task that repeats text of the solution
+ * parts is only a warning of the parser (the whole scenario is public).
  */
 export function toTraineeScenario(
   result: ParseResult<ParsedScenario>
@@ -977,16 +977,6 @@ export function toTraineeScenario(
   const scenario = result.value;
   const task = scenario.task ?? '';
   if (hasSolutionMarker([scenario.title ?? '', scenario.situation, task])) {
-    return null;
-  }
-  if (task && hasSolutionHeadingLine(task)) return null;
-  if (
-    task &&
-    sharesSolutionText(task, [
-      scenario.solution,
-      scenario.knowledgeContribution,
-    ])
-  ) {
     return null;
   }
   return {
