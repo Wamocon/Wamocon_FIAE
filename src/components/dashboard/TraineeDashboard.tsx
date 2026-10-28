@@ -211,7 +211,8 @@ export default function TraineeDashboard() {
         break;
       case 'lessons':
         if (data?.lessonId) {
-          router.push(`/trainee/trainer-feedback/${data.lessonId}`);
+          // The ongoing item of the dashboard is an enabler
+          router.push(`/trainee/enablers/${data.lessonId}`);
         } else {
           router.push('/trainee/trainer-feedback');
         }

@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { BookOpen, Power } from 'lucide-react';
+import { BookOpen, Power, Rocket } from 'lucide-react';
 import { authFetch } from '@/lib/authFetch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { ContentReleasePanel } from '@/components/admin/ContentReleasePanel';
 import {
   DEFAULT_CATALOG_CODE,
   catalogErrorMessage,
@@ -27,6 +28,8 @@ export function CatalogActivationPanel({ onChanged }: Props) {
   const [catalogs, setCatalogs] = useState<CatalogSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  // The catalog whose release tool is open
+  const [releaseId, setReleaseId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -176,6 +179,24 @@ export function CatalogActivationPanel({ onChanged }: Props) {
                   ? t('admin.catalogs.deactivate')
                   : t('admin.catalogs.activate')}
               </button>
+              <button
+                type="button"
+                aria-expanded={releaseId === catalog.id}
+                onClick={() =>
+                  setReleaseId(releaseId === catalog.id ? null : catalog.id)
+                }
+                className="text-foreground hover:bg-accent/10 border-border focus-visible:ring-accent flex w-fit items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <Rocket className="h-4 w-4" aria-hidden="true" />
+                {t('contentRelease.open')}
+              </button>
+              {releaseId === catalog.id && (
+                <ContentReleasePanel
+                  catalogId={catalog.id}
+                  catalogCode={catalog.code}
+                  onClose={() => setReleaseId(null)}
+                />
+              )}
             </li>
           );
         })}
