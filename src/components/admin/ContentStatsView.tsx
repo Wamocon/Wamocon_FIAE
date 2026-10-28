@@ -15,6 +15,7 @@ import { authFetch } from '@/lib/authFetch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ContentTargetsForm } from '@/components/admin/ContentTargetsForm';
+import { SequenceRulePanel } from '@/components/admin/SequenceRulePanel';
 import type {
   CatalogContentStats,
   ContentMetric,
@@ -161,6 +162,7 @@ function CatalogCard({
 }) {
   const { t, language } = useLanguage();
   const [editing, setEditing] = useState(false);
+  const [sequenceOpen, setSequenceOpen] = useState(false);
   const editRef = useRef<HTMLButtonElement | null>(null);
   const wasEditing = useRef(false);
   const titleId = `content-stats-${catalog.catalogId}`;
@@ -222,6 +224,19 @@ function CatalogCard({
           }}
           onClose={() => setEditing(false)}
         />
+      )}
+
+      {canEditTargets && !sequenceOpen && (
+        <button
+          type="button"
+          onClick={() => setSequenceOpen(true)}
+          className="text-foreground hover:bg-accent/10 border-border focus-visible:ring-accent mt-4 flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        >
+          {t('sequenceRule.title')}
+        </button>
+      )}
+      {canEditTargets && sequenceOpen && (
+        <SequenceRulePanel catalogId={catalog.catalogId} />
       )}
 
       <ul

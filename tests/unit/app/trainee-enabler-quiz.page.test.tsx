@@ -211,6 +211,7 @@ describe('lesson quiz on the enabler page', () => {
         unlocked: true,
         isActive: true,
         completed: true,
+        passed: true,
       },
     ]);
     authFetchMock.mockImplementation(async (input: any) => {

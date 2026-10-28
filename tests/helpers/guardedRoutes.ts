@@ -696,6 +696,18 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['catalogId'],
   },
   {
+    route: 'admin/catalogs/[catalogId]/sequence-rule',
+    method: 'GET',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
+    route: 'admin/catalogs/[catalogId]/sequence-rule',
+    method: 'PUT',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
+  {
     route: 'admin/organizations/[orgId]/catalogs',
     method: 'GET',
     guard: 'admin',

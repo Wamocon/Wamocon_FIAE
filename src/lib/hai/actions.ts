@@ -31,6 +31,7 @@ import { getTrainingPhase } from '@/lib/ausbildung/duration';
 import { getUserOrgIdStrict } from '@/lib/auth-helpers';
 import { isInOrgScope, scopeOrg, type SessionUser } from '@/lib/auth/session';
 import { loadPhasePlanForUser } from '@/lib/catalog/phase-plan-db';
+import { getEnablerProgression } from '@/lib/catalog/progression-db';
 import type { CatalogRequestLike } from '@/lib/catalog/scope';
 import {
     ensureContentAllowed,
@@ -665,6 +666,22 @@ async function completeEnabler(
             .limit(1);
 
         if (!member) return notFound();
+
+        // Order of work: a locked enabler cannot be marked as completed
+        const found = await getEnablerProgression(userId, {
+            id: String(enabler.id),
+            courseId: String(enabler.courseId),
+        });
+        if (found?.enabler.locked) {
+            const first = found.enabler.lockedBy?.title;
+            return fail(
+                'forbidden',
+                first
+                    ? `Der Enabler "${enabler.title}" ist noch gesperrt. Schließe zuerst "${first}" ab.`
+                    : `Der Enabler "${enabler.title}" ist für dich gesperrt.`,
+                'ENABLER_LOCKED'
+            );
+        }
 
         // Check if already completed
         const existing = await db

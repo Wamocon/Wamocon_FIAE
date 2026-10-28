@@ -4,6 +4,7 @@ import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import { enablers, courseMembers, enablerSubmissions, EnablerSubmission } from '@/db/migrations/schemas/schema';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { getEnablerProgression } from '@/lib/catalog/progression-db';
 
 // GET trainee-facing enabler detail (title, description, ppt, video)
 // The data of the session user, a traineeId or userId in the query is ignored.
@@ -38,7 +39,29 @@ export async function GET(
       .where(and(eq(enablerSubmissions.enablerId, enablerId), eq(enablerSubmissions.traineeId, traineeId)));
     const latest = subs.sort((a, b) => (new Date(b.submittedAt || '').getTime() - new Date(a.submittedAt || '').getTime()))[0];
 
+    // Order of work: the title and the material of a locked enabler stay
+    // readable, the answer says that it is locked and what to finish first.
+    // The writes and the quiz questions are closed by their own routes.
+    const found = await getEnablerProgression(traineeId, {
+      id: String(e.id),
+      courseId: String(e.courseId),
+    });
+    const progression = found
+      ? {
+          state: found.enabler.state,
+          locked: found.enabler.locked,
+          reason: found.enabler.lockReason,
+          lockedBy: found.enabler.lockedBy
+            ? {
+                id: found.enabler.lockedBy.enablerId,
+                title: found.enabler.lockedBy.title,
+              }
+            : null,
+        }
+      : { state: 'open', locked: false, reason: null, lockedBy: null };
+
     return NextResponse.json({
+      progression,
       enabler: {
         id: e.id,
         title: e.title,

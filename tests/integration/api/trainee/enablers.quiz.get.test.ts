@@ -8,10 +8,17 @@ import {
 } from '../../../helpers/mockNext';
 import { findSolutionKeys } from '../../../helpers/solutionKeys';
 
+// The order of work (progression) has its own tests: here the guard says
+// "open" unless a test sets a lock
+let lockAnswer: Response | null = null;
+
 // helper to import the route handler with a mocked DB
 async function importHandlerWithDb(mockDb: any) {
   jest.resetModules();
   jest.doMock('@/db', () => ({ __esModule: true, default: mockDb }));
+  jest.doMock('@/lib/catalog/progression-db', () => ({
+    requireEnablerOpen: async () => lockAnswer,
+  }));
   mockTraineeSession();
   mockCatalogScope();
   const mod = await import('@/app/api/trainee/enablers/[enablerId]/quiz/route');
@@ -26,6 +33,33 @@ describe('API: GET /api/trainee/enablers/[enablerId]/quiz', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+    lockAnswer = null;
+  });
+
+  it('answers 403 ENABLER_LOCKED and no question for a locked enabler', async () => {
+    const { NextResponse } = await import('next/server');
+    lockAnswer = NextResponse.json(
+      { error: 'Enabler locked', code: 'ENABLER_LOCKED' },
+      { status: 403 }
+    );
+    const returns: any[] = [
+      [{ id: 'e1', isActive: true, courseId: 'c1' }],
+      [{ userId: 't1', courseId: 'c1' }],
+    ];
+    const mockDb = {
+      select: jest.fn().mockImplementation(() => ({
+        from: () => ({ where: () => returns.shift() }),
+      })),
+    };
+    const GET = await importHandlerWithDb(mockDb);
+    const res = await GET(
+      makeGet('http://localhost/api/trainee/enablers/e1/quiz'),
+      { params: Promise.resolve({ enablerId: 'e1' }) }
+    );
+    expect((res as any).status).toBe(403);
+    expect(await (res as any).json()).toMatchObject({ code: 'ENABLER_LOCKED' });
+    // the enabler and the membership were read, the quiz was not
+    expect(mockDb.select).toHaveBeenCalledTimes(2);
   });
 
   it('returns {quiz:null} if no quiz linked', async () => {

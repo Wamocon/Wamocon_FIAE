@@ -3,11 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/db';
 import { and, eq } from 'drizzle-orm';
 import {
+  activityLog,
+  courseMembers,
+  enablers,
+  profiles,
   traineeEnablerOverrides,
   traineeUseCaseOverrides,
   quizAssignments,
   notifications,
 } from '@/db/migrations/schemas/schema';
+import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { invalidateTraineeListCaches } from '@/lib/catalog/trainee-cache';
 import { requireTraineeAccess } from '@/lib/auth/trainee-access';
@@ -19,6 +24,17 @@ import {
 
 type ItemType = 'ENABLER' | 'USE_CASE' | 'GLOBAL_QUIZ';
 
+/**
+ * PATCH the exception of one trainee (rights unchanged: any trainer level
+ * caller inside the scope of the trainee).
+ *
+ * ENABLER: the exception to the order of work. isActive true releases the
+ * enabler for this trainee out of turn, false locks it, null removes the
+ * exception (the order applies again). The enabler has to belong to a course
+ * the trainee works in, the trainee needs an organization (without one nothing
+ * is written), and the change is written to the activity log in the same
+ * transaction. The effect is described in src/lib/catalog/progression.ts.
+ */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ traineeId: string }> }) {
   try {
     const session = await requireTrainer(req);
@@ -29,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     const { itemType, itemId, isActive } = body as {
       itemType: ItemType;
       itemId: string;
-      isActive: boolean;
+      isActive: boolean | null;
     };
     // The acting trainer is the authenticated user, never a client value
     const trainerId = session.id;
@@ -39,7 +55,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     const access = await requireTraineeAccess(session, traineeId, req);
     if (isErrorResponse(access)) return access;
 
-    if (!itemType || !itemId || typeof isActive !== 'boolean') {
+    // null (remove the exception) only for an enabler
+    const validValue =
+      typeof isActive === 'boolean' ||
+      (itemType === 'ENABLER' && isActive === null);
+    if (!itemType || !itemId || !validValue) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
@@ -57,18 +77,95 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
       if (deniedItem) return deniedItem;
     }
 
-    const organizationId = await getUserOrgId(traineeId);
+    let organizationId: string;
+    if (itemType === 'ENABLER') {
+      // Fail closed: no organization, no exception (and no fallback to the
+      // platform organization, which getUserOrgId would use). A failed query
+      // is no "missing organization": it reaches the catch below (500).
+      const [owner] = await db
+        .select({ organizationId: profiles.organizationId })
+        .from(profiles)
+        .where(eq(profiles.id, traineeId as any));
+      if (!owner?.organizationId) {
+        return NextResponse.json(
+          { error: 'Trainee has no organization' },
+          { status: 409 }
+        );
+      }
+      organizationId = String(owner.organizationId);
+    } else {
+      organizationId = await getUserOrgId(traineeId);
+    }
 
     switch (itemType) {
       case 'ENABLER': {
-        // Upsert override
-        await db
-          .insert(traineeEnablerOverrides)
-          .values({ traineeId: traineeId as any, enablerId: itemId as any, isActive })
-          .onConflictDoUpdate({
-            target: [traineeEnablerOverrides.traineeId, traineeEnablerOverrides.enablerId],
-            set: { isActive },
+        // The enabler has to belong to a course the trainee works in
+        const [owner] = await db
+          .select({ courseId: enablers.courseId })
+          .from(enablers)
+          .where(eq(enablers.id, itemId as any));
+        const [member] = owner
+          ? await db
+              .select({ userId: courseMembers.userId })
+              .from(courseMembers)
+              .where(
+                and(
+                  eq(courseMembers.courseId, owner.courseId),
+                  eq(courseMembers.userId, traineeId as any),
+                  eq(courseMembers.role, 'TRAINEE' as any)
+                )
+              )
+          : [];
+        if (!member) {
+          return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        }
+
+        const [before] = await db
+          .select({ isActive: traineeEnablerOverrides.isActive })
+          .from(traineeEnablerOverrides)
+          .where(
+            and(
+              eq(traineeEnablerOverrides.traineeId, traineeId as any),
+              eq(traineeEnablerOverrides.enablerId, itemId as any)
+            )
+          );
+        // The exception and its protocol entry stand or fall together
+        await db.transaction(async tx => {
+          if (isActive === null) {
+            await tx
+              .delete(traineeEnablerOverrides)
+              .where(
+                and(
+                  eq(traineeEnablerOverrides.traineeId, traineeId as any),
+                  eq(traineeEnablerOverrides.enablerId, itemId as any)
+                )
+              );
+          } else {
+            // createdAt carries the time of the last change
+            await tx
+              .insert(traineeEnablerOverrides)
+              .values({ traineeId: traineeId as any, enablerId: itemId as any, isActive })
+              .onConflictDoUpdate({
+                target: [traineeEnablerOverrides.traineeId, traineeEnablerOverrides.enablerId],
+                set: { isActive, createdAt: new Date() },
+              });
+          }
+          await tx.insert(activityLog).values({
+            userId: trainerId,
+            organizationId,
+            activityType: 'TRAINEE_ENABLER_OVERRIDE',
+            relatedItemId: itemId as any,
+            relatedItemTable: 'enablers',
+            context: {
+              traineeId,
+              enablerId: itemId,
+              previous: before ? (before.isActive ?? null) : null,
+              value: isActive,
+            },
           });
+        });
+        // The dashboard caches the next item, which depends on the state
+        apiCache.invalidate('trainee_dashboard');
         break;
       }
       case 'USE_CASE': {
@@ -103,7 +200,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     // Notify the trainee about the activation change
     try {
       const typeLabel = itemType === 'ENABLER' ? 'Lesson' : itemType === 'USE_CASE' ? 'Use Case' : 'Quiz';
-      const statusLabel = isActive ? 'aktiviert' : 'deaktiviert';
+      const statusLabel =
+        itemType === 'ENABLER'
+          ? isActive === null
+            ? 'wieder in die Reihenfolge eingeordnet'
+            : isActive
+              ? 'außer der Reihe freigegeben'
+              : 'gesperrt'
+          : isActive
+            ? 'aktiviert'
+            : 'deaktiviert';
       await db.insert(notifications).values({
         userId: traineeId,
         actorId: trainerId || undefined,

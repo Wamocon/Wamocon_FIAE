@@ -14,6 +14,7 @@ import { requireOptionalSessionScope } from '@/lib/catalog/public';
 import { legacyLearningFieldSelect } from '@/lib/catalog/learning-fields';
 import { getSessionUser } from '@/lib/auth/session';
 import { notFoundUnlessUuid } from '@/lib/uuid';
+import { loadCourseProgressions } from '@/lib/catalog/progression-db';
 
 /**
  * GET /api/trainee/lernfelder/[id]
@@ -125,6 +126,39 @@ export async function GET(
       return true;
     });
 
+    // Order of work: the state of every enabler for a trainee (locked with what
+    // to finish first, open, completed). Trainer level callers get none, the
+    // order is a matter of the trainee.
+    const enablerState = new Map<
+      string,
+      {
+        state: string;
+        lockReason: string | null;
+        lockedBy: { id: string; title: string } | null;
+      }
+    >();
+    if (session && !session.isTrainerLevel) {
+      const memberOf = Array.from(
+        new Set(
+          uniqueEnablers
+            .filter(e => accessible(String(e.courseId)))
+            .map(e => String(e.courseId))
+        )
+      );
+      const progressions = await loadCourseProgressions(session.id, memberOf);
+      for (const p of progressions.values()) {
+        for (const e of p.progression.enablers) {
+          enablerState.set(e.enablerId, {
+            state: e.state,
+            lockReason: e.lockReason,
+            lockedBy: e.lockedBy
+              ? { id: e.lockedBy.enablerId, title: e.lockedBy.title }
+              : null,
+          });
+        }
+      }
+    }
+
     return NextResponse.json({
       lernfeld: row,
       // The description of a use case is for the members of its course, like
@@ -143,8 +177,12 @@ export async function GET(
       }),
       enablers: uniqueEnablers.map(e => {
         const isMember = accessible(String(e.courseId));
+        const own = enablerState.get(String(e.id));
         return {
           ...e,
+          state: own?.state ?? null,
+          lockReason: own?.lockReason ?? null,
+          lockedBy: own?.lockedBy ?? null,
           // the name of a course the caller is not in stays with its members
           courseTitle: isMember ? e.courseTitle : null,
           accessible: isMember,

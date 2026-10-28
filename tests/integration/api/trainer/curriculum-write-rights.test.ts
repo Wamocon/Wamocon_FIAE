@@ -160,8 +160,8 @@ describe('curriculum write rights', () => {
     jest.restoreAllMocks();
   });
 
-  it('knows every curriculum write handler (27), the 21 of the content upload and the read handlers', () => {
-    expect(WRITES.length - CONTENT_UPLOAD.length).toBe(27);
+  it('knows every curriculum handler (29: 27 writes and the two handlers of the cut-off date of the order of work), the 21 of the content upload and the read handlers', () => {
+    expect(WRITES.length - CONTENT_UPLOAD.length).toBe(29);
     expect(CONTENT_UPLOAD.length).toBe(21);
     expect(READS.length).toBe(READ_ROUTES.length);
   });

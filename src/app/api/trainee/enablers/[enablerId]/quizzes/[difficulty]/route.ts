@@ -11,6 +11,7 @@ import {
   quizzes,
 } from '@/db/migrations/schemas/schema';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { requireQuizOpen } from '@/lib/catalog/progression-db';
 
 // GET: quiz content for a specific difficulty if unlocked and active
 // The data of the session user, a traineeId or userId in the query is ignored.
@@ -69,6 +70,16 @@ export async function GET(
       .where(eq(quizzes.id, link.quizId));
     if (!quiz || !quiz.isActive)
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Order of work: no questions of a locked enabler (ENABLER_LOCKED) and none
+    // of a quiz whose predecessor in the chain LOW, MEDIUM, HIGH was not
+    // attempted (QUIZ_LOCKED)
+    const access = await requireQuizOpen(
+      traineeId,
+      { id: String(enabler.id), courseId: String(enabler.courseId) },
+      String(quiz.id)
+    );
+    if (access.blocked) return access.blocked;
 
     // Questions and options as the trainee sees them before answering: the
     // text and the id, never is_correct, explanation or expected_answer. The

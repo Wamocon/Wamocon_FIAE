@@ -110,7 +110,9 @@ describe('PATCH /api/trainer/trainees/[traineeId]/activate: the quiz list of the
       },
     ],
     quizzes: [{ trainingCatalogId: FIAE }],
-    enablers: [{ trainingCatalogId: FIAE }],
+    // the enabler lies in a course the trainee works in
+    enablers: [{ trainingCatalogId: FIAE, courseId: 'c1' }],
+    courseMembers: [{ courseId: 'c1', userId: T1, role: 'TRAINEE' }],
   };
   const patch = (itemType: string, isActive: boolean) =>
     scopeReq(url, {
@@ -132,10 +134,10 @@ describe('PATCH /api/trainer/trainees/[traineeId]/activate: the quiz list of the
     cleared();
   });
 
-  it('is left alone for an enabler (no list of the trainee shows it)', async () => {
+  it('clears only the dashboard for an enabler (it caches the next item), no list', async () => {
     const { mod } = await loadScoped(route, { tables });
     expect((await mod.PATCH(patch('ENABLER', true), params)).status).toBe(200);
-    untouched();
+    expect(tags()).toEqual(['trainee_dashboard']);
   });
 });
 

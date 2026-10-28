@@ -32,6 +32,15 @@ import { haiSettingsSchema } from '@/lib/catalog/hai-settings';
  *                             whole numbers 0 to 100000, see
  *                             src/lib/catalog/content-targets.ts, which also
  *                             reads it (not part of CatalogSettings)
+ *  - sequence_since           cut-off date (ISO timestamp, UTC) of the order of
+ *                             work: a trainee who joined the catalog on or after
+ *                             it works through the enablers of a course one
+ *                             after the other, everybody who joined before is
+ *                             grandfathered. Missing means the order is not in
+ *                             force for the catalog. Set by the platform admin
+ *                             only (PUT .../sequence-rule), see
+ *                             src/lib/catalog/progression.ts, which also reads
+ *                             it (not part of CatalogSettings)
  *
  * This module only defines the type, defaults and validation. Callers in the
  * Arbeitszeugnis code still use their own constants; switching them over is
@@ -68,6 +77,7 @@ export const catalogSettingsSchema = z
     branding: brandingSchema,
     hai: haiSettingsSchema,
     content_targets: storedContentTargetsSchema,
+    sequence_since: z.string().datetime(),
   })
   .partial()
   .strict();

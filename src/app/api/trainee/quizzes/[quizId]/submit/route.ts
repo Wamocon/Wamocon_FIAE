@@ -18,6 +18,8 @@ import {
 import { apiCache } from '@/lib/api-cache';
 import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { requireQuizOpen } from '@/lib/catalog/progression-db';
+import { isQuizPassed } from '@/lib/catalog/progression';
 
 /**
  * Ids of the questions that hold a real answer: a selected option, or a text.
@@ -40,6 +42,27 @@ function answeredQuestionIds(
       )
       .map(sa => String(sa.questionId))
   );
+}
+
+/**
+ * A lesson quiz is repeated until it is passed. While it is not passed the
+ * answer says only right or wrong per question: the right option, the
+ * reasoning and the expected answer come with the pass. Otherwise a failed
+ * attempt would hand over the key for the next one.
+ */
+function withholdKey<
+  T extends {
+    correctOptionId?: unknown;
+    explanation?: unknown;
+    correctAnswerText?: unknown;
+  },
+>(items: T[]): T[] {
+  return items.map(f => ({
+    ...f,
+    correctOptionId: null,
+    explanation: null,
+    correctAnswerText: null,
+  }));
 }
 
 // POST: submit answers for a quiz attempt
@@ -127,6 +150,16 @@ export async function POST(
         );
       if (!member)
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+      // Order of work: a locked enabler takes no attempt (ENABLER_LOCKED), and
+      // neither does a quiz whose predecessor in the chain LOW, MEDIUM, HIGH
+      // was not attempted yet (QUIZ_LOCKED)
+      const access = await requireQuizOpen(
+        traineeId,
+        { id: String(enabler.id), courseId: String(enabler.courseId) },
+        String(quizId)
+      );
+      if (access.blocked) return access.blocked;
     }
 
     const qs = await db
@@ -141,7 +174,9 @@ export async function POST(
 
     const allowMultipleAttempts = isGlobal;
 
-    // Check for existing submission (single-attempt enforcement for non-global quizzes)
+    // A lesson quiz is repeated until it is passed (a best attempt at or above
+    // the passing score), a passed one stays as it is. Global quizzes allow
+    // any number of attempts.
     const existingSubmission = await db
       .select()
       .from(quizSubmissions)
@@ -151,9 +186,13 @@ export async function POST(
           eq(quizSubmissions.traineeId, traineeId)
         )
       );
-    if (!allowMultipleAttempts && existingSubmission.length) {
-      // Build feedback from stored answers for review-only mode
-      const [sub] = existingSubmission;
+    const passedBefore = existingSubmission.some(s => isQuizPassed(s.score));
+    if (!allowMultipleAttempts && passedBefore) {
+      // Build feedback from stored answers for review-only mode: the attempt
+      // that passed (the best one)
+      const sub = existingSubmission.reduce((best, s) =>
+        (s.score ?? 0) > (best.score ?? 0) ? s : best
+      );
       const storedAnswers = await db
         .select()
         .from(quizSubmissionAnswers)
@@ -361,6 +400,10 @@ export async function POST(
       }
     });
 
+    // The key of a lesson quiz comes with the pass, not before (see withholdKey)
+    const shownFeedback =
+      isGlobal || isQuizPassed(score) ? feedback : withholdKey(feedback);
+
     // Notify trainers (reuse existing pattern)
     try {
       if (isGlobal) {
@@ -371,7 +414,7 @@ export async function POST(
         return NextResponse.json({
           submissionId: submission.id,
           score,
-          feedback,
+          feedback: shownFeedback,
           locked: false,
         });
       }
@@ -415,13 +458,16 @@ export async function POST(
     }
 
     apiCache.invalidate('trainee_quizzes');
+    // A passed quiz moves the progress and may open the next enabler
+    apiCache.invalidate('trainee_courses');
+    apiCache.invalidate('trainee_dashboard');
     apiCache.invalidate('trainer_reviews');
     apiCache.invalidate('trainer_dashboard');
 
     return NextResponse.json({
       submissionId: submission.id,
       score,
-      feedback,
+      feedback: shownFeedback,
       locked: false,
     });
   } catch (e) {
@@ -478,8 +524,17 @@ export async function GET(
       );
     if (!subs.length)
       return NextResponse.json({ error: 'No submission' }, { status: 404 });
-    // Use the most recent by id as a proxy (schema may have timestamp); adjust if submittedAt exists
-    const latest = subs[subs.length - 1];
+    // Use the most recent by id as a proxy (schema may have timestamp); adjust if submittedAt exists.
+    // A lesson quiz that was passed shows the attempt that passed (the best one).
+    const isGlobalQuiz =
+      String((quiz as any).quizType || '').toUpperCase() === 'GLOBAL';
+    const passedSubs = subs.filter(s => isQuizPassed(s.score));
+    const latest =
+      !isGlobalQuiz && passedSubs.length
+        ? passedSubs.reduce((best, s) =>
+            (s.score ?? 0) > (best.score ?? 0) ? s : best
+          )
+        : subs[subs.length - 1];
     const storedAnswers = await db
       .select()
       .from(quizSubmissionAnswers)
@@ -529,10 +584,14 @@ export async function GET(
       };
     });
 
+    // The key of a lesson quiz that is not passed yet stays back
     return NextResponse.json({
       submissionId: latest.id,
       score: latest.score,
-      feedback,
+      feedback:
+        isGlobalQuiz || isQuizPassed(latest.score)
+          ? feedback
+          : withholdKey(feedback),
     });
   } catch (e) {
     console.error('Get quiz latest submission error', e);

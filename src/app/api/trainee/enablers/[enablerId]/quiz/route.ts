@@ -11,6 +11,7 @@ import {
   courseMembers,
 } from '@/db/migrations/schemas/schema';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
+import { requireEnablerOpen } from '@/lib/catalog/progression-db';
 
 // GET trainee-facing enabler quiz (requires membership and enabler active)
 // The data of the session user, a traineeId or userId in the query is ignored.
@@ -52,6 +53,13 @@ export async function GET(
       );
     if (!member)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    // Order of work: the questions of a locked enabler are not delivered
+    const locked = await requireEnablerOpen(traineeId, {
+      id: String(enabler.id),
+      courseId: String(enabler.courseId),
+    });
+    if (locked) return locked;
 
     const [link] = await db
       .select()
