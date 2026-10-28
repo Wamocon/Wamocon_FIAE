@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "zusammenfassen",
+  "rank": 8,
+  "title": "Zusammenfassen",
+  "effectiveness": "niedrig",
+  "dunlosky": {
+    "technique": "Summarization",
+    "utility": "low"
+  },
+  "keywords": [
+    "Zusammenfassung schreiben",
+    "Text kürzen",
+    "Kernaussagen",
+    "Lernzettel"
+  ],
+  "what": "Du fasst einen Text in eigenen Worten kürzer zusammen. Allein angewendet gilt das als Technik mit niedrigem Nutzen, weil die Wirkung stark davon abhängt, wie gut jemand zusammenfassen kann.",
+  "whenUseful": "Nur als Zwischenschritt, um Stoff zu ordnen, bevor du ihn mit Abrufübung festigst.",
+  "steps": [
+    "Material lesen und dann schließen.",
+    "Kernaussagen in drei bis fünf Sätzen aufschreiben.",
+    "Danach nicht neu lesen, sondern Fragen zur Zusammenfassung ohne Hilfe beantworten."
+  ],
+  "examples": {
+    "FIAE": "Du fasst das Kapitel zu Netzwerkprotokollen in fünf Sätzen zusammen und beantwortest danach Fragen dazu aus dem Kopf.",
+    "KFBM": "Du fasst die Einheit zur Büroorganisation in fünf Sätzen zusammen und beantwortest danach Fragen dazu aus dem Kopf."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Dunlosky",
+    "note": "Niedriger Nutzen in der Übersichtsarbeit."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Die Begründung (Abhängigkeit von der Zusammenfassungsfähigkeit) ist nicht am Text geprüft."
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "bildhaftigkeit-beim-lesen",
+  "rank": 11,
+  "title": "Bilder beim Lesen vorstellen",
+  "effectiveness": "niedrig",
+  "dunlosky": {
+    "technique": "Imagery use for text learning",
+    "utility": "low"
+  },
+  "keywords": [
+    "vorstellen",
+    "visualisieren",
+    "Skizze",
+    "innere Bilder",
+    "Ablauf zeichnen"
+  ],
+  "what": "Beim Lesen versuchst du, dir den Inhalt als inneres Bild vorzustellen. Für Lerntexte gilt die Wirkung nach der Forschung als begrenzt und hängt stark vom Text ab.",
+  "whenUseful": "Ergänzend bei anschaulichen Beschreibungen von Abläufen oder Aufbauten.",
+  "steps": [
+    "Einen Absatz lesen.",
+    "Den Ablauf als Bild oder Skizze vorstellen.",
+    "Die Skizze danach ohne Vorlage zeichnen und mit dem Text vergleichen (Abrufübung)."
+  ],
+  "examples": {
+    "FIAE": "Den Weg eines Datenpakets durch ein Heimnetz stellst du dir als Postweg vor und zeichnest ihn danach aus dem Gedächtnis.",
+    "KFBM": "Den Weg einer Eingangspost durch das Büro (Eingang, Verteilung, Bearbeitung, Ablage) zeichnest du nach dem Lesen aus dem Gedächtnis."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Dunlosky",
+    "note": "Niedriger Nutzen in der Übersichtsarbeit."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt."
+  }
+}

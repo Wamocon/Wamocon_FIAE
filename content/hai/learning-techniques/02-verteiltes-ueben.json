@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "verteiltes-ueben",
+  "rank": 2,
+  "title": "Verteiltes Üben",
+  "effectiveness": "hoch",
+  "dunlosky": {
+    "technique": "Distributed practice",
+    "utility": "high"
+  },
+  "keywords": [
+    "Lernplan",
+    "Zeit einteilen",
+    "nicht auf den letzten Drücker lernen",
+    "Wiederholung",
+    "Abstände",
+    "Merken über Wochen"
+  ],
+  "what": "Du verteilst das Lernen auf mehrere kürzere Einheiten mit Pausen dazwischen, statt alles in einer langen Sitzung zu lernen. Das Vergessen zwischen den Einheiten zwingt dein Gedächtnis, den Stoff erneut abzurufen.",
+  "whenUseful": "Wenn bis zur Klausur oder Prüfung mehr als ein paar Tage bleiben und viel Stoff ansteht. Je weiter der Termin entfernt ist, desto größer dürfen die Abstände sein.",
+  "steps": [
+    "Termin notieren und den Stoff in kleine Portionen teilen.",
+    "Jede Portion an mehreren Tagen mit Abstand wiederholen, zum Beispiel nach einem Tag, nach einer Woche und nach zwei Wochen (Richtwert, keine feste Regel).",
+    "Am Ende jeder Einheit kurz notieren, was noch wackelt, und es in die nächste Einheit einplanen."
+  ],
+  "examples": {
+    "FIAE": "Netzwerkgrundlagen verteilst du auf drei kurze Termine in zwei Wochen und fragst beim zweiten Termin zuerst ab, was beim ersten unklar blieb.",
+    "KFBM": "Die Grundlagen zu Buchungssätzen übst du an drei Tagen je 20 Minuten, statt an einem Nachmittag alles auf einmal."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Dunlosky",
+    "note": "Verteiltes Üben ist die zweite Technik mit hohem Nutzen. Die genannten Abstände sind ein eigener Richtwert, keine Angabe der Studie."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Die Abstände (1 Tag, 1 Woche, 2 Wochen) sind ein Richtwert ohne Beleg im Originaltext."
+  }
+}

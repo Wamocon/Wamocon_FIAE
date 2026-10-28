@@ -13,6 +13,7 @@ import {
 } from './trainingScope';
 import { FIAE_PERSONA, type HaiPersona } from './persona';
 import { sanitizePromptData } from '../prompt-sanitize';
+import { buildLearningTechniquePrompt } from './learningTechniques/promptSection';
 
 // ============================================================================
 // TYPES
@@ -47,6 +48,13 @@ export interface PromptContext {
    * it the FIAE texts apply, as before the persona work.
    */
   persona?: HaiPersona;
+  /**
+   * The message is about learning and memorizing, or learning technique cards
+   * were retrieved: adds the learning technique section with its limits (no
+   * diagnoses, no voice or emotion analysis, no learning types, no promises).
+   * Without it the prompt is unchanged.
+   */
+  learningTechniques?: boolean;
 }
 
 // ============================================================================
@@ -318,6 +326,12 @@ ${context.liveDataContext}`);
 Es konnten KEINE Live-Daten aus der Plattform geladen werden.
 **ABSOLUTES VERBOT:** Erfinde KEINE Plattform-Daten (keine Noten, Nachweise, Fortschritte, Tabellen, Kalenderwochen).
 Wenn der Nutzer nach Fortschritt, Kalender, Nachweisen oder Azubi-Daten fragt, antworte: "Dazu liegen mir aktuell keine Daten vor. Bitte pruefe es direkt in der Plattform unter dem entsprechenden Menuepunkt."`);
+  }
+
+  // Learning technique section (package B): limits and rules for tips on
+  // learning and memorizing, for both pipelines, only when it applies
+  if (context.learningTechniques) {
+    parts.push(buildLearningTechniquePrompt(persona));
   }
 
   return parts.join('\n\n');

@@ -10,6 +10,7 @@
 import { getEmbeddingProvider } from './providers';
 import haiDb from '@/db/haiDb';
 import { sql, type SQL } from 'drizzle-orm';
+import { LEARNING_TECHNIQUE_SOURCE_TYPE } from './indexScope';
 import {
   filterSearchResultsForTrainingScope,
   type HaiTrainingScope,
@@ -62,6 +63,7 @@ export interface SearchOptions extends SearchScope {
     | 'course'
     | 'document'
     | 'quiz'
+    | 'learning_technique'
     | 'trainee_schedule'
     | 'trainee_profile'
     | 'trainee_progress';
@@ -86,6 +88,9 @@ export interface SearchContext {
 // ACCESS FILTER
 // ============================================================================
 
+/** Places a question about learning reserves for learning technique cards */
+export const LEARNING_TECHNIQUE_SLOTS = 3;
+
 /** Candidates fetched per wanted result when the training scope post filters */
 const CANDIDATE_FACTOR = 3;
 
@@ -102,7 +107,8 @@ export function isUuid(value: unknown): value is string {
  * catalog (the search then returns nothing).
  *
  *  - catalog: training_catalog_id must be one of the caller's catalogs; rows
- *    without a catalog match nobody
+ *    without a catalog match nobody, except the platform knowledge of the
+ *    source type learning_technique (no occupation, visibility 'all')
  *  - audience: everyone but 'trainer' sees only visibility 'all'
  *  - organization: own organization or platform content (NULL)
  *  - personal rows (trainee_* rows, rows with metadata.userId) match only
@@ -112,11 +118,18 @@ export function buildScopeCondition(scope: SearchScope): SQL | null {
   const catalogIds = [...new Set((scope.catalogIds ?? []).filter(isUuid))];
   if (catalogIds.length === 0) return null;
 
+  // Platform knowledge (learning technique cards) has no occupation. It is
+  // matched by its source type, only for rows without occupation and owner
+  // (the audience rule below still applies), and only for a caller who has a
+  // catalog scope at all (the early return above). It opens no content of any
+  // occupation. The source type is a trusted constant, written as a literal so
+  // the numbering of the bound parameters stays as it was.
+  const platformSourceType = sql.raw(`'${LEARNING_TECHNIQUE_SOURCE_TYPE}'`);
   const parts: SQL[] = [
-    sql`training_catalog_id IN (${sql.join(
+    sql`(training_catalog_id IN (${sql.join(
       catalogIds.map(id => sql`${id}::uuid`),
       sql`, `
-    )})`,
+    )}) OR (source_type = ${platformSourceType} AND training_catalog_id IS NULL AND organization_id IS NULL))`,
   ];
   if (scope.audience !== 'trainer') {
     parts.push(sql`visibility = 'all'`);
@@ -254,10 +267,16 @@ export async function searchWithContext(
   context: {
     currentEnablerId?: string;
     currentCourseId?: string;
+    /**
+     * The question is about learning and memorizing: reserve up to
+     * LEARNING_TECHNIQUE_SLOTS places for learning technique cards, found with
+     * the same query embedding (no extra embedding call).
+     */
+    includeLearningTechniques?: boolean;
   },
   options: SearchOptions
 ): Promise<SearchContext> {
-  const topK = options.topK ?? 5;
+  const requestedTopK = options.topK ?? 5;
   const results: SearchResult[] = [];
 
   // Fail closed: no catalog scope, no result, no embedding call
@@ -277,8 +296,28 @@ export async function searchWithContext(
     const queryEmbedding = await embeddingProvider.generateEmbedding(query);
     const cachedEmbeddingVector = JSON.stringify(queryEmbedding.embedding);
 
+    // Step 0: learning technique cards for a question about learning. They
+    // come first, the other steps share the remaining places.
+    const cardResults =
+      context.includeLearningTechniques && requestedTopK > 0
+        ? await searchSimilar(
+            query,
+            {
+              ...options,
+              topK: Math.min(LEARNING_TECHNIQUE_SLOTS, requestedTopK),
+              sourceType: 'learning_technique',
+              sourceIds: undefined,
+              courseId: undefined,
+            },
+            cachedEmbeddingVector
+          )
+        : [];
+    const topK = requestedTopK - cardResults.length;
+    // A card of step 0 must not come back from a later step
+    const reserved = new Set(cardResults.map(r => r.id));
+
     // Step 1: Search in current enabler context first (highest priority)
-    if (context.currentEnablerId) {
+    if (context.currentEnablerId && topK > 0) {
       const contextResults = await searchSimilar(query, {
         ...options,
         topK: Math.min(3, topK),
@@ -307,7 +346,7 @@ export async function searchWithContext(
 
       // Add non-duplicate results
       for (const r of courseResults) {
-        if (!results.find(existing => existing.id === r.id)) {
+        if (!reserved.has(r.id) && !results.find(e => e.id === r.id)) {
           results.push(r);
         }
       }
@@ -321,7 +360,7 @@ export async function searchWithContext(
       }, cachedEmbeddingVector);
 
       for (const r of globalResults) {
-        if (!results.find(existing => existing.id === r.id)) {
+        if (!reserved.has(r.id) && !results.find(e => e.id === r.id)) {
           results.push(r);
         }
       }
@@ -331,9 +370,9 @@ export async function searchWithContext(
     results.sort((a, b) => b.similarity - a.similarity);
 
     return {
-      results: results.slice(0, topK),
+      results: [...cardResults, ...results.slice(0, topK)],
       query,
-      totalResults: results.length,
+      totalResults: cardResults.length + results.length,
     };
   } catch (error) {
     console.error('HAI.ai: Error in contextual search:', error);
