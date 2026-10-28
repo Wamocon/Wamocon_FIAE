@@ -377,6 +377,23 @@ describe('scenario: the PDF holds the whole document, solution part included', (
     ).not.toContain('example.invalid');
   });
 
+  it('keeps a scenario whose task repeats its solution (warning of the parser, no refusal)', async () => {
+    const blocks = scenarioBlocks();
+    // an Aufgabe between the situation and the solution that repeats the solution text
+    blocks.splice(4, 0, b('Aufgabe'), t(CANARY.scenarioSolution));
+    const result = await prepareWordDocument(
+      'scenario',
+      await docxFromBlocks(blocks),
+      context()
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.variants).toHaveLength(1);
+    expect(await textOf(result.variants[0].docx)).toContain(
+      CANARY.scenarioSolution
+    );
+  });
+
   it('refuses a file with a format error, another code and a file that is no docx', async () => {
     expect(
       await prepareWordDocument(

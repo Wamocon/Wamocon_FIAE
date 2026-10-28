@@ -1538,4 +1538,4 @@ Unverändert: der Auszug eines Szenarios enthält nur die Überschrift und die A
 
 - Die Textzeile "Szenario <Code>: Ausgangssituation" (`TRAINEE_QUESTION`/`ALL`) schreibt der Upload weiter. Neben der ganzen Datei zeigt sie die Situation ein zweites Mal. Ob sie entfällt, entscheidet der Eigentümer.
 - Eine Zeile `EXERCISE`/`ALL` ist sofort lesbar, auch bei inaktivem Enabler (Runbook, Abschnitt 8, Punkt 5). Das gilt nun auch für ein Szenario.
-- Der Parserfehler `TASK_SOLUTION_OVERLAP` (die Aufgabe wiederholt Text der Lösung) hält eine Word-Datei eines Szenarios aus dem Plan und damit von der Veröffentlichung fern. Für ein ganzes, öffentliches Szenario ist er kein Schutz mehr nötig. Ob er zur Warnung wird, entscheidet der Eigentümer.
+- Erledigt: Die Parserbefunde `TASK_SOLUTION_OVERLAP` und `TASK_SOLUTION_HEADING` sind für Szenarien Warnungen. Die Datei bleibt im Plan und wird veröffentlicht, die Warnung steht im Bericht. Für Use Cases ändert sich nichts.

@@ -361,35 +361,33 @@ describe('the task of a scenario', () => {
     ],
   });
 
-  it('is visible text: a marker or a solution text in it is a leak', () => {
+  it('is visible text: a marker in it is a leak', () => {
     const p = plan();
     expect(findSolutionLeaks(p)).toEqual([]);
     p.scenarios[0].task = 'Eine erfundene Frage. Richtige Antwort: B';
     expect(findSolutionLeaks(p).join(' ')).toMatch(/scenario K1-a task/);
-    const q = plan();
-    q.scenarios[0].task = `Vorweg. ${q.scenarios[0].solution} Danach.`;
-    expect(findSolutionLeaks(q).join(' ')).toMatch(
-      /scenario K1-a task repeats text of a solution part/
-    );
   });
 
-  it('is a leak when it repeats one paragraph of the solution or knowledge part', () => {
+  // The whole scenario is public: a task that repeats its solution parts, or a
+  // line like "Erwartete Lösung", is a warning of the parser (TASK_SOLUTION_*)
+  // and no leak of the plan.
+  it('is no leak when it repeats the solution or knowledge part', () => {
     const p = plan();
+    p.scenarios[0].task = `Vorweg. ${p.scenarios[0].solution} Danach.`;
+    expect(findSolutionLeaks(p)).toEqual([]);
     p.scenarios[0].solution =
       'Erster erfundener Absatz der Lösung.\n\nZweiter erfundener Absatz.';
     p.scenarios[0].task = 'Zweiter erfundener Absatz.';
-    expect(findSolutionLeaks(p).join(' ')).toMatch(/scenario K1-a task/);
+    expect(findSolutionLeaks(p)).toEqual([]);
     const q = plan();
     q.scenarios[0].task = q.scenarios[0].knowledgeContribution.toUpperCase();
-    expect(findSolutionLeaks(q).join(' ')).toMatch(/scenario K1-a task/);
+    expect(findSolutionLeaks(q)).toEqual([]);
   });
 
-  it('is a leak when a line looks like the heading of a solution', () => {
+  it('is no leak when a line looks like the heading of a solution', () => {
     const p = plan();
     p.scenarios[0].task = 'Eine erfundene Frage.\n\nErwartete Lösung';
-    expect(findSolutionLeaks(p).join(' ')).toMatch(
-      /scenario K1-a task has a line/
-    );
+    expect(findSolutionLeaks(p)).toEqual([]);
   });
 
   it('does not throw on a plan whose solution parts are missing', () => {

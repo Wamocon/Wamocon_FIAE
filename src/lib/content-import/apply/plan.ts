@@ -20,7 +20,6 @@ import type {
   ParseResult,
   PathInfo,
 } from '../types';
-import { hasSolutionHeadingLine } from '../source-parsers';
 import {
   HOURS_PER_WEEK,
   hoursFromWeeks,
@@ -900,12 +899,9 @@ export function buildImportPlan(
   const guardScenarios = scenarios.filter(s => {
     const bad =
       leakOf(s.situation, solutions) ?? leakOf(s.title ?? '', solutions);
-    const badTask = s.task
-      ? (leakOf(s.task, solutions) ??
-        (hasSolutionHeadingLine(s.task)
-          ? 'contains the heading of a solution'
-          : null))
-      : null;
+    // A task that repeats the solution or looks like a solution heading is a warning of the
+    // parser (the scenario is public), only a marker or a rationale of a quiz skips the file.
+    const badTask = s.task ? leakOf(s.task, solutions) : null;
     if (bad || badTask) {
       skipped.push(
         skip(
