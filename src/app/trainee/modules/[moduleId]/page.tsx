@@ -7,6 +7,11 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useApiQuery } from '@/lib/hooks/useApiQuery';
 import { Check, Clock, X as XIcon, ChevronRight } from 'lucide-react';
 import { PageLoader } from '@/components/ui/PageLoader';
+import {
+  EnablerStateBadge,
+  type EnablerLockReasonValue,
+  type EnablerStateValue,
+} from '@/components/trainee/EnablerStateBadge';
 
 export default function TraineeModuleDetailPage() {
   const params = useParams<{ moduleId: string }>();
@@ -26,6 +31,10 @@ export default function TraineeModuleDetailPage() {
       title: string;
       attemptNumber?: number | null;
       status?: string | null;
+      /** Order of work: locked, open or completed */
+      state?: EnablerStateValue;
+      lockReason?: EnablerLockReasonValue;
+      lockedBy?: { id: string; title: string } | null;
     }>;
     useCases: Array<{
       id: string;
@@ -112,8 +121,11 @@ export default function TraineeModuleDetailPage() {
                   <Link
                     prefetch={false}
                     href={`/trainee/enablers/${e.id}`}
+                    data-state={e.state ?? 'open'}
                     className={`group flex items-center justify-between rounded-xl border-3 p-3 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg ${
-                      e.status === 'APPROVED'
+                      e.state === 'locked'
+                        ? 'border-amber-500/40 bg-muted/20 hover:border-amber-500/60'
+                        : e.status === 'APPROVED'
                         ? 'border-green-500/40 bg-green-500/10 hover:border-green-500/60 hover:shadow-green-500/5'
                         : e.status === 'PENDING'
                           ? 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/50 hover:shadow-yellow-500/5'
@@ -124,9 +136,16 @@ export default function TraineeModuleDetailPage() {
                   >
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <StatusIndicator status={e.status} />
-                      <span className="group-hover:text-accent transition-colors duration-200">
-                        {e.title}
-                      </span>
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <span className="group-hover:text-accent transition-colors duration-200">
+                          {e.title}
+                        </span>
+                        <EnablerStateBadge
+                          state={e.state ?? 'open'}
+                          reason={e.lockReason}
+                          lockedByTitle={e.lockedBy?.title}
+                        />
+                      </div>
                       {e.attemptNumber && !e.status ? (
                         <span className="border-accent/30 ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs">
                           {t('courses.attempt').replace(

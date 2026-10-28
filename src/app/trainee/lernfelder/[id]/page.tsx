@@ -14,6 +14,10 @@ import {
 import { authFetch } from '@/lib/authFetch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import {
+  EnablerStateBadge,
+  type EnablerStateValue,
+} from '@/components/trainee/EnablerStateBadge';
 
 type DurationUnit = 'DAYS' | 'WEEKS' | null;
 
@@ -43,6 +47,9 @@ interface EnablerItem {
   durationValue: number | null;
   durationUnit: DurationUnit;
   accessible: boolean;
+  /** Order of work (a trainee who is a member of the course): locked, open or completed */
+  state?: EnablerStateValue | null;
+  lockedBy?: { id: string; title: string } | null;
 }
 
 type Detail = {
@@ -231,6 +238,15 @@ export default function TraineeLernfeldDetailPage() {
                     </span>
                   )}
                 </div>
+                {enabler.accessible && enabler.state && (
+                  <div className="mt-2">
+                    <EnablerStateBadge
+                      state={enabler.state}
+                      reason={enabler.lockedBy ? 'SEQUENCE' : 'MANUAL'}
+                      lockedByTitle={enabler.lockedBy?.title}
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>

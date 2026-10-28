@@ -37,7 +37,7 @@ describe('API: Trainee Courses', () => {
   });
 
   it('GET /api/trainee/courses lists courses with strict progress', async () => {
-    const { db } = createTableDb({
+    const { db, filters } = createTableDb({
       courseMembers: [
         { userId: 't1', courseId: 'c1' },
         { userId: 't1', courseId: 'c2' },
@@ -47,12 +47,15 @@ describe('API: Trainee Courses', () => {
         { id: 'c2', title: 'Course 2', year: 2025, chapter: 'B' },
       ],
       enablers: [
-        { id: 'e1', courseId: 'c1', scenarioPdfUrl: null },
-        { id: 'e2', courseId: 'c2', scenarioPdfUrl: null },
-        { id: 'e3', courseId: 'c1', scenarioPdfUrl: null },
+        { id: 'e1', courseId: 'c1', orderIndex: 1, isActive: true },
+        { id: 'e2', courseId: 'c2', orderIndex: 1, isActive: true },
+        { id: 'e3', courseId: 'c1', orderIndex: 2, isActive: true },
       ],
       // e1 needs a passed quiz, the trainee scored 80, so it counts as done
-      enablerQuizLinks: [{ enablerId: 'e1', quizId: 'q1' }],
+      enablerQuizLinks: [
+        { enablerId: 'e1', quizId: 'q1', difficulty: 'LOW' },
+      ],
+      quizzes: [{ id: 'q1', isActive: true }],
       quizSubmissions: [{ quizId: 'q1', score: 80 }],
     });
 
@@ -66,46 +69,63 @@ describe('API: Trainee Courses', () => {
         { id: 'c2', title: 'Course 2', year: 2025, chapter: 'B', progress: 100, enablerCount: 1, completedCount: 1 },
       ],
     });
+    // Courses that are not active are not listed (the page "Lernen")
+    expect(filters('select', 'courses').sql).toContain('"is_active" = $');
+  });
+
+  it('GET /api/trainee/courses counts a failed quiz as not done and a scenario as no condition', async () => {
+    const { db } = createTableDb({
+      courseMembers: [{ userId: 't1', courseId: 'c1' }],
+      courses: [{ id: 'c1', title: 'Course 1', year: 2024, chapter: 'A' }],
+      enablers: [
+        // a scenario PDF is set but no submission exists: still completed
+        // through its passed quiz, the scenario is not part of the rule
+        {
+          id: 'e1',
+          courseId: 'c1',
+          orderIndex: 1,
+          isActive: true,
+          scenarioPdfUrl: 'https://x/s.pdf',
+        },
+        { id: 'e2', courseId: 'c1', orderIndex: 2, isActive: true },
+      ],
+      enablerQuizLinks: [
+        { enablerId: 'e1', quizId: 'q1', difficulty: 'LOW' },
+        { enablerId: 'e2', quizId: 'q2', difficulty: 'LOW' },
+      ],
+      quizzes: [
+        { id: 'q1', isActive: true },
+        { id: 'q2', isActive: true },
+      ],
+      quizSubmissions: [
+        { quizId: 'q1', score: 50 },
+        { quizId: 'q2', score: 49 },
+      ],
+    });
+    const GET = await importListHandlerWithDb(db);
+    const res = await GET(makeGet('http://localhost/api/trainee/courses'));
+    const body = await (res as any).json();
+    expect(body.courses[0]).toMatchObject({
+      enablerCount: 2,
+      completedCount: 1,
+      progress: 50,
+    });
   });
 
   it('GET /api/trainee/courses/[courseId] returns course summary with active enablers/use-cases', async () => {
-    const sequence: any[] = [
-      // membership
-      [{ userId: 't1', courseId: 'c1' }],
-      // course by id
-      [{ id: 'c1', title: 'Course 1', year: 2024, chapter: 'A' }],
-      // enablers with orderBy
-      {
-        withOrderBy: true, data: [
-          { id: 'e1', title: 'E1', courseId: 'c1', isActive: true, orderIndex: 1 },
-          { id: 'e2', title: 'E2', courseId: 'c1', isActive: true, orderIndex: 2 },
-        ]
-      },
-      // useCases with orderBy
-      {
-        withOrderBy: true, data: [
-          { id: 'u1', title: 'UC1', courseId: 'c1', isActive: true, orderIndex: 1 },
-        ]
-      },
-      // enAttempts
-      [],
-      // ucAttempts
-      [],
-    ];
-    let idx = 0;
-    const mockDb = {
-      select: jest.fn().mockImplementation(() => ({
-        from: () => ({
-          where: () => {
-            const ret = sequence[idx++];
-            if (ret && ret.withOrderBy) {
-              return { orderBy: () => ret.data };
-            }
-            return ret;
-          },
-        }),
-      })),
-    };
+    const { db: mockDb } = createTableDb({
+      courseMembers: [{ userId: 't1', courseId: 'c1' }],
+      courses: [{ id: 'c1', title: 'Course 1', year: 2024, chapter: 'A' }],
+      enablers: [
+        { id: 'e1', title: 'E1', courseId: 'c1', isActive: true, orderIndex: 1 },
+        { id: 'e2', title: 'E2', courseId: 'c1', isActive: true, orderIndex: 2 },
+      ],
+      useCases: [
+        { id: 'u1', title: 'UC1', courseId: 'c1', isActive: true, orderIndex: 1 },
+      ],
+      enablerSubmissions: [],
+      useCaseSubmissions: [],
+    });
 
     const GET = await importDetailHandlerWithDb(mockDb);
     const res = await GET(
@@ -117,8 +137,8 @@ describe('API: Trainee Courses', () => {
     expect(body).toEqual({
       course: { id: 'c1', title: 'Course 1', year: 2024, chapter: 'A' },
       enablers: [
-        { id: 'e1', title: 'E1', attemptNumber: null, status: null },
-        { id: 'e2', title: 'E2', attemptNumber: null, status: null }
+        { id: 'e1', title: 'E1', attemptNumber: null, status: null, state: 'completed', lockReason: null, lockedBy: null },
+        { id: 'e2', title: 'E2', attemptNumber: null, status: null, state: 'completed', lockReason: null, lockedBy: null }
       ],
       useCases: [
         { id: 'u1', title: 'UC1', attemptNumber: null, status: null }

@@ -30,7 +30,9 @@ import {
   AlertCircle,
   FileText,
   Layers,
+  Lock,
 } from 'lucide-react';
+import { lockText } from '@/components/trainee/EnablerStateBadge';
 
 // Types
 type Difficulty = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -62,7 +64,10 @@ type GatedQuizInfo = {
   title?: string;
   unlocked: boolean;
   isActive?: boolean;
+  /** An attempt was made (opens the next quiz of the chain) */
   completed?: boolean;
+  /** The best attempt reached the passing score, otherwise it can be repeated */
+  passed?: boolean;
 };
 
 export default function TraineeEnablerPage() {
@@ -89,8 +94,22 @@ export default function TraineeEnablerPage() {
     : null;
 
   // Data fetching via React Query
-  type EnablerResponse = { enabler: any | null; submission: any | null };
-  type QuizzesResponse = { quizzes: GatedQuizInfo[] };
+  type EnablerResponse = {
+    enabler: any | null;
+    submission: any | null;
+    /** Order of work: locked (with the reason and what to finish first), open or completed */
+    progression?: {
+      state: 'locked' | 'open' | 'completed';
+      locked: boolean;
+      reason: 'SEQUENCE' | 'MANUAL' | null;
+      lockedBy: { id: string; title: string } | null;
+    };
+  };
+  type QuizzesResponse = {
+    quizzes: GatedQuizInfo[];
+    enablerLocked?: boolean;
+    lockedBy?: { id: string; title: string } | null;
+  };
   type DocsResponse = {
     documents: Array<{
       id: string;
@@ -111,6 +130,15 @@ export default function TraineeEnablerPage() {
   const { data: docsData } = useApiQuery<DocsResponse>(docsUrl);
 
   const enabler = enablerData?.enabler || null;
+  // Order of work: a locked enabler shows its title and material, the
+  // submission and the quizzes are closed (the server enforces the same)
+  const progression = enablerData?.progression ?? null;
+  const isLocked = !!progression?.locked || !!quizzesData?.enablerLocked;
+  const lockSentence = lockText(
+    t,
+    progression?.reason ?? 'SEQUENCE',
+    progression?.lockedBy?.title ?? quizzesData?.lockedBy?.title
+  );
   // A row without a file is no link (a scenario kept without a PDF)
   const documents = useMemo(
     () =>
@@ -143,7 +171,8 @@ export default function TraineeEnablerPage() {
   } | null>(null);
 
   // Determine if editing is allowed
-  const canEdit = !submission || submission.status === 'REJECTED';
+  const canEdit =
+    !isLocked && (!submission || submission.status === 'REJECTED');
 
   // PDF flipbook viewer
   const flipbook = useFlipbookViewer();
@@ -189,6 +218,17 @@ export default function TraineeEnablerPage() {
     }
   }, [enablerData]);
 
+  // The text for a failed request: the lock has its own sentence
+  const failureText = async (r: Response, fallbackKey: string) => {
+    try {
+      const body = await r.clone().json();
+      if (body?.code === 'ENABLER_LOCKED') return t('progression.locked403');
+    } catch {
+      // no JSON body
+    }
+    return t(fallbackKey);
+  };
+
   const loadQuizContent = async (difficulty: Difficulty) => {
     if (!profile?.id || !enablerId) return;
     setError(null);
@@ -200,7 +240,7 @@ export default function TraineeEnablerPage() {
         `/api/trainee/enablers/${enablerId}/quizzes/${difficulty}?traineeId=${profile.id}`,
         { cache: 'no-store' }
       );
-      if (!r.ok) throw new Error(t('enablerPage.quizLoadError'));
+      if (!r.ok) throw new Error(await failureText(r, 'enablerPage.quizLoadError'));
       const j = await r.json();
       const qc: QuizContent = {
         quizId: String(j.quiz?.id || j.quizId),
@@ -224,11 +264,13 @@ export default function TraineeEnablerPage() {
 
   const handleTileClick = async (g: GatedQuizInfo) => {
     if (!g.quizId) return;
-    setReviewMode(!!g.completed);
-    setQuizLocked(!!g.completed);
+    // A passed quiz is shown as it was answered, one that was not passed is
+    // taken again
+    setReviewMode(!!g.passed);
+    setQuizLocked(!!g.passed);
     await loadQuizContent(g.difficulty);
-    // If already completed, fetch stored submission for review-only mode
-    if (g.completed && profile?.id) {
+    // If already passed, fetch stored submission for review-only mode
+    if (g.passed && profile?.id) {
       try {
         const vr = await authFetch(
           `/api/trainee/quizzes/${g.quizId}/submit?traineeId=${profile.id}`,
@@ -288,10 +330,11 @@ export default function TraineeEnablerPage() {
           body: JSON.stringify(payload),
         }
       );
-      if (!r.ok) throw new Error(t('enablerPage.submissionFailed'));
+      if (!r.ok)
+        throw new Error(await failureText(r, 'enablerPage.submissionFailed'));
       const data = await r.json();
 
-      // Handle locked response (quiz already submitted, single-attempt)
+      // Handle locked response (quiz already passed)
       if (data.locked) {
         setQuizLocked(true);
         // Map the stored selectedOptionId into answers for display
@@ -311,8 +354,10 @@ export default function TraineeEnablerPage() {
         score: Number(data.score || 0),
         feedback: (data.feedback || []) as QuizFeedback[],
       });
-      // Refresh gated list to reflect unlocking next level
+      // Refresh gated list to reflect unlocking next level, and the state of
+      // the enabler (a passed quiz can complete it)
       if (quizzesUrl) queryClient.invalidateQueries({ queryKey: [quizzesUrl] });
+      if (enablerUrl) queryClient.invalidateQueries({ queryKey: [enablerUrl] });
     } catch (e: any) {
       setError(e?.message || t('error.unknown'));
     } finally {
@@ -341,7 +386,8 @@ export default function TraineeEnablerPage() {
             filledSolutions.length === 1 ? filledSolutions[0].text : undefined, // Backward compat
         }),
       });
-      if (!r.ok) throw new Error(t('enablerPage.submissionFailed'));
+      if (!r.ok)
+        throw new Error(await failureText(r, 'enablerPage.submissionFailed'));
       setSaveSuccess(t('enablerPage.solutionSaved'));
 
       // Optimistically update to PENDING, then refetch from server
@@ -595,6 +641,38 @@ export default function TraineeEnablerPage() {
         />
       </div>
 
+      {/* Order of work: a locked enabler says why */}
+      {isLocked && (
+        <div
+          role="status"
+          data-testid="enabler-locked-banner"
+          className="text-foreground flex items-start gap-3 rounded-2xl border border-amber-600/60 bg-amber-500/15 p-4"
+        >
+          <Lock
+            className="mt-0.5 h-5 w-5 shrink-0 text-amber-600"
+            aria-hidden="true"
+          />
+          <div>
+            <div className="font-semibold">
+              {t('progression.bannerTitle')}
+            </div>
+            <div className="text-sm">
+              {progression?.reason === 'MANUAL'
+                ? t('progression.bannerManual')
+                : progression?.lockedBy?.title ||
+                    quizzesData?.lockedBy?.title
+                  ? t('progression.bannerAfter', {
+                      title: String(
+                        progression?.lockedBy?.title ??
+                          quizzesData?.lockedBy?.title
+                      ),
+                    })
+                  : t('progression.bannerAfterGeneric')}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Scenario Section */}
       {(scenarioDocs.length > 0 || enabler.scenarioPdfUrl) && (
         <div className="border-accent/30 bg-background rounded-3xl border p-5">
@@ -809,6 +887,27 @@ export default function TraineeEnablerPage() {
           />
         </div>
 
+        {isLocked && (
+          <div className="flex flex-col items-end gap-1">
+            <button
+              type="button"
+              aria-disabled="true"
+              aria-describedby="enabler-submit-lock"
+              onClick={e => e.preventDefault()}
+              className="bg-primary text-primary-foreground cursor-not-allowed rounded-md px-4 py-2 opacity-50"
+            >
+              {t('enablerPage.submitAll')}
+            </button>
+            <p
+              id="enabler-submit-lock"
+              className="text-muted-foreground flex items-center gap-1 text-xs"
+            >
+              <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('progression.submitDisabled')} {lockSentence}
+            </p>
+          </div>
+        )}
+
         {canEdit && (
           <div className="flex justify-end">
             <button
@@ -839,14 +938,21 @@ export default function TraineeEnablerPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {gated.map(g => {
-              const disabled = !g.unlocked || !g.isActive || !g.quizId;
+            {gated.map((g, index) => {
+              const disabled =
+                isLocked || !g.unlocked || !g.isActive || !g.quizId;
+              // The quiz of the chain before this one (what to do first)
+              const before = gated
+                .slice(0, index)
+                .filter(x => x.quizId)
+                .pop();
               return (
                 <button
                   key={g.difficulty}
+                  type="button"
                   onClick={() => !disabled && handleTileClick(g)}
                   className={`rounded-2xl border p-4 text-left transition-all duration-200 ${disabled ? 'border-accent/20 bg-muted/20 cursor-not-allowed opacity-60' : 'border-accent/30 hover:bg-accent/15 hover:border-accent/60 hover:shadow-accent/20 bg-muted/30 cursor-pointer hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]'}`}
-                  disabled={disabled}
+                  aria-disabled={disabled}
                 >
                   <div className="text-muted-foreground text-sm">
                     {t('enablerPage.difficulty')}
@@ -860,13 +966,33 @@ export default function TraineeEnablerPage() {
                     </div>
                   )}
                   <div className="mt-2 text-xs">
-                    {g.completed ? (
+                    {g.passed ? (
                       <span className="rounded bg-green-600/20 px-2 py-0.5 text-green-600 dark:text-green-400">
                         {t('enablerPage.completed')}
                       </span>
                     ) : disabled ? (
-                      <span className="bg-muted/30 rounded px-2 py-0.5">
-                        {t('enablerPage.locked')}
+                      <span className="flex flex-col gap-1">
+                        <span className="bg-muted/30 inline-flex w-fit items-center gap-1 rounded px-2 py-0.5">
+                          <Lock className="h-3 w-3" aria-hidden="true" />
+                          {t('enablerPage.locked')}
+                        </span>
+                        {g.quizId && (
+                          <span className="text-muted-foreground">
+                            {isLocked
+                              ? lockSentence
+                              : before
+                                ? t('progression.quizAfter', {
+                                    difficulty: difficultyLabel(
+                                      before.difficulty
+                                    ),
+                                  })
+                                : ''}
+                          </span>
+                        )}
+                      </span>
+                    ) : g.completed ? (
+                      <span className="text-foreground rounded border border-amber-600/60 bg-amber-500/15 px-2 py-0.5">
+                        {t('progression.quizRetry')}
                       </span>
                     ) : (
                       <span className="rounded bg-blue-600/20 px-2 py-0.5 text-blue-600 dark:text-blue-400">
@@ -878,6 +1004,13 @@ export default function TraineeEnablerPage() {
               );
             })}
           </div>
+        )}
+
+        {isLocked && !gated.every(g => !g.quizId) && (
+          <p className="text-muted-foreground mt-3 flex items-center gap-1 text-sm">
+            <Lock className="h-4 w-4" aria-hidden="true" />
+            {t('progression.quizDisabled')} {lockSentence}
+          </p>
         )}
 
         {/* Active quiz runner */}
@@ -1010,6 +1143,20 @@ export default function TraineeEnablerPage() {
                 <div className="font-medium">
                   {t('enablerPage.score')} {result?.score ?? 0}%
                 </div>
+                {!reviewMode && !quizLocked && (
+                  <div
+                    role="status"
+                    className={`text-foreground rounded-lg border p-2 text-sm ${
+                      (result?.score ?? 0) >= 50
+                        ? 'border-green-600/60 bg-green-500/15'
+                        : 'border-amber-600/60 bg-amber-500/15'
+                    }`}
+                  >
+                    {(result?.score ?? 0) >= 50
+                      ? t('progression.resultPassed')
+                      : t('progression.resultFailed')}
+                  </div>
+                )}
                 <ul className="space-y-2">
                   {quizContent.questions.map(q => {
                     const fb = result?.feedback.find(
@@ -1053,6 +1200,17 @@ export default function TraineeEnablerPage() {
                     );
                   })}
                 </ul>
+                {!reviewMode &&
+                  !quizLocked &&
+                  (result?.score ?? 0) < 50 &&
+                  selectedDifficulty && (
+                    <button
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 mr-2 rounded-md px-4 py-2"
+                      onClick={() => loadQuizContent(selectedDifficulty)}
+                    >
+                      {t('progression.retryQuiz')}
+                    </button>
+                  )}
                 <button
                   className="border-accent/30 hover:bg-background/60 rounded-md border px-4 py-2"
                   onClick={() => {

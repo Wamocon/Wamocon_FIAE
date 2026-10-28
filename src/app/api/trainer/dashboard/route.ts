@@ -24,9 +24,7 @@ import {
   requireCatalogScope,
   type CatalogScope,
 } from '@/lib/catalog/scope';
-
-// Passing score threshold
-const PASS_THRESHOLD = 50;
+import { bestScoresOf, isEnablerCompleted } from '@/lib/catalog/progression';
 
 async function fetchTrainerDashboardData(
   trainerId: string,
@@ -139,7 +137,6 @@ async function fetchTrainerDashboardData(
     const [
       quizLinks,
       allQuizSubs,
-      enablerSubRows,
       useCaseSubRows,
       pendingQuizResult,
       pendingLessonQuizResult,
@@ -168,21 +165,6 @@ async function fetchTrainerDashboardData(
             })
             .from(quizSubmissions)
             .where(inArray(quizSubmissions.traineeId, traineeIds))
-        : Promise.resolve([]),
-      hasTrainees && hasEnablers
-        ? db
-            .select({
-              traineeId: enablerSubmissions.traineeId,
-              enablerId: enablerSubmissions.enablerId,
-            })
-            .from(enablerSubmissions)
-            .where(
-              and(
-                inArray(enablerSubmissions.traineeId, traineeIds as any),
-                inArray(enablerSubmissions.enablerId, enablerIds as any),
-                eq(enablerSubmissions.status, 'APPROVED')
-              )
-            )
         : Promise.resolve([]),
       hasTrainees && useCaseIds.length > 0
         ? db
@@ -271,58 +253,45 @@ async function fetchTrainerDashboardData(
         : Promise.resolve([]),
     ]);
 
+    // Which linked quizzes are active (an inactive quiz does not exist for the
+    // trainee, see src/lib/catalog/progression.ts)
+    const linkedQuizRows = quizLinks.length
+      ? await db
+          .select({ id: quizzes.id, isActive: quizzes.isActive })
+          .from(quizzes)
+          .where(
+            inArray(
+              quizzes.id,
+              quizLinks.map(l => l.quizId)
+            )
+          )
+      : [];
+    const quizActive = new Map(
+      linkedQuizRows.map(q => [String(q.id), !!q.isActive])
+    );
+    const progressionLinks = quizLinks.map(l => ({
+      enablerId: String(l.enablerId),
+      quizId: String(l.quizId),
+      quizIsActive: quizActive.get(String(l.quizId)) ?? false,
+    }));
+
     // ── Compute progress per trainee (pure computation, no DB) ──
     const completedMap = new Map<string, number>();
     if (totalEnablers > 0 && hasTrainees) {
       for (const traineeId of traineeIds) {
-        const quizBestScores = new Map<string, number>();
-        for (const s of allQuizSubs.filter(
-          r => String(r.traineeId) === traineeId
-        )) {
-          const qid = String(s.quizId);
-          const currentBest = quizBestScores.get(qid) || 0;
-          if ((s.score || 0) > currentBest) {
-            quizBestScores.set(qid, s.score || 0);
-          }
-        }
-
-        const approvedEnablerSubs = new Set(
-          enablerSubRows
-            .filter(r => String(r.traineeId) === traineeId)
-            .map(r => String(r.enablerId))
-        );
-        const approvedUseCasesSet = new Set(
-          useCaseSubRows
-            .filter(r => String(r.traineeId) === traineeId)
-            .map(r => String(r.useCaseId))
+        // The one definition of a completed enabler: every active lesson quiz
+        // passed (best attempt). Scenarios and use cases do not count.
+        const quizBestScores = bestScoresOf(
+          allQuizSubs.filter(r => String(r.traineeId) === traineeId)
         );
 
         let completedCount = 0;
         for (const enabler of trainerEnablers) {
           const enablerId = String(enabler.id);
-
-          const enablerQuizzes = quizLinks.filter(
-            l => String(l.enablerId) === enablerId
+          const enablerQuizzes = progressionLinks.filter(
+            l => l.enablerId === enablerId
           );
-          let allQuizzesPassed = true;
-
-          if (enablerQuizzes.length > 0) {
-            for (const link of enablerQuizzes) {
-              const score = quizBestScores.get(String(link.quizId)) || 0;
-              if (score < PASS_THRESHOLD) {
-                allQuizzesPassed = false;
-                break;
-              }
-            }
-          }
-
-          const hasScenarios = !!enabler.scenarioPdfUrl;
-          let scenariosApproved = true;
-          if (hasScenarios) {
-            scenariosApproved = approvedEnablerSubs.has(enablerId);
-          }
-
-          if (allQuizzesPassed && scenariosApproved) {
+          if (isEnablerCompleted(enablerQuizzes, quizBestScores)) {
             completedCount++;
           }
         }

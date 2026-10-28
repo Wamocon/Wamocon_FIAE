@@ -110,7 +110,9 @@ describe('PATCH /api/trainer/trainees/[traineeId]/activate: the quiz list of the
       },
     ],
     quizzes: [{ trainingCatalogId: FIAE }],
-    enablers: [{ trainingCatalogId: FIAE }],
+    // the enabler lies in a course the trainee works in
+    enablers: [{ trainingCatalogId: FIAE, courseId: 'c1' }],
+    courseMembers: [{ courseId: 'c1', userId: T1, role: 'TRAINEE' }],
   };
   const patch = (itemType: string, isActive: boolean) =>
     scopeReq(url, {
