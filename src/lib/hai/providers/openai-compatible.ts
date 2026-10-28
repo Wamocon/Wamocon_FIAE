@@ -76,6 +76,12 @@ class Watchdog {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
+
+  /** Closes the connection now (the caller gave up, nothing may keep it open). */
+  abort(): void {
+    this.clear();
+    this.controller.abort();
+  }
 }
 
 /** A short code of the server (`invalid_request_error`), or null. Never free text. */
@@ -274,18 +280,18 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(body),
+          redirect: 'error',
           signal: watchdog.signal,
         });
       } catch {
         throw this.connectionError(watchdog, 'request');
       }
 
-      let responseText = '';
+      let responseText: string;
       try {
         responseText = await response.text();
       } catch {
-        if (watchdog.timedOut) throw this.connectionError(watchdog, 'request');
-        responseText = '';
+        throw this.connectionError(watchdog, 'request');
       }
 
       if (!response.ok) {
@@ -366,6 +372,7 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
           body: JSON.stringify(
             this.buildBody(systemPrompt, messages, userMessage, options, true)
           ),
+          redirect: 'error',
           signal: watchdog.signal,
         });
       } catch {
@@ -392,6 +399,48 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
       const decoder = new TextDecoder();
       let buffer = '';
 
+      /** One line of the event stream. Only the JSON parsing may fail quietly. */
+      const handleLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) return;
+
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') return;
+
+        let parsed: {
+          choices?: {
+            delta?: { content?: string };
+            finish_reason?: string;
+          }[];
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        };
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          // Skip malformed JSON lines
+          return;
+        }
+
+        const content = parsed.choices?.[0]?.delta?.content;
+        const chunkFinishReason = parsed.choices?.[0]?.finish_reason;
+
+        if (content) {
+          fullText += content;
+          // an error of the caller (the client left) is not swallowed
+          onChunk(content);
+        }
+
+        if (chunkFinishReason) {
+          finishReason = chunkFinishReason;
+        }
+
+        if (parsed.usage) {
+          tokenCount =
+            (parsed.usage.prompt_tokens ?? 0) +
+            (parsed.usage.completion_tokens ?? 0);
+        }
+      };
+
       try {
         while (true) {
           let chunk: ReadableStreamReadResult<Uint8Array>;
@@ -408,37 +457,15 @@ export class OpenAICompatibleChatProvider implements ChatProvider {
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
 
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-            const data = trimmed.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed.choices?.[0]?.delta;
-              const chunkFinishReason = parsed.choices?.[0]?.finish_reason;
-
-              if (delta?.content) {
-                fullText += delta.content;
-                onChunk(delta.content);
-              }
-
-              if (chunkFinishReason) {
-                finishReason = chunkFinishReason;
-              }
-
-              if (parsed.usage) {
-                tokenCount =
-                  (parsed.usage.prompt_tokens ?? 0) +
-                  (parsed.usage.completion_tokens ?? 0);
-              }
-            } catch {
-              // Skip malformed JSON lines
-            }
-          }
+          for (const line of lines) handleLine(line);
         }
+        // the last line may come without a line break
+        buffer += decoder.decode();
+        handleLine(buffer);
+      } catch (error) {
+        // give the connection up: nothing may keep reading after a failure
+        watchdog.abort();
+        throw error;
       } finally {
         try {
           reader.releaseLock();

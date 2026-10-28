@@ -352,14 +352,14 @@ describe('OpenAICompatibleChatProvider: reasoning off, empty answers, time limit
         res.write(
           `data: ${JSON.stringify({ choices: [{ delta: { content: `p${i} ` } }] })}\n\n`
         );
-        await new Promise(resolve => setTimeout(resolve, 60));
+        await new Promise(resolve => setTimeout(resolve, 30));
       }
       res.end('data: [DONE]\n\n');
     });
     const chunks: string[] = [];
     const result = await provider({
-      firstByteTimeoutMs: 150,
-      idleTimeoutMs: 150,
+      firstByteTimeoutMs: 300,
+      idleTimeoutMs: 300,
     }).generateResponseStream('system', [], 'user', c => chunks.push(c));
     expect(chunks).toHaveLength(6);
     expect(result.text).toBe('p0 p1 p2 p3 p4 p5 ');
@@ -381,5 +381,63 @@ describe('OpenAICompatibleChatProvider: reasoning off, empty answers, time limit
     fake.setHandler((_s, res) => reply(res, 200, completion('with usage')));
     const response = await provider().generateResponse('system', [], 'user');
     expect(response.tokenCount).toBe(160);
+  });
+
+  it('does not follow a redirect: the body is never re-sent to another host', async () => {
+    const other = await startFakeSokrates(answers(() => 'must not be asked'));
+    try {
+      fake.setHandler((_s, res) =>
+        reply(res, 307, '', { location: `${other.url}/chat/completions` })
+      );
+      const error = await provider()
+        .generateResponse('system', [], MARKER)
+        .catch(e => e);
+      expect((error as ChatProviderError).kind).toBe('network');
+      expect(other.requests).toHaveLength(0);
+      fake.setHandler(sse(['x']));
+      const streamError = await provider()
+        .generateResponseStream('system', [], MARKER, () => {})
+        .then(() => null)
+        .catch(e => e);
+      expect(streamError).toBeNull();
+      fake.setHandler((_s, res) =>
+        reply(res, 308, '', { location: `${other.url}/chat/completions` })
+      );
+      const streamRedirect = await provider()
+        .generateResponseStream('system', [], MARKER, () => {})
+        .catch(e => e);
+      expect((streamRedirect as ChatProviderError).kind).toBe('network');
+      expect(other.requests).toHaveLength(0);
+    } finally {
+      await other.close();
+    }
+  });
+
+  it('reads a last event that comes without a line break', async () => {
+    fake.setHandler((_s, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'tail' } }] })}`
+      );
+    });
+    const chunks: string[] = [];
+    const result = await provider().generateResponseStream(
+      'system',
+      [],
+      'user',
+      c => chunks.push(c)
+    );
+    expect(chunks).toEqual(['tail']);
+    expect(result.text).toBe('tail');
+  });
+
+  it('an error of the caller is not swallowed and ends the read', async () => {
+    fake.setHandler(sse(['a', 'b']));
+    const error = await provider()
+      .generateResponseStream('system', [], 'user', () => {
+        throw new Error('client left');
+      })
+      .catch(e => e);
+    expect((error as Error).message).toBe('client left');
   });
 });

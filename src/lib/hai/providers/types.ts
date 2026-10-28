@@ -165,6 +165,18 @@ export interface ProviderConfig {
   };
 }
 
+export function parseChatFallback(raw: string | undefined): ChatFallbackMode {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (value === 'none') return 'none';
+  if (value !== '' && value !== 'sokrates') {
+    // the value is not echoed: it is dropped to the default
+    console.warn(
+      'HAI.ai: Unknown HAI_CHAT_FALLBACK value. Using "sokrates" (allowed: sokrates, none).'
+    );
+  }
+  return 'sokrates';
+}
+
 /**
  * Load provider configuration from environment variables.
  *
@@ -182,18 +194,6 @@ export interface ProviderConfig {
  *   - 'gemini' (default) → Google Gemini API (production standard)
  *   - 'ollama' → Local Ollama, for local dev only (768 dims — incompatible with production)
  */
-export function parseChatFallback(raw: string | undefined): ChatFallbackMode {
-  const value = (raw ?? '').trim().toLowerCase();
-  if (value === 'none') return 'none';
-  if (value !== '' && value !== 'sokrates') {
-    // the value is not echoed: it is dropped to the default
-    console.warn(
-      'HAI.ai: Unknown HAI_CHAT_FALLBACK value. Using "sokrates" (allowed: sokrates, none).'
-    );
-  }
-  return 'sokrates';
-}
-
 export function loadProviderConfig(): ProviderConfig {
   // Prefer openai-compatible when available; fall back to gemini for legacy setups.
   const rawChatProvider = (process.env.HAI_CHAT_PROVIDER ||

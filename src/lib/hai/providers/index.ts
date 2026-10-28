@@ -187,14 +187,17 @@ function resolveFallback(
 
   const effectivePolicy =
     policy === undefined ? defaultFallbackPolicy() : policy;
-  const baseUrl = config.openaiCompatible.baseUrl.trim();
-  if (!effectivePolicy || !parseTarget(baseUrl, effectivePolicy).ok) {
+  const parsed = effectivePolicy
+    ? parseTarget(config.openaiCompatible.baseUrl, effectivePolicy)
+    : null;
+  if (!parsed || !parsed.ok) {
     return { fallback: null, state: 'target_rejected' };
   }
 
+  // the provider is built from the address that was checked, not from the raw text
   return {
     fallback: new OpenAICompatibleChatProvider(
-      baseUrl,
+      parsed.target.url.replace(/\/chat\/completions$/, ''),
       apiKey,
       config.openaiCompatible.model
     ),
@@ -309,7 +312,7 @@ export async function runChatChain(
     let emitted = false;
     const guardedChunk = onChunk
       ? (text: string) => {
-          if (text) emitted = true;
+          if (text.trim()) emitted = true;
           onChunk(text);
         }
       : undefined;

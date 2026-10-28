@@ -63,6 +63,8 @@ Ist `OPENAI_COMPATIBLE_API_KEY` nicht gesetzt (oder `HAI_CHAT_FALLBACK=none`, od
 - Bei einem Ausfall gehen Chat-Inhalte nur an Sokrates, den eigenen Dienst. Der Primäranbieter (Gemini) bekommt sie weiterhin, solange er der Primäranbieter ist.
 - Das Protokoll enthält nie Inhalte: keine Nachricht, keinen Systemprompt, keine Antwort, keinen Fehlertext des Servers, keinen Schlüssel. Es nennt den Anbieter, die Fehlerart (zum Beispiel `http status=429`, `timeout`, `empty`) und den Zustand des Fallbacks (`sokrates`, `no_key`, `disabled`, `target_rejected`, `primary_is_sokrates`).
 - Die Adresse des Fallbacks wird geprüft (https, kein Port, keine Zugangsdaten, Host auf der Positivliste). Eine falsch gesetzte Adresse schickt nichts an einen fremden Host, der Fallback ist dann aus.
+- Weiterleitungen (Redirects) folgt der Sokrates-Aufruf nicht, damit der Inhalt nie an einen anderen Host geht.
+- Ist Sokrates selbst der **Primäranbieter** (`HAI_CHAT_PROVIDER=openai-compatible`), wird die Adresse nicht gegen die Positivliste geprüft, sie liegt allein in der Hand des Eigentümers. Die Positivliste gilt für den Fallback und wird mit `CONTENT_UPLOAD_KI_ALLOWED_HOSTS` gemeinsam mit dem KI-Upload geführt.
 - Die Websuche (nur Gemini) gibt es beim Fallback nicht, Sokrates beantwortet die Frage ohne Suche.
 - Vor dem ersten Einsatz des Fallbacks mit echten Inhalten klären: Speichert oder protokolliert Open WebUI die Anfragen, und wie lange (Entscheidung O13 des KI-Uploads)? Beim Fallback liegen dann Chat-Inhalte dort.
 - Die Schlüssel `OPENROUTER_API_KEY` und `ANTHROPIC_API_KEY` werden vom Chat nicht mehr als Fallback benutzt. Sie dürfen entfernt werden (Datensparsamkeit), solange kein Primäranbieter sie braucht. `GEMINI_API_KEY` bleibt (Primär und Einbettungen).

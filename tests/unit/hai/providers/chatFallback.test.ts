@@ -543,6 +543,8 @@ describe('runChatChain against a stand-in for Sokrates on localhost', () => {
       chunk => chunks.push(chunk)
     ).catch(e => e);
     expect(isChatUnavailableError(error)).toBe(true);
+    expect((error as ChatUnavailableError).reason).toBe('fallback_failed');
+    expect(fake.requests).toHaveLength(1);
     expect(chunks).toEqual([]);
   });
 
@@ -611,6 +613,7 @@ describe('no fallback: a clear error instead of a foreign provider', () => {
 
       expect(isChatUnavailableError(error)).toBe(true);
       expect((error as ChatUnavailableError).reason).toBe('no_fallback');
+      expect((error as ChatUnavailableError).fallback).not.toBe('sokrates');
       expect(mockGemini.generate).toHaveBeenCalledTimes(1);
       // nothing reached another provider, nothing was fetched at all
       expect(mockForeign).not.toHaveBeenCalled();
