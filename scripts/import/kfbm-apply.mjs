@@ -69,6 +69,7 @@ import {
   planCounts,
   readGlobalQuizzes,
   readLessonQuizzes,
+  renderLengthChanges,
   renderPlanSummary,
   renderQuizJsonReport,
   runJob,
@@ -404,6 +405,7 @@ export function renderRunReport(report, info) {
       out.push(`- und ${report.differences.length - 200} weitere`);
     }
     out.push('');
+    out.push(...renderLengthChanges(report.differences, info.updateExisting));
   }
   if (report.extended?.length) {
     const added = report.extended.reduce((n, e) => n + e.added, 0);

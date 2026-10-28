@@ -1,6 +1,7 @@
 // Report of a run of the use case import as Markdown (German). Holds counts and
 // keys, never the content of a source file. Pure function.
 
+import { renderLengthChanges } from '../descriptions';
 import type { UseCaseReport } from './engine';
 
 export interface UseCaseRunInfo {
@@ -77,6 +78,7 @@ export function renderUseCaseRunReport(
       out.push(`- und ${report.differences.length - 200} weitere`);
     }
     out.push('');
+    out.push(...renderLengthChanges(report.differences, info.updateExisting));
   }
   if (report.conflicts.length > 0) {
     out.push('## Konflikte');

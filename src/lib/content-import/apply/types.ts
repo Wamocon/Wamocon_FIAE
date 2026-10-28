@@ -267,6 +267,13 @@ export interface Difference {
    * --update-existing (tables.ts fillWhenEmpty: the value is still empty).
    */
   filled?: string[];
+  /**
+   * Length in characters before (the row of the target) and after (the plan) of
+   * the description columns of this difference (description, description_text).
+   * Numbers only, never the text. The report shows them, so a run that replaces
+   * a long text by the short form says so before it is applied.
+   */
+  lengths?: Record<string, { before: number; after: number }>;
 }
 
 export interface TableCount {

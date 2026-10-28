@@ -57,6 +57,14 @@ const lessonCodes = (p: ImportPlan, enabler: string) =>
 const skippedCode = (p: ImportPlan, key: string) =>
   p.skipped.find(s => s.key === key)?.code;
 const clone = (p: ImportPlan) => JSON.parse(JSON.stringify(p));
+// The description of a plan is the short form of the text (the bare line never
+// reaches it), so the tests of the guard on a plan put the table text in.
+const withTableText = (p: ImportPlan, code = 'K1-b') => {
+  const copy = clone(p) as ImportPlan;
+  copy.enablers.find(e => e.code === code)!.descriptionText =
+    TABLE.join('\n\n');
+  return copy;
+};
 
 describe('leakOf with the review option', () => {
   it('lets only the bare line of the word pass', () => {
@@ -237,7 +245,7 @@ describe('buildImportPlan with a reviewed enabler', () => {
 });
 
 describe('validatePlan and the guards with reviewed markers', () => {
-  const bad = () => clone(build());
+  const bad = () => withTableText(build());
   const enabler = (p: ImportPlan, code: string) =>
     p.enablers.find(e => e.code === code)!;
 
@@ -303,7 +311,7 @@ describe('validatePlan and the guards with reviewed markers', () => {
   });
 
   it('findSolutionLeaks follows the list of the plan, not a guess', () => {
-    const p = build();
+    const p = withTableText(build());
     expect(findSolutionLeaks(p)).toEqual([]);
     const q = { ...p, reviewedMarkers: undefined };
     expect(findSolutionLeaks(q).join(' ')).toMatch(/enabler K1-b text/);
@@ -359,7 +367,7 @@ describe('executePlan with a reviewed enabler', () => {
 
   it('refuses the same plan once the marker is removed', async () => {
     const db = new MemoryImportDb();
-    const p = clone(build());
+    const p = withTableText(build());
     delete p.reviewedMarkers;
     await expect(executePlan(db, p, options())).rejects.toMatchObject({
       code: 'PLAN_INVALID',

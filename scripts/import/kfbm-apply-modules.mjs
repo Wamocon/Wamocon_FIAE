@@ -56,3 +56,6 @@ export const { ImportAbort } = db;
 export const { readGlobalQuizzes, readLessonQuizzes } = quizRead;
 export const { mergeQuizSources } = quizMerge;
 export const { renderQuizJsonReport, summarizeQuizJson } = quizReport;
+export const { renderLengthChanges } = await import(
+  new URL('../../src/lib/content-import/descriptions.ts', import.meta.url).href
+);
