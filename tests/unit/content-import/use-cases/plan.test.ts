@@ -260,6 +260,33 @@ describe('buildUseCasePlan: skips with a reason, nothing is guessed', () => {
     expect(plan.skipped[0].code).toBe('SOLUTION_MARKER');
   });
 
+  it('skips a use case whose assignment holds its own model solution, and keeps the model solution private', () => {
+    const own =
+      'Die gesuchte Antwort KAPPA lautet zwölf Schrauben und drei Muttern.';
+    const leaking = build([
+      file(
+        ucPath(DIR.k1, '1', '1a'),
+        useCaseContent('1a', {
+          bareSolution: own,
+          extraSteps: [plain(`Hinweis: ${own}`)],
+        })
+      ),
+    ]);
+    expect(leaking.useCases).toEqual([]);
+    expect(leaking.skipped.map(s => s.code)).toEqual(['SOLUTION_MARKER']);
+    // a clean use case keeps its model solution, in the private field only
+    const clean = build([
+      file(
+        ucPath(DIR.k1, '1', '1a'),
+        useCaseContent('1a', { bareSolution: own })
+      ),
+    ]);
+    expect(clean.skipped).toEqual([]);
+    expect(clean.useCases[0].solution).toContain('KAPPA');
+    expect(clean.useCases[0].topics ?? '').not.toContain('KAPPA');
+    expect(clean.useCases[0].description ?? '').not.toContain('KAPPA');
+  });
+
   it('skips a use case whose visible text holds the solution of another one', () => {
     const stolen =
       'Die gesuchte Antwort KAPPA lautet zwölf Schrauben und drei Muttern.';

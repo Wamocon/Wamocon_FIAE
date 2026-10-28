@@ -47,6 +47,7 @@ import type {
   ItemEvent,
   TableCount,
 } from '@/lib/content-import/apply/types';
+import { scenarioSolutionTexts } from '@/lib/content-import/apply/guard';
 import { solutionTextsOfUseCases } from '@/lib/content-import/use-cases/guard';
 import { executeUseCasePlan } from '@/lib/content-import/use-cases/engine';
 import {
@@ -330,8 +331,11 @@ export async function runTransfer(
           requested: request.publishOriginals,
           files,
           readBytes: deps.readBytes,
-          // the model solutions of the use cases only: a scenario is public, whole
+          // the model solutions of the use cases: no original may show them. The solution
+          // parts of the scenarios are searched in a teaching text only, a whole scenario
+          // shows its own (it is public).
           solutions: solutionTextsOfUseCases(plan.useCasePlan.useCases),
+          scenarioSolutions: scenarioSolutionTexts(plan.importPlan),
           plannedFileIds: new Set(plan.plannedFiles.map(f => f.id)),
         })
       : { plans: [], refused: [] as OriginalRefusal[] };
@@ -539,6 +543,9 @@ export async function runTransfer(
             );
             const importReport = await executePlan(db, plan.importPlan, {
               ...engineSwitches,
+              protectedTexts: solutionTextsOfUseCases(
+                plan.useCasePlan.useCases
+              ),
               scenarioSolutions: FIXED_ENGINE_OPTIONS.scenarioSolutions,
               extendQuizzes: FIXED_ENGINE_OPTIONS.extendQuizzes,
               enablerOriginals: forEngine.map(e => e.original),

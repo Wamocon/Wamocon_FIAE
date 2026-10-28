@@ -66,6 +66,7 @@ import type {
 } from '@/lib/content-import/learning-fields/types';
 import { mergeQuizSources } from '@/lib/content-import/quiz-json/merge';
 import type { QuizJsonRead } from '@/lib/content-import/quiz-json/types';
+import { solutionTextsOfUseCases } from '@/lib/content-import/use-cases/guard';
 import { parseUseCaseText } from '@/lib/content-import/use-cases/parser';
 import {
   buildUseCasePlan,
@@ -773,18 +774,32 @@ export async function buildTransferPlan(
   const now = input.now ?? new Date();
   const merged =
     jsonSources.length > 0 ? mergeQuizSources(importFiles, jsonSources) : null;
+  // The use case plan comes first: its model solutions must not stand in a teaching text, so
+  // the import plan gets them to search for (they are not stored in it).
+  const useCasePlan = buildUseCasePlan(useCaseFiles, decisions, { now });
   const importPlan = buildImportPlan(
     merged ? merged.files : importFiles,
     decisions,
     {
       now,
+      protectedTexts: [
+        ...solutionTextsOfUseCases(useCasePlan.useCases),
+        // a use case that was left out keeps its solution private as well
+        ...useCaseFiles.flatMap(f =>
+          f.content?.type === 'use-case'
+            ? [
+                f.content.result.value.solution,
+                f.content.result.value.criteria ?? '',
+              ].filter(text => text.length > 0)
+            : []
+        ),
+      ],
       existingEnablers: new Map((input.enablers ?? []).map(e => [e.code, e])),
       ...(merged
         ? { extra: { skipped: merged.skipped, superseded: merged.superseded } }
         : {}),
     }
   );
-  const useCasePlan = buildUseCasePlan(useCaseFiles, decisions, { now });
 
   const skipped: SkippedItem[] = [
     ...importPlan.skipped.map(s => ({

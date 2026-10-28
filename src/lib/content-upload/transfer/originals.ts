@@ -191,6 +191,11 @@ export interface EvaluateOriginalsInput {
    */
   solutions: readonly string[];
   /**
+   * Solution parts of the scenarios of the plan. Only a teaching text must not repeat them, the
+   * whole scenario shows its own. Optional: a caller without a plan of scenarios names none.
+   */
+  scenarioSolutions?: readonly string[];
+  /**
    * Files that became an item of the plan. A Word file that the plan left out (an
    * unresolved duplicate, a file the planner skipped) is not published either: its
    * text did not pass the plan.
@@ -269,7 +274,14 @@ export async function evaluateOriginals(
       });
       continue;
     }
-    const check = await checkOriginalBytes(ext, bytes, input.solutions, kind);
+    const check = await checkOriginalBytes(
+      ext,
+      bytes,
+      kind === 'scenario'
+        ? input.solutions
+        : [...input.solutions, ...(input.scenarioSolutions ?? [])],
+      kind
+    );
     if (!check.ok) {
       refused.push({ fileId: id, code: check.code, reason: check.reason });
       continue;

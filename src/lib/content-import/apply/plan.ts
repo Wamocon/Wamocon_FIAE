@@ -29,9 +29,9 @@ import {
 import { kindOfComponent } from './decisions';
 import {
   findSolutionLeaks,
-  LONG_SOLUTION_TEXTS,
   leakOf,
   leakOfEnablerText,
+  longSolutionTexts,
   solutionTexts,
 } from './guard';
 import type {
@@ -409,6 +409,13 @@ export interface BuildOptions {
    * the engine finds it unchanged and writes nothing for it. Its source names no file.
    */
   existingEnablers?: ReadonlyMap<string, ExistingEnabler>;
+  /**
+   * Long texts that no teaching text, component or course may repeat word for word besides
+   * the solution parts of the scenarios of the plan: the model solutions of the use cases.
+   * The plan of this import does not know them, the caller hands them over. They are never
+   * stored in the plan.
+   */
+  protectedTexts?: readonly string[];
   limitedTo?: string[];
   now?: Date;
   /**
@@ -869,9 +876,25 @@ export function buildImportPlan(
     quizzes,
     scenarios,
   } as unknown as ImportPlan);
-  // The solution parts of a scenario are no protected texts any more (the whole scenario is
-  // public), so a teaching text may repeat them. Only the marker words are still searched.
-  const strong = LONG_SOLUTION_TEXTS;
+  // Only the scenario file itself may show its solution (the whole scenario is public). A
+  // teaching text, a component or a course must not repeat it, and not the model solution of a
+  // use case that the caller names.
+  // The scenario files that were read count even when the scenario is left out later, its text
+  // stays a solution text.
+  const strong = longSolutionTexts(
+    { scenarios } as unknown as ImportPlan,
+    [
+      ...(options.protectedTexts ?? []),
+      ...chosen.flatMap(f =>
+        f.content?.type === 'scenario'
+          ? [
+              f.content.result.value.solution,
+              f.content.result.value.knowledgeContribution,
+            ].filter(text => text.length > 0)
+          : []
+      ),
+    ]
+  );
   const guardQuizzes = quizzes.filter(q => {
     let reason: string | null = null;
     const bad = q.questions.find(question => {
@@ -926,7 +949,8 @@ export function buildImportPlan(
   const reviewedMarkers: PlanReviewedMarker[] = [];
   const guardEnablers = enablers.filter(e => {
     // The text of an enabler may repeat a sentence of a rationale (the
-    // rationales come from it), only a marker counts. The title stays strict.
+    // rationales come from it), only a marker or a long solution text counts. The title
+    // stays strict.
     const text = leakOfEnablerText(
       fullTextByCode.get(e.code) ?? e.descriptionText ?? '',
       strong,
@@ -1121,7 +1145,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * reference points to an item of the plan and that no solution stands in a
  * visible field.
  */
-export function validatePlan(raw: unknown): string[] {
+export function validatePlan(
+  raw: unknown,
+  options: { protectedTexts?: readonly string[] } = {}
+): string[] {
   if (!isRecord(raw)) return ['The plan is not an object'];
   const errors: string[] = [];
   if (raw.version !== 1) errors.push('The plan version must be 1');
@@ -1332,7 +1359,7 @@ export function validatePlan(raw: unknown): string[] {
     }
   }
   errors.push(...reviewedMarkerProblems(plan, enablerCodes));
-  errors.push(...findSolutionLeaks(plan));
+  errors.push(...findSolutionLeaks(plan, options.protectedTexts));
   return errors;
 }
 

@@ -71,7 +71,10 @@ export type WordResult =
   | {
       ok: true;
       variants: WordVariant[];
-      /** Solution texts of this file (scenarios only), for the check of the enabler texts. */
+      /**
+       * Solution texts of this file (scenarios and use cases), for the check of the enabler
+       * texts: a teaching text must not repeat them. The file itself is not checked against them.
+       */
       solutions: string[];
     }
   | { ok: false; code: WordSkipCode };
@@ -83,7 +86,7 @@ export interface WordContext {
   enablerKey: string;
   /** K6.2-d */
   enablerCode: string;
-  /** The solution texts of all scenarios of the run (for the enabler texts). */
+  /** The solution texts of all scenarios and use cases of the run (for the enabler texts). */
   strongSolutions: readonly string[];
   /** The bare line "Lösung" of this enabler text was checked by the owner. */
   reviewedBareSolutionLine: boolean;
@@ -625,7 +628,8 @@ async function prepareUseCase(
   if (!full.ok) return { ok: false, code: full.code };
   return {
     ok: true,
-    solutions: [],
+    // the model solution is private, so no teaching text may repeat it
+    solutions,
     variants: [
       {
         kind: 'usecase_task',
