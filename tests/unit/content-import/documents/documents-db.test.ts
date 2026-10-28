@@ -116,8 +116,35 @@ if (!url) {
   });
 
   /** The KfBM enabler K4-a and its use case, written by the real transfer (inactive). */
-  async function seedKfbm(options: { original?: boolean } = {}) {
+  async function seedKfbm(
+    options: { original?: boolean; scenario?: boolean } = {}
+  ) {
     const files = await enablerFiles({ tree: true });
+    const scenario = options.scenario
+      ? [
+          fixtureFile(
+            new Uint8Array(
+              pdfBytes({
+                pages: [
+                  [
+                    'Szenario 4a) Der ausgefallene Router',
+                    'Loesungsszenario',
+                    'Die Auszubildende prueft zuerst den Router und danach die beiden Switches.',
+                  ],
+                ],
+              })
+            ),
+            {
+              ext: 'pdf',
+              name: 'Szenario_4a.pdf',
+              docType: 'pdf_original',
+              componentCode: 'K4',
+              enablerCode: 'K4-a',
+              dupKey: 'pdf:scenario:4a',
+            }
+          ),
+        ]
+      : [];
     const extra = options.original
       ? [
           fixtureFile(
@@ -142,7 +169,8 @@ if (!url) {
           ),
         ]
       : [];
-    const seeded = await seedRun(sql, [...files, ...extra]);
+    const published = [...extra, ...scenario];
+    const seeded = await seedRun(sql, [...files, ...published]);
     const deps = transferDeps(sql, seeded, {
       contentBucket: () => new MemoryBucket(),
     });
@@ -151,7 +179,7 @@ if (!url) {
       callerId: USER,
       mode,
       updateExisting: false,
-      publishOriginals: extra.map(e => e.file.id),
+      publishOriginals: published.map(e => e.file.id),
       ...(mode === 'apply' ? { confirm: 'KFBM' } : {}),
     });
     await runTransfer(deps, body('dry_run'));
@@ -288,6 +316,30 @@ if (!url) {
       const [{ n: after }] =
         await sql`select count(*)::int as n from content_documents where document_type = 'THEORY' and storage_path is not null`;
       expect(after).toBe(1);
+    });
+
+    it('the whole scenario of the content upload and this import do not make two rows for one scenario', async () => {
+      await seedKfbm({ scenario: true });
+      const [{ n: before }] =
+        await sql`select count(*)::int as n from content_documents where document_type = 'EXERCISE' and storage_path is not null`;
+      expect(before).toBe(1);
+      const storage = new MemoryStorage();
+      const report = await runImport(storage, sources(), 'apply');
+      // the teaching text, the task and the model solution are new, the scenario is the row there
+      expect(report.tables.content_documents.insert).toBe(3);
+      expect(report.tables.content_documents.unchanged).toBe(1);
+      const rows =
+        await sql`select title, visibility, use_case_id from content_documents where document_type = 'EXERCISE' and storage_path is not null`;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        title: 'Szenario K4-a (PDF)',
+        visibility: 'ALL',
+        use_case_id: null,
+      });
+      // the use case stays apart: its model solution is the only trainer-only row
+      expect(
+        await sql`select title from content_documents where visibility = 'TRAINER_ONLY'`
+      ).toEqual([{ title: 'Use Case K4-a: Musterlösung (PDF)' }]);
     });
 
     it('refuses the storage of another target before it writes a row', async () => {

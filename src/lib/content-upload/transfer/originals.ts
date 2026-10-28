@@ -1,20 +1,24 @@
-// Originals of enabler texts that go to the public document bucket
-// (docs/ki-upload-konzept.md 8.5, entscheidung O2).
+// Originals of enabler texts and of whole scenarios that go to the public document
+// bucket (docs/ki-upload-konzept.md 8.5, entscheidung O2).
 //
-// Only the original of an ENABLER TEXT may leave the private staging bucket: it holds
-// no solution parts. Quizzes, global quizzes, scenarios and use cases hold the
-// solutions and stay in staging. The person asks for each original by name when
-// starting the dry run and the apply (a list of file ids), nothing is published by
-// default. Before a file is taken on, this module reads it again and refuses it when
+// Only two kinds of file may leave the private staging bucket: the original of an
+// ENABLER TEXT (it holds no solution parts) and a WHOLE SCENARIO (decision of the owner
+// of 29.10.2026: one file, solution approach and knowledge text included, trainees read
+// all of it, like the scenario documents of FIAE). Quizzes, global quizzes and use
+// cases hold solutions and stay in staging: a use case is split into a task and a
+// private model solution. The person asks for each original by name when starting the
+// dry run and the apply (a list of file ids), nothing is published by default. Before
+// a file is taken on, this module reads it again and refuses it when
 //
-//   - it is not an enabler text (a Word file typed enabler, or a PDF that is the
-//     original of an enabler text),
+//   - it is neither (a Word file typed enabler or scenario, or a PDF that is the
+//     original of an enabler text or of a scenario),
 //   - the Word file has comments, tracked changes, text boxes or hidden text (the
 //     guard only sees the text the parser reads, and these parts it does not), or
 //     any feature that is more than a note; the PDF has any finding that is more than
 //     a note (script, launch, embedded file, ...),
-//   - a marker word of a solution, or a long solution text of a scenario or a use case
-//     of the same plan, stands in the text.
+//   - a marker word of a solution, or a long solution text of a use case of the same plan,
+//     stands in the text. A whole scenario may hold its own solution approach (its own
+//     markers pass), but a quiz answer or a use case model solution in it stops the file.
 //
 // The refusal of one original never stops the run: the file stays in staging and the
 // report names the reason. The copy to the bucket happens after the gate and before
@@ -26,11 +30,12 @@ import { createHash } from 'node:crypto';
 import type { EnablerOriginal } from '@/lib/content-import/apply/types';
 import { documentPublicUrl, documentStoragePath } from '@/lib/document-storage';
 import { withStoragePrefix } from '@/lib/db-schema';
-import { leakOf } from '@/lib/content-import/apply/guard';
+import { NON_SCENARIO_MARKERS, leakOf } from '@/lib/content-import/apply/guard';
 import { hasSolutionMarker } from '@/lib/content-upload/patterns';
 import { readDocx } from '@/lib/content-upload/read-docx';
 import { readPdf } from '@/lib/content-upload/read-pdf';
 import type {
+  OriginalKind,
   OriginalPlan,
   OriginalRefusal,
   TransferFile,
@@ -61,13 +66,15 @@ const refuse = (code: string, reason: string): OriginalCheck => ({
 
 /**
  * Reads the bytes of an original and decides whether it may be published.
- * `solutions` are the long solution texts of the plan (scenario and use case
- * solutions), searched in the text. Never throws.
+ * `solutions` are the long solution texts of the plan (use case solutions),
+ * searched in the text of an enabler text. A whole scenario is checked for what
+ * hides in the file only: its solution approach is no secret. Never throws.
  */
 export async function checkOriginalBytes(
   ext: 'docx' | 'pdf',
   bytes: Uint8Array,
-  solutions: string[]
+  solutions: readonly string[],
+  kind: OriginalKind = 'enabler'
 ): Promise<OriginalCheck> {
   let text: string;
   let pageCount: number | null = null;
@@ -103,6 +110,25 @@ export async function checkOriginalBytes(
     text = read.text;
     pageCount = read.pageCount;
   }
+  if (kind === 'scenario') {
+    // A whole scenario holds its solution approach on purpose, so its own markers and its own
+    // texts pass. What never belongs to a scenario still stops the file: the answers of a quiz,
+    // the model solution of a use case and the long solution texts of the use cases of the plan.
+    // A file typed as a scenario by mistake (a quiz, a use case) does not reach the bucket.
+    const leak = leakOf(text, solutions, { markers: NON_SCENARIO_MARKERS });
+    if (leak) {
+      return leak === 'contains a solution text'
+        ? refuse(
+            'SOLUTION_TEXT',
+            'The text holds a solution text of this transfer.'
+          )
+        : refuse(
+            'SOLUTION_MARKER',
+            'The text shows a quiz answer or the model solution of a use case.'
+          );
+    }
+    return { ok: true, pageCount };
+  }
   if (hasSolutionMarker(text)) {
     return refuse(
       'SOLUTION_MARKER',
@@ -118,19 +144,40 @@ export async function checkOriginalBytes(
   return { ok: true, pageCount };
 }
 
-/** The enabler text a file is the original of, or null when it is no such file. */
-export function enablerOfOriginal(file: TransferFile): string | null {
+/**
+ * What a file is the original of, and at which enabler: the teaching text or the whole
+ * scenario. Null when it is neither (a quiz, a use case, a file that is not accepted).
+ * A use case never is, in no format: its task and its model solution stay apart.
+ */
+export function originalOf(
+  file: TransferFile
+): { kind: OriginalKind; enablerCode: string } | null {
   const d = file.decision;
   if (d.action !== 'accept' || !d.enablerCode) return null;
-  if (d.docType === 'enabler' && file.ext === 'docx') return d.enablerCode;
-  if (
-    d.docType === 'pdf_original' &&
-    file.ext === 'pdf' &&
-    (file.dupKey ?? '').startsWith('pdf:enabler:')
-  ) {
-    return d.enablerCode;
+  if (file.ext === 'docx') {
+    if (d.docType === 'enabler') {
+      return { kind: 'enabler', enablerCode: d.enablerCode };
+    }
+    if (d.docType === 'scenario') {
+      return { kind: 'scenario', enablerCode: d.enablerCode };
+    }
+  }
+  if (d.docType === 'pdf_original' && file.ext === 'pdf') {
+    const key = file.dupKey ?? '';
+    if (key.startsWith('pdf:enabler:')) {
+      return { kind: 'enabler', enablerCode: d.enablerCode };
+    }
+    if (key.startsWith('pdf:scenario:')) {
+      return { kind: 'scenario', enablerCode: d.enablerCode };
+    }
   }
   return null;
+}
+
+/** The enabler text a file is the original of, or null when it is no such file. */
+export function enablerOfOriginal(file: TransferFile): string | null {
+  const original = originalOf(file);
+  return original?.kind === 'enabler' ? original.enablerCode : null;
 }
 
 export interface EvaluateOriginalsInput {
@@ -138,8 +185,11 @@ export interface EvaluateOriginalsInput {
   requested: readonly string[];
   files: readonly TransferFile[];
   readBytes: (file: TransferFile) => Promise<Uint8Array | null>;
-  /** Long solution texts of the plans (not the rationales, a Lehrtext may repeat them). */
-  solutions: string[];
+  /**
+   * Long solution texts of the plans: the use case solutions (not the rationales, a
+   * Lehrtext may repeat them, and not the scenarios, which are public).
+   */
+  solutions: readonly string[];
   /**
    * Files that became an item of the plan. A Word file that the plan left out (an
    * unresolved duplicate, a file the planner skipped) is not published either: its
@@ -166,7 +216,9 @@ export async function evaluateOriginals(
       });
       continue;
     }
-    const enablerCode = enablerOfOriginal(file);
+    const found = originalOf(file);
+    const enablerCode = found?.enablerCode ?? null;
+    const kind = found?.kind ?? 'enabler';
     // only a Word file or a PDF can be an original (a JSON or Excel file never is)
     const ext = file.ext === 'docx' || file.ext === 'pdf' ? file.ext : null;
     if (!enablerCode || !ext) {
@@ -174,7 +226,7 @@ export async function evaluateOriginals(
         fileId: id,
         code: 'NOT_AN_ENABLER_TEXT',
         reason:
-          'Only the original of an accepted enabler text may go to the public bucket.',
+          'Only the original of an accepted enabler text or a whole scenario may go to the public bucket.',
       });
       continue;
     }
@@ -194,12 +246,12 @@ export async function evaluateOriginals(
       });
       continue;
     }
-    const slot = `${enablerCode}:${ext}`;
+    const slot = `${kind}:${enablerCode}:${ext}`;
     if (taken.has(slot)) {
       refused.push({
         fileId: id,
         code: 'DUPLICATE_ORIGINAL',
-        reason: 'Another original of this enabler text and format was chosen.',
+        reason: 'Another original of this enabler and format was chosen.',
       });
       continue;
     }
@@ -217,7 +269,7 @@ export async function evaluateOriginals(
       });
       continue;
     }
-    const check = await checkOriginalBytes(ext, bytes, input.solutions);
+    const check = await checkOriginalBytes(ext, bytes, input.solutions, kind);
     if (!check.ok) {
       refused.push({ fileId: id, code: check.code, reason: check.reason });
       continue;
@@ -228,6 +280,7 @@ export async function evaluateOriginals(
       sha256: file.sha256,
       enablerCode,
       ext,
+      ...(kind === 'scenario' ? { kind } : {}),
       sizeBytes: file.sizeBytes,
       pageCount: check.pageCount,
     });
@@ -235,10 +288,24 @@ export async function evaluateOriginals(
   return { plans, refused };
 }
 
-/** Title of the document row of an original. */
-export function originalTitle(enablerCode: string, ext: 'docx' | 'pdf') {
+/**
+ * Title of the document row of an original. The title is the key of the row, so it is the
+ * title the PDF import writes for the same file (documents/engine.ts KIND_ROWS): both ways
+ * meet one row and never write two. A whole scenario as a Word file has a title of its own.
+ */
+export function originalTitle(
+  enablerCode: string,
+  ext: 'docx' | 'pdf',
+  kind: OriginalKind = 'enabler'
+) {
+  if (kind === 'scenario') {
+    return `Szenario ${enablerCode} (${ext === 'pdf' ? 'PDF' : 'Word'})`;
+  }
   return `Enabler ${enablerCode}: Lehrtext (Original ${ext === 'pdf' ? 'PDF' : 'Word'})`;
 }
+
+/** The exercise document of a scenario stands behind the teaching texts (as in the PDF import). */
+const SCENARIO_ORDER_INDEX = 100;
 
 const SAFE_NAME = /[^A-Za-z0-9._-]/g;
 
@@ -249,10 +316,11 @@ const SAFE_NAME = /[^A-Za-z0-9._-]/g;
  */
 export function originalStoragePath(
   ownerId: string,
-  plan: Pick<OriginalPlan, 'enablerCode' | 'ext'>,
+  plan: Pick<OriginalPlan, 'enablerCode' | 'ext' | 'kind'>,
   timestamp: number
 ): string | null {
-  const name = `${plan.enablerCode.replace(SAFE_NAME, '_')}_lehrtext.${plan.ext}`;
+  const part = plan.kind === 'scenario' ? 'szenario' : 'lehrtext';
+  const name = `${plan.enablerCode.replace(SAFE_NAME, '_')}_${part}.${plan.ext}`;
   const path = withStoragePrefix(`${ownerId}/${timestamp}_${name}`);
   return documentStoragePath(path, ownerId) === path ? path : null;
 }
@@ -270,11 +338,14 @@ export function toEnablerOriginals(
   for (const plan of plans) {
     const path = originalStoragePath(ownerId, plan, timestamp);
     if (!path) continue;
+    const scenario = plan.kind === 'scenario';
     out.push({
       plan,
       original: {
         enablerCode: plan.enablerCode,
-        title: originalTitle(plan.enablerCode, plan.ext),
+        documentType: scenario ? 'EXERCISE' : 'THEORY',
+        orderIndex: scenario ? SCENARIO_ORDER_INDEX : 0,
+        title: originalTitle(plan.enablerCode, plan.ext, plan.kind),
         fileName: path.slice(path.lastIndexOf('/') + 1),
         fileSize: plan.sizeBytes,
         mimeType: plan.ext === 'pdf' ? PDF_MIME : DOCX_MIME,

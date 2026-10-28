@@ -1,5 +1,6 @@
-// The original PDF of an enabler text can go with the transfer to the document bucket, so the
-// trainees read it in the reader of the enabler page (package OR1, docs/ki-upload-konzept.md 8.5).
+// The original PDF of an enabler text or of a whole scenario can go with the transfer to the
+// document bucket, so the trainees read it in the reader of the enabler page (package OR1 and
+// UP3, docs/ki-upload-konzept.md 8.5). The PDF of a use case is refused by the transfer.
 // The person marks the files in the review list. This module decides which rows can be marked and
 // keeps the mark within the limit. The transfer checks every file again (transfer/originals.ts) and
 // refuses what does not fit, so this is a convenience for the person and no protection.
@@ -14,8 +15,8 @@ export const MAX_ORIGINALS = 25;
 
 /**
  * The rows that can be marked: an accepted PDF that was assigned as the original of an enabler
- * text (type pdf_original with an enabler). Word files are not offered: the reader of the trainees
- * opens PDF files only.
+ * text or of a scenario (type pdf_original with an enabler; the transfer refuses the PDF of a
+ * use case). Word files are not offered: the reader of the trainees opens PDF files only.
  */
 export function originalCandidates(
   rows: readonly ReviewRowDto[]

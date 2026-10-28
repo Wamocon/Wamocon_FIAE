@@ -136,11 +136,16 @@ describe('visibilityOf', () => {
     ]);
   });
 
-  it('keeps the starting situation visible and the solution parts of a scenario for trainers', () => {
+  it('shows a whole scenario to trainees, solution approach and knowledge included', () => {
     expect(visibilityOf('scenario', null)).toEqual({
-      trainee: ['situation'],
-      trainerOnly: ['solution_scenario', 'knowledge_contribution'],
-      originalMayBePublic: false,
+      trainee: [
+        'situation',
+        'task',
+        'solution_scenario',
+        'knowledge_contribution',
+      ],
+      trainerOnly: [],
+      originalMayBePublic: true,
     });
   });
 
@@ -155,6 +160,12 @@ describe('visibilityOf', () => {
   it('judges the original by the type it is a copy of', () => {
     expect(visibilityOf('pdf_original', 'enabler').originalMayBePublic).toBe(
       true
+    );
+    expect(visibilityOf('pdf_original', 'scenario').originalMayBePublic).toBe(
+      true
+    );
+    expect(visibilityOf('pdf_original', 'use_case').originalMayBePublic).toBe(
+      false
     );
     expect(visibilityOf('pdf_original', 'quiz').originalMayBePublic).toBe(
       false

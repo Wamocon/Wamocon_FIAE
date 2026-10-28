@@ -1,12 +1,17 @@
 // Solution protection of the apply step. Pure functions.
 //
 // Solutions of the KfBM content are the correct option of a question and its
-// rationale, the solution of a scenario and the text about how the knowledge
-// contributes to the solution. The app keeps them in columns that trainee
-// routes do not read (options.is_correct, options.explanation of the correct
-// option, content_documents of the type TRAINER_SOLUTION with the visibility
-// TRAINER_ONLY). This module checks, on the plan and on the rows that are
-// about to be written, that no solution reaches a field that a trainee can see.
+// rationale, and the model solution of a use case (use-cases/guard.ts). The app
+// keeps them in columns that trainee routes do not read (options.is_correct,
+// options.explanation of the correct option, content_documents of the type
+// TRAINER_SOLUTION with the visibility TRAINER_ONLY). This module checks, on the
+// plan and on the rows that are about to be written, that no solution reaches a
+// field that a trainee can see.
+//
+// A scenario is no secret since the decision of the owner of 29.10.2026: it is one
+// file, whole, and trainees read all of it (solution approach and knowledge text
+// included, like the scenario documents of FIAE). Its solution parts are no
+// solution texts here. Only the structure of a scenario text is still checked.
 //
 // The check fails closed: a marker word of a solution in a visible text, or a
 // longer solution text inside a visible text, is a leak.
@@ -56,13 +61,35 @@ export const SOLUTION_MARKERS: readonly RegExp[] = Object.freeze([
   /(?:Korrekte[^\S\n]+Antwort|Antwortschl(?:ü|ue)ssel|L(?:ö|oe)sungsvorschlag)[^\S\n]*:/i,
 ]);
 
+/**
+ * The markers that never belong to a whole scenario: the answers and rationales of a quiz
+ * and the model solution and criteria of a use case. A scenario holds its own solution
+ * approach on purpose (Lösungsszenario, Fachwissen zur Lösung, a Lösung heading), so those
+ * markers are left out. The upload uses this list to refuse a file that is typed as a
+ * scenario but is really a quiz or a use case.
+ */
+export const NON_SCENARIO_MARKERS: readonly RegExp[] = Object.freeze([
+  /(?:^|\n)\s*Richtige\s+Antwort\b/i,
+  /Richtige\s+Antwort\s*:/i,
+  /(?:^|\n)\s*Kurzbegr(?:ü|ue)ndung\b/i,
+  /Kurzbegr(?:ü|ue)ndung\s*:/i,
+  /(?:^|\n)[^\S\n]*Musterl(?:ö|oe)sung\b/i,
+  /Musterl(?:ö|oe)sung[^\S\n]*:/i,
+  /(?:^|\n)[^\S\n]*Bewertungskriterien[^\S\n]*(?::[^\S\n]*)?(?:\n|$)/i,
+  /(?:^|\n)[^\S\n]*(?:Korrekte[^\S\n]+Antwort|Antwortschl(?:ü|ue)ssel)\b/i,
+  /(?:Korrekte[^\S\n]+Antwort|Antwortschl(?:ü|ue)ssel)[^\S\n]*:/i,
+]);
+
 /** A solution text must be at least this long to be searched inside others. */
 const MIN_SOLUTION_LENGTH = 20;
 
 const normalize = (text: string) =>
   text.replace(/\s+/g, ' ').trim().toLowerCase();
 
-/** Every solution text of the plan (rationales, scenario solutions). */
+/**
+ * Every solution text of the plan: the rationales of the quizzes. The solution
+ * parts of a scenario are not among them (the whole scenario is public).
+ */
 export function solutionTexts(plan: ImportPlan): string[] {
   const out: string[] = [];
   for (const quiz of plan.quizzes) {
@@ -72,31 +99,17 @@ export function solutionTexts(plan: ImportPlan): string[] {
       }
     }
   }
-  for (const scenario of plan.scenarios) {
-    if (scenario.solution) out.push(scenario.solution);
-    if (scenario.knowledgeContribution) {
-      out.push(scenario.knowledgeContribution);
-    }
-  }
   return out;
 }
 
 /**
- * The long solution texts of the scenarios (solution and knowledge text). A
- * Lehrtext may repeat a sentence of a rationale, because the rationales are
- * taken from it, so only these long texts are searched in descriptions of
- * components, courses and enablers.
+ * The long solution texts that are searched in the descriptions of components,
+ * courses and enablers. A Lehrtext may repeat a sentence of a rationale, because
+ * the rationales are taken from it, so the rationales do not count here. These
+ * were the solution parts of the scenarios, which are public now: nothing is
+ * left, only the marker words of a solution still hold in these fields.
  */
-export function scenarioSolutionTexts(plan: ImportPlan): string[] {
-  const out: string[] = [];
-  for (const scenario of plan.scenarios) {
-    if (scenario.solution) out.push(scenario.solution);
-    if (scenario.knowledgeContribution) {
-      out.push(scenario.knowledgeContribution);
-    }
-  }
-  return out;
-}
+export const LONG_SOLUTION_TEXTS: readonly string[] = Object.freeze([]);
 
 /**
  * Where a visible text shows a solution. `solutions` are the solution texts to
@@ -104,15 +117,19 @@ export function scenarioSolutionTexts(plan: ImportPlan): string[] {
  */
 export function leakOf(
   text: string,
-  solutions: string[],
-  options: { allowBareSolutionLine?: boolean } = {}
+  solutions: readonly string[],
+  options: {
+    allowBareSolutionLine?: boolean;
+    /** The markers to look for, SOLUTION_MARKERS when left out. */
+    markers?: readonly RegExp[];
+  } = {}
 ): string | null {
   const visible = normalize(text);
   if (visible.length === 0) return null;
   // allowBareSolutionLine skips that one marker and no other (an owner review,
   // see leakOfEnablerText). Every other marker and the solution texts stay.
   if (
-    SOLUTION_MARKERS.some(
+    (options.markers ?? SOLUTION_MARKERS).some(
       marker =>
         !(options.allowBareSolutionLine && marker === BARE_SOLUTION_LINE) &&
         marker.test(text)
@@ -133,18 +150,19 @@ export function leakOf(
 /**
  * The check of an enabler text. `reviewed` is true for an enabler whose bare line
  * "Lösung" the owner has checked (a table cell label in the teaching text): then
- * that one pattern is let through, every other marker and every scenario
- * solution still counts. `reviewUsed` tells whether the review was needed, so the
+ * that one pattern is let through, every other marker and every solution text
+ * still counts. `reviewUsed` tells whether the review was needed, so the
  * plan can say so. Only for the enabler text, never for titles, scenarios,
  * quizzes or use cases.
  */
 export function leakOfEnablerText(
   text: string,
-  solutions: string[],
+  solutions: readonly string[],
   reviewed: boolean
 ): { reason: string | null; reviewUsed: boolean } {
   const strict = leakOf(text, solutions);
-  if (strict === null || !reviewed) return { reason: strict, reviewUsed: false };
+  if (strict === null || !reviewed)
+    return { reason: strict, reviewUsed: false };
   const relaxed = leakOf(text, solutions, { allowBareSolutionLine: true });
   return { reason: relaxed, reviewUsed: relaxed === null };
 }
@@ -176,8 +194,8 @@ export function reviewedEnablerCodes(
  * thousands of rationales and tens of thousands of options). Built once per
  * list of solutions.
  */
-const indexCache = new WeakMap<string[], Map<string, string[]>>();
-function needleIndex(solutions: string[]): Map<string, string[]> {
+const indexCache = new WeakMap<readonly string[], Map<string, string[]>>();
+function needleIndex(solutions: readonly string[]): Map<string, string[]> {
   const cached = indexCache.get(solutions);
   if (cached) return cached;
   const index = new Map<string, string[]>();
@@ -196,13 +214,13 @@ function needleIndex(solutions: string[]): Map<string, string[]> {
 /** Problems of the plan: a solution in a field that trainees can see. */
 export function findSolutionLeaks(plan: ImportPlan): string[] {
   const solutions = solutionTexts(plan);
-  const strong = scenarioSolutionTexts(plan);
+  const strong = LONG_SOLUTION_TEXTS;
   const reviewed = reviewedEnablerCodes(plan);
   const problems: string[] = [];
   const check = (
     where: string,
     text: string | null | undefined,
-    against = solutions
+    against: readonly string[] = solutions
   ) => {
     if (!text) return;
     const reason = leakOf(text, against);
@@ -282,8 +300,8 @@ const VISIBLE_COLUMNS: Record<string, string[]> = {
  */
 export function findRowLeaks(
   rows: Record<string, Row[]>,
-  solutions: string[],
-  strong: string[] = solutions,
+  solutions: readonly string[],
+  strong: readonly string[] = solutions,
   reviewedEnablers: ReadonlySet<string> = new Set()
 ): string[] {
   const problems: string[] = [];
@@ -328,21 +346,27 @@ export function findRowLeaks(
     // that hangs on an enabler. The theory documents of a use case belong to the
     // use case import and are not written here.
     const theory = row.document_type === 'THEORY' && row.visibility === 'ALL';
-    if (!trainerOnly && !traineeQuestion && !theory) {
+    // The whole scenario (upload): the exercise document of FIAE, for everyone, at
+    // an enabler. Trainees may read all of it, so it is no solution document. The
+    // task and the model solution of a use case are not part of this.
+    const exercise =
+      row.document_type === 'EXERCISE' && row.visibility === 'ALL';
+    if (!trainerOnly && !traineeQuestion && !theory && !exercise) {
       problems.push(
         'content_documents row has an unexpected type or visibility'
       );
       continue;
     }
-    if (theory && !row.enabler_id) {
-      problems.push('content_documents THEORY row names no enabler');
+    const filed = theory ? 'THEORY' : 'EXERCISE';
+    if ((theory || exercise) && !row.enabler_id) {
+      problems.push(`content_documents ${filed} row names no enabler`);
       continue;
     }
-    if (theory && row.use_case_id) {
-      problems.push('content_documents THEORY row belongs to a use case');
+    if ((theory || exercise) && row.use_case_id) {
+      problems.push(`content_documents ${filed} row belongs to a use case`);
       continue;
     }
-    const traineeSafe = traineeQuestion || theory;
+    const traineeSafe = traineeQuestion || theory || exercise;
     const title = typeof row.title === 'string' ? row.title : '';
     if (leakOf(title, solutions)) {
       problems.push('content_documents.title contains a solution');
