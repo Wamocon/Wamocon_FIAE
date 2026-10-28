@@ -12,7 +12,10 @@ import {
   quizzes,
 } from '@/db/migrations/schemas/schema';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
-import { getEnablerProgression } from '@/lib/catalog/progression-db';
+import {
+  getEnablerProgression,
+  loadGradableQuizIds,
+} from '@/lib/catalog/progression-db';
 import { bestScoresOf, computeQuizChain } from '@/lib/catalog/progression';
 
 // GET: list active quizzes for an enabler visible to the trainee with gating
@@ -110,11 +113,17 @@ export async function GET(
           )
       : [];
     const best = bestScoresOf(subs);
+    // A quiz without a gradable question is not graded automatically and no
+    // prerequisite (see src/lib/catalog/quiz-grading.ts)
+    const gradableIds = await loadGradableQuizIds(
+      active.map(a => String(a.quizId))
+    );
     const chain = computeQuizChain(
       active.map(a => ({
         quizId: String(a.quizId),
         difficulty: a.difficulty,
         quizIsActive: true,
+        gradable: gradableIds.has(String(a.quizId)),
       })),
       best,
       new Set(best.keys())
@@ -129,6 +138,8 @@ export async function GET(
         completed: !!entry?.submitted,
         // the best attempt reached the passing score (otherwise it can be repeated)
         passed: !!entry?.passed,
+        // false: no gradable question, the quiz is stored but not graded
+        autoGraded: gradableIds.has(String(a.quizId)),
       };
     });
 

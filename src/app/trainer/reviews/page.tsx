@@ -1077,7 +1077,11 @@ export default function TrainerReviewsPage() {
                   <div className="text-muted-foreground text-xs">
                     {t('trainer.reviews.score')}
                   </div>
-                  <div className="text-sm">{s.score ?? 0}%</div>
+                  <div className="text-sm">
+                    {s.score === null
+                      ? t('quizGrading.trainerNotGraded')
+                      : `${s.score}%`}
+                  </div>
                 </div>
                 {s.quizType === 'LESSON' && (
                   <div>

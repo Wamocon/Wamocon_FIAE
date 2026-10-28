@@ -2861,5 +2861,13 @@
   "sequenceRule.removed": "Ausgeschaltet.",
   "sequenceRule.failed": "Die Änderung konnte nicht gespeichert werden.",
   "sequenceRule.invalid": "Bitte ein gültiges Datum eingeben.",
+  "quizGrading.notGradedBadge": "Nicht bewertet",
+  "quizGrading.questionNote": "Zu dieser Frage gibt es keine hinterlegte Lösung. Sie wird nicht automatisch bewertet und zählt weder als richtig noch als falsch. Deine Antwort ist gespeichert.",
+  "quizGrading.resultNoteOne": "Eine Frage wurde nicht bewertet. Sie zählt nicht für die Prozentzahl und nicht für das Bestehen.",
+  "quizGrading.resultNoteMany": "{count} Fragen wurden nicht bewertet. Sie zählen nicht für die Prozentzahl und nicht für das Bestehen.",
+  "quizGrading.onlyUngradedTitle": "Dieses Quiz wird nicht automatisch bewertet",
+  "quizGrading.onlyUngradedText": "Zu den Fragen dieses Quiz gibt es keine hinterlegte Lösung. Deine Antworten sind gespeichert und für deinen Ausbilder sichtbar. Es gibt keine Prozentzahl, und das Quiz hält dich nicht auf: Es zählt nicht für den Abschluss des Enablers.",
+  "quizGrading.listBadge": "Nicht automatisch bewertet",
+  "quizGrading.trainerNotGraded": "Nicht bewertet",
   "hai.error.chatUnavailable": "HAI ist gerade nicht erreichbar. Bitte versuche es in ein paar Minuten noch einmal oder wende dich an deinen Trainer."
 }

@@ -20,6 +20,13 @@ import { getUserOrgId } from '@/lib/auth-helpers';
 import { requireContentScopeForUser } from '@/lib/catalog/scope';
 import { requireQuizOpen } from '@/lib/catalog/progression-db';
 import { isQuizPassed } from '@/lib/catalog/progression';
+import {
+  type GradingQuestion,
+  gradableCountOf,
+  isQuestionGradable,
+  quizScore,
+  textAnswerMatches,
+} from '@/lib/catalog/quiz-grading';
 
 /**
  * Ids of the questions that hold a real answer: a selected option, or a text.
@@ -63,6 +70,17 @@ function withholdKey<
     explanation: null,
     correctAnswerText: null,
   }));
+}
+
+/**
+ * What the answer says about the grading: autoGraded is false for a quiz
+ * without any gradable question (it has no score, the answers are only
+ * stored), ungradedCount is the number of questions that stayed out of the
+ * percentage (free text without an expected answer).
+ */
+function gradingSummary(qs: ReadonlyArray<GradingQuestion>) {
+  const gradable = gradableCountOf(qs);
+  return { autoGraded: gradable > 0, ungradedCount: qs.length - gradable };
 }
 
 // POST: submit answers for a quiz attempt
@@ -211,17 +229,17 @@ export async function POST(
         if (qType === 'TEXT') {
           const given = (answerMapText.get(String(q.id)) || '') as string;
           const expected = ((q as any).expectedAnswer || '') as string;
-          const correct = expected
-            ? given.trim().toLowerCase() === expected.trim().toLowerCase()
-            : false;
+          // Without an expected answer the question is not graded
+          const graded = isQuestionGradable(q);
           return {
             questionId: q.id,
-            correct,
+            graded,
+            correct: graded ? textAnswerMatches(given, expected) : false,
             correctOptionId: null,
             explanation: null,
             selectedOptionId: null,
             selectedText: given,
-            correctAnswerText: expected || null,
+            correctAnswerText: graded ? expected : null,
           };
         } else {
           const chosenOptId = answerMapOpt.get(String(q.id));
@@ -233,6 +251,7 @@ export async function POST(
           );
           return {
             questionId: q.id,
+            graded: true,
             correct: !!chosenOpt?.isCorrect,
             correctOptionId: correctOpt?.id,
             explanation: correctOpt?.explanation || null,
@@ -245,6 +264,7 @@ export async function POST(
       return NextResponse.json({
         submissionId: sub.id,
         score: sub.score,
+        ...gradingSummary(qs),
         feedback,
         locked: true,
       });
@@ -303,21 +323,20 @@ export async function POST(
       );
     }
 
+    // Only a question with a solution is graded: a choice question, or a free
+    // text question with an expected answer. A free text question without one
+    // is neither right nor wrong, it stays out of numerator and denominator
+    // (quiz-grading.ts). A quiz without any graded question has no score.
     let correctCount = 0;
     for (const a of normalized) {
       const q = qs.find(qq => String(qq.id) === String(a.questionId));
-      const qType = (q as any)?.questionType || 'MCQ';
-      if (qType === 'TEXT') {
+      if (!q || !isQuestionGradable(q)) continue;
+      if (q.questionType === 'TEXT') {
         const given = (a as any).textAnswer
-          ? String((a as any).textAnswer).trim()
+          ? String((a as any).textAnswer)
           : '';
-        const expected = ((q as any)?.expectedAnswer || '') as string;
-        // If expectedAnswer exists, compare case-insensitively; otherwise non-empty = correct (free-text for manual review)
-        if (expected) {
-          if (given.toLowerCase() === expected.trim().toLowerCase()) correctCount++;
-        } else {
-          if (given.length > 0) correctCount++;
-        }
+        if (textAnswerMatches(given, q.expectedAnswer ?? ''))
+          correctCount++;
       } else {
         const opt = a.selectedOptionId
           ? optMap.get(String(a.selectedOptionId))
@@ -325,7 +344,7 @@ export async function POST(
         if (opt?.isCorrect) correctCount++;
       }
     }
-    const score = Math.round((correctCount / Math.max(1, qs.length)) * 100);
+    const score = quizScore(correctCount, gradableCountOf(qs));
 
     const submission = await db.transaction(async tx => {
       // attempt number auto-increment
@@ -366,17 +385,16 @@ export async function POST(
             ? String((chosen as any).textAnswer)
             : '';
         const expected = ((q as any).expectedAnswer || '') as string;
-        const correct = expected
-          ? given.trim().toLowerCase() === expected.trim().toLowerCase()
-          : given.trim().length > 0;
+        const graded = isQuestionGradable(q);
         return {
           questionId: q.id,
-          correct,
+          graded,
+          correct: graded ? textAnswerMatches(given, expected) : false,
           correctOptionId: null,
           explanation: null,
           selectedOptionId: null,
           selectedText: given,
-          correctAnswerText: ((q as any).expectedAnswer || null) as any,
+          correctAnswerText: graded ? expected : null,
         };
       } else {
         const chosen = normalized.find(
@@ -390,6 +408,7 @@ export async function POST(
         );
         return {
           questionId: q.id,
+          graded: true,
           correct: !!chosenOpt?.isCorrect,
           correctOptionId: correctOpt?.id,
           explanation: correctOpt?.explanation || null,
@@ -414,6 +433,7 @@ export async function POST(
         return NextResponse.json({
           submissionId: submission.id,
           score,
+          ...gradingSummary(qs),
           feedback: shownFeedback,
           locked: false,
         });
@@ -467,6 +487,7 @@ export async function POST(
     return NextResponse.json({
       submissionId: submission.id,
       score,
+      ...gradingSummary(qs),
       feedback: shownFeedback,
       locked: false,
     });
@@ -554,16 +575,16 @@ export async function GET(
       if (qType === 'TEXT') {
         const given = (storedAnswerMapText.get(String(q.id)) || '') as string;
         const expected = ((q as any).expectedAnswer || '') as string;
+        const graded = isQuestionGradable(q);
         return {
           questionId: q.id,
-          correct: expected
-            ? given.trim().toLowerCase() === expected.trim().toLowerCase()
-            : given.trim().length > 0,
+          graded,
+          correct: graded ? textAnswerMatches(given, expected) : false,
           correctOptionId: null,
           explanation: null,
           selectedOptionId: null,
           selectedText: given,
-          correctAnswerText: ((q as any).expectedAnswer || null) as any,
+          correctAnswerText: graded ? expected : null,
         };
       }
       const chosenOptId = answerMap.get(String(q.id));
@@ -575,6 +596,7 @@ export async function GET(
       );
       return {
         questionId: q.id,
+        graded: true,
         correct: !!chosenOpt?.isCorrect,
         correctOptionId: correctOpt?.id,
         explanation: correctOpt?.explanation || null,
@@ -588,6 +610,7 @@ export async function GET(
     return NextResponse.json({
       submissionId: latest.id,
       score: latest.score,
+      ...gradingSummary(qs),
       feedback:
         isGlobalQuiz || isQuizPassed(latest.score)
           ? feedback

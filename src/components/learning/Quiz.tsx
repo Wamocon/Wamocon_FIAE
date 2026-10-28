@@ -33,6 +33,8 @@ export type QuizView = {
 
 type QuestionFeedback = {
   questionId: string;
+  /** false: no solution to grade against, neither right nor wrong */
+  graded?: boolean;
   correct: boolean;
   correctOptionId?: string | null;
   selectedOptionId?: string | null;
@@ -41,7 +43,8 @@ type QuestionFeedback = {
   explanation?: string | null;
 };
 type QuizResult = {
-  score: number;
+  /** null: nothing of the quiz could be graded, there is no percentage */
+  score: number | null;
   locked: boolean;
   feedback: QuestionFeedback[];
 };
@@ -88,7 +91,10 @@ export default function Quiz({ quiz }: QuizProps) {
       if (!res.ok) throw new Error('submit failed');
       const data = await res.json();
       setResult({
-        score: Number(data?.score ?? 0),
+        score:
+          data?.score === null || data?.score === undefined
+            ? null
+            : Number(data.score),
         locked: data?.locked === true,
         feedback: Array.isArray(data?.feedback) ? data.feedback : [],
       });
@@ -117,35 +123,74 @@ export default function Quiz({ quiz }: QuizProps) {
   }
 
   if (result) {
-    const total = quiz.questions.length;
-    const correctCount = result.feedback.filter(f => f.correct).length;
-    const perfect = result.score >= 100;
+    // Questions without a solution stay out of the percentage and the count
+    const gradedFeedback = result.feedback.filter(f => f.graded !== false);
+    const total = gradedFeedback.length;
+    const correctCount = gradedFeedback.filter(f => f.correct).length;
+    const ungradedCount = result.feedback.length - gradedFeedback.length;
+    const notGradedQuiz = result.score === null;
+    const perfect = result.score !== null && result.score >= 100;
     return (
       <div className="mx-auto max-w-3xl space-y-6 p-6">
         <div className="glass-effect border-accent/30 rounded-3xl border p-8 text-center shadow-lg">
           <div
             className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full shadow-xl ${
-              perfect
-                ? 'bg-gradient-to-br from-green-500 to-emerald-500'
-                : 'bg-gradient-to-br from-amber-500 to-orange-500'
+              notGradedQuiz
+                ? 'bg-muted'
+                : perfect
+                  ? 'bg-gradient-to-br from-green-500 to-emerald-500'
+                  : 'bg-gradient-to-br from-amber-500 to-orange-500'
             }`}
           >
-            {perfect ? (
+            {notGradedQuiz ? (
+              <CheckCircle
+                aria-hidden="true"
+                className="text-foreground h-10 w-10"
+              />
+            ) : perfect ? (
               <Award className="h-10 w-10 text-white" />
             ) : (
               <AlertTriangle className="h-10 w-10 text-white" />
             )}
           </div>
-          <h1 className="text-foreground mb-2 text-3xl font-bold">
-            {perfect ? t('quiz.perfectScore') : t('quiz.notPerfectYet')}
-          </h1>
-          <p className="text-foreground text-4xl font-bold">{result.score}%</p>
-          <p className="text-muted mt-2">
-            {t('traineeQuiz.resultSummary', {
-              correct: correctCount,
-              total,
-            })}
-          </p>
+          {notGradedQuiz ? (
+            <div role="status" data-testid="quiz-not-graded">
+              <h1 className="text-foreground mb-2 text-3xl font-bold">
+                {t('quizGrading.onlyUngradedTitle')}
+              </h1>
+              <p className="text-muted mt-2">
+                {t('quizGrading.onlyUngradedText')}
+              </p>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-foreground mb-2 text-3xl font-bold">
+                {perfect ? t('quiz.perfectScore') : t('quiz.notPerfectYet')}
+              </h1>
+              <p className="text-foreground text-4xl font-bold">
+                {result.score}%
+              </p>
+              <p className="text-muted mt-2">
+                {t('traineeQuiz.resultSummary', {
+                  correct: correctCount,
+                  total,
+                })}
+              </p>
+              {ungradedCount > 0 && (
+                <p
+                  data-testid="quiz-ungraded-note"
+                  className="text-muted mt-1 text-sm"
+                >
+                  {t(
+                    ungradedCount === 1
+                      ? 'quizGrading.resultNoteOne'
+                      : 'quizGrading.resultNoteMany',
+                    { count: ungradedCount }
+                  )}
+                </p>
+              )}
+            </>
+          )}
           <div className="mt-4 flex items-center justify-center gap-2 text-sm">
             <span className="text-muted">{t('quiz.attempts')}</span>
             <span className="text-foreground font-semibold">{attempt}</span>
@@ -166,21 +211,29 @@ export default function Quiz({ quiz }: QuizProps) {
             const right = textQuestion
               ? f?.correctAnswerText
               : optionText(f?.correctOptionId);
+            const notGraded = f?.graded === false;
             return (
               <div
                 key={q.id}
                 data-testid="quiz-result-item"
                 className={`rounded-2xl border p-4 ${
-                  f?.correct
-                    ? 'border-green-500/40 bg-green-500/5'
-                    : 'border-red-500/40 bg-red-500/5'
+                  notGraded
+                    ? 'border-accent/40 bg-muted/30'
+                    : f?.correct
+                      ? 'border-green-500/40 bg-green-500/5'
+                      : 'border-red-500/40 bg-red-500/5'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-foreground font-medium">
                     {q.questionText}
                   </p>
-                  {f && (
+                  {f && notGraded && (
+                    <span className="text-foreground border-accent/40 bg-muted/40 shrink-0 rounded border px-2 py-0.5 text-xs font-semibold">
+                      {t('quizGrading.notGradedBadge')}
+                    </span>
+                  )}
+                  {f && !notGraded && (
                     <span
                       className={`flex shrink-0 items-center gap-1 text-sm font-semibold ${
                         f.correct ? 'text-green-600' : 'text-red-600'
@@ -199,10 +252,15 @@ export default function Quiz({ quiz }: QuizProps) {
                     </span>
                   )}
                 </div>
+                {notGraded && (
+                  <p className="text-foreground mt-2 text-sm">
+                    {t('quizGrading.questionNote')}
+                  </p>
+                )}
                 <p className="text-muted mt-2 text-sm">
                   {t('traineeQuiz.yourAnswer')}: {given || t('quiz.noAnswer')}
                 </p>
-                {f && !f.correct && right && (
+                {f && !notGraded && !f.correct && right && (
                   <p className="mt-1 text-sm text-green-700 dark:text-green-400">
                     {t('traineeQuiz.correctAnswer')}: {right}
                   </p>

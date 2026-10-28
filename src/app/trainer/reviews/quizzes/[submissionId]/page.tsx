@@ -130,7 +130,10 @@ export default function QuizSubmissionReviewPage() {
         </h1>
         <div className="text-muted-foreground mt-1 text-sm">
           Trainee: {trainee?.fullName ?? trainee?.email ?? sub.traineeId} •
-          Score: {sub.score ?? 0}%
+          Score:{' '}
+          {sub.score === null
+            ? t('quizGrading.trainerNotGraded')
+            : `${sub.score}%`}
           {quiz?.quizType === 'LESSON' && lesson?.difficulty && (
             <>
               {' '}

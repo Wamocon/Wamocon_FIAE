@@ -228,3 +228,155 @@ describe('lesson quiz on the enabler page', () => {
     );
   });
 });
+
+describe('lesson quiz on the enabler page: questions without a solution', () => {
+  const freeTextQuestion = {
+    quiz: {
+      id: 'q1',
+      title: 'Lesson quiz',
+      difficulty: 'LOW',
+      questions: [
+        {
+          id: 'q-1',
+          questionText: 'Which one?',
+          questionType: 'MCQ',
+          options: [
+            { id: 'o-1', optionText: 'Right' },
+            { id: 'o-2', optionText: 'Wrong' },
+          ],
+        },
+        {
+          id: 'q-2',
+          questionText: 'Explain it',
+          questionType: 'TEXT',
+          options: [],
+        },
+      ],
+    },
+  };
+
+  const run = async (submit: unknown) => {
+    authFetchMock.mockImplementation(async (input: any, init?: any) => {
+      const url = String(input);
+      if (init?.method === 'POST') return json(submit);
+      if (url.includes('/quizzes/LOW')) return json(freeTextQuestion);
+      return json({});
+    });
+    renderWithProviders(<TraineeEnablerPage />);
+    fireEvent.click(tile());
+    await waitFor(() => expect(screen.getAllByRole('radio')).toHaveLength(2));
+    fireEvent.click(screen.getAllByRole('radio')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Weiter|Next/ }));
+    fireEvent.change(screen.getByPlaceholderText('Antwort eingeben...'), {
+      target: { value: 'my text' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Quiz abgeben/ }));
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQueries([
+      {
+        difficulty: 'LOW',
+        quizId: 'q1',
+        title: 'Lesson quiz',
+        unlocked: true,
+        isActive: true,
+        completed: false,
+      },
+    ]);
+  });
+
+  it('mixed: shows the percentage, the note and "Nicht bewertet" at the free text question', async () => {
+    await run({
+      submissionId: 's1',
+      score: 100,
+      locked: false,
+      autoGraded: true,
+      ungradedCount: 1,
+      feedback: [
+        {
+          questionId: 'q-1',
+          graded: true,
+          correct: true,
+          correctOptionId: 'o-1',
+          explanation: null,
+          selectedOptionId: 'o-1',
+        },
+        {
+          questionId: 'q-2',
+          graded: false,
+          correct: false,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: null,
+          selectedText: 'my text',
+          correctAnswerText: null,
+        },
+      ],
+    });
+    expect(await screen.findByText(/Score:/)).toHaveTextContent('100%');
+    expect(screen.getByTestId('quiz-ungraded-note')).toHaveTextContent(
+      'Eine Frage wurde nicht bewertet'
+    );
+    const item = screen.getByTestId('question-not-graded');
+    expect(item).toHaveTextContent('Nicht bewertet');
+    expect(item).toHaveTextContent('keine hinterlegte Lösung');
+  });
+
+  it('only questions without a solution: no percentage, no pass banner, no retry button', async () => {
+    await run({
+      submissionId: 's1',
+      score: null,
+      locked: false,
+      autoGraded: false,
+      ungradedCount: 2,
+      feedback: [
+        {
+          questionId: 'q-1',
+          graded: false,
+          correct: false,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: null,
+          selectedText: 'x',
+          correctAnswerText: null,
+        },
+        {
+          questionId: 'q-2',
+          graded: false,
+          correct: false,
+          correctOptionId: null,
+          explanation: null,
+          selectedOptionId: null,
+          selectedText: 'my text',
+          correctAnswerText: null,
+        },
+      ],
+    });
+    const box = await screen.findByTestId('quiz-not-graded');
+    expect(box).toHaveAttribute('role', 'status');
+    expect(box).toHaveTextContent('Dieses Quiz wird nicht automatisch bewertet');
+    expect(screen.queryByText(/Score:/)).toBeNull();
+    expect(screen.queryByText(/Nicht bestanden/)).toBeNull();
+    expect(screen.queryByText(/Bestanden/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Quiz wiederholen/ })).toBeNull();
+  });
+
+  it('the tile of a quiz that is not graded automatically says so instead of "retry"', async () => {
+    mockQueries([
+      {
+        difficulty: 'LOW',
+        quizId: 'q1',
+        title: 'Lesson quiz',
+        unlocked: true,
+        isActive: true,
+        completed: true,
+        autoGraded: false,
+      } as any,
+    ]);
+    renderWithProviders(<TraineeEnablerPage />);
+    expect(tile()).toHaveTextContent('Nicht automatisch bewertet');
+    expect(tile()).not.toHaveTextContent('Wiederholung möglich');
+  });
+});

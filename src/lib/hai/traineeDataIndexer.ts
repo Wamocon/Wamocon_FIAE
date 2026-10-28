@@ -489,7 +489,9 @@ async function buildTraineeProgressText(
       lines.push(``, `## Letzte Quiz-Ergebnisse:`);
       for (const q of latestQuizzes as any[]) {
         const date = new Date(q.submitted_at).toLocaleDateString('de-DE');
-        lines.push(`- ${q.quiz_title}: ${q.score}% (${date})`);
+        // a quiz without a score was not graded automatically
+        const shown = q.score === null ? 'nicht bewertet' : `${q.score}%`;
+        lines.push(`- ${q.quiz_title}: ${shown} (${date})`);
       }
     }
 

@@ -434,7 +434,9 @@ export async function fetchTraineeProgress(userId: string): Promise<CourseProgre
             `);
 
             const latestScore = (latestQuiz as any[]).length > 0
-                ? Number((latestQuiz as any[])[0].score)
+                ? ((latestQuiz as any[])[0].score === null
+                    ? null
+                    : Number((latestQuiz as any[])[0].score))
                 : null;
 
             // Find next incomplete enabler

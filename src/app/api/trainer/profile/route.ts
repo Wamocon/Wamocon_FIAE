@@ -216,7 +216,10 @@ export async function GET(req: NextRequest) {
           userFullName: userMap.get(q.traineeId) || 'Azubi',
           activityType: 'QUIZ_SUBMITTED',
           createdAt: q.createdAt,
-          details: `Quiz abgegeben (${q.score ?? 0}%)`,
+          details:
+            q.score === null || q.score === undefined
+              ? 'Quiz abgegeben (nicht bewertet)'
+              : `Quiz abgegeben (${q.score}%)`,
         });
       });
 
