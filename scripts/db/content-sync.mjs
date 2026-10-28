@@ -17,6 +17,13 @@
 // A copied column that is a foreign key to a user table (profiles, organizations,
 // auth.*) needs a remap rule, otherwise the sync aborts.
 //
+// Activation state: a table may list "withheldFromPublic" columns (is_active,
+// is_published, activated_at). Towards public (Production) they are never
+// written, so a row that arrives there takes the column default (inactive, not
+// published) and an existing row keeps its state. Switching content on in
+// Production is a decision of the owner, never a side effect of a copy.
+// Towards public_preview the columns are copied as listed.
+//
 // Update mode: --update never (default) only inserts. --update configured applies
 // the per-table "update" setting of the allowlist (newer, always, never). The
 // release workflow always runs with never; configured is only started by hand.
@@ -69,6 +76,8 @@ export const DIRECTIONS = {
   'production-to-preview': ['public', 'public_preview'],
 };
 const ALLOWED_SCHEMAS = ['public', 'public_preview'];
+// The schema of Production: the activation state is never written into it
+const PRODUCTION_SCHEMA = 'public';
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 const ON_MISSING = ['skip', 'null', 'owner'];
 const UPDATE_MODES = ['always', 'newer', 'never'];
@@ -163,6 +172,15 @@ export function validateConfig(config) {
       errors.push(`${where}: update must be one of ${UPDATE_MODES.join(', ')}`);
     }
     if (
+      t.withheldFromPublic !== undefined &&
+      (!Array.isArray(t.withheldFromPublic) ||
+        !t.withheldFromPublic.every(c => IDENT.test(c)))
+    ) {
+      errors.push(
+        `${where}: withheldFromPublic must be a list of column names`
+      );
+    }
+    if (
       t.catalogKey !== undefined &&
       (!Array.isArray(t.catalogKey) ||
         t.catalogKey.length === 0 ||
@@ -194,6 +212,24 @@ export function validateConfig(config) {
       for (const c of Object.keys(t.remap ?? {})) {
         if (!t.columns.includes(c)) {
           errors.push(`${where}: remap column ${c} is not in columns`);
+        }
+      }
+      for (const c of Array.isArray(t.withheldFromPublic)
+        ? t.withheldFromPublic
+        : []) {
+        if (!t.columns.includes(c)) {
+          errors.push(
+            `${where}: withheldFromPublic column ${c} is not in columns`
+          );
+        }
+        if (
+          (t.key ?? []).includes(c) ||
+          (t.catalogKey ?? []).includes(c) ||
+          c in (t.remap ?? {})
+        ) {
+          errors.push(
+            `${where}: withheldFromPublic column ${c} is part of a key or a remap`
+          );
         }
       }
       for (const c of t.columns) {
@@ -407,11 +443,16 @@ export function buildScript({
     }
     const dstByName = new Map(dstCols.map(c => [c.name, c]));
     const allowed = new Set(t.columns);
+    // The activation state is never written into Production (see the header)
+    const withheld = new Set(
+      to === PRODUCTION_SCHEMA ? (t.withheldFromPublic ?? []) : []
+    );
     // A run limited to one occupation may use another key (with the stable code)
     const key = catalog && t.catalogKey ? t.catalogKey : t.key;
     const common = srcCols.filter(
       c =>
         allowed.has(c.name) &&
+        !withheld.has(c.name) &&
         dstByName.has(c.name) &&
         !c.generated &&
         !dstByName.get(c.name).generated
@@ -604,6 +645,42 @@ export function buildScript({
   return { sql, tables: [...planned.keys()], notes, errors };
 }
 
+/** True when a table of the allowlist falls back to the owner profile. */
+function ownerNeeded(config) {
+  return config.tables.some(t =>
+    Object.values(t.remap ?? {}).some(r => r.onMissing === 'owner')
+  );
+}
+
+/**
+ * The creator of a copied row that cannot be matched by e-mail falls back to
+ * the owner profile (CONTENT_SYNC_OWNER_EMAIL). Without a matching owner such
+ * a row is skipped, and with it everything below it (enablers, quizzes,
+ * documents), without an error. So a configured owner that does not exist in
+ * the target is an error, and a missing owner is a loud warning.
+ * @returns {{ errors: string[], warnings: string[] }}
+ */
+export function ownerCheck({ config, ownerEmail, ownerFound, to }) {
+  if (!ownerNeeded(config)) return { errors: [], warnings: [] };
+  if (!ownerEmail) {
+    return {
+      errors: [],
+      warnings: [
+        'CONTENT_SYNC_OWNER_EMAIL is not set: rows whose creator cannot be matched by e-mail are skipped, and with them the enablers, quizzes and documents below them. Set the variable before an apply.',
+      ],
+    };
+  }
+  if (!ownerFound) {
+    return {
+      errors: [
+        `The owner e-mail (CONTENT_SYNC_OWNER_EMAIL or --owner-email) matches no profile in ${to}.profiles, so rows with an unknown creator would be skipped silently. Check the address.`,
+      ],
+      warnings: [],
+    };
+  }
+  return { errors: [], warnings: [] };
+}
+
 /** Reads the JSON report out of the error message of a rolled back dry run. */
 export function parseReport(message) {
   const at = message.indexOf(REPORT_MARKER);
@@ -730,6 +807,17 @@ function main() {
     if (!['never', 'configured'].includes(updateMode))
       throw new Error('--update must be never or configured');
     const { meta, fks } = loadMeta(target, config, from, to);
+    const ownerFound =
+      ownerEmail && ownerNeeded(config)
+        ? Number(
+            query(
+              target,
+              `select count(*) as n from ${ident(to)}.profiles where lower(email) = lower(${q(ownerEmail)})`
+            )[0]?.n
+          ) > 0
+        : false;
+    const owner = ownerCheck({ config, ownerEmail, ownerFound, to });
+    if (owner.errors.length > 0) throw new Error(owner.errors.join('\n'));
     const only = argValue(args, '--only')?.split(',') ?? null;
     const catalog = args.includes('--catalog')
       ? parseCatalogCode(argValue(args, '--catalog'))
@@ -751,10 +839,7 @@ function main() {
         `Content sync refused:\n${dry.errors.map(e => `  - ${e}`).join('\n')}`
       );
     for (const n of dry.notes) say(`Note: ${n}`);
-    if (!ownerEmail)
-      say(
-        'Note: no owner email, rows whose creator cannot be matched are skipped.'
-      );
+    for (const w of owner.warnings) say(`WARNING: ${w}`);
     say(
       `Content sync ${from} -> ${to} (${dry.tables.length} tables${catalog ? `, catalog ${catalog} only` : ''}, ${apply ? 'apply' : 'dry run'}, update mode: ${updateMode === 'never' ? 'never, insert only' : 'configured per table'})`
     );

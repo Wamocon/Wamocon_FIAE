@@ -1,5 +1,5 @@
 {
-  "$comment": "Allowlist for scripts/db/content-sync.mjs. ONLY training content (curriculum, courses, enablers, use cases, quizzes) is ever synchronised between public_preview and public. Never user data: no profiles, organizations, submissions, progress, certificates, evaluations, notifications, hai_embeddings. The order follows the foreign keys (parents first). key = columns that identify a row across both schemas (stable keys); until the stable code columns exist, the keys marked status=provisional are natural keys. columns = the explicit list of columns that are copied; a column that is not listed is never copied (is_indexed_by_hai is deliberately missing). A listed column that is a foreign key to a user table (profiles, organizations, auth) needs a remap rule, otherwise the sync aborts. remap translates a foreign key column through the key of the parent table (the ids differ between the schemas). lookups = tables that are only READ to translate ids (matched by email or slug), their rows are never copied. update: always | newer | never, only used with --update configured (the release run always uses --update never, i.e. insert only). optional=true: the table may be missing in one schema (created by a migration of another branch), it is then skipped with a note. catalogScope = how a row is assigned to a training catalog for a run limited to one occupation (--catalog <CODE>): self (the catalog table, column = code), column (the table has the catalog column) or parents (the row belongs to the catalog of a parent row, listed as column + table, nested up to a table with the column; any parent counts). catalogKey = the key of such a run (with the stable code); without --catalog it is ignored and key is used. A table without catalogScope is skipped in a run with --catalog.",
+  "$comment": "Allowlist for scripts/db/content-sync.mjs. ONLY training content (curriculum, courses, enablers, use cases, quizzes) is ever synchronised between public_preview and public. Never user data: no profiles, organizations, submissions, progress, certificates, evaluations, notifications, hai_embeddings. The order follows the foreign keys (parents first). key = columns that identify a row across both schemas (stable keys); until the stable code columns exist, the keys marked status=provisional are natural keys. columns = the explicit list of columns that are copied; a column that is not listed is never copied (is_indexed_by_hai is deliberately missing). A listed column that is a foreign key to a user table (profiles, organizations, auth) needs a remap rule, otherwise the sync aborts. remap translates a foreign key column through the key of the parent table (the ids differ between the schemas). lookups = tables that are only READ to translate ids (matched by email or slug), their rows are never copied. update: always | newer | never, only used with --update configured (the release run always uses --update never, i.e. insert only). optional=true: the table may be missing in one schema (created by a migration of another branch), it is then skipped with a note. catalogScope = how a row is assigned to a training catalog for a run limited to one occupation (--catalog <CODE>): self (the catalog table, column = code), column (the table has the catalog column) or parents (the row belongs to the catalog of a parent row, listed as column + table, nested up to a table with the column; any parent counts). catalogKey = the key of such a run (with the stable code); without --catalog it is ignored and key is used. A table without catalogScope is skipped in a run with --catalog. withheldFromPublic = columns that carry the activation state (is_active, is_published, activated_at): they are never written into public (Production), so a new row starts with the column default (inactive, not published) and an existing row keeps its state; towards public_preview they are copied. The learning fields and their mappings are NOT the views lernfelder and lernfeld_mappings (compatibility views since 20261024000500, an insert into them would write twice) but the tables training_catalog_learning_fields and training_catalog_content_mappings.",
   "version": 1,
   "lookups": {
     "profiles": {
@@ -110,6 +110,7 @@
         "code",
         "training_component_id"
       ],
+      "withheldFromPublic": ["is_active", "is_published"],
       "status": "provisional",
       "note": "The key stays the natural key for a run without --catalog (FIAE courses have no code). A run with --catalog uses the stable code per catalog.",
       "remap": {
@@ -150,6 +151,7 @@
         "updated_at",
         "code"
       ],
+      "withheldFromPublic": ["is_active", "activated_at"],
       "status": "provisional",
       "remap": {
         "course_id": {
@@ -187,6 +189,7 @@
         "code",
         "enabler_id"
       ],
+      "withheldFromPublic": ["is_active", "activated_at"],
       "status": "provisional",
       "remap": {
         "course_id": {
@@ -294,6 +297,7 @@
         "training_catalog_id",
         "training_component_id"
       ],
+      "withheldFromPublic": ["is_active"],
       "status": "provisional",
       "remap": {
         "created_by_id": {
@@ -412,42 +416,6 @@
             "table": "questions"
           }
         ]
-      }
-    },
-    {
-      "name": "lernfelder",
-      "key": ["code"],
-      "columns": [
-        "code",
-        "title",
-        "description",
-        "training_year",
-        "hours_budget",
-        "is_common",
-        "order_index",
-        "created_at"
-      ],
-      "status": "provisional",
-      "note": "schema.ts defines pgTable('lernfelder') twice (lernfelder with code, lernfelderSchema with label). The first definition (code) is assumed."
-    },
-    {
-      "name": "lernfeld_mappings",
-      "key": ["lernfeld_id", "enabler_id", "use_case_id"],
-      "columns": ["lernfeld_id", "enabler_id", "use_case_id", "created_at"],
-      "status": "provisional",
-      "remap": {
-        "lernfeld_id": {
-          "table": "lernfelder",
-          "onMissing": "skip"
-        },
-        "enabler_id": {
-          "table": "enablers",
-          "onMissing": "skip"
-        },
-        "use_case_id": {
-          "table": "use_cases",
-          "onMissing": "skip"
-        }
       }
     },
     {

@@ -85,7 +85,11 @@ test('without --catalog the new allowlist keys and scope fields change nothing i
   const after = Object.fromEntries(
     realConfig().tables.map(t => [t.name, t.key])
   );
+  // the only tables that left the allowlist are the two compatibility views
+  const removed = Object.keys(before).filter(name => !(name in after));
+  assert.deepEqual(removed.sort(), ['lernfeld_mappings', 'lernfelder']);
   for (const [name, key] of Object.entries(before)) {
+    if (removed.includes(name)) continue;
     assert.deepEqual(after[name], key, name);
   }
   const sql = squash(build(realConfig(), { updateMode: 'never' }).sql);
@@ -188,9 +192,9 @@ test('the run limited to one occupation has a key with code and a scope for ever
   ]) {
     assert.ok(tables[name].catalogScope, `${name} has a catalogScope`);
   }
-  // the legacy tables of the FIAE learning fields are not part of an occupation run
-  assert.ok(!tables.lernfelder.catalogScope);
-  assert.ok(!tables.lernfeld_mappings.catalogScope);
+  // the compatibility views of the FIAE learning fields are not in the allowlist
+  assert.ok(!tables.lernfelder);
+  assert.ok(!tables.lernfeld_mappings);
 });
 
 test('config: catalogScope and catalogKey are validated', () => {
@@ -273,7 +277,13 @@ test('--catalog: the run is built, only allowlist tables, never a delete', () =>
   assert.ok(built.tables.includes('options'));
   assert.ok(!built.tables.includes('lernfelder'));
   assert.ok(!built.tables.includes('lernfeld_mappings'));
-  assert.ok(built.notes.some(n => n.startsWith('lernfelder: skipped')));
+  assert.ok(built.tables.includes('training_catalog_learning_fields'));
+  assert.ok(built.tables.includes('training_catalog_content_mappings'));
+  // every table of the allowlist has a scope, so none is skipped
+  assert.deepEqual(
+    built.notes.filter(n => n.includes('skipped, no catalogScope')),
+    []
+  );
   // (the temporary id maps end with "on commit drop", that is no data change)
   const written = built.sql.replaceAll('on commit drop', '');
   assert.ok(!/\bdelete\b|\btruncate\b|\bdrop\b/i.test(written));
