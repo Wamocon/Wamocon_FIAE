@@ -168,7 +168,8 @@ describe('what leaves the platform', () => {
       temperature: 0,
       top_p: 1,
       stream: false,
-      max_tokens: 300,
+      max_tokens: 400,
+      reasoning_effort: 'none',
     });
     const system = systemText(seen);
     expect(system).toContain(
@@ -619,6 +620,142 @@ describe('a server that fails', () => {
       [KI_STATE_KEY]: 'failed',
       [KI_CODE_KEY]: 'KI_TIMEOUT',
     });
+  });
+
+  it('treats an empty content as an error "answer empty", asks once more, then settles, with no proposal', async () => {
+    // a thinking model that spent the tokens on thinking: content empty, finish length
+    const THOUGHT = 'GEDANKE-4711-NICHT-ANZEIGEN';
+    fake.setHandler((_s, res) =>
+      reply(
+        res,
+        200,
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: 'length',
+              message: {
+                role: 'assistant',
+                content: '',
+                reasoning: JSON.stringify(GOOD_ANSWER) + THOUGHT,
+              },
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 400 },
+        })
+      )
+    );
+    const h = await unclearRun([await ambiguousQuiz()]);
+    await h.pump();
+    // at most one retry: two calls, both logged as failures of the answer
+    expect(fake.requests).toHaveLength(2);
+    expect(h.ctx.ki.calls.map(c => [c.status, c.attempt])).toEqual([
+      ['invalid_json', 1],
+      ['invalid_json', 2],
+    ]);
+    const record = await only(h);
+    expect(record.file.status).toBe('unclear');
+    expect(record.file.parseSummary).toMatchObject({
+      [KI_STATE_KEY]: 'failed',
+      [KI_CODE_KEY]: 'KI_EMPTY',
+    });
+    // no proposal of the model, and the reasoning is nowhere
+    expect(h.ctx.review.proposals.filter(p => p.source === 'ki')).toHaveLength(
+      0
+    );
+    expect(JSON.stringify([h.ctx.ki.calls, record])).not.toContain(THOUGHT);
+    await h.pump();
+    expect(fake.requests).toHaveLength(2);
+  });
+
+  it('uses the answer of the retry when the second try has content', async () => {
+    let n = 0;
+    fake.setHandler((_s, res) =>
+      reply(
+        res,
+        200,
+        n++ === 0
+          ? JSON.stringify({
+              choices: [{ finish_reason: 'length', message: { content: '' } }],
+            })
+          : completion(JSON.stringify(GOOD_ANSWER))
+      )
+    );
+    const h = await unclearRun([await ambiguousQuiz()]);
+    await h.pump();
+    expect(fake.requests).toHaveLength(2);
+    expect((await only(h)).file.status).toBe('proposed_ki');
+  });
+
+  it('ignores the reasoning of a usable answer: it is neither judged nor kept nor shown', async () => {
+    const THOUGHT = 'GEDANKE-4712-NICHT-ANZEIGEN';
+    fake.setHandler((_s, res) =>
+      reply(
+        res,
+        200,
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: {
+                role: 'assistant',
+                content: JSON.stringify(GOOD_ANSWER),
+                // would be a different, valid answer if anything read it
+                reasoning: JSON.stringify({ ...GOOD_ANSWER, komponente: 'K1' }),
+                reasoning_content: THOUGHT,
+              },
+            },
+          ],
+        })
+      )
+    );
+    const h = await unclearRun([await ambiguousQuiz()]);
+    await h.pump();
+    const record = await only(h);
+    expect(record.proposal).toMatchObject({
+      source: 'ki',
+      componentCode: 'K6.2',
+    });
+    expect(
+      JSON.stringify([h.ctx.ki.calls, h.ctx.review.proposals])
+    ).not.toContain(THOUGHT);
+  });
+
+  it('rejects a component field with words around the code, and does not turn text into a code', async () => {
+    fake.setHandler(
+      answers(() => ({
+        ...GOOD_ANSWER,
+        komponente: 'K6.2 (Erfundenes Thema Sechs Zwei)',
+      }))
+    );
+    const h = await unclearRun([await ambiguousQuiz()]);
+    await h.pump();
+    const record = await only(h);
+    expect(record.file.status).toBe('unclear');
+    expect(record.file.parseSummary).toMatchObject({
+      [KI_STATE_KEY]: 'invalid',
+      [KI_CODE_KEY]: 'KI_NOT_IN_LIST',
+    });
+    expect(h.ctx.review.proposals.filter(p => p.source === 'ki')).toHaveLength(
+      0
+    );
+    expect(h.ctx.ki.calls.map(c => c.status)).toEqual(['not_in_whitelist']);
+    // the same answer again would be the same: no retry
+    expect(fake.requests).toHaveLength(1);
+  });
+
+  it('plans its calls inside the limit the queue gives the step, so no call outlives the step', async () => {
+    // the server never answers; the limit of the call is 30 s, the step gets 4 s
+    fake.setHandler(() => undefined);
+    const h = await unclearRun([await ambiguousQuiz()], {
+      limits: { timeoutMs: 30_000 },
+    });
+    const started = Date.now();
+    await h.pump({ rounds: 1, stepTimeoutMs: 4000 }).catch(() => undefined);
+    // the call ended by its own limit (4 s minus a margin) before the step was cut:
+    // it is logged, the file is retried by the step and not by a lost claim
+    expect(h.ctx.ki.calls.map(c => c.status)).toEqual(['timeout']);
+    expect(Date.now() - started).toBeLessThan(4000);
+    expect(h.ctx.ki.calls[0].latencyMs).toBeLessThan(4000);
   });
 
   it('settles at once for an answer that is too large', async () => {

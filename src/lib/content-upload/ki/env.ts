@@ -89,6 +89,7 @@ export function createKiStepEnv(options: KiEnvOptions): KiStepEnv {
         timeoutMs,
         maxResponseBytes: cfg.limits.maxResponseBytes,
         maxTokens: cfg.limits.maxTokens,
+        reasoningEffort: cfg.reasoningEffort,
         fetchImpl: options.fetchImpl,
       });
     },

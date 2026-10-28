@@ -29,6 +29,23 @@ export const DEFAULT_ALLOWED_HOSTS: readonly string[] = Object.freeze([
 /** The model of the chat when the variable is not set (same default as the HAI). */
 export const DEFAULT_MODEL = 'gpt-4o-mini';
 
+/**
+ * How much the model may think before it answers (the request parameter
+ * `reasoning_effort` of the OpenAI compatible endpoint). The models behind Sokrates
+ * think by default and then spend the whole token limit on it: the answer comes back
+ * empty. `none` switches the thinking off. The reasoning the model writes is never
+ * read, kept or shown, whatever the value.
+ */
+export const REASONING_EFFORTS = Object.freeze([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+] as const);
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'none';
+
 export const KI_ENV = Object.freeze({
   enabled: 'CONTENT_UPLOAD_KI_ENABLED',
   baseUrl: 'OPENAI_COMPATIBLE_BASE_URL',
@@ -36,6 +53,7 @@ export const KI_ENV = Object.freeze({
   model: 'OPENAI_COMPATIBLE_MODEL',
   allowedHosts: 'CONTENT_UPLOAD_KI_ALLOWED_HOSTS',
   timeoutMs: 'CONTENT_UPLOAD_KI_TIMEOUT_MS',
+  reasoningEffort: 'CONTENT_UPLOAD_KI_REASONING_EFFORT',
   maxCallsPerRun: 'CONTENT_UPLOAD_KI_MAX_CALLS_PER_RUN',
   maxCallsPerDay: 'CONTENT_UPLOAD_KI_MAX_CALLS_PER_DAY',
 } as const);
@@ -61,7 +79,7 @@ export interface KiLimits {
   timeoutMs: number;
   /** The whole answer of the server, in bytes. */
   maxResponseBytes: number;
-  /** Tokens of the answer (the schema needs about 100). */
+  /** Tokens of the answer (the schema needs about 100, a thinking model more). */
   maxTokens: number;
   /** Calls of one run (all statuses that reached the server). */
   maxCallsPerRun: number;
@@ -78,9 +96,10 @@ export interface KiLimits {
 }
 
 export const DEFAULT_LIMITS: Readonly<KiLimits> = Object.freeze({
-  timeoutMs: 15_000,
+  // the first call of a model that is not loaded yet takes 8 to 10 seconds
+  timeoutMs: 30_000,
   maxResponseBytes: 32 * 1024,
-  maxTokens: 300,
+  maxTokens: 400,
   maxCallsPerRun: 1500,
   maxCallsPerDay: 3000,
   maxCallsPerFile: 3,
@@ -95,8 +114,13 @@ export interface KiConfig {
   /** Only for the Authorization header. Never log it, never store it. */
   apiKey: string;
   model: string;
+  /** Sent as `reasoning_effort`. Never logged. */
+  reasoningEffort: ReasoningEffort;
   limits: KiLimits;
 }
+
+/** The longest time limit of one call that the variable may set, in milliseconds. */
+export const MAX_TIMEOUT_MS = 45_000;
 
 export type KiConfigCode =
   | 'DISABLED'
@@ -197,6 +221,17 @@ function modelOf(raw: string | undefined): string {
 }
 
 /**
+ * The reasoning effort: one of the five known values, else the default. A value that
+ * is not known is dropped without a trace (it is never logged or echoed).
+ */
+export function reasoningEffortOf(raw: string | undefined): ReasoningEffort {
+  const value = (raw ?? '').trim().toLowerCase();
+  return (
+    REASONING_EFFORTS.find(known => known === value) ?? DEFAULT_REASONING_EFFORT
+  );
+}
+
+/**
  * The configuration of the stage from the environment. `ok: false` means the
  * stage does not run, with the reason as a stable code (never the value of a
  * variable).
@@ -222,13 +257,14 @@ export function loadKiConfig(env: Env): KiConfigResult {
       policy,
       apiKey: key,
       model: modelOf(env[KI_ENV.model]),
+      reasoningEffort: reasoningEffortOf(env[KI_ENV.reasoningEffort]),
       limits: {
         ...DEFAULT_LIMITS,
         timeoutMs: intOf(
           env[KI_ENV.timeoutMs],
           DEFAULT_LIMITS.timeoutMs,
           1000,
-          20_000
+          MAX_TIMEOUT_MS
         ),
         maxCallsPerRun: intOf(
           env[KI_ENV.maxCallsPerRun],

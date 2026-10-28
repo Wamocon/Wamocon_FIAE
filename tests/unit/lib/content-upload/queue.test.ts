@@ -5,10 +5,13 @@ import { announceFiles, completeFiles } from '@/lib/content-upload/staging/files
 import {
   DEFAULT_STEPS,
   MAX_ATTEMPTS,
+  MAX_BUDGET_MS,
   MAX_HELD_PER_RUN,
+  MAX_PUMP_MS,
   buildSteps,
   clampBudget,
   pumpRun,
+  stepTimeoutFor,
   verifyMetadataStep,
   type QueueStep,
   type StepContext,
@@ -654,6 +657,90 @@ describe('pumpRun', () => {
       });
       expect(result.retried).toBe(1);
       expect((await statusOf(ctx, run.id, id)).claimId).toBeNull();
+    });
+
+    it('gives a step its own time limit, and an explicit option of the call wins', async () => {
+      const ctx = setup();
+      const run = await newRun(ctx.deps);
+      const [id] = await uploadedFiles(ctx, run.id, 1);
+      const slow: QueueStep = {
+        name: 'slow',
+        from: 'uploaded',
+        timeoutMs: 20,
+        run: () => new Promise(() => undefined),
+      };
+      // no option of the call: the limit of the step ends the attempt
+      const result = await pumpRun(ctx.deps, run.id, { steps: [slow] });
+      expect(result.retried).toBe(1);
+      expect((await statusOf(ctx, run.id, id)).claimId).toBeNull();
+
+      // a step that takes 60 ms is fine under its own limit of 500 ms ...
+      const ctx2 = setup();
+      const run2 = await newRun(ctx2.deps);
+      await uploadedFiles(ctx2, run2.id, 1);
+      const patient: QueueStep = {
+        name: 'patient',
+        from: 'uploaded',
+        timeoutMs: 500,
+        run: () =>
+          new Promise(resolve =>
+            setTimeout(() => resolve({ kind: 'advance', to: 'verified' }), 60)
+          ),
+      };
+      const fine = await pumpRun(ctx2.deps, run2.id, { steps: [patient] });
+      expect(fine.advanced).toBe(1);
+
+      // ... and the option of the call (20 ms) still wins over it
+      const ctx3 = setup();
+      const run3 = await newRun(ctx3.deps);
+      await uploadedFiles(ctx3, run3.id, 1);
+      const cut = await pumpRun(ctx3.deps, run3.id, {
+        steps: [patient],
+        stepTimeoutMs: 20,
+      });
+      expect(cut.retried).toBe(1);
+    });
+
+    it('keeps a long step inside the time of the route: the limit shrinks as the call goes on', () => {
+      expect(stepTimeoutFor(50_000, 0)).toBe(50_000);
+      expect(stepTimeoutFor(50_000, 7_000)).toBe(50_000);
+      expect(stepTimeoutFor(50_000, 8_000)).toBe(MAX_PUMP_MS - 8_000);
+      expect(stepTimeoutFor(50_000, 20_000)).toBe(MAX_PUMP_MS - 20_000);
+      expect(stepTimeoutFor(30_000, 20_000)).toBe(30_000);
+      expect(stepTimeoutFor(50_000, MAX_PUMP_MS)).toBe(1000);
+      expect(stepTimeoutFor(50_000, MAX_PUMP_MS + 5000)).toBe(1000);
+      expect(MAX_PUMP_MS).toBeLessThan(60_000);
+      expect(MAX_BUDGET_MS).toBeLessThan(MAX_PUMP_MS);
+    });
+
+    it('tells the step the limit it really has, so it can plan its waits inside it', async () => {
+      const seen: Array<number | undefined> = [];
+      const make = (timeoutMs?: number): QueueStep => ({
+        name: 'look',
+        from: 'uploaded',
+        timeoutMs,
+        run: async context => {
+          seen.push(context.stepTimeoutMs);
+          return { kind: 'advance', to: 'verified' };
+        },
+      });
+      for (const [step, option] of [
+        [make(50_000), undefined],
+        [make(undefined), undefined],
+        [make(50_000), 5000],
+      ] as const) {
+        const ctx = setup();
+        const run = await newRun(ctx.deps);
+        await uploadedFiles(ctx, run.id, 1);
+        await pumpRun(ctx.deps, run.id, {
+          steps: [step],
+          stepTimeoutMs: option,
+        });
+      }
+      expect(seen[0]).toBeLessThanOrEqual(50_000);
+      expect(seen[0]).toBeGreaterThan(40_000);
+      expect(seen[1]).toBeLessThanOrEqual(30_000);
+      expect(seen[2]).toBe(5000);
     });
 
     it('fails a file with TIMEOUT when its holder died on every attempt', async () => {

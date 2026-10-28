@@ -198,6 +198,22 @@ describe('the prompt', () => {
     expect(p.system).not.toContain('K2');
   });
 
+  it('asks for the code alone in the fields komponente and enabler, in both stages', () => {
+    for (const stage of ['type_component', 'enabler'] as const) {
+      const { system } = buildPrompt({
+        stage,
+        excerpt: 'x',
+        catalog,
+        componentCode: 'K1',
+      });
+      expect(system).toContain(
+        'Das Feld komponente enthält NUR den Komponentencode, zum Beispiel K6.1'
+      );
+      expect(system).toContain('keine Erklärung, keinen Titel');
+      expect(system).toContain('Das Feld enabler enthält NUR den Enablercode');
+    }
+  });
+
   it('asks for JSON only on a second try', () => {
     expect(
       buildPrompt({ stage: 'type_component', excerpt: 'x', catalog }).system

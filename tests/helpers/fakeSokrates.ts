@@ -18,6 +18,7 @@ export interface Seen {
     model?: string;
     messages?: { role: string; content: string }[];
     max_tokens?: number;
+    reasoning_effort?: string;
     temperature?: number;
     top_p?: number;
     stream?: boolean;
@@ -141,7 +142,7 @@ export async function startFakeSokrates(
 export function localConfig(
   fake: Pick<FakeSokrates, 'url'>,
   overrides: Partial<KiConfig['limits']> = {},
-  extra: Partial<Pick<KiConfig, 'apiKey' | 'model'>> = {}
+  extra: Partial<Pick<KiConfig, 'apiKey' | 'model' | 'reasoningEffort'>> = {}
 ): KiConfig {
   return {
     target: {
@@ -151,6 +152,7 @@ export function localConfig(
     policy: { requireHttps: false, allowedHosts: ['127.0.0.1'] },
     apiKey: extra.apiKey ?? 'test-key-NOT-A-SECRET',
     model: extra.model ?? 'test-model',
+    reasoningEffort: extra.reasoningEffort ?? 'none',
     limits: { ...DEFAULT_LIMITS, timeoutMs: 2000, ...overrides },
   };
 }
