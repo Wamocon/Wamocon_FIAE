@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "schluesselwortmethode",
+  "rank": 10,
+  "title": "Schlüsselwortmethode",
+  "effectiveness": "niedrig",
+  "dunlosky": {
+    "technique": "Keyword mnemonic",
+    "utility": "low"
+  },
+  "keywords": [
+    "Eselsbrücke",
+    "Merkhilfe",
+    "englische Fachbegriffe merken",
+    "Vokabeln",
+    "Klangbild"
+  ],
+  "what": "Für ein fremdes Wort suchst du ein ähnlich klingendes bekanntes Wort und verbindest beides in einem Bild. Bei einzelnen Vokabeln kann das helfen, auf anderen Stoff lässt es sich nach der Einschätzung der Forschung nur begrenzt übertragen.",
+  "whenUseful": "Für einzelne fremdsprachige Fachbegriffe, nicht für Zusammenhänge oder Abläufe.",
+  "steps": [
+    "Fremdes Wort und Bedeutung notieren.",
+    "Ein ähnlich klingendes Schlüsselwort finden und ein Bild dazu ausdenken.",
+    "Nach einem Tag das Wort ohne Hilfe abfragen und prüfen, ob das Bild noch trägt."
+  ],
+  "examples": {
+    "FIAE": "Zu \"Queue\" (Warteschlange, gesprochen wie \"Kjuh\") stellst du dir eine Kuh vor, die brav in einer Schlange wartet.",
+    "KFBM": "Zu \"Invoice\" (Rechnung) stellst du dir vor, wie jemand eine Rechnung mit lauter Stimme (\"in Voice\") vorliest."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Dunlosky",
+    "note": "Niedriger Nutzen in der Übersichtsarbeit."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Die Aussage zur begrenzten Übertragbarkeit ist aus dem Gedächtnis formuliert und nicht am Text geprüft."
+  }
+}

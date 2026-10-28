@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "markieren",
+  "rank": 9,
+  "title": "Markieren und Unterstreichen",
+  "effectiveness": "niedrig",
+  "dunlosky": {
+    "technique": "Highlighting and underlining",
+    "utility": "low"
+  },
+  "keywords": [
+    "Text markieren",
+    "Leuchtstift",
+    "unterstreichen",
+    "Wichtiges hervorheben"
+  ],
+  "what": "Du markierst Wichtiges im Text farbig. Das fühlt sich produktiv an, hilft nach der Studienlage aber meist nur wenig, wenn danach nichts weiter damit passiert.",
+  "whenUseful": "Nur als Vorbereitung, um später gezielt Fragen zu formulieren.",
+  "steps": [
+    "Höchstens einen Satz pro Absatz markieren.",
+    "Aus jeder Markierung eine Frage formulieren.",
+    "Die Fragen später ohne Material beantworten."
+  ],
+  "examples": {
+    "FIAE": "Aus den markierten Sätzen zum Thema Datenbanken schreibst du Fragen und beantwortest sie am nächsten Tag ohne Skript.",
+    "KFBM": "Aus den markierten Sätzen zum Thema Vertragsarten schreibst du Fragen und beantwortest sie am nächsten Tag ohne Skript."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Dunlosky",
+    "note": "Niedriger Nutzen in der Übersichtsarbeit."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt."
+  }
+}

@@ -53,6 +53,44 @@ export const QUIZ_QUESTIONS_VISIBILITY: HaiVisibility = 'all';
 /** Answers, explanations and expected answers are trainer level only. */
 export const QUIZ_ANSWERS_VISIBILITY: HaiVisibility = 'trainer';
 
+/**
+ * Source type of the learning technique cards (HAI package B). Platform
+ * knowledge for every trainee and trainer of every occupation: the chunks have
+ * NO occupation (training_catalog_id NULL), visibility 'all' and no
+ * organization. The search matches this source type explicitly (see
+ * buildScopeCondition in vectorSearch.ts); it opens no other source.
+ */
+export const LEARNING_TECHNIQUE_SOURCE_TYPE = 'learning_technique';
+
+/** Source types whose chunks are platform knowledge without an occupation. */
+export const PLATFORM_SOURCE_TYPES: readonly string[] = [
+  LEARNING_TECHNIQUE_SOURCE_TYPE,
+];
+
+export function isPlatformSourceType(
+  sourceType: string | null | undefined
+): boolean {
+  return !!sourceType && PLATFORM_SOURCE_TYPES.includes(sourceType);
+}
+
+/**
+ * Scope of a platform chunk: exactly the one the search expects, otherwise the
+ * writer refuses (a chunk with an occupation or an owner would not match the
+ * platform rule of the search and would be wasted or too narrow).
+ */
+function platformScopeProblem(scope: Partial<IndexScope>): string | null {
+  if (scope.trainingCatalogId !== null) {
+    return 'a platform chunk has no occupation (trainingCatalogId must be null)';
+  }
+  if (scope.visibility !== 'all') {
+    return 'a platform chunk has visibility all';
+  }
+  if (scope.organizationId !== null) {
+    return 'a platform chunk has no organization (organizationId must be null)';
+  }
+  return null;
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isHaiVisibility(value: unknown): value is HaiVisibility {
@@ -65,9 +103,11 @@ export function isHaiVisibility(value: unknown): value is HaiVisibility {
  * show it, so the embedding call would be wasted.
  */
 export function scopeProblem(
-  scope: Partial<IndexScope> | undefined
+  scope: Partial<IndexScope> | undefined,
+  sourceType?: string
 ): string | null {
   if (!scope) return 'scope is missing';
+  if (isPlatformSourceType(sourceType)) return platformScopeProblem(scope);
   if (!scope.trainingCatalogId || !UUID.test(scope.trainingCatalogId)) {
     return 'trainingCatalogId is missing or not a uuid';
   }

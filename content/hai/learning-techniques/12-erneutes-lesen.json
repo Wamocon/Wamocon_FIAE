@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "erneutes-lesen",
+  "rank": 12,
+  "title": "Erneutes Lesen",
+  "effectiveness": "niedrig",
+  "dunlosky": {
+    "technique": "Rereading",
+    "utility": "low"
+  },
+  "keywords": [
+    "mehrmals lesen",
+    "Text noch einmal lesen",
+    "durchlesen",
+    "Skript lesen"
+  ],
+  "what": "Du liest denselben Text mehrmals. Das fühlt sich sicher an, weil der Text vertraut wirkt, bringt nach der Studienlage aber wenig, wenn es die einzige Technik bleibt.",
+  "whenUseful": "Höchstens einmal mit zeitlichem Abstand, wenn du den Text beim ersten Mal nicht verstanden hast.",
+  "steps": [
+    "Den Text einmal gründlich lesen.",
+    "Statt des zweiten Lesens das Material schließen und aufschreiben, was du weißt.",
+    "Nur die Lücken gezielt nachlesen."
+  ],
+  "examples": {
+    "FIAE": "Statt das Skript zu Datenbanken ein drittes Mal zu lesen, schreibst du die wichtigsten Begriffe aus dem Kopf auf und liest nur Fehlendes nach.",
+    "KFBM": "Statt die Unterlagen zum Rechnungswesen ein drittes Mal zu lesen, schreibst du die wichtigsten Begriffe aus dem Kopf auf und liest nur Fehlendes nach."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Dunlosky",
+    "note": "Niedriger Nutzen in der Übersichtsarbeit."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt."
+  }
+}

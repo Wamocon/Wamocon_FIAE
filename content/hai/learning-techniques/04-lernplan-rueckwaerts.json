@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "lernplan-rueckwaerts",
+  "rank": 4,
+  "title": "Lernplan rückwärts vom Prüfungstermin",
+  "effectiveness": "hoch",
+  "basedOn": "verteiltes-ueben",
+  "dunlosky": null,
+  "keywords": [
+    "Prüfungstermin",
+    "Klausurtermin",
+    "Zeitplan",
+    "wie viel Zeit",
+    "Lernplan erstellen",
+    "Prüfung in drei Wochen"
+  ],
+  "what": "Du planst vom Termin aus rückwärts: Wie viele Tage bleiben, welche Themen gibt es, welche sind schwer? So entstehen kleine Portionen auf mehreren Tagen statt Lernen in letzter Minute.",
+  "whenUseful": "Sobald ein Klausur- oder Prüfungstermin bekannt ist, am besten mehrere Wochen vorher.",
+  "steps": [
+    "Termin und Themenliste nebeneinanderlegen und einen Puffertag vor dem Termin einplanen.",
+    "Themen auf Lerntage verteilen, schwere Themen früher und häufiger.",
+    "Einmal pro Woche prüfen, ob der Plan zu deinen Ergebnissen aus Quiz und Übungen passt, und ihn anpassen."
+  ],
+  "examples": {
+    "FIAE": "Vor der Klausur in Datenbanken legst du fest: SQL-Grundlagen zweimal pro Woche 25 Minuten, Normalisierung dreimal in den letzten zwei Wochen.",
+    "KFBM": "Vor der Klausur zum Rechnungswesen verteilst du Buchungssätze, Belege und Kennzahlen auf feste Lerntage und planst den letzten Tag nur für Fragen aus deinem Fehlerprotokoll ein."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Eigene Anwendung",
+    "note": "Anwendung des verteilten Übens auf einen Prüfungstermin. Die Anwendung ist nicht Gegenstand der Übersichtsarbeit."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Die Planungsschritte (Puffertag, wöchentliche Prüfung) sind eigene Empfehlungen ohne Beleg."
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "quizfehler-wiederholen",
+  "rank": 3,
+  "title": "Quizfehler gezielt wiederholen",
+  "effectiveness": "hoch",
+  "basedOn": "abrufuebung",
+  "dunlosky": null,
+  "keywords": [
+    "Quizergebnis",
+    "Fehler im Quiz",
+    "Klausur schlecht",
+    "Wiederholungsbedarf",
+    "was soll ich wiederholen",
+    "Lücken finden"
+  ],
+  "what": "Falsch oder unsicher beantwortete Fragen aus Quiz, Klausur oder Selbsttest zeigen am genauesten, wo Wissen noch fehlt. Du übst genau diese Stellen erneut, statt den gesamten Stoff gleichmäßig zu wiederholen.",
+  "whenUseful": "Nach einem Quiz, einer Klausur oder einem Selbsttest, besonders wenn das Ergebnis unter deinen Erwartungen lag oder wenn du eine Auswahl brauchst, was du zuerst wiederholst.",
+  "steps": [
+    "Falsche und unsichere Fragen auflisten.",
+    "Zu jeder Frage die richtige Antwort in eigenen Worten aufschreiben und begründen.",
+    "Nach ein bis zwei Tagen dieselben Punkte ohne Hilfe erneut abfragen (Abrufübung)."
+  ],
+  "examples": {
+    "FIAE": "Beim Quiz zur Normalisierung warst du bei der dritten Normalform unsicher: Du erklärst sie an einem eigenen Beispiel und fragst sie zwei Tage später noch einmal ab.",
+    "KFBM": "Beim Quiz zum Schriftverkehr war dir die Gliederung eines Geschäftsbriefs unklar: Du schreibst sie aus dem Kopf auf und vergleichst sie zwei Tage später erneut mit dem Material."
+  },
+  "source": {
+    "citation": "Dunlosky, J., Rawson, K. A., Marsh, E. J., Nathan, M. J. & Willingham, D. T. (2013). Improving students' learning with effective learning techniques: Promising directions from cognitive and educational psychology. Psychological Science in the Public Interest, 14(1), 4-58.",
+    "basis": "Eigene Anwendung",
+    "note": "Anwendung der Abrufübung auf Quizergebnisse. Die Kombination ist nicht Gegenstand der Übersichtsarbeit."
+  },
+  "review": {
+    "reviewed": false,
+    "status": "Entwurf, ungeprüft gegen Originaltext",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "checked": "Einordnung des Nutzens (hoch, mittel, niedrig) und Zitatdaten gegen öffentliche Zusammenfassungen abgeglichen (Pressemitteilung der Association for Psychological Science 2013, Kent State University, ScienceDaily). Alle Quellen stimmen in der Einordnung überein.",
+    "notChecked": "Der Volltext war nicht lesbar (Verlagsseite lieferte HTTP 403). Nicht geprüft: Begründungen und Bedingungen der Einordnung im Originaltext, Seitenzahlen je Technik. Formulierungen, Schritte und Beispiele sind eigener Text und nicht einzeln belegt. Die Anwendung auf Quizfehler ist nicht von Dunlosky et al. bewertet."
+  }
+}
