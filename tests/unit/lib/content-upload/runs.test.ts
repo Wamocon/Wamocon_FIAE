@@ -43,20 +43,20 @@ describe('parseCreateRunBody', () => {
   it('takes a label, the declaration and the defaults', () => {
     expect(parseCreateRunBody(body())).toEqual({
       ok: true,
-      data: { label: 'KfBM Lehrtexte', kiEnabled: true },
+      data: { label: 'KfBM Lehrtexte', kiEnabled: false },
     });
     expect(
-      parseCreateRunBody(body({ kiEnabled: false, catalog: 'kfbm' }))
+      parseCreateRunBody(body({ kiEnabled: true, catalog: 'kfbm' }))
     ).toEqual({
       ok: true,
-      data: { label: 'KfBM Lehrtexte', kiEnabled: false },
+      data: { label: 'KfBM Lehrtexte', kiEnabled: true },
     });
   });
 
   it('trims the label and removes control and invisible characters', () => {
     expect(parseCreateRunBody(body({ label: '  ‮ab\u0000c​  ' }))).toEqual({
       ok: true,
-      data: { label: 'abc', kiEnabled: true },
+      data: { label: 'abc', kiEnabled: false },
     });
   });
 
@@ -103,7 +103,8 @@ describe('createRun', () => {
     expect(run.createdById).toBe(USER);
     expect(run.trainingCatalogId).toBe('catalog-kfbm');
     expect(run.storagePrefix).toBe(`upload/${run.id}/`);
-    expect(run.kiEnabled).toBe(true);
+    // the opt in for the model stage is off unless the person chose it
+    expect(run.kiEnabled).toBe(false);
     expect(run.declarationAcceptedAt).toBeInstanceOf(Date);
   });
 
@@ -251,7 +252,7 @@ describe('answers do not leak', () => {
       catalog: 'KFBM',
       label: 'A run',
       status: 'draft',
-      kiEnabled: true,
+      kiEnabled: false,
       createdById: USER,
     });
     expect(Object.keys(dto)).not.toContain('storagePrefix');
@@ -298,6 +299,12 @@ describe('getRunWithProgress', () => {
     expect(result.limits).toEqual({
       maxFilesPerRequest: 50,
       maxFileBytes: 25 * 1024 * 1024,
+      maxFileBytesByExt: {
+        docx: 25 * 1024 * 1024,
+        pdf: 25 * 1024 * 1024,
+        json: 32 * 1024 * 1024,
+        xlsx: 5 * 1024 * 1024,
+      },
       maxFilesPerRun: 1500,
       maxRunBytes: 1024 ** 3,
     });

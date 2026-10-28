@@ -90,7 +90,14 @@ export interface PlanComponent {
   orderIndex: number;
   totalWeeks: number;
   totalHours: number;
-  /** True when weeks and hours are placeholders. */
+  /**
+   * Where totalWeeks comes from: the training framework plan
+   * (component-weeks.ts), a decision of the owner, none (the plan prints no
+   * weeks for the component, 0 is the right value) or a placeholder (nobody
+   * named a value). Plans of older runs have no such field.
+   */
+  weeksSource?: 'rahmenplan' | 'decision' | 'none' | 'placeholder';
+  /** True when the weeks or the hours are placeholders. */
   provisionalTotals: boolean;
 }
 
@@ -249,12 +256,45 @@ export interface Difference {
   table: string;
   key: string;
   columns: string[];
+  /**
+   * The columns of this difference that a run writes even without
+   * --update-existing (tables.ts fillWhenEmpty: the value is still empty).
+   */
+  filled?: string[];
 }
 
 export interface TableCount {
   insert: number;
   update: number;
   unchanged: number;
+}
+
+/**
+ * What an engine finds out about one item of a plan when it compares the plan
+ * with the target (the status of a supply of content, docs/ki-upload-konzept.md
+ * section 8.9):
+ *  - new        the row does not exist and is inserted
+ *  - unchanged  the row exists and equals the plan
+ *  - extended   an existing quiz lacks questions that the plan has (added)
+ *  - differs    the row exists and an updatable column differs from the plan
+ *  - conflict   the row exists with another meaning, nothing is written
+ */
+export type ItemStatus =
+  | 'new'
+  | 'unchanged'
+  | 'extended'
+  | 'differs'
+  | 'conflict';
+
+/** One finding of an engine, keyed like the differences and conflicts of its report. */
+export interface ItemEvent {
+  table: string;
+  key: string;
+  status: ItemStatus;
+  /** Questions added to an existing quiz (status extended). */
+  added?: number;
+  /** Existing questions whose position moves on (status extended). */
+  moved?: number;
 }
 
 export interface RunReport {

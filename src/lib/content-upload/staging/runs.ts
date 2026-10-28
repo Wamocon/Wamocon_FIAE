@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import {
   LIMITS,
   UPLOAD_CATALOG_CODE,
+  maxFileBytesFor,
 } from '@/lib/content-upload/staging/config';
 import {
   removePendingObjects,
@@ -159,7 +160,8 @@ export function parseCreateRunBody(
       'CATALOG_UNSUPPORTED'
     );
   }
-  return ok({ label, kiEnabled: input.kiEnabled !== false });
+  // The model stage is an opt in: a run without the choice does not send anything
+  return ok({ label, kiEnabled: input.kiEnabled === true });
 }
 
 export async function createRun(
@@ -233,6 +235,8 @@ export interface RunWithProgress {
   limits: {
     maxFilesPerRequest: number;
     maxFileBytes: number;
+    /** Largest file by kind (docx, pdf, json, xlsx), for the page. */
+    maxFileBytesByExt: Record<string, number>;
     maxFilesPerRun: number;
     maxRunBytes: number;
   };
@@ -249,6 +253,12 @@ export async function getRunWithProgress(
     limits: {
       maxFilesPerRequest: LIMITS.maxFilesPerRequest,
       maxFileBytes: LIMITS.maxFileBytes,
+      maxFileBytesByExt: {
+        docx: maxFileBytesFor('docx'),
+        pdf: maxFileBytesFor('pdf'),
+        json: maxFileBytesFor('json'),
+        xlsx: maxFileBytesFor('xlsx'),
+      },
       maxFilesPerRun: LIMITS.maxFilesPerRun,
       maxRunBytes: LIMITS.maxRunBytes,
     },

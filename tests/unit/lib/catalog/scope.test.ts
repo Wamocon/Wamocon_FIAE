@@ -226,10 +226,86 @@ describe('catalog scope', () => {
         activeCatalogId: FIAE,
         selected: false,
       });
+      // the super admin can also view an inactive catalog (to check content
+      // before the activation), the default stays the active one
       expect(
-        (await getCatalogScope(superAdmin, req({ header: 'KFBM' })))
+        await getCatalogScope(superAdmin, req({ header: 'KFBM' }))
+      ).toEqual({
+        allowedCatalogIds: [FIAE, KFBM],
+        activeCatalogId: KFBM,
+        selected: true,
+      });
+      expect(
+        (await getCatalogScope(superAdmin, req({ query: 'kfbm' })))
           .activeCatalogId
       ).toBe(KFBM);
+      expect(
+        (await getCatalogScope(superAdmin, req({ header: 'FIAE' })))
+          .activeCatalogId
+      ).toBe(FIAE);
+    });
+
+    it.each(['NOPE', "KFBM'--", 'KFBM,FIAE', '%'])(
+      'still refuses the unknown code %p',
+      async code => {
+        const { getCatalogScope } = await load({
+          trainingCatalogs: [
+            { id: FIAE, code: 'FIAE', isActive: true },
+            { id: KFBM, code: 'KFBM', isActive: false },
+          ],
+        });
+        await expect(
+          getCatalogScope(superAdmin, req({ header: code }))
+        ).rejects.toMatchObject({ status: 403 });
+      }
+    );
+  });
+
+  describe('an inactive catalog is never chosen by other roles', () => {
+    it.each([
+      ['trainer', trainer],
+      ['trainee', { ...trainee }],
+    ])(
+      '%s gets 403 for it, also if it is enabled or enrolled',
+      async (_n, who) => {
+        const { getCatalogScope } = await load({
+          trainingCatalogs: [
+            { id: FIAE, code: 'FIAE', isActive: true },
+            { id: KFBM, code: 'KFBM', isActive: false },
+          ],
+          organizationCatalogs: [
+            { trainingCatalogId: FIAE, isEnabled: true },
+            { trainingCatalogId: KFBM, isEnabled: true },
+          ],
+          traineeEnrollments: [
+            { trainingCatalogId: FIAE, startDate: '2026-08-01' },
+            { trainingCatalogId: KFBM, startDate: '2026-09-01' },
+          ],
+        });
+        await expect(
+          getCatalogScope(who, req({ header: 'KFBM' }))
+        ).rejects.toMatchObject({ status: 403 });
+        const scope = await getCatalogScope(who, req());
+        expect(scope.allowedCatalogIds).toEqual([FIAE]);
+      }
+    );
+
+    it('chooses an active catalog with the header or the query', async () => {
+      const { getCatalogScope } = await load({ trainingCatalogs: catalogRows });
+      expect(
+        await getCatalogScope(superAdmin, req({ header: 'kfbm' }))
+      ).toEqual({
+        allowedCatalogIds: [FIAE, KFBM],
+        activeCatalogId: KFBM,
+        selected: true,
+      });
+      expect(
+        (await getCatalogScope(superAdmin, req({ query: 'KFBM' })))
+          .activeCatalogId
+      ).toBe(KFBM);
+      await expect(
+        getCatalogScope(superAdmin, req({ query: 'NOPE' }))
+      ).rejects.toMatchObject({ status: 403 });
     });
   });
 

@@ -226,6 +226,7 @@ const OWN_CHECK: Entry[] = [
       ['GET', 'trainer/content-upload/runs/[runId]/review/duplicates'],
       ['POST', 'trainer/content-upload/runs/[runId]/decisions'],
       ['POST', 'trainer/content-upload/runs/[runId]/dry-run'],
+      ['POST', 'trainer/content-upload/runs/[runId]/stock'],
       ['POST', 'trainer/content-upload/runs/[runId]/apply'],
       ['GET', 'trainer/content-upload/runs/[runId]/rollback-sql'],
       ['POST', 'trainer/content-upload/runs/[runId]/reopen'],

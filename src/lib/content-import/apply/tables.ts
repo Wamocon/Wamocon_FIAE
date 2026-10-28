@@ -29,6 +29,12 @@ export interface TableSpec {
    * (is_active, ids, authors, storage columns) is never overwritten.
    */
   updatable: readonly string[];
+  /**
+   * Columns of `updatable` that are also written without --update-existing
+   * where the value of the existing row is still empty (null or 0) and the plan
+   * names a positive number. A plan value of 0 or null never writes.
+   */
+  fillWhenEmpty?: readonly string[];
   /** Columns of the type uuid (for array comparisons). */
   uuid: readonly string[];
   /** The table has an updated_at column that an update refreshes. */
@@ -49,7 +55,17 @@ export const TABLES: Record<TableName, TableSpec> = {
       'kind',
       'order_index',
     ],
-    updatable: ['title', 'description', 'phase', 'kind', 'order_index'],
+    // total_weeks: only the weeks, never total_hours (the training framework
+    // plan has no hours, the owner decides them).
+    updatable: [
+      'title',
+      'description',
+      'total_weeks',
+      'phase',
+      'kind',
+      'order_index',
+    ],
+    fillWhenEmpty: ['total_weeks'],
     uuid: ['id', 'training_catalog_id'],
     touch: false,
   },
@@ -181,11 +197,15 @@ export const TABLES: Record<TableName, TableSpec> = {
       'description_text',
       'order_index',
       'is_active',
+      'lernfelder',
     ],
     // The course, the enabler link, the code and the activation are part of
     // the identity of a use case, only the visible texts and the position are
     // updated. The solution texts are not here: they live in content_documents.
-    updatable: ['title', 'description_text', 'order_index'],
+    // lernfelder (text[], the codes of the learning fields the use case belongs
+    // to) is what the learning field pages read. Only the learning field import
+    // writes it, and only by adding codes.
+    updatable: ['title', 'description_text', 'order_index', 'lernfelder'],
     uuid: ['id', 'course_id', 'training_catalog_id', 'enabler_id'],
     touch: true,
   },
@@ -199,9 +219,10 @@ export const TABLES: Record<TableName, TableSpec> = {
       'hours_budget',
       'order_index',
     ],
-    // Only the title and the hours (official time guideline) are updated. The
-    // school year and the order are part of the identity of a learning field.
-    updatable: ['title', 'hours_budget'],
+    // Only the title, the description and the hours (official time guideline)
+    // are updated. The school year and the order are part of the identity of a
+    // learning field.
+    updatable: ['title', 'description', 'hours_budget'],
     uuid: ['id', 'training_catalog_id'],
     touch: true,
   },

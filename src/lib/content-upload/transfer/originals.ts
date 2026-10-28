@@ -167,7 +167,9 @@ export async function evaluateOriginals(
       continue;
     }
     const enablerCode = enablerOfOriginal(file);
-    if (!enablerCode) {
+    // only a Word file or a PDF can be an original (a JSON or Excel file never is)
+    const ext = file.ext === 'docx' || file.ext === 'pdf' ? file.ext : null;
+    if (!enablerCode || !ext) {
       refused.push({
         fileId: id,
         code: 'NOT_AN_ENABLER_TEXT',
@@ -184,7 +186,7 @@ export async function evaluateOriginals(
       });
       continue;
     }
-    if (file.ext === 'docx' && !input.plannedFileIds.has(file.id)) {
+    if (ext === 'docx' && !input.plannedFileIds.has(file.id)) {
       refused.push({
         fileId: id,
         code: 'NOT_IN_PLAN',
@@ -192,7 +194,7 @@ export async function evaluateOriginals(
       });
       continue;
     }
-    const slot = `${enablerCode}:${file.ext}`;
+    const slot = `${enablerCode}:${ext}`;
     if (taken.has(slot)) {
       refused.push({
         fileId: id,
@@ -215,7 +217,7 @@ export async function evaluateOriginals(
       });
       continue;
     }
-    const check = await checkOriginalBytes(file.ext, bytes, input.solutions);
+    const check = await checkOriginalBytes(ext, bytes, input.solutions);
     if (!check.ok) {
       refused.push({ fileId: id, code: check.code, reason: check.reason });
       continue;
@@ -225,7 +227,7 @@ export async function evaluateOriginals(
       fileId: id,
       sha256: file.sha256,
       enablerCode,
-      ext: file.ext,
+      ext,
       sizeBytes: file.sizeBytes,
       pageCount: check.pageCount,
     });

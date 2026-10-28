@@ -578,7 +578,7 @@ describe('the whole flow: run, announce, upload, report, process', () => {
           entryFor('K1/Enabler/a.pdf', good),
           entryFor('K1/Quiz/b.docx', doc),
           entryFor('Kopie/a.pdf', same),
-          entryFor('K1/Tabelle.xlsx', good),
+          entryFor('K1/Tabelle.csv', good),
         ],
       },
     });
@@ -996,14 +996,14 @@ describe('every handler of the content upload checks the session, then the switc
 
   const files = walk(base);
 
-  it('finds the seventeen route files with their twenty handlers', () => {
-    expect(files).toHaveLength(17);
+  it('finds the eighteen route files with their twenty one handlers', () => {
+    expect(files).toHaveLength(18);
     const handlers = files.flatMap(f => [
       ...fs
         .readFileSync(f, 'utf8')
         .matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g),
     ]);
-    expect(handlers).toHaveLength(20);
+    expect(handlers).toHaveLength(21);
   });
 
   it.each(

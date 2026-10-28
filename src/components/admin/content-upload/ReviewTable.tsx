@@ -2,7 +2,10 @@
 
 import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { DECIDABLE } from '@/lib/content-upload/review/states';
+import {
+  DECIDABLE,
+  UNCHECKED_REASONS,
+} from '@/lib/content-upload/review/states';
 import type {
   AssignmentDto,
   DecisionAction,
@@ -11,12 +14,15 @@ import type {
   SortKey,
 } from '@/lib/content-upload/review/types';
 import { BandBadge } from '@/components/admin/content-upload/BandBadge';
+import { StockBadge } from '@/components/admin/content-upload/StockBadge';
+import { KiBadge } from '@/components/admin/content-upload/KiBadge';
 import {
   KIND_KEYS,
   fileCodeLabel,
   formatBytes,
   formatDate,
   levelLabel,
+  kiStateLabel,
   sourceLabel,
   statusLabel,
   typeLabel,
@@ -44,21 +50,45 @@ export function describeAssignment(t: Translate, a: AssignmentDto): string {
 }
 
 /**
+ * What a row stands for: "Enabler-Quizze (JSON), 12 Quizze, 36 Sätze, 360 Fragen" for a
+ * quiz file, "Lernfeld-Zuordnung (Excel), 71 Positionen" for the mapping table. A Word or
+ * PDF row has no contents and is described by its assignment.
+ */
+export function describeContents(
+  t: Translate,
+  contents: NonNullable<ReviewRowDto['contents']>
+): string {
+  const n = contents.numbers;
+  if (contents.kind === 'mapping_xlsx') {
+    return `${t('contentUpload.contents.mapping_xlsx')}, ${t(
+      'contentUpload.contents.mapping_xlsx.counts',
+      { positions: n.positions ?? 0, blocks: n.blocks ?? 0 }
+    )}`;
+  }
+  const head = t(
+    contents.variant === 'global'
+      ? 'contentUpload.contents.quiz_json.global'
+      : 'contentUpload.contents.quiz_json.lesson'
+  );
+  return `${head}, ${t('contentUpload.contents.quiz_json.counts', {
+    quizzes: n.quizzes ?? 0,
+    sets: n.sets ?? 0,
+    questions: n.questions ?? 0,
+  })}`;
+}
+
+/**
  * Reasons that say the content was not checked with full certainty: such a
  * proposal is not taken as it stands either (the same list as the route has).
  */
-const UNCHECKED_REASONS: ReadonlySet<string> = new Set([
-  'SOLUTION_MARKER',
-  'CONTENT_UNREADABLE',
-  'INPUT_TRUNCATED',
-  'ARCHIVE_ABOVE_TREE',
-]);
 
 /** The proposal is taken as it stands only in the band high or medium without such a reason (as the route does). */
 export function canAcceptAsProposed(row: ReviewRowDto): boolean {
   if (row.decision?.action === 'accept') return true;
   const proposal = row.proposal;
   if (!proposal) return false;
+  // a proposal of the model needs a person who names the assignment (as the route says)
+  if (proposal.source === 'ki') return false;
   if (proposal.band !== 'high' && proposal.band !== 'medium') return false;
   return !proposal.reasons.some(r => UNCHECKED_REASONS.has(r.code));
 }
@@ -83,7 +113,7 @@ type Props = {
   onOpenDuplicate: (key: string) => void;
 };
 
-const COLUMNS = 6;
+const COLUMNS = 7;
 
 export function ReviewTable({
   rows,
@@ -161,6 +191,9 @@ export function ReviewTable({
             </th>
             <th scope="col" aria-sort={ariaSort('band')} className="px-3 py-3">
               {sortButton('band', t('contentUpload.col.confidence'))}
+            </th>
+            <th scope="col" className="px-3 py-3 font-semibold">
+              {t('contentUpload.col.stock')}
             </th>
             <th scope="col" className="px-3 py-3 font-semibold">
               {t('contentUpload.col.decision')}
@@ -247,7 +280,11 @@ function Row({
   ]
     .filter(Boolean)
     .join(', ');
-  const proposalText = row.proposal ? describeAssignment(t, row.effective) : '';
+  const proposalText = row.proposal
+    ? row.contents
+      ? describeContents(t, row.contents)
+      : describeAssignment(t, row.effective)
+    : '';
   const decisionValue = row.decision?.action ?? '';
 
   return (
@@ -309,7 +346,7 @@ function Row({
             )}
             {row.status === 'unclear' && (
               <div className="text-muted text-xs">
-                {t('contentUpload.notSent')}
+                {row.ki ? kiStateLabel(t, row.ki) : t('contentUpload.notSent')}
               </div>
             )}
           </>
@@ -338,7 +375,15 @@ function Row({
         )}
       </td>
       <td className="px-3 py-3">
-        {row.proposal ? sourceLabel(t, row.proposal.source) : ''}
+        {row.proposal ? (
+          row.proposal.source === 'ki' ? (
+            <KiBadge />
+          ) : (
+            sourceLabel(t, row.proposal.source)
+          )
+        ) : (
+          ''
+        )}
       </td>
       <td className="px-3 py-3">
         {row.proposal ? (
@@ -346,6 +391,13 @@ function Row({
             band={row.proposal.band}
             confidence={row.proposal.confidence}
           />
+        ) : (
+          <span className="text-muted">-</span>
+        )}
+      </td>
+      <td className="px-3 py-3">
+        {DECIDABLE.includes(row.status) ? (
+          <StockBadge stock={row.stock} />
         ) : (
           <span className="text-muted">-</span>
         )}
@@ -420,8 +472,13 @@ function Details({
 }) {
   const { t, language } = useLanguage();
   const reasons = row.proposal?.reasons ?? [];
+  // A quiz JSON file and the Excel mapping hold many items that name their own
+  // component, enabler and level: there is no assignment to edit, only to accept or not
   const canEdit =
-    decidable && DECIDABLE.includes(row.status) && options !== null;
+    decidable &&
+    DECIDABLE.includes(row.status) &&
+    options !== null &&
+    !row.contents;
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <div className="space-y-3">
@@ -446,6 +503,21 @@ function Details({
               {t('contentUpload.details.code')}:{' '}
             </span>
             {fileCodeLabel(t, row.statusCode)}
+          </p>
+        )}
+        {row.proposal?.source === 'ki' && (
+          <p className="text-muted">{t('contentUpload.ki.detailsNote')}</p>
+        )}
+        {row.contents && (
+          <p className="text-muted" data-testid="fixed-kind-note">
+            {t(`contentUpload.contents.${row.contents.kind}.note`)}
+          </p>
+        )}
+        {row.contents && (row.contents.numbers.setsWithErrors ?? 0) > 0 && (
+          <p>
+            {t('contentUpload.contents.setsWithErrors', {
+              count: row.contents.numbers.setsWithErrors,
+            })}
           </p>
         )}
         {row.copyOfId && <p>{t('contentUpload.details.copy')}</p>}

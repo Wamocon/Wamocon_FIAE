@@ -663,6 +663,30 @@ export async function listOrganizationCatalogs(
 }
 
 /**
+ * The ids of the catalogs an organization can use right now (enabled and
+ * active, an organization without any row counts as FIAE enabled). Fail closed:
+ * an organization that does not exist gets none, so a session that points at a
+ * missing organization sees nothing of the catalogs. Used by the content
+ * statistics of an organization admin.
+ */
+export async function listUsableCatalogIds(
+  organizationId: string,
+  q: Executor = db
+): Promise<string[]> {
+  return withDbRetry(async () => {
+    const [organization] = await q
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.id, organizationId))
+      .limit(1);
+    if (!organization) return [];
+    const catalogs = await loadCatalogs(q);
+    const orgRows = await loadOrganizationRows(q, organizationId);
+    return usableCatalogIds(orgRows, catalogs);
+  });
+}
+
+/**
  * Enable or disable a catalog for an organization (upsert on the primary
  * key). An organization that has no row yet gets the FIAE row as well, so its
  * existing users keep what they had.

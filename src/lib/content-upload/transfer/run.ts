@@ -13,9 +13,21 @@
 //      happens, the run leaves "applying" again: back to review (dry run, failure) or
 //      to applied (committed apply)
 //
+// A third engine runs when an Excel mapping file is part of the transfer (package UP2): the
+// learning field engine, after the two others on the same connection (it needs the
+// enablers and use cases they have just written). It only adds (updateExisting false):
+// learning fields and mappings that are missing, an empty description, the codes in the
+// column lernfelder of use cases.
+//
 // Fixed on purpose and by test: nothing is activated (activate false), the solution
 // parts of scenarios and use cases are never written (the switches stay false). The
 // engines never delete.
+//
+// A supply of content (docs 8.9): what is new is inserted and the missing questions of an
+// existing quiz are added (extendQuizzes, always). A row that exists and differs from the
+// file is NOT written, unless a person named exactly that file in replaceFiles. The run
+// reports the status per file (new, unchanged, extended, differs, conflict) and stores it
+// for the review list.
 
 import { executePlan } from '@/lib/content-import/apply/engine';
 import { ImportAbort, type Db } from '@/lib/content-import/apply/db';
@@ -30,10 +42,18 @@ import {
   type ApplyTarget,
   type ConnectionFacts,
 } from '@/lib/content-import/apply/target';
-import type { Decisions, TableCount } from '@/lib/content-import/apply/types';
+import type {
+  Decisions,
+  ItemEvent,
+  TableCount,
+} from '@/lib/content-import/apply/types';
 import { scenarioSolutionTexts } from '@/lib/content-import/apply/guard';
 import { solutionTextsOfUseCases } from '@/lib/content-import/use-cases/guard';
 import { executeUseCasePlan } from '@/lib/content-import/use-cases/engine';
+import {
+  executeLearningFieldPlan,
+  type LearningFieldReport,
+} from '@/lib/content-import/learning-fields/engine';
 import {
   withReservedConnection,
   type ConnectionSource,
@@ -50,6 +70,15 @@ import {
 import { planAttribution } from '@/lib/content-upload/transfer/attribution';
 import { decisionsHash } from '@/lib/content-upload/transfer/canonical';
 import {
+  assignmentFingerprint,
+  learningEvents,
+  stockOfFiles,
+  toStockReport,
+  toStockWrites,
+  updateFilterFor,
+  type FileStock,
+} from '@/lib/content-upload/transfer/stock';
+import {
   copyOriginals,
   evaluateOriginals,
   toEnablerOriginals,
@@ -57,6 +86,7 @@ import {
 } from '@/lib/content-upload/transfer/originals';
 import {
   buildTransferPlan,
+  MAX_LEARNING_SKIPS,
   TransferPlanError,
 } from '@/lib/content-upload/transfer/plan';
 import { transferDecisions } from '@/lib/content-upload/transfer/preset';
@@ -67,6 +97,7 @@ import type {
 } from '@/lib/content-upload/transfer/store';
 import type {
   OriginalRefusal,
+  StockReport,
   TransferFile,
   TransferMode,
   TransferReport,
@@ -96,6 +127,7 @@ export const FIXED_ENGINE_OPTIONS = Object.freeze({
   activate: false,
   scenarioSolutions: false,
   useCaseSolutions: false,
+  extendQuizzes: true,
 } as const);
 
 export interface TransferDeps {
@@ -128,7 +160,11 @@ export interface TransferRequest {
   /** The profile that is entered as author of the rows and as the one who applied. */
   callerId: string;
   mode: TransferMode;
-  updateExisting: boolean;
+  /**
+   * Ids of the files whose differing rows are replaced by this run (the decision of a
+   * person for exactly these files). Empty: only new rows and added questions are written.
+   */
+  replaceFiles: readonly string[];
   /** File ids of enabler texts whose original goes to the public document bucket. */
   publishOriginals: readonly string[];
   /** The catalog code, typed by the person. Required for an apply. */
@@ -203,7 +239,8 @@ export async function runTransfer(
   const clock = deps.clock ?? (() => new Date());
   const started = clock();
   const { runId, mode } = request;
-  const updateExisting = request.updateExisting === true;
+  const replaceFiles = [...new Set(request.replaceFiles)].sort();
+  const replaceSet: ReadonlySet<string> = new Set(replaceFiles);
 
   if (mode === 'apply' && request.confirm !== UPLOAD_CATALOG_CODE) {
     return fail(
@@ -240,11 +277,13 @@ export async function runTransfer(
   const decisions = deps.decisions ?? transferDecisions();
   const files = await store.loadFiles(runId);
   const components = await store.loadComponents(state.catalogId);
+  const enablers = await store.loadEnablers(state.catalogId);
   let plan: Awaited<ReturnType<typeof buildTransferPlan>>;
   try {
     plan = await buildTransferPlan({
       files,
       components,
+      enablers,
       decisions,
       readBytes: deps.readBytes,
       now: started,
@@ -265,7 +304,8 @@ export async function runTransfer(
     plan.counts.enablers +
     plan.counts.scenarios +
     plan.counts.quizzes +
-    plan.useCaseCounts.useCases;
+    plan.useCaseCounts.useCases +
+    (plan.learningPlan ? 1 : 0);
   if (itemCount === 0 && request.publishOriginals.length === 0) {
     return fail(
       409,
@@ -274,6 +314,14 @@ export async function runTransfer(
     );
   }
 
+  const plannedIds = new Set(plan.plannedFiles.map(f => f.id));
+  if (replaceFiles.some(id => !plannedIds.has(id))) {
+    return fail(
+      409,
+      'A file to replace is not part of this transfer: it must be accepted and become an item of the plan',
+      'REPLACE_NOT_PLANNED'
+    );
+  }
   const fileById = new Map(files.map(f => [f.id, f]));
   const evaluated =
     request.publishOriginals.length > 0
@@ -313,7 +361,8 @@ export async function runTransfer(
     decisions,
     importPlan: plan.importPlan,
     useCasePlan: plan.useCasePlan,
-    options: { updateExisting },
+    learningPlan: plan.learningPlan,
+    options: { replaceFiles },
     files: plan.plannedFiles,
     originals: originals.plans.map(p => ({
       id: p.fileId,
@@ -365,12 +414,57 @@ export async function runTransfer(
     startedById: request.callerId,
     decisionsVersion: state.decisionsVersion,
     decisionsHash: hash,
-    updateExisting,
+    updateExisting: replaceFiles.length > 0,
     status,
     counts,
     conflicts,
     startedAt: started,
   });
+
+  const events: ItemEvent[] = [];
+  const planRefs = {
+    importPlan: plan.importPlan,
+    useCasePlan: plan.useCasePlan,
+    fileOfSource: plan.fileOfSource,
+    learningFileId: plan.learningFileId,
+  };
+  const fileFilter = updateFilterFor(planRefs, replaceSet);
+  const engineSwitches = {
+    createdBy: request.callerId,
+    updateExisting: replaceSet.size > 0,
+    write: true,
+    activate: FIXED_ENGINE_OPTIONS.activate,
+    observe: (event: ItemEvent) => {
+      events.push(event);
+    },
+    updateFilter: (table: string, key: string) => fileFilter(table, key),
+  };
+  const stockOf = (
+    skipped?: ReadonlyArray<{ useCaseCode: string }>
+  ): Map<string, FileStock> =>
+    stockOfFiles({ ...planRefs, events, useCasesSkippedInDb: skipped });
+  const stockReport = (stock: ReadonlyMap<string, FileStock>): StockReport =>
+    toStockReport(stock, id => fileById.get(id)?.fileName);
+  /** Keeps the status per file for the review list (a dry run only, in the state review). */
+  const rememberStock = async (stock: ReadonlyMap<string, FileStock>) => {
+    const writes = toStockWrites(
+      stock,
+      id => {
+        const file = fileById.get(id);
+        return file ? assignmentFingerprint(file.decision) : undefined;
+      },
+      clock().toISOString()
+    );
+    await safely(async () => {
+      const written = await store.saveStock(runId, writes);
+      if (written < writes.length) {
+        console.error('[content-upload] stock not stored for some files', {
+          wanted: writes.length,
+          written,
+        });
+      }
+    });
+  };
 
   let copied: string[] = [];
   let keepHash: string | null = null;
@@ -407,26 +501,47 @@ export async function runTransfer(
                 { deadline: Date.now() + COPY_BUDGET_MS }
               );
             }
+            const engineDb = (deps.makeDb ?? (c => new PgDb(c)))(connection);
+            // The quizzes that exist already: what an extension adds to them belongs to
+            // the file of the quiz (only for the protocol of an apply)
+            const existingQuizzes = apply
+              ? (
+                  await engineDb.select('quizzes', {
+                    code: plan.importPlan.quizzes.map(q => q.code),
+                  })
+                ).map(r => ({ id: String(r.id), code: String(r.code) }))
+              : [];
+            const existingQuestions =
+              existingQuizzes.length > 0
+                ? (
+                    await engineDb.select('questions', {
+                      quiz_id: existingQuizzes.map(q => q.id),
+                    })
+                  ).map(r => ({ id: String(r.id), quizId: String(r.quiz_id) }))
+                : [];
             const db = new RecordingDb(
-              (deps.makeDb ?? (c => new PgDb(c)))(connection),
+              engineDb,
               planAttribution({
                 importPlan: plan.importPlan,
                 useCasePlan: plan.useCasePlan,
                 fileOfSource: plan.fileOfSource,
+                learningFileId: plan.learningFileId,
                 fileOfOriginalTitle: new Map(
                   forEngine.map(({ plan: o, original }) => [
                     original.title,
                     o.fileId,
                   ])
                 ),
+                existing: {
+                  quizzes: existingQuizzes,
+                  questions: existingQuestions,
+                },
               })
             );
             const importReport = await executePlan(db, plan.importPlan, {
-              createdBy: request.callerId,
-              updateExisting,
-              write: true,
-              activate: FIXED_ENGINE_OPTIONS.activate,
+              ...engineSwitches,
               scenarioSolutions: FIXED_ENGINE_OPTIONS.scenarioSolutions,
+              extendQuizzes: FIXED_ENGINE_OPTIONS.extendQuizzes,
               enablerOriginals: forEngine.map(e => e.original),
             });
             // The use case engine needs the enablers: it runs on the same connection
@@ -434,13 +549,18 @@ export async function runTransfer(
             const useCaseReport =
               plan.useCasePlan.useCases.length > 0
                 ? await executeUseCasePlan(db, plan.useCasePlan, {
-                    createdBy: request.callerId,
-                    updateExisting,
-                    write: true,
-                    activate: FIXED_ENGINE_OPTIONS.activate,
+                    ...engineSwitches,
                     solutions: FIXED_ENGINE_OPTIONS.useCaseSolutions,
                   })
                 : null;
+            // The learning field engine needs the enablers and use cases of the two engines
+            // above (it sees them on this connection) and only ever adds.
+            const learningReport = plan.learningPlan
+              ? await executeLearningFieldPlan(db, plan.learningPlan, {
+                  updateExisting: false,
+                  write: true,
+                })
+              : null;
             const tables: Record<string, TableCount> = {
               ...importReport.tables,
             };
@@ -450,6 +570,10 @@ export async function runTransfer(
                 tables.content_documents,
                 useCaseReport.tables.content_documents
               );
+            }
+            if (learningReport) {
+              Object.assign(tables, learningTables(learningReport, tables));
+              events.push(...learningEvents(learningReport));
             }
             let applyId: string | null = null;
             if (apply) {
@@ -476,10 +600,21 @@ export async function runTransfer(
                   fileId: w.fileId,
                 }))
               );
+              // A file that differs and was not chosen for replacing wrote nothing: it
+              // stays a decided file, not an applied one
+              const written = stockOf(useCaseReport?.skipped);
               await writer.markFilesApplied(
                 runId,
-                plan.plannedFiles.map(f => f.id)
+                plan.plannedFiles
+                  .map(f => f.id)
+                  .filter(
+                    id =>
+                      written.get(id)?.status !== 'differs' ||
+                      replaceSet.has(id)
+                  )
               );
+              // The database is another one now, the comparisons made before are stale
+              await writer.clearStock(runId);
               if (
                 !(await writer.finishRunApplied(runId, LIMITS.appliedFilesDays))
               ) {
@@ -492,6 +627,7 @@ export async function runTransfer(
             return {
               importReport,
               useCaseReport,
+              learningReport,
               tables,
               applyId,
               storedPaths: db.storedPaths,
@@ -509,20 +645,24 @@ export async function runTransfer(
       });
     }
 
+    const stock = stockOf(done.useCaseReport?.skipped);
     const report: TransferReport = {
       mode,
       status: 'ok',
       applyId: done.applyId,
       decisionsHash: hash,
       decisionsVersion: state.decisionsVersion,
-      updateExisting,
+      replaceFiles,
+      stock: stockReport(stock),
+      extended: done.importReport.extended ?? [],
       tables: counted(done.tables),
       conflicts: [],
       differences: [
         ...done.importReport.differences,
         ...(done.useCaseReport?.differences ?? []),
+        ...(done.learningReport?.differences ?? []),
       ],
-      skipped: plan.skipped,
+      skipped: [...plan.skipped, ...learningSkips(plan, done.learningReport)],
       excluded: plan.excluded,
       useCasesSkippedInDb: done.useCaseReport?.skipped ?? [],
       originals: {
@@ -546,6 +686,7 @@ export async function runTransfer(
         )
       );
       await store.endApplying(runId, hash);
+      await rememberStock(stock);
     }
     return ok(report);
   } catch (error) {
@@ -559,6 +700,7 @@ export async function runTransfer(
         code === 'CONNECTION_RESERVE_TIMEOUT' ||
         code === '55P03' ||
         code === '57014' ||
+        code === '40P01' ||
         code === '40001')
     ) {
       keepHash = hash;
@@ -603,13 +745,30 @@ export async function runTransfer(
       );
     }
     if (abort?.code === 'CONFLICTS') {
+      // The engines of the content compared everything before they stopped: the files say which
+      // one conflicts. The learning field engine runs after them and only speaks when they passed.
+      // (the learning field engine has no observer: its conflicts name the tables of its rows)
+      events.push(
+        ...learningEvents({
+          tables: {},
+          useCaseMappings: { insert: 0, update: 0, unchanged: 0 },
+          useCaseCodes: { insert: 0, update: 0, unchanged: 0 },
+          conflicts: conflicts.filter(c =>
+            c.table.startsWith('training_catalog_')
+          ),
+        })
+      );
+      const stock = stockOf();
+      await rememberStock(stock);
       return ok({
         mode,
         status: 'conflict',
         applyId: null,
         decisionsHash: hash,
         decisionsVersion: state.decisionsVersion,
-        updateExisting,
+        replaceFiles,
+        stock: stockReport(stock),
+        extended: [],
         tables: {},
         conflicts,
         differences: [],
@@ -630,6 +789,40 @@ export async function runTransfer(
     }
     throw error;
   }
+}
+
+/**
+ * The counters of the learning field engine in the shape of the report: learning fields,
+ * the mappings of enablers and use cases (one table), and the use cases that got codes in
+ * lernfelder (added to the counter of use_cases).
+ */
+export function learningTables(
+  report: LearningFieldReport,
+  current: Record<string, TableCount>
+): Record<string, TableCount> {
+  const fields = 'training_catalog_learning_fields';
+  const mappings = 'training_catalog_content_mappings';
+  return {
+    [fields]: report.tables[fields],
+    [mappings]: addCounts(report.tables[mappings], report.useCaseMappings),
+    use_cases: addCounts(
+      current.use_cases ?? { insert: 0, update: 0, unchanged: 0 },
+      { insert: 0, update: report.useCaseCodes.update, unchanged: 0 }
+    ),
+  };
+}
+
+/** The mappings that the learning engine skipped (the enabler is missing), named for the report. */
+function learningSkips(
+  plan: { learningFileId: string | null },
+  report: LearningFieldReport | null
+) {
+  if (!report || !plan.learningFileId) return [];
+  return report.skipped.slice(0, MAX_LEARNING_SKIPS).map(s => ({
+    fileId: plan.learningFileId,
+    code: s.code,
+    reason: s.reason,
+  }));
 }
 
 /** Runs a clean up step that must not hide the error that is being handled. */

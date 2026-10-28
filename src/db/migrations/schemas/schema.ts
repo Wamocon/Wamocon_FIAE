@@ -2149,7 +2149,13 @@ export const CONTENT_UPLOAD_FILE_STATUSES = [
   'skipped',
   'superseded',
 ] as const;
-export const CONTENT_UPLOAD_EXTENSIONS = ['docx', 'pdf'] as const;
+// docx and pdf from 20261030000100, json and xlsx from 20261030000200
+export const CONTENT_UPLOAD_EXTENSIONS = [
+  'docx',
+  'pdf',
+  'json',
+  'xlsx',
+] as const;
 export const CONTENT_UPLOAD_DOC_TYPES = [
   'enabler',
   'quiz',

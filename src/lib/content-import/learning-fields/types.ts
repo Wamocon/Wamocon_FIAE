@@ -85,6 +85,12 @@ export interface PlanLearningField {
   trainingYear: SchoolYear;
   /** Time guideline in hours (official.ts), null when no source names it. */
   hoursBudget: number | null;
+  /**
+   * Verbatim "Zielformulierung" of the framework curriculum (official.ts), null
+   * when the plan does not carry one. Absent in plans written before the
+   * description was added, read as null.
+   */
+  description?: string | null;
   /** Position 1 to 13. */
   orderIndex: number;
 }

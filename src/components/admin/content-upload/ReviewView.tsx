@@ -18,6 +18,7 @@ import {
   DEFAULT_PAGE_SIZE,
   type AssignmentDto,
   type DecisionAction,
+  type MediumGroupDto,
   type ReviewFilter,
   type ReviewOptions,
   type ReviewRowDto,
@@ -44,6 +45,10 @@ import {
   canAcceptAsProposed,
 } from '@/components/admin/content-upload/ReviewTable';
 import { RunUploader } from '@/components/admin/content-upload/RunUploader';
+import {
+  TransferPanel,
+  transferErrorText,
+} from '@/components/admin/content-upload/TransferPanel';
 import {
   runStatusLabel,
   skipLabel,
@@ -75,6 +80,8 @@ type Notice = { kind: 'info' | 'warn' | 'error'; text: string };
 type Dialog =
   | null
   | { kind: 'acceptHigh' }
+  | { kind: 'acceptStock' }
+  | { kind: 'acceptMedium'; group: MediumGroupDto }
   | { kind: 'bulk'; action: 'reject' | 'defer' }
   | { kind: 'assign' }
   | { kind: 'newest'; groups: number }
@@ -324,6 +331,32 @@ export function ReviewView({
     }
   };
 
+  /** "Bestand abgleichen": compares the files with the database, nothing is written. */
+  const compare = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const report = await client.compare(runId);
+      const c = report.stock.counts;
+      setNotice({
+        kind: 'info',
+        text: t('contentUpload.stock.done', {
+          compared: report.compared,
+          new: c.new,
+          extended: c.extended,
+          differs: c.differs,
+          unchanged: c.unchanged,
+          conflict: c.conflict,
+        }),
+      });
+    } catch (error) {
+      setNotice({ kind: 'error', text: transferErrorText(t, error) });
+    } finally {
+      setBusy(false);
+      reload();
+    }
+  };
+
   const reopen = async () => {
     setBusy(true);
     setNotice(null);
@@ -565,11 +598,33 @@ export function ReviewView({
             facets={facets}
             onChange={applyFilter}
           />
+          {decidable && (
+            <section
+              aria-label={t('contentUpload.stock.title')}
+              className="border-border flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+            >
+              <button
+                type="button"
+                className={BTN_SECONDARY}
+                disabled={busy}
+                onClick={() => void compare()}
+              >
+                {t('contentUpload.stock.compare')}
+              </button>
+              <p className="text-muted max-w-3xl text-sm">
+                {t('contentUpload.stock.help')}
+              </p>
+            </section>
+          )}
           <BulkBar
             selectedCount={selected.size}
             acceptableHigh={counts.acceptableHigh}
+            acceptableStock={counts.acceptableStock}
+            mediumGroups={counts.mediumGroups}
             disabled={!decidable || busy}
             onAcceptHigh={() => setDialog({ kind: 'acceptHigh' })}
+            onAcceptStock={() => setDialog({ kind: 'acceptStock' })}
+            onAcceptMedium={group => setDialog({ kind: 'acceptMedium', group })}
             onReject={() => setDialog({ kind: 'bulk', action: 'reject' })}
             onDefer={() => setDialog({ kind: 'bulk', action: 'defer' })}
             onAssign={() => setDialog({ kind: 'assign' })}
@@ -691,6 +746,17 @@ export function ReviewView({
         </>
       )}
 
+      {counts.total > 0 && (
+        <TransferPanel
+          runId={runId}
+          status={status}
+          version={data.version}
+          accepted={counts.accepted}
+          client={client}
+          onChanged={reload}
+        />
+      )}
+
       {dialog?.kind === 'acceptHigh' && (
         <ConfirmDialog
           title={t('contentUpload.confirm.acceptHighTitle')}
@@ -702,6 +768,39 @@ export function ReviewView({
           <p>
             {t('contentUpload.confirm.acceptHigh', {
               count: counts.acceptableHigh,
+            })}
+          </p>
+        </ConfirmDialog>
+      )}
+      {dialog?.kind === 'acceptStock' && (
+        <ConfirmDialog
+          title={t('contentUpload.confirm.acceptStockTitle')}
+          confirmLabel={t('contentUpload.confirm.accept')}
+          busy={busy}
+          onCancel={() => setDialog(null)}
+          onConfirm={() => void send({ command: 'accept_stock' })}
+        >
+          <p>
+            {t('contentUpload.confirm.acceptStock', {
+              count: counts.acceptableStock,
+            })}
+          </p>
+        </ConfirmDialog>
+      )}
+      {dialog?.kind === 'acceptMedium' && (
+        <ConfirmDialog
+          title={t('contentUpload.confirm.acceptMediumTitle')}
+          confirmLabel={t('contentUpload.confirm.accept')}
+          busy={busy}
+          onCancel={() => setDialog(null)}
+          onConfirm={() =>
+            void send({ command: 'accept_medium', group: dialog.group.key })
+          }
+        >
+          <p>
+            {t('contentUpload.confirm.acceptMedium', {
+              count: dialog.group.count,
+              reasons: dialog.group.text,
             })}
           </p>
         </ConfirmDialog>

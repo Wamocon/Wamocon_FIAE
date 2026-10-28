@@ -31,6 +31,9 @@ export type Sql = ReturnType<typeof postgres>;
 
 /** Tables of the content import, children first. */
 export const CONTENT_TABLES = [
+  // written by the learning field import (an Excel mapping file)
+  'training_catalog_content_mappings',
+  'training_catalog_learning_fields',
   'content_documents',
   'enabler_quiz_links',
   'options',
@@ -64,6 +67,10 @@ export function connect(url: string): Sql {
 /** Empties the content and the upload tables and makes sure the catalog and the user exist. */
 export async function reset(sql: Sql) {
   await sql`truncate content_upload_runs cascade`;
+  // the learning field import (an Excel mapping file) writes these two as well
+  await sql.unsafe(
+    'truncate training_catalog_content_mappings, training_catalog_learning_fields cascade'
+  );
   await sql.unsafe(
     `truncate ${[...CONTENT_TABLES].join(', ')}, quiz_submissions, use_case_submissions cascade`
   );

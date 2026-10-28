@@ -10,7 +10,7 @@ Es liest die Quelldokumente (nur lesend) und schreibt in acht Tabellen: `trainin
 
 Es lädt keine Dateien in den Storage hoch, ruft keine Modelle auf, löst keine Indexierung aus und nutzt kein Netzwerk außer der Zieldatenbank. Use Cases gehören nicht dazu, sie schreibt ein eigenes Skript (Abschnitt "Use Cases"). Die Lernfelder und ihre Zuordnung aus der Excel schreibt ebenfalls ein eigenes Skript (Abschnitt "Lernfelder und Zuordnungen").
 
-**Reihenfolge der drei Läufe:** erst der Inhaltsimport (Kurse, Enabler, Quizze, Szenarien), dann die Lernfelder, dann die Use Cases. Die Lernfelder und die Use Cases hängen an den Enablern des Inhaltsimports und brauchen sich nicht gegenseitig, ihre Reihenfolge ist egal. Jeder Lauf ist ein Probelauf, solange `--apply` fehlt.
+**Reihenfolge der drei Läufe:** erst der Inhaltsimport (Kurse, Enabler, Quizze, Szenarien), dann die Lernfelder, dann die Use Cases. Die Lernfelder und die Use Cases hängen an den Enablern des Inhaltsimports. Der Lernfeldlauf liest die Use Cases aus der Datenbank und ordnet sie den Lernfeldern zu, deshalb wird er nach dem Use-Case-Import wiederholt (ein zweiter Lauf ergänzt nur, was fehlt). Jeder Lauf ist ein Probelauf, solange `--apply` fehlt.
 
 ## Ablauf in vier Schritten
 
@@ -106,7 +106,63 @@ rollback; -- zur Kontrolle der Zahlen, dann mit commit wiederholen
 | Global-Quiz         | `quizzes` (Typ `GLOBAL`, Code `K6.2-global`, `training_component_id`) mit 20 Fragen. Die Stufe der Frage (1 bis 5 leicht, 6 bis 15 mittel, 16 bis 20 schwer) ergibt sich aus der Nummer, die Tabelle hat dafür keine Spalte. | Katalog und Code             |
 | Szenario            | `content_documents` am Enabler, bis zu drei Zeilen (siehe unten)                                                                                                                                                             | Enabler, Typ und Titel       |
 
-Die Komponenten tragen vorläufig Wochen und Sollstunden 0 (die Spalten sind `NOT NULL`, der Plan nennt keine Werte). `order_index` einer Komponente ist `Nummer * 10 + Teilung` (K1 gleich 10, K6.2 gleich 62). Der Kurs bekommt `year` gleich Phase (die Plattform führt "Ausbildungsjahr" als Phase) und `chapter` gleich `order_index`.
+Die Wochen der Komponenten kommen aus dem Ausbildungsrahmenplan (Abschnitt "Wochen und Sollstunden der Komponenten"), die Sollstunden bleiben vorläufig 0 (die Spalten sind `NOT NULL`, der Plan nennt keine Stunden). `order_index` einer Komponente ist `Nummer * 10 + Teilung` (K1 gleich 10, K6.2 gleich 62). Der Kurs bekommt `year` gleich Phase (die Plattform führt "Ausbildungsjahr" als Phase) und `chapter` gleich `order_index`.
+
+## Wochen und Sollstunden der Komponenten
+
+**Quelle der Wochen:** Bundesgesetzblatt Teil I Nr. 62 vom 28.02.2025, Verordnung über die Berufsausbildung zum Kaufmann und zur Kauffrau für Büromanagement (BüroMKfAusbV) vom 25.02.2025, Anlage (Ausbildungsrahmenplan), Spalte 4 "Zeitliche Richtwerte in Wochen im 1. bis 15. Monat und im 16. bis 36. Monat". Die Seitenangaben sind die Seiten "Seite N von 17" dieser Veröffentlichung. Gegenprobe mit zwei Dokumenten des BIBB ("Ausbildung gestalten", Kaufmann/Kauffrau für Büromanagement, Bonn 2025): Kapitel 2.2.1 mit der Übersicht (Wochen insgesamt Abschnitt A: 58 und 37, zwei Wahlqualifikationen: 44) und das Muster eines betrieblichen Ausbildungsplans, das jeden Wert mit seinem Zeitraum druckt. Die Daten stehen mit Seite je Wert in `src/lib/content-import/apply/component-weeks.ts`, die Prüfung der Summen in `tests/unit/content-import/apply/component-weeks.test.ts`.
+
+| Komponente  | Position (Abschnitt) | Zeitraum         | Wochen | Seite     |
+| ----------- | -------------------- | ---------------- | ------ | --------- |
+| K1          | A1 (a bis f)         | 1. bis 15.       | 11     | 8         |
+| K2          | A2 (a bis j)         | 1. bis 15.       | 11     | 8         |
+| K3          | A3 (a bis d)         | 1. bis 15.       | 7      | 8         |
+| K4          | A4 (a bis c)         | 1. bis 15.       | 5      | 8         |
+| K5          | A5 (a bis e)         | 1. bis 15.       | 7      | 9         |
+| K6.1        | A6 (a bis c)         | 1. bis 15.       | 6      | 9         |
+| K6.2        | A6 (d bis g)         | 16. bis 36.      | 11     | 9         |
+| K7          | A7 (a bis f)         | 1. bis 15.       | 11     | 9         |
+| K8          | A8 (a bis e)         | 16. bis 36.      | 13     | 9         |
+| K9          | A9 (a bis f)         | 16. bis 36.      | 13     | 9         |
+| K10 bis K17 | B1 bis B8            | 16. bis 36.      | je 22  | 10 bis 14 |
+| K19         | B10                  | 16. bis 36.      | 22     | 15        |
+| K20 bis K23 | C1 bis C4            | ganze Ausbildung | keine  | 15 bis 16 |
+| K24.1       | C5 (a bis d)         | 1. bis 15.       | 4      | 17        |
+| K24.2       | C5 (e)               | 16. bis 36.      | 2      | 17        |
+| K25.1       | C6 (a bis c)         | 1. bis 15.       | 2      | 17        |
+| K25.2       | C6 (d bis k)         | 16. bis 36.      | 9      | 17        |
+
+**Regeln (nichts wird gerechnet, jeder Wert steht so im Plan):**
+
+- Die Nummer der Komponente ist die Position der Verordnung: K1 bis K9 sind Abschnitt A (§ 4 Abs. 2 Nr. 1 bis 9), K10 bis K19 sind die Wahlqualifikationen 1 bis 10 (§ 4 Abs. 3), K20 bis K25 sind Abschnitt C (§ 4 Abs. 4 Nr. 1 bis 6). K18 (Wahlqualifikation 9, Verwaltung) wird nicht importiert, hat im Plan aber ebenfalls 22 Wochen.
+- Eine Position, deren Wochen der Plan auf beide Zeiträume verteilt, ist in der Plattform schon zwei Komponenten: A6 (K6.1 mit 6 und K6.2 mit 11), C5 (K24.1 mit 4 und K24.2 mit 2) und C6 (K25.1 mit 2 und K25.2 mit 9). Die Ordner Teil 1 und Teil 2 der Quelle und die Phase der Komponente stimmen mit dem Zeitraum überein (1 bis 15 Monate gleich Phase 1, 16 bis 36 Monate gleich Phase 2).
+- Jede Wahlqualifikation hat 22 Wochen, alle im 16. bis 36. Monat. Ein Ausbildungsvertrag wählt zwei davon. Die Wochen aller Wahlkomponenten dürfen deshalb nie addiert werden (neun Komponenten ergeben 198 Wochen, eine Ausbildung hat 44).
+- K20 bis K23 haben keine Wochen. Der Plan nennt dort "Zeitliche Zuordnung: während der gesamten Ausbildung". Die Spalte bleibt 0 und das ist der richtige Wert, kein Platzhalter. Der Import setzt diese Komponenten nie auf einen anderen Wert.
+- Die Werte sind Bruttowochen. Berufsschule, Urlaub, Feiertage und Krankheit sind nicht abgezogen (BIBB, Kapitel 2.2.1: etwa drei Tage je Woche stehen im Betrieb zur Verfügung).
+- Summenprobe (im Test festgeschrieben): Abschnitt A 58 Wochen im 1. bis 15. Monat und 37 im 16. bis 36. Monat, Abschnitt C (Position 5 und 6) 6 und 11 Wochen, zwei Wahlqualifikationen 44 Wochen. Das ergibt 64 und 92 Wochen, zusammen 156 Wochen, also drei Jahre zu je 52 Wochen.
+
+**Wirkung im Import:** `plan` schreibt die Wochen aus dieser Tabelle in den Plan (Spalte "Wochen" der Zusammenfassung, im Plan `weeksSource`). Eine Entscheidung des Eigentümers in `kfbm-decisions.json` unter `components.totalWeeks` geht vor. Eine neue Komponente bekommt die Wochen beim Anlegen. Bei einer bestehenden Komponente setzt der echte Lauf `total_weeks` nur, wenn der Wert 0 ist (auch ohne `--update-existing`). Steht dort ein anderer Wert, meldet der Bericht die Abweichung und `--update-existing` überschreibt sie. Eine 0 im Plan (K20 bis K23, Platzhalter) überschreibt nie einen Wert. Keine andere Spalte wird angefasst, `total_hours` nie. Der Probelauf bleibt Standard. Ein zweiter Lauf schreibt nichts.
+
+**Sollstunden:** Der Ausbildungsrahmenplan hat kein Stundenmaß je Komponente, und in keinem der gelesenen Dokumente (Rahmenplan, Verordnung, Erläuterungen, Muster und Beispiel des betrieblichen Ausbildungsplans, Struktur, BIBB-Handbuch, Broschüre) steht eine amtliche Stundenangabe für die betriebliche Ausbildung. Die Stundenzahlen dort betreffen die Berufsschule (Zeitrichtwerte der Lernfelder, zusammen 880 Stunden) und die dienstbegleitende Unterweisung im öffentlichen Dienst (420 Stunden) und gehören nicht in `total_hours`. Deshalb bleibt `total_hours` bei 0, der Plan führt das als offene Frage.
+
+Vorschlag zur Entscheidung des Eigentümers (nicht gesetzt): Wochen mal 40 Stunden. Das ist die Regel der Plattform (Kommentar zu `total_hours` im Schema: "totalWeeks \* 40", ebenso die Daten für FIAE). Es sind Bruttostunden, nach der Modellrechnung des BIBB wären es netto etwa drei Fünftel davon.
+
+| Komponente       | Wochen | Stunden (Vorschlag) |
+| ---------------- | ------ | ------------------- |
+| K1, K2, K7, K6.2 | 11     | 440                 |
+| K3, K5           | 7      | 280                 |
+| K4               | 5      | 200                 |
+| K6.1             | 6      | 240                 |
+| K8, K9           | 13     | 520                 |
+| K10 bis K17, K19 | 22     | 880                 |
+| K24.1            | 4      | 160                 |
+| K24.2, K25.1     | 2      | 80                  |
+| K25.2            | 9      | 360                 |
+| K20 bis K23      | keine  | keine               |
+
+Folgt der Eigentümer dem Vorschlag, trägt er die Stunden je Code in `kfbm-decisions.json` unter `components.totalHours` ein. Das Anlegen neuer Komponenten nimmt sie dann mit. Für bestehende Komponenten braucht es eine kleine Erweiterung des Imports (`total_hours` in `fillWhenEmpty` in `src/lib/content-import/apply/tables.ts`), die bewusst noch nicht gebaut ist.
+
+**Wo die Plattform die Werte verwendet:** Die Spalten `total_weeks` und `total_hours` der Komponenten liefert `GET /api/training-components` unverändert aus. Angezeigt wird nur `total_hours`, in der Liste der Komponenten im Tätigkeitsnachweis der Azubis (`{Code} • {Stunden} Std gesamt`, `src/app/trainee/activity-reports/page.tsx`). Mit 0 steht dort "0 Std gesamt" (falsche Anzeige, kein Fehler); `total_weeks` wird nirgends angezeigt oder gerechnet. Der Reindex (`scripts/reindex-gemini.ts`) schreibt "Dauer: N Wochen / M Stunden" in den Text, den HAI zu einer Komponente findet. Mit den richtigen Wochen und 0 Stunden stünde dort "11 Wochen / 0 Stunden". Es gibt kein Go für eine Neuindexierung, der Text ändert sich erst mit ihr. Der Phasenplan (`src/lib/catalog/phase-plan.ts`) rechnet in Monaten aus den Katalogeinstellungen, die Schule und die Prüfungen lesen die Spalten nicht, und die Stundengrenze eines Tätigkeitsnachweises kommt aus den Sollstunden der Use Cases (`normalizePlannedHours`). Nirgends wird durch `total_weeks` oder `total_hours` geteilt, 0 verursacht also keinen Fehler.
 
 ## Lösungsschutz
 
@@ -130,7 +186,7 @@ Steht in einem Lehrtext eine Zeile nur mit dem Wort "Lösung" (zum Beispiel als 
 
 1. Die Route `GET /api/trainee/enablers/[enablerId]/quizzes/[difficulty]` liefert `options.explanation` an Azubis schon vor der Antwort (die Seite nutzt das, um die Begründung nach der Antwort zu zeigen). Weil die Begründung nur an der richtigen Option steht, verrät das die richtige Antwort. Das ist bestehender Code und gilt auch für FIAE. Vor der Aktivierung eines Quiz die Route ändern (Begründung erst mit dem Ergebnis aus `submit`).
 2. Die Seite der Azubis für einen Enabler ruft die Dokumentenroute des Trainers auf und listet jede Dokumentzeile als Link. Die Route liefert alle Spalten ohne Filter nach Sichtbarkeit. Sie bleibt für Azubis gesperrt, solange niemand sie öffnet. Wer sie öffnet, muss `TRAINER_ONLY` und `TRAINER_SOLUTION` ausfiltern und Zeilen mit leerer `storage_url` nicht als Link zeigen.
-3. Die Wochen und Sollstunden der Komponenten fehlen noch. Die Lernfelder und ihre Zuordnung schreibt das Skript der Phase 4.5, Titel und Stunden der Lernfelder sind dort vorläufig oder offen.
+3. Die Sollstunden der Komponenten fehlen noch (der Eigentümer entscheidet, die Wochen stehen im Plan). Die Lernfelder und ihre Zuordnung schreibt das Skript der Phase 4.5, Titel und Stunden der Lernfelder sind dort vorläufig oder offen.
 
 ## Upload der Originaldateien (eigenes Paket, nicht Teil dieses Laufs)
 
@@ -156,6 +212,7 @@ Ein eigenes Skript, `scripts/import/kfbm-learning-fields.mjs` (`npm run import:k
 1. Inhaltsimport (Abschnitte oben): schreibt Komponenten, Kurse, Enabler, Quizze und Szenarien.
 2. Plan der Lernfelder (ohne Datenbank).
 3. Prüfung, Probelauf, echter Lauf der Lernfelder.
+4. Use-Case-Import (Abschnitt "Use Cases"), danach den Lauf der Lernfelder wiederholen: erst dann gibt es Use Cases, denen der Lauf die Lernfelder zuordnen kann. Der erste Lauf schreibt Lernfelder, Beschreibungen und die Zuordnung der Enabler, der zweite ergänzt die Zuordnung der Use Cases.
 
 Ohne Enabler im Katalog stoppt das Skript (`NO_ENABLERS`). Fehlen einzelne Enabler, werden deren Zuordnungen als übersprungen gemeldet (`ENABLER_NOT_IN_DATABASE`), und der Lauf lässt sich wiederholen, sobald der Inhaltsimport sie geschrieben hat. Ein zweiter Lauf ergänzt nur, was fehlt.
 
@@ -170,21 +227,27 @@ npm run import:kfbm:learning-fields -- run --plan kfbm-plan-lf.json --target loc
 ```
 
 - `plan` liest die Tabelle (nur lesend, 60 Sekunden Frist) und die Codes des Inhaltsimports. Die Codes kommen aus den Dateinamen des Quellordners (`--import-source`, es wird kein Dokument geöffnet, dieselbe Auswahl wie im Plan des Inhaltsimports) oder aus dessen Plan (`--import-plan kfbm-plan.json`). Neben dem JSON entsteht eine Zusammenfassung als Markdown (`kfbm-plan-lf.md`). Beide Dateien enthalten nur Codes, Zahlen und Zeilennummern, keinen Zelltext. Der Dateiname `kfbm-plan-lf.json` steht über `kfbm-plan*.json` in der `.gitignore`.
-- `check` vergleicht den Plan in einer schreibgeschützten Transaktion mit der Zieldatenbank. `run` ist ein Probelauf und rollt zurück, mit `--apply` wird übernommen. Optionen wie beim Inhaltsimport: `--confirm-host <Host>` ist Pflicht für einen echten Lauf in der Preview, `--report-out <Datei.md>` schreibt den Bericht. `--update-existing` aktualisiert bei bestehenden Lernfeldern nur den Titel und die Stunden (`hours_budget`). Der Titel wird nur durch den amtlichen Titel, einen Titel aus der Titeldatei des Eigentümers (`.json`) oder bei noch stehendem Platzhalter "Lernfeld N" ersetzt. Vorläufige Titel aus der Quellenliste ersetzen nie einen gesetzten Titel und ein Platzhalter nie einen vorhandenen. Die Stunden werden gesetzt, wenn sie fehlen oder vom Zeitrichtwert abweichen, und nie geleert. Schuljahr und Reihenfolge ändert der Lauf nie. Ohne `--update-existing` bleiben bestehende Zeilen unverändert, der Bericht nennt die Abweichungen. Sonst wird nichts überschrieben. Exit-Codes: 0 fertig, 1 Fehler oder abgelehnt, 2 falsche Aufrufe, 3 Konflikte.
+- `check` vergleicht den Plan in einer schreibgeschützten Transaktion mit der Zieldatenbank. `run` ist ein Probelauf und rollt zurück, mit `--apply` wird übernommen. Optionen wie beim Inhaltsimport: `--confirm-host <Host>` ist Pflicht für einen echten Lauf in der Preview, `--report-out <Datei.md>` schreibt den Bericht. Eine leere Beschreibung eines bestehenden Lernfelds füllt jeder Lauf mit der amtlichen Zielformulierung, eine Beschreibung mit Text ersetzt nur `--update-existing`. `--update-existing` aktualisiert bei bestehenden Lernfeldern nur den Titel, die Beschreibung und die Stunden (`hours_budget`). Der Titel wird nur durch den amtlichen Titel, einen Titel aus der Titeldatei des Eigentümers (`.json`) oder bei noch stehendem Platzhalter "Lernfeld N" ersetzt. Vorläufige Titel aus der Quellenliste ersetzen nie einen gesetzten Titel und ein Platzhalter nie einen vorhandenen. Die Stunden werden gesetzt, wenn sie fehlen oder vom Zeitrichtwert abweichen, und nie geleert. Schuljahr und Reihenfolge ändert der Lauf nie. Ohne `--update-existing` bleiben bestehende Zeilen unverändert, der Bericht nennt die Abweichungen. Sonst wird nichts überschrieben. Exit-Codes: 0 fertig, 1 Fehler oder abgelehnt, 2 falsche Aufrufe, 3 Konflikte.
 
 ### Was gelesen und geschrieben wird
 
 | Quelle                                                  | Ziel                                                                                                                                                          | Schlüssel für die Idempotenz |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
 | 13 Lernfelder (Code `LF1` bis `LF13`)                   | `training_catalog_learning_fields` (Schuljahr 1 für LF1 bis LF4, 2 für LF5 bis LF8, 3 für LF9 bis LF13, `order_index` 1 bis 13, `hours_budget` Zeitrichtwert) | Katalog und Code             |
+| 13 Lernfelder, Beschreibung                             | `training_catalog_learning_fields.description` (wörtliche Zielformulierung des Rahmenlehrplans, ein Satz, 120 bis 240 Zeichen wie bei den FIAE-Lernfeldern)    | Katalog und Code             |
 | Zeile der Tabelle (Position mit Buchstabe) und Lernfeld | `training_catalog_content_mappings` (`learning_field_id`, `enabler_id`, der Katalog wird per Trigger abgeleitet)                                              | Lernfeld und Enabler         |
+| Zuordnung Enabler zu Lernfeld und `use_cases.enabler_id` | `training_catalog_content_mappings` (`learning_field_id`, `use_case_id`, `enabler_id` leer): eine eigene Zeile je Use Case                                    | Lernfeld und Use Case        |
+| dieselbe Zuordnung                                      | `use_cases.lernfelder` (Textfeld, Code des Lernfelds, zum Beispiel `LF3`, es wird nur ergänzt)                                                                | Use Case und Code            |
 
 - Die Tabelle: Kopfzeile mit "Schuljahr 1" bis "Schuljahr 3" (in der Fassung vom 07.08.2026 Zeile 4), Spalte A nennt die Komponente nur in der ersten Zeile ihres Blocks, Spalte B die Position ("a) ..."), die Spalten C bis E die Lernfelder je Schuljahr. Die Nummer der Importkomponente folgt aus dem Paragrafen der Verordnung: Abschnitt A (§ 4 Absatz 2) Nr. 1 bis 9 sind K1 bis K9, Abschnitt B (Absatz 3) Nr. 1 bis 10 sind K10 bis K19, Abschnitt C (Absatz 4) Nr. 1 bis 6 sind K20 bis K25. Der Titel der Komponente wird nicht ausgewertet. Bei geteilten Komponenten (K6, K24, K25) entscheidet der Buchstabe, zu welchem Teil der Enabler gehört (K6.1-a, K6.2-d). Es gilt die Fassung "Übertragung von Mapping aus Dokument in Excel.xlsx" (Stand 07.08.2026), die ältere Datei mit dem Zusatz "-WMC-NB-MB-03" wird nicht gelesen.
 - Angaben wie "LF 2", "LF2,3", "LF 2,3,4", "Lernfeld 3", "LF 5, LF 7", "LF 5 und 7" werden gelesen (Groß und Kleinschreibung, Leerzeichen, Steuerzeichen und Silbentrennung spielen keine Rolle). "alle Lernfelder" bedeutet alle Lernfelder des Schuljahrs der Spalte. "nur betrieblich" und "nur betr./beh." bedeuten, dass die Position nur im Betrieb vermittelt wird: kein Lernfeld, kein Fehler (Hinweis im Plan).
 - Nichts wird geraten. Als übersprungen mit Grund und Zeilennummer (und Spalte) führt der Plan: Komponente ohne Gegenstück im Import (`COMPONENT_NOT_IN_IMPORT`), ausgeschlossene Komponente (`COMPONENT_EXCLUDED`, K18), Buchstabe ohne Enabler im Import (`ENABLER_NOT_IN_IMPORT`), mehrfach vorkommender Buchstabe (`DUPLICATE_LETTER`, beide Zeilen), Zeile ohne Buchstaben (`NO_LETTER`), widersprüchlicher Block (`NUMBER_MISMATCH`, `SECTION_MISMATCH`, `REFERENCE_MISMATCH`, `NUMBER_OUT_OF_RANGE`, `BLOCK_UNKNOWN`), Lernfeld außerhalb 1 bis 13 (`LF_OUT_OF_RANGE`), Lernfeld, das nicht zum Schuljahr der Spalte gehört (`YEAR_MISMATCH`), nicht lesbare Zelle (`UNPARSEABLE_REFERENCE`), Lernfeldangabe ohne Zeilentext (`ORPHAN_REFERENCE`).
 - Zuordnungen gibt es nur zu Enablern. Das Modell erlaubt auch Use Cases (genau eines von beiden), die Zuordnung zu Komponenten gibt es im Modell nicht. Die Use Cases schreibt das Skript des nächsten Abschnitts, die Excel nennt für sie keine eigene Zuordnung (jeder Use Case gehört zu genau einem Enabler).
 - Titel und Stunden: Die Tabelle nennt keine. Maßgebliche Quelle ist der Rahmenlehrplan für Kaufleute für Büromanagement (Beschluss der KMK vom 27.09.2013 in der Fassung vom 20.03.2025, Teil V Lernfelder). Bezeichnung und Zeitrichtwert der 13 Lernfelder stehen als Daten im Modul `src/lib/content-import/learning-fields/official.ts` und gehen standardmäßig in jeden Plan ein: Titel mit Quelle `official` (nicht vorläufig) und `hours_budget` je Lernfeld. Die Summe ist 880 Stunden, 320 im Schuljahr 1, 280 im Schuljahr 2 und 280 im Schuljahr 3, die Tests prüfen das. Beim Lernfeld 11 steht im PDF "40. Stunden" (Tippfehler mit Punkt), eingetragen sind 40 Stunden, weil nur das zur Jahressumme von 280 Stunden passt. Rangfolge der Titel: Titeldatei des Eigentümers (`--titles <Datei>.json`, `{"LF1": "..."}`), dann der amtliche Titel, dann die Kapitelliste `Enabler_Quellen.csv` (`--titles <Datei>.csv`, Kurztitel, vorläufig) und zuletzt der Platzhalter "Lernfeld N". Weil der amtliche Titel vor der Kapitelliste steht, ist `--titles` mit einer `.csv` nur noch für Pläne ohne die amtlichen Daten von Bedeutung. Die Stunden kommen nur aus dem Modul. Ein bestehendes Lernfeld mit anderem Titel oder anderen Stunden wird ohne `--update-existing` nur gemeldet.
-- Offener Punkt `HOURS_BUDGET` entfällt, sobald alle 13 Lernfelder Stunden haben. Die 13 Einzel-PDF der Lernfelder sind als zweite Gegenprobe nicht ausgewertet. Die Änderung braucht keine Migration (die Spalte `hours_budget` gibt es seit `20261024000100`) und hat keine Wirkung auf Production.
+- Offener Punkt `HOURS_BUDGET` entfällt, sobald alle 13 Lernfelder Stunden haben. Die 13 Einzel-PDF der Lernfelder enthalten nur Kapitelverzeichnisse eines Lehrbuchs ohne Stunden, ihre Titel stimmen mit den amtlichen überein (außer beim Lernfeld 7: dort steht "bewältigen" statt "gestalten", maßgeblich ist der Rahmenlehrplan). Die Änderung braucht keine Migration (die Spalte `hours_budget` gibt es seit `20261024000100`) und hat keine Wirkung auf Production.
+- Beschreibung: Die Beschreibung ist die wörtliche Zielformulierung des Lernfelds aus dem Rahmenlehrplan (erster Absatz unter Titel und Zeitrichtwert, ein Satz "Die Schülerinnen und Schüler besitzen die Kompetenz, ..."), im Modul `official.ts` mit Quelle. Nichts ist umformuliert, nur das Layout des PDF ist bereinigt (Zeilenumbrüche, Silbentrennung am Zeilenende, zum Beispiel "Be-" und "triebs" zu "Betriebs"). Diese Form hat dieselbe Länge wie die FIAE-Beschreibungen (ein bis zwei Sätze), die Lernfeldseiten sehen damit für beide Berufe gleich aus. Die Inhalte der Lernfelder stehen im Rahmenlehrplan nicht als eigene Liste, sondern als Beispiele in Klammern im Fließtext der Kompetenzbeschreibung, sie sind deshalb nicht übernommen. Die 13 Einzel-PDF der Lernfelder (`Dokumente\LF`) sind Inhaltsverzeichnisse eines Lehrbuchs ohne Zielformulierung, Zeitrichtwert und Kompetenzen und deshalb keine amtliche Quelle. Der Plan trägt die Beschreibung mit, ein Planfile ohne Beschreibung (älterer Plan) schreibt keine und löscht keine. Eine Beschreibung im Plan, die nicht der amtliche Text ist, lehnt die Prüfung des Plans ab.
+- Zuordnung der Use Cases: Die Lernfeldseiten (`/api/trainee/lernfelder`, `/api/trainer/lernfelder` und die Detailrouten) lesen die Use Cases eines Lernfelds nicht aus der Zuordnungstabelle, sondern aus dem Textfeld `use_cases.lernfelder` (Code des Lernfelds, `arrayContains`). Für KfBM war es leer, deshalb zeigten die Seiten keinen Use Case, auch wenn Zeilen mit `use_case_id` gefehlt hätten. Der Lauf liest in `check`, Probelauf und echtem Lauf die Use Cases des Katalogs aus der Datenbank und schreibt für jede Zuordnung (Lernfeld, Enabler) zwei Dinge für den Use Case des Enablers (`use_cases.enabler_id`, je Enabler höchstens einer): die Zeile (Lernfeld, Use Case) in `training_catalog_content_mappings` (die Tabelle erlaubt je Zeile genau einen von `enabler_id` und `use_case_id`, deshalb eine eigene Zeile) und den Code des Lernfelds in `use_cases.lernfelder`. Das Textfeld wird nur ergänzt, nie geleert oder umgeordnet, vorhandene Codes bleiben. Das Ergänzen geschieht auch ohne `--update-existing` (wie das Anlegen der Zuordnungszeilen), ein Code, den jemand von Hand entfernt hat, kommt beim nächsten Lauf wieder. Die Liste der Lernfelder der Trainee-Route (`/api/trainee/lernfelder`) hält die Zahl der Use Cases bis zu 15 Minuten im Speicher des Servers, nach dem Lauf erscheinen die neuen Zahlen also mit Verzögerung oder nach einem Neustart. Es gibt keine Migration, der Lauf schreibt nur diese Daten.
+- Meldungen zur Zuordnung der Use Cases im Bericht: "Enabler mit Lernfeld, aber ohne Use Case" (die Enabler, für die es keinen Use Case gibt, mit Code) und "Use Cases des Katalogs ohne Enabler" (Use Cases mit `enabler_id` leer, sie bekommen kein Lernfeld, mit Code). Beide sind Hinweise, kein Fehler. Die Zahlen der Preview stehen erst nach dem Lauf fest (erwartet bis zu 688 Zuordnungen zu Use Cases, eine je Zuordnung eines Enablers mit Use Case).
 - Konflikte (ein Lernfeld besteht mit anderem Schuljahr, eine Stelle der Reihenfolge ist von einem anderen Code belegt) stoppen einen echten Lauf vor dem ersten Schreiben (Exit 3). Bestehende Zuordnungen, die der Plan nicht nennt, bleiben unverändert (der Bericht zählt sie).
 
 ### Apply in die Preview, Rückbau
@@ -198,6 +261,18 @@ begin;
 delete from training_catalog_content_mappings
   where training_catalog_id = (select id from training_catalogs where code = 'KFBM');
 delete from training_catalog_learning_fields
+  where training_catalog_id = (select id from training_catalogs where code = 'KFBM');
+rollback; -- zur Kontrolle der Zahlen, dann mit commit wiederholen
+```
+
+Die Zuordnung der Use Cases wird mit demselben Löschen der Zuordnungen mit entfernt (die Zeilen mit `use_case_id` tragen den Katalog). Nicht mit entfernt sind die Codes in `use_cases.lernfelder`. Sie lassen sich in derselben Transaktion zurücknehmen, wenn an den Use Cases des Katalogs keine Lernfeldcodes von Hand gesetzt wurden:
+
+```sql
+begin;
+update use_cases
+  set lernfelder = array(
+    select code from unnest(lernfelder) as code where code !~ '^LF[0-9]+$'
+  )
   where training_catalog_id = (select id from training_catalogs where code = 'KFBM');
 rollback; -- zur Kontrolle der Zahlen, dann mit commit wiederholen
 ```

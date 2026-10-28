@@ -1,18 +1,28 @@
 'use client';
 
+import { useId, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import type { MediumGroupDto } from '@/lib/content-upload/review/types';
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
+  LABEL,
+  SELECT_SMALL,
 } from '@/components/admin/content-upload/styles';
 
 type Props = {
   selectedCount: number;
   /** What "accept all safe ones" would take. */
   acceptableHigh: number;
+  /** What "accept new and added" would take. */
+  acceptableStock: number;
+  /** The proposals of the band medium a click may take, by the same reasons. */
+  mediumGroups: MediumGroupDto[];
   /** Decisions cannot be written now (the run is not in review, or a call is running). */
   disabled: boolean;
   onAcceptHigh: () => void;
+  onAcceptStock: () => void;
+  onAcceptMedium: (group: MediumGroupDto) => void;
   onReject: () => void;
   onDefer: () => void;
   onAssign: () => void;
@@ -29,8 +39,12 @@ type Props = {
 export function BulkBar({
   selectedCount,
   acceptableHigh,
+  acceptableStock,
+  mediumGroups,
   disabled,
   onAcceptHigh,
+  onAcceptStock,
+  onAcceptMedium,
   onReject,
   onDefer,
   onAssign,
@@ -39,6 +53,10 @@ export function BulkBar({
 }: Props) {
   const { t } = useLanguage();
   const none = selectedCount === 0;
+  const mediumId = useId();
+  const [groupKey, setGroupKey] = useState('');
+  // the chosen group counts only while it exists (a click removes its files), else the first
+  const group = mediumGroups.find(g => g.key === groupKey) ?? mediumGroups[0];
   return (
     <section
       aria-label={t('contentUpload.bulk.title')}
@@ -52,6 +70,45 @@ export function BulkBar({
       >
         {t('contentUpload.bulk.acceptHigh', { count: acceptableHigh })}
       </button>
+      <button
+        type="button"
+        onClick={onAcceptStock}
+        disabled={disabled || acceptableStock === 0}
+        className={BTN_PRIMARY}
+      >
+        {t('contentUpload.bulk.acceptStock', { count: acceptableStock })}
+      </button>
+      {mediumGroups.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label htmlFor={mediumId} className={LABEL}>
+              {t('contentUpload.bulk.mediumLabel')}
+            </label>
+            <select
+              id={mediumId}
+              value={group?.key ?? ''}
+              onChange={e => setGroupKey(e.target.value)}
+              className={`${SELECT_SMALL} max-w-xs`}
+            >
+              {mediumGroups.map(g => (
+                <option key={g.key} value={g.key}>
+                  {g.text} ({g.count})
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={() => group && onAcceptMedium(group)}
+            disabled={disabled || !group}
+            className={BTN_SECONDARY}
+          >
+            {t('contentUpload.bulk.mediumAccept', {
+              count: group?.count ?? 0,
+            })}
+          </button>
+        </div>
+      )}
       <button
         type="button"
         onClick={onNewest}

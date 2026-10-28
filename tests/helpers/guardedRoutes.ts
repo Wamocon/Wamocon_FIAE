@@ -256,6 +256,12 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['runId'],
   },
   {
+    route: 'trainer/content-upload/runs/[runId]/stock',
+    method: 'POST',
+    guard: 'curriculum',
+    params: ['runId'],
+  },
+  {
     route: 'trainer/content-upload/runs/[runId]/apply',
     method: 'POST',
     guard: 'curriculum',
@@ -665,6 +671,13 @@ export const GUARDED_ROUTES: GuardedRoute[] = [
     params: ['catalogId'],
   },
   { route: 'admin/catalogs', method: 'GET', guard: 'superAdmin', params: [] },
+  { route: 'admin/content-stats', method: 'GET', guard: 'admin', params: [] },
+  {
+    route: 'admin/catalogs/[catalogId]/content-targets',
+    method: 'PUT',
+    guard: 'curriculum',
+    params: ['catalogId'],
+  },
   {
     route: 'admin/organizations/[orgId]/catalogs',
     method: 'GET',

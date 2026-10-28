@@ -1,7 +1,7 @@
 // The steps of the queue that lead a verified file to its proposal (package U6 binds
 // what U3 and U4 built into the slots `extract` and `rules` of staging/queue.ts):
 //
-//   extract  verified  -> extracted        reads the file (Word or PDF), applies the rule
+//   extract  verified  -> extracted        reads the file (Word, PDF, quiz JSON or Excel), applies the rule
 //                                          stage and writes the proposal; a file that must
 //                                          not be processed is rejected, one that cannot be
 //                                          read fails (code), never an exception
@@ -12,7 +12,9 @@
 // Two states because the model allows one step per state; the second one reads no
 // file. Nothing of the document is kept: the proposal holds type, codes, confidence
 // and reasons (code and fixed text), the file row holds numbers and finding codes.
-// The excerpt for the model is not built here, that is package U5.
+// The excerpt for the model is not built here, that is the stage of package U5
+// (src/lib/content-upload/ki): when the environment has a model step it takes the
+// files the rules left `unclear`, in the two slots `ki` and `kiCall`.
 
 import type { Decisions } from '@/lib/content-import/apply/types';
 import { readDocx } from '@/lib/content-upload/read-docx';
@@ -27,7 +29,16 @@ import {
   buildPositiveList,
   positiveListFromPaths,
 } from '@/lib/content-upload/classify/positive-list';
+import { extractQuizJson } from '@/lib/content-upload/review/json-step';
+import { extractMappingXlsx } from '@/lib/content-upload/review/xlsx-step';
 import { OBJECT_DELETED_KEY } from '@/lib/content-upload/staging/types';
+import { contentUploadAvailability } from '@/lib/content-upload/staging/config';
+import { createKiStepEnv, type KiEnvOptions } from '@/lib/content-upload/ki/env';
+import {
+  createKiCallStep,
+  createKiReserveStep,
+  type KiStepEnv,
+} from '@/lib/content-upload/ki/steps';
 import {
   buildSteps,
   pumpRun,
@@ -47,6 +58,8 @@ import type { Paragraph } from '@/lib/content-import/types';
 
 /** What the steps need from outside (replaced in the tests). */
 export interface ReviewStepEnv {
+  /** The model step. Absent: the files the rules left unclear stay as they are. */
+  ki?: KiStepEnv;
   /** Positive list and presets of the run, loaded once and kept for the call of the pump. */
   context(): Promise<{ list: PositiveList; decisions: Decisions }>;
   writeProposal(
@@ -80,21 +93,36 @@ export function createExtractStep(env: ReviewStepEnv): QueueStep {
     from: 'verified',
     async run(context): Promise<StepResult> {
       const { file } = context;
-      const reject = async (code: string): Promise<StepResult> => {
+      const reject = async (
+        code: string,
+        extra?: Record<string, unknown>
+      ): Promise<StepResult> => {
         const removed = await context.removeObject();
+        const summary = {
+          ...(extra ?? {}),
+          ...(removed ? { [OBJECT_DELETED_KEY]: true } : {}),
+        };
         return {
           kind: 'advance',
           to: 'rejected',
           code,
-          patch: removed
-            ? { parseSummary: { [OBJECT_DELETED_KEY]: true } }
-            : {},
+          patch:
+            Object.keys(summary).length > 0 ? { parseSummary: summary } : {},
         };
       };
 
       const bytes = await context.loadBytes();
       if (bytes === null) {
         return { kind: 'advance', to: 'failed', code: 'OBJECT_MISSING' };
+      }
+
+      // A quiz JSON file and an Excel file have their own reading and rule stage (and
+      // never an excerpt)
+      if (file.ext === 'json') {
+        return extractQuizJson(file, bytes, env, reject);
+      }
+      if (file.ext === 'xlsx') {
+        return extractMappingXlsx(file, bytes, env, reject);
       }
 
       let paragraphs: Paragraph[] | null = null;
@@ -207,11 +235,14 @@ export function createRulesStep(): QueueStep {
   };
 }
 
-/** The steps with the slots of U6 filled in. */
+/** The steps with the slots of U6 filled in, and the model step when the environment has one. */
 export function reviewSteps(env: ReviewStepEnv): QueueStep[] {
   return buildSteps({
     extract: createExtractStep(env),
     rules: createRulesStep(),
+    ...(env.ki
+      ? { ki: createKiReserveStep(env.ki), kiCall: createKiCallStep(env.ki) }
+      : {}),
   });
 }
 
@@ -220,9 +251,27 @@ export function reviewSteps(env: ReviewStepEnv): QueueStep[] {
  * positive list (the components of the catalog plus the plan of the folder tree of
  * the run) is loaded on first use and kept for the call.
  */
-export function reviewStepEnv(deps: ReviewDeps, runId: string): ReviewStepEnv {
+export function reviewStepEnv(
+  deps: ReviewDeps,
+  runId: string,
+  ki: Partial<
+    Pick<KiEnvOptions, 'env' | 'available' | 'fetchImpl' | 'config'>
+  > = {}
+): ReviewStepEnv {
   let loaded: Promise<{ list: PositiveList; decisions: Decisions }> | undefined;
   return {
+    ki: deps.ki
+      ? createKiStepEnv({
+          deps,
+          ki: deps.ki,
+          runId,
+          env: ki.env ?? (() => process.env),
+          available:
+            ki.available ?? (() => contentUploadAvailability().enabled),
+          fetchImpl: ki.fetchImpl,
+          config: ki.config,
+        })
+      : undefined,
     context() {
       loaded ??= (async () => {
         const run = await deps.repo.getRun(runId);
@@ -230,7 +279,12 @@ export function reviewStepEnv(deps: ReviewDeps, runId: string): ReviewStepEnv {
         const paths: string[] = [];
         for (let offset = 0; ; offset += 500) {
           const page = await deps.repo.listFiles(runId, { offset, limit: 500 });
-          paths.push(...page.map(f => f.relPath));
+          // only the paths of Word and PDF files describe the folder tree
+          paths.push(
+            ...page
+              .filter(f => f.ext === 'docx' || f.ext === 'pdf')
+              .map(f => f.relPath)
+          );
           if (page.length < 500) break;
         }
         const components = await deps.review.catalogComponents(

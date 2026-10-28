@@ -16,6 +16,7 @@
 import { createHash } from 'node:crypto';
 
 import type { Decisions, ImportPlan } from '@/lib/content-import/apply/types';
+import type { LearningFieldPlan } from '@/lib/content-import/learning-fields/types';
 import type { UseCasePlan } from '@/lib/content-import/use-cases/types';
 
 /**
@@ -23,7 +24,7 @@ import type { UseCasePlan } from '@/lib/content-import/use-cases/types';
  * the protocol change what a plan means: a dry run of an older version then never
  * opens the gate of a newer one.
  */
-export const TRANSFER_ENGINE_VERSION = 'upload-transfer/1';
+export const TRANSFER_ENGINE_VERSION = 'upload-transfer/3';
 
 /** JSON with sorted keys and no whitespace. undefined is left out, like JSON.stringify. */
 export function stableStringify(value: unknown): string {
@@ -66,8 +67,10 @@ export interface CanonicalInput {
   decisions: Decisions;
   importPlan: ImportPlan;
   useCasePlan: UseCasePlan;
-  /** The switches of this run. */
-  options: { updateExisting: boolean };
+  /** The plan of the learning field import (an Excel mapping file), null without one. */
+  learningPlan?: LearningFieldPlan | null;
+  /** The switches of this run: the files whose differing rows are replaced. */
+  options: { replaceFiles: readonly string[] };
   /** The files that became rows of the plans: id and the hash of the object. */
   files: ReadonlyArray<{ id: string; sha256: string }>;
   /** The originals that are copied to the document bucket: file id and hash. */
@@ -92,10 +95,15 @@ export function canonicalPlan(input: CanonicalInput): string {
       activate: false,
       scenarioSolutions: false,
       useCaseSolutions: false,
+      // missing questions of an existing quiz are added (docs 8.9)
+      extendQuizzes: true,
+      // the learning field engine only adds, it never replaces (package UP2)
+      learningUpdateExisting: false,
     },
-    options: { updateExisting: input.options.updateExisting === true },
+    options: { replaceFiles: [...input.options.replaceFiles].sort() },
     import: withoutTime(input.importPlan),
     useCases: withoutTime(input.useCasePlan),
+    learning: input.learningPlan ? withoutTime(input.learningPlan) : null,
     files: [...input.files].sort(byId),
     originals: [...input.originals].sort(byId),
   });

@@ -9,7 +9,7 @@ import {
   type UploadCandidate,
   type UploadSummary,
 } from '@/lib/content-upload/staging/client';
-import { LIMITS } from '@/lib/content-upload/staging/config';
+import { LIMITS, maxFileBytesFor } from '@/lib/content-upload/staging/config';
 import { ProcessingPanel } from '@/components/admin/content-upload/ProcessingPanel';
 import {
   fileCodeLabel,
@@ -23,7 +23,11 @@ import {
 } from '@/components/admin/content-upload/styles';
 import { useThrottledAnnouncement } from '@/components/admin/content-upload/useAnnouncer';
 
-const EXTENSION = /\.(docx|pdf)$/i;
+const EXTENSION = /\.(docx|pdf|json|xlsx)$/i;
+
+/** The kind of a file by its name, as the server reads it (lower case, without the dot). */
+const extOf = (name: string) =>
+  name.slice(name.lastIndexOf('.') + 1).toLowerCase();
 
 type Phase = 'hashing' | 'announcing' | 'uploading' | 'completing';
 type State = 'idle' | 'uploading' | 'paused' | 'processing' | 'error';
@@ -81,7 +85,7 @@ export function RunUploader({
 
   const totalBytes = selected.reduce((sum, c) => sum + c.file.size, 0);
   const tooLarge = selected.filter(
-    c => c.file.size > LIMITS.maxFileBytes
+    c => c.file.size > maxFileBytesFor(extOf(c.file.name))
   ).length;
   const tooMany = selected.length > LIMITS.maxFilesPerRun;
 
@@ -175,7 +179,7 @@ export function RunUploader({
               type="file"
               multiple
               hidden
-              accept=".docx,.pdf"
+              accept=".docx,.pdf,.json,.xlsx"
               data-testid="files-input"
               aria-label={t('contentUpload.upload.pickFiles')}
               onChange={e => {
@@ -187,8 +191,13 @@ export function RunUploader({
           <p className="text-muted text-sm">
             {t('contentUpload.upload.allowed', {
               size: Math.round(LIMITS.maxFileBytes / (1024 * 1024)),
+              json: Math.round(maxFileBytesFor('json') / (1024 * 1024)),
+              xlsx: Math.round(maxFileBytesFor('xlsx') / (1024 * 1024)),
               count: LIMITS.maxFilesPerRun,
             })}
+          </p>
+          <p className="text-muted text-sm" data-testid="path-hint">
+            {t('contentUpload.upload.pathHint')}
           </p>
 
           {selected.length > 0 && (

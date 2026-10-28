@@ -166,6 +166,14 @@ test(
       assert.equal(plan.catalog, 'KFBM');
       assert.equal(plan.learningFields.length, 13);
       assert.equal(plan.source.sheet, 'Tabelle1');
+      // the official Zielformulierung travels in the plan
+      assert.ok(
+        plan.learningFields.every(
+          f =>
+            typeof f.description === 'string' &&
+            f.description.startsWith('Die Schülerinnen und Schüler')
+        )
+      );
       assert.deepEqual(
         plan.mappings
           .filter(m => m.enablerCode === 'K1-a')

@@ -748,3 +748,158 @@ describe('pumpRun', () => {
     });
   });
 });
+
+describe('steps that wait for a condition and files that are done with a step', () => {
+  /** Files in the state `unclear`, as the rule stage leaves them. */
+  async function unclearFiles(ctx: Ctx, runId: string, count: number) {
+    const ids = await uploadedFiles(ctx, runId, count, 'u');
+    for (const id of ids) {
+      ctx.repo.files.get(id)!.status = 'unclear';
+    }
+    return ids;
+  }
+  const toPending = (
+    extra: Partial<QueueStep> = {}
+  ): { step: QueueStep; seen: string[] } => {
+    const seen: string[] = [];
+    return {
+      seen,
+      step: {
+        name: 'reserve',
+        from: 'unclear',
+        async run({ file }) {
+          seen.push(file.id);
+          return { kind: 'advance', to: 'ki_pending' };
+        },
+        ...extra,
+      },
+    };
+  };
+
+  it('takes no files of a state while its step is not ready, and does not count them as work', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    await unclearFiles(ctx, run.id, 2);
+    let ready = false;
+    const { step, seen } = toPending({ ready: async () => ready });
+    const first = await pumpRun(ctx.deps, run.id, {
+      steps: [step],
+      closeUpload: true,
+    });
+    expect(seen).toHaveLength(0);
+    expect(first.pending.claimable).toBe(0);
+    expect(first.done).toBe(true);
+    // the run is not held back by files that wait for a condition
+    expect(first.runStatus).toBe('review');
+    ready = true;
+    const second = await pumpRun(ctx.deps, run.id, { steps: [step] });
+    expect(seen).toHaveLength(2);
+    expect(second.advanced).toBe(2);
+    expect(second.runStatus).toBe('review');
+  });
+
+  it('asks again before every batch and gets the run and the deps', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    await unclearFiles(ctx, run.id, 4);
+    const asked: string[] = [];
+    const { step } = toPending({
+      ready: async context => {
+        asked.push(context.runId);
+        expect(context.deps).toBe(ctx.deps);
+        return true;
+      },
+    });
+    await pumpRun(ctx.deps, run.id, { steps: [step], concurrency: 1 });
+    // four batches of one file, a fifth that finds nothing, and the final look
+    expect(asked.length).toBeGreaterThanOrEqual(5);
+    expect(new Set(asked)).toEqual(new Set([run.id]));
+  });
+
+  it('never takes a file again that carries the marker of its step', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    const ids = await unclearFiles(ctx, run.id, 3);
+    ctx.repo.files.get(ids[0])!.parseSummary = { kiState: 'conflict' };
+    const { step, seen } = toPending({ unlessMarked: 'kiState' });
+    const result = await pumpRun(ctx.deps, run.id, {
+      steps: [step],
+      closeUpload: true,
+    });
+    expect(seen.sort()).toEqual([ids[1], ids[2]].sort());
+    expect(result.pending.claimable).toBe(0);
+    // the marked file stays where it is and does not keep the run in processing
+    expect((await statusOf(ctx, run.id, ids[0])).status).toBe('unclear');
+    expect(result.runStatus).toBe('review');
+  });
+
+  it('lets a step choose how long a file waits for its next try', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    const [id] = await uploadedFiles(ctx, run.id, 1);
+    const step: QueueStep = {
+      name: 'later',
+      from: 'uploaded',
+      async run() {
+        return { kind: 'retry', reason: 'LATER', delaySeconds: 300 };
+      },
+    };
+    await pumpRun(ctx.deps, run.id, { steps: [step], retryDelaySeconds: 1 });
+    const locked = await statusOf(ctx, run.id, id);
+    expect(locked.attempts).toBe(1);
+    const wait = locked.lockedUntil!.getTime() - ctx.repo.now().getTime();
+    expect(wait).toBe(300_000);
+  });
+
+  it('knows the slots of the model step and their states', () => {
+    const noop = async () => ({ kind: 'advance', to: 'ki_pending' }) as const;
+    const steps = buildSteps({
+      ki: { name: 'a', from: 'unclear', run: noop },
+      kiCall: { name: 'b', from: 'ki_pending', run: noop },
+    });
+    expect(steps.map(s => s.from)).toEqual([
+      'uploaded',
+      'unclear',
+      'ki_pending',
+    ]);
+    expect(() =>
+      buildSteps({ kiCall: { name: 'b', from: 'unclear', run: noop } })
+    ).toThrow();
+  });
+});
+
+describe('a step whose condition cannot be answered', () => {
+  it('is not ready, and the other steps go on', async () => {
+    const ctx = setup();
+    const run = await newRun(ctx.deps);
+    const ids = await uploadedFiles(ctx, run.id, 2, 'r');
+    for (const id of ids) ctx.repo.files.get(id)!.status = 'unclear';
+    const waiting: QueueStep = {
+      name: 'waits',
+      from: 'unclear',
+      ready: async () => {
+        throw new Error('the database is gone SECRET-DETAIL');
+      },
+      async run() {
+        return { kind: 'advance', to: 'ki_pending' };
+      },
+    };
+    const [more] = await uploadedFiles(ctx, run.id, 1, 'm');
+    const logged = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const result = await pumpRun(ctx.deps, run.id, {
+      steps: [verifyMetadataStep, waiting],
+      closeUpload: true,
+    });
+    // the step of the upload check still worked, the waiting step took nothing
+    expect((await statusOf(ctx, run.id, more)).status).toBe('verified');
+    for (const id of ids) {
+      expect((await statusOf(ctx, run.id, id)).status).toBe('unclear');
+    }
+    expect(result.advanced).toBeGreaterThanOrEqual(1);
+    expect(result.runStatus).toBe('review');
+    // only the name of the error is logged, never its text
+    const printed = JSON.stringify(logged.mock.calls);
+    expect(printed).toContain('step not ready');
+    expect(printed).not.toContain('SECRET-DETAIL');
+  });
+});

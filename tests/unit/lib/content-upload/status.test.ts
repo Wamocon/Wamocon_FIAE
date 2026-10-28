@@ -86,6 +86,8 @@ describe('file status model (concept 2.3)', () => {
     expect(canTransitionFile('unclear', 'ki_pending')).toBe(true);
     expect(canTransitionFile('ki_pending', 'proposed_ki')).toBe(true);
     expect(canTransitionFile('ki_pending', 'unclear')).toBe(true);
+    // the sweeper of the queue may fail a held file of the model step
+    expect(canTransitionFile('ki_pending', 'failed')).toBe(true);
     expect(canTransitionFile('proposed_ki', 'decided')).toBe(true);
     expect(canTransitionFile('unclear', 'decided')).toBe(true);
     expect(canTransitionFile('announced', 'expired')).toBe(true);

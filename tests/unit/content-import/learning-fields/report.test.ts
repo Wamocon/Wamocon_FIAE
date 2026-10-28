@@ -23,6 +23,10 @@ const report = (
   conflicts: [],
   differences: [],
   keptMappings: 0,
+  useCaseMappings: { insert: 30, update: 0, unchanged: 4 },
+  useCaseCodes: { insert: 0, update: 20, unchanged: 5 },
+  enablersWithoutUseCase: [],
+  useCasesWithoutEnabler: [],
   wrote: true,
   ...over,
 });
@@ -39,6 +43,14 @@ describe('renderLearningFieldRunReport', () => {
     expect(text).toContain(
       '| Zuordnungen (Enabler zu Lernfeld) | 22 | 0 | 3 |'
     );
+    expect(text).toContain(
+      '| Zuordnungen (Use Case zu Lernfeld) | 30 | 0 | 4 |'
+    );
+    expect(text).toContain(
+      '| Use Cases (Lernfeld-Codes in der Spalte lernfelder) | 0 | 20 | 5 |'
+    );
+    expect(text).not.toContain('## Enabler ohne Use Case');
+    expect(text).not.toContain('## Use Cases ohne Enabler');
     expect(text).not.toContain('## Konflikte');
     expect(text).not.toMatch(/[–—]/);
   });
@@ -93,7 +105,7 @@ describe('renderLearningFieldRunReport', () => {
       '1 Enabler des Plans fehlen in der Zieldatenbank, 2 Zuordnungen sind deshalb nicht geschrieben'
     );
     expect(text).toContain(
-      'Mit --update-existing nur Titel und Stunden aktualisiert'
+      'Mit --update-existing nur Titel, Beschreibung und Stunden aktualisiert'
     );
     expect(text).toContain('- training_catalog_learning_fields LF1: title');
     expect(text).toContain('## Konflikte');
@@ -113,7 +125,35 @@ describe('renderLearningFieldRunReport', () => {
       report({ differences: many }),
       info
     );
-    expect(text).toContain('Nicht geändert (dafür gibt es --update-existing).');
+    expect(text).toContain('Nicht geändert (dafür gibt es --update-existing)');
+    expect(text).toContain('einer leeren Beschreibung');
     expect(text).toContain('und 5 weitere');
+  });
+
+  it('lists the enablers without a use case and the use cases without an enabler', () => {
+    const text = renderLearningFieldRunReport(
+      report({
+        enablersWithoutUseCase: ['K23.2-b'],
+        useCasesWithoutEnabler: ['5b', '9z'],
+      }),
+      info
+    );
+    expect(text).toContain('## Enabler ohne Use Case');
+    expect(text).toContain('Enabler mit Lernfeld, aber ohne Use Case: 1.');
+    expect(text).toContain('K23.2-b');
+    expect(text).toContain('## Use Cases ohne Enabler');
+    expect(text).toContain('Use Cases des Katalogs ohne Enabler: 2.');
+    expect(text).toContain('5b, 9z');
+    expect(text).not.toMatch(/[–—]/);
+  });
+
+  it('cuts a long list of codes', () => {
+    const codes = Array.from({ length: 203 }, (_v, i) => `c${i}`);
+    const text = renderLearningFieldRunReport(
+      report({ useCasesWithoutEnabler: codes }),
+      info
+    );
+    expect(text).toContain('und 3 weitere');
+    expect(text).not.toContain('c202');
   });
 });

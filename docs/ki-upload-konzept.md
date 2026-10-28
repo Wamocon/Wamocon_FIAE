@@ -270,7 +270,7 @@ Eindeutig: `(run_id, rel_path, sha256)`. Indizes: `(run_id, status, locked_until
 | `note`                                                     | text, null             | Anmerkung, höchstens 500 Zeichen                                                       |
 | `is_current`, `decided_at`                                 | boolean, timestamptz   | höchstens eine aktuelle Entscheidung je Datei (Teilindex `(file_id) where is_current`) |
 
-Den Schalter "bestehende Zeilen aktualisieren" kennt die Engine nur einmal je Lauf (`RunOptions.updateExisting` in `apply/engine.ts`). Er steht deshalb je Übernahme in `content_upload_applies.update_existing`, nicht je Entscheidung.
+Den Schalter "bestehende Zeilen aktualisieren" kennt die Engine nur einmal je Lauf (`RunOptions.updateExisting` in `apply/engine.ts`). Seit UP1 wird er nur noch mit einer Dateiauswahl (`replaceFiles`, `RunOptions.updateFilter`) benutzt, siehe Abschnitt 19. `content_upload_applies.update_existing` heißt jetzt: mindestens eine Datei wird ersetzt.
 
 **`content_upload_ki_calls`** (Protokoll jeder Übermittlung)
 
@@ -1222,7 +1222,7 @@ Stand: 27.10.2026. Paket U7 ist umgesetzt, ohne Migration und ohne Wirkung auf P
 | Protokoll (`transfer/record.ts`, `attribution.ts`) | Ein Decorator um die `Db`-Schnittstelle der Engine liefert Zeilen-IDs und Vorwerte, die Engines blieben unverändert. Eine Zeile je Tabelle und ID, `file_id` aus dem Plan. Alles in derselben Transaktion wie der Inhalt |
 | Festgelegt (`FIXED_ENGINE_OPTIONS`) | `activate` und beide Lösungsschalter sind `false`. Ein Test liest die Quelltexte (`transfer-policy.test.ts`), ein weiterer prüft mit Voreinstellungen `activate: true`, dass trotzdem alles inaktiv bleibt |
 | Tippbestätigung | `confirm` muss genau `KFBM` sein, sonst 400 ohne jede Wirkung |
-| Schalter "Bestehende Zeilen aktualisieren" | je Übernahme (`update_existing` im Protokoll), Teil des Hashes: ein Probelauf mit Schalter öffnet das Tor nicht für eine Übernahme ohne |
+| Schalter "Bestehende Zeilen aktualisieren" | seit UP1 je Datei (`replaceFiles`, Abschnitt 19), Teil des Hashes: ein Probelauf mit anderer Auswahl öffnet das Tor nicht |
 | `purge_after` | Beim Übernehmen jetzt plus 30 Tage (Entscheidung O3), im selben Update, das den Lauf auf `applied` setzt |
 | Rückbau (`transfer/rollback.ts`) | SQL-Text aus `applied_rows`, ausgeführt vom Eigentümer, erst als Probe. Siehe 16.3 |
 | Originale (`transfer/originals.ts`, `content-bucket.ts`, Engine) | Neue Operation der Engine (`enablerOriginals`): eine Zeile `THEORY`/`ALL` am Enabler mit Dateiangaben, nur für Enabler-Lehrtexte. Siehe 16.4 |
@@ -1380,3 +1380,130 @@ Geprüft mit `ecc:security-reviewer` und `ecc:typescript-reviewer` (nur lesend).
 - **Freigabebedingungen vor Production** (Runbook, Abschnitt 8): PDF-Leser ohne Sandbox, Obergrenze gleichzeitiger Claims (erledigt in U8), unbenutzte signierte Upload-URL nach Löschen des Objekts, Docx-Metadaten der Originale, Sichtbarkeit der Originale vor der Aktivierung (Entscheidung von Niko offen, Empfehlung: erst nach der Aktivierung).
 - **Oberfläche für Probelauf, Übernahme und Rückbau**, Sammelannahme für das Band Mittel.
 - **Abdeckung:** die Module von U2 bis U7 und das Golden-Set-Werkzeug stehen nicht in der Schwelle von 100 Prozent (`jest.config.ts`).
+
+## 18. Stand U5 (Sokrates-Stufe)
+
+Stand: 28.10.2026. Paket U5 ist umgesetzt, ohne Migration und ohne Wirkung auf Production. **Es wurde kein echter Modellaufruf gemacht**, auch keine Verbindung zu Sokrates oder einem anderen Netzwerkziel. Alle Tests laufen gegen eine Attrappe auf localhost (Browserprüfung: https mit eigenem Zertifikat, der Name wird nur im Dev-Prozess auf 127.0.0.1 gelenkt, die Prüfungen der Anwendung bleiben unverändert). Der Code liegt unter `src/lib/content-upload/ki/`.
+
+### 18.1 Was gebaut ist
+
+| Teil | Inhalt |
+| ---- | ------ |
+| Konfiguration (`ki/config.ts`) | Aus der Umgebung, fail closed. Aus, solange `CONTENT_UPLOAD_KI_ENABLED` nicht genau `true` ist. Schlüssel nur aus `OPENAI_COMPATIBLE_API_KEY`, Adresse aus `OPENAI_COMPATIBLE_BASE_URL` (dieselbe Standardadresse wie der Chat, ein Test vergleicht sie mit `loadProviderConfig`). Nur https, Standardport, keine Zugangsdaten, kein Query, Host in der Positivliste (Standard nur der Host von Sokrates, ersetzbar durch `CONTENT_UPLOAD_KI_ALLOWED_HOSTS`) |
+| Client (`ki/client.ts`) | Nur Sokrates, kein Fallback. Prüft das Ziel vor jedem Aufruf noch einmal, `redirect: 'error'`, Zeitlimit auch über das Lesen der Antwort, Antwort höchstens 32 KB (Header und Strom), Anfrage höchstens 16000 Zeichen, Schlüssel nur im Header, keine Ausgabe an die Konsole. Temperatur 0, höchstens 300 Token, kein Streaming |
+| Prompt (`ki/prompt.ts`) | Systemtext, Positivliste (Titel nur aus der Datenbank, nie aus einem Ordnernamen des Uploads), Auszug zwischen Markierungen mit zufälliger Kennung. Kein Dateiname, kein Pfad. Zweite Stufe nur mit den Enablern einer Komponente |
+| Prüfung der Antwort (`ki/answer.ts`) | JSON (erstes `{` bis letztes `}`), Zod-Schema, feste Typen, Komponente und Enabler aus der Liste (sonst fällt die ganze Antwort durch), unbekannte Felder verworfen, Sicherheit höchstens 0,80, Begründung bereinigt und auf 200 Zeichen gekürzt |
+| Vorschlag (`ki/proposal.ts`) | Quelle `ki`, Band Wahrscheinlich nur bei vollständiger Zuordnung und Sicherheit ab 0,6, sonst Unklar, nie Sicher. Ein Widerspruch zu den Regeln ergibt einen Widerspruch mit den Werten und der Quelle der Regeln. Die Gründe der Regeln bleiben erhalten |
+| Letzte Prüfung (`ki/guard.ts`) | Auf der Nutzernachricht, wie sie hinausgeht: genaue Form, Länge, Lösungsmarken, Lösungstexte (auch über zwei Zeilen), Anweisungstext, übrig gebliebene personenbezogene Muster |
+| Lösungsliste (`ki/corpus.ts`, `excerpt.ts` `solutionTextsOf`) | Lösungstexte aller Word-Dateien des Laufs plus der Datenbank, Aufbau in Schritten mit Zeitbudget, kurz zwischengespeichert je Lauf. Eine nicht lesbare Datei oder eine Überschreitung der Grenzen macht die Liste unvollständig, dann wird nichts gesendet |
+| Bremsen (`ki/budget.ts`, `ki/repo*.ts`) | Aufrufe je Lauf, je Tag (alle Läufe, 24 Stunden), je Datei, Schutzschalter nach 5 Fehlern in Folge, Zahlen aus der Datenbank |
+| Schritte (`ki/steps.ts`) | Die Plätze `ki` (`unclear` nach `ki_pending`) und `kiCall` (`ki_pending` nach `proposed_ki` oder `unclear`). Bereit erst, wenn die Umgebung, der Lauf (Opt-in), alle gelesenen Dateien, die Bremsen und die Lösungsliste es erlauben |
+| Warteschlange (`staging/queue.ts`) | Neue Fähigkeiten der Schritte: `ready` (der Schritt nimmt nichts, solange die Bedingung nicht gilt, und seine Dateien zählen nicht als offene Arbeit), `unlessMarked` (eine Datei mit dem Vermerk `kiState` wird nicht wieder genommen), eigene Wartezeit bei einer Wiederholung. Der Lauf wird vor dem letzten Blick auf die Warteschlange geschlossen, damit die Stufe im selben Aufruf startet. Eine Bedingung, die einen Fehler wirft, gilt als nicht bereit |
+| Prüfliste | Quelle "KI-Vorschlag" mit Hinweistext, Zustand je Datei (nicht gesendet, nicht erreichbar, nicht verwertbar, Widerspruch, nicht eingeordnet), Hinweis in den Details. Ein Vorschlag der KI wird nie mit einem Klick übernommen. Das Opt-in-Feld ist jetzt wirksam und standardmäßig aus (Server und Formular) |
+
+### 18.2 Abweichungen vom Konzept und Entscheidungen
+
+- **Kein Auszug im Protokoll.** Das Konzept (3.2) speichert den gesendeten Auszug 30 Tage. Auftrag dieses Pakets: keine Inhalte. Die Spalte `excerpt` bleibt leer, Länge und Hash stehen im Protokoll. Das nimmt die Gegenmaßnahme "Auszug in der Prüfliste sichtbar" aus 6.4 weg. Ein Hash-Vergleich mit der Anfrage bei Open WebUI ist möglich (Runbook 11.4).
+- **Nur Band Unklar geht an die KI**, nicht Wahrscheinlich (Entscheidung U4, 15.2, bestätigt: ein Vorschlag der KI würde dort die Gründe der Regeln ersetzen, die eine Person verlangen).
+- **Dateien ohne erkennbare Struktur** werden nie gesendet, der Opt-in je Datei fehlt (nicht gebaut). Deshalb erreicht die Stufe vor allem Dateien mit erkannter Struktur und mehrdeutigem oder unbekanntem Code.
+- **Ein Vorschlag der KI wird nie mit einem Klick übernommen** (Gutachten). Der Editor beginnt ohne Vorgabe.
+- **Zwei Wiederholungsstufen:** die Stufe versucht eine Datei höchstens zweimal (neuer Schritt der Warteschlange, Wartezeit 10 Sekunden). Insgesamt sind höchstens 3 Aufrufe je Datei möglich (zwei Versuche der ersten Stufe, ein Aufruf der zweiten). Das Zeitlimit je Aufruf ist 15 statt 20 Sekunden, damit zwei Aufrufe in das Zeitlimit des Schritts passen.
+- **Ein abgelehnter Schlüssel (401, 403, 404) markiert keine Datei**, er zählt zum Schutzschalter. Die Datei wartet.
+- **Schutzschalter über die Umgebung ist ein Einschalter** (Standard aus), nicht ein Ausschalter. So sendet ein Deployment ohne die Variable nichts.
+- **Zustand `ki_pending`** darf von der Aufräumroutine der Warteschlange nach `failed` gesetzt werden (hängender Halter), Änderung in `staging/status.ts`.
+- `ki_enabled` hat in der Datenbank weiter den Standard `true` (Migration nicht erlaubt), die Anwendung schreibt den Wert immer ausdrücklich, und der Standard der Anwendung ist jetzt `false`.
+
+### 18.3 Prüfung
+
+- Einheitentests (`tests/unit/content-upload/ki`): Konfiguration (Schalter, Schlüssel, Adresse, Positivliste, falscher Host, http, Weiterleitung), Client gegen die Attrappe (Erfolg, Zeitüberschreitung auch bei halber Antwort, kaputte und zu große Antwort nach Header und Strom, Weiterleitung ohne Zugriff auf das zweite Ziel, fremder Host ohne einen Aufruf von `fetch`, Schlüssel nur im Header, keine Konsolenausgabe), Antwortprüfung (Injection, erfundene Codes, Zusatzfelder, Grenzen), Vorschlag (Widerspruch, Band, Gründe), Bremsen, Letzte Prüfung, Lösungsliste (Überlauf, Wiederholung, Zwischenspeicher), Bereitschaft (jede Bedingung einzeln) und die Schritte der Warteschlange ende zu Ende gegen die Attrappe (Kanarienstrings erscheinen in keiner Anfrage, kein Dateiname, kein Pfad, kein Schlüssel, Injection-Datei wird nicht gesendet, Schalter, Opt-in, Production, Tagesgrenze, Schutzschalter mit Wiederholung nach der Abkühlzeit, Protokoll ohne Text). Ein Test über die Quelltexte sichert: kein anderer Anbieter, `fetch` nur im Client, keine Umgebung und keine Konsole in den Entscheidungsmodulen.
+- Vertragstests: die Warteschlange mit Vermerken (Speicher und SQL), das Protokoll der KI (Speicher und SQL), `latestRuleProposal` und `existingSolutionTexts`.
+- Wegwerf-Postgres (Supabase-Image 17, Migrationen bis `20261030000100`): Vertragstests und ein Durchlauf der echten Schritte auf SQL mit der Attrappe (gleichzeitige Pumpen rufen eine Datei nur einmal auf, Zähler über alle Läufe, Vermerk und Protokoll).
+- Browserprüfung (playwright-core, Chrome, Dev-Server, Wegwerf-Postgres, Attrappe für Supabase und für Sokrates über https mit dem echten Konfigurationspfad der Anwendung): 40 Prüfungen, darunter Opt-in standardmäßig aus, Kennzeichnung, Zustände, Widerspruch, Protokoll ohne Text, nichts gesendet ohne Opt-in, die Anfragen bei der Attrappe (Bearer, Temperatur, kein Dateiname, keine Lösungsmarke, Positivliste mit Titeln), axe-core (WCAG 2.2 AA) hell und dunkel ohne Verstoß, 400 Pixel ohne waagerechtes Scrollen. Nicht gegen den echten Storage und nicht gegen Sokrates geprüft.
+
+### 18.4 Gutachten
+
+Geprüft mit `ecc:security-reviewer` (Pflicht: Daten an Dritte, SSRF) und `ecc:typescript-reviewer` (nur lesend). Kein kritischer Befund. Eingearbeitet: eine Bedingung der Schritte, die einen Fehler wirft, stoppt nicht mehr die ganze Pumpe (hoch), die Lösungsliste ist bei einer Überschreitung ihrer Grenzen unvollständig statt still gekappt, Datenbankabfrage mit einem Eintrag mehr als die Grenze, kleinere Grenzen (hoch und mittel), Vergleich mit dem Vorschlag der Regeln statt mit einem früheren Vorschlag der KI (mittel), ein Zeitbudget für die Lösungsliste je Aufruf der Pumpe und höchstens ein Versuch je Datei in einem Zeitfenster (mittel), Dateien ohne Objekt zählen nicht (mittel), ein abgelehnter Schlüssel markiert keine Datei und die Codes nennen die Art des Fehlers (mittel), ein Protokollfehler nach dem Aufruf verliert die Antwort nicht und ein Ziel, das der Client ablehnt, ist ein Zustand der Datei (mittel), Enabler-Codes, die mehreren Komponenten gehören (mittel), Vorschläge der KI nie mit einem Klick (mittel, Entscheidung), erneute Prüfung der Bremsen vor dem zweiten Aufruf, nur Codes bekannter Form im Prompt, Gründe der Regeln werden nicht gekappt, kein `aria-describedby` am Hinweis.
+
+### 18.5 Offen und Risiken
+
+- **Erster echter Aufruf** braucht das Go von Niko und die Antwort auf O13 (Open WebUI). Anleitung: Runbook 11.4.
+- **Namensprüfung statt Adressprüfung:** Die Positivliste prüft den Hostnamen, nicht die aufgelöste Adresse. Ein vom Betreiber gesetzter Name, der auf eine interne Adresse zeigt, wäre erlaubt. Das setzt Zugriff auf die Umgebung voraus.
+- **Aufbau der Lösungsliste** an einem Lauf mit allen Dateien ist nicht gemessen (die Liste liegt bis zu 10 Minuten im Arbeitsspeicher der Instanz, bis zu 40000 Texte).
+- **Opt-in je Datei** für unbekannte Struktur, **"KI erneut versuchen"** und die Anzeige des gesendeten Auszugs (Konzept 6.4) fehlen.
+- **Zähler der Obergrenzen** werden vor dem Aufruf geprüft, bei gleichzeitigen Aufrufen sind wenige mehr möglich. Ein Absturz zwischen Senden und Protokoll lässt eine Zeile fehlen.
+- **Standard `ki_enabled` in der Datenbank** ist weiter `true` (Migration nicht erlaubt). Heute schreibt jeder Pfad den Wert ausdrücklich.
+- Zusammenführen mit UP1 (Prüfliste und Planbau) und ST1: die Änderungen an `ReviewTable.tsx`, `review/build.ts` und `review/types.ts` sind klein und am Rand.
+
+## 19. Stand UP1 (Nachschub)
+
+Umgesetzt: Bestandsabgleich je Datei, Nachschub in der Übernahme, Bedienung von Probelauf, Übernahme und Rückbau in der Prüfliste. Bedienung und Regeln für Anwender: Runbook, Abschnitt 12.
+
+**8.9 Nachschub (Regeln)**
+
+- **Status je Datei** (`transfer/stock.ts`): `new`, `unchanged`, `extended`, `differs`, `conflict`. Die Engines melden jeden Posten über `RunOptions.observe` (neues Ereignis `ItemEvent` in `apply/types.ts`), `transfer/stock.ts` ordnet sie über die Quellpfade des Plans den Dateien zu. Rangfolge je Datei: Konflikt, abweichend, ergänzt (auch: neue Teile neben unveränderten), neu, unverändert.
+- **Abgleich** (`transfer/compare.ts`, Route `POST .../runs/[runId]/stock`): derselbe Planbau und dieselben Engines wie der Probelauf, aber eine Transaktion `read-only` mit `rollback` und `write: false`, der Lauf behält seinen Zustand. Der Status liegt je Datei in `content_upload_files.parse_summary.stock` (Status, Zahlen, Zuordnung als Fingerabdruck, Zeit). Keine Migration. Ändert sich die Zuordnung, ist er veraltet. Die Übernahme löscht alle Abgleiche des Laufs in ihrer Transaktion. Ein Probelauf speichert den Status seiner Dateien ebenfalls.
+- **Ergänzen immer an** (`FIXED_ENGINE_OPTIONS.extendQuizzes`, Teil des Hashes, `TRANSFER_ENGINE_VERSION` auf `upload-transfer/2`). Quizze und Szenarien ohne Enabler-Text: `BuildOptions.existingEnablers`, der Enabler der Datenbank steht mit `source: database:<Code>` stellvertretend im Plan (kein Posten einer Datei, die Engine findet ihn unverändert).
+- **Ersetzen je Datei statt Schalter für alle:** `replaceFiles` (Body von `dry-run` und `apply`), `RunOptions.updateFilter` lässt nur Zeilen der genannten Dateien zu. Im Hash. Eine Datei, die nicht Posten des Plans ist, wird mit 409 `REPLACE_NOT_PLANNED` abgelehnt. Der alte Schalter `updateExisting` im Body und im Bericht entfällt (`content_upload_applies.update_existing` bleibt und heißt jetzt: mindestens eine Datei wird ersetzt). Das ändert die Aussage in 8.1 und 8.2 ("je Übernahme").
+- **Sammelannahmen** (`accept_stock`, `accept_medium` in `review/decisions.ts`): nie bei Band Unklar oder Widerspruch, nie bei unsicherem Inhalt (`SOLUTION_MARKER`, `CONTENT_UNREADABLE`, `INPUT_TRUNCATED`, `ARCHIVE_ABOVE_TREE`, für die Mittelgruppe zusätzlich `PARSER_ERRORS`), nie bei einer zweiten Fassung.
+
+**Gemessen an einem Wegwerf-Postgres** (Supabase-Image 17, Bestand als Ausgangslage, erfundene Daten): drei Quizze mit 3 statt 5 Fragen werden um 6 Fragen ergänzt (30 Einfügungen im Protokoll, keine Änderung), ein zweiter und dritter Lauf schreiben nichts, ein fehlendes Szenario fügt genau eine Zeile (nur Teil für Lernende) ein, ein Quiz ohne Enabler-Text wird ergänzt, ein Konflikt benennt seine Datei und schreibt nichts, der Abgleich ändert keine Inhaltstabelle.
+
+**Offen (erledigt in UP2, Abschnitt 20): JSON und Excel im Upload.** Nicht gebaut in UP1, weil es eine Migration braucht (Verbot im Auftrag). Der Check `content_upload_files_ext_check` erlaubt nur `docx` und `pdf`. Nötig wären: (1) Migration, die den Check um `json` und `xlsx` erweitert (eine Zeile, wie der `doc_type`-Check bleibt gültig), (2) Magic Bytes und Pfadregeln in `staging/magic.ts` und `staging/paths.ts` (JSON hat keine feste Signatur: erstes Zeichen `{`, gültiges UTF-8, strenges Schema 1.0, Obergrenze 32 MB, Modul `content-import/quiz-json` wiederverwenden), (3) für xlsx eine Vorprüfung (Zip-Bombe, Makros `vbaProject.bin`, Grenzen für Größe und Zeilen) und ein Leser ohne Auswerten aktiver Inhalte (`learning-fields/xlsx-sheet.ts` liest ohne Fremdbibliothek, eine Vorprüfung fehlt dort für den Upload), (4) am Bucket `content-upload` die MIME-Liste und für JSON 32 MB (Niko, nicht per Agent am gehosteten Supabase), (5) Auszug ohne Lösungsteile für JSON-Quizze und eine Regelstufe, die den Schlüssel aus dem Inhalt der JSON-Datei nimmt. Bis UP2 galt der Weg über die Skripte (Runbook 12.4).
+
+## 20. Stand UP2 (JSON und Excel im Upload)
+
+Umgesetzt: Quizze als JSON (Schema 1.0) und die Lernfeld-Zuordnung als Excel (.xlsx) sind Dateiarten des Uploads, mit Staging, Erkennung am Inhalt, Prüfliste, Bestandsabgleich, Probelauf, Übernahme und Rückbau. Bedienung: Runbook 12.4 und 12.7 bis 12.9.
+
+### 20.1 Was gebaut ist
+
+- **Migration** `20261030000200_content_upload_json_xlsx.sql`: weitet den Check `content_upload_files_ext_check` auf `docx`, `pdf`, `json`, `xlsx` (Vorprüfung, `drop constraint if exists`, `add constraint`, Prüfung des Ergebnisses, `lock_timeout` 5 s, `statement_timeout` 60 s). Rein additiv, idempotent, kein `NOT VALID` nötig (kleine Prozesstabelle). Rückbau-Vorlage `supabase/manual/rollback-content-upload-json-xlsx.sql` (stoppt, wenn eine Zeile `json` oder `xlsx` hat, löscht nie). In Production gesperrt durch das Rollout-Gate (Version ab `20261024000100`), in der Preview läuft sie automatisch durch die CI (`Migrate public_preview`). Die `doc_type`-Werte bleiben: JSON-Quizze sind `quiz` oder `global_quiz`, die Excel-Datei ist `other`.
+- **Staging:** `UploadExt` hat vier Werte. `maxFileBytesFor(ext)`: 25 MB (Word, PDF), 32 MB (JSON), 5 MB (Excel), unbekannt: der kleinste Wert. Magic Bytes (`staging/magic.ts`): JSON beginnt nach Byte-Order-Marke und Leerraum mit `{`, Excel ist ein Zip. Codes `NOT_A_JSON`, `NOT_AN_XLSX`. Die Prüfung liest 64 statt 8 Bytes.
+- **JSON** (`read-json.ts`, `classify/json-rule.ts`, `review/json-step.ts`): Größe, dann ein linearer Bytedurchlauf auf Verschachtelung (Tiefe höchstens 16, höchstens eine Million Objekte und Listen, sonst `TOO_COMPLEX`, gemessen: ohne den Durchlauf kostete eine 32-MB-Datei aus Klammern 2,4 s und rund 1 GB), striktes UTF-8 (nichts wird repariert), `JSON.parse`, Kopf (`schema_version` 1.0, `quizzes`), Art aus dem **Inhalt** des Kopfes, dann der strenge Leser `content-import/quiz-json` (derselbe wie im Skript). Die Prüfliste bekommt eine Zeile je Datei mit Zahlen, nie mit Text. Band Sicher ohne Fehler, Mittel mit Fehlern in einzelnen Sätzen (Grund `PARSER_ERRORS`, kein Sammelklick), Widerspruch, wenn der Dateiname die andere Art nennt.
+- **Excel** (`read-xlsx.ts`, `classify/mapping-rule.ts`, `review/xlsx-step.ts`): siehe 20.3.
+- **Übernahme** (`transfer/plan.ts`, `run.ts`, `compare.ts`): JSON-Quizze laufen als synthetische Quelldateien durch denselben Planbau wie Word (gleiche Schlüssel, Codes, Komponenten, Lösungsschutz, `extendQuizzes`). Die Excel-Tabelle wird zum Plan der Lernfeld-Übernahme, deren Engine nach den beiden anderen in derselben Transaktion läuft, nur ergänzend. Jede geschriebene Zeile steht im Protokoll mit ihrer Datei, der Rückbau-SQL kennt die Tabellen und Textlisten (`use_cases.lernfelder`).
+- **Hash:** `TRANSFER_ENGINE_VERSION` ist `upload-transfer/3`, der Plan der Tabelle ohne Zeit steht im Hash, `learningUpdateExisting: false` ist Teil der festen Einstellungen.
+- **Oberfläche:** Auswahl `.json` und `.xlsx`, Grenzen je Art, Zeilen mit Zahlen statt Zuordnung (kein Editor, ein Hinweis), Texte deutsch und englisch.
+
+### 20.2 Entscheidungen und Abweichungen
+
+- **Eine Zeile je Datei, nicht je Quiz.** Das Modell kennt eine Zeile je Datei. Die Datei bekommt nur ihre Art, die Kennungen der Quizze stehen im Inhalt (`10a`, `24_1a`) und werden vom selben Leser geprüft wie beim Skript. Der Bestandsstatus fasst alle Quizze der Datei zusammen, die Einzelheiten zeigen Probelauf und Rückbau. Je Quiz zu entscheiden bräuchte eine eigene Zeilenart und ist nicht gebaut.
+- **Zwei JSON-Dateien mit denselben Quizzen:** beide ausgelassen (`JSON_KEY_OVERLAP`), die Person nimmt eine an. Ein fehlerhafter Satz in einer Datei nimmt einen guten Satz einer anderen nicht aus dem Plan. Höchstens 10 JSON-Dateien je Übernahme (jede Lesung hält alle Fragen und Antworten bis zum Planbau).
+- **Word gewinnt gegen JSON** desselben Laufs und desselben Schlüssels (`mergeQuizSources`), ein nicht lesbares Word-Quiz hält seinen Schlüssel nicht. Dem Menschen wird das als `SUPERSEDED` genannt.
+- **Keine KI.** Eine JSON-Datei enthält die richtigen Antworten (Entscheidung O13). Es gibt nie einen Auszug, die Datei wird nie `unklar`, `ki/steps.ts` stellt jede Datei, die kein Word ist, vor dem Lesen als nicht gesendet fest (`FORMAT_NOT_SENT`). Die Lösungstexte der JSON-Dateien gehören zur Liste der bekannten Lösungen: was ein Lehrtext davon wiederholt, wird aus seinem Auszug geschnitten (gemessen im Test mit Gegenprobe ohne die JSON-Datei). Grenze je JSON-Datei 20.000 Texte.
+- **Excel nur ergänzend.** `updateExisting` ist fest `false`. Abweichende Titel und Stunden werden gemeldet, nie überschrieben, es gibt kein Ersetzen je Datei. Höchstens eine Tabelle je Übernahme.
+- **Der alte Pfadbaum kommt nur aus Word- und PDF-Dateien.** Die Positivliste und die Auswahl für die KI bilden ihren Ordnerbaum nur aus den Pfaden dieser Dateien.
+
+### 20.3 Excel: sichere Lesbarkeit auf hochgeladenen Bytes
+
+Geprüft wurde zuerst, was der vorhandene Leser `learning-fields/xlsx-sheet.ts` tut: Er nutzt **JSZip** (schon Abhängigkeit, kein SheetJS), liest per linearem Durchlauf nur Arbeitsmappe, Beziehungen, Zeichenketten und ein Blatt und wertet nie Formeln aus. Für Dateien aus dem Upload war er **nicht sicher genug**: `Zip.loadAsync` öffnet vor der Zählung der Einträge, die Grenzen sind weit (50 MB, 500.000 Zellen), und Makros, Verknüpfungen und Verbindungen werden nicht geprüft. Deshalb gibt es `read-xlsx.ts`, ohne neue Abhängigkeit, auf dem Muster des Word-Lesers:
+
+| Gefahr | Gegenmaßnahme |
+| --- | --- |
+| Zip-Bombe, viele Einträge | Verzeichnis vom Dateiende lesen **vor** JSZip: höchstens 200 Einträge, je Teil höchstens 8 MB, Summe höchstens 40 MB, Verhältnis höchstens 100:1 (Teile über 1 MB), nur Methoden 0 und 8. Danach jede Lesung mit Obergrenze auf die **tatsächlich** entpackten Bytes (ein Verzeichnis, das lügt, hilft nicht). JSZip und Verzeichnis müssen dieselben Einträge nennen |
+| Makros | `vbaProject.bin`, `vbaData.xml`, `macrosheets`, `dialogsheets`, `activeX`, Inhaltstyp `macroEnabled` oder `macrosheet`: abgelehnt |
+| Externe Verknüpfungen, Verbindungen, Vorlagen | `externalLinks`, `<externalReferences>`, `connections.xml`, `queryTables`, Beziehungen mit `TargetMode=External` außer Links: abgelehnt, nichts wird je geöffnet oder abgerufen |
+| Formeln | nur der gespeicherte Wert wird gelesen, `<f>` wird gezählt und nie ausgewertet (kein DDE, kein WEBSERVICE) |
+| Verborgener Text | `DOCTYPE`, Kommentar, CDATA im XML: abgelehnt. Versteckte Blätter werden nicht gelesen |
+| Ausmaß | höchstens 20 Blätter (5 gelesen), 100.000 Zellen, 10.000 Zeilen, Spalte bis CV, 15 Sekunden |
+| Verschlüsselt, altes Format | `ENCRYPTED`, `LEGACY_XLS`: abgelehnt |
+
+Die Tests bauen Zip-Bomben (3 MB, 12 MB, 100 MB gepackt unter 1 MB), eine Summe aus je erlaubten Teilen, ein Verzeichnis mit falschen Größen, zu viele Einträge, Makros, Verknüpfungen, Namen mit `..`, ein gesetztes Verschlüsselungsbit und Formeln mit Netzwerkaufruf (es wird nichts abgerufen). Das Ergebnis der Prüfung nennt nur Codes und Zahlen.
+
+### 20.4 Bucket (macht Niko)
+
+Der Bucket `content-upload` braucht die MIME-Typen `application/json` und `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` und 32 MB je Datei (Runbook 12.9). Kein Agent ändert ihn.
+
+### 20.5 Prüfung
+
+Wegwerf-Postgres (Supabase-Image 17, Struktur aus dem Snapshot): Migration angewendet, zweimal und dreimal ausgeführt, die vier Arten angenommen, andere (`xls`, `exe`, `JSON`, leer) abgelehnt, Rückbau-Vorlage mit und ohne Zeile `json`, danach wieder erweitert. Die Tests gegen die echte Datenbank (`transfer-db.test.ts`, 47 Tests) liefen in der Form `public` und in der Form der Preview (Schema `public_preview`, Rolle `app_preview`, Preview-Rebuild mit allen Migrationen bis `20261030000200`): JSON-Nachschub inaktiv und idempotent, Ergänzung fehlender Fragen und Rückbau, Excel mit Inhalt und Use Case in einem Lauf, Rückbau mit dem Zustand davor (Snapshot gleich), Beschreibung füllen und zurücksetzen, Liste von Kennungen als Textfeld mit Anführungszeichen im Wert wiederhergestellt.
+
+### 20.6 Gutachten
+
+Sicherheit (Pflicht), Datenbank, TypeScript und React ohne kritische oder hohe Befunde zur Sicherheit. Abgearbeitet: nicht sichere Verschachtelung von JSON (Bytedurchlauf, gemessen), Status `visible` eines Blattes (wurde als verborgen gelesen), Makroblätter, die Obergrenze der Lösungstexte je JSON-Datei, Obergrenze der JSON-Dateien je Übernahme und gleichzeitiges Lesen in der Liste der Lösungen, Zählung nur fehlerfreier Sätze bei Überschneidung, Status der Tabelle im Abgleich ohne Enabler, fehlende Elemente in Textlisten des Rückbaus, genaue Codes in den Tests, Texte für weitere Codes.
+
+### 20.7 Offen und Risiken
+
+- Bucket umstellen (20.4), erst danach lässt sich in der Preview eine JSON- oder Excel-Datei hochladen. Nicht an der echten Preview mit echtem Speicher erprobt.
+- Production: die Migration ist gesperrt (Rollout-Gate), der Upload bleibt dort aus.
+- Eine Zeile je Datei (20.2): wer einzelne Quizze einer Datei ablehnen will, trennt die Datei oder lässt Sätze mit Fehlern überspringen.
+- Das Lesen einer JSON-Datei bleibt synchron (bis 32 MB, nach dem Bytedurchlauf nur noch begrenzte Form). Eine Messung an der echten Preview mit einer Datei von 30 MB steht aus.

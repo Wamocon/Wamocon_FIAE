@@ -19,6 +19,17 @@ export interface AttributionInput {
   fileOfSource: ReadonlyMap<string, string>;
   /** Title of the document row of an original to the id of its file. */
   fileOfOriginalTitle?: ReadonlyMap<string, string>;
+  /** The Excel file of the learning field plan: its rows (and the codes it adds to use cases) belong to it. */
+  learningFileId?: string | null;
+  /**
+   * Quizzes and questions that exist already (read before the engines run): the
+   * questions an extension adds, and the positions it moves, belong to the file of
+   * the quiz although the quiz row itself is not written.
+   */
+  existing?: {
+    quizzes: ReadonlyArray<{ id: string; code: string }>;
+    questions: ReadonlyArray<{ id: string; quizId: string }>;
+  };
 }
 
 export function planAttribution(input: AttributionInput): Attribution {
@@ -41,6 +52,14 @@ export function planAttribution(input: AttributionInput): Attribution {
   const questionOfId = new Map<string, string | null>();
   const enablerOfId = new Map<string, string | null>();
   const useCaseOfId = new Map<string, string | null>();
+  for (const q of input.existing?.quizzes ?? []) {
+    if (quizByCode.has(q.code)) quizOfId.set(q.id, quizByCode.get(q.code) ?? null);
+  }
+  for (const q of input.existing?.questions ?? []) {
+    if (quizOfId.has(q.quizId)) {
+      questionOfId.set(q.id, quizOfId.get(q.quizId) ?? null);
+    }
+  }
 
   const scenarioCodeOfTitle = (title: unknown) => {
     const match = /^Szenario (\S+):/.exec(String(title ?? ''));
@@ -82,12 +101,19 @@ export function planAttribution(input: AttributionInput): Attribution {
         const code = scenarioCodeOfTitle(row.title);
         return code ? (scenarioByCode.get(code) ?? null) : null;
       }
+      case 'training_catalog_learning_fields':
+      case 'training_catalog_content_mappings':
+        return input.learningFileId ?? null;
       default:
         return null;
     }
   };
   return {
     inserted: (table, row) => of(table, row),
-    updated: (table, row) => of(table, row),
+    // A use case that exists and is no item of the plan is only ever updated by the
+    // learning field engine (it adds the codes of the learning fields to lernfelder)
+    updated: (table, row) =>
+      of(table, row) ??
+      (table === 'use_cases' ? (input.learningFileId ?? null) : null),
   };
 }
